@@ -1,17 +1,3 @@
-Here's a **very comprehensive `README.md`** tailored to your **Stellar Uzima Smart Contract project using Soroban and Rust**, based on your current document. This covers:
-
-* Project Overview
-* Architecture
-* Folder Structure
-* Setup Instructions
-* Contract Usage
-* Testing
-* Deployment
-* Contribution
-* Licensing
-
----
-
 ```markdown
 # 🌟 Stellar Uzima - Decentralized Medical Records on Stellar using Soroban
 
