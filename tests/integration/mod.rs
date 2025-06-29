@@ -188,6 +188,71 @@ pub mod medical_records_tests {
         assert_eq!(patient2_records.len(), 1);
         assert_ne!(patient1_records.get(0).unwrap(), patient2_records.get(0).unwrap());
     }
+
+    #[test]
+    fn test_public_key_role_mapping_and_validation() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let stranger = Address::generate(&env);
+
+        // Initialize the contract with the admin
+        client.initialize(&admin);
+        client.manage_user(&admin, &doctor, Role::Doctor);
+        client.manage_user(&admin, &patient, Role::Patient);
+
+        // Check role mapping
+        assert_eq!(client.get_user_role(&admin), Role::Admin);
+        assert_eq!(client.get_user_role(&doctor), Role::Doctor);
+        assert_eq!(client.get_user_role(&patient), Role::Patient);
+        assert_eq!(client.get_user_role(&stranger), Role::None);
+
+        // Only doctor can add a record
+        let record_id = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "add_record",
+                    args: (),
+                    sub_invokes: &[],
+                },
+            }])
+            .add_record(&doctor, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
+        assert!(record_id.is_ok());
+
+        // Patient (not doctor) cannot add a record
+        let result = client
+            .mock_auths(&[MockAuth {
+                address: &patient,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "add_record",
+                    args: (),
+                    sub_invokes: &[],
+                },
+            }])
+            .add_record(&patient, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
+        assert!(result.is_err());
+
+        // Stranger (no role) cannot add a record
+        let result = client
+            .mock_auths(&[MockAuth {
+                address: &stranger,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "add_record",
+                    args: (),
+                    sub_invokes: &[],
+                },
+            }])
+            .add_record(&stranger, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
+        assert!(result.is_err());
+    }
 }
 
 // tests/unit/mod.rs
