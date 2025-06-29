@@ -63,6 +63,9 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &true,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
 
         // Patient can access their record
@@ -115,6 +118,9 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
 
         // Deactivate doctor
@@ -131,6 +137,9 @@ mod tests {
                 &String::from_str(&env, "New Diagnosis"),
                 &String::from_str(&env, "New Treatment"),
                 &false,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
         assert!(result.is_err());
     }

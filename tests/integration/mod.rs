@@ -42,12 +42,18 @@ pub mod medical_records_tests {
                 &diagnosis,
                 &treatment,
                 &false,
+                &vec![String::from_str(&env, "herbal"), String::from_str(&env, "spiritual")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
 
         // Verify record was added
         let record = client.get_record(&record_id).expect("Record should exist");
         assert_eq!(record.patient_id, patient_id);
         assert_eq!(record.diagnosis, diagnosis);
+        assert_eq!(record.category, String::from_str(&env, "Traditional"));
+        assert_eq!(record.treatment_type, String::from_str(&env, "Herbal Therapy"));
+        assert_eq!(record.tags.len(), 2);
 
         // Update the record
         let new_diagnosis = String::from_str(&env, "Hypertension Stage 2");
@@ -107,6 +113,9 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "Initial diagnosis"),
                 &String::from_str(&env, "Initial treatment"),
                 &false,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
 
         // Try to update as unauthorized user
@@ -159,6 +168,9 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "Diagnosis for patient 1"),
                 &String::from_str(&env, "Treatment for patient 1"),
                 &false,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
             );
 
         let _record2 = client
@@ -178,6 +190,9 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "Diagnosis for patient 2"),
                 &String::from_str(&env, "Treatment for patient 2"),
                 &true,
+                &vec![String::from_str(&env, "spiritual")],
+                String::from_str(&env, "Spiritual"),
+                String::from_str(&env, "Prayer"),
             );
 
         // Verify each patient has their own records

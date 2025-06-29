@@ -27,6 +27,9 @@ pub struct MedicalRecord {
     pub diagnosis: String,
     pub treatment: String,
     pub is_confidential: bool,
+    pub tags: Vec<String>,
+    pub category: String,
+    pub treatment_type: String,
 }
 
 const USERS: Symbol = Symbol::short("USERS");
@@ -102,12 +105,38 @@ impl MedicalRecordsContract {
         diagnosis: String,
         treatment: String,
         is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
     ) -> u64 {
         caller.require_auth();
-        
+
         // Verify caller is a doctor
         if !Self::has_role(&env, &caller, &Role::Doctor) {
             panic!("Only doctors can add medical records");
+        }
+
+        // Validate category
+        let allowed_categories = vec![
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, "Traditional"),
+            String::from_str(&env, "Herbal"),
+            String::from_str(&env, "Spiritual"),
+        ];
+        if !allowed_categories.contains(&category) {
+            panic!("Invalid category");
+        }
+
+        // Validate treatment_type (non-empty)
+        if treatment_type.len() == 0 {
+            panic!("Treatment type cannot be empty");
+        }
+
+        // Validate tags (all non-empty)
+        for tag in tags.iter() {
+            if tag.len() == 0 {
+                panic!("Tags cannot be empty");
+            }
         }
 
         let record_id = env.ledger().sequence();
@@ -120,6 +149,9 @@ impl MedicalRecordsContract {
             diagnosis,
             treatment,
             is_confidential,
+            tags,
+            category,
+            treatment_type,
         };
 
         // Store the record
