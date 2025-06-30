@@ -33,5 +33,3 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
-
-# Ensure no dependency enables the `arbitrary` feature for stellar-xdr

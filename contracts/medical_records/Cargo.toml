@@ -17,7 +17,7 @@ stellar-xdr = { version = "20.1.0", default-features = false, features = [] }
 
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"], default-features = false }
+soroban-sdk = { workspace = true, default-features = false }
 
 
 [features]
