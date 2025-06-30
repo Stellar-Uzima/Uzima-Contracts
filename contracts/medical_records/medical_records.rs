@@ -175,6 +175,15 @@ impl MedicalRecordsContract {
             false
         }
     }
+
+    /// Get the role of a user by address (public key)
+    pub fn get_user_role(env: Env, user: Address) -> Role {
+        let users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        match users.get(user) {
+            Some(profile) => profile.role,
+            None => Role::None,
+        }
+    }
 }
 
 #[cfg(test)]
