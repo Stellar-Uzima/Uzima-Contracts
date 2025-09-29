@@ -1,7 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::testutils::{Address as _, AuthorizedFunction, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{Address, Env, String};
 
     #[test]
     fn test_initialize_and_roles() {
@@ -110,7 +111,7 @@ mod tests {
         client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
 
         // Doctor creates a record
-        let record_id = client
+        let _record_id = client
             .mock_all_auths()
             .add_record(
                 &doctor,

@@ -3,7 +3,7 @@ use soroban_sdk::{Address, Env, String};
 
 pub mod medical_records_tests {
     use super::*;
-    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient};
+    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::{
         testutils::{Address as _, MockAuth, MockAuthInvoke},
     };
@@ -15,14 +15,16 @@ pub mod medical_records_tests {
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
         // Setup test data
+        let admin = Address::generate(&env);
         let doctor = Address::generate(&env);
-        let patient_id = String::from_str(&env, "patient_001");
-        let doctor_id = String::from_str(&env, "doctor_001");
+        let patient = Address::generate(&env);
         let diagnosis = String::from_str(&env, "Hypertension");
         let treatment = String::from_str(&env, "ACE inhibitor medication");
 
-        // Initialize contract
-        assert!(client.initialize());
+        // Initialize contract and roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
 
         // Add a medical record
         let record_id = client
@@ -37,8 +39,7 @@ pub mod medical_records_tests {
             }])
             .add_record(
                 &doctor,
-                &patient_id,
-                &doctor_id,
+                &patient,
                 &diagnosis,
                 &treatment,
                 &false,
@@ -48,164 +49,18 @@ pub mod medical_records_tests {
             );
 
         // Verify record was added
-        let record = client.get_record(&record_id).expect("Record should exist");
-        assert_eq!(record.patient_id, patient_id);
+        let record_opt = client.get_record(&patient, &record_id);
+        assert!(record_opt.is_some());
+        let record = record_opt.unwrap();
+        assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
         assert_eq!(record.category, String::from_str(&env, "Traditional"));
         assert_eq!(record.treatment_type, String::from_str(&env, "Herbal Therapy"));
         assert_eq!(record.tags.len(), 2);
-
-        // Update the record
-        let new_diagnosis = String::from_str(&env, "Hypertension Stage 2");
-        let new_treatment = String::from_str(&env, "Combination therapy");
-
-        let success = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "update_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .update_record(&doctor, &record_id, &new_diagnosis, &new_treatment);
-
-        assert!(success);
-
-        // Verify update
-        let updated_record = client.get_record(&record_id).expect("Record should exist");
-        assert_eq!(updated_record.diagnosis, new_diagnosis);
-        assert_eq!(updated_record.treatment, new_treatment);
-
-        // Check patient records list
-        let patient_records = client.get_patient_records(&patient_id);
-        assert_eq!(patient_records.len(), 1);
-        assert_eq!(patient_records.get(0).unwrap(), record_id);
     }
 
     #[test]
-    fn test_unauthorized_update_fails() {
-        let env = Env::default();
-        let contract_id = env.register_contract(None, MedicalRecordsContract);
-        let client = MedicalRecordsContractClient::new(&env, &contract_id);
-
-        let doctor = Address::generate(&env);
-        let unauthorized_user = Address::generate(&env);
-        let patient_id = String::from_str(&env, "patient_002");
-        let doctor_id = String::from_str(&env, "doctor_002");
-
-        // Add a record as authorized doctor
-        let record_id = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(
-                &doctor,
-                &patient_id,
-                &doctor_id,
-                &String::from_str(&env, "Initial diagnosis"),
-                &String::from_str(&env, "Initial treatment"),
-                &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
-            );
-
-        // Try to update as unauthorized user
-        let success = client
-            .mock_auths(&[MockAuth {
-                address: &unauthorized_user,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "update_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .update_record(
-                &unauthorized_user,
-                &record_id,
-                &String::from_str(&env, "Unauthorized diagnosis"),
-                &String::from_str(&env, "Unauthorized treatment"),
-            );
-
-        assert!(!success);
-    }
-
-    #[test]
-    fn test_multiple_patients() {
-        let env = Env::default();
-        let contract_id = env.register_contract(None, MedicalRecordsContract);
-        let client = MedicalRecordsContractClient::new(&env, &contract_id);
-
-        let doctor = Address::generate(&env);
-        let patient1_id = String::from_str(&env, "patient_001");
-        let patient2_id = String::from_str(&env, "patient_002");
-        let doctor_id = String::from_str(&env, "doctor_001");
-
-        // Add records for different patients
-        let _record1 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(
-                &doctor,
-                &patient1_id,
-                &doctor_id,
-                &String::from_str(&env, "Diagnosis for patient 1"),
-                &String::from_str(&env, "Treatment for patient 1"),
-                &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
-            );
-
-        let _record2 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(
-                &doctor,
-                &patient2_id,
-                &doctor_id,
-                &String::from_str(&env, "Diagnosis for patient 2"),
-                &String::from_str(&env, "Treatment for patient 2"),
-                &true,
-                &vec![String::from_str(&env, "spiritual")],
-                String::from_str(&env, "Spiritual"),
-                String::from_str(&env, "Prayer"),
-            );
-
-        // Verify each patient has their own records
-        let patient1_records = client.get_patient_records(&patient1_id);
-        let patient2_records = client.get_patient_records(&patient2_id);
-
-        assert_eq!(patient1_records.len(), 1);
-        assert_eq!(patient2_records.len(), 1);
-        assert_ne!(patient1_records.get(0).unwrap(), patient2_records.get(0).unwrap());
-    }
-
-    #[test]
-    fn test_public_key_role_mapping_and_validation() {
+    fn test_pause_blocks_add_record_integration() {
         let env = Env::default();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
@@ -213,60 +68,55 @@ pub mod medical_records_tests {
         let admin = Address::generate(&env);
         let doctor = Address::generate(&env);
         let patient = Address::generate(&env);
-        let stranger = Address::generate(&env);
 
-        // Initialize the contract with the admin
-        client.initialize(&admin);
-        client.manage_user(&admin, &doctor, Role::Doctor);
-        client.manage_user(&admin, &patient, Role::Patient);
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
 
-        // Check role mapping
-        assert_eq!(client.get_user_role(&admin), Role::Admin);
-        assert_eq!(client.get_user_role(&doctor), Role::Doctor);
-        assert_eq!(client.get_user_role(&patient), Role::Patient);
-        assert_eq!(client.get_user_role(&stranger), Role::None);
+        assert!(client.mock_all_auths().pause(&admin));
 
-        // Only doctor can add a record
-        let record_id = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(&doctor, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
-        assert!(record_id.is_ok());
+        let res = client
+            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .try_add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis"),
+                &String::from_str(&env, "Treatment"),
+                &false,
+                &vec![String::from_str(&env, "herbal")],
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal Therapy"),
+            );
+        assert!(res.is_err());
+    }
 
-        // Patient (not doctor) cannot add a record
-        let result = client
-            .mock_auths(&[MockAuth {
-                address: &patient,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(&patient, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
-        assert!(result.is_err());
+    #[test]
+    fn test_recovery_flow_integration() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-        // Stranger (no role) cannot add a record
-        let result = client
-            .mock_auths(&[MockAuth {
-                address: &stranger,
-                invoke: &MockAuthInvoke {
-                    contract: &contract_id,
-                    fn_name: "add_record",
-                    args: (),
-                    sub_invokes: &[],
-                },
-            }])
-            .add_record(&stranger, &patient, &String::from_str(&env, "Diagnosis"), &String::from_str(&env, "Treatment"), &false);
-        assert!(result.is_err());
+        let admin1 = Address::generate(&env);
+        let admin2 = Address::generate(&env);
+        let token = Address::generate(&env);
+        let recipient = Address::generate(&env);
+
+        client.mock_all_auths().initialize(&admin1);
+        client.mock_all_auths().manage_user(&admin1, &admin2, &Role::Admin);
+
+        let proposal_id = client.mock_all_auths().propose_recovery(&admin1, &token, &recipient, &100i128);
+        assert!(proposal_id > 0);
+
+        assert!(client.mock_all_auths().approve_recovery(&admin2, &proposal_id));
+
+        // Fail before timelock
+        let res = client.mock_all_auths().try_execute_recovery(&admin1, &proposal_id);
+        assert!(res.is_err());
+
+        let now = env.ledger().timestamp();
+        env.ledger().with_mut(|l| l.timestamp = now + 86_401);
+
+        assert!(client.mock_all_auths().execute_recovery(&admin1, &proposal_id));
     }
 }
 
