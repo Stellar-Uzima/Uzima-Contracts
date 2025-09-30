@@ -1,5 +1,7 @@
 #![cfg(test)]
 
+use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
+
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo},

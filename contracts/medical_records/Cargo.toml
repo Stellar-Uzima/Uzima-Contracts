@@ -12,7 +12,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk.workspace = true
-stellar-xdr = { version = "20.1.0", default-features = false, features = [] }
 
 
 
