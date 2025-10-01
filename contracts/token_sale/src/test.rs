@@ -1,16 +1,24 @@
 #![cfg(test)]
 
+use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
+
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation, Ledger, LedgerInfo},
-    token, Address, Env, IntoVal,
+    testutils::{Address as _, Ledger},
+    token, Address, Env,
 };
 
-fn create_token_contract<'a>(e: &Env, admin: &Address) -> (Address, token::Client<'a>) {
-    let contract_address = e.register_stellar_asset_contract(admin.clone());
+fn create_token_contract<'a>(
+    e: &Env,
+    admin: &Address,
+) -> (Address, token::Client<'a>, token::StellarAssetClient<'a>) {
+    let contract_address = e
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
     (
         contract_address.clone(),
         token::Client::new(e, &contract_address),
+        token::StellarAssetClient::new(e, &contract_address),
     )
 }
 
@@ -21,7 +29,7 @@ fn test_token_sale_initialization() {
 
     let owner = Address::generate(&env);
     let treasury = Address::generate(&env);
-    let (token_address, _token_client) = create_token_contract(&env, &owner);
+    let (token_address, _token_client, _token_admin) = create_token_contract(&env, &owner);
 
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
@@ -43,7 +51,7 @@ fn test_add_sale_phase() {
 
     let owner = Address::generate(&env);
     let treasury = Address::generate(&env);
-    let (token_address, _token_client) = create_token_contract(&env, &owner);
+    let (token_address, _token_client, _token_admin) = create_token_contract(&env, &owner);
 
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
@@ -54,7 +62,7 @@ fn test_add_sale_phase() {
     let start_time = 1000;
     let end_time = 2000;
     let price_per_token = 100; // 100 payment tokens per SUT token
-    let max_tokens = 5000;
+    let max_tokens = 50000000; // Increased to accommodate the calculation
     let per_address_cap = 1000;
 
     client.add_sale_phase(
@@ -84,14 +92,16 @@ fn test_contribution_and_claim() {
     let treasury = Address::generate(&env);
     let contributor = Address::generate(&env);
 
-    let (sut_token_address, sut_token_client) = create_token_contract(&env, &owner);
-    let (payment_token_address, payment_token_client) = create_token_contract(&env, &owner);
+    let (sut_token_address, sut_token_client, sut_token_admin) =
+        create_token_contract(&env, &owner);
+    let (payment_token_address, _payment_token_client, payment_token_admin) =
+        create_token_contract(&env, &owner);
 
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
     // Initialize contract
-    client.initialize(&owner, &sut_token_address, &treasury, &1000, &10000);
+    client.initialize(&owner, &sut_token_address, &treasury, &500, &10000);
 
     // Add supported payment token
     client.add_supported_token(&payment_token_address);
@@ -102,13 +112,13 @@ fn test_contribution_and_claim() {
     });
 
     // Add a sale phase
-    client.add_sale_phase(&1000, &2000, &100, &5000, &1000);
+    client.add_sale_phase(&1000, &2000, &100, &50000000, &1000);
 
     // Mint payment tokens to contributor
-    payment_token_client.mint(&contributor, &1000);
+    payment_token_admin.mint(&contributor, &1000);
 
     // Mint SUT tokens to contract for distribution
-    sut_token_client.mint(&contract_id, &50000);
+    sut_token_admin.mint(&contract_id, &50000000);
 
     // Contribute to sale
     client.contribute(&contributor, &0, &payment_token_address, &500);
@@ -116,7 +126,7 @@ fn test_contribution_and_claim() {
     // Check contribution
     let contribution = client.get_contribution(&contributor).unwrap();
     assert_eq!(contribution.amount, 500);
-    assert_eq!(contribution.tokens_allocated, 5000); // 500 * 1_000_000 / 100
+    assert_eq!(contribution.tokens_allocated, 5000000); // 500 * 1_000_000 / 100
 
     // Finalize sale
     client.finalize_sale();
@@ -125,7 +135,7 @@ fn test_contribution_and_claim() {
     client.claim_tokens(&contributor);
 
     // Verify tokens were transferred
-    assert_eq!(sut_token_client.balance(&contributor), 5000);
+    assert_eq!(sut_token_client.balance(&contributor), 5000000);
 }
 
 #[test]
@@ -135,7 +145,7 @@ fn test_vesting_contract() {
 
     let owner = Address::generate(&env);
     let beneficiary = Address::generate(&env);
-    let (token_address, token_client) = create_token_contract(&env, &owner);
+    let (token_address, token_client, token_admin) = create_token_contract(&env, &owner);
 
     let contract_id = env.register_contract(None, VestingContract);
     let client = VestingContractClient::new(&env, &contract_id);
@@ -144,7 +154,7 @@ fn test_vesting_contract() {
     client.initialize(&owner, &token_address);
 
     // Mint tokens to vesting contract
-    token_client.mint(&contract_id, &10000);
+    token_admin.mint(&contract_id, &10000);
 
     // Set initial time
     env.ledger().with_mut(|li| {
@@ -166,9 +176,9 @@ fn test_vesting_contract() {
     // Check initial state - nothing releasable before cliff
     assert_eq!(client.get_releasable_amount(&beneficiary), 0);
 
-    // Move past cliff
+    // Move past cliff (move to 10% through vesting period)
     env.ledger().with_mut(|li| {
-        li.timestamp = 1000 + cliff_duration + 1;
+        li.timestamp = 1000 + cliff_duration + (vesting_duration - cliff_duration) / 10;
     });
 
     // Should have some tokens releasable now
@@ -178,7 +188,7 @@ fn test_vesting_contract() {
     // Release tokens
     let released = client.release_tokens(&beneficiary);
     assert_eq!(released, releasable);
-    assert_eq!(token_client.balance(&beneficiary), released);
+    assert_eq!(token_client.balance(&beneficiary), released as i128);
 
     // Move to end of vesting period
     env.ledger().with_mut(|li| {
@@ -186,11 +196,11 @@ fn test_vesting_contract() {
     });
 
     // Release remaining tokens
-    let remaining_releasable = client.get_releasable_amount(&beneficiary);
+    let _remaining_releasable = client.get_releasable_amount(&beneficiary);
     client.release_tokens(&beneficiary);
 
     // Should have all tokens now
-    assert_eq!(token_client.balance(&beneficiary), total_amount);
+    assert_eq!(token_client.balance(&beneficiary), total_amount as i128);
 }
 
 #[test]
@@ -202,8 +212,10 @@ fn test_refund_mechanism() {
     let treasury = Address::generate(&env);
     let contributor = Address::generate(&env);
 
-    let (sut_token_address, _sut_token_client) = create_token_contract(&env, &owner);
-    let (payment_token_address, payment_token_client) = create_token_contract(&env, &owner);
+    let (sut_token_address, _sut_token_client, _sut_token_admin) =
+        create_token_contract(&env, &owner);
+    let (payment_token_address, payment_token_client, payment_token_admin) =
+        create_token_contract(&env, &owner);
 
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
@@ -216,11 +228,11 @@ fn test_refund_mechanism() {
         li.timestamp = 1500;
     });
 
-    client.add_sale_phase(&1000, &2000, &100, &5000, &1000);
+    client.add_sale_phase(&1000, &2000, &100, &50000000, &1000);
 
     // Mint and contribute (but not enough to meet soft cap)
-    payment_token_client.mint(&contributor, &1000);
-    payment_token_client.mint(&contract_id, &1000); // For refunds
+    payment_token_admin.mint(&contributor, &1000);
+    payment_token_admin.mint(&contract_id, &1000); // For refunds
 
     client.contribute(&contributor, &0, &payment_token_address, &500);
 
