@@ -32,6 +32,7 @@ Stellar Uzima is a decentralized smart contract system for secure, encrypted, an
 - 🔑 Public key-based identity verification
 - ⚙️ Fully testable, modular, and CI-enabled
 - 📦 Gas-efficient contract design
+- 🗳️ Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
 
 ---
 
