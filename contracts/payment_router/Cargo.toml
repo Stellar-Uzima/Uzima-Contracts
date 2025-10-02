@@ -1,5 +1,5 @@
 [package]
-name = "medical_records"
+name = "payment_router"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -9,19 +9,12 @@ repository.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
-
 [dependencies]
 soroban-sdk.workspace = true
-stellar-xdr.workspace = true
-
-
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, default-features = false }
 
-
 [features]
 default = []
 testutils = ["soroban-sdk/testutils"]
-
-# No arbitrary or other extra features enabled
