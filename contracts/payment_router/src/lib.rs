@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
@@ -9,7 +9,7 @@ pub struct RouterFeeConfig {
     pub fee_receiver: Address,
 }
 
-const FEE_CONF: &str = "feeconf";
+const FEE_CONF: Symbol = symbol_short!("feeconf");
 
 #[contract]
 pub struct PaymentRouter;
@@ -21,22 +21,22 @@ impl PaymentRouter {
             panic!("Invalid fee bps");
         }
         let conf = RouterFeeConfig { fee_receiver, platform_fee_bps };
-        env.storage().persistent().set(&FEE_CONF.into(), &conf);
+        env.storage().persistent().set(&FEE_CONF, &conf);
     }
 
     pub fn get_fee_config(env: Env) -> Option<RouterFeeConfig> {
-        env.storage().persistent().get(&FEE_CONF.into())
+        env.storage().persistent().get(&FEE_CONF)
     }
 
     pub fn compute_split(env: Env, amount: i128) -> (i128, i128) {
         let conf: RouterFeeConfig = env
             .storage()
             .persistent()
-            .get(&FEE_CONF.into())
+            .get(&FEE_CONF)
             .unwrap_or_else(|| panic!("Fee not set"));
         let fee = amount * (conf.platform_fee_bps as i128) / 10_000;
         let provider = amount - fee;
-        env.events().publish(symbol_short!("FeeSplit"), (provider, fee));
+        env.events().publish((symbol_short!("FeeSplit"),), (provider, fee));
         (provider, fee)
     }
 }
