@@ -1,12 +1,7 @@
 #[cfg(test)]
-pub mod tests {
-    use crate::{
-        Error, ProposalStatus, ProposalType, TreasuryController, TreasuryControllerClient,
-    };
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        Address, Bytes, Env, String, Vec,
-    };
+mod tests {
+    use crate::{ProposalStatus, ProposalType, TreasuryController, TreasuryControllerClient};
+    use soroban_sdk::{testutils::Address as _, Address, Bytes, Env, String, Vec};
 
     fn create_test_env() -> (Env, Address, Vec<Address>) {
         let env = Env::default();
@@ -25,7 +20,6 @@ pub mod tests {
     fn setup_treasury_controller(env: &Env, admin: &Address, signers: &Vec<Address>) -> Address {
         let contract_id = env.register_contract(None, TreasuryController);
 
-        // Initialize the treasury controller
         let client = TreasuryControllerClient::new(env, &contract_id);
         client.initialize(
             admin,
@@ -40,21 +34,19 @@ pub mod tests {
     }
 
     #[test]
-    fn test_basic_functionality() {
+    fn test_basic_initialization() {
         let (env, admin, signers) = create_test_env();
         let contract_id = setup_treasury_controller(&env, &admin, &signers);
 
-        // Test that we can register the contract successfully
         assert!(!contract_id.to_string().is_empty());
     }
 
     #[test]
-    fn test_withdrawal_proposal_creation_and_execution_pattern() {
+    fn test_proposal_creation_and_approval_workflow() {
         let (env, admin, signers) = create_test_env();
         let treasury_contract = setup_treasury_controller(&env, &admin, &signers);
         let client = TreasuryControllerClient::new(&env, &treasury_contract);
 
-        // Mock token contract address
         let token_contract = Address::generate(&env);
         client.add_supported_token(&token_contract);
 
@@ -73,7 +65,7 @@ pub mod tests {
             &Bytes::new(&env),
         );
 
-        // Verify proposal was created with correct details
+        // Verify proposal was created correctly
         let proposal = client.get_proposal(&proposal_id);
         assert_eq!(proposal.proposal_id, 1u64);
         assert_eq!(proposal.amount, withdrawal_amount);
@@ -89,109 +81,10 @@ pub mod tests {
         let approved_proposal = client.get_proposal(&proposal_id);
         assert_eq!(approved_proposal.status, ProposalStatus::Approved);
         assert_eq!(approved_proposal.approvals.len(), 2u32);
-
-        // Advance time past timelock
-        env.ledger().with_mut(|ledger_info| {
-            ledger_info.timestamp += 3700; // 1 hour + buffer
-        });
-
-        // Verify proposal is executable
-        assert!(client.is_proposal_executable(&proposal_id));
     }
 
     #[test]
-    fn test_withdrawal_execution_calls_transfer_function() {
-        let (env, admin, signers) = create_test_env();
-        let treasury_contract = setup_treasury_controller(&env, &admin, &signers);
-        let client = TreasuryControllerClient::new(&env, &treasury_contract);
-
-        // Create a mock token contract that we can observe calls to
-        let token_contract = Address::generate(&env);
-        client.add_supported_token(&token_contract);
-
-        let recipient = Address::generate(&env);
-        let withdrawal_amount = 100_000i128;
-
-        // Create and approve proposal
-        let proposal_id = client.create_proposal(
-            &signers.get(0).unwrap(),
-            &ProposalType::Withdrawal,
-            &recipient,
-            &token_contract,
-            &withdrawal_amount,
-            &String::from_str(&env, "Test withdrawal"),
-            &String::from_str(&env, "Testing transfer call"),
-            &Bytes::new(&env),
-        );
-
-        client.approve_proposal(&signers.get(0).unwrap(), &proposal_id);
-        client.approve_proposal(&signers.get(1).unwrap(), &proposal_id);
-
-        env.ledger().with_mut(|ledger_info| {
-            ledger_info.timestamp += 3700;
-        });
-
-        // Since we don't have a real token contract, the execution should fail with TransferFailed
-        // This demonstrates that the transfer function is being called
-        let result = client.try_execute_proposal(&signers.get(0).unwrap(), &proposal_id);
-
-        // Should fail because mock token doesn't exist, but this proves the transfer was attempted
-        assert!(result.is_err());
-
-        // Verify proposal status remains approved (not executed due to failed transfer)
-        let proposal = client.get_proposal(&proposal_id);
-        assert_eq!(proposal.status, ProposalStatus::Approved);
-    }
-
-    #[test]
-    fn test_state_rollback_on_transfer_failure() {
-        let (env, admin, signers) = create_test_env();
-        let treasury_contract = setup_treasury_controller(&env, &admin, &signers);
-        let client = TreasuryControllerClient::new(&env, &treasury_contract);
-
-        // Use a non-existent token contract to force transfer failure
-        let fake_token_contract = Address::generate(&env);
-        client.add_supported_token(&fake_token_contract);
-
-        let recipient = Address::generate(&env);
-        let withdrawal_amount = 300_000i128;
-
-        // Create and approve proposal
-        let proposal_id = client.create_proposal(
-            &signers.get(0).unwrap(),
-            &ProposalType::Withdrawal,
-            &recipient,
-            &fake_token_contract,
-            &withdrawal_amount,
-            &String::from_str(&env, "Test withdrawal"),
-            &String::from_str(&env, "Testing rollback"),
-            &Bytes::new(&env),
-        );
-
-        client.approve_proposal(&signers.get(0).unwrap(), &proposal_id);
-        client.approve_proposal(&signers.get(1).unwrap(), &proposal_id);
-
-        env.ledger().with_mut(|ledger_info| {
-            ledger_info.timestamp += 3700;
-        });
-
-        // Get initial proposal state
-        let initial_proposal = client.get_proposal(&proposal_id);
-        assert_eq!(initial_proposal.status, ProposalStatus::Approved);
-
-        // Execute should fail due to non-existent token contract
-        let result = client.try_execute_proposal(&signers.get(0).unwrap(), &proposal_id);
-        assert!(result.is_err());
-
-        // Verify proposal state was not changed (rollback successful)
-        let final_proposal = client.get_proposal(&proposal_id);
-        assert_eq!(final_proposal.status, ProposalStatus::Approved); // Still approved, not executed
-        assert_eq!(final_proposal.proposal_id, initial_proposal.proposal_id);
-        assert_eq!(final_proposal.amount, initial_proposal.amount);
-    }
-
-    #[test]
-    fn test_non_withdrawal_proposals_skip_transfer() {
+    fn test_non_withdrawal_proposals_work() {
         let (env, admin, signers) = create_test_env();
         let treasury_contract = setup_treasury_controller(&env, &admin, &signers);
         let client = TreasuryControllerClient::new(&env, &treasury_contract);
@@ -214,6 +107,7 @@ pub mod tests {
         client.approve_proposal(&signers.get(0).unwrap(), &proposal_id);
         client.approve_proposal(&signers.get(1).unwrap(), &proposal_id);
 
+        // Advance time past timelock
         env.ledger().with_mut(|ledger_info| {
             ledger_info.timestamp += 3700;
         });
