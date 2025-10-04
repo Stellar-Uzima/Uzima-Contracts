@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    Map, String, Vec,
+    contract, contractimpl, contracterror, contracttype, 
+    Address, Bytes, BytesN, Env, Map, String, Vec, symbol_short
 };
 
 #[contracterror]
@@ -167,16 +167,17 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::ProposalCount, &0u64);
 
         // Emit initialization event
-        env.events().publish((symbol_short!("INIT"),), admin);
+        env.events().publish(
+            (symbol_short!("INIT"),),
+            admin,
+        );
 
         Ok(())
     }
 
     /// Add supported token for treasury operations
     pub fn add_supported_token(env: Env, token_address: Address) -> Result<(), Error> {
-        let mut config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let mut config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -190,8 +191,10 @@ impl TreasuryController {
             config.supported_tokens.push_back(token_address.clone());
             env.storage().instance().set(&DataKey::Config, &config);
 
-            env.events()
-                .publish((symbol_short!("TOKEN_ADD"),), token_address);
+            env.events().publish(
+                (symbol_short!("TOKEN_ADD"),),
+                token_address,
+            );
         }
 
         Ok(())
@@ -211,9 +214,7 @@ impl TreasuryController {
     ) -> Result<u64, Error> {
         proposer.require_auth();
 
-        let config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -237,12 +238,9 @@ impl TreasuryController {
             }
         }
 
-        let proposal_id = env
-            .storage()
-            .instance()
+        let proposal_id = env.storage().instance()
             .get(&DataKey::ProposalCount)
-            .unwrap_or(0u64)
-            + 1;
+            .unwrap_or(0u64) + 1;
 
         let current_time = env.ledger().timestamp();
         let timelock_end = current_time + config.multisig_config.timelock_duration;
@@ -264,19 +262,14 @@ impl TreasuryController {
             execution_data,
         };
 
-        let mut proposals: Map<u64, TreasuryProposal> = env
-            .storage()
+        let mut proposals: Map<u64, TreasuryProposal> = env.storage()
             .persistent()
             .get(&DataKey::Proposals)
             .unwrap_or(Map::new(&env));
 
         proposals.set(proposal_id, proposal);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Proposals, &proposals);
-        env.storage()
-            .instance()
-            .set(&DataKey::ProposalCount, &proposal_id);
+        env.storage().persistent().set(&DataKey::Proposals, &proposals);
+        env.storage().instance().set(&DataKey::ProposalCount, &proposal_id);
 
         // Emit proposal created event
         env.events().publish(
@@ -291,9 +284,7 @@ impl TreasuryController {
     pub fn approve_proposal(env: Env, signer: Address, proposal_id: u64) -> Result<(), Error> {
         signer.require_auth();
 
-        let config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -306,13 +297,13 @@ impl TreasuryController {
             return Err(Error::NotSigner);
         }
 
-        let mut proposals: Map<u64, TreasuryProposal> = env
-            .storage()
+        let mut proposals: Map<u64, TreasuryProposal> = env.storage()
             .persistent()
             .get(&DataKey::Proposals)
             .ok_or(Error::ProposalNotFound)?;
 
-        let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+        let mut proposal = proposals.get(proposal_id)
+            .ok_or(Error::ProposalNotFound)?;
 
         // Check if proposal is still pending
         if !matches!(proposal.status, ProposalStatus::Pending) {
@@ -338,9 +329,7 @@ impl TreasuryController {
 
         let approvals_len = proposal.approvals.len();
         proposals.set(proposal_id, proposal);
-        env.storage()
-            .persistent()
-            .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().set(&DataKey::Proposals, &proposals);
 
         // Emit approval event
         env.events().publish(
@@ -355,9 +344,7 @@ impl TreasuryController {
     pub fn execute_proposal(env: Env, executor: Address, proposal_id: u64) -> Result<(), Error> {
         executor.require_auth();
 
-        let config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -370,13 +357,13 @@ impl TreasuryController {
             return Err(Error::NotSigner);
         }
 
-        let mut proposals: Map<u64, TreasuryProposal> = env
-            .storage()
+        let mut proposals: Map<u64, TreasuryProposal> = env.storage()
             .persistent()
             .get(&DataKey::Proposals)
             .ok_or(Error::ProposalNotFound)?;
 
-        let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+        let mut proposal = proposals.get(proposal_id)
+            .ok_or(Error::ProposalNotFound)?;
 
         // Check if proposal is approved
         if !matches!(proposal.status, ProposalStatus::Approved) {
@@ -392,9 +379,7 @@ impl TreasuryController {
         // Mark as executed
         proposal.status = ProposalStatus::Executed;
         proposals.set(proposal_id, proposal.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().set(&DataKey::Proposals, &proposals);
 
         // Record withdrawal for audit trail
         if matches!(proposal.proposal_type, ProposalType::Withdrawal) {
@@ -409,16 +394,13 @@ impl TreasuryController {
                 transaction_hash: BytesN::from_array(&env, &[0u8; 32]),
             };
 
-            let mut withdrawals: Map<u64, WithdrawalRecord> = env
-                .storage()
+            let mut withdrawals: Map<u64, WithdrawalRecord> = env.storage()
                 .persistent()
                 .get(&DataKey::Withdrawals)
                 .unwrap_or(Map::new(&env));
 
             withdrawals.set(proposal_id, withdrawal_record);
-            env.storage()
-                .persistent()
-                .set(&DataKey::Withdrawals, &withdrawals);
+            env.storage().persistent().set(&DataKey::Withdrawals, &withdrawals);
         }
 
         // Emit execution event
@@ -434,9 +416,7 @@ impl TreasuryController {
     pub fn emergency_halt(env: Env, caller: Address) -> Result<(), Error> {
         caller.require_auth();
 
-        let mut config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let mut config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -452,7 +432,10 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit emergency halt event
-        env.events().publish((symbol_short!("EMERGENCY"),), caller);
+        env.events().publish(
+            (symbol_short!("EMERGENCY"),),
+            caller,
+        );
 
         Ok(())
     }
@@ -461,9 +444,7 @@ impl TreasuryController {
     pub fn resume_operations(env: Env, caller: Address) -> Result<(), Error> {
         caller.require_auth();
 
-        let mut config: TreasuryConfig = env
-            .storage()
-            .instance()
+        let mut config: TreasuryConfig = env.storage().instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
 
@@ -476,7 +457,10 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit resume event
-        env.events().publish((symbol_short!("RESUMED"),), caller);
+        env.events().publish(
+            (symbol_short!("RESUMED"),),
+            caller,
+        );
 
         Ok(())
     }
@@ -485,29 +469,34 @@ impl TreasuryController {
 
     /// Get treasury configuration
     pub fn get_config(env: Env) -> TreasuryConfig {
-        env.storage().instance().get(&DataKey::Config).unwrap()
+        env.storage().instance()
+            .get(&DataKey::Config)
+            .unwrap()
     }
 
     /// Get proposal details
     pub fn get_proposal(env: Env, proposal_id: u64) -> TreasuryProposal {
-        let proposals: Map<u64, TreasuryProposal> =
-            env.storage().persistent().get(&DataKey::Proposals).unwrap();
+        let proposals: Map<u64, TreasuryProposal> = env.storage()
+            .persistent()
+            .get(&DataKey::Proposals)
+            .unwrap();
 
-        proposals.get(proposal_id).unwrap()
+        proposals.get(proposal_id)
+            .unwrap()
     }
 
     /// Get total number of proposals
     pub fn get_proposal_count(env: Env) -> u64 {
-        env.storage()
-            .instance()
+        env.storage().instance()
             .get(&DataKey::ProposalCount)
             .unwrap_or(0)
     }
 
     /// Check if proposal is ready for execution
     pub fn is_proposal_executable(env: Env, proposal_id: u64) -> bool {
-        let proposals: Map<u64, TreasuryProposal> =
-            match env.storage().persistent().get(&DataKey::Proposals) {
+        let proposals: Map<u64, TreasuryProposal> = match env.storage()
+            .persistent()
+            .get(&DataKey::Proposals) {
                 Some(p) => p,
                 None => return false,
             };
@@ -517,17 +506,18 @@ impl TreasuryController {
             None => return false,
         };
 
-        let config: TreasuryConfig = match env.storage().instance().get(&DataKey::Config) {
-            Some(c) => c,
-            None => return false,
-        };
+        let config: TreasuryConfig = match env.storage().instance()
+            .get(&DataKey::Config) {
+                Some(c) => c,
+                None => return false,
+            };
 
         if !matches!(proposal.status, ProposalStatus::Approved) {
             return false;
         }
 
         let current_time = env.ledger().timestamp();
-
+        
         // Check timelock
         if current_time < proposal.timelock_end {
             return false;
@@ -547,7 +537,7 @@ impl TreasuryController {
     }
 
     // === Gnosis Safe Compatibility Interface ===
-
+    
     /// Get threshold for Gnosis Safe compatibility
     pub fn gnosis_get_threshold(env: Env) -> u32 {
         let config = Self::get_config(env);

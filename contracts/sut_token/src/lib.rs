@@ -1,7 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, contracttype, contracterror, Address, Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contractmeta, contracttype, Address, Env, String,
+    Symbol, Vec,
 };
 
 contractmeta!(
@@ -66,7 +67,7 @@ pub enum DataKey {
     Minter(Address),
     Snapshot(u32), // snapshot_id
     SnapshotCount,
-    UserCheckpoints(Address), // Vec<Checkpoint> for user
+    UserCheckpoints(Address),     // Vec<Checkpoint> for user
     UserCheckpointCount(Address), // number of checkpoints for user
 }
 
@@ -146,10 +147,14 @@ impl SutToken {
             supply_cap,
             admin: admin.clone(),
         };
-        env.storage().instance().set(&DataKey::TokenInfo, &token_info);
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenInfo, &token_info);
 
         // Set admin as initial minter
-        env.storage().instance().set(&DataKey::Minter(admin.clone()), &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::Minter(admin.clone()), &true);
 
         // Initialize snapshot counter
         env.storage().instance().set(&DataKey::SnapshotCount, &0u32);
@@ -159,7 +164,9 @@ impl SutToken {
 
     /// Get token name
     pub fn name(env: Env) -> Result<String, Error> {
-        let metadata: TokenMetadata = env.storage().instance()
+        let metadata: TokenMetadata = env
+            .storage()
+            .instance()
             .get(&DataKey::Metadata)
             .ok_or(Error::NotInitialized)?;
         Ok(metadata.name)
@@ -167,7 +174,9 @@ impl SutToken {
 
     /// Get token symbol
     pub fn symbol(env: Env) -> Result<String, Error> {
-        let metadata: TokenMetadata = env.storage().instance()
+        let metadata: TokenMetadata = env
+            .storage()
+            .instance()
             .get(&DataKey::Metadata)
             .ok_or(Error::NotInitialized)?;
         Ok(metadata.symbol)
@@ -175,7 +184,9 @@ impl SutToken {
 
     /// Get token decimals
     pub fn decimals(env: Env) -> Result<u32, Error> {
-        let metadata: TokenMetadata = env.storage().instance()
+        let metadata: TokenMetadata = env
+            .storage()
+            .instance()
             .get(&DataKey::Metadata)
             .ok_or(Error::NotInitialized)?;
         Ok(metadata.decimals)
@@ -183,7 +194,9 @@ impl SutToken {
 
     /// Get total supply
     pub fn total_supply(env: Env) -> Result<i128, Error> {
-        let token_info: TokenInfo = env.storage().instance()
+        let token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
         Ok(token_info.total_supply)
@@ -191,7 +204,9 @@ impl SutToken {
 
     /// Get supply cap
     pub fn supply_cap(env: Env) -> Result<i128, Error> {
-        let token_info: TokenInfo = env.storage().instance()
+        let token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
         Ok(token_info.supply_cap)
@@ -199,14 +214,16 @@ impl SutToken {
 
     /// Get balance of an address
     pub fn balance_of(env: Env, account: Address) -> i128 {
-        env.storage().persistent()
+        env.storage()
+            .persistent()
             .get(&DataKey::Balance(account))
             .unwrap_or(0)
     }
 
     /// Get allowance between owner and spender
     pub fn allowance(env: Env, owner: Address, spender: Address) -> i128 {
-        env.storage().persistent()
+        env.storage()
+            .persistent()
             .get(&DataKey::Allowance(owner, spender))
             .unwrap_or(0)
     }
@@ -232,7 +249,8 @@ impl SutToken {
             to: to.clone(),
             amount,
         };
-        env.events().publish((Symbol::new(&env, "transfer"),), event);
+        env.events()
+            .publish((Symbol::new(&env, "transfer"),), event);
 
         Ok(())
     }
@@ -265,9 +283,14 @@ impl SutToken {
         // Update allowance
         let new_allowance = allowance - amount;
         if new_allowance == 0 {
-            env.storage().persistent().remove(&DataKey::Allowance(from.clone(), spender.clone()));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Allowance(from.clone(), spender.clone()));
         } else {
-            env.storage().persistent().set(&DataKey::Allowance(from.clone(), spender.clone()), &new_allowance);
+            env.storage().persistent().set(
+                &DataKey::Allowance(from.clone(), spender.clone()),
+                &new_allowance,
+            );
         }
 
         Self::transfer_internal(&env, &from, &to, amount)?;
@@ -278,7 +301,8 @@ impl SutToken {
             to: to.clone(),
             amount,
         };
-        env.events().publish((Symbol::new(&env, "transfer"),), event);
+        env.events()
+            .publish((Symbol::new(&env, "transfer"),), event);
 
         Ok(())
     }
@@ -294,9 +318,13 @@ impl SutToken {
 
         // Set allowance
         if amount == 0 {
-            env.storage().persistent().remove(&DataKey::Allowance(owner.clone(), spender.clone()));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Allowance(owner.clone(), spender.clone()));
         } else {
-            env.storage().persistent().set(&DataKey::Allowance(owner.clone(), spender.clone()), &amount);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Allowance(owner.clone(), spender.clone()), &amount);
         }
 
         // Emit approval event
@@ -305,7 +333,8 @@ impl SutToken {
             spender: spender.clone(),
             amount,
         };
-        env.events().publish((Symbol::new(&env, "approval"),), event);
+        env.events()
+            .publish((Symbol::new(&env, "approval"),), event);
 
         Ok(())
     }
@@ -320,12 +349,19 @@ impl SutToken {
         minter.require_auth();
 
         // Check if caller is a minter
-        if !env.storage().instance().get(&DataKey::Minter(minter.clone())).unwrap_or(false) {
+        if !env
+            .storage()
+            .instance()
+            .get(&DataKey::Minter(minter.clone()))
+            .unwrap_or(false)
+        {
             return Err(Error::Unauthorized);
         }
 
         // Get current token info
-        let mut token_info: TokenInfo = env.storage().instance()
+        let mut token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
 
@@ -336,12 +372,16 @@ impl SutToken {
 
         // Update total supply
         token_info.total_supply += amount;
-        env.storage().instance().set(&DataKey::TokenInfo, &token_info);
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenInfo, &token_info);
 
         // Update recipient balance
         let current_balance = Self::balance_of(env.clone(), to.clone());
         let new_balance = current_balance + amount;
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_balance);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(to.clone()), &new_balance);
 
         // Update checkpoint for recipient
         Self::update_checkpoint(&env, &to, new_balance);
@@ -366,7 +406,12 @@ impl SutToken {
         minter.require_auth();
 
         // Check if caller is a minter
-        if !env.storage().instance().get(&DataKey::Minter(minter.clone())).unwrap_or(false) {
+        if !env
+            .storage()
+            .instance()
+            .get(&DataKey::Minter(minter.clone()))
+            .unwrap_or(false)
+        {
             return Err(Error::Unauthorized);
         }
 
@@ -377,20 +422,28 @@ impl SutToken {
         }
 
         // Get current token info
-        let mut token_info: TokenInfo = env.storage().instance()
+        let mut token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
 
         // Update total supply
         token_info.total_supply -= amount;
-        env.storage().instance().set(&DataKey::TokenInfo, &token_info);
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenInfo, &token_info);
 
         // Update sender balance
         let new_balance = current_balance - amount;
         if new_balance == 0 {
-            env.storage().persistent().remove(&DataKey::Balance(from.clone()));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Balance(from.clone()));
         } else {
-            env.storage().persistent().set(&DataKey::Balance(from.clone()), &new_balance);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Balance(from.clone()), &new_balance);
         }
 
         // Update checkpoint for sender
@@ -408,20 +461,26 @@ impl SutToken {
 
     /// Add a new minter (only by admin)
     pub fn add_minter(env: Env, minter: Address) -> Result<(), Error> {
-        let token_info: TokenInfo = env.storage().instance()
+        let token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
 
         // Require authorization from admin
         token_info.admin.require_auth();
 
-        env.storage().instance().set(&DataKey::Minter(minter), &true);
+        env.storage()
+            .instance()
+            .set(&DataKey::Minter(minter), &true);
         Ok(())
     }
 
     /// Remove a minter (only by admin)
     pub fn remove_minter(env: Env, minter: Address) -> Result<(), Error> {
-        let token_info: TokenInfo = env.storage().instance()
+        let token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
 
@@ -434,12 +493,17 @@ impl SutToken {
 
     /// Check if address is a minter
     pub fn is_minter(env: Env, address: Address) -> bool {
-        env.storage().instance().get(&DataKey::Minter(address)).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Minter(address))
+            .unwrap_or(false)
     }
 
     /// Create a snapshot for voting/rewards
     pub fn snapshot(env: Env) -> Result<u32, Error> {
-        let token_info: TokenInfo = env.storage().instance()
+        let token_info: TokenInfo = env
+            .storage()
+            .instance()
             .get(&DataKey::TokenInfo)
             .ok_or(Error::NotInitialized)?;
 
@@ -447,7 +511,9 @@ impl SutToken {
         token_info.admin.require_auth();
 
         // Get current snapshot count
-        let snapshot_count: u32 = env.storage().instance()
+        let snapshot_count: u32 = env
+            .storage()
+            .instance()
             .get(&DataKey::SnapshotCount)
             .unwrap_or(0);
 
@@ -460,22 +526,29 @@ impl SutToken {
             total_supply: token_info.total_supply,
         };
 
-        env.storage().instance().set(&DataKey::Snapshot(snapshot_id), &snapshot);
-        env.storage().instance().set(&DataKey::SnapshotCount, &snapshot_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::Snapshot(snapshot_id), &snapshot);
+        env.storage()
+            .instance()
+            .set(&DataKey::SnapshotCount, &snapshot_id);
 
         // Emit snapshot event
         let event = SnapshotEvent {
             id: snapshot_id,
             block_number,
         };
-        env.events().publish((Symbol::new(&env, "snapshot"),), event);
+        env.events()
+            .publish((Symbol::new(&env, "snapshot"),), event);
 
         Ok(snapshot_id)
     }
 
     /// Get balance at snapshot
     pub fn balance_of_at(env: Env, account: Address, snapshot_id: u32) -> Result<i128, Error> {
-        let _snapshot: Snapshot = env.storage().instance()
+        let _snapshot: Snapshot = env
+            .storage()
+            .instance()
             .get(&DataKey::Snapshot(snapshot_id))
             .ok_or(Error::SnapshotNotFound)?;
 
@@ -484,7 +557,9 @@ impl SutToken {
 
     /// Get total supply at snapshot
     pub fn total_supply_at(env: Env, snapshot_id: u32) -> Result<i128, Error> {
-        let snapshot: Snapshot = env.storage().instance()
+        let snapshot: Snapshot = env
+            .storage()
+            .instance()
             .get(&DataKey::Snapshot(snapshot_id))
             .ok_or(Error::SnapshotNotFound)?;
 
@@ -507,14 +582,20 @@ impl SutToken {
         // Update balances
         let new_from_balance = from_balance - amount;
         if new_from_balance == 0 {
-            env.storage().persistent().remove(&DataKey::Balance(from.clone()));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::Balance(from.clone()));
         } else {
-            env.storage().persistent().set(&DataKey::Balance(from.clone()), &new_from_balance);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Balance(from.clone()), &new_from_balance);
         }
 
         let to_balance = Self::balance_of(env.clone(), to.clone());
         let new_to_balance = to_balance + amount;
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_to_balance);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(to.clone()), &new_to_balance);
 
         // Update checkpoints for both accounts
         Self::update_checkpoint(env, from, new_from_balance);
@@ -524,7 +605,9 @@ impl SutToken {
     }
 
     fn update_checkpoint(env: &Env, user: &Address, new_balance: i128) {
-        let current_snapshot_count: u32 = env.storage().instance()
+        let current_snapshot_count: u32 = env
+            .storage()
+            .instance()
             .get(&DataKey::SnapshotCount)
             .unwrap_or(0);
 
@@ -532,23 +615,34 @@ impl SutToken {
             return;
         }
 
-        let checkpoint_count: u32 = env.storage().persistent()
+        let checkpoint_count: u32 = env
+            .storage()
+            .persistent()
             .get(&DataKey::UserCheckpointCount(user.clone()))
             .unwrap_or(0);
 
-        let mut checkpoints: Vec<Checkpoint> = env.storage().persistent()
+        let mut checkpoints: Vec<Checkpoint> = env
+            .storage()
+            .persistent()
             .get(&DataKey::UserCheckpoints(user.clone()))
             .unwrap_or(Vec::new(env));
 
-        if checkpoint_count == 0 || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count {
+        if checkpoint_count == 0
+            || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count
+        {
             let new_checkpoint = Checkpoint {
                 snapshot_id: current_snapshot_count,
                 balance: new_balance,
             };
             checkpoints.push_back(new_checkpoint);
 
-            env.storage().persistent().set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
-            env.storage().persistent().set(&DataKey::UserCheckpointCount(user.clone()), &(checkpoint_count + 1));
+            env.storage()
+                .persistent()
+                .set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
+            env.storage().persistent().set(
+                &DataKey::UserCheckpointCount(user.clone()),
+                &(checkpoint_count + 1),
+            );
         } else if checkpoint_count > 0 {
             let last_checkpoint = checkpoints.get(checkpoint_count - 1).unwrap();
             if last_checkpoint.snapshot_id == current_snapshot_count {
@@ -557,17 +651,23 @@ impl SutToken {
                     balance: new_balance,
                 };
                 checkpoints.set(checkpoint_count - 1, updated_checkpoint);
-                env.storage().persistent().set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
             }
         }
     }
 
     fn get_balance_at_snapshot(env: &Env, user: &Address, snapshot_id: u32) -> i128 {
-        let checkpoints: Vec<Checkpoint> = env.storage().persistent()
+        let checkpoints: Vec<Checkpoint> = env
+            .storage()
+            .persistent()
             .get(&DataKey::UserCheckpoints(user.clone()))
             .unwrap_or(Vec::new(env));
 
-        let checkpoint_count: u32 = env.storage().persistent()
+        let checkpoint_count: u32 = env
+            .storage()
+            .persistent()
             .get(&DataKey::UserCheckpointCount(user.clone()))
             .unwrap_or(0);
 
