@@ -37,21 +37,21 @@ impl IdentityRegistryContract {
     pub fn initialize(env: Env, owner: Address) {
         owner.require_auth();
 
-            // Initialization guard: panic if already initialized
-            if env.storage().instance().has(&DataKey::Owner) {
-                panic!("Contract already initialized");
-            }
+        // Initialization guard: panic if already initialized
+        if env.storage().instance().has(&DataKey::Owner) {
+            panic!("Contract already initialized");
+        }
 
-            // Set the owner
-            env.storage().instance().set(&DataKey::Owner, &owner);
+        // Set the owner
+        env.storage().instance().set(&DataKey::Owner, &owner);
 
-            // Owner is automatically a verifier
-            env.storage()
-                .instance()
-                .set(&DataKey::Verifier(owner.clone()), &true);
+        // Owner is automatically a verifier
+        env.storage()
+            .instance()
+            .set(&DataKey::Verifier(owner.clone()), &true);
 
-            // Emit Initialized event
-            env.events().publish(("Initialized",), owner.clone());
+        // Emit Initialized event
+        env.events().publish(("Initialized",), owner.clone());
     }
 
     /// Register an identity hash with metadata
@@ -328,7 +328,9 @@ mod tests {
         let meta = String::from_str(&env, "Healthcare Provider License #12345");
 
         // Register identity hash - subject must authorize
-        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
+        client
+            .mock_all_auths()
+            .register_identity_hash(&hash, &subject, &meta);
 
         // Verify storage
         assert_eq!(client.get_identity_hash(&subject), Some(hash));
@@ -348,7 +350,9 @@ mod tests {
         let meta = String::from_str(&env, "Healthcare Provider License #12345");
 
         // Register identity hash
-        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
+        client
+            .mock_all_auths()
+            .register_identity_hash(&hash, &subject, &meta);
 
         // Verify that registered_by is set to the subject (not the contract)
         let record_key = DataKey::IdentityHash(subject.clone());
@@ -534,8 +538,12 @@ mod tests {
         let meta2 = String::from_str(&env, "Clinic Registration");
 
         // Register multiple identities
-        client.mock_all_auths().register_identity_hash(&hash1, &subject1, &meta1);
-        client.mock_all_auths().register_identity_hash(&hash2, &subject2, &meta2);
+        client
+            .mock_all_auths()
+            .register_identity_hash(&hash1, &subject1, &meta1);
+        client
+            .mock_all_auths()
+            .register_identity_hash(&hash2, &subject2, &meta2);
 
         // Verify both are stored correctly
         assert_eq!(client.get_identity_hash(&subject1), Some(hash1));
