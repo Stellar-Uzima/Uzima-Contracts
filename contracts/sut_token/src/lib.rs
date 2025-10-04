@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contractmeta, contracttype, contracterror, Address, Env, String, Symbol, Map,
+    contract, contractimpl, contractmeta, contracttype, contracterror, Address, Env, String, Symbol, Vec,
 };
 
 contractmeta!(
@@ -46,7 +46,13 @@ pub struct TokenInfo {
 pub struct Snapshot {
     pub block_number: u32,
     pub total_supply: i128,
-    pub balances: Map<Address, i128>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct Checkpoint {
+    pub snapshot_id: u32,
+    pub balance: i128,
 }
 
 // Storage keys
@@ -60,6 +66,8 @@ pub enum DataKey {
     Minter(Address),
     Snapshot(u32), // snapshot_id
     SnapshotCount,
+    UserCheckpoints(Address), // Vec<Checkpoint> for user
+    UserCheckpointCount(Address), // number of checkpoints for user
 }
 
 // Events
@@ -332,7 +340,11 @@ impl SutToken {
 
         // Update recipient balance
         let current_balance = Self::balance_of(env.clone(), to.clone());
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &(current_balance + amount));
+        let new_balance = current_balance + amount;
+        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_balance);
+
+        // Update checkpoint for recipient
+        Self::update_checkpoint(&env, &to, new_balance);
 
         // Emit mint event
         let event = MintEvent {
@@ -380,6 +392,9 @@ impl SutToken {
         } else {
             env.storage().persistent().set(&DataKey::Balance(from.clone()), &new_balance);
         }
+
+        // Update checkpoint for sender
+        Self::update_checkpoint(&env, &from, new_balance);
 
         // Emit burn event
         let event = BurnEvent {
@@ -439,11 +454,10 @@ impl SutToken {
         let snapshot_id = snapshot_count + 1;
         let block_number = env.ledger().sequence();
 
-        // Create snapshot (simplified - in production, you'd capture all balances)
+        // Create snapshot
         let snapshot = Snapshot {
             block_number,
             total_supply: token_info.total_supply,
-            balances: Map::new(&env), // Simplified - would capture all balances
         };
 
         env.storage().instance().set(&DataKey::Snapshot(snapshot_id), &snapshot);
@@ -465,9 +479,7 @@ impl SutToken {
             .get(&DataKey::Snapshot(snapshot_id))
             .ok_or(Error::SnapshotNotFound)?;
 
-        // In a full implementation, this would return the balance from the snapshot
-        // For now, return current balance as placeholder
-        Ok(Self::balance_of(env, account))
+        Ok(Self::get_balance_at_snapshot(&env, &account, snapshot_id))
     }
 
     /// Get total supply at snapshot
@@ -501,9 +513,87 @@ impl SutToken {
         }
 
         let to_balance = Self::balance_of(env.clone(), to.clone());
-        env.storage().persistent().set(&DataKey::Balance(to.clone()), &(to_balance + amount));
+        let new_to_balance = to_balance + amount;
+        env.storage().persistent().set(&DataKey::Balance(to.clone()), &new_to_balance);
+
+        // Update checkpoints for both accounts
+        Self::update_checkpoint(env, from, new_from_balance);
+        Self::update_checkpoint(env, to, new_to_balance);
 
         Ok(())
+    }
+
+    fn update_checkpoint(env: &Env, user: &Address, new_balance: i128) {
+        let current_snapshot_count: u32 = env.storage().instance()
+            .get(&DataKey::SnapshotCount)
+            .unwrap_or(0);
+
+        if current_snapshot_count == 0 {
+            return;
+        }
+
+        let checkpoint_count: u32 = env.storage().persistent()
+            .get(&DataKey::UserCheckpointCount(user.clone()))
+            .unwrap_or(0);
+
+        let mut checkpoints: Vec<Checkpoint> = env.storage().persistent()
+            .get(&DataKey::UserCheckpoints(user.clone()))
+            .unwrap_or(Vec::new(env));
+
+        if checkpoint_count == 0 || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count {
+            let new_checkpoint = Checkpoint {
+                snapshot_id: current_snapshot_count,
+                balance: new_balance,
+            };
+            checkpoints.push_back(new_checkpoint);
+
+            env.storage().persistent().set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
+            env.storage().persistent().set(&DataKey::UserCheckpointCount(user.clone()), &(checkpoint_count + 1));
+        } else if checkpoint_count > 0 {
+            let last_checkpoint = checkpoints.get(checkpoint_count - 1).unwrap();
+            if last_checkpoint.snapshot_id == current_snapshot_count {
+                let updated_checkpoint = Checkpoint {
+                    snapshot_id: current_snapshot_count,
+                    balance: new_balance,
+                };
+                checkpoints.set(checkpoint_count - 1, updated_checkpoint);
+                env.storage().persistent().set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
+            }
+        }
+    }
+
+    fn get_balance_at_snapshot(env: &Env, user: &Address, snapshot_id: u32) -> i128 {
+        let checkpoints: Vec<Checkpoint> = env.storage().persistent()
+            .get(&DataKey::UserCheckpoints(user.clone()))
+            .unwrap_or(Vec::new(env));
+
+        let checkpoint_count: u32 = env.storage().persistent()
+            .get(&DataKey::UserCheckpointCount(user.clone()))
+            .unwrap_or(0);
+
+        if checkpoint_count == 0 {
+            return 0;
+        }
+
+        let mut low = 0u32;
+        let mut high = checkpoint_count;
+
+        while low < high {
+            let mid = (low + high) / 2;
+            let checkpoint = checkpoints.get(mid).unwrap();
+
+            if checkpoint.snapshot_id <= snapshot_id {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+
+        if low == 0 {
+            0
+        } else {
+            checkpoints.get(low - 1).unwrap().balance
+        }
     }
 }
 
