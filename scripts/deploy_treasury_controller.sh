@@ -2,21 +2,30 @@
 
 # Deploy Treasury Controller Contract to Stellar Testnet
 # This script deploys and initializes the Multi-Sig Treasury Controller
+# Usage: ./scripts/deploy_treasury_controller.sh
 
-set -e
+set -euo pipefail  # Exit on error, undefined vars, or pipe fail
+
+if [ $# -ne 0 ]; then
+    echo "❌ Error: No arguments expected. Usage: $0"
+    exit 1
+fi
 
 echo "🏛️ Deploying Treasury Controller Contract..."
 
 # Build contracts
 echo "📦 Building contracts..."
-soroban contract build
+if ! soroban contract build; then
+    echo "❌ Error: Contract build failed"
+    exit 1
+fi
 
 # Deploy Treasury Controller
 echo "🔐 Deploying Treasury Controller..."
 TREASURY_CONTROLLER_ID=$(soroban contract deploy \
     --wasm target/wasm32-unknown-unknown/release/treasury_controller.wasm \
     --source alice \
-    --network testnet)
+    --network testnet) || { echo "❌ Error: Treasury Controller deployment failed"; exit 1; }
 
 echo "Treasury Controller deployed at: $TREASURY_CONTROLLER_ID"
 
@@ -25,14 +34,14 @@ echo "🪙 Deploying SUT Token for treasury management..."
 SUT_TOKEN_ID=$(soroban contract deploy \
     --wasm target/wasm32-unknown-unknown/release/sut_token.wasm \
     --source alice \
-    --network testnet)
+    --network testnet) || { echo "❌ Error: SUT Token deployment failed"; exit 1; }
 
 echo "SUT Token deployed at: $SUT_TOKEN_ID"
 
 # Initialize SUT Token
 echo "🔧 Initializing SUT Token..."
-soroban contract invoke \
-    --id $SUT_TOKEN_ID \
+if ! soroban contract invoke \
+    --id "$SUT_TOKEN_ID" \
     --source alice \
     --network testnet \
     -- \
@@ -41,7 +50,10 @@ soroban contract invoke \
     --name "Stellar Utility Token" \
     --symbol "SUT" \
     --decimals 6 \
-    --supply_cap 1000000000000
+    --supply_cap 1000000000000; then
+    echo "❌ Error: SUT Token initialization failed"
+    exit 1
+fi
 
 # Set up multisig signers (replace with actual addresses for production)
 SIGNER1="GCDNJUBQSX7AJWLJACMJ7I4BC3Z47BQUTMHEICZLE6MU4KQBRYG5JY6B"  # Alice
@@ -49,8 +61,8 @@ SIGNER2="GDXLKEY5TR4IDEV7FZWYFG6MA6M24YDCX5HENQ7DTESBE233FOQIUWR"  # Bob
 SIGNER3="GCJXTTQNUCL7NLRX2E7DWLVP7V4RYDGB6E5CVFYFFGJGFQAZCXZFLXPN"  # Charlie
 
 echo "🔧 Initializing Treasury Controller..."
-soroban contract invoke \
-    --id $TREASURY_CONTROLLER_ID \
+if ! soroban contract invoke \
+    --id "$TREASURY_CONTROLLER_ID" \
     --source alice \
     --network testnet \
     -- \
@@ -60,16 +72,22 @@ soroban contract invoke \
     --threshold 2 \
     --timelock_duration 3600 \
     --emergency_threshold 2 \
-    --max_withdrawal_amount 1000000000
+    --max_withdrawal_amount 1000000000; then
+    echo "❌ Error: Treasury Controller initialization failed"
+    exit 1
+fi
 
 echo "✅ Adding SUT Token as supported token..."
-soroban contract invoke \
-    --id $TREASURY_CONTROLLER_ID \
+if ! soroban contract invoke \
+    --id "$TREASURY_CONTROLLER_ID" \
     --source alice \
     --network testnet \
     -- \
     add_supported_token \
-    --token_address $SUT_TOKEN_ID
+    --token_address "$SUT_TOKEN_ID"; then
+    echo "❌ Error: Failed to add SUT Token"
+    exit 1
+fi
 
 echo "🎉 Treasury Controller setup complete!"
 echo ""
