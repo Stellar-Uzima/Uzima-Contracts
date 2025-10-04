@@ -81,3 +81,8 @@ wheels/
 # Local configuration
 local_config.toml
 secrets.toml
+
+# Stellar / Soroban CLI binaries & tarballs
+stellar-cli.tar.gz
+stellar
+soroban
