@@ -47,13 +47,15 @@ impl IdentityRegistryContract {
     }
 
     /// Register an identity hash with metadata
+    /// Only the subject can register their own identity hash
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
-        let caller = env.current_contract_address();
+        // Require authorization from the subject
+        subject.require_auth();
 
         let identity_record = IdentityRecord {
             hash: hash.clone(),
             meta: meta.clone(),
-            registered_by: caller,
+            registered_by: subject.clone(),
         };
 
         env.storage()
@@ -302,8 +304,8 @@ mod tests {
         let hash = BytesN::from_array(&env, &[1; 32]);
         let meta = String::from_str(&env, "Healthcare Provider License #12345");
 
-        // Register identity hash
-        client.register_identity_hash(&hash, &subject, &meta);
+        // Register identity hash - subject must authorize
+        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
 
         // Verify storage
         assert_eq!(client.get_identity_hash(&subject), Some(hash));
@@ -488,8 +490,8 @@ mod tests {
         let meta2 = String::from_str(&env, "Clinic Registration");
 
         // Register multiple identities
-        client.register_identity_hash(&hash1, &subject1, &meta1);
-        client.register_identity_hash(&hash2, &subject2, &meta2);
+        client.mock_all_auths().register_identity_hash(&hash1, &subject1, &meta1);
+        client.mock_all_auths().register_identity_hash(&hash2, &subject2, &meta2);
 
         // Verify both are stored correctly
         assert_eq!(client.get_identity_hash(&subject1), Some(hash1));
