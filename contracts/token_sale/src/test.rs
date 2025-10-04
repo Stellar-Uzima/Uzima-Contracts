@@ -13,7 +13,7 @@ fn create_token_contract<'a>(
     admin: &Address,
 ) -> (Address, token::Client<'a>, token::StellarAssetClient<'a>) {
     let contract_address = e
-        .register_stellar_asset_contract_v2(admin.clone())
+        .register_stellar_asset_contract(admin.clone())
         .address();
     (
         contract_address.clone(),
