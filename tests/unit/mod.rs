@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
+    use medical_records::{Category, MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::testutils::{Address as _, AuthorizedFunction, MockAuth, MockAuthInvoke};
     use soroban_sdk::{Address, Env, String};
 
@@ -64,8 +64,8 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &true,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
                 String::from_str(&env, "Herbal Therapy"),
             );
 
@@ -119,8 +119,8 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
                 String::from_str(&env, "Herbal Therapy"),
             );
 
@@ -138,8 +138,8 @@ mod tests {
                 &String::from_str(&env, "New Diagnosis"),
                 &String::from_str(&env, "New Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
                 String::from_str(&env, "Herbal Therapy"),
             );
         assert!(result.is_err());

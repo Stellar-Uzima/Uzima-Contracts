@@ -2,6 +2,15 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, Env, Map, String, Symbol, Vec};
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum Category {
+    Modern,
+    Traditional,
+    Herbal,
+    Spiritual,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum Role {
@@ -28,7 +37,7 @@ pub struct MedicalRecord {
     pub treatment: String,
     pub is_confidential: bool,
     pub tags: Vec<String>,
-    pub category: String,
+    pub category: Category,
     pub treatment_type: String,
 }
 
@@ -41,6 +50,7 @@ pub enum DataKey {
 const USERS: Symbol = Symbol::short("USERS");
 const ADMINS: Symbol = Symbol::short("ADMINS");
 const RECORDS: Symbol = Symbol::short("RECORDS");
+const ALLOWED_CATEGORIES: Symbol = Symbol::short("CATGS");
 // Pausable state and recovery storage
 const PAUSED: Symbol = Symbol::short("PAUSED");
 const PROPOSALS: Symbol = Symbol::short("PROPOSALS");
@@ -86,6 +96,16 @@ impl MedicalRecordsContract {
 
         // Initialize paused state to false
         env.storage().persistent().set(&PAUSED, &false);
+
+        // Initialize allowed categories with default values
+        let default_categories = vec![
+            &env,
+            Category::Modern,
+            Category::Traditional,
+            Category::Herbal,
+            Category::Spiritual,
+        ];
+        env.storage().persistent().set(&ALLOWED_CATEGORIES, &default_categories);
 
         true
     }
@@ -147,6 +167,89 @@ impl MedicalRecordsContract {
         true
     }
 
+    /// Add a category to the allowed list - only admins
+    pub fn add_allowed_category(env: Env, caller: Address, category: Category) -> bool {
+        caller.require_auth();
+        
+        // Block when paused
+        if Self::is_paused(&env) {
+            panic!("Contract is paused");
+        }
+
+        // Only admins can manage allowed categories
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            panic!("Only admins can manage categories");
+        }
+
+        let mut allowed_categories: Vec<Category> = env
+            .storage()
+            .persistent()
+            .get(&ALLOWED_CATEGORIES)
+            .unwrap_or(Vec::new(&env));
+
+        // Check if category already exists
+        if allowed_categories.iter().any(|c| c == category) {
+            return false;
+        }
+
+        allowed_categories.push_back(category.clone());
+        env.storage().persistent().set(&ALLOWED_CATEGORIES, &allowed_categories);
+
+        // Emit CategoryAdded event
+        env.events().publish((Symbol::short("CategoryAdded"),), category);
+        true
+    }
+
+    /// Remove a category from the allowed list - only admins
+    pub fn remove_allowed_category(env: Env, caller: Address, category: Category) -> bool {
+        caller.require_auth();
+        
+        // Block when paused
+        if Self::is_paused(&env) {
+            panic!("Contract is paused");
+        }
+
+        // Only admins can manage allowed categories
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            panic!("Only admins can manage categories");
+        }
+
+        let allowed_categories: Vec<Category> = env
+            .storage()
+            .persistent()
+            .get(&ALLOWED_CATEGORIES)
+            .unwrap_or(Vec::new(&env));
+
+        // Create new vector without the specified category
+        let mut new_categories = Vec::new(&env);
+        let mut found = false;
+        for cat in allowed_categories.iter() {
+            if cat != category {
+                new_categories.push_back(cat);
+            } else {
+                found = true;
+            }
+        }
+
+        if !found {
+            return false;
+        }
+
+        env.storage().persistent().set(&ALLOWED_CATEGORIES, &new_categories);
+
+        // Emit CategoryRemoved event
+        env.events().publish((Symbol::short("CategoryRemoved"),), category);
+        true
+    }
+
+    /// Get the list of allowed categories
+    pub fn get_allowed_categories(env: Env) -> Vec<Category> {
+        env.storage()
+            .persistent()
+            .get(&ALLOWED_CATEGORIES)
+            .unwrap_or(Vec::new(&env))
+    }
+
     /// Add or update a user with a specific role
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
         caller.require_auth();
@@ -182,7 +285,7 @@ impl MedicalRecordsContract {
         treatment: String,
         is_confidential: bool,
         tags: Vec<String>,
-        category: String,
+        category: Category,
         treatment_type: String,
     ) -> u64 {
         caller.require_auth();
@@ -197,15 +300,14 @@ impl MedicalRecordsContract {
             panic!("Only doctors can add medical records");
         }
 
-        // Validate category
-        let allowed_categories = vec![
-            &env,
-            String::from_str(&env, "Modern"),
-            String::from_str(&env, "Traditional"),
-            String::from_str(&env, "Herbal"),
-            String::from_str(&env, "Spiritual"),
-        ];
-        if !allowed_categories.contains(&category) {
+        // Validate category against allowed list
+        let allowed_categories: Vec<Category> = env
+            .storage()
+            .persistent()
+            .get(&ALLOWED_CATEGORIES)
+            .unwrap_or(Vec::new(&env));
+        
+        if !allowed_categories.iter().any(|c| c == category) {
             panic!("Invalid category");
         }
 
@@ -422,19 +524,16 @@ mod test {
 
         // Add a record
         let record_id = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &diagnosis,
                 &treatment,
                 &false,
-                &vec![String::from_str(&env, "respiratory")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Medication"),
+                &vec![&env, String::from_str(&env, "respiratory")],
+                &Category::Modern,
+                &String::from_str(&env, "Medication"),
             );
 
         // Get the record as patient
@@ -463,29 +562,29 @@ mod test {
 
         // Add multiple records for the same patient
         let record_id1 = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 1"),
                 &String::from_str(&env, "Treatment 1"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
 
         let record_id2 = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 2"),
                 &String::from_str(&env, "Treatment 2"),
                 &true,
-                &vec![String::from_str(&env, "spiritual")],
-                String::from_str(&env, "Spiritual"),
-                String::from_str(&env, "Prayer"),
+                &vec![&env, String::from_str(&env, "spiritual")],
+                &Category::Spiritual,
+                &String::from_str(&env, "Prayer"),
             );
 
         // Patient can access both records
@@ -512,16 +611,16 @@ mod test {
 
         // Doctor adds a confidential record
         let record_id = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Flu"),
                 &String::from_str(&env, "Antiviral medication"),
                 &true,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
 
         // Patient tries to access the record (should succeed)
@@ -559,16 +658,16 @@ mod test {
 
         // Try to add a record as the deactivated doctor (should fail)
         let result = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .try_add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Cold"),
                 &String::from_str(&env, "Rest"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
         assert!(result.is_err());
 
@@ -577,16 +676,16 @@ mod test {
 
         // Add a record as the reactivated doctor (should succeed)
         let record_id = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Cold"),
                 &String::from_str(&env, "Rest"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
         assert!(record_id > 0);
     }
@@ -608,19 +707,16 @@ mod test {
 
         // Add a record (not paused)
         let _record_id = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
 
         // Pause the contract
@@ -630,16 +726,16 @@ mod test {
         let r1 = client.mock_all_auths().try_manage_user(&admin, &Address::generate(&env), &Role::Doctor);
         assert!(r1.is_err());
         let r2 = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .try_add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis2"),
                 &String::from_str(&env, "Treatment2"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
         assert!(r2.is_err());
 
@@ -649,16 +745,16 @@ mod test {
         // Now mutating calls should succeed
         assert!(client.mock_all_auths().manage_user(&admin, &Address::generate(&env), &Role::Doctor));
         let r3 = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis3"),
                 &String::from_str(&env, "Treatment3"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
         assert!(r3 > 0);
     }
@@ -718,51 +814,42 @@ mod test {
 
         // Add multiple records and verify IDs are monotonically increasing
         let record_id1 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 1"),
                 &String::from_str(&env, "Treatment 1"),
                 &false,
-                &vec![String::from_str(&env, "tag1")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Type1"),
+                &vec![&env, String::from_str(&env, "tag1")],
+                &Category::Modern,
+                &String::from_str(&env, "Type1"),
             );
 
         let record_id2 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 2"),
                 &String::from_str(&env, "Treatment 2"),
                 &false,
-                &vec![String::from_str(&env, "tag2")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Type2"),
+                &vec![&env, String::from_str(&env, "tag2")],
+                &Category::Modern,
+                &String::from_str(&env, "Type2"),
             );
 
         let record_id3 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 3"),
                 &String::from_str(&env, "Treatment 3"),
                 &false,
-                &vec![String::from_str(&env, "tag3")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Type3"),
+                &vec![&env, String::from_str(&env, "tag3")],
+                &Category::Modern,
+                &String::from_str(&env, "Type3"),
             );
 
         // Verify IDs are monotonically increasing
@@ -792,35 +879,29 @@ mod test {
 
         // Add records from different doctors
         let record_id1 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor1,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor1,
                 &patient,
                 &String::from_str(&env, "Diagnosis A"),
                 &String::from_str(&env, "Treatment A"),
                 &false,
-                &vec![String::from_str(&env, "tag")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "TypeA"),
+                &vec![&env, String::from_str(&env, "tag")],
+                &Category::Modern,
+                &String::from_str(&env, "TypeA"),
             );
 
         let record_id2 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor2,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor2,
                 &patient,
                 &String::from_str(&env, "Diagnosis B"),
                 &String::from_str(&env, "Treatment B"),
                 &false,
-                &vec![String::from_str(&env, "tag")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "TypeB"),
+                &vec![&env, String::from_str(&env, "tag")],
+                &Category::Modern,
+                &String::from_str(&env, "TypeB"),
             );
 
         // Verify all IDs are unique
@@ -845,20 +926,19 @@ mod test {
         // Add records in sequence
         let mut record_ids: Vec<u64> = Vec::new(&env);
         for i in 0..5 {
+            let diagnosis = String::from_str(&env, "Diagnosis");
+            let treatment = String::from_str(&env, "Treatment");
             let id = client
-                .mock_auths(&[MockAuth {
-                    address: &doctor,
-                    invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-                }])
+                .mock_all_auths()
                 .add_record(
                     &doctor,
                     &patient,
-                    &String::from_str(&env, &format!("Diagnosis {}", i)),
-                    &String::from_str(&env, &format!("Treatment {}", i)),
+                    &diagnosis,
+                    &treatment,
                     &false,
-                    &vec![String::from_str(&env, "tag")],
-                    String::from_str(&env, "Modern"),
-                    String::from_str(&env, "Type"),
+                    &vec![&env, String::from_str(&env, "tag")],
+                    &Category::Modern,
+                    &String::from_str(&env, "Type"),
                 );
             record_ids.push_back(id);
         }
@@ -886,19 +966,16 @@ mod test {
 
         // Add first record
         let record_id1 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "tag")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Type"),
+                &vec![&env, String::from_str(&env, "tag")],
+                &Category::Modern,
+                &String::from_str(&env, "Type"),
             );
 
         // Create a recovery proposal (also uses the counter)
@@ -908,19 +985,16 @@ mod test {
 
         // Add another record
         let record_id2 = client
-            .mock_auths(&[MockAuth {
-                address: &doctor,
-                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
-            }])
+            .mock_all_auths()
             .add_record(
                 &doctor,
                 &patient,
                 &String::from_str(&env, "Diagnosis 2"),
                 &String::from_str(&env, "Treatment 2"),
                 &false,
-                &vec![String::from_str(&env, "tag")],
-                String::from_str(&env, "Modern"),
-                String::from_str(&env, "Type"),
+                &vec![&env, String::from_str(&env, "tag")],
+                &Category::Modern,
+                &String::from_str(&env, "Type"),
             );
 
         // Verify all IDs are unique and monotonic
@@ -929,5 +1003,228 @@ mod test {
         assert_eq!(record_id2, 3);
         assert!(proposal_id > record_id1);
         assert!(record_id2 > proposal_id);
+    }
+
+    #[test]
+    fn test_category_enum_validation() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Verify all default categories are allowed
+        let allowed = client.get_allowed_categories();
+        assert_eq!(allowed.len(), 4);
+        assert!(allowed.iter().any(|c| c == Category::Modern));
+        assert!(allowed.iter().any(|c| c == Category::Traditional));
+        assert!(allowed.iter().any(|c| c == Category::Herbal));
+        assert!(allowed.iter().any(|c| c == Category::Spiritual));
+
+        // Test adding record with each category
+        for category in [Category::Modern, Category::Traditional, Category::Herbal, Category::Spiritual] {
+            let record_id = client
+                .mock_all_auths()
+                .add_record(
+                    &doctor,
+                    &patient,
+                    &String::from_str(&env, "Test"),
+                    &String::from_str(&env, "Test"),
+                    &false,
+                    &vec![&env, String::from_str(&env, "test")],
+                    &category,
+                    &String::from_str(&env, "Test"),
+                );
+            assert!(record_id > 0);
+        }
+    }
+
+    #[test]
+    fn test_admin_add_category() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+
+        // Initialize
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+
+        // Get initial categories
+        let initial = client.get_allowed_categories();
+        let initial_len = initial.len();
+
+        // Admin removes a category
+        assert!(client.mock_all_auths().remove_allowed_category(&admin, &Category::Spiritual));
+
+        // Verify category was removed
+        let updated = client.get_allowed_categories();
+        assert_eq!(updated.len(), initial_len - 1);
+        assert!(!updated.iter().any(|c| c == Category::Spiritual));
+
+        // Re-add the category
+        assert!(client.mock_all_auths().add_allowed_category(&admin, &Category::Spiritual));
+
+        // Verify category was added back
+        let final_categories = client.get_allowed_categories();
+        assert_eq!(final_categories.len(), initial_len);
+        assert!(final_categories.iter().any(|c| c == Category::Spiritual));
+    }
+
+    #[test]
+    fn test_admin_remove_category() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Remove a category
+        assert!(client.mock_all_auths().remove_allowed_category(&admin, &Category::Modern));
+
+        // Try to add record with removed category (should fail)
+        let result = client
+            .mock_all_auths()
+            .try_add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Test"),
+                &String::from_str(&env, "Test"),
+                &false,
+                &vec![&env, String::from_str(&env, "test")],
+                &Category::Modern,
+                &String::from_str(&env, "Test"),
+            );
+        assert!(result.is_err());
+
+        // Try with allowed category (should succeed)
+        let record_id = client
+            .mock_all_auths()
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Test"),
+                &String::from_str(&env, "Test"),
+                &false,
+                &vec![&env, String::from_str(&env, "test")],
+                &Category::Traditional,
+                &String::from_str(&env, "Test"),
+            );
+        assert!(record_id > 0);
+    }
+
+    #[test]
+    fn test_non_admin_cannot_manage_categories() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+
+        // Doctor tries to add category (should fail)
+        let result = client
+            .mock_all_auths()
+            .try_add_allowed_category(&doctor, &Category::Modern);
+        assert!(result.is_err());
+
+        // Doctor tries to remove category (should fail)
+        let result = client
+            .mock_all_auths()
+            .try_remove_allowed_category(&doctor, &Category::Traditional);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_duplicate_category_not_added() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        // Initialize
+        client.mock_all_auths().initialize(&admin);
+
+        // Get initial count
+        let initial = client.get_allowed_categories();
+        let initial_len = initial.len();
+
+        // Try to add existing category (should return false)
+        let result = client.mock_all_auths().add_allowed_category(&admin, &Category::Modern);
+        assert!(!result);
+
+        // Verify count unchanged
+        let final_categories = client.get_allowed_categories();
+        assert_eq!(final_categories.len(), initial_len);
+    }
+
+    #[test]
+    fn test_remove_nonexistent_category() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        // Initialize
+        client.mock_all_auths().initialize(&admin);
+
+        // Remove a category first
+        assert!(client.mock_all_auths().remove_allowed_category(&admin, &Category::Modern));
+
+        // Try to remove it again (should return false)
+        let result = client.mock_all_auths().remove_allowed_category(&admin, &Category::Modern);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_category_management_when_paused() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+
+        // Initialize
+        client.mock_all_auths().initialize(&admin);
+
+        // Pause the contract
+        assert!(client.mock_all_auths().pause(&admin));
+
+        // Try to add category while paused (should fail)
+        let result = client.mock_all_auths().try_add_allowed_category(&admin, &Category::Modern);
+        assert!(result.is_err());
+
+        // Try to remove category while paused (should fail)
+        let result = client.mock_all_auths().try_remove_allowed_category(&admin, &Category::Traditional);
+        assert!(result.is_err());
+
+        // Unpause
+        assert!(client.mock_all_auths().unpause(&admin));
+
+        // Now should work
+        assert!(client.mock_all_auths().remove_allowed_category(&admin, &Category::Spiritual));
+        assert!(client.mock_all_auths().add_allowed_category(&admin, &Category::Spiritual));
     }
 }
