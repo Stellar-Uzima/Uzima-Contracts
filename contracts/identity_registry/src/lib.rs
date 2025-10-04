@@ -37,13 +37,21 @@ impl IdentityRegistryContract {
     pub fn initialize(env: Env, owner: Address) {
         owner.require_auth();
 
-        // Set the owner
-        env.storage().instance().set(&DataKey::Owner, &owner);
+            // Initialization guard: panic if already initialized
+            if env.storage().instance().has(&DataKey::Owner) {
+                panic!("Contract already initialized");
+            }
 
-        // Owner is automatically a verifier
-        env.storage()
-            .instance()
-            .set(&DataKey::Verifier(owner.clone()), &true);
+            // Set the owner
+            env.storage().instance().set(&DataKey::Owner, &owner);
+
+            // Owner is automatically a verifier
+            env.storage()
+                .instance()
+                .set(&DataKey::Verifier(owner.clone()), &true);
+
+            // Emit Initialized event
+            env.events().publish(("Initialized",), owner.clone());
     }
 
     /// Register an identity hash with metadata
@@ -267,6 +275,21 @@ impl IdentityRegistryContract {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[should_panic(expected = "Contract already initialized")]
+    fn test_double_initialization_panics() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, IdentityRegistryContract);
+        let client = IdentityRegistryContractClient::new(&env, &contract_id);
+        let owner1 = Address::generate(&env);
+        let owner2 = Address::generate(&env);
+
+        // First initialization should succeed
+        client.mock_all_auths().initialize(&owner1);
+
+        // Second initialization should panic
+        client.mock_all_auths().initialize(&owner2);
+    }
     use super::*;
     use soroban_sdk::testutils::{Address as _, Events};
     use soroban_sdk::{Address, BytesN, Env, String};

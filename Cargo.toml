@@ -1,3 +1,5 @@
+[patch.crates-io]
+stellar-xdr = { version = "20.0.0", default-features = false, features = [] }
 [workspace]
 resolver = "2"
 members = [
@@ -15,9 +17,9 @@ repository = "https://github.com/yourusername/soroban-project"
 
 
 [workspace.dependencies]
+stellar-xdr = { version = "20.0.0", default-features = false, features = [] }
 soroban-sdk = { version = "20.0.0", default-features = false }
 soroban-cli = "20.0.0"
-stellar-xdr = { version = "20.0.0", default-features = false }
 
 
 
