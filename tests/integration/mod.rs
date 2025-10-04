@@ -3,7 +3,7 @@ use soroban_sdk::{Address, Env, String};
 
 pub mod medical_records_tests {
     use super::*;
-    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
+    use medical_records::{Category, MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::{
         testutils::{Address as _, MockAuth, MockAuthInvoke},
     };
@@ -43,9 +43,9 @@ pub mod medical_records_tests {
                 &diagnosis,
                 &treatment,
                 &false,
-                &vec![String::from_str(&env, "herbal"), String::from_str(&env, "spiritual")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal"), String::from_str(&env, "spiritual")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
 
         // Verify record was added
@@ -54,7 +54,7 @@ pub mod medical_records_tests {
         let record = record_opt.unwrap();
         assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
-        assert_eq!(record.category, String::from_str(&env, "Traditional"));
+        assert_eq!(record.category, Category::Traditional);
         assert_eq!(record.treatment_type, String::from_str(&env, "Herbal Therapy"));
         assert_eq!(record.tags.len(), 2);
     }
@@ -83,9 +83,9 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &Category::Traditional,
+                &String::from_str(&env, "Herbal Therapy"),
             );
         assert!(res.is_err());
     }

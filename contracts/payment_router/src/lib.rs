@@ -20,7 +20,10 @@ impl PaymentRouter {
         if platform_fee_bps > 10_000 {
             panic!("Invalid fee bps");
         }
-        let conf = RouterFeeConfig { fee_receiver, platform_fee_bps };
+        let conf = RouterFeeConfig {
+            fee_receiver,
+            platform_fee_bps,
+        };
         env.storage().persistent().set(&FEE_CONF, &conf);
     }
 
@@ -36,7 +39,8 @@ impl PaymentRouter {
             .unwrap_or_else(|| panic!("Fee not set"));
         let fee = amount * (conf.platform_fee_bps as i128) / 10_000;
         let provider = amount - fee;
-        env.events().publish((symbol_short!("FeeSplit"),), (provider, fee));
+        env.events()
+            .publish((symbol_short!("FeeSplit"),), (provider, fee));
         (provider, fee)
     }
 }
