@@ -3,7 +3,7 @@
 # deploy.sh - Soroban Contract Deployment Script
 # Usage: ./scripts/deploy.sh <contract_name> <network> [identity]
 
-set -e
+set -euo pipefail  # Exit on error, undefined vars, or pipe fail
 
 # Colors for output
 RED='\033[0;31m'
@@ -37,9 +37,9 @@ if [ $# -lt 2 ]; then
     exit 1
 fi
 
-CONTRACT_NAME=$1
-NETWORK=$2
-IDENTITY=${3:-"default"}
+CONTRACT_NAME="$1"
+NETWORK="$2"
+IDENTITY="${3:-"default"}"
 
 # Validate contract exists
 CONTRACT_DIR="contracts/$CONTRACT_NAME"
@@ -52,13 +52,19 @@ print_status "Starting deployment of '$CONTRACT_NAME' to '$NETWORK' network"
 
 # Build the contract
 print_step "Building contract..."
-cd "$CONTRACT_DIR"
+if ! cd "$CONTRACT_DIR"; then
+    print_error "Failed to cd into $CONTRACT_DIR"
+    exit 1
+fi
 
 # Clean previous builds
-cargo clean
+cargo clean || { print_error "Cargo clean failed"; exit 1; }
 
 # Build for WebAssembly target
-cargo build --target wasm32-unknown-unknown --release
+if ! cargo build --target wasm32-unknown-unknown --release; then
+    print_error "Cargo build failed"
+    exit 1
+fi
 
 # Check if build was successful
 WASM_FILE="target/wasm32-unknown-unknown/release/${CONTRACT_NAME}.wasm"
@@ -72,39 +78,43 @@ print_status "Contract built successfully"
 # Optimize the contract (if soroban contract optimize is available)
 if command -v soroban &> /dev/null; then
     print_step "Optimizing contract..."
-    soroban contract optimize --wasm "$WASM_FILE" || {
+    if ! soroban contract optimize --wasm "$WASM_FILE"; then
         print_warning "Optimization failed, continuing with unoptimized contract"
-    }
+    fi
 fi
 
-cd - > /dev/null
+cd - > /dev/null || { print_error "Failed to cd back"; exit 1; }
 
 # Configure network if not already configured
 print_step "Configuring network..."
 case $NETWORK in
     "local")
-        soroban config network add local \
+        if ! soroban config network add local \
             --rpc-url http://localhost:8000/soroban/rpc \
-            --network-passphrase "Standalone Network ; February 2017" \
-            2>/dev/null || print_warning "Network 'local' already configured"
+            --network-passphrase "Standalone Network ; February 2017" 2>/dev/null; then
+            print_warning "Network 'local' already configured"
+        fi
         ;;
     "testnet")
-        soroban config network add testnet \
+        if ! soroban config network add testnet \
             --rpc-url https://soroban-testnet.stellar.org:443 \
-            --network-passphrase "Test SDF Network ; September 2015" \
-            2>/dev/null || print_warning "Network 'testnet' already configured"
+            --network-passphrase "Test SDF Network ; September 2015" 2>/dev/null; then
+            print_warning "Network 'testnet' already configured"
+        fi
         ;;
     "futurenet")
-        soroban config network add futurenet \
+        if ! soroban config network add futurenet \
             --rpc-url https://rpc-futurenet.stellar.org:443 \
-            --network-passphrase "Test SDF Future Network ; October 2022" \
-            2>/dev/null || print_warning "Network 'futurenet' already configured"
+            --network-passphrase "Test SDF Future Network ; October 2022" 2>/dev/null; then
+            print_warning "Network 'futurenet' already configured"
+        fi
         ;;
     "mainnet")
-        soroban config network add mainnet \
+        if ! soroban config network add mainnet \
             --rpc-url https://soroban-rpc.stellar.org:443 \
-            --network-passphrase "Public Global Stellar Network ; September 2015" \
-            2>/dev/null || print_warning "Network 'mainnet' already configured"
+            --network-passphrase "Public Global Stellar Network ; September 2015" 2>/dev/null; then
+            print_warning "Network 'mainnet' already configured"
+        fi
         ;;
     *)
         print_error "Unknown network: $NETWORK"
@@ -117,7 +127,10 @@ esac
 print_step "Checking identity..."
 if ! soroban config identity show "$IDENTITY" &> /dev/null; then
     print_warning "Identity '$IDENTITY' not found, generating new one..."
-    soroban config identity generate "$IDENTITY"
+    if ! soroban config identity generate "$IDENTITY"; then
+        print_error "Failed to generate identity '$IDENTITY'"
+        exit 1
+    fi
 fi
 
 # Get identity address
@@ -127,9 +140,9 @@ print_status "Using identity: $IDENTITY ($IDENTITY_ADDRESS)"
 # Fund account for testnet/futurenet
 if [ "$NETWORK" = "testnet" ] || [ "$NETWORK" = "futurenet" ]; then
     print_step "Funding account on $NETWORK..."
-    soroban config identity fund "$IDENTITY" --network "$NETWORK" || {
+    if ! soroban config identity fund "$IDENTITY" --network "$NETWORK"; then
         print_warning "Failed to fund account, continuing anyway..."
-    }
+    fi
 fi
 
 # Deploy the contract
@@ -137,18 +150,18 @@ print_step "Deploying contract..."
 CONTRACT_ID=$(soroban contract deploy \
     --wasm "$CONTRACT_DIR/$WASM_FILE" \
     --source "$IDENTITY" \
-    --network "$NETWORK" 2>/dev/null)
+    --network "$NETWORK" 2>/dev/null) || { print_error "Deployment command failed"; exit 1; }
 
-if [ $? -eq 0 ] && [ -n "$CONTRACT_ID" ]; then
+if [ -n "$CONTRACT_ID" ]; then
     print_status "Contract deployed successfully!"
     print_status "Contract ID: $CONTRACT_ID"
     print_status "Network: $NETWORK"
     print_status "Deployer: $IDENTITY ($IDENTITY_ADDRESS)"
-    
+     
     # Save deployment info
     DEPLOY_INFO_FILE="deployments/${NETWORK}_${CONTRACT_NAME}.json"
-    mkdir -p deployments
-    
+    mkdir -p deployments || { print_error "Failed to create deployments dir"; exit 1; }
+     
     cat > "$DEPLOY_INFO_FILE" << EOF
 {
     "contract_name": "$CONTRACT_NAME",
@@ -160,23 +173,23 @@ if [ $? -eq 0 ] && [ -n "$CONTRACT_ID" ]; then
     "wasm_hash": "$(sha256sum "$CONTRACT_DIR/$WASM_FILE" | cut -d' ' -f1)"
 }
 EOF
-    
+     
     print_status "Deployment info saved to: $DEPLOY_INFO_FILE"
-    
+     
     # Initialize contract if it has an initialize function
     print_step "Attempting to initialize contract..."
-    soroban contract invoke \
+    if soroban contract invoke \
         --id "$CONTRACT_ID" \
         --source "$IDENTITY" \
         --network "$NETWORK" \
-        -- initialize 2>/dev/null && {
+        -- initialize 2>/dev/null; then
         print_status "Contract initialized successfully"
-    } || {
+    else
         print_warning "Contract initialization failed or not required"
-    }
-    
+    fi
+     
 else
-    print_error "Contract deployment failed"
+    print_error "Contract deployment failed (empty CONTRACT_ID)"
     exit 1
 fi
 
