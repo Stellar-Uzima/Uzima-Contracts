@@ -3,7 +3,7 @@
 # interact.sh - Soroban Contract Interaction Script
 # Usage: ./scripts/interact.sh <contract_id> <network> <function> [args...]
 
-set -e
+set -euo pipefail  # Exit on error, undefined vars, or pipe fail
 
 # Colors for output
 RED='\033[0;31m'
@@ -36,9 +36,9 @@ if [ $# -lt 3 ]; then
     exit 1
 fi
 
-CONTRACT_ID=$1
-NETWORK=$2
-FUNCTION=$3
+CONTRACT_ID="$1"
+NETWORK="$2"
+FUNCTION="$3"
 shift 3
 ARGS=("$@")
 
@@ -80,11 +80,9 @@ fi
 print_step "Executing: $CMD"
 
 # Execute the command
-eval "$CMD"
-
-if [ $? -eq 0 ]; then
-    print_status "Contract interaction completed successfully! ✅"
-else
+if ! eval "$CMD"; then
     print_error "Contract interaction failed ❌"
     exit 1
 fi
+
+print_status "Contract interaction completed successfully! ✅"

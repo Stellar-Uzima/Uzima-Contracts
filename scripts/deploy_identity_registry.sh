@@ -3,38 +3,58 @@
 # Deploy Identity Registry Contract on Stellar/Soroban
 # Usage: ./scripts/deploy_identity_registry.sh [OWNER_ADDRESS]
 
-set -e
+set -euo pipefail  # Exit on error, undefined vars, or pipe fail
 
-# Configuration
+# Input validation
+if [ $# -gt 1 ]; then
+    echo "❌ Error: Too many arguments. Usage: $0 [OWNER_ADDRESS]"
+    exit 1
+fi
+
+# Configuration with defaults
 NETWORK=${NETWORK:-"testnet"}
 OWNER_ADDRESS=${1:-"GDIY6AQQ75WMD4W46EYB7O6UYMHOCGQHLAQGQTKHDX4J2DYQCHVCR4W4"}
+if [[ ! "$OWNER_ADDRESS" =~ ^G[A-Z0-9]{55}$ ]]; then
+    echo "❌ Error: Invalid OWNER_ADDRESS format. Must be a valid Stellar address (starts with G, 56 chars)."
+    exit 1
+fi
 
 echo "🚀 Deploying Identity Registry Contract to Stellar $NETWORK..."
 echo "Owner Address: $OWNER_ADDRESS"
 
 # Build the contract
 echo "📦 Building contract..."
-cd contracts/identity_registry
-soroban contract build
+if ! cd contracts/identity_registry; then
+    echo "❌ Error: Failed to cd into contracts/identity_registry"
+    exit 1
+fi
+if ! soroban contract build; then
+    echo "❌ Error: Contract build failed"
+    exit 1
+fi
+cd - > /dev/null || { echo "❌ Error: Failed to cd back"; exit 1; }
 
 # Deploy the contract
 echo "🌐 Deploying to $NETWORK..."
 CONTRACT_ID=$(soroban contract deploy \
     --wasm target/wasm32-unknown-unknown/release/identity_registry.wasm \
-    --source-account $OWNER_ADDRESS \
-    --network $NETWORK)
+    --source-account "$OWNER_ADDRESS" \
+    --network "$NETWORK") || { echo "❌ Error: Deployment failed"; exit 1; }
 
 echo "Contract deployed with ID: $CONTRACT_ID"
 
 # Initialize the contract
 echo "🔧 Initializing contract..."
-soroban contract invoke \
-    --id $CONTRACT_ID \
-    --source-account $OWNER_ADDRESS \
-    --network $NETWORK \
+if ! soroban contract invoke \
+    --id "$CONTRACT_ID" \
+    --source-account "$OWNER_ADDRESS" \
+    --network "$NETWORK" \
     -- \
     initialize \
-    --owner $OWNER_ADDRESS
+    --owner "$OWNER_ADDRESS"; then
+    echo "❌ Error: Contract initialization failed"
+    exit 1
+fi
 
 echo "✅ Identity Registry Contract deployed and initialized successfully!"
 echo "📋 Contract ID: $CONTRACT_ID"
