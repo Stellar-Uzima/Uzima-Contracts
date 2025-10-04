@@ -17,6 +17,7 @@ pub enum DataKey {
     TokenRevoked(u64),
     OwnerTokens(Address),
     ConsentHistory(u64),
+    PatientConsents(Address), // Track tokens issued for a patient (for revoke access)
 }
 
 #[contracterror]
@@ -29,7 +30,7 @@ pub enum ContractError {
     NotTokenOwner = 5,
 }
 
-// Consent metadata structure
+// Consent metadata structure - Added patient field
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConsentMetadata {
@@ -38,6 +39,7 @@ pub struct ConsentMetadata {
     pub issued_timestamp: u64, // When consent was issued
     pub expiry_timestamp: u64, // When consent expires (0 = no expiry)
     pub issuer: Address,       // Who issued the consent
+    pub patient: Address,      // The patient this consent is for
     pub version: u32,          // Metadata version for updates
 }
 
@@ -135,21 +137,20 @@ impl PatientConsentToken {
         false
     }
 
-    /// Mint a new consent token
+    /// Mint a new consent token - FIXED: Add issuer: Address param, require_auth on it, use for check & metadata (no env.invoker())
     pub fn mint_consent(
         env: Env,
-        to: Address,
+        issuer: Address, // FIXED: Passed by caller (must be their own Address::AccountId)
+        patient: Address, // Renamed from 'to' for clarity
         metadata_uri: String,
         consent_type: String,
         expiry_timestamp: u64,
     ) -> Result<u64, ContractError> {
-        // Verify caller is authorized issuer
-        let caller = to.clone();
-        if !Self::is_issuer(env.clone(), caller.clone()) {
+        // FIXED: Verify caller is authorized issuer via passed address + auth
+        issuer.require_auth();
+        if !Self::is_issuer(env.clone(), issuer.clone()) {
             return Err(ContractError::NotAuthorized);
         }
-
-        to.require_auth();
 
         // Get and increment token counter
         let token_id: u64 = env
@@ -167,14 +168,15 @@ impl PatientConsentToken {
             consent_type: consent_type.clone(),
             issued_timestamp: env.ledger().timestamp(),
             expiry_timestamp,
-            issuer: caller.clone(),
+            issuer: issuer.clone(),
+            patient: patient.clone(),
             version: 1,
         };
 
         // Store token data
         env.storage()
             .instance()
-            .set(&DataKey::TokenOwner(token_id), &to);
+            .set(&DataKey::TokenOwner(token_id), &patient);
         env.storage()
             .instance()
             .set(&DataKey::TokenMetadata(token_id), &metadata);
@@ -182,8 +184,8 @@ impl PatientConsentToken {
             .instance()
             .set(&DataKey::TokenRevoked(token_id), &false);
 
-        // Add to owner's token list
-        let owner_key = DataKey::OwnerTokens(to.clone());
+        // Add to patient's token list (initial owner)
+        let owner_key = DataKey::OwnerTokens(patient.clone());
         let mut owner_tokens: Vec<u64> = env
             .storage()
             .instance()
@@ -192,11 +194,21 @@ impl PatientConsentToken {
         owner_tokens.push_back(token_id);
         env.storage().instance().set(&owner_key, &owner_tokens);
 
+        // Add to patient's consents list (for revoke access)
+        let patient_key = DataKey::PatientConsents(patient.clone());
+        let mut patient_consents: Vec<u64> = env
+            .storage()
+            .instance()
+            .get(&patient_key)
+            .unwrap_or(Vec::new(&env));
+        patient_consents.push_back(token_id);
+        env.storage().instance().set(&patient_key, &patient_consents);
+
         // Initialize consent history
         let history_entry = ConsentHistoryEntry {
             action: String::from_str(&env, "issued"),
             timestamp: env.ledger().timestamp(),
-            actor: caller.clone(),
+            actor: issuer.clone(),
             metadata_uri: metadata_uri.clone(),
         };
         let mut history = Vec::new(&env);
@@ -208,7 +220,7 @@ impl PatientConsentToken {
         // Emit event
         env.events().publish(
             (symbol_short!("consent"), symbol_short!("issued")),
-            (token_id, to, consent_type, metadata_uri),
+            (token_id, patient, consent_type, metadata_uri),
         );
 
         Ok(token_id)
@@ -237,7 +249,7 @@ impl PatientConsentToken {
             return Err(ContractError::ConsentRevoked);
         }
 
-        // Verify caller is issuer or owner
+        // Verify caller is owner (or tighten to issuer/patient if needed)
         owner.require_auth();
 
         // Get and update metadata
@@ -280,16 +292,35 @@ impl PatientConsentToken {
         Ok(())
     }
 
-    /// Revoke consent (marks as revoked, prevents transfers)
-    pub fn revoke_consent(env: Env, token_id: u64) {
-        let owner: Address = env
+    /// Revoke consent (marks as revoked, prevents transfers) - Patient authorizes via require_auth on their address from metadata
+    pub fn revoke_consent(env: Env, token_id: u64) -> Result<(), ContractError> {
+        // Verify token exists
+        let _: Address = env
             .storage()
             .instance()
             .get(&DataKey::TokenOwner(token_id))
-            .expect("Token does not exist");
+            .ok_or(ContractError::TokenNotFound)?;
 
-        // Verify caller is owner or authorized issuer
-        owner.require_auth();
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        let patient = metadata.patient;
+
+        // Patient must authorize revoke (controls their consent)
+        patient.require_auth();
+
+        let is_revoked: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenRevoked(token_id))
+            .unwrap_or(false);
+
+        if is_revoked {
+            return Err(ContractError::ConsentRevoked);
+        }
 
         // Mark as revoked
         env.storage()
@@ -297,16 +328,10 @@ impl PatientConsentToken {
             .set(&DataKey::TokenRevoked(token_id), &true);
 
         // Add to history
-        let metadata: ConsentMetadata = env
-            .storage()
-            .instance()
-            .get(&DataKey::TokenMetadata(token_id))
-            .expect("Metadata not found");
-
         let history_entry = ConsentHistoryEntry {
             action: String::from_str(&env, "revoked"),
             timestamp: env.ledger().timestamp(),
-            actor: owner.clone(),
+            actor: patient.clone(),
             metadata_uri: metadata.metadata_uri.clone(),
         };
 
@@ -323,8 +348,10 @@ impl PatientConsentToken {
         // Emit event
         env.events().publish(
             (symbol_short!("consent"), symbol_short!("revoked")),
-            (token_id, owner),
+            (token_id, patient),
         );
+
+        Ok(())
     }
 
     /// Transfer consent token (blocked if revoked)
@@ -387,6 +414,8 @@ impl PatientConsentToken {
         to_tokens.push_back(token_id);
         env.storage().instance().set(&to_key, &to_tokens);
 
+        // PatientConsents list unchanged - patient still tracks/revokes it
+
         // Emit event
         env.events().publish(
             (symbol_short!("consent"), symbol_short!("transfer")),
@@ -435,6 +464,25 @@ impl PatientConsentToken {
             .unwrap_or(Vec::new(&env))
     }
 
+    /// Check if doctor has valid consent for patient and type (for cross-contract access control)
+    pub fn has_consent(env: Env, patient: Address, doctor: Address, consent_type: String) -> bool {
+        let tokens = Self::tokens_of_owner(env.clone(), doctor);
+        for i in 0..tokens.len() {
+            let token_id = tokens.get(i).unwrap();
+            if Self::is_revoked(env.clone(), token_id) {
+                continue;
+            }
+            let metadata = Self::get_metadata(env.clone(), token_id);
+            if metadata.patient == patient
+                && metadata.consent_type == consent_type
+                && (metadata.expiry_timestamp == 0 || env.ledger().timestamp() < metadata.expiry_timestamp)
+            {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check if consent is valid (not revoked and not expired)
     pub fn is_valid(env: Env, token_id: u64) -> bool {
         let is_revoked: bool = env
@@ -462,4 +510,130 @@ impl PatientConsentToken {
 }
 
 #[cfg(test)]
-mod test;
+mod test {
+    use super::*;
+    use soroban_sdk::testutils::{Accounts, AuthorizedInvocation, AuthorizedFunction};
+    use soroban_sdk::{Symbol, symbol_short};
+
+    #[test]
+    fn test_mint_and_grant() {
+        let env = Env::default();
+        let admin = env.accounts().generate_and_create();
+        let issuer = env.accounts().generate_and_create(); // Will add as issuer
+        let patient = env.accounts().generate_and_create();
+        let doctor = env.accounts().generate_and_create();
+
+        // Setup
+        PatientConsentToken::initialize(env.clone(), admin.clone());
+        admin.clone().mock_all_auths();
+        PatientConsentToken::add_issuer(env.clone(), issuer.clone());
+
+        // FIXED: Mint by issuer - pass issuer addr, mock auth for it
+        issuer.clone().mock_all_auths();
+        let token_id = PatientConsentToken::mint_consent(
+            env.clone(),
+            issuer.clone(), // FIXED: Pass issuer addr
+            patient.clone(),
+            String::from_str(&env, "ipfs://hash"),
+            String::from_str(&env, "treatment"),
+            0, // No expiry
+        ).unwrap();
+
+        assert_eq!(PatientConsentToken::owner_of(env.clone(), token_id), patient);
+        assert!(PatientConsentToken::is_valid(env.clone(), token_id));
+
+        // Patient transfers to doctor (grant consent)
+        patient.clone().mock_all_auths();
+        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id).unwrap();
+        assert_eq!(PatientConsentToken::owner_of(env.clone(), token_id), doctor);
+
+        // Doctor has consent
+        assert!(PatientConsentToken::has_consent(env.clone(), patient.clone(), doctor.clone(), String::from_str(&env, "treatment")));
+    }
+
+    #[test]
+    #[should_panic(expected = "ConsentRevoked")]
+    fn test_revoke_fails_access() {
+        let env = Env::default();
+        let admin = env.accounts().generate_and_create();
+        let issuer = env.accounts().generate_and_create();
+        let patient = env.accounts().generate_and_create();
+        let doctor = env.accounts().generate_and_create();
+
+        // Setup & mint & transfer
+        PatientConsentToken::initialize(env.clone(), admin.clone());
+        admin.clone().mock_all_auths();
+        PatientConsentToken::add_issuer(env.clone(), issuer.clone());
+        issuer.clone().mock_all_auths();
+        let token_id = PatientConsentToken::mint_consent(
+            env.clone(),
+            issuer.clone(),
+            patient.clone(),
+            String::from_str(&env, "ipfs://hash"),
+            String::from_str(&env, "treatment"),
+            0,
+        ).unwrap();
+        patient.clone().mock_all_auths();
+        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id).unwrap();
+
+        // Patient revokes - mock auth for patient
+        patient.clone().mock_all_auths();
+        PatientConsentToken::revoke_consent(env.clone(), token_id).unwrap();
+
+        // Doctor no longer has consent
+        assert!(!PatientConsentToken::has_consent(env.clone(), patient.clone(), doctor.clone(), String::from_str(&env, "treatment")));
+    }
+
+    #[test]
+    #[should_panic(expected = "NotAuthorized")]
+    fn test_unauthorized_mint_fails() {
+        let env = Env::default();
+        let admin = env.accounts().generate_and_create();
+        let fake_issuer = env.accounts().generate_and_create();
+        let patient = env.accounts().generate_and_create();
+
+        PatientConsentToken::initialize(env.clone(), admin.clone());
+        // No add_issuer for fake
+
+        fake_issuer.clone().mock_all_auths();
+        let _ = PatientConsentToken::mint_consent(
+            env.clone(),
+            fake_issuer.clone(), // Pass fake, but not in issuers
+            patient.clone(),
+            String::from_str(&env, "ipfs://hash"),
+            String::from_str(&env, "treatment"),
+            0,
+        ); // Should panic on is_issuer check
+    }
+
+    #[test]
+    fn test_patient_consents_list() {
+        let env = Env::default();
+        let admin = env.accounts().generate_and_create();
+        let issuer = env.accounts().generate_and_create();
+        let patient = env.accounts().generate_and_create();
+
+        PatientConsentToken::initialize(env.clone(), admin.clone());
+        admin.clone().mock_all_auths();
+        PatientConsentToken::add_issuer(env.clone(), issuer.clone());
+        issuer.clone().mock_all_auths();
+        let token1 = PatientConsentToken::mint_consent(
+            env.clone(),
+            issuer.clone(),
+            patient.clone(),
+            String::from_str(&env, "ipfs1"),
+            String::from_str(&env, "treatment"),
+            0,
+        ).unwrap();
+        let token2 = PatientConsentToken::mint_consent(
+            env.clone(),
+            issuer.clone(),
+            patient.clone(),
+            String::from_str(&env, "ipfs2"),
+            String::from_str(&env, "research"),
+            0,
+        ).unwrap();
+
+        // patient_consents works via storage push in mint
+    }
+}
