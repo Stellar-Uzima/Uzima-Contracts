@@ -161,8 +161,7 @@ impl MedicalRecordsContract {
         env.storage().instance().set(&PAUSED, &true);
         // Emit Paused event
         let ts = env.ledger().timestamp();
-        env.events()
-            .publish(("paused",), (caller.clone(), ts));
+        env.events().publish(("paused",), (caller.clone(), ts));
         true
     }
 
@@ -175,8 +174,7 @@ impl MedicalRecordsContract {
         env.storage().instance().set(&PAUSED, &false);
         // Emit Unpaused event
         let ts = env.ledger().timestamp();
-        env.events()
-            .publish(("unpaused",), (caller.clone(), ts));
+        env.events().publish(("unpaused",), (caller.clone(), ts));
         true
     }
 
@@ -211,8 +209,7 @@ impl MedicalRecordsContract {
             .set(&ALLOWED_CATEGORIES, &allowed_categories);
 
         // Emit CategoryAdded event
-        env.events()
-            .publish(("cat_add",), category);
+        env.events().publish(("cat_add",), category);
         true
     }
 
@@ -256,8 +253,7 @@ impl MedicalRecordsContract {
             .set(&ALLOWED_CATEGORIES, &new_categories);
 
         // Emit CategoryRemoved event
-        env.events()
-            .publish(("cat_rem",), category);
+        env.events().publish(("cat_rem",), category);
         true
     }
 
@@ -334,7 +330,7 @@ impl MedicalRecordsContract {
                 break;
             }
         }
-        
+
         if !is_valid {
             panic!("Invalid category");
         }
@@ -376,8 +372,7 @@ impl MedicalRecordsContract {
         env.storage().instance().set(&RECORDS, &records);
 
         // Emit RecordAdded event
-        env.events()
-            .publish(("rec_add",), record_id);
+        env.events().publish(("rec_add",), record_id);
 
         record_id
     }
@@ -562,10 +557,8 @@ impl MedicalRecordsContract {
 
         // Emit RecoveryExecuted event
         let ts = env.ledger().timestamp();
-        env.events().publish(
-            ("recovery",),
-            (caller.clone(), proposal_id, ts),
-        );
+        env.events()
+            .publish(("recovery",), (caller.clone(), proposal_id, ts));
         true
     }
 }
@@ -578,7 +571,6 @@ mod test {
 
     #[test]
     fn test_simple() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let _addr = Address::generate(&env);
@@ -587,7 +579,6 @@ mod test {
 
     #[test]
     fn test_register_contract() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let _contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -598,11 +589,11 @@ mod test {
     fn test_initialize_contract() {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
-        
+
         client.initialize(&admin);
         assert!(true);
     }
@@ -611,12 +602,12 @@ mod test {
     fn test_manage_user() {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let doctor = Address::generate(&env);
-        
+
         client.initialize(&admin);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         assert!(true);
@@ -626,17 +617,17 @@ mod test {
     fn test_add_record_function() {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
         let doctor = Address::generate(&env);
         let patient = Address::generate(&env);
-        
+
         client.initialize(&admin);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         client.manage_user(&admin, &patient, &Role::Patient);
-        
+
         let record_id = client.add_record(
             &doctor,
             &patient,
@@ -654,7 +645,7 @@ mod test {
     fn test_add_and_get_record() {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
@@ -693,7 +684,6 @@ mod test {
 
     #[test]
     fn test_get_patient_records() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -731,15 +721,12 @@ mod test {
         );
 
         // Patient can access both records
-        assert!(client.get_record(&patient, &record_id1)
-            .is_some());
-        assert!(client.get_record(&patient, &record_id2)
-            .is_some());
+        assert!(client.get_record(&patient, &record_id1).is_some());
+        assert!(client.get_record(&patient, &record_id2).is_some());
     }
 
     #[test]
     fn test_role_based_access() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -783,7 +770,6 @@ mod test {
 
     #[test]
     fn test_deactivate_user() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -838,7 +824,6 @@ mod test {
 
     #[test]
     fn test_pause_unpause_blocks_sensitive_functions() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -897,11 +882,7 @@ mod test {
         assert!(client.unpause(&admin));
 
         // Now mutating calls should succeed
-        assert!(client.manage_user(
-            &admin,
-            &Address::generate(&env),
-            &Role::Doctor
-        ));
+        assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
         let r3 = client.add_record(
             &doctor,
             &patient,
@@ -917,7 +898,6 @@ mod test {
 
     #[test]
     fn test_recovery_timelock_and_multisig() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -958,7 +938,6 @@ mod test {
 
     #[test]
     fn test_monotonic_record_ids() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1017,7 +996,6 @@ mod test {
 
     #[test]
     fn test_unique_record_ids() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1063,7 +1041,6 @@ mod test {
 
     #[test]
     fn test_record_ordering() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1104,7 +1081,6 @@ mod test {
 
     #[test]
     fn test_record_counter_isolation() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1161,7 +1137,6 @@ mod test {
 
     #[test]
     fn test_category_enum_validation() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1207,7 +1182,6 @@ mod test {
 
     #[test]
     fn test_admin_add_category() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1243,7 +1217,6 @@ mod test {
 
     #[test]
     fn test_admin_remove_category() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1264,7 +1237,7 @@ mod test {
         // Verify category was removed
         let allowed = client.get_allowed_categories();
         assert_eq!(allowed.len(), 3); // Should have 3 categories left (Traditional, Herbal, Spiritual)
-        
+
         // Try to add record with removed category (should fail with panic)
         // TODO: Re-enable when try_add_record is available
         /*
@@ -1297,7 +1270,6 @@ mod test {
 
     #[test]
     fn test_non_admin_cannot_manage_categories() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1320,7 +1292,7 @@ mod test {
         let result = client.try_remove_allowed_category(&doctor, &Category::Traditional);
         assert!(result.is_err());
         */
-        
+
         // For now, just verify admin can manage categories
         // Remove a category that exists
         assert!(client.remove_allowed_category(&admin, &Category::Spiritual));
@@ -1330,7 +1302,6 @@ mod test {
 
     #[test]
     fn test_duplicate_category_not_added() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1356,7 +1327,6 @@ mod test {
 
     #[test]
     fn test_remove_nonexistent_category() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
@@ -1377,7 +1347,6 @@ mod test {
 
     #[test]
     fn test_category_management_when_paused() {
-        
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register_contract(None, MedicalRecordsContract);
