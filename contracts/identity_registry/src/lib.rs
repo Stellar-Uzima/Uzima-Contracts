@@ -317,6 +317,27 @@ mod tests {
     }
 
     #[test]
+    fn test_register_identity_hash_with_correct_registrar() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+
+        let hash = BytesN::from_array(&env, &[1; 32]);
+        let meta = String::from_str(&env, "Healthcare Provider License #12345");
+
+        // Register identity hash
+        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
+
+        // Verify that registered_by is set to the subject (not the contract)
+        let record_key = DataKey::IdentityHash(subject.clone());
+        let record: IdentityRecord = env.storage().instance().get(&record_key).unwrap();
+
+        // The registered_by field should be the subject, not the contract address
+        assert_eq!(record.registered_by, subject);
+        assert_eq!(record.hash, hash);
+        assert_eq!(record.meta, meta);
+    }
+
+    #[test]
     fn test_add_and_remove_verifier() {
         let (env, client, _owner) = create_contract();
         let new_verifier = Address::generate(&env);
