@@ -1577,7 +1577,17 @@
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 1
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1675,7 +1685,17 @@
               }
             ],
             "data": {
-              "u64": 2
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 2
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1773,7 +1793,17 @@
               }
             ],
             "data": {
-              "u64": 3
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 3
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1871,7 +1901,17 @@
               }
             ],
             "data": {
-              "u64": 4
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 4
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1969,7 +2009,17 @@
               }
             ],
             "data": {
-              "u64": 5
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 5
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }

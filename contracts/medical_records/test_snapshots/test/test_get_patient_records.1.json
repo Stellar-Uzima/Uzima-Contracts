@@ -1192,7 +1192,17 @@
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 1
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1290,7 +1300,17 @@
               }
             ],
             "data": {
-              "u64": 2
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 2
+                },
+                {
+                  "bool": true
+                }
+              ]
             }
           }
         }

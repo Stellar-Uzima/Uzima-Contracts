@@ -249,7 +249,7 @@ impl MedicalRecordsContract {
         let mut patient_records: Map<Address, Vec<u64>> = env.storage().persistent().get(&PATIENT_RECORDS).unwrap_or(Map::new(&env));
         let mut ids = patient_records.get(patient.clone()).unwrap_or(Vec::new(&env));
         ids.push_back(record_id);
-        patient_records.set(patient, ids);
+        patient_records.set(patient.clone(), ids);
         env.storage().persistent().set(&PATIENT_RECORDS, &patient_records);
 
         // Emit RecordAdded event
@@ -257,7 +257,7 @@ impl MedicalRecordsContract {
             (
                 Symbol::new(&env, "RecordAdded"),
             ),
-            record_id,
+            (patient, record_id, is_confidential),
         );
 
         record_id

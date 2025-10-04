@@ -1767,7 +1767,17 @@
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "u64": 1
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1865,7 +1875,17 @@
               }
             ],
             "data": {
-              "u64": 2
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "u64": 2
+                },
+                {
+                  "bool": true
+                }
+              ]
             }
           }
         }
@@ -1963,7 +1983,17 @@
               }
             ],
             "data": {
-              "u64": 3
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "u64": 3
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }

@@ -1236,7 +1236,17 @@
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "u64": 1
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }
@@ -1334,7 +1344,17 @@
               }
             ],
             "data": {
-              "u64": 2
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "u64": 2
+                },
+                {
+                  "bool": false
+                }
+              ]
             }
           }
         }

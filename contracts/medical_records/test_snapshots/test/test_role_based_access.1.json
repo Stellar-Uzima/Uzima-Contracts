@@ -1082,7 +1082,17 @@
               }
             ],
             "data": {
-              "u64": 1
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "u64": 1
+                },
+                {
+                  "bool": true
+                }
+              ]
             }
           }
         }
