@@ -32,6 +32,12 @@ pub struct MedicalRecord {
     pub treatment_type: String,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub enum DataKey {
+    RecordCount,
+}
+
 const USERS: Symbol = Symbol::short("USERS");
 const ADMINS: Symbol = Symbol::short("ADMINS");
 const RECORDS: Symbol = Symbol::short("RECORDS");
@@ -99,6 +105,20 @@ impl MedicalRecordsContract {
     /// Internal function to check paused state
     fn is_paused(env: &Env) -> bool {
         env.storage().persistent().get::<bool>(&PAUSED).unwrap_or(false)
+    }
+
+    /// Internal function to get and increment the record counter
+    fn get_and_increment_record_count(env: &Env) -> u64 {
+        let current_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCount)
+            .unwrap_or(0);
+        let next_count = current_count + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCount, &next_count);
+        next_count
     }
 
     /// Emergency pause - only admins
@@ -200,7 +220,7 @@ impl MedicalRecordsContract {
             }
         }
 
-        let record_id = env.ledger().sequence();
+        let record_id = Self::get_and_increment_record_count(&env);
         let timestamp = env.ledger().timestamp();
 
         let record = MedicalRecord {
@@ -219,6 +239,9 @@ impl MedicalRecordsContract {
         let mut records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
         records.set(record_id, record);
         env.storage().persistent().set(&RECORDS, &records);
+
+        // Emit RecordAdded event
+        env.events().publish((Symbol::short("RecordAdded"),), record_id);
 
         record_id
     }
@@ -292,7 +315,7 @@ impl MedicalRecordsContract {
             panic!("Only admins can propose recovery");
         }
 
-        let proposal_id = env.ledger().sequence();
+        let proposal_id = Self::get_and_increment_record_count(&env);
         let created_at = env.ledger().timestamp();
         let mut proposal = RecoveryProposal {
             proposal_id,
@@ -675,5 +698,235 @@ mod test {
 
         // Execute should succeed now
         assert!(client.mock_all_auths().execute_recovery(&admin1, &proposal_id));
+    }
+
+    #[test]
+    fn test_monotonic_record_ids() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Add multiple records and verify IDs are monotonically increasing
+        let record_id1 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis 1"),
+                &String::from_str(&env, "Treatment 1"),
+                &false,
+                &vec![String::from_str(&env, "tag1")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Type1"),
+            );
+
+        let record_id2 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis 2"),
+                &String::from_str(&env, "Treatment 2"),
+                &false,
+                &vec![String::from_str(&env, "tag2")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Type2"),
+            );
+
+        let record_id3 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis 3"),
+                &String::from_str(&env, "Treatment 3"),
+                &false,
+                &vec![String::from_str(&env, "tag3")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Type3"),
+            );
+
+        // Verify IDs are monotonically increasing
+        assert_eq!(record_id1, 1);
+        assert_eq!(record_id2, 2);
+        assert_eq!(record_id3, 3);
+        assert!(record_id2 > record_id1);
+        assert!(record_id3 > record_id2);
+    }
+
+    #[test]
+    fn test_unique_record_ids() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor1 = Address::generate(&env);
+        let doctor2 = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor1, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &doctor2, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Add records from different doctors
+        let record_id1 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor1,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor1,
+                &patient,
+                &String::from_str(&env, "Diagnosis A"),
+                &String::from_str(&env, "Treatment A"),
+                &false,
+                &vec![String::from_str(&env, "tag")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "TypeA"),
+            );
+
+        let record_id2 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor2,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor2,
+                &patient,
+                &String::from_str(&env, "Diagnosis B"),
+                &String::from_str(&env, "Treatment B"),
+                &false,
+                &vec![String::from_str(&env, "tag")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "TypeB"),
+            );
+
+        // Verify all IDs are unique
+        assert_ne!(record_id1, record_id2);
+    }
+
+    #[test]
+    fn test_record_ordering() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Add records in sequence
+        let mut record_ids: Vec<u64> = Vec::new(&env);
+        for i in 0..5 {
+            let id = client
+                .mock_auths(&[MockAuth {
+                    address: &doctor,
+                    invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+                }])
+                .add_record(
+                    &doctor,
+                    &patient,
+                    &String::from_str(&env, &format!("Diagnosis {}", i)),
+                    &String::from_str(&env, &format!("Treatment {}", i)),
+                    &false,
+                    &vec![String::from_str(&env, "tag")],
+                    String::from_str(&env, "Modern"),
+                    String::from_str(&env, "Type"),
+                );
+            record_ids.push_back(id);
+        }
+
+        // Verify ordering is preserved
+        for i in 1..record_ids.len() {
+            assert!(record_ids.get(i).unwrap() > record_ids.get(i - 1).unwrap());
+        }
+    }
+
+    #[test]
+    fn test_record_counter_isolation() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        // Initialize and set roles
+        client.mock_all_auths().initialize(&admin);
+        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
+        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+
+        // Add first record
+        let record_id1 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis"),
+                &String::from_str(&env, "Treatment"),
+                &false,
+                &vec![String::from_str(&env, "tag")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Type"),
+            );
+
+        // Create a recovery proposal (also uses the counter)
+        let proposal_id = client
+            .mock_all_auths()
+            .propose_recovery(&admin, &Address::generate(&env), &Address::generate(&env), &100i128);
+
+        // Add another record
+        let record_id2 = client
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] },
+            }])
+            .add_record(
+                &doctor,
+                &patient,
+                &String::from_str(&env, "Diagnosis 2"),
+                &String::from_str(&env, "Treatment 2"),
+                &false,
+                &vec![String::from_str(&env, "tag")],
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Type"),
+            );
+
+        // Verify all IDs are unique and monotonic
+        assert_eq!(record_id1, 1);
+        assert_eq!(proposal_id, 2);
+        assert_eq!(record_id2, 3);
+        assert!(proposal_id > record_id1);
+        assert!(record_id2 > proposal_id);
     }
 }
