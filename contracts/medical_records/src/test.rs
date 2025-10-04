@@ -138,145 +138,171 @@ fn test_role_based_access() {
     assert!(retrieved_record.is_some());
 }
 
-// #[test]
-// fn test_deactivate_user() {
-//     let env = Env::default();
-//     env.mock_all_auths();
+#[test]
+#[should_panic(expected = "Error(Contract, #2)")]
+fn test_deactivate_user() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-//     let (client, admin) = create_contract(&env);
-//     let doctor = Address::generate(&env);
-//     let patient = Address::generate(&env);
-//     // Admin manages user roles
-//     client.manage_user(&admin, &doctor, &Role::Doctor);
-//     client.manage_user(&admin, &patient, &Role::Patient);
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    // Admin manages user roles
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
 
-//     // Deactivate the doctor
-//    let res =  client.deactivate_user(&admin, &doctor);
+    // Deactivate the doctor
+    client.deactivate_user(&admin, &doctor);
 
-//     let result  = client.add_record(
-//         &doctor,
-//         &patient,
-//         &String::from_str(&env, "Cold"),
-//         &String::from_str(&env, "Rest"),
-//         &false,
-//         &vec![&env, String::from_str(&env, "herbal")],
-//         &String::from_str(&env, "Traditional"),
-//         &String::from_str(&env, "Herbal Therapy"),
-//     );
-//     assert!(result.is_err());
+    // // Try to add a record as the deactivated doctor (should fail)
+    let result = client
+        .add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Cold"),
+            &String::from_str(&env, "Rest"),
+            &false,
+            &vec![&env, String::from_str(&env, "herbal")],
+            &String::from_str(&env, "Traditional"),
+            &String::from_str(&env, "Herbal Therapy"),
+        );
+}
 
-//     // Reactivate the doctor
-//     assert!(client.manage_user(&admin, &doctor, &Role::Doctor));
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn test_pause_unpause_blocks_sensitive_functions_panic() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-//     // Add a record as the reactivated doctor (should succeed)
-//     let record_id = client.add_record(
-//             &doctor,
-//             &patient,
-//             &String::from_str(&env, "Cold"),
-//             &String::from_str(&env, "Rest"),
-//             &false,
-//             &vec![&env, String::from_str(&env, "herbal")],
-//             &String::from_str(&env, "Traditional"),
-//             &String::from_str(&env, "Herbal Therapy"),
-//         );
-//     assert!(record_id > 0);
-// }
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
 
-// #[test]
-// fn test_pause_unpause_blocks_sensitive_functions() {
-//     let env = Env::default();
-//     env.mock_all_auths();
+    // Initialize and set up roles
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
 
-//     let (client, admin) = create_contract(&env);
-//     let doctor = Address::generate(&env);
-//     let patient = Address::generate(&env);
+    // Add a record (not paused)
+    let _record_id = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Diagnosis"),
+            &String::from_str(&env, "Treatment"),
+            &false,
+            &vec![&env, String::from_str(&env, "herbal")],
+            &String::from_str(&env, "Traditional"),
+            &String::from_str(&env, "Herbal Therapy")
+    );
 
-//     // Initialize and set up roles
-//     client.manage_user(&admin, &doctor, &Role::Doctor);
-//     client.manage_user(&admin, &patient, &Role::Patient);
+    // Pause the contract
+    client.pause(&admin);
 
-//     // Add a record (not paused)
-//     let _record_id = client.add_record(
-//             &doctor,
-//             &patient,
-//             &String::from_str(&env, "Diagnosis"),
-//             &String::from_str(&env, "Treatment"),
-//             &false,
-//             &vec![&env, String::from_str(&env, "herbal")],
-//             &String::from_str(&env, "Traditional"),
-//             &String::from_str(&env, "Herbal Therapy")
-//     );
+    // Mutating functions should be blocked when paused
+    let r1 = client.manage_user(&admin, &Address::generate(&env), &Role::Doctor);
+}
 
-//     // Pause the contract
-//     assert!(client.pause(&admin));
+#[test]
+fn test_pause_unpause_blocks_sensitive_functions() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-//     // Mutating functions should be blocked when paused
-//     let r1 = client.try_manage_user(&admin, &Address::generate(&env), &Role::Doctor);
-//     assert!(r1.is_err());
-//     let r2 = client.try_add_record(
-//             &doctor,
-//             &patient,
-//             &String::from_str(&env, "Diagnosis2"),
-//             &String::from_str(&env, "Treatment2"),
-//             &false,
-//             &vec![&env, String::from_str(&env, "herbal")],
-//             &String::from_str(&env, "Traditional"),
-//             &String::from_str(&env, "Herbal Therapy"),
-//         );
-//     assert!(r2.is_err());
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
 
-//     // Unpause
-//     assert!(client.unpause(&admin));
+    // Initialize and set up roles
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
 
-//     // Now mutating calls should succeed
-//     assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
-//     let r3 = client.add_record(
-//             &doctor,
-//             &patient,
-//             &String::from_str(&env, "Diagnosis3"),
-//             &String::from_str(&env, "Treatment3"),
-//             &false,
-//             &vec![&env, String::from_str(&env, "herbal")],
-//             &String::from_str(&env, "Traditional"),
-//             &String::from_str(&env, "Herbal Therapy"),
-//         );
-//     assert!(r3 > 0);
-// }
+    // Add a record (not paused)
+    let _record_id = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Diagnosis"),
+            &String::from_str(&env, "Treatment"),
+            &false,
+            &vec![&env, String::from_str(&env, "herbal")],
+            &String::from_str(&env, "Traditional"),
+            &String::from_str(&env, "Herbal Therapy")
+    );
 
-// #[test]
-// fn test_recovery_timelock_and_multisig() {
-//     let env = Env::default();
-//     env.mock_all_auths();
+    // Pause the contract
+    client.pause(&admin);
 
-//     let (client, admin1) = create_contract(&env);
+    // Unpause
+    assert!(client.unpause(&admin));
 
-//     let admin2 = Address::generate(&env);
-//     let token = Address::generate(&env);
-//     let recipient = Address::generate(&env);
+    // Now mutating calls should succeed
+    assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
+    let r3 = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Diagnosis3"),
+            &String::from_str(&env, "Treatment3"),
+            &false,
+            &vec![&env, String::from_str(&env, "herbal")],
+            &String::from_str(&env, "Traditional"),
+            &String::from_str(&env, "Herbal Therapy"),
+        );
+}
 
-//     // Initialize and add second admin
-//     client.manage_user(&admin1, &admin2, &Role::Admin);
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn test_recovery_timelock_and_multisig() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-//     // Propose recovery by admin1
-//     let proposal_id = client.propose_recovery(&admin1, &token, &recipient, &100i128);
-//     assert!(proposal_id > 0);
+    let (client, admin1) = create_contract(&env);
 
-//     // Approve by admin2
-//     assert!(client.approve_recovery(&admin2, &proposal_id));
+    let admin2 = Address::generate(&env);
+    let token = Address::generate(&env);
+    let recipient = Address::generate(&env);
 
-//     // Try execute before timelock elapsed -> should error
-//     let res = client.execute_recovery(&admin1, &proposal_id);
-//     // assert!(res.is_err());
+    // Initialize and add second admin
+    client.manage_user(&admin1, &admin2, &Role::Admin);
 
-//     // // Advance time beyond timelock
-//     // let now = env.ledger().timestamp();
-//     // env.ledger().with_mut(|l| {
-//     //     l.timestamp = now + TIMELOCK_SECS + 1;
-//     // });
+    // Propose recovery by admin1
+    let proposal_id = client.propose_recovery(&admin1, &token, &recipient, &100i128);
+    assert!(proposal_id > 0);
 
-//     // // Execute should succeed now
-//     // assert!(client.execute_recovery(&admin1, &proposal_id));
-// }
+    // Approve by admin2
+    client.approve_recovery(&admin2, &proposal_id);
+
+    // Try execute before timelock elapsed -> should error
+    let _ = client.execute_recovery(&admin1, &proposal_id);
+}
+
+#[test]
+fn test_recovery_timelock_and_multisig_success() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin1) = create_contract(&env);
+
+    let admin2 = Address::generate(&env);
+    let token = Address::generate(&env);
+    let recipient = Address::generate(&env);
+
+    // Initialize and add second admin
+    client.manage_user(&admin1, &admin2, &Role::Admin);
+
+    // Propose recovery by admin1
+    let proposal_id = client.propose_recovery(&admin1, &token, &recipient, &100i128);
+    assert!(proposal_id > 0);
+
+    // Approve by admin2
+    client.approve_recovery(&admin2, &proposal_id);
+
+    // Advance time beyond timelock
+    let now = env.ledger().timestamp();
+    env.ledger().with_mut(|l| {
+        l.timestamp = now + TIMELOCK_SECS + 1;
+    });
+
+    let res = client.execute_recovery(&admin1, &proposal_id);
+
+}
+
 
 #[test]
 fn test_monotonic_record_ids() {
