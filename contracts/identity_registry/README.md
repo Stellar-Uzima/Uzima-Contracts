@@ -18,8 +18,10 @@ The Identity Registry Contract provides a decentralized trust system for healthc
 
 - **`initialize(owner)`**: Initialize the contract with an owner who becomes the first verifier
 - **`register_identity_hash(hash, subject, meta)`**: Register a 32-byte identity hash with metadata
-- **`attest(subject, claim_hash)`**: Create an attestation for a subject (verifiers only)
-- **`revoke_attestation(subject, claim_hash)`**: Revoke an existing attestation (verifiers only)
+  - **Authorization**: Requires `subject.require_auth()` - only the subject can register their own identity
+  - The `registered_by` field is set to the subject (the authenticated caller)
+- **`attest(verifier, subject, claim_hash)`**: Create an attestation for a subject (verifiers only)
+- **`revoke_attestation(verifier, subject, claim_hash)`**: Revoke an existing attestation (verifiers only)
 
 ### Verifier Management
 
@@ -71,9 +73,11 @@ pub struct Attestation {
 - Consider using salted hashes for additional security
 
 ### Access Control
-- Only the owner can add/remove verifiers
-- Only verifiers can create/revoke attestations
-- Owner cannot be removed as a verifier
+- **Identity Registration**: Only the subject can register their own identity hash (requires `subject.require_auth()`)
+- **Registrar Attribution**: The `registered_by` field correctly reflects the subject (actual caller), not the contract address
+- **Verifier Management**: Only the owner can add/remove verifiers
+- **Attestations**: Only authorized verifiers can create/revoke attestations
+- **Owner Protection**: Owner cannot be removed as a verifier
 
 ### Gas Optimization
 - Efficient storage patterns using Soroban's native types
