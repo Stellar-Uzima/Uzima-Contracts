@@ -603,6 +603,5 @@ impl TreasuryController {
     }
 }
 
-// Tests temporarily disabled due to stellar-xdr dependency conflicts in Soroban SDK v20
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;

@@ -14,6 +14,8 @@ soroban-sdk.workspace = true
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+arbitrary = { workspace = true }
+derive_arbitrary = { workspace = true }
 
 [features]
 default = []
