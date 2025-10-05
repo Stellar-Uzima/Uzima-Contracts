@@ -1,10 +1,7 @@
 #[cfg(test)]
 pub mod tests {
     use crate::TreasuryController;
-    use soroban_sdk::{
-        testutils::Address as _,
-        Address, Env, Vec,
-    };
+    use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
 
     fn create_test_env() -> (Env, Address, Vec<Address>) {
         let env = Env::default();
@@ -14,9 +11,9 @@ pub mod tests {
         let signer1 = Address::generate(&env);
         let signer2 = Address::generate(&env);
         let signer3 = Address::generate(&env);
-        
+
         let signers = Vec::from_array(&env, [signer1, signer2, signer3]);
-        
+
         (env, admin, signers)
     }
 
@@ -32,6 +29,7 @@ pub mod tests {
         let contract_id = setup_treasury_controller(&env, &admin, &signers);
 
         // Test that we can register the contract successfully
-        assert!(!contract_id.to_string().is_empty());
+        // Verify contract_id was created (length check)
+        assert!(contract_id.to_string().len() > 0);
     }
 }

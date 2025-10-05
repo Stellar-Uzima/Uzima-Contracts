@@ -68,7 +68,10 @@ impl EscrowContract {
         if platform_fee_bps > 10_000 {
             panic!("Invalid fee bps");
         }
-        let conf = FeeConfig { fee_receiver, platform_fee_bps };
+        let conf = FeeConfig {
+            fee_receiver,
+            platform_fee_bps,
+        };
         env.storage().persistent().set(&FEE_CONF, &conf);
     }
 
@@ -128,7 +131,8 @@ impl EscrowContract {
         e.disputed = true;
         escrows.set(order_id, e.clone());
         env.storage().persistent().set(&ESCROWS, &escrows);
-        env.events().publish((symbol_short!("EscDisput"), order_id), ());
+        env.events()
+            .publish((symbol_short!("EscDisput"), order_id), ());
     }
 
     pub fn approve_release(env: Env, order_id: u64, approver: Address) {
@@ -139,7 +143,9 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
-        if e.released || e.refunded { panic!("Already settled"); }
+        if e.released || e.refunded {
+            panic!("Already settled");
+        }
         let mut approvals = e.approvals.clone();
         if !approvals.contains(&approver) {
             approvals.push_back(approver);
@@ -164,9 +170,13 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
-        if e.released || e.refunded { panic!("Already settled"); }
+        if e.released || e.refunded {
+            panic!("Already settled");
+        }
         // simple threshold: at least 2 approvals (payer + oracle/admin)
-        if e.approvals.len() < 2 { panic!("Insufficient approvals"); }
+        if e.approvals.len() < 2 {
+            panic!("Insufficient approvals");
+        }
 
         // effects: mark released and record owed balances (pull-payment)
         e.released = true;
@@ -180,7 +190,13 @@ impl EscrowContract {
         add_credit(&env, &fee_conf.fee_receiver, fee);
         env.events().publish(
             (symbol_short!("EscRel"), order_id),
-            (e.payee, provider_amount, fee_conf.fee_receiver, fee, e.token),
+            (
+                e.payee,
+                provider_amount,
+                fee_conf.fee_receiver,
+                fee,
+                e.token,
+            ),
         );
 
         clear_reentrancy(&env);
@@ -195,7 +211,9 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
-        if e.released || e.refunded { panic!("Already settled"); }
+        if e.released || e.refunded {
+            panic!("Already settled");
+        }
         // require at least one approval (oracle/admin) or disputed flag
         if e.approvals.len() == 0 && !e.disputed {
             panic!("No basis to refund");
@@ -241,10 +259,13 @@ impl EscrowContract {
             .get(&CREDITS)
             .unwrap_or(Map::new(&env));
         let amount = credits.get(to.clone()).unwrap_or(0);
-        if amount <= 0 { panic!("No credit"); }
+        if amount <= 0 {
+            panic!("No credit");
+        }
         credits.set(to.clone(), 0);
         env.storage().persistent().set(&CREDITS, &credits);
-        env.events().publish((symbol_short!("Withdrawn"),), (to.clone(), amount, token));
+        env.events()
+            .publish((symbol_short!("Withdrawn"),), (to.clone(), amount, token));
         clear_reentrancy(&env);
         amount
     }
@@ -276,8 +297,8 @@ mod test {
         // credits: payee 975, fee 25
         let payee_credit = client.get_credit(&payee);
         let fee_credit = client.get_credit(&Address::generate(&env)); // not the same; need fee receiver used above
-        // Retrieve exact fee receiver credit
-        // We can't read fee receiver here; just assert payee credit equals expected
+                                                                      // Retrieve exact fee receiver credit
+                                                                      // We can't read fee receiver here; just assert payee credit equals expected
         assert_eq!(payee_credit, 975);
     }
 

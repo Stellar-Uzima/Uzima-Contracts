@@ -31,7 +31,10 @@ impl Timelock {
         if env.storage().persistent().has(&CFG) {
             panic!("Already initialized");
         }
-        let cfg = TimelockConfig { admin, delay_seconds };
+        let cfg = TimelockConfig {
+            admin,
+            delay_seconds,
+        };
         env.storage().persistent().set(&CFG, &cfg);
     }
 
@@ -68,12 +71,15 @@ impl Timelock {
             .unwrap_or(Map::new(&env));
         let tx = q.get(id).unwrap_or_else(|| panic!("Not queued"));
         let now: u64 = env.ledger().timestamp().into();
-        if now < tx.eta { panic!("Not ready"); }
+        if now < tx.eta {
+            panic!("Not ready");
+        }
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.
         // Here we just emit execution event and remove from queue.
         q.remove(id);
         env.storage().persistent().set(&QUEUE, &q);
-        env.events().publish((symbol_short!("Exec"), id), (tx.target, tx.call));
+        env.events()
+            .publish((symbol_short!("Exec"), id), (tx.target, tx.call));
     }
 }
 
@@ -81,7 +87,7 @@ impl Timelock {
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{Address, Env, BytesN, LedgerInfo};
+    use soroban_sdk::{Address, BytesN, Env, LedgerInfo};
 
     #[test]
     fn queue_and_execute_respects_delay() {
@@ -107,7 +113,11 @@ mod test {
         });
         Timelock::execute(env.clone(), 1);
         // ensure queue cleared
-        let q: Map<u64, QueuedTx> = env.storage().persistent().get(&QUEUE).unwrap_or(Map::new(&env));
+        let q: Map<u64, QueuedTx> = env
+            .storage()
+            .persistent()
+            .get(&QUEUE)
+            .unwrap_or(Map::new(&env));
         assert!(!q.contains_key(1));
     }
 }

@@ -71,8 +71,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::IdentityHash(subject.clone()), &identity_record);
 
         // Emit event
-        env.events()
-            .publish(("IdentityRegistered",), (subject, hash, meta));
+        env.events().publish(("id_reg",), (subject, hash, meta));
     }
 
     /// Create an attestation (only verifiers can do this)
@@ -117,7 +116,7 @@ impl IdentityRegistryContract {
 
         // Emit event
         env.events()
-            .publish(("Attested",), (subject, verifier, claim_hash));
+            .publish(("attested",), (subject, verifier, claim_hash));
     }
 
     /// Revoke an attestation (only verifiers can do this)
@@ -156,7 +155,7 @@ impl IdentityRegistryContract {
 
         // Emit event
         env.events()
-            .publish(("Revoked",), (subject, verifier, claim_hash));
+            .publish(("revoked",), (subject, verifier, claim_hash));
     }
 
     /// Add a verifier (only owner can do this)
@@ -174,7 +173,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Verifier(verifier.clone()), &true);
 
         // Emit event
-        env.events().publish(("VerifierAdded",), verifier);
+        env.events().publish(("ver_add",), verifier);
     }
 
     /// Remove a verifier (only owner can do this)
@@ -197,7 +196,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Verifier(verifier.clone()), &false);
 
         // Emit event
-        env.events().publish(("VerifierRemoved",), verifier);
+        env.events().publish(("ver_rem",), verifier);
     }
 
     /// Check if an address is a verifier
@@ -294,16 +293,41 @@ mod tests {
     }
     use super::*;
     use soroban_sdk::testutils::{Address as _, Events};
-    use soroban_sdk::{Address, BytesN, Env, String};
+    use soroban_sdk::{Address, BytesN, Env, IntoVal, String};
 
+    // Helper for normal tests - mocks all auths
     fn create_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
 
-        // Initialize the contract
-        client.mock_all_auths().initialize(&owner);
+        // Mock auth for initialize call and all future calls
+        env.mock_all_auths();
+        client.initialize(&owner);
+
+        (env, client, owner)
+    }
+
+    // Helper for should_panic tests - only mocks initialize auth via client
+    fn create_contract_no_mock() -> (Env, IdentityRegistryContractClient<'static>, Address) {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, IdentityRegistryContract);
+        let client = IdentityRegistryContractClient::new(&env, &contract_id);
+        let owner = Address::generate(&env);
+
+        // Only mock auth for this specific initialize call using client
+        client
+            .mock_auths(&[soroban_sdk::testutils::MockAuth {
+                address: &owner,
+                invoke: &soroban_sdk::testutils::MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "initialize",
+                    args: (&owner,).into_val(&env),
+                    sub_invokes: &[],
+                },
+            }])
+            .initialize(&owner);
 
         (env, client, owner)
     }
@@ -366,11 +390,11 @@ mod tests {
         let new_verifier = Address::generate(&env);
 
         // Add verifier
-        client.mock_all_auths().add_verifier(&new_verifier);
+        client.add_verifier(&new_verifier);
         assert!(client.is_verifier(&new_verifier));
 
         // Remove verifier
-        client.mock_all_auths().remove_verifier(&new_verifier);
+        client.remove_verifier(&new_verifier);
         assert!(!client.is_verifier(&new_verifier));
 
         // Verify events
@@ -381,10 +405,10 @@ mod tests {
     #[test]
     #[should_panic(expected = "Cannot remove owner as verifier")]
     fn test_cannot_remove_owner_as_verifier() {
-        let (_env, client, owner) = create_contract();
+        let (_env, client, owner) = create_contract_no_mock();
 
         // Try to remove owner as verifier (should panic)
-        client.mock_all_auths().remove_verifier(&owner);
+        client.remove_verifier(&owner);
     }
 
     #[test]
@@ -394,13 +418,11 @@ mod tests {
         let subject = Address::generate(&env);
 
         // Add verifier
-        client.mock_all_auths().add_verifier(&verifier);
+        client.add_verifier(&verifier);
 
         // Create attestation
         let claim_hash = BytesN::from_array(&env, &[2; 32]);
-        client
-            .mock_all_auths()
-            .attest(&verifier, &subject, &claim_hash);
+        client.attest(&verifier, &subject, &claim_hash);
 
         // Verify attestation
         assert!(client.is_attested(&subject, &claim_hash));
@@ -414,16 +436,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "Caller is not a verifier")]
     fn test_attest_unauthorized() {
-        let (env, client, _owner) = create_contract();
+        let (env, client, _owner) = create_contract_no_mock();
         let unauthorized = Address::generate(&env);
         let subject = Address::generate(&env);
 
         let claim_hash = BytesN::from_array(&env, &[3; 32]);
 
         // Try to attest without being a verifier (should panic)
-        client
-            .mock_all_auths()
-            .attest(&unauthorized, &subject, &claim_hash);
+        client.attest(&unauthorized, &subject, &claim_hash);
     }
 
     #[test]
@@ -433,21 +453,17 @@ mod tests {
         let subject = Address::generate(&env);
 
         // Add verifier
-        client.mock_all_auths().add_verifier(&verifier);
+        client.add_verifier(&verifier);
 
         // Create attestation
         let claim_hash = BytesN::from_array(&env, &[4; 32]);
-        client
-            .mock_all_auths()
-            .attest(&verifier, &subject, &claim_hash);
+        client.attest(&verifier, &subject, &claim_hash);
 
         // Verify attestation exists
         assert!(client.is_attested(&subject, &claim_hash));
 
         // Revoke attestation
-        client
-            .mock_all_auths()
-            .revoke_attestation(&verifier, &subject, &claim_hash);
+        client.revoke_attestation(&verifier, &subject, &claim_hash);
 
         // Verify attestation is revoked
         assert!(!client.is_attested(&subject, &claim_hash));
@@ -460,16 +476,14 @@ mod tests {
     #[test]
     #[should_panic(expected = "Caller is not a verifier")]
     fn test_revoke_attestation_unauthorized() {
-        let (env, client, _owner) = create_contract();
+        let (env, client, _owner) = create_contract_no_mock();
         let unauthorized = Address::generate(&env);
         let subject = Address::generate(&env);
 
         let claim_hash = BytesN::from_array(&env, &[5; 32]);
 
         // Try to revoke without being a verifier (should panic)
-        client
-            .mock_all_auths()
-            .revoke_attestation(&unauthorized, &subject, &claim_hash);
+        client.revoke_attestation(&unauthorized, &subject, &claim_hash);
     }
 
     #[test]
@@ -480,23 +494,17 @@ mod tests {
         let subject = Address::generate(&env);
 
         // Add verifiers
-        client.mock_all_auths().add_verifier(&verifier1);
-        client.mock_all_auths().add_verifier(&verifier2);
+        client.add_verifier(&verifier1);
+        client.add_verifier(&verifier2);
 
         // Create multiple attestations
         let claim_hash1 = BytesN::from_array(&env, &[6; 32]);
         let claim_hash2 = BytesN::from_array(&env, &[7; 32]);
         let claim_hash3 = BytesN::from_array(&env, &[8; 32]);
 
-        client
-            .mock_all_auths()
-            .attest(&verifier1, &subject, &claim_hash1);
-        client
-            .mock_all_auths()
-            .attest(&verifier1, &subject, &claim_hash2);
-        client
-            .mock_all_auths()
-            .attest(&verifier2, &subject, &claim_hash3);
+        client.attest(&verifier1, &subject, &claim_hash1);
+        client.attest(&verifier1, &subject, &claim_hash2);
+        client.attest(&verifier2, &subject, &claim_hash3);
 
         // Verify all attestations
         assert!(client.is_attested(&subject, &claim_hash1));
@@ -508,9 +516,7 @@ mod tests {
         assert_eq!(attestations.len(), 3);
 
         // Revoke one attestation
-        client
-            .mock_all_auths()
-            .revoke_attestation(&verifier1, &subject, &claim_hash1);
+        client.revoke_attestation(&verifier1, &subject, &claim_hash1);
 
         // Verify partial revocation
         assert!(!client.is_attested(&subject, &claim_hash1));

@@ -81,6 +81,7 @@
         }
       ]
     ],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
@@ -97,10 +98,10 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Diagnosis 1"
+                  "string": "Test"
                 },
                 {
-                  "string": "Treatment 1"
+                  "string": "Test"
                 },
                 {
                   "bool": false
@@ -108,7 +109,55 @@
                 {
                   "vec": [
                     {
-                      "string": "herbal"
+                      "string": "test"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Modern"
+                    }
+                  ]
+                },
+                {
+                  "string": "Test"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "add_record",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
                     }
                   ]
                 },
@@ -120,7 +169,7 @@
                   ]
                 },
                 {
-                  "string": "Herbal Therapy"
+                  "string": "Test"
                 }
               ]
             }
@@ -145,18 +194,66 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Diagnosis 2"
+                  "string": "Test"
                 },
                 {
-                  "string": "Treatment 2"
+                  "string": "Test"
                 },
                 {
-                  "bool": true
+                  "bool": false
                 },
                 {
                   "vec": [
                     {
-                      "string": "spiritual"
+                      "string": "test"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Herbal"
+                    }
+                  ]
+                },
+                {
+                  "string": "Test"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+              "function_name": "add_record",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
                     }
                   ]
                 },
@@ -168,51 +265,7 @@
                   ]
                 },
                 {
-                  "string": "Prayer"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "get_record",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "get_record",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "u64": 2
+                  "string": "Test"
                 }
               ]
             }
@@ -319,7 +372,7 @@
                                     "val": {
                                       "vec": [
                                         {
-                                          "symbol": "Traditional"
+                                          "symbol": "Modern"
                                         }
                                       ]
                                     }
@@ -329,7 +382,7 @@
                                       "symbol": "diagnosis"
                                     },
                                     "val": {
-                                      "string": "Diagnosis 1"
+                                      "string": "Test"
                                     }
                                   },
                                   {
@@ -363,7 +416,7 @@
                                     "val": {
                                       "vec": [
                                         {
-                                          "string": "herbal"
+                                          "string": "test"
                                         }
                                       ]
                                     }
@@ -381,7 +434,7 @@
                                       "symbol": "treatment"
                                     },
                                     "val": {
-                                      "string": "Treatment 1"
+                                      "string": "Test"
                                     }
                                   },
                                   {
@@ -389,7 +442,7 @@
                                       "symbol": "treatment_type"
                                     },
                                     "val": {
-                                      "string": "Herbal Therapy"
+                                      "string": "Test"
                                     }
                                   }
                                 ]
@@ -398,6 +451,184 @@
                             {
                               "key": {
                                 "u64": 2
+                              },
+                              "val": {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "category"
+                                    },
+                                    "val": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Traditional"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "diagnosis"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "doctor_id"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "is_confidential"
+                                    },
+                                    "val": {
+                                      "bool": false
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "patient_id"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "tags"
+                                    },
+                                    "val": {
+                                      "vec": [
+                                        {
+                                          "string": "test"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "timestamp"
+                                    },
+                                    "val": {
+                                      "u64": 0
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "treatment"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "treatment_type"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "u64": 3
+                              },
+                              "val": {
+                                "map": [
+                                  {
+                                    "key": {
+                                      "symbol": "category"
+                                    },
+                                    "val": {
+                                      "vec": [
+                                        {
+                                          "symbol": "Herbal"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "diagnosis"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "doctor_id"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "is_confidential"
+                                    },
+                                    "val": {
+                                      "bool": false
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "patient_id"
+                                    },
+                                    "val": {
+                                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "tags"
+                                    },
+                                    "val": {
+                                      "vec": [
+                                        {
+                                          "string": "test"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "timestamp"
+                                    },
+                                    "val": {
+                                      "u64": 0
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "treatment"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "treatment_type"
+                                    },
+                                    "val": {
+                                      "string": "Test"
+                                    }
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "u64": 4
                               },
                               "val": {
                                 "map": [
@@ -418,7 +649,7 @@
                                       "symbol": "diagnosis"
                                     },
                                     "val": {
-                                      "string": "Diagnosis 2"
+                                      "string": "Test"
                                     }
                                   },
                                   {
@@ -434,7 +665,7 @@
                                       "symbol": "is_confidential"
                                     },
                                     "val": {
-                                      "bool": true
+                                      "bool": false
                                     }
                                   },
                                   {
@@ -452,7 +683,7 @@
                                     "val": {
                                       "vec": [
                                         {
-                                          "string": "spiritual"
+                                          "string": "test"
                                         }
                                       ]
                                     }
@@ -470,7 +701,7 @@
                                       "symbol": "treatment"
                                     },
                                     "val": {
-                                      "string": "Treatment 2"
+                                      "string": "Test"
                                     }
                                   },
                                   {
@@ -478,7 +709,7 @@
                                       "symbol": "treatment_type"
                                     },
                                     "val": {
-                                      "string": "Prayer"
+                                      "string": "Test"
                                     }
                                   }
                                 ]
@@ -592,7 +823,7 @@
                           ]
                         },
                         "val": {
-                          "u64": 2
+                          "u64": 4
                         }
                       }
                     ]
@@ -743,6 +974,39 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
+                "nonce": 4270020994084947596
+              }
+            },
+            "durability": "temporary"
+          }
+        },
+        [
+          {
+            "last_modified_ledger_seq": 0,
+            "data": {
+              "contract_data": {
+                "ext": "v0",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+                "key": {
+                  "ledger_key_nonce": {
+                    "nonce": 4270020994084947596
+                  }
+                },
+                "durability": "temporary",
+                "val": "void"
+              }
+            },
+            "ext": "v0"
+          },
+          15
+        ]
+      ],
+      [
+        {
+          "contract_data": {
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+            "key": {
+              "ledger_key_nonce": {
                 "nonce": 4837995959683129791
               }
             },
@@ -773,40 +1037,7 @@
       [
         {
           "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 4270020994084947596
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 4270020994084947596
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          15
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
                 "nonce": 8370022561469687789
@@ -821,7 +1052,7 @@
             "data": {
               "contract_data": {
                 "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 8370022561469687789
@@ -1050,30 +1281,36 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_record"
+                "symbol": "get_allowed_categories"
+              }
+            ],
+            "data": "void"
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_return"
+              },
+              {
+                "symbol": "get_allowed_categories"
               }
             ],
             "data": {
               "vec": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "string": "Diagnosis 1"
-                },
-                {
-                  "string": "Treatment 1"
-                },
-                {
-                  "bool": false
-                },
-                {
                   "vec": [
                     {
-                      "string": "herbal"
+                      "symbol": "Modern"
                     }
                   ]
                 },
@@ -1085,7 +1322,77 @@
                   ]
                 },
                 {
-                  "string": "Herbal Therapy"
+                  "vec": [
+                    {
+                      "symbol": "Herbal"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Spiritual"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "fn_call"
+              },
+              {
+                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
+              },
+              {
+                "symbol": "add_record"
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Modern"
+                    }
+                  ]
+                },
+                {
+                  "string": "Test"
                 }
               ]
             }
@@ -1164,30 +1471,30 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Diagnosis 2"
+                  "string": "Test"
                 },
                 {
-                  "string": "Treatment 2"
+                  "string": "Test"
                 },
                 {
-                  "bool": true
+                  "bool": false
                 },
                 {
                   "vec": [
                     {
-                      "string": "spiritual"
+                      "string": "test"
                     }
                   ]
                 },
                 {
                   "vec": [
                     {
-                      "symbol": "Spiritual"
+                      "symbol": "Traditional"
                     }
                   ]
                 },
                 {
-                  "string": "Prayer"
+                  "string": "Test"
                 }
               ]
             }
@@ -1254,18 +1561,64 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_record"
+                "symbol": "add_record"
               }
             ],
             "data": {
               "vec": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "u64": 1
+                  "string": "Test"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Herbal"
+                    }
+                  ]
+                },
+                {
+                  "string": "Test"
                 }
               ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "string": "rec_add"
+              }
+            ],
+            "data": {
+              "u64": 3
             }
           }
         }
@@ -1284,92 +1637,11 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_record"
+                "symbol": "add_record"
               }
             ],
             "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "category"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "symbol": "Traditional"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "diagnosis"
-                  },
-                  "val": {
-                    "string": "Diagnosis 1"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "is_confidential"
-                  },
-                  "val": {
-                    "bool": false
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "patient_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "tags"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "string": "herbal"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment"
-                  },
-                  "val": {
-                    "string": "Treatment 1"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment_type"
-                  },
-                  "val": {
-                    "string": "Herbal Therapy"
-                  }
-                }
-              ]
+              "u64": 3
             }
           }
         }
@@ -1391,18 +1663,64 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "get_record"
+                "symbol": "add_record"
               }
             ],
             "data": {
               "vec": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "u64": 2
+                  "string": "Test"
+                },
+                {
+                  "string": "Test"
+                },
+                {
+                  "bool": false
+                },
+                {
+                  "vec": [
+                    {
+                      "string": "test"
+                    }
+                  ]
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Spiritual"
+                    }
+                  ]
+                },
+                {
+                  "string": "Test"
                 }
               ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "string": "rec_add"
+              }
+            ],
+            "data": {
+              "u64": 4
             }
           }
         }
@@ -1421,92 +1739,11 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "get_record"
+                "symbol": "add_record"
               }
             ],
             "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "category"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "symbol": "Spiritual"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "diagnosis"
-                  },
-                  "val": {
-                    "string": "Diagnosis 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "is_confidential"
-                  },
-                  "val": {
-                    "bool": true
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "patient_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "tags"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "string": "spiritual"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment"
-                  },
-                  "val": {
-                    "string": "Treatment 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment_type"
-                  },
-                  "val": {
-                    "string": "Prayer"
-                  }
-                }
-              ]
+              "u64": 4
             }
           }
         }

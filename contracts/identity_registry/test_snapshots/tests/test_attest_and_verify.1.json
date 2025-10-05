@@ -71,7 +71,7 @@
     []
   ],
   "ledger": {
-    "protocol_version": 21,
+    "protocol_version": 20,
     "sequence_number": 0,
     "timestamp": 0,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -247,7 +247,7 @@
             },
             "ext": "v0"
           },
-          6311999
+          15
         ]
       ],
       [
@@ -280,7 +280,7 @@
             },
             "ext": "v0"
           },
-          6311999
+          15
         ]
       ],
       [
@@ -313,7 +313,7 @@
             },
             "ext": "v0"
           },
-          6311999
+          15
         ]
       ],
       [
@@ -422,7 +422,7 @@
           "v0": {
             "topics": [
               {
-                "string": "VerifierAdded"
+                "string": "ver_add"
               }
             ],
             "data": {
@@ -499,7 +499,7 @@
           "v0": {
             "topics": [
               {
-                "string": "Attested"
+                "string": "attested"
               }
             ],
             "data": {
