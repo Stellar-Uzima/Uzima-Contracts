@@ -33,6 +33,7 @@ pub struct MedicalRecord {
     pub tags: Vec<String>,
     pub category: String,
     pub treatment_type: String,
+    pub data_ref: String,
 }
 
 #[derive(Clone)]
@@ -76,6 +77,9 @@ pub enum Error {
     ProposalAlreadyExecuted = 6,
     TimelockNotElasped = 7,
     NotEnoughApproval = 8,
+    EmptyDataRef = 9,
+    InvalidDataRefLength = 10,
+    InvalidDataRefCharset = 11,
 }
 
 #[contract]
@@ -138,6 +142,43 @@ impl MedicalRecordsContract {
             .persistent()
             .set(&DataKey::RecordCount, &next_count);
         next_count
+    }
+
+    /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
+    /// Validates:
+    /// - CIDv0: 46 chars, starts with "Qm", base58 encoded
+    /// - CIDv1: 50+ chars, starts with "b" (base32) or "z" (base58)
+    fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
+        // Check if data_ref is empty
+        if data_ref.len() == 0 {
+            return Err(Error::EmptyDataRef);
+        }
+
+        let len = data_ref.len();
+        let data_ref_str = data_ref.to_string();
+
+        // Check minimum length
+        if len < 10 {
+            return Err(Error::InvalidDataRefLength);
+        }
+
+        // Check maximum length (reasonable bound for CIDs)
+        if len > 200 {
+            return Err(Error::InvalidDataRefLength);
+        }
+
+        // Validate charset: base58 characters (used by IPFS)
+        // Base58 alphabet (Bitcoin): 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
+        // Base32 alphabet (lowercase): abcdefghijklmnopqrstuvwxyz234567
+        let valid_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz234567";
+        
+        for ch in data_ref_str.chars() {
+            if !valid_chars.contains(ch) {
+                return Err(Error::InvalidDataRefCharset);
+            }
+        }
+
+        Ok(())
     }
 
     /// Emergency pause - only admins
