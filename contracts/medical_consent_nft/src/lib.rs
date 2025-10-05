@@ -202,7 +202,9 @@ impl PatientConsentToken {
             .get(&patient_key)
             .unwrap_or(Vec::new(&env));
         patient_consents.push_back(token_id);
-        env.storage().instance().set(&patient_key, &patient_consents);
+        env.storage()
+            .instance()
+            .set(&patient_key, &patient_consents);
 
         // Initialize consent history
         let history_entry = ConsentHistoryEntry {
@@ -475,7 +477,8 @@ impl PatientConsentToken {
             let metadata = Self::get_metadata(env.clone(), token_id);
             if metadata.patient == patient
                 && metadata.consent_type == consent_type
-                && (metadata.expiry_timestamp == 0 || env.ledger().timestamp() < metadata.expiry_timestamp)
+                && (metadata.expiry_timestamp == 0
+                    || env.ledger().timestamp() < metadata.expiry_timestamp)
             {
                 return true;
             }
@@ -512,8 +515,8 @@ impl PatientConsentToken {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Accounts, AuthorizedInvocation, AuthorizedFunction};
-    use soroban_sdk::{Symbol, symbol_short};
+    use soroban_sdk::testutils::{Accounts, AuthorizedFunction, AuthorizedInvocation};
+    use soroban_sdk::{symbol_short, Symbol};
 
     #[test]
     fn test_mint_and_grant() {
@@ -537,18 +540,28 @@ mod test {
             String::from_str(&env, "ipfs://hash"),
             String::from_str(&env, "treatment"),
             0, // No expiry
-        ).unwrap();
+        )
+        .unwrap();
 
-        assert_eq!(PatientConsentToken::owner_of(env.clone(), token_id), patient);
+        assert_eq!(
+            PatientConsentToken::owner_of(env.clone(), token_id),
+            patient
+        );
         assert!(PatientConsentToken::is_valid(env.clone(), token_id));
 
         // Patient transfers to doctor (grant consent)
         patient.clone().mock_all_auths();
-        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id).unwrap();
+        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id)
+            .unwrap();
         assert_eq!(PatientConsentToken::owner_of(env.clone(), token_id), doctor);
 
         // Doctor has consent
-        assert!(PatientConsentToken::has_consent(env.clone(), patient.clone(), doctor.clone(), String::from_str(&env, "treatment")));
+        assert!(PatientConsentToken::has_consent(
+            env.clone(),
+            patient.clone(),
+            doctor.clone(),
+            String::from_str(&env, "treatment")
+        ));
     }
 
     #[test]
@@ -572,16 +585,23 @@ mod test {
             String::from_str(&env, "ipfs://hash"),
             String::from_str(&env, "treatment"),
             0,
-        ).unwrap();
+        )
+        .unwrap();
         patient.clone().mock_all_auths();
-        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id).unwrap();
+        PatientConsentToken::transfer(env.clone(), patient.clone(), doctor.clone(), token_id)
+            .unwrap();
 
         // Patient revokes - mock auth for patient
         patient.clone().mock_all_auths();
         PatientConsentToken::revoke_consent(env.clone(), token_id).unwrap();
 
         // Doctor no longer has consent
-        assert!(!PatientConsentToken::has_consent(env.clone(), patient.clone(), doctor.clone(), String::from_str(&env, "treatment")));
+        assert!(!PatientConsentToken::has_consent(
+            env.clone(),
+            patient.clone(),
+            doctor.clone(),
+            String::from_str(&env, "treatment")
+        ));
     }
 
     #[test]
@@ -624,7 +644,8 @@ mod test {
             String::from_str(&env, "ipfs1"),
             String::from_str(&env, "treatment"),
             0,
-        ).unwrap();
+        )
+        .unwrap();
         let token2 = PatientConsentToken::mint_consent(
             env.clone(),
             issuer.clone(),
@@ -632,7 +653,8 @@ mod test {
             String::from_str(&env, "ipfs2"),
             String::from_str(&env, "research"),
             0,
-        ).unwrap();
+        )
+        .unwrap();
 
         // patient_consents works via storage push in mint
     }
