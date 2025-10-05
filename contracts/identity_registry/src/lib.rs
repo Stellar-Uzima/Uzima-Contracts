@@ -37,23 +37,33 @@ impl IdentityRegistryContract {
     pub fn initialize(env: Env, owner: Address) {
         owner.require_auth();
 
-        // Set the owner
-        env.storage().instance().set(&DataKey::Owner, &owner);
+            // Initialization guard: panic if already initialized
+            if env.storage().instance().has(&DataKey::Owner) {
+                panic!("Contract already initialized");
+            }
 
-        // Owner is automatically a verifier
-        env.storage()
-            .instance()
-            .set(&DataKey::Verifier(owner.clone()), &true);
+            // Set the owner
+            env.storage().instance().set(&DataKey::Owner, &owner);
+
+            // Owner is automatically a verifier
+            env.storage()
+                .instance()
+                .set(&DataKey::Verifier(owner.clone()), &true);
+
+            // Emit Initialized event
+            env.events().publish(("Initialized",), owner.clone());
     }
 
     /// Register an identity hash with metadata
+    /// Only the subject can register their own identity hash
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
-        let caller = env.current_contract_address();
+        // Require authorization from the subject
+        subject.require_auth();
 
         let identity_record = IdentityRecord {
             hash: hash.clone(),
             meta: meta.clone(),
-            registered_by: caller,
+            registered_by: subject.clone(),
         };
 
         env.storage()
@@ -266,6 +276,21 @@ impl IdentityRegistryContract {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[should_panic(expected = "Contract already initialized")]
+    fn test_double_initialization_panics() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, IdentityRegistryContract);
+        let client = IdentityRegistryContractClient::new(&env, &contract_id);
+        let owner1 = Address::generate(&env);
+        let owner2 = Address::generate(&env);
+
+        // First initialization should succeed
+        client.mock_all_auths().initialize(&owner1);
+
+        // Second initialization should panic
+        client.mock_all_auths().initialize(&owner2);
+    }
     use super::*;
     use soroban_sdk::testutils::{Address as _, Events};
     use soroban_sdk::{Address, BytesN, Env, IntoVal, String};
@@ -326,8 +351,8 @@ mod tests {
         let hash = BytesN::from_array(&env, &[1; 32]);
         let meta = String::from_str(&env, "Healthcare Provider License #12345");
 
-        // Register identity hash
-        client.register_identity_hash(&hash, &subject, &meta);
+        // Register identity hash - subject must authorize
+        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
 
         // Verify storage
         assert_eq!(client.get_identity_hash(&subject), Some(hash));
@@ -336,6 +361,27 @@ mod tests {
         // Verify event emission
         let events = env.events().all();
         assert_eq!(events.len(), 1);
+    }
+
+    #[test]
+    fn test_register_identity_hash_with_correct_registrar() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+
+        let hash = BytesN::from_array(&env, &[1; 32]);
+        let meta = String::from_str(&env, "Healthcare Provider License #12345");
+
+        // Register identity hash
+        client.mock_all_auths().register_identity_hash(&hash, &subject, &meta);
+
+        // Verify that registered_by is set to the subject (not the contract)
+        let record_key = DataKey::IdentityHash(subject.clone());
+        let record: IdentityRecord = env.storage().instance().get(&record_key).unwrap();
+
+        // The registered_by field should be the subject, not the contract address
+        assert_eq!(record.registered_by, subject);
+        assert_eq!(record.hash, hash);
+        assert_eq!(record.meta, meta);
     }
 
     #[test]
@@ -494,8 +540,8 @@ mod tests {
         let meta2 = String::from_str(&env, "Clinic Registration");
 
         // Register multiple identities
-        client.register_identity_hash(&hash1, &subject1, &meta1);
-        client.register_identity_hash(&hash2, &subject2, &meta2);
+        client.mock_all_auths().register_identity_hash(&hash1, &subject1, &meta1);
+        client.mock_all_auths().register_identity_hash(&hash2, &subject2, &meta2);
 
         // Verify both are stored correctly
         assert_eq!(client.get_identity_hash(&subject1), Some(hash1));
