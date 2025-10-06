@@ -1,12 +1,14 @@
-    #![no_std]
+#![no_std]
 
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, Env, Map, String, Symbol, Vec, contracterror, symbol_short};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Env, Map,
+    String, Symbol, Vec,
+};
 
-
-    #[derive(Clone)]
+#[derive(Clone)]
 #[contracttype]
 pub enum Role {
     Admin,
@@ -43,13 +45,13 @@ pub enum DataKey {
     RecordCount,
 }
 
-const USERS: Symbol = symbol_short!("USERS");
-const ADMINS: Symbol = symbol_short!("ADMINS");
-const RECORDS: Symbol = symbol_short!("RECORDS");
-const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
+const USERS: Symbol = Symbol::short("USERS");
+const ADMINS: Symbol = Symbol::short("ADMINS");
+const RECORDS: Symbol = Symbol::short("RECORDS");
+const PATIENT_RECORDS: Symbol = Symbol::short("PATIENT_R");
 // Pausable state and recovery storage
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
+const PAUSED: Symbol = Symbol::short("PAUSED");
+const PROPOSALS: Symbol = Symbol::short("PROPOSALS");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400; // 24 hours timelock
 
@@ -93,7 +95,11 @@ impl MedicalRecordsContract {
         admin.require_auth();
 
         // Ensure contract hasn't been initialized
-        let users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         if !users.is_empty() {
             panic!("Contract already initialized");
         }
@@ -116,12 +122,20 @@ impl MedicalRecordsContract {
 
     /// Internal function to check if an address has a specific role
     fn has_role(env: &Env, address: &Address, role: &Role) -> bool {
-        let users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         match users.get(address.clone()) {
-            Some(profile) => matches!((profile.role, role),
-                (Role::Admin, Role::Admin) |
-                (Role::Doctor, Role::Doctor) |
-                (Role::Patient, Role::Patient)) && profile.active,
+            Some(profile) => {
+                matches!(
+                    (profile.role, role),
+                    (Role::Admin, Role::Admin)
+                        | (Role::Doctor, Role::Doctor)
+                        | (Role::Patient, Role::Patient)
+                ) && profile.active
+            }
             None => false,
         }
     }
@@ -169,12 +183,13 @@ impl MedicalRecordsContract {
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized)
+            return Err(Error::NotAuthorized);
         }
         env.storage().persistent().set(&PAUSED, &true);
         // Emit Paused event
         let ts = env.ledger().timestamp();
-        env.events().publish((symbol_short!("Paused"),), (caller.clone(), ts));
+        env.events()
+            .publish((Symbol::short("Paused"),), (caller.clone(), ts));
         Ok(true)
     }
 
@@ -182,22 +197,28 @@ impl MedicalRecordsContract {
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized)
+            return Err(Error::NotAuthorized);
         }
         env.storage().persistent().set(&PAUSED, &false);
         // Emit Unpaused event
         let ts = env.ledger().timestamp();
-        env.events().publish((symbol_short!("Unpaused"),), (caller.clone(), ts));
+        env.events()
+            .publish((Symbol::short("Unpaused"),), (caller.clone(), ts));
         Ok(true)
     }
 
     /// Add or update a user with a specific role
-    pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> Result<bool, Error> {
+    pub fn manage_user(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role: Role,
+    ) -> Result<bool, Error> {
         caller.require_auth();
 
         // Block when paused
         if Self::is_paused(&env) {
-           return Err(Error::ContractPaused);
+            return Err(Error::ContractPaused);
         }
 
         // Only admins can manage users
@@ -205,11 +226,12 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
-        let profile = UserProfile {
-            role,
-            active: true,
-        };
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
+        let profile = UserProfile { role, active: true };
 
         users.set(user, profile);
         env.storage().persistent().set(&USERS, &users);
@@ -234,13 +256,12 @@ impl MedicalRecordsContract {
 
         // Block when paused
         if Self::is_paused(&env) {
-            return Err(Error::ContractPaused)
-
+            return Err(Error::ContractPaused);
         }
 
         // Verify caller is a doctor
         if !Self::has_role(&env, &caller, &Role::Doctor) {
-            return Err(Error::NotAuthorized)
+            return Err(Error::NotAuthorized);
         }
 
         // Validate data_ref
@@ -287,22 +308,32 @@ impl MedicalRecordsContract {
         };
 
         // Store the record
-        let mut records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        let mut records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
         records.set(record_id, record);
         env.storage().persistent().set(&RECORDS, &records);
 
         // Track record ID per patient
-        let mut patient_records: Map<Address, Vec<u64>> = env.storage().persistent().get(&PATIENT_RECORDS).unwrap_or(Map::new(&env));
-        let mut ids = patient_records.get(patient.clone()).unwrap_or(Vec::new(&env));
+        let mut patient_records: Map<Address, Vec<u64>> = env
+            .storage()
+            .persistent()
+            .get(&PATIENT_RECORDS)
+            .unwrap_or(Map::new(&env));
+        let mut ids = patient_records
+            .get(patient.clone())
+            .unwrap_or(Vec::new(&env));
         ids.push_back(record_id);
         patient_records.set(patient.clone(), ids);
-        env.storage().persistent().set(&PATIENT_RECORDS, &patient_records);
+        env.storage()
+            .persistent()
+            .set(&PATIENT_RECORDS, &patient_records);
 
         // Emit RecordAdded event
         env.events().publish(
-            (
-                Symbol::new(&env, "RecordAdded"),
-            ),
+            (Symbol::new(&env, "RecordAdded"),),
             (patient, record_id, is_confidential),
         );
 
@@ -313,7 +344,11 @@ impl MedicalRecordsContract {
     pub fn get_record(env: Env, caller: Address, record_id: u64) -> Option<MedicalRecord> {
         caller.require_auth();
 
-        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
 
         if let Some(record) = records.get(record_id) {
             // Allow access if:
@@ -324,7 +359,8 @@ impl MedicalRecordsContract {
             if Self::has_role(&env, &caller, &Role::Admin)
                 || caller == record.patient_id
                 || caller == record.doctor_id
-                || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential) {
+                || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+            {
                 Some(record)
             } else {
                 panic!("Unauthorized access to medical record");
@@ -349,7 +385,11 @@ impl MedicalRecordsContract {
             panic!("Contract is paused");
         }
 
-        let patient_records: Map<Address, Vec<u64>> = env.storage().persistent().get(&PATIENT_RECORDS).unwrap_or(Map::new(&env));
+        let patient_records: Map<Address, Vec<u64>> = env
+            .storage()
+            .persistent()
+            .get(&PATIENT_RECORDS)
+            .unwrap_or(Map::new(&env));
         let ids = patient_records.get(patient).unwrap_or(Vec::new(&env));
 
         // Pagination: calculate start and end indices
@@ -365,7 +405,11 @@ impl MedicalRecordsContract {
         let actual_end = ((start + max_fetch as u32) as usize).min(end);
 
         let mut history = Vec::new(&env);
-        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
 
         for i in start as usize..actual_end {
             let record_id = ids.get(i as u32).unwrap();
@@ -373,7 +417,8 @@ impl MedicalRecordsContract {
                 if Self::has_role(&env, &caller, &Role::Admin)
                     || caller == record.patient_id
                     || caller == record.doctor_id
-                    || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential) {
+                    || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+                {
                     let tuple = (record_id, record);
                     history.push_back(tuple);
                 }
@@ -397,7 +442,11 @@ impl MedicalRecordsContract {
             panic!("Only admins can deactivate users");
         }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
 
         if let Some(mut profile) = users.get(user.clone()) {
             profile.active = false;
@@ -411,7 +460,11 @@ impl MedicalRecordsContract {
 
     /// Get the role of a user by address (public key)
     pub fn get_user_role(env: Env, user: Address) -> Role {
-        let users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         match users.get(user) {
             Some(profile) => profile.role,
             None => Role::None,
@@ -421,7 +474,13 @@ impl MedicalRecordsContract {
     // ------------------ Recovery (timelock + multisig) ------------------
 
     /// Propose a recovery operation (e.g., recover tokens sent to this contract)
-    pub fn propose_recovery(env: Env, caller: Address, token_contract: Address, to: Address, amount: i128) -> u64 {
+    pub fn propose_recovery(
+        env: Env,
+        caller: Address,
+        token_contract: Address,
+        to: Address,
+        amount: i128,
+    ) -> u64 {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
             panic!("Only admins can propose recovery");
@@ -441,7 +500,11 @@ impl MedicalRecordsContract {
         // Initial approval by proposer for convenience
         proposal.approvals.push_back(caller.clone());
 
-        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
+        let mut proposals: Map<u64, RecoveryProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .unwrap_or(Map::new(&env));
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
@@ -455,8 +518,14 @@ impl MedicalRecordsContract {
             panic!("Only admins can approve recovery");
         }
 
-        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
-        let mut proposal = proposals.get(proposal_id).unwrap_or_else(|| panic!("Proposal not found"));
+        let mut proposals: Map<u64, RecoveryProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .unwrap_or(Map::new(&env));
+        let mut proposal = proposals
+            .get(proposal_id)
+            .unwrap_or_else(|| panic!("Proposal not found"));
         if proposal.executed {
             panic!("Proposal already executed");
         }
@@ -474,25 +543,31 @@ impl MedicalRecordsContract {
     pub fn execute_recovery(env: Env, caller: Address, proposal_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized)
+            return Err(Error::NotAuthorized);
         }
 
-        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
-        let mut proposal = proposals.get(proposal_id).unwrap_or_else(|| panic!("Proposal not found"));
+        let mut proposals: Map<u64, RecoveryProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .unwrap_or(Map::new(&env));
+        let mut proposal = proposals
+            .get(proposal_id)
+            .unwrap_or_else(|| panic!("Proposal not found"));
         if proposal.executed {
-            return Err(Error::ProposalAlreadyExecuted)
+            return Err(Error::ProposalAlreadyExecuted);
         }
 
         // Check timelock
         let now = env.ledger().timestamp();
         if now < proposal.created_at + TIMELOCK_SECS {
-            return Err(Error::TimelockNotElasped)
+            return Err(Error::TimelockNotElasped);
         }
 
         // Check multisig approvals
         let distinct_approvals = proposal.approvals.len();
         if (distinct_approvals as u32) < APPROVAL_THRESHOLD {
-            return Err(Error::NotEnoughApproval)
+            return Err(Error::NotEnoughApproval);
         }
 
         // In actual implementation, we would invoke the token contract transfer here.
@@ -502,7 +577,8 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
         // Emit RecoveryExecuted event
-        // env.events().publish((symbol_short!("RecoveryExecuted"),), (caller.clone(), proposal_id, env.ledger().timestamp()));
+        let ts = env.ledger().timestamp();
+        // env.events().publish((Symbol::short("RecoveryExecuted"),), (caller.clone(), proposal_id, ts));
         Ok(true)
     }
 }

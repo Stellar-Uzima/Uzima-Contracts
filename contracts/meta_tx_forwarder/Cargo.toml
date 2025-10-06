@@ -1,5 +1,5 @@
 [package]
-name = "payment_router"
+name = "meta_tx_forwarder"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,7 +10,7 @@ repository.workspace = true
 crate-type = ["cdylib"]
 
 [dependencies]
-soroban-sdk.workspace = true
+soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

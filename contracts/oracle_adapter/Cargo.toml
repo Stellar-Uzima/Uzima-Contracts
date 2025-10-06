@@ -1,0 +1,18 @@
+[package]
+name = "oracle_adapter"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+name = "oracle_adapter"
+
+[dependencies]
+soroban-sdk.workspace = true
+
+[dev-dependencies]
+soroban-sdk.workspace = true
+
+[profile.release]
+opt-level = "z"
+panic = "abort"

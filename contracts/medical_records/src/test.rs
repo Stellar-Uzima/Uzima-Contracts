@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::{log, Address, Env, String, Vec};
@@ -37,7 +36,17 @@ fn test_add_and_get_record() {
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
     let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx");
-    let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,& is_confidential, &tags, &category, &treatment_type, &data_ref);
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &diagnosis,
+        &treatment,
+        &is_confidential,
+        &tags,
+        &category,
+        &treatment_type,
+        &data_ref
+    );
 
     // Get the record as patient
     let retrieved_record = client.get_record(&patient, &record_id);
@@ -206,17 +215,17 @@ fn test_get_patient_records() {
 
     // Add multiple records for the same patient
     let record_id1 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis 1"),
-            &String::from_str(&env, "Treatment 1"),
-            &false,
-            &vec![&env, String::from_str(&env, "herbal")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 1"),
+        &String::from_str(&env, "Treatment 1"),
+        &false,
+        &vec![&env, String::from_str(&env, "herbal")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     let record_id2 = client.add_record(
         &doctor,
@@ -224,10 +233,10 @@ fn test_get_patient_records() {
         &String::from_str(&env, "Diagnosis 2"),
         &String::from_str(&env, "Treatment 2"),
         &true,
-        &vec![&env,String::from_str(&env, "spiritual")],
+        &vec![&env, String::from_str(&env, "spiritual")],
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
-        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
     );
 
@@ -251,7 +260,6 @@ fn test_role_based_access() {
     let category = String::from_str(&env, "Modern");
     let treatment_type = String::from_str(&env, "Medication");
 
-
     // Admin manages user roles
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
@@ -263,10 +271,10 @@ fn test_role_based_access() {
         &String::from_str(&env, "Diagnosis 2"),
         &String::from_str(&env, "Treatment 2"),
         &true,
-        &vec![&env,String::from_str(&env, "spiritual")],
+        &vec![&env, String::from_str(&env, "spiritual")],
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
-        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
     );
     // Patient tries to access the record (should succeed)
@@ -299,19 +307,18 @@ fn test_deactivate_user() {
     client.deactivate_user(&admin, &doctor);
 
     // // Try to add a record as the deactivated doctor (should fail)
-    let result = client
-        .add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Cold"),
-            &String::from_str(&env, "Rest"),
-            &false,
-            &vec![&env, String::from_str(&env, "herbal")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+    let result = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Cold"),
+        &String::from_str(&env, "Rest"),
+        &false,
+        &vec![&env, String::from_str(&env, "herbal")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 }
 
 #[test]
@@ -330,15 +337,15 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
 
     // Add a record (not paused)
     let _record_id = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis"),
-            &String::from_str(&env, "Treatment"),
-            &false,
-            &vec![&env, String::from_str(&env, "herbal")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "herbal")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
     );
 
@@ -364,15 +371,15 @@ fn test_pause_unpause_blocks_sensitive_functions() {
 
     // Add a record (not paused)
     let _record_id = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis"),
-            &String::from_str(&env, "Treatment"),
-            &false,
-            &vec![&env, String::from_str(&env, "herbal")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "herbal")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
     );
 
@@ -385,17 +392,17 @@ fn test_pause_unpause_blocks_sensitive_functions() {
     // Now mutating calls should succeed
     assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
     let r3 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis3"),
-            &String::from_str(&env, "Treatment3"),
-            &false,
-            &vec![&env, String::from_str(&env, "herbal")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis3"),
+        &String::from_str(&env, "Treatment3"),
+        &false,
+        &vec![&env, String::from_str(&env, "herbal")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 }
 
 #[test]
@@ -452,13 +459,11 @@ fn test_recovery_timelock_and_multisig_success() {
     });
 
     let res = client.execute_recovery(&admin1, &proposal_id);
-
 }
-
 
 #[test]
 fn test_monotonic_record_ids() {
-   let env = Env::default();
+    let env = Env::default();
     env.mock_all_auths();
 
     let (client, admin) = create_contract(&env);
@@ -471,44 +476,43 @@ fn test_monotonic_record_ids() {
 
     // Add multiple records and verify IDs are monotonically increasing
     let record_id1 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis 1"),
-            &String::from_str(&env, "Treatment 1"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag1")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Type1"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 1"),
+        &String::from_str(&env, "Treatment 1"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag1")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type1"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-            
-        );
+    );
 
     let record_id2 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis 2"),
-            &String::from_str(&env, "Treatment 2"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag2")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Type2"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 2"),
+        &String::from_str(&env, "Treatment 2"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag2")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type2"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     let record_id3 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis 3"),
-            &String::from_str(&env, "Treatment 3"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag3")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Type3"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 3"),
+        &String::from_str(&env, "Treatment 3"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag3")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type3"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     // Verify IDs are monotonically increasing
     assert_eq!(record_id1, 1);
@@ -535,30 +539,30 @@ fn test_unique_record_ids() {
 
     // Add records from different doctors
     let record_id1 = client.add_record(
-            &doctor1,
-            &patient,
-            &String::from_str(&env, "Diagnosis A"),
-            &String::from_str(&env, "Treatment A"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "TypeA"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor1,
+        &patient,
+        &String::from_str(&env, "Diagnosis A"),
+        &String::from_str(&env, "Treatment A"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "TypeA"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     let record_id2 = client.add_record(
-            &doctor2,
-            &patient,
-            &String::from_str(&env, "Diagnosis B"),
-            &String::from_str(&env, "Treatment B"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "TypeB"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor2,
+        &patient,
+        &String::from_str(&env, "Diagnosis B"),
+        &String::from_str(&env, "Treatment B"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "TypeB"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     // Verify all IDs are unique
     assert_ne!(record_id1, record_id2);
@@ -566,7 +570,7 @@ fn test_unique_record_ids() {
 
 #[test]
 fn test_record_ordering() {
-   let env = Env::default();
+    let env = Env::default();
     env.mock_all_auths();
 
     let (client, admin) = create_contract(&env);
@@ -582,17 +586,17 @@ fn test_record_ordering() {
     let mut record_ids: Vec<u64> = Vec::new(&env);
     for i in 0..5 {
         let id = client.add_record(
-                &doctor,
-                &patient,
-                &String::from_str(&env, &format!("Diagnosis {}", i)),
-                &String::from_str(&env, &format!("Treatment {}", i)),
-                &false,
-                &vec![&env, String::from_str(&env, "tag")],
-                &String::from_str(&env, "Modern"),
-                &String::from_str(&env, "Type"),
-                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+            &doctor,
+            &patient,
+            &String::from_str(&env, &format!("Diagnosis {}", i)),
+            &String::from_str(&env, &format!("Treatment {}", i)),
+            &false,
+            &vec![&env, String::from_str(&env, "tag")],
+            &String::from_str(&env, "Modern"),
+            &String::from_str(&env, "Type"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-            );
+        );
         record_ids.push_back(id);
     }
 
@@ -607,7 +611,8 @@ fn test_record_counter_isolation() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin) = create_contract(&env);    let doctor = Address::generate(&env);
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
 
     // Initialize and set roles
@@ -616,36 +621,39 @@ fn test_record_counter_isolation() {
 
     // Add first record
     let record_id1 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis"),
-            &String::from_str(&env, "Treatment"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Type"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     // Create a recovery proposal (also uses the counter)
-    let proposal_id = client
-        .mock_all_auths()
-        .propose_recovery(&admin, &Address::generate(&env), &Address::generate(&env), &100i128);
+    let proposal_id = client.mock_all_auths().propose_recovery(
+        &admin,
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &100i128,
+    );
 
     // Add another record
     let record_id2 = client.add_record(
-            &doctor,
-            &patient,
-            &String::from_str(&env, "Diagnosis 2"),
-            &String::from_str(&env, "Treatment 2"),
-            &false,
-            &vec![&env, String::from_str(&env, "tag")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Type"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 2"),
+        &String::from_str(&env, "Treatment 2"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     // Verify all IDs are unique and monotonic
     assert_eq!(record_id1, 1);
@@ -660,7 +668,7 @@ fn test_get_history_pagination_and_access() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin) = create_contract(&env);    
+    let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let doctor1 = Address::generate(&env);
     let doctor2 = Address::generate(&env);
@@ -679,43 +687,43 @@ fn test_get_history_pagination_and_access() {
 
     // Add records with different doctors and confidentiality
     let _ = client.add_record(
-            &doctor1,
-            &patient,
-            &diagnosis1,
-            &treatment1,
-            &false, // non-confidential
-            &vec![&env, String::from_str(&env, "tag1")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Medication"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor1,
+        &patient,
+        &diagnosis1,
+        &treatment1,
+        &false, // non-confidential
+        &vec![&env, String::from_str(&env, "tag1")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     let _ = client.add_record(
-            &doctor1,
-            &patient,
-            &diagnosis2,
-            &treatment2,
-            &true, // confidential
-            &vec![&env, String::from_str(&env, "tag2")],
-            &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor1,
+        &patient,
+        &diagnosis2,
+        &treatment2,
+        &true, // confidential
+        &vec![&env, String::from_str(&env, "tag2")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     let record_id3 = client.add_record(
-            &doctor1,
-            &patient,
-            &diagnosis3,
-            &treatment3,
-            &false, // non-confidential
-            &vec![&env, String::from_str(&env, "tag3")],
-            &String::from_str(&env, "Modern"),
-            &String::from_str(&env, "Surgery"),
-            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+        &doctor1,
+        &patient,
+        &diagnosis3,
+        &treatment3,
+        &false, // non-confidential
+        &vec![&env, String::from_str(&env, "tag3")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Surgery"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
 
-        );
+    );
 
     // Patient gets full history (page 0, size 3) - should get all 3
     let history = client.get_history(&patient, &patient, &0u32, &3u32);
@@ -734,6 +742,8 @@ fn test_get_history_pagination_and_access() {
     let history_admin = client.get_history(&admin, &patient, &0u32, &3u32);
     assert_eq!(history_admin.len(), 3);
 
-    let empty_page = client.mock_all_auths().get_history(&patient, &patient, &3u32, &1u32);
+    let empty_page = client
+        .mock_all_auths()
+        .get_history(&patient, &patient, &3u32, &1u32);
     assert_eq!(empty_page.len(), 0);
 }
