@@ -11,10 +11,14 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 repository = "https://github.com/yourusername/soroban-project"
 
+#[workspace.dependencies]
+#stellar-xdr = { version = "20.0.0", default-features = false, features = [] }
+#soroban-sdk = { version = "20.0.0", default-features = false }
+#soroban-cli = "20.0.0"
+
 [workspace.dependencies]
-stellar-xdr = { version = "20.0.0", default-features = false, features = [] }
-soroban-sdk = { version = "20.0.0", default-features = false }
-soroban-cli = "20.0.0"
+stellar-xdr = "21"
+soroban-sdk = "21"
 
 [profile.release]
 opt-level = "z"
@@ -29,3 +33,4 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+

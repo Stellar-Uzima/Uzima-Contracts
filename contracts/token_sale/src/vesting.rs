@@ -13,7 +13,7 @@ pub struct VestingContract;
 #[contractimpl]
 impl VestingContract {
     /// Initialize the vesting contract
-    pub fn initialize(env: Env, owner: Address, token_address: Address) {
+    pub fn initialize_vesting(env: Env, owner: Address, token_address: Address) {
         owner.require_auth();
 
         let config = SaleConfig {

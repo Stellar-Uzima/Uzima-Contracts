@@ -36,7 +36,8 @@ fn test_add_and_get_record() {
     // Initialize and set roles
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
-    let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,& is_confidential, &tags, &category, &treatment_type);
+    let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx");
+    let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,& is_confidential, &tags, &category, &treatment_type, &data_ref);
 
     // Get the record as patient
     let retrieved_record = client.get_record(&patient, &record_id);
@@ -46,6 +47,143 @@ fn test_add_and_get_record() {
     assert_eq!(record.diagnosis, diagnosis);
     assert_eq!(record.treatment, treatment);
     assert_eq!(record.is_confidential, false);
+}
+#[test]
+#[should_panic(expected = "Error(Contract, #9)")]
+fn test_empty_data_ref() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Empty data_ref should fail
+    let _ = client.add_record(
+        &doctor, &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, ""),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn test_data_ref_too_short() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Data ref shorter than 10 chars should fail
+    let _ = client.add_record(
+        &doctor, &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "Qm123"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn test_data_ref_too_long() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Create a string longer than 200 characters (201 chars)
+    let long_ref = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+
+    let _ = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &long_ref,
+    );
+}
+
+#[test]
+fn test_data_ref_boundary_min_length() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Exactly 10 chars (should pass)
+    let min_ref = String::from_str(&env, "Qm12345678");
+    let record_id = client.add_record(
+        &doctor, &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &min_ref,
+    );
+
+    let record = client.get_record(&patient, &record_id);
+    assert!(record.is_some());
+}
+
+#[test]
+fn test_data_ref_boundary_max_length() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Exactly 200 characters
+    let max_ref = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); // 200 chars
+
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &max_ref,
+    );
+
+    let record = client.get_record(&patient, &record_id);
+    assert!(record.is_some());
 }
 
 #[test]
@@ -76,6 +214,8 @@ fn test_get_patient_records() {
             &vec![&env, String::from_str(&env, "herbal")],
             &String::from_str(&env, "Traditional"),
             &String::from_str(&env, "Herbal Therapy"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     let record_id2 = client.add_record(
@@ -87,6 +227,8 @@ fn test_get_patient_records() {
         &vec![&env,String::from_str(&env, "spiritual")],
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
     );
 
     // Patient can access both records
@@ -124,6 +266,8 @@ fn test_role_based_access() {
         &vec![&env,String::from_str(&env, "spiritual")],
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
     );
     // Patient tries to access the record (should succeed)
     let retrieved_record = client.get_record(&patient, &record_id);
@@ -165,6 +309,8 @@ fn test_deactivate_user() {
             &vec![&env, String::from_str(&env, "herbal")],
             &String::from_str(&env, "Traditional"),
             &String::from_str(&env, "Herbal Therapy"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 }
 
@@ -191,7 +337,9 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
             &false,
             &vec![&env, String::from_str(&env, "herbal")],
             &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy")
+            &String::from_str(&env, "Herbal Therapy"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+
     );
 
     // Pause the contract
@@ -223,7 +371,9 @@ fn test_pause_unpause_blocks_sensitive_functions() {
             &false,
             &vec![&env, String::from_str(&env, "herbal")],
             &String::from_str(&env, "Traditional"),
-            &String::from_str(&env, "Herbal Therapy")
+            &String::from_str(&env, "Herbal Therapy"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
     );
 
     // Pause the contract
@@ -243,6 +393,8 @@ fn test_pause_unpause_blocks_sensitive_functions() {
             &vec![&env, String::from_str(&env, "herbal")],
             &String::from_str(&env, "Traditional"),
             &String::from_str(&env, "Herbal Therapy"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 }
 
@@ -327,6 +479,9 @@ fn test_monotonic_record_ids() {
             &vec![&env, String::from_str(&env, "tag1")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type1"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+
+            
         );
 
     let record_id2 = client.add_record(
@@ -338,6 +493,8 @@ fn test_monotonic_record_ids() {
             &vec![&env, String::from_str(&env, "tag2")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type2"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+
         );
 
     let record_id3 = client.add_record(
@@ -349,6 +506,8 @@ fn test_monotonic_record_ids() {
             &vec![&env, String::from_str(&env, "tag3")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type3"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     // Verify IDs are monotonically increasing
@@ -384,6 +543,8 @@ fn test_unique_record_ids() {
             &vec![&env, String::from_str(&env, "tag")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "TypeA"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     let record_id2 = client.add_record(
@@ -395,6 +556,8 @@ fn test_unique_record_ids() {
             &vec![&env, String::from_str(&env, "tag")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "TypeB"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     // Verify all IDs are unique
@@ -427,6 +590,8 @@ fn test_record_ordering() {
                 &vec![&env, String::from_str(&env, "tag")],
                 &String::from_str(&env, "Modern"),
                 &String::from_str(&env, "Type"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
             );
         record_ids.push_back(id);
     }
@@ -459,6 +624,8 @@ fn test_record_counter_isolation() {
             &vec![&env, String::from_str(&env, "tag")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     // Create a recovery proposal (also uses the counter)
@@ -476,6 +643,8 @@ fn test_record_counter_isolation() {
             &vec![&env, String::from_str(&env, "tag")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     // Verify all IDs are unique and monotonic
@@ -518,6 +687,8 @@ fn test_get_history_pagination_and_access() {
             &vec![&env, String::from_str(&env, "tag1")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Medication"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     let _ = client.add_record(
@@ -529,6 +700,8 @@ fn test_get_history_pagination_and_access() {
             &vec![&env, String::from_str(&env, "tag2")],
             &String::from_str(&env, "Traditional"),
             &String::from_str(&env, "Herbal"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     let record_id3 = client.add_record(
@@ -540,6 +713,8 @@ fn test_get_history_pagination_and_access() {
             &vec![&env, String::from_str(&env, "tag3")],
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Surgery"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"), 
+
         );
 
     // Patient gets full history (page 0, size 3) - should get all 3

@@ -97,10 +97,10 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Common cold"
+                  "string": "Diagnosis"
                 },
                 {
-                  "string": "Rest and fluids"
+                  "string": "Treatment"
                 },
                 {
                   "bool": false
@@ -108,7 +108,7 @@
                 {
                   "vec": [
                     {
-                      "string": "respiratory"
+                      "string": "tag"
                     }
                   ]
                 },
@@ -119,7 +119,7 @@
                   "string": "Medication"
                 },
                 {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                  "string": "Qm12345678"
                 }
               ]
             }
@@ -278,7 +278,7 @@
                               "symbol": "data_ref"
                             },
                             "val": {
-                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                              "string": "Qm12345678"
                             }
                           },
                           {
@@ -286,7 +286,7 @@
                               "symbol": "diagnosis"
                             },
                             "val": {
-                              "string": "Common cold"
+                              "string": "Diagnosis"
                             }
                           },
                           {
@@ -320,7 +320,7 @@
                             "val": {
                               "vec": [
                                 {
-                                  "string": "respiratory"
+                                  "string": "tag"
                                 }
                               ]
                             }
@@ -338,7 +338,7 @@
                               "symbol": "treatment"
                             },
                             "val": {
-                              "string": "Rest and fluids"
+                              "string": "Treatment"
                             }
                           },
                           {
@@ -942,10 +942,10 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Common cold"
+                  "string": "Diagnosis"
                 },
                 {
-                  "string": "Rest and fluids"
+                  "string": "Treatment"
                 },
                 {
                   "bool": false
@@ -953,7 +953,7 @@
                 {
                   "vec": [
                     {
-                      "string": "respiratory"
+                      "string": "tag"
                     }
                   ]
                 },
@@ -964,7 +964,7 @@
                   "string": "Medication"
                 },
                 {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                  "string": "Qm12345678"
                 }
               ]
             }
@@ -1089,7 +1089,7 @@
                     "symbol": "data_ref"
                   },
                   "val": {
-                    "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                    "string": "Qm12345678"
                   }
                 },
                 {
@@ -1097,7 +1097,7 @@
                     "symbol": "diagnosis"
                   },
                   "val": {
-                    "string": "Common cold"
+                    "string": "Diagnosis"
                   }
                 },
                 {
@@ -1131,7 +1131,7 @@
                   "val": {
                     "vec": [
                       {
-                        "string": "respiratory"
+                        "string": "tag"
                       }
                     ]
                   }
@@ -1149,7 +1149,7 @@
                     "symbol": "treatment"
                   },
                   "val": {
-                    "string": "Rest and fluids"
+                    "string": "Treatment"
                   }
                 },
                 {

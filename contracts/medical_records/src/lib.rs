@@ -1,11 +1,12 @@
-#![no_std]
+    #![no_std]
 
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, Env, Map, String, Symbol, Vec, panic_with_error, contracterror};
+use soroban_sdk::{contract, contractimpl, contracttype, vec, Address, Env, Map, String, Symbol, Vec, contracterror, symbol_short};
 
-#[derive(Clone)]
+
+    #[derive(Clone)]
 #[contracttype]
 pub enum Role {
     Admin,
@@ -42,13 +43,13 @@ pub enum DataKey {
     RecordCount,
 }
 
-const USERS: Symbol = Symbol::short("USERS");
-const ADMINS: Symbol = Symbol::short("ADMINS");
-const RECORDS: Symbol = Symbol::short("RECORDS");
-const PATIENT_RECORDS: Symbol = Symbol::short("PATIENT_R");
+const USERS: Symbol = symbol_short!("USERS");
+const ADMINS: Symbol = symbol_short!("ADMINS");
+const RECORDS: Symbol = symbol_short!("RECORDS");
+const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 // Pausable state and recovery storage
-const PAUSED: Symbol = Symbol::short("PAUSED");
-const PROPOSALS: Symbol = Symbol::short("PROPOSALS");
+const PAUSED: Symbol = symbol_short!("PAUSED");
+const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400; // 24 hours timelock
 
@@ -144,10 +145,8 @@ impl MedicalRecordsContract {
         next_count
     }
 
+
     /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
-    /// Validates:
-    /// - CIDv0: 46 chars, starts with "Qm", base58 encoded
-    /// - CIDv1: 50+ chars, starts with "b" (base32) or "z" (base58)
     fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
         // Check if data_ref is empty
         if data_ref.len() == 0 {
@@ -155,31 +154,16 @@ impl MedicalRecordsContract {
         }
 
         let len = data_ref.len();
-        let data_ref_str = data_ref.to_string();
 
-        // Check minimum length
-        if len < 10 {
+        // Check valid length bounds
+        if len < 10 || len > 200 {
             return Err(Error::InvalidDataRefLength);
         }
 
-        // Check maximum length (reasonable bound for CIDs)
-        if len > 200 {
-            return Err(Error::InvalidDataRefLength);
-        }
-
-        // Validate charset: base58 characters (used by IPFS)
-        // Base58 alphabet (Bitcoin): 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
-        // Base32 alphabet (lowercase): abcdefghijklmnopqrstuvwxyz234567
-        let valid_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz234567";
-        
-        for ch in data_ref_str.chars() {
-            if !valid_chars.contains(ch) {
-                return Err(Error::InvalidDataRefCharset);
-            }
-        }
 
         Ok(())
     }
+
 
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
@@ -190,7 +174,7 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PAUSED, &true);
         // Emit Paused event
         let ts = env.ledger().timestamp();
-        env.events().publish((Symbol::short("Paused"),), (caller.clone(), ts));
+        env.events().publish((symbol_short!("Paused"),), (caller.clone(), ts));
         Ok(true)
     }
 
@@ -203,7 +187,7 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PAUSED, &false);
         // Emit Unpaused event
         let ts = env.ledger().timestamp();
-        env.events().publish((Symbol::short("Unpaused"),), (caller.clone(), ts));
+        env.events().publish((symbol_short!("Unpaused"),), (caller.clone(), ts));
         Ok(true)
     }
 
@@ -244,6 +228,7 @@ impl MedicalRecordsContract {
         tags: Vec<String>,
         category: String,
         treatment_type: String,
+        data_ref: String,
     ) -> Result<u64, Error> {
         caller.require_auth();
 
@@ -257,6 +242,9 @@ impl MedicalRecordsContract {
         if !Self::has_role(&env, &caller, &Role::Doctor) {
             return Err(Error::NotAuthorized)
         }
+
+        // Validate data_ref
+        Self::validate_data_ref(&data_ref)?;
 
         // Validate category
         let allowed_categories = vec![
@@ -295,6 +283,7 @@ impl MedicalRecordsContract {
             tags,
             category,
             treatment_type,
+            data_ref,
         };
 
         // Store the record
@@ -513,8 +502,7 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
         // Emit RecoveryExecuted event
-        let ts = env.ledger().timestamp();
-        // env.events().publish((Symbol::short("RecoveryExecuted"),), (caller.clone(), proposal_id, ts));
+        // env.events().publish((symbol_short!("RecoveryExecuted"),), (caller.clone(), proposal_id, env.ledger().timestamp()));
         Ok(true)
     }
 }
