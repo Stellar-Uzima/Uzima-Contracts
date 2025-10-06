@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 5,
+    "address": 4,
     "nonce": 0
   },
   "auth": [
@@ -70,35 +70,6 @@
                 {
                   "vec": [
                     {
-                      "symbol": "Doctor"
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "manage_user",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "vec": [
-                    {
                       "symbol": "Patient"
                     }
                   ]
@@ -123,13 +94,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Diagnosis A"
+                  "string": "Diagnosis"
                 },
                 {
-                  "string": "Treatment A"
+                  "string": "Treatment"
                 },
                 {
                   "bool": false
@@ -145,10 +116,10 @@
                   "string": "Modern"
                 },
                 {
-                  "string": "TypeA"
+                  "string": "Medication"
                 },
                 {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                  "string": "Qm12345678"
                 }
               ]
             }
@@ -164,38 +135,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "add_record",
+              "function_name": "get_record",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "string": "Diagnosis B"
-                },
-                {
-                  "string": "Treatment B"
-                },
-                {
-                  "bool": false
-                },
-                {
-                  "vec": [
-                    {
-                      "string": "tag"
-                    }
-                  ]
-                },
-                {
-                  "string": "Modern"
-                },
-                {
-                  "string": "TypeB"
-                },
-                {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                  "u64": 1
                 }
               ]
             }
@@ -240,15 +186,12 @@
                   "map": [
                     {
                       "key": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                       },
                       "val": {
                         "vec": [
                           {
                             "u64": 1
-                          },
-                          {
-                            "u64": 2
                           }
                         ]
                       }
@@ -335,7 +278,7 @@
                               "symbol": "data_ref"
                             },
                             "val": {
-                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                              "string": "Qm12345678"
                             }
                           },
                           {
@@ -343,7 +286,7 @@
                               "symbol": "diagnosis"
                             },
                             "val": {
-                              "string": "Diagnosis A"
+                              "string": "Diagnosis"
                             }
                           },
                           {
@@ -367,104 +310,11 @@
                               "symbol": "patient_id"
                             },
                             "val": {
-                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "tags"
-                            },
-                            "val": {
-                              "vec": [
-                                {
-                                  "string": "tag"
-                                }
-                              ]
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "timestamp"
-                            },
-                            "val": {
-                              "u64": 0
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "treatment"
-                            },
-                            "val": {
-                              "string": "Treatment A"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "treatment_type"
-                            },
-                            "val": {
-                              "string": "TypeA"
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "u64": 2
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "category"
-                            },
-                            "val": {
-                              "string": "Modern"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "data_ref"
-                            },
-                            "val": {
-                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "diagnosis"
-                            },
-                            "val": {
-                              "string": "Diagnosis B"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "doctor_id"
-                            },
-                            "val": {
                               "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                             }
                           },
                           {
                             "key": {
-                              "symbol": "is_confidential"
-                            },
-                            "val": {
-                              "bool": false
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "patient_id"
-                            },
-                            "val": {
-                              "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                            }
-                          },
-                          {
-                            "key": {
                               "symbol": "tags"
                             },
                             "val": {
@@ -488,7 +338,7 @@
                               "symbol": "treatment"
                             },
                             "val": {
-                              "string": "Treatment B"
+                              "string": "Treatment"
                             }
                           },
                           {
@@ -496,7 +346,7 @@
                               "symbol": "treatment_type"
                             },
                             "val": {
-                              "string": "TypeB"
+                              "string": "Medication"
                             }
                           }
                         ]
@@ -613,35 +463,6 @@
                             "val": {
                               "vec": [
                                 {
-                                  "symbol": "Doctor"
-                                }
-                              ]
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "active"
-                            },
-                            "val": {
-                              "bool": true
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "role"
-                            },
-                            "val": {
-                              "vec": [
-                                {
                                   "symbol": "Patient"
                                 }
                               ]
@@ -689,7 +510,7 @@
                 },
                 "durability": "persistent",
                 "val": {
-                  "u64": 2
+                  "u64": 1
                 }
               }
             },
@@ -802,39 +623,6 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
             "key": {
               "ledger_key_nonce": {
-                "nonce": 4837995959683129791
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 4837995959683129791
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          15
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "ledger_key_nonce": {
                 "nonce": 5541220902715666415
               }
             },
@@ -868,7 +656,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
-                "nonce": 2032731177588607455
+                "nonce": 4837995959683129791
               }
             },
             "durability": "temporary"
@@ -883,7 +671,7 @@
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
                 "key": {
                   "ledger_key_nonce": {
-                    "nonce": 2032731177588607455
+                    "nonce": 4837995959683129791
                   }
                 },
                 "durability": "temporary",
@@ -901,7 +689,7 @@
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
             "key": {
               "ledger_key_nonce": {
-                "nonce": 4270020994084947596
+                "nonce": 2032731177588607455
               }
             },
             "durability": "temporary"
@@ -916,7 +704,7 @@
                 "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
                 "key": {
                   "ledger_key_nonce": {
-                    "nonce": 4270020994084947596
+                    "nonce": 2032731177588607455
                   }
                 },
                 "durability": "temporary",
@@ -1093,69 +881,6 @@
                 {
                   "vec": [
                     {
-                      "symbol": "Doctor"
-                    }
-                  ]
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "manage_user"
-              }
-            ],
-            "data": {
-              "bool": true
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "manage_user"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "vec": [
-                    {
                       "symbol": "Patient"
                     }
                   ]
@@ -1214,13 +939,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "string": "Diagnosis A"
+                  "string": "Diagnosis"
                 },
                 {
-                  "string": "Treatment A"
+                  "string": "Treatment"
                 },
                 {
                   "bool": false
@@ -1236,10 +961,10 @@
                   "string": "Modern"
                 },
                 {
-                  "string": "TypeA"
+                  "string": "Medication"
                 },
                 {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                  "string": "Qm12345678"
                 }
               ]
             }
@@ -1263,7 +988,7 @@
             "data": {
               "vec": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
                   "u64": 1
@@ -1316,7 +1041,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_record"
+                "symbol": "get_record"
               }
             ],
             "data": {
@@ -1325,62 +1050,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "string": "Diagnosis B"
-                },
-                {
-                  "string": "Treatment B"
-                },
-                {
-                  "bool": false
-                },
-                {
-                  "vec": [
-                    {
-                      "string": "tag"
-                    }
-                  ]
-                },
-                {
-                  "string": "Modern"
-                },
-                {
-                  "string": "TypeB"
-                },
-                {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "contract",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "RecordAdded"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                },
-                {
-                  "u64": 2
-                },
-                {
-                  "bool": false
+                  "u64": 1
                 }
               ]
             }
@@ -1401,11 +1071,96 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "add_record"
+                "symbol": "get_record"
               }
             ],
             "data": {
-              "u64": 2
+              "map": [
+                {
+                  "key": {
+                    "symbol": "category"
+                  },
+                  "val": {
+                    "string": "Modern"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "data_ref"
+                  },
+                  "val": {
+                    "string": "Qm12345678"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "diagnosis"
+                  },
+                  "val": {
+                    "string": "Diagnosis"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "doctor_id"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "is_confidential"
+                  },
+                  "val": {
+                    "bool": false
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "patient_id"
+                  },
+                  "val": {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "tags"
+                  },
+                  "val": {
+                    "vec": [
+                      {
+                        "string": "tag"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "timestamp"
+                  },
+                  "val": {
+                    "u64": 0
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "treatment"
+                  },
+                  "val": {
+                    "string": "Treatment"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "treatment_type"
+                  },
+                  "val": {
+                    "string": "Medication"
+                  }
+                }
+              ]
             }
           }
         }

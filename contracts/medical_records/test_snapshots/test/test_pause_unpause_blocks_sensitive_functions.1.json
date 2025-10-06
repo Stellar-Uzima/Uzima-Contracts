@@ -117,6 +117,9 @@
                 },
                 {
                   "string": "Herbal Therapy"
+                },
+                {
+                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                 }
               ]
             }
@@ -228,6 +231,9 @@
                 },
                 {
                   "string": "Herbal Therapy"
+                },
+                {
+                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                 }
               ]
             }
@@ -364,6 +370,14 @@
                           },
                           {
                             "key": {
+                              "symbol": "data_ref"
+                            },
+                            "val": {
+                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "diagnosis"
                             },
                             "val": {
@@ -445,6 +459,14 @@
                             },
                             "val": {
                               "string": "Traditional"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "data_ref"
+                            },
+                            "val": {
+                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                             }
                           },
                           {
@@ -1256,6 +1278,9 @@
                 },
                 {
                   "string": "Herbal Therapy"
+                },
+                {
+                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                 }
               ]
             }
@@ -1579,6 +1604,9 @@
                 },
                 {
                   "string": "Herbal Therapy"
+                },
+                {
+                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                 }
               ]
             }

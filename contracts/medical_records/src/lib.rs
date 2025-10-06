@@ -36,6 +36,7 @@ pub struct MedicalRecord {
     pub tags: Vec<String>,
     pub category: String,
     pub treatment_type: String,
+    pub data_ref: String,
 }
 
 #[derive(Clone)]
@@ -79,6 +80,9 @@ pub enum Error {
     ProposalAlreadyExecuted = 6,
     TimelockNotElasped = 7,
     NotEnoughApproval = 8,
+    EmptyDataRef = 9,
+    InvalidDataRefLength = 10,
+    InvalidDataRefCharset = 11,
 }
 
 #[contract]
@@ -155,6 +159,26 @@ impl MedicalRecordsContract {
         next_count
     }
 
+
+    /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
+    fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
+        // Check if data_ref is empty
+        if data_ref.len() == 0 {
+            return Err(Error::EmptyDataRef);
+        }
+
+        let len = data_ref.len();
+
+        // Check valid length bounds
+        if len < 10 || len > 200 {
+            return Err(Error::InvalidDataRefLength);
+        }
+
+
+        Ok(())
+    }
+
+
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
@@ -226,6 +250,7 @@ impl MedicalRecordsContract {
         tags: Vec<String>,
         category: String,
         treatment_type: String,
+        data_ref: String,
     ) -> Result<u64, Error> {
         caller.require_auth();
 
@@ -238,6 +263,9 @@ impl MedicalRecordsContract {
         if !Self::has_role(&env, &caller, &Role::Doctor) {
             return Err(Error::NotAuthorized);
         }
+
+        // Validate data_ref
+        Self::validate_data_ref(&data_ref)?;
 
         // Validate category
         let allowed_categories = vec![
@@ -276,6 +304,7 @@ impl MedicalRecordsContract {
             tags,
             category,
             treatment_type,
+            data_ref,
         };
 
         // Store the record
