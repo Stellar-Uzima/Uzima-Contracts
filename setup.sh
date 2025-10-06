@@ -47,16 +47,11 @@ check_command() {
 }
 
 install_rust() {
-    print_step "Installing Rust..."
-    if check_command rustc; then
-        print_status "Rust is already installed"
-        rustc --version
-    else
-        print_status "Installing Rust via rustup..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-        print_status "Rust installed successfully"
-    fi
+    print_step "Installing Rust 1.78.0..."
+    rustup install 1.78.0
+    rustup override set 1.78.0
+    rustc --version
+    print_status "Rust 1.78.0 installed and set"
 }
 
 setup_rust_targets() {
@@ -67,15 +62,26 @@ setup_rust_targets() {
 }
 
 install_soroban_cli() {
-    print_step "Installing Soroban CLI..."
+    print_step "Installing Soroban CLI v23.1.4..."
+    
     if check_command soroban; then
-        print_status "Soroban CLI is already installed"
-        soroban --version
-    else
-        print_status "Installing Soroban CLI..."
-        cargo install --locked soroban-cli --features opt
-        print_status "Soroban CLI installed successfully"
+        CURRENT_VERSION=$(soroban --version | head -n1 | awk '{print $2}')
+        if [ "$CURRENT_VERSION" = "23.1.4" ]; then
+            print_status "Soroban CLI v23.1.4 already installed"
+            return
+        else
+            print_warning "Different Soroban CLI version detected ($CURRENT_VERSION). Replacing..."
+        fi
     fi
+
+    curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v23.1.4/stellar-cli-23.1.4-x86_64-unknown-linux-gnu.tar.gz
+    tar -xzf stellar-cli.tar.gz
+    sudo mv stellar /usr/local/bin/
+    sudo ln -sf /usr/local/bin/stellar /usr/local/bin/soroban
+    rm stellar-cli.tar.gz
+
+    soroban --version
+    print_status "Soroban CLI v23.1.4 installed successfully"
 }
 
 create_project_structure() {
@@ -154,7 +160,7 @@ run_tests() {
 
 make_scripts_executable() {
     print_step "Making scripts executable..."
-    chmod +x scripts/*.sh
+    chmod +x scripts/*.sh 2>/dev/null || true
     print_status "Scripts are now executable"
 }
 
