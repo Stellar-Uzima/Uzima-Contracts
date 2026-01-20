@@ -1,25 +1,157 @@
-```markdown
-# 🌟 Stellar Uzima - Decentralized Medical Records on Stellar using Soroban
+# 🌟 Stellar Uzima - Decentralized Medical Records on Stellar
 
-Stellar Uzima is a decentralized smart contract system for secure, encrypted, and role-based management of medical records on the Stellar blockchain using Soroban and Rust. The project is designed to respect both modern and traditional medical practices, allowing metadata support for indigenous healing records.
+Stellar Uzima is a decentralized smart contract system for secure, encrypted, and role-based management of medical records on the Stellar blockchain using Soroban and Rust. The project enables healthcare providers and patients to maintain control over sensitive medical data while ensuring privacy, immutability, and auditability. Built specifically for healthcare organizations transitioning to blockchain-based record keeping, the system also respects traditional healing practices by supporting metadata for indigenous medical records.
+
+The platform provides a comprehensive solution for modern healthcare data management, combining the security benefits of blockchain technology with practical healthcare workflows. It's designed for hospitals, clinics, research institutions, and healthcare providers who need to maintain patient confidentiality while enabling secure data sharing between authorized parties.
 
 ---
 
-## 📌 Table of Contents
+## � Table of Contents
 
+- [Project Overview](#project-overview)
+- [Setup Instructions](#setup-instructions)
+  - [Prerequisites](#prerequisites)
+  - [Quick Start](#quick-start)
+  - [Environment Setup](#environment-setup)
+  - [Running Tests](#running-tests)
+  - [Network Configuration](#network-configuration)
 - [Features](#features)
 - [Architecture](#architecture)
-- [Folder Structure](#folder-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Project Initialization](#project-initialization)
-  - [Running a Local Testnet](#running-a-local-testnet)
-- [Smart Contract Structure](#smart-contract-structure)
-- [Usage](#usage)
-- [Testing](#testing)
+- [Project Structure](#project-structure)
+- [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
-- [Contribution Guide](#contribution-guide)
+- [Helpful Links](#helpful-links)
+- [Contribution Guidelines](#contribution-guidelines)
 - [License](#license)
+
+---
+
+## 🎯 Project Overview
+
+Stellar Uzima transforms medical record management by leveraging Stellar's blockchain infrastructure to create an immutable, secure, and patient-centric healthcare data ecosystem. The system addresses critical healthcare challenges including data breaches, interoperability issues, and patient privacy concerns through cryptographic security and decentralized governance.
+
+**Key Benefits:**
+- **Enhanced Security**: Military-grade encryption protects sensitive medical data
+- **Patient Control**: Patients grant and revoke access to their records
+- **Interoperability**: Standardized format enables seamless data exchange
+- **Audit Trail**: Complete, immutable history of all record access and modifications
+- **Cultural Respect**: Support for traditional healing practices and metadata
+
+**Target Users:**
+- Healthcare providers and hospitals
+- Medical research institutions
+- Health insurance companies
+- Patients seeking control over their medical data
+- Traditional medicine practitioners
+
+---
+
+## 🚀 Setup Instructions
+
+### ✅ Prerequisites
+
+Before you begin, ensure you have the following installed:
+
+- **Rust 1.78.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
+- **Soroban CLI v23.1.4+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
+- **Git** - For version control
+- **Make** - For using the provided Makefile (optional but recommended)
+
+### ⚡ Quick Start
+
+Get up and running in under 5 minutes:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/Uzima-Contracts.git
+cd Uzima-Contracts
+
+# Run the automated setup script
+chmod +x setup.sh
+./setup.sh
+
+# Or use the Makefile for step-by-step setup
+make setup
+```
+
+### 🔧 Environment Setup
+
+#### Option 1: Automated Setup (Recommended)
+
+The `setup.sh` script handles everything automatically:
+
+```bash
+./setup.sh
+```
+
+This script will:
+- Install Rust 1.78.0 and required targets
+- Install Soroban CLI v23.1.4
+- Set up project structure
+- Configure Soroban networks (local, testnet, futurenet)
+- Build the project and run tests
+- Generate default identity
+
+#### Option 2: Manual Setup
+
+```bash
+# Install Rust targets and components
+rustup target add wasm32-unknown-unknown
+rustup component add rustfmt clippy rust-src
+
+# Install Soroban CLI
+cargo install --locked soroban-cli
+
+# Configure Soroban
+soroban config identity generate default
+soroban config network add local \
+  --rpc-url http://localhost:8000/soroban/rpc \
+  --network-passphrase "Standalone Network ; February 2017"
+
+# Build the project
+cargo build --all-targets
+
+# Run tests to verify setup
+cargo test --all
+```
+
+### 🧪 Running Tests
+
+Ensure everything is working correctly:
+
+```bash
+# Run all tests
+make test
+
+# Or use cargo directly
+cargo test --all
+
+# Run specific test types
+make test-unit          # Unit tests only
+make test-integration   # Integration tests only
+```
+
+### 🌐 Network Configuration
+
+The project supports multiple Stellar networks:
+
+```bash
+# Start local development network
+make start-local
+# or
+soroban network start local
+
+# Deploy to local network
+make deploy-local
+
+# Stop local network
+make stop-local
+```
+
+**Available Networks:**
+- **Local**: `http://localhost:8000/soroban/rpc` (Development)
+- **Testnet**: `https://soroban-testnet.stellar.org:443` (Testing)
+- **Futurenet**: `https://rpc-futurenet.stellar.org:443` (Staging)
 
 ---
 
@@ -36,179 +168,246 @@ Stellar Uzima is a decentralized smart contract system for secure, encrypted, an
 
 ---
 
-## 🧠 Architecture
-
-The smart contract uses the Stellar Soroban framework written in Rust. Roles (doctor, patient, admin) are associated with public keys and permissions are enforced at the smart contract level.
-
-All medical records are encrypted off-chain and stored with associated metadata on-chain:
-- Patient ID
-- Doctor ID
-- Timestamp
-- Encrypted data reference (IPFS hash or similar)
-- Optional: Traditional treatment metadata (tags, category)
-
----
-
-## 📂 Folder Structure
+## 🏗️ Project Structure
 
 ```
-
-stellar-uzima-contract/
+Uzima-Contracts/
 │
 ├── contracts/
-│   └── medical\_records/
+│   └── medical_records/
 │       ├── src/
 │       │   └── lib.rs         # Main contract logic
-│       └── Cargo.toml         # Contract crate definition
+│       └── Cargo.toml         # Contract dependencies
 │
-├── scripts/                   # CLI scripts to test and deploy contract
-│   ├── deploy\_contract.rs
-│   └── test\_interactions.rs
+├── scripts/                   # Deployment and interaction scripts
+│   ├── deploy.sh             # Contract deployment
+│   ├── interact.sh           # Contract interaction
+│   └── test_scripts/         # Test utilities
 │
 ├── tests/
-│   └── integration\_test.rs    # Contract integration tests
+│   ├── integration/          # Integration tests
+│   └── unit/                 # Unit tests
+│
+├── docs/                     # Documentation
+│   ├── api.md               # API reference
+│   └── architecture.md      # Architecture details
 │
 ├── .github/
 │   └── workflows/
-│       └── rust.yml           # CI pipeline config
+│       └── ci.yml            # Continuous integration
 │
-├── .gitignore
-├── Cargo.toml                 # Workspace manifest
-└── README.md
-
-````
-
----
-
-## 🚀 Getting Started
-
-### ✅ Prerequisites
-
-- [Rust](https://www.rust-lang.org/tools/install)
-- [Cargo](https://doc.rust-lang.org/cargo/)
-- [Soroban CLI](https://soroban.stellar.org/docs/getting-started/installation)
-- Git
-
-### 🛠 Project Initialization
-
-```bash
-# Clone repo
-git clone https://github.com/your-org/stellar-uzima-contract.git
-cd stellar-uzima-contract
-
-# Install dependencies
-rustup update
-cargo build
-````
-
----
-
-### 🌐 Running a Local Testnet
-
-To interact with your smart contract locally:
-
-```bash
-soroban local network start
-```
-
-To deploy the contract:
-
-```bash
-soroban contract deploy --wasm target/wasm32-unknown-unknown/release/*.wasm --network local
+├── setup.sh                  # Automated setup script
+├── makefile                  # Build automation
+├── dockerfile               # Docker support
+├── Cargo.toml               # Workspace configuration
+└── README.md                # This file
 ```
 
 ---
 
-## 📜 Smart Contract Structure
+## � Usage Examples
 
-### Roles
-
-* **Patient**: Can view their own records
-* **Doctor**: Can write and view records of their patients
-* **Admin**: Can manage user roles
-
-### Core Methods
-
-| Method                | Description                         | Role Required  |
-| --------------------- | ----------------------------------- | -------------- |
-| `write_record`        | Adds a new encrypted medical record | Doctor         |
-| `read_record`         | Retrieves a specific patient record | Doctor/Patient |
-| `get_history`         | Retrieves all records for a patient | Authorized     |
-| `assign_role`         | Assigns role to a public key        | Admin          |
-| `add_traditional_tag` | Adds cultural metadata to a record  | Doctor         |
-
----
-
-## 🧪 Testing
-
-To run unit and integration tests:
+### Basic Contract Interaction
 
 ```bash
-cargo test
+# Deploy the medical records contract
+./scripts/deploy.sh medical_records local
+
+# Initialize the contract with admin
+./scripts/interact.sh <CONTRACT_ID> local initialize
+
+# Register a new patient
+./scripts/interact.sh <CONTRACT_ID> local register_patient \
+  --patient-id "P12345" \
+  --public-key "GD5..."
+
+# Add a medical record
+./scripts/interact.sh <CONTRACT_ID> local write_record \
+  --patient-id "P12345" \
+  --doctor-id "D67890" \
+  --encrypted-data "QmXxx..." \
+  --metadata "traditional_healing"
 ```
 
-Tests are located in the `/tests/` folder and include:
-
-* Role validation
-* Record write and read
-* Permission boundaries
-* Record history tracking
-
----
-
-## 🧰 Scripts
-
-The `/scripts` folder includes test helpers for deploying and interacting with the contract using Soroban CLI. Example:
+### Using the Makefile
 
 ```bash
-cargo run --bin deploy_contract
-```
+# Complete development workflow
+make dev-deploy
 
-> See script headers for usage documentation.
+# Individual steps
+make build           # Build contracts
+make test            # Run tests
+make start-local     # Start local network
+make deploy-local    # Deploy contracts
+```
 
 ---
 
-## 📦 Deployment
+## 🚀 Deployment
 
-To deploy on Stellar Futurenet:
+### Local Development
 
-1. Ensure `soroban` CLI is configured for Futurenet
-2. Compile contract to WASM:
+```bash
+# Quick deployment to local network
+make dev-deploy
 
+# Step-by-step deployment
+make clean
+make build-opt
+make dist
+make start-local
+make deploy-local
+```
+
+### Testnet Deployment
+
+```bash
+# Configure testnet (if not already configured)
+soroban config network add testnet \
+  --rpc-url https://soroban-testnet.stellar.org:443 \
+  --network-passphrase "Test SDF Network ; September 2015"
+
+# Build for deployment
+make build-opt
+
+# Deploy to testnet
+./scripts/deploy.sh medical_records testnet
+```
+
+### Production Deployment
+
+For production deployment on Stellar Mainnet:
+
+1. Ensure you have sufficient XLM for deployment
+2. Configure mainnet network settings
+3. Use optimized builds: `make build-opt`
+4. Consider using the provided Dockerfile for consistent builds
+
+```bash
+# Build production Docker image
+docker build -t uzima-contracts .
+
+# Deploy using Docker
+docker run -it --rm -v $(PWD):/workspace uzima-contracts \
+  make build-opt deploy-mainnet
+```
+
+---
+
+## 🔗 Helpful Links
+
+### Documentation
+- [API Reference](./docs/api.md) - Complete contract API documentation
+- [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
+- [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem
+
+### Repository Resources
+- [Contracts](./contracts/) - Smart contract source code
+- [Scripts](./scripts/) - Deployment and utility scripts
+- [Tests](./tests/) - Test suites and examples
+- [CI/CD](./.github/workflows/) - GitHub Actions workflows
+
+### External Resources
+- [Stellar Laboratory](https://laboratory.stellar.org/) - Transaction builder and explorer
+- [Stellar Expert](https://stellar.expert/) - Blockchain explorer
+- [Rust Documentation](https://doc.rust-lang.org/) - Rust language reference
+
+---
+
+## 🤝 Contribution Guidelines
+
+We welcome contributions from the community! Please follow these guidelines to ensure smooth collaboration.
+
+### Getting Started
+
+1. **Fork the repository** on GitHub
+2. **Clone your fork** locally:
    ```bash
-   cargo build --target wasm32-unknown-unknown --release
+   git clone https://github.com/your-username/Uzima-Contracts.git
+   cd Uzima-Contracts
    ```
-3. Deploy:
-
+3. **Add upstream remote**:
    ```bash
-   soroban contract deploy --wasm target/wasm32-unknown-unknown/release/*.wasm --network futurenet
+   git remote add upstream https://github.com/original-org/Uzima-Contracts.git
    ```
 
----
+### Development Workflow
 
-## 🤝 Contribution Guide
+1. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
-We welcome contributors! To contribute:
+2. **Make your changes** following our coding standards:
+   - Use `cargo fmt` for formatting
+   - Run `cargo clippy` for linting
+   - Ensure all tests pass: `cargo test`
 
-1. Fork the repo
-2. Create your feature branch: `git checkout -b feature/my-feature`
-3. Commit your changes: `git commit -m 'Add feature'`
-4. Push to the branch: `git push origin feature/my-feature`
-5. Open a pull request
+3. **Test thoroughly**:
+   ```bash
+   make test          # Run all tests
+   make check         # Run formatting, linting, and tests
+   ```
 
-### 📋 Definition of Done
+4. **Commit your changes**:
+   ```bash
+   git commit -m "feat: add your feature description"
+   ```
 
-All contributions must:
+5. **Push to your fork**:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
 
-* Pass `cargo test` and `cargo fmt -- --check`
-* Have >80% code coverage
-* Include documentation for new methods
-* Follow the architecture and role model
+6. **Create a Pull Request** with:
+   - Clear description of changes
+   - Links to relevant issues
+   - Test results
+   - Documentation updates (if applicable)
+
+### Code Standards
+
+- **Rust**: Follow official Rust style guidelines
+- **Documentation**: Include doc comments for all public functions
+- **Tests**: Maintain >80% code coverage
+- **Commits**: Use [Conventional Commits](https://www.conventionalcommits.org/) format
+
+### Review Process
+
+All PRs undergo:
+1. **Automated checks** (CI/CD pipeline)
+2. **Code review** by maintainers
+3. **Integration testing** on testnet
+4. **Security audit** for significant changes
+
+### Definition of Done
+
+A contribution is complete when:
+- ✅ All tests pass (`cargo test`)
+- ✅ Code is formatted (`cargo fmt`)
+- ✅ No linting warnings (`cargo clippy`)
+- ✅ Documentation is updated
+- ✅ CI/CD pipeline passes
+- ✅ Security review completed (if applicable)
 
 ---
 
 ## 📄 License
 
-MIT © 2025 Stellar Uzima Contributors
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-```
+**Copyright © 2025 Stellar Uzima Contributors**
+
+---
+
+## 🆘 Support
+
+- **Issues**: [GitHub Issues](https://github.com/your-org/Uzima-Contracts/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/your-org/Uzima-Contracts/discussions)
+- **Documentation**: [Project Docs](./docs/)
+
+---
+
+*Built with ❤️ for the healthcare community*
