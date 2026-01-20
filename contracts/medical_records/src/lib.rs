@@ -4,9 +4,10 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Env, Map,
+    contract, contracterror, contractimpl, contracttype, vec, Address, Env, Map,
     String, Symbol, Vec,
 };
+use soroban_sdk::symbol_short;
 
 #[derive(Clone)]
 #[contracttype]
@@ -45,13 +46,12 @@ pub enum DataKey {
     RecordCount,
 }
 
-const USERS: Symbol = Symbol::short("USERS");
-const ADMINS: Symbol = Symbol::short("ADMINS");
-const RECORDS: Symbol = Symbol::short("RECORDS");
-const PATIENT_RECORDS: Symbol = Symbol::short("PATIENT_R");
+const USERS: Symbol = symbol_short!("USERS");
+const RECORDS: Symbol = symbol_short!("RECORDS");
+const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 // Pausable state and recovery storage
-const PAUSED: Symbol = Symbol::short("PAUSED");
-const PROPOSALS: Symbol = Symbol::short("PROPOSALS");
+const PAUSED: Symbol = symbol_short!("PAUSED");
+const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400; // 24 hours timelock
 
@@ -189,7 +189,7 @@ impl MedicalRecordsContract {
         // Emit Paused event
         let ts = env.ledger().timestamp();
         env.events()
-            .publish((Symbol::short("Paused"),), (caller.clone(), ts));
+            .publish((symbol_short!("Paused"),), (caller.clone(), ts));
         Ok(true)
     }
 
@@ -203,7 +203,7 @@ impl MedicalRecordsContract {
         // Emit Unpaused event
         let ts = env.ledger().timestamp();
         env.events()
-            .publish((Symbol::short("Unpaused"),), (caller.clone(), ts));
+            .publish((symbol_short!("Unpaused"),), (caller.clone(), ts));
         Ok(true)
     }
 
@@ -577,8 +577,8 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
         // Emit RecoveryExecuted event
-        let ts = env.ledger().timestamp();
-        // env.events().publish((Symbol::short("RecoveryExecuted"),), (caller.clone(), proposal_id, ts));
+        let _ts = env.ledger().timestamp();
+        // env.events().publish((symbol_short!("RecoveryExecuted"),), (caller.clone(), proposal_id, _ts));
         Ok(true)
     }
 }
