@@ -164,11 +164,18 @@ jobs:
             --network-passphrase "Public Global Stellar Network ; September 2015" || true
 
       - name: Setup deployment identity
+        env:
+          SOROBAN_SECRET_KEY: ${{ secrets.MAINNET_DEPLOYER_SECRET_KEY }}
         run: |
-          # Check if identity exists, create if not
-          if ! soroban config identity show deployer-mainnet &> /dev/null; then
-            soroban config identity generate deployer-mainnet
+          # Add identity from secret key (required for mainnet)
+          if [ -z "$SOROBAN_SECRET_KEY" ]; then
+            echo "❌ MAINNET_DEPLOYER_SECRET_KEY secret is required for mainnet deployment"
+            exit 1
           fi
+          echo "$SOROBAN_SECRET_KEY" | soroban config identity add deployer-mainnet --secret-key - || {
+            echo "Failed to add identity from secret key"
+            exit 1
+          }
 
       - name: Deploy contracts
         id: deploy
