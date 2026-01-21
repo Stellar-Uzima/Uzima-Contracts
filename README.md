@@ -295,6 +295,277 @@ docker run -it --rm -v $(PWD):/workspace uzima-contracts \
 
 ---
 
+## 🔄 CI/CD Pipeline
+
+The project includes a comprehensive CI/CD pipeline for automated testing, building, security scanning, and deployment.
+
+### GitHub Actions Workflows
+
+#### Continuous Integration (CI)
+
+The CI workflow (`.github/workflows/ci.yml`) runs on every push and pull request:
+
+- **Code Formatting**: Checks code formatting with `cargo fmt`
+- **Linting**: Runs Clippy with strict warnings
+- **Unit Tests**: Executes all unit tests
+- **Integration Tests**: Runs integration tests with Soroban CLI
+- **Build**: Builds optimized WASM contracts
+- **Shell Script Linting**: Validates shell scripts with ShellCheck
+
+```bash
+# View CI status
+# Check the "Actions" tab on GitHub or:
+gh workflow view ci.yml
+```
+
+#### Security Scanning
+
+The security workflow (`.github/workflows/security.yml`) performs automated security checks:
+
+- **Dependency Audit**: Scans for known vulnerabilities with `cargo-audit`
+- **Security-focused Clippy**: Checks for security anti-patterns
+- **Secret Scanning**: Detects hardcoded secrets with Gitleaks
+- **Dependency Review**: Reviews dependency changes in PRs
+
+Runs on:
+- Every push to main/develop branches
+- Pull requests
+- Daily at 2 AM UTC (scheduled)
+
+#### Automated Testnet Deployment
+
+The deployment workflow (`.github/workflows/deploy-testnet.yml`) automatically deploys to testnet:
+
+**Triggers:**
+- Pushes to `develop` branch
+- Version tags (e.g., `v1.0.0`)
+- Manual workflow dispatch
+
+**Process:**
+1. Runs pre-deployment tests (unless skipped)
+2. Builds optimized contracts
+3. Deploys to testnet
+4. Verifies deployments
+5. Creates deployment summary
+
+**Configuration:**
+
+Set up the following GitHub secrets:
+- `TESTNET_DEPLOYER_SECRET_KEY`: Secret key for testnet deployment account
+
+```bash
+# Manual deployment via GitHub Actions
+gh workflow run deploy-testnet.yml \
+  --field contract=medical_records \
+  --field skip_tests=false
+```
+
+### Deployment Scripts
+
+#### Enhanced Deployment with Rollback
+
+Deploy contracts with automatic backup and rollback support:
+
+```bash
+# Deploy with rollback enabled (default)
+./scripts/deploy_with_rollback.sh medical_records testnet
+
+# Deploy without rollback
+./scripts/deploy_with_rollback.sh medical_records testnet default --no-rollback
+```
+
+**Features:**
+- Automatic backup of current deployment
+- Rollback on deployment failure
+- Contract verification after deployment
+- Deployment metadata tracking
+
+#### Environment-based Deployment
+
+Deploy all contracts to a specific environment:
+
+```bash
+# Deploy all contracts to testnet
+./scripts/deploy_environment.sh testnet
+
+# Deploy specific contracts
+./scripts/deploy_environment.sh testnet --contracts medical_records,identity_registry
+
+# Skip tests (not recommended)
+./scripts/deploy_environment.sh testnet --skip-tests
+```
+
+**Environments:**
+- `local`: Local development network
+- `testnet`: Stellar testnet
+- `futurenet`: Stellar futurenet (staging)
+- `mainnet`: Production mainnet (requires confirmation)
+
+#### Deployment Monitoring
+
+Monitor deployed contracts and receive alerts:
+
+```bash
+# Monitor all deployments on testnet
+./scripts/monitor_deployments.sh testnet
+
+# Monitor with alerts on failure
+./scripts/monitor_deployments.sh testnet --alert-on-failure
+```
+
+**Features:**
+- Health checks for all deployed contracts
+- Contract verification
+- Alert generation for unhealthy contracts
+- Deployment status reporting
+
+#### Rollback Deployment
+
+Rollback a contract to a previous version:
+
+```bash
+# Interactive rollback (selects latest backup)
+./scripts/rollback_deployment.sh medical_records testnet
+
+# Rollback to specific backup
+./scripts/rollback_deployment.sh medical_records testnet \
+  deployments/testnet_medical_records_backup_20240101_120000.json
+```
+
+**Process:**
+1. Lists available backups
+2. Verifies backup contract exists
+3. Restores deployment configuration
+4. Logs rollback action
+
+#### Deployment Status
+
+View deployment status across all networks:
+
+```bash
+# Show all deployments
+./scripts/deployment_status.sh
+
+# Show deployments for specific network
+./scripts/deployment_status.sh testnet
+```
+
+**Information displayed:**
+- Contract names and IDs
+- Deployment timestamps
+- Rollback status
+- Backup availability
+- Rollback history
+
+### Deployment Workflow
+
+#### Standard Deployment Process
+
+1. **Development**: Make changes and test locally
+   ```bash
+   make test
+   make build-opt
+   ```
+
+2. **CI Validation**: Push to branch triggers CI
+   - Tests run automatically
+   - Security scans execute
+   - Build artifacts created
+
+3. **Testnet Deployment**: Merge to `develop` triggers testnet deployment
+   - Contracts deployed automatically
+   - Verification runs
+   - Status reported
+
+4. **Production Deployment**: Manual deployment to mainnet
+   ```bash
+   ./scripts/deploy_environment.sh mainnet
+   ```
+
+#### Rollback Process
+
+If a deployment fails or issues are detected:
+
+1. **Identify Issue**: Check deployment logs and monitoring
+   ```bash
+   ./scripts/monitor_deployments.sh testnet
+   ```
+
+2. **Review Backups**: List available backups
+   ```bash
+   ./scripts/rollback_deployment.sh medical_records testnet
+   ```
+
+3. **Execute Rollback**: Restore previous version
+   ```bash
+   ./scripts/rollback_deployment.sh medical_records testnet <backup_file>
+   ```
+
+4. **Verify**: Confirm rollback success
+   ```bash
+   ./scripts/monitor_deployments.sh testnet
+   ```
+
+### Deployment Artifacts
+
+Deployment information is stored in the `deployments/` directory:
+
+```
+deployments/
+├── testnet_medical_records.json          # Current deployment
+├── testnet_medical_records_backup_*.json # Backup files
+├── rollback_log.json                     # Rollback history
+└── alerts.log                            # Alert log
+```
+
+**Deployment File Format:**
+```json
+{
+  "contract_name": "medical_records",
+  "contract_id": "C...",
+  "network": "testnet",
+  "deployer": "deployer-testnet",
+  "deployed_at": "2025-01-15T10:30:00Z",
+  "wasm_hash": "...",
+  "commit_sha": "..."
+}
+```
+
+### CI/CD Best Practices
+
+1. **Always run tests locally** before pushing
+2. **Review CI results** before merging PRs
+3. **Monitor deployments** after each release
+4. **Keep backups** for critical deployments
+5. **Use rollback** when issues are detected
+6. **Document** any manual deployment steps
+
+### Troubleshooting
+
+#### CI Failures
+
+- **Formatting errors**: Run `cargo fmt --all`
+- **Clippy warnings**: Fix warnings or add `#[allow(...)]` with justification
+- **Test failures**: Review test output and fix issues
+- **Build failures**: Check Rust version and dependencies
+
+#### Deployment Failures
+
+- **Network issues**: Verify network connectivity and RPC endpoints
+- **Insufficient funds**: Fund deployment account
+- **Contract errors**: Check contract logs and verify WASM file
+- **Identity issues**: Ensure identity is properly configured
+
+#### Rollback Issues
+
+- **No backups**: Previous deployments weren't backed up
+- **Invalid backup**: Backup file may be corrupted
+- **Contract not found**: Backup contract may have been removed
+
+For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contracts/issues) or [Discussions](https://github.com/your-org/Uzima-Contracts/discussions).
+
+---
+
 ## 🔗 Helpful Links
 
 ### Documentation
