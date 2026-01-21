@@ -262,7 +262,7 @@ main() {
     "deployer_address": "$IDENTITY_ADDRESS",
     "deployed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
     "wasm_hash": "$(sha256sum "$CONTRACT_DIR/$WASM_FILE" | cut -d' ' -f1)",
-    "commit_sha": "${GIT_COMMIT:-unknown}",
+    "commit_sha": "$(git rev-parse HEAD 2>/dev/null || echo 'unknown')",
     "backup_file": "${backup_file:-null}"
 }
 EOF
