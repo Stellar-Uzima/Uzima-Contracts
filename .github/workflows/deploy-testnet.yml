@@ -171,8 +171,6 @@ jobs:
 
       - name: Deploy contracts
         id: deploy
-        env:
-          SOROBAN_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
         run: |
           mkdir -p deployments
           deployment_log="deployments/testnet_$(date +%Y%m%d_%H%M%S).json"
