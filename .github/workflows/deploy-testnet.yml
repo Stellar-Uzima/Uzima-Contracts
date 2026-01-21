@@ -152,14 +152,20 @@ jobs:
             --network-passphrase "Test SDF Network ; September 2015" || true
 
       - name: Setup deployment identity
+        env:
+          SOROBAN_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
         run: |
-          # Check if identity exists, create if not
-          if ! soroban config identity show deployer-testnet &> /dev/null; then
-            soroban config identity generate deployer-testnet
+          # Add identity from secret key if provided
+          if [ -n "$SOROBAN_SECRET_KEY" ]; then
+            echo "$SOROBAN_SECRET_KEY" | soroban config identity add deployer-testnet --secret-key - || true
+          else
+            # Generate new identity if no secret key provided
+            if ! soroban config identity show deployer-testnet &> /dev/null; then
+              soroban config identity generate deployer-testnet
+            fi
+            # Fund the account
+            soroban config identity fund deployer-testnet --network testnet || true
           fi
-          
-          # Fund the account
-          soroban config identity fund deployer-testnet --network testnet || true
 
       - name: Deploy contracts
         id: deploy
