@@ -172,10 +172,13 @@ jobs:
             echo "❌ MAINNET_DEPLOYER_SECRET_KEY secret is required for mainnet deployment"
             exit 1
           fi
-          echo "$SOROBAN_SECRET_KEY" | soroban config identity add deployer-mainnet --secret-key - || {
+          echo "$SOROBAN_SECRET_KEY" > /tmp/secret_key.txt
+          soroban config identity add deployer-mainnet --secret-key /tmp/secret_key.txt || {
             echo "Failed to add identity from secret key"
+            rm -f /tmp/secret_key.txt
             exit 1
           }
+          rm -f /tmp/secret_key.txt
 
       - name: Deploy contracts
         id: deploy
