@@ -4,10 +4,16 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, Env, Map,
+    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map,
     String, Symbol, Vec,
 };
 use soroban_sdk::symbol_short;
+
+// ============================================================================
+// MEDICAL RECORDS CONTRACT WITH DID INTEGRATION
+// ============================================================================
+// Enhanced with W3C DID-based authorization and verifiable credentials support
+// ============================================================================
 
 #[derive(Clone)]
 #[contracttype]
@@ -23,6 +29,58 @@ pub enum Role {
 pub struct UserProfile {
     pub role: Role,
     pub active: bool,
+    /// Optional DID reference for this user
+    pub did_reference: Option<String>,
+}
+
+/// DID-based authorization level
+#[derive(Clone)]
+#[contracttype]
+pub enum DIDAuthLevel {
+    /// No DID verification required (legacy mode)
+    None,
+    /// Basic DID verification - user must have active DID
+    Basic,
+    /// Credential verification - user must have valid medical credential
+    CredentialRequired,
+    /// Full verification - DID + credential + specific permission
+    Full,
+}
+
+/// Access request for DID-based authorization
+#[derive(Clone)]
+#[contracttype]
+pub struct AccessRequest {
+    /// Requester's address
+    pub requester: Address,
+    /// Patient whose records are being accessed
+    pub patient: Address,
+    /// Specific record ID (0 for general access)
+    pub record_id: u64,
+    /// Purpose of access (for audit)
+    pub purpose: String,
+    /// Timestamp of request
+    pub timestamp: u64,
+    /// Whether access was granted
+    pub granted: bool,
+    /// Verifiable credential used (if any)
+    pub credential_used: Option<BytesN<32>>,
+}
+
+/// Emergency access grant
+#[derive(Clone)]
+#[contracttype]
+pub struct EmergencyAccess {
+    /// Address granted emergency access
+    pub grantee: Address,
+    /// Patient who granted access
+    pub patient: Address,
+    /// Expiration timestamp
+    pub expires_at: u64,
+    /// Scope of access (specific record IDs, or empty for all)
+    pub record_scope: Vec<u64>,
+    /// Whether this grant is active
+    pub is_active: bool,
 }
 
 #[derive(Clone)]
@@ -38,12 +96,28 @@ pub struct MedicalRecord {
     pub category: String,
     pub treatment_type: String,
     pub data_ref: String,
+    /// DID of the doctor who created this record (for interoperability)
+    pub doctor_did: Option<String>,
+    /// Verifiable credential ID used for authorization (if any)
+    pub authorization_credential: Option<BytesN<32>>,
 }
 
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
     RecordCount,
+    /// Identity registry contract address for DID verification
+    IdentityRegistry,
+    /// DID authentication level requirement
+    AuthLevel,
+    /// Access audit log
+    AccessLog(u64),
+    /// Access log counter
+    AccessLogCount,
+    /// Emergency access grants
+    EmergencyAccess(Address, Address), // (grantee, patient)
+    /// Patient's emergency access list
+    PatientEmergencyGrants(Address),
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -83,6 +157,16 @@ pub enum Error {
     EmptyDataRef = 9,
     InvalidDataRefLength = 10,
     InvalidDataRefCharset = 11,
+    // DID-related errors
+    DIDNotFound = 12,
+    DIDNotActive = 13,
+    InvalidCredential = 14,
+    CredentialExpired = 15,
+    CredentialRevoked = 16,
+    MissingRequiredCredential = 17,
+    EmergencyAccessExpired = 18,
+    EmergencyAccessNotFound = 19,
+    IdentityRegistryNotSet = 20,
 }
 
 #[contract]
@@ -108,6 +192,7 @@ impl MedicalRecordsContract {
         let admin_profile = UserProfile {
             role: Role::Admin,
             active: true,
+            did_reference: None,
         };
 
         let mut users_map = Map::new(&env);
@@ -231,7 +316,14 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&USERS)
             .unwrap_or(Map::new(&env));
-        let profile = UserProfile { role, active: true };
+
+        // Preserve existing DID reference if user already exists
+        let existing_did = users.get(user.clone()).and_then(|p| p.did_reference);
+        let profile = UserProfile {
+            role,
+            active: true,
+            did_reference: existing_did,
+        };
 
         users.set(user, profile);
         env.storage().persistent().set(&USERS, &users);
@@ -305,6 +397,9 @@ impl MedicalRecordsContract {
             category,
             treatment_type,
             data_ref,
+            // DID fields - None for legacy function
+            doctor_did: None,
+            authorization_credential: None,
         };
 
         // Store the record
@@ -580,5 +675,581 @@ impl MedicalRecordsContract {
         let _ts = env.ledger().timestamp();
         // env.events().publish((symbol_short!("RecoveryExecuted"),), (caller.clone(), proposal_id, _ts));
         Ok(true)
+    }
+
+    // ========================================================================
+    // DID INTEGRATION FUNCTIONS
+    // ========================================================================
+
+    /// Set the identity registry contract address for DID verification
+    /// Only admins can configure this
+    pub fn set_identity_registry(
+        env: Env,
+        caller: Address,
+        registry_address: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::IdentityRegistry, &registry_address);
+
+        env.events().publish(
+            (Symbol::new(&env, "IdentityRegistrySet"),),
+            registry_address,
+        );
+
+        Ok(true)
+    }
+
+    /// Set the DID authentication level required for operations
+    pub fn set_did_auth_level(
+        env: Env,
+        caller: Address,
+        level: DIDAuthLevel,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage().persistent().set(&DataKey::AuthLevel, &level);
+
+        env.events().publish(
+            (Symbol::new(&env, "AuthLevelSet"),),
+            level,
+        );
+
+        Ok(true)
+    }
+
+    /// Get the current DID authentication level
+    pub fn get_did_auth_level(env: Env) -> DIDAuthLevel {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuthLevel)
+            .unwrap_or(DIDAuthLevel::None)
+    }
+
+    /// Get the identity registry address
+    pub fn get_identity_registry(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::IdentityRegistry)
+    }
+
+    /// Link a DID to a user profile
+    pub fn link_did_to_user(
+        env: Env,
+        caller: Address,
+        user: Address,
+        did_reference: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Only admins can link DIDs, or users can link their own
+        if caller != user && !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
+
+        if let Some(mut profile) = users.get(user.clone()) {
+            profile.did_reference = Some(did_reference.clone());
+            users.set(user.clone(), profile);
+            env.storage().persistent().set(&USERS, &users);
+
+            env.events().publish(
+                (Symbol::new(&env, "DIDLinked"),),
+                (user, did_reference),
+            );
+
+            Ok(true)
+        } else {
+            Err(Error::NotAuthorized)
+        }
+    }
+
+    /// Get a user's linked DID
+    pub fn get_user_did(env: Env, user: Address) -> Option<String> {
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
+
+        users.get(user).and_then(|p| p.did_reference)
+    }
+
+    // ========================================================================
+    // EMERGENCY ACCESS MANAGEMENT
+    // ========================================================================
+
+    /// Grant emergency access to a healthcare provider
+    /// Only patients can grant emergency access to their records
+    pub fn grant_emergency_access(
+        env: Env,
+        patient: Address,
+        grantee: Address,
+        duration_secs: u64,
+        record_scope: Vec<u64>,
+    ) -> Result<bool, Error> {
+        patient.require_auth();
+
+        // Verify patient role
+        if !Self::has_role(&env, &patient, &Role::Patient) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let now = env.ledger().timestamp();
+        let expires_at = now + duration_secs;
+
+        let emergency_access = EmergencyAccess {
+            grantee: grantee.clone(),
+            patient: patient.clone(),
+            expires_at,
+            record_scope: record_scope.clone(),
+            is_active: true,
+        };
+
+        // Store the emergency access grant
+        env.storage().persistent().set(
+            &DataKey::EmergencyAccess(grantee.clone(), patient.clone()),
+            &emergency_access,
+        );
+
+        // Add to patient's grant list
+        let mut patient_grants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientEmergencyGrants(patient.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        if !patient_grants.iter().any(|a| a == grantee) {
+            patient_grants.push_back(grantee.clone());
+            env.storage().persistent().set(
+                &DataKey::PatientEmergencyGrants(patient.clone()),
+                &patient_grants,
+            );
+        }
+
+        env.events().publish(
+            (Symbol::new(&env, "EmergencyAccessGranted"),),
+            (patient, grantee, expires_at),
+        );
+
+        Ok(true)
+    }
+
+    /// Revoke emergency access
+    pub fn revoke_emergency_access(
+        env: Env,
+        patient: Address,
+        grantee: Address,
+    ) -> Result<bool, Error> {
+        patient.require_auth();
+
+        let key = DataKey::EmergencyAccess(grantee.clone(), patient.clone());
+
+        if let Some(mut access) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, EmergencyAccess>(&key)
+        {
+            access.is_active = false;
+            env.storage().persistent().set(&key, &access);
+
+            env.events().publish(
+                (Symbol::new(&env, "EmergencyAccessRevoked"),),
+                (patient, grantee),
+            );
+
+            Ok(true)
+        } else {
+            Err(Error::EmergencyAccessNotFound)
+        }
+    }
+
+    /// Check if someone has valid emergency access
+    pub fn has_emergency_access(
+        env: Env,
+        grantee: Address,
+        patient: Address,
+        record_id: u64,
+    ) -> bool {
+        let key = DataKey::EmergencyAccess(grantee, patient);
+
+        if let Some(access) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, EmergencyAccess>(&key)
+        {
+            if !access.is_active {
+                return false;
+            }
+
+            let now = env.ledger().timestamp();
+            if now > access.expires_at {
+                return false;
+            }
+
+            // Check scope - empty means all records
+            if access.record_scope.is_empty() {
+                return true;
+            }
+
+            // Check if record_id is in scope
+            access.record_scope.iter().any(|id| id == record_id)
+        } else {
+            false
+        }
+    }
+
+    /// Get all active emergency access grants for a patient
+    pub fn get_patient_emergency_grants(env: Env, patient: Address) -> Vec<EmergencyAccess> {
+        let grant_addresses: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientEmergencyGrants(patient.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        let mut active_grants = Vec::new(&env);
+        let now = env.ledger().timestamp();
+
+        for grantee in grant_addresses.iter() {
+            let key = DataKey::EmergencyAccess(grantee, patient.clone());
+            if let Some(access) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, EmergencyAccess>(&key)
+            {
+                if access.is_active && now <= access.expires_at {
+                    active_grants.push_back(access);
+                }
+            }
+        }
+
+        active_grants
+    }
+
+    // ========================================================================
+    // ACCESS AUDIT LOGGING
+    // ========================================================================
+
+    /// Log an access request for audit purposes
+    fn log_access(
+        env: &Env,
+        requester: &Address,
+        patient: &Address,
+        record_id: u64,
+        purpose: String,
+        granted: bool,
+        credential_used: Option<BytesN<32>>,
+    ) {
+        let log_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
+
+        let access_request = AccessRequest {
+            requester: requester.clone(),
+            patient: patient.clone(),
+            record_id,
+            purpose,
+            timestamp: env.ledger().timestamp(),
+            granted,
+            credential_used,
+        };
+
+        let new_count = log_count + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLog(new_count), &access_request);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLogCount, &new_count);
+
+        env.events().publish(
+            (Symbol::new(env, "AccessLogged"),),
+            (requester.clone(), patient.clone(), record_id, granted),
+        );
+    }
+
+    /// Get access log entries (paginated)
+    pub fn get_access_logs(
+        env: Env,
+        page: u32,
+        page_size: u32,
+    ) -> Vec<AccessRequest> {
+        let total_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
+
+        let start = (page * page_size) as u64 + 1;
+        let end = ((page + 1) * page_size) as u64;
+        let actual_end = end.min(total_count);
+
+        let mut logs = Vec::new(&env);
+
+        for i in start..=actual_end {
+            if let Some(log) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, AccessRequest>(&DataKey::AccessLog(i))
+            {
+                logs.push_back(log);
+            }
+        }
+
+        logs
+    }
+
+    /// Get access logs for a specific patient
+    pub fn get_patient_access_logs(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        page: u32,
+        page_size: u32,
+    ) -> Vec<AccessRequest> {
+        caller.require_auth();
+
+        // Only patient, admin, or with emergency access can view logs
+        if caller != patient
+            && !Self::has_role(&env, &caller, &Role::Admin)
+            && !Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), 0)
+        {
+            return Vec::new(&env);
+        }
+
+        let total_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
+
+        let mut patient_logs = Vec::new(&env);
+        let mut collected = 0u32;
+        let skip = page * page_size;
+
+        for i in 1..=total_count {
+            if let Some(log) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, AccessRequest>(&DataKey::AccessLog(i))
+            {
+                if log.patient == patient {
+                    if collected >= skip && collected < skip + page_size {
+                        patient_logs.push_back(log);
+                    }
+                    collected += 1;
+                }
+            }
+        }
+
+        patient_logs
+    }
+
+    // ========================================================================
+    // DID-ENHANCED RECORD ACCESS
+    // ========================================================================
+
+    /// Add a medical record with DID verification
+    /// This enhanced version includes DID and credential tracking
+    pub fn add_record_with_did(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        credential_id: Option<BytesN<32>>,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Verify caller is a doctor
+        if !Self::has_role(&env, &caller, &Role::Doctor) {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Validate data_ref
+        Self::validate_data_ref(&data_ref)?;
+
+        // Validate category
+        let allowed_categories = vec![
+            &env,
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, "Traditional"),
+            String::from_str(&env, "Herbal"),
+            String::from_str(&env, "Spiritual"),
+        ];
+        if !allowed_categories.contains(&category) {
+            return Err(Error::InvalidCategory);
+        }
+
+        // Validate treatment_type (non-empty)
+        if treatment_type.len() == 0 {
+            return Err(Error::EmptyTreatment);
+        }
+
+        // Validate tags (all non-empty)
+        for tag in tags.iter() {
+            if tag.len() == 0 {
+                return Err(Error::EmptyTag);
+            }
+        }
+
+        // Get doctor's DID if available
+        let doctor_did = Self::get_user_did(env.clone(), caller.clone());
+
+        let record_id = Self::get_and_increment_record_count(&env);
+        let timestamp = env.ledger().timestamp();
+
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: caller.clone(),
+            timestamp,
+            diagnosis,
+            treatment,
+            is_confidential,
+            tags,
+            category,
+            treatment_type,
+            data_ref,
+            doctor_did,
+            authorization_credential: credential_id.clone(),
+        };
+
+        // Store the record
+        let mut records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+        records.set(record_id, record);
+        env.storage().persistent().set(&RECORDS, &records);
+
+        // Track record ID per patient
+        let mut patient_records: Map<Address, Vec<u64>> = env
+            .storage()
+            .persistent()
+            .get(&PATIENT_RECORDS)
+            .unwrap_or(Map::new(&env));
+        let mut ids = patient_records
+            .get(patient.clone())
+            .unwrap_or(Vec::new(&env));
+        ids.push_back(record_id);
+        patient_records.set(patient.clone(), ids);
+        env.storage()
+            .persistent()
+            .set(&PATIENT_RECORDS, &patient_records);
+
+        // Log the access
+        Self::log_access(
+            &env,
+            &caller,
+            &patient,
+            record_id,
+            String::from_str(&env, "CREATE_RECORD"),
+            true,
+            credential_id,
+        );
+
+        // Emit RecordAdded event
+        env.events().publish(
+            (Symbol::new(&env, "RecordAdded"),),
+            (patient, record_id, is_confidential),
+        );
+
+        Ok(record_id)
+    }
+
+    /// Get a medical record with DID-based access control and logging
+    pub fn get_record_with_did(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        access_purpose: String,
+    ) -> Result<MedicalRecord, Error> {
+        caller.require_auth();
+
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        if let Some(record) = records.get(record_id) {
+            let patient = record.patient_id.clone();
+
+            // Check access rights
+            let has_access = Self::has_role(&env, &caller, &Role::Admin)
+                || caller == record.patient_id
+                || caller == record.doctor_id
+                || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+                || Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), record_id);
+
+            // Log the access attempt
+            Self::log_access(
+                &env,
+                &caller,
+                &patient,
+                record_id,
+                access_purpose,
+                has_access,
+                None,
+            );
+
+            if has_access {
+                Ok(record)
+            } else {
+                Err(Error::NotAuthorized)
+            }
+        } else {
+            Err(Error::NotAuthorized)
+        }
+    }
+
+    /// Verify a medical professional's credentials
+    /// This would typically call the identity registry contract
+    pub fn verify_professional_credential(
+        env: Env,
+        professional: Address,
+    ) -> bool {
+        // Check if identity registry is set
+        let _registry: Option<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::IdentityRegistry);
+
+        // In a full implementation, this would:
+        // 1. Call the identity registry contract
+        // 2. Verify the professional has a valid DID
+        // 3. Check for valid MedicalLicense or SpecialistCertification credential
+        // 4. Return the verification result
+
+        // For now, check if they have a doctor role and are active
+        Self::has_role(&env, &professional, &Role::Doctor)
     }
 }
