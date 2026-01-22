@@ -218,8 +218,13 @@ impl Governor {
     // --- Helpers ---
     fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> i128 {
         let token_args = vec![&env, voter.into_val(env)];
-        let balance: i128 = env.invoke_contract(&cfg.token, &symbol_short!("balance"), token_args);
+        let balance: i128 = env.invoke_contract(
+            &cfg.token, 
+            &Symbol::new(&env, "balance_of"),
+            token_args
+        );
 
+        // Reputation
         let rep: i128 = if let Some(rep_addr) = &cfg.rep_contract {
             let rep_args = vec![&env, voter.into_val(env)];
             env.invoke_contract(rep_addr, &Symbol::new(&env, "get_score"), rep_args)
@@ -228,7 +233,6 @@ impl Governor {
         balance + rep
     }
 }
-
 
 #[cfg(test)]
 mod test {
@@ -240,10 +244,12 @@ mod test {
     pub struct MockToken;
     #[contractimpl]
     impl MockToken {
-        pub fn balance(env: Env, user: Address) -> i128 {
+        pub fn balance_of(env: Env, user: Address) -> i128 {
             let key = (symbol_short!("bal"), user);
             env.storage().instance().get(&key).unwrap_or(0i128)
         }
+        
+        // Helper to set balance for testing
         pub fn set_bal(env: Env, user: Address, amount: i128) {
             let key = (symbol_short!("bal"), user);
             env.storage().instance().set(&key, &amount);
@@ -255,36 +261,37 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        // 1. Setup Mocks (Replaces old 'set_weight' logic with DAO standard)
+        // 1. Setup Mocks
         let token_id = env.register_contract(None, MockToken);
         let token_client = MockTokenClient::new(&env, &token_id);
 
         let tl = Address::generate(&env);
         let voter = Address::generate(&env);
 
-        // 2. Initialize Governor (Connecting to Mock Token)
+        // 2. Initialize Governor
         let gov_id = env.register_contract(None, Governor);
         let gov_client = GovernorClient::new(&env, &gov_id);
         
         gov_client.initialize(
             &token_id, 
             &tl, 
-            &5,  // delay
-            &10, // period
-            &100, // quorum
-            &1,   // threshold
-            &None, // no rep
-            &None  // no dispute
+            &5,   // voting_delay
+            &10,  // voting_period
+            &100, // quorum_bps
+            &1,   // proposal_threshold
+            &None, // no reputation contract
+            &None  // no dispute contract
         );
 
-        // 3. Give Voter Weight (Minting tokens in Mock instead of manual set_weight)
+        // 3. Give Voter Weight
+        // We use our helper 'set_bal' to simulate the user having tokens
         token_client.set_bal(&voter, &200);
 
         // 4. Propose
         let prop_id = gov_client.propose(
             &voter,
-            &Bytes::from_array(&env, &[1, 2, 3]), // Description
-            &Bytes::from_array(&env, &[0])        // Exec data
+            &Bytes::from_array(&env, &[1, 2, 3]), // Description Hash
+            &Bytes::from_array(&env, &[0])        // Execution Data
         );
 
         // 5. Move Time -> Active
@@ -299,6 +306,7 @@ mod test {
         
         // 8. Queue & Execute
         assert_eq!(gov_client.state(&prop_id), 3); // 3 = Succeeded
+        
         gov_client.queue(&prop_id);
         assert_eq!(gov_client.state(&prop_id), 4); // 4 = Queued
         
