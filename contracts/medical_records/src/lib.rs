@@ -118,6 +118,10 @@ pub enum DataKey {
     EmergencyAccess(Address, Address), // (grantee, patient)
     /// Patient's emergency access list
     PatientEmergencyGrants(Address),
+    /// Error log entry
+    ErrorLog(u64),
+    /// Error log counter
+    ErrorLogCount,
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -167,6 +171,30 @@ pub enum Error {
     EmergencyAccessExpired = 18,
     EmergencyAccessNotFound = 19,
     IdentityRegistryNotSet = 20,
+    AlreadyInitialized = 21,
+    UserNotFound = 22,
+    RecordNotFound = 23,
+    ProposalNotFound = 24,
+    InvalidPagination = 25,
+    DuplicateApproval = 26,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ErrorInfo {
+    pub code: u32,
+    pub message: String,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ErrorLogEntry {
+    pub timestamp: u64,
+    pub error: Error,
+    pub code: u32,
+    pub message: String,
+    pub context: String,
+    pub caller: Option<Address>,
 }
 
 #[contract]
@@ -175,7 +203,7 @@ pub struct MedicalRecordsContract;
 #[contractimpl]
 impl MedicalRecordsContract {
     /// Initialize the contract with the first admin
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
         admin.require_auth();
 
         // Ensure contract hasn't been initialized
@@ -185,7 +213,12 @@ impl MedicalRecordsContract {
             .get(&USERS)
             .unwrap_or(Map::new(&env));
         if !users.is_empty() {
-            panic!("Contract already initialized");
+            return Err(Self::log_error(
+                &env,
+                Error::AlreadyInitialized,
+                "initialize",
+                Some(admin.clone()),
+            ));
         }
 
         // Set up initial admin
@@ -202,7 +235,7 @@ impl MedicalRecordsContract {
         // Initialize paused state to false
         env.storage().persistent().set(&PAUSED, &false);
 
-        true
+        Ok(true)
     }
 
     /// Internal function to check if an address has a specific role
@@ -244,6 +277,107 @@ impl MedicalRecordsContract {
         next_count
     }
 
+    fn error_message(env: &Env, err: Error) -> String {
+        match err {
+            Error::ContractPaused => String::from_str(env, "contract is paused"),
+            Error::NotAuthorized => String::from_str(env, "not authorized"),
+            Error::InvalidCategory => String::from_str(env, "invalid category"),
+            Error::EmptyTreatment => String::from_str(env, "treatment cannot be empty"),
+            Error::EmptyTag => String::from_str(env, "tag cannot be empty"),
+            Error::ProposalAlreadyExecuted => String::from_str(env, "proposal already executed"),
+            Error::TimelockNotElasped => String::from_str(env, "timelock not elapsed"),
+            Error::NotEnoughApproval => String::from_str(env, "not enough approvals"),
+            Error::EmptyDataRef => String::from_str(env, "data_ref cannot be empty"),
+            Error::InvalidDataRefLength => String::from_str(env, "data_ref length is invalid"),
+            Error::InvalidDataRefCharset => String::from_str(env, "data_ref contains invalid characters"),
+            Error::DIDNotFound => String::from_str(env, "did not found"),
+            Error::DIDNotActive => String::from_str(env, "did not active"),
+            Error::InvalidCredential => String::from_str(env, "invalid credential"),
+            Error::CredentialExpired => String::from_str(env, "credential expired"),
+            Error::CredentialRevoked => String::from_str(env, "credential revoked"),
+            Error::MissingRequiredCredential => {
+                String::from_str(env, "missing required credential")
+            }
+            Error::EmergencyAccessExpired => String::from_str(env, "emergency access expired"),
+            Error::EmergencyAccessNotFound => String::from_str(env, "emergency access not found"),
+            Error::IdentityRegistryNotSet => String::from_str(env, "identity registry not set"),
+            Error::AlreadyInitialized => String::from_str(env, "contract already initialized"),
+            Error::UserNotFound => String::from_str(env, "user not found"),
+            Error::RecordNotFound => String::from_str(env, "record not found"),
+            Error::ProposalNotFound => String::from_str(env, "proposal not found"),
+            Error::InvalidPagination => String::from_str(env, "invalid pagination"),
+            Error::DuplicateApproval => String::from_str(env, "duplicate approval"),
+        }
+    }
+
+    fn error_info(env: &Env, err: Error) -> ErrorInfo {
+        ErrorInfo {
+            code: err as u32,
+            message: Self::error_message(env, err),
+        }
+    }
+
+    fn log_error(
+        env: &Env,
+        err: Error,
+        context: &str,
+        caller: Option<Address>,
+    ) -> Error {
+        let info = Self::error_info(env, err);
+        let current_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ErrorLogCount)
+            .unwrap_or(0);
+        let next_count = current_count + 1;
+        let context_str = String::from_str(env, context);
+        let entry = ErrorLogEntry {
+            timestamp: env.ledger().timestamp(),
+            error: err,
+            code: info.code,
+            message: info.message.clone(),
+            context: context_str.clone(),
+            caller: caller.clone(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ErrorLog(next_count), &entry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ErrorLogCount, &next_count);
+
+        env.events().publish(
+            (Symbol::new(env, "ErrorLogged"),),
+            (caller, entry.code, context_str),
+        );
+
+        err
+    }
+
+    fn ensure_not_paused(env: &Env, context: &str, caller: Option<Address>) -> Result<(), Error> {
+        if Self::is_paused(env) {
+            return Err(Self::log_error(env, Error::ContractPaused, context, caller));
+        }
+        Ok(())
+    }
+
+    fn ensure_role(
+        env: &Env,
+        caller: &Address,
+        role: Role,
+        context: &str,
+    ) -> Result<(), Error> {
+        if !Self::has_role(env, caller, &role) {
+            return Err(Self::log_error(
+                env,
+                Error::NotAuthorized,
+                context,
+                Some(caller.clone()),
+            ));
+        }
+        Ok(())
+    }
 
     /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
     fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
@@ -253,12 +387,25 @@ impl MedicalRecordsContract {
         }
 
         let len = data_ref.len();
+        let len_usize = len as usize;
 
         // Check valid length bounds
         if len < 10 || len > 200 {
             return Err(Error::InvalidDataRefLength);
         }
 
+        // Validate charset (alphanumeric plus '-', '_', '.')
+        let mut buffer = [0u8; 200];
+        data_ref.copy_into_slice(&mut buffer[..len_usize]);
+        for byte in buffer[..len_usize].iter() {
+            let is_alnum = (*byte >= b'0' && *byte <= b'9')
+                || (*byte >= b'A' && *byte <= b'Z')
+                || (*byte >= b'a' && *byte <= b'z');
+            let is_allowed = matches!(*byte, b'-' | b'_' | b'.');
+            if !(is_alnum || is_allowed) {
+                return Err(Error::InvalidDataRefCharset);
+            }
+        }
 
         Ok(())
     }
@@ -267,9 +414,7 @@ impl MedicalRecordsContract {
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "pause:admin")?;
         env.storage().persistent().set(&PAUSED, &true);
         // Emit Paused event
         let ts = env.ledger().timestamp();
@@ -281,9 +426,7 @@ impl MedicalRecordsContract {
     /// Resume operations - only admins
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "unpause:admin")?;
         env.storage().persistent().set(&PAUSED, &false);
         // Emit Unpaused event
         let ts = env.ledger().timestamp();
@@ -302,14 +445,10 @@ impl MedicalRecordsContract {
         caller.require_auth();
 
         // Block when paused
-        if Self::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
+        Self::ensure_not_paused(&env, "manage_user:paused", Some(caller.clone()))?;
 
         // Only admins can manage users
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "manage_user:admin")?;
 
         let mut users: Map<Address, UserProfile> = env
             .storage()
@@ -347,17 +486,14 @@ impl MedicalRecordsContract {
         caller.require_auth();
 
         // Block when paused
-        if Self::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
+        Self::ensure_not_paused(&env, "add_record:paused", Some(caller.clone()))?;
 
         // Verify caller is a doctor
-        if !Self::has_role(&env, &caller, &Role::Doctor) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Doctor, "add_record:doctor")?;
 
         // Validate data_ref
-        Self::validate_data_ref(&data_ref)?;
+        Self::validate_data_ref(&data_ref)
+            .map_err(|err| Self::log_error(&env, err, "add_record:data_ref", Some(caller.clone())))?;
 
         // Validate category
         let allowed_categories = vec![
@@ -368,18 +504,33 @@ impl MedicalRecordsContract {
             String::from_str(&env, "Spiritual"),
         ];
         if !allowed_categories.contains(&category) {
-            return Err(Error::InvalidCategory);
+            return Err(Self::log_error(
+                &env,
+                Error::InvalidCategory,
+                "add_record:category",
+                Some(caller.clone()),
+            ));
         }
 
         // Validate treatment_type (non-empty)
         if treatment_type.len() == 0 {
-            return Err(Error::EmptyTreatment);
+            return Err(Self::log_error(
+                &env,
+                Error::EmptyTreatment,
+                "add_record:treatment_type",
+                Some(caller.clone()),
+            ));
         }
 
         // Validate tags (all non-empty)
         for tag in tags.iter() {
             if tag.len() == 0 {
-                return Err(Error::EmptyTag);
+                return Err(Self::log_error(
+                    &env,
+                    Error::EmptyTag,
+                    "add_record:tag",
+                    Some(caller.clone()),
+                ));
             }
         }
 
@@ -436,7 +587,11 @@ impl MedicalRecordsContract {
     }
 
     /// Get a medical record with role-based access control
-    pub fn get_record(env: Env, caller: Address, record_id: u64) -> Option<MedicalRecord> {
+    pub fn get_record(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<MedicalRecord, Error> {
         caller.require_auth();
 
         let records: Map<u64, MedicalRecord> = env
@@ -456,12 +611,22 @@ impl MedicalRecordsContract {
                 || caller == record.doctor_id
                 || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
             {
-                Some(record)
+                Ok(record)
             } else {
-                panic!("Unauthorized access to medical record");
+                Err(Self::log_error(
+                    &env,
+                    Error::NotAuthorized,
+                    "get_record:not_authorized",
+                    Some(caller),
+                ))
             }
         } else {
-            None
+            Err(Self::log_error(
+                &env,
+                Error::RecordNotFound,
+                "get_record:not_found",
+                Some(caller),
+            ))
         }
     }
 
@@ -472,12 +637,18 @@ impl MedicalRecordsContract {
         patient: Address,
         page: u32,
         page_size: u32,
-    ) -> Vec<(u64, MedicalRecord)> {
+    ) -> Result<Vec<(u64, MedicalRecord)>, Error> {
         caller.require_auth();
 
         // Block when paused (optional; reads are generally allowed during pause)
-        if Self::is_paused(&env) {
-            panic!("Contract is paused");
+        Self::ensure_not_paused(&env, "get_history:paused", Some(caller.clone()))?;
+        if page_size == 0 {
+            return Err(Self::log_error(
+                &env,
+                Error::InvalidPagination,
+                "get_history:page_size",
+                Some(caller.clone()),
+            ));
         }
 
         let patient_records: Map<Address, Vec<u64>> = env
@@ -492,7 +663,7 @@ impl MedicalRecordsContract {
         let end = ((page + 1) * page_size).min(ids.len() as u32) as usize;
 
         if start >= ids.len() as u32 {
-            return Vec::new(&env); // Empty page
+            return Ok(Vec::new(&env)); // Empty page
         }
 
         // Gas bounding: limit total records fetched (e.g., max 100 per call)
@@ -520,22 +691,18 @@ impl MedicalRecordsContract {
             }
         }
 
-        history
+        Ok(history)
     }
 
     /// Deactivate a user
-    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
+    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> Result<bool, Error> {
         caller.require_auth();
 
         // Block when paused
-        if Self::is_paused(&env) {
-            panic!("Contract is paused");
-        }
+        Self::ensure_not_paused(&env, "deactivate_user:paused", Some(caller.clone()))?;
 
         // Only admins can deactivate users
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            panic!("Only admins can deactivate users");
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "deactivate_user:admin")?;
 
         let mut users: Map<Address, UserProfile> = env
             .storage()
@@ -547,9 +714,14 @@ impl MedicalRecordsContract {
             profile.active = false;
             users.set(user, profile);
             env.storage().persistent().set(&USERS, &users);
-            true
+            Ok(true)
         } else {
-            false
+            Err(Self::log_error(
+                &env,
+                Error::UserNotFound,
+                "deactivate_user:not_found",
+                Some(caller),
+            ))
         }
     }
 
@@ -575,11 +747,9 @@ impl MedicalRecordsContract {
         token_contract: Address,
         to: Address,
         amount: i128,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            panic!("Only admins can propose recovery");
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "propose_recovery:admin")?;
 
         let proposal_id = Self::get_and_increment_record_count(&env);
         let created_at = env.ledger().timestamp();
@@ -603,66 +773,97 @@ impl MedicalRecordsContract {
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
 
-        proposal_id
+        Ok(proposal_id)
     }
 
     /// Approve a recovery proposal (admin only)
-    pub fn approve_recovery(env: Env, caller: Address, proposal_id: u64) -> bool {
+    pub fn approve_recovery(env: Env, caller: Address, proposal_id: u64) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            panic!("Only admins can approve recovery");
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "approve_recovery:admin")?;
 
         let mut proposals: Map<u64, RecoveryProposal> = env
             .storage()
             .persistent()
             .get(&PROPOSALS)
             .unwrap_or(Map::new(&env));
-        let mut proposal = proposals
-            .get(proposal_id)
-            .unwrap_or_else(|| panic!("Proposal not found"));
+        let mut proposal = proposals.get(proposal_id).ok_or_else(|| {
+            Self::log_error(
+                &env,
+                Error::ProposalNotFound,
+                "approve_recovery:not_found",
+                Some(caller.clone()),
+            )
+        })?;
         if proposal.executed {
-            panic!("Proposal already executed");
+            return Err(Self::log_error(
+                &env,
+                Error::ProposalAlreadyExecuted,
+                "approve_recovery:executed",
+                Some(caller.clone()),
+            ));
         }
         // Prevent duplicate approvals
         if proposal.approvals.iter().any(|a| a == caller) {
-            return true;
+            return Err(Self::log_error(
+                &env,
+                Error::DuplicateApproval,
+                "approve_recovery:duplicate",
+                Some(caller),
+            ));
         }
         proposal.approvals.push_back(caller.clone());
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        true
+        Ok(true)
     }
 
     /// Execute recovery after timelock and approvals threshold
     pub fn execute_recovery(env: Env, caller: Address, proposal_id: u64) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "execute_recovery:admin")?;
 
         let mut proposals: Map<u64, RecoveryProposal> = env
             .storage()
             .persistent()
             .get(&PROPOSALS)
             .unwrap_or(Map::new(&env));
-        let mut proposal = proposals
-            .get(proposal_id)
-            .unwrap_or_else(|| panic!("Proposal not found"));
+        let mut proposal = proposals.get(proposal_id).ok_or_else(|| {
+            Self::log_error(
+                &env,
+                Error::ProposalNotFound,
+                "execute_recovery:not_found",
+                Some(caller.clone()),
+            )
+        })?;
         if proposal.executed {
-            return Err(Error::ProposalAlreadyExecuted);
+            return Err(Self::log_error(
+                &env,
+                Error::ProposalAlreadyExecuted,
+                "execute_recovery:executed",
+                Some(caller.clone()),
+            ));
         }
 
         // Check timelock
         let now = env.ledger().timestamp();
         if now < proposal.created_at + TIMELOCK_SECS {
-            return Err(Error::TimelockNotElasped);
+            return Err(Self::log_error(
+                &env,
+                Error::TimelockNotElasped,
+                "execute_recovery:timelock",
+                Some(caller.clone()),
+            ));
         }
 
         // Check multisig approvals
         let distinct_approvals = proposal.approvals.len();
         if (distinct_approvals as u32) < APPROVAL_THRESHOLD {
-            return Err(Error::NotEnoughApproval);
+            return Err(Self::log_error(
+                &env,
+                Error::NotEnoughApproval,
+                "execute_recovery:approvals",
+                Some(caller.clone()),
+            ));
         }
 
         // In actual implementation, we would invoke the token contract transfer here.
@@ -690,9 +891,7 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "set_identity_registry:admin")?;
 
         env.storage()
             .persistent()
@@ -714,9 +913,7 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Admin, "set_did_auth_level:admin")?;
 
         env.storage().persistent().set(&DataKey::AuthLevel, &level);
 
@@ -754,7 +951,12 @@ impl MedicalRecordsContract {
 
         // Only admins can link DIDs, or users can link their own
         if caller != user && !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
+            return Err(Self::log_error(
+                &env,
+                Error::NotAuthorized,
+                "link_did_to_user:not_authorized",
+                Some(caller.clone()),
+            ));
         }
 
         let mut users: Map<Address, UserProfile> = env
@@ -775,7 +977,12 @@ impl MedicalRecordsContract {
 
             Ok(true)
         } else {
-            Err(Error::NotAuthorized)
+            Err(Self::log_error(
+                &env,
+                Error::UserNotFound,
+                "link_did_to_user:not_found",
+                Some(caller),
+            ))
         }
     }
 
@@ -806,9 +1013,7 @@ impl MedicalRecordsContract {
         patient.require_auth();
 
         // Verify patient role
-        if !Self::has_role(&env, &patient, &Role::Patient) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &patient, Role::Patient, "grant_emergency_access:patient")?;
 
         let now = env.ledger().timestamp();
         let expires_at = now + duration_secs;
@@ -875,7 +1080,12 @@ impl MedicalRecordsContract {
 
             Ok(true)
         } else {
-            Err(Error::EmergencyAccessNotFound)
+            Err(Self::log_error(
+                &env,
+                Error::EmergencyAccessNotFound,
+                "revoke_emergency_access:not_found",
+                Some(patient),
+            ))
         }
     }
 
@@ -888,7 +1098,7 @@ impl MedicalRecordsContract {
     ) -> bool {
         let key = DataKey::EmergencyAccess(grantee, patient);
 
-        if let Some(access) = env
+        if let Some(mut access) = env
             .storage()
             .persistent()
             .get::<DataKey, EmergencyAccess>(&key)
@@ -899,6 +1109,8 @@ impl MedicalRecordsContract {
 
             let now = env.ledger().timestamp();
             if now > access.expires_at {
+                access.is_active = false;
+                env.storage().persistent().set(&key, &access);
                 return false;
             }
 
@@ -1084,17 +1296,20 @@ impl MedicalRecordsContract {
         caller.require_auth();
 
         // Block when paused
-        if Self::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
+        Self::ensure_not_paused(&env, "add_record_with_did:paused", Some(caller.clone()))?;
 
         // Verify caller is a doctor
-        if !Self::has_role(&env, &caller, &Role::Doctor) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::ensure_role(&env, &caller, Role::Doctor, "add_record_with_did:doctor")?;
 
         // Validate data_ref
-        Self::validate_data_ref(&data_ref)?;
+        Self::validate_data_ref(&data_ref).map_err(|err| {
+            Self::log_error(
+                &env,
+                err,
+                "add_record_with_did:data_ref",
+                Some(caller.clone()),
+            )
+        })?;
 
         // Validate category
         let allowed_categories = vec![
@@ -1105,18 +1320,33 @@ impl MedicalRecordsContract {
             String::from_str(&env, "Spiritual"),
         ];
         if !allowed_categories.contains(&category) {
-            return Err(Error::InvalidCategory);
+            return Err(Self::log_error(
+                &env,
+                Error::InvalidCategory,
+                "add_record_with_did:category",
+                Some(caller.clone()),
+            ));
         }
 
         // Validate treatment_type (non-empty)
         if treatment_type.len() == 0 {
-            return Err(Error::EmptyTreatment);
+            return Err(Self::log_error(
+                &env,
+                Error::EmptyTreatment,
+                "add_record_with_did:treatment_type",
+                Some(caller.clone()),
+            ));
         }
 
         // Validate tags (all non-empty)
         for tag in tags.iter() {
             if tag.len() == 0 {
-                return Err(Error::EmptyTag);
+                return Err(Self::log_error(
+                    &env,
+                    Error::EmptyTag,
+                    "add_record_with_did:tag",
+                    Some(caller.clone()),
+                ));
             }
         }
 
@@ -1224,11 +1454,55 @@ impl MedicalRecordsContract {
             if has_access {
                 Ok(record)
             } else {
-                Err(Error::NotAuthorized)
+                Err(Self::log_error(
+                    &env,
+                    Error::NotAuthorized,
+                    "get_record_with_did:not_authorized",
+                    Some(caller),
+                ))
             }
         } else {
-            Err(Error::NotAuthorized)
+            Err(Self::log_error(
+                &env,
+                Error::RecordNotFound,
+                "get_record_with_did:not_found",
+                Some(caller),
+            ))
         }
+    }
+
+    /// Get error details for a specific error
+    pub fn get_error_info(env: Env, error: Error) -> ErrorInfo {
+        Self::error_info(&env, error)
+    }
+
+    /// Get error log entries (paginated)
+    pub fn get_error_logs(env: Env, page: u32, page_size: u32) -> Vec<ErrorLogEntry> {
+        let total_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ErrorLogCount)
+            .unwrap_or(0);
+        if page_size == 0 || total_count == 0 {
+            return Vec::new(&env);
+        }
+
+        let start = (page * page_size) as u64 + 1;
+        let end = ((page + 1) * page_size) as u64;
+        let actual_end = end.min(total_count);
+
+        let mut logs = Vec::new(&env);
+        for i in start..=actual_end {
+            if let Some(log) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ErrorLogEntry>(&DataKey::ErrorLog(i))
+            {
+                logs.push_back(log);
+            }
+        }
+
+        logs
     }
 
     /// Verify a medical professional's credentials
