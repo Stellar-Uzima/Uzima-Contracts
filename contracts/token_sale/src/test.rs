@@ -151,7 +151,7 @@ fn test_vesting_contract() {
     let client = VestingContractClient::new(&env, &contract_id);
 
     // Initialize vesting contract
-    client.initialize(&owner, &token_address);
+    client.initialize_vesting(&owner, &token_address);
 
     // Mint tokens to vesting contract
     token_admin.mint(&contract_id, &10000);

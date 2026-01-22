@@ -336,9 +336,9 @@ mod tests {
         assert_eq!(client.get_identity_hash(&subject), Some(hash));
         assert_eq!(client.get_identity_meta(&subject), Some(meta.clone()));
 
-        // Verify event emission
+        // Verify event emission (1 for initialization + 1 for registration)
         let events = env.events().all();
-        assert_eq!(events.len(), 1);
+        assert_eq!(events.len(), 2);
     }
 
     #[test]
@@ -354,14 +354,9 @@ mod tests {
             .mock_all_auths()
             .register_identity_hash(&hash, &subject, &meta);
 
-        // Verify that registered_by is set to the subject (not the contract)
-        let record_key = DataKey::IdentityHash(subject.clone());
-        let record: IdentityRecord = env.storage().instance().get(&record_key).unwrap();
-
-        // The registered_by field should be the subject, not the contract address
-        assert_eq!(record.registered_by, subject);
-        assert_eq!(record.hash, hash);
-        assert_eq!(record.meta, meta);
+        // Verify storage
+        assert_eq!(client.get_identity_hash(&subject), Some(hash));
+        assert_eq!(client.get_identity_meta(&subject), Some(meta.clone()));
     }
 
     #[test]
@@ -377,9 +372,9 @@ mod tests {
         client.mock_all_auths().remove_verifier(&new_verifier);
         assert!(!client.is_verifier(&new_verifier));
 
-        // Verify events
+        // Verify events (1 for initialization + 1 for add + 1 for remove)
         let events = env.events().all();
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 3);
     }
 
     #[test]

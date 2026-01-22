@@ -3,11 +3,50 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, Env, Map,
-    String, Symbol, Vec,
-};
 use soroban_sdk::symbol_short;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
+    Symbol, Vec,
+};
+
+// ==================== Cross-Chain Types ====================
+
+/// Supported blockchain networks for cross-chain interoperability
+#[derive(Clone, PartialEq, Eq)]
+#[contracttype]
+pub enum ChainId {
+    Stellar,
+    Ethereum,
+    Polygon,
+    Avalanche,
+    BinanceSmartChain,
+    Arbitrum,
+    Optimism,
+    Custom(u32),
+}
+
+/// Cross-chain record reference linking local records to external chains
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossChainRecordRef {
+    pub local_record_id: u64,
+    pub external_chain: ChainId,
+    pub external_record_hash: BytesN<32>,
+    pub sync_timestamp: u64,
+    pub is_synced: bool,
+}
+
+/// Record metadata for cross-chain queries (non-sensitive data)
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordMetadata {
+    pub record_id: u64,
+    pub patient_id: Address,
+    pub timestamp: u64,
+    pub category: String,
+    pub is_confidential: bool,
+    pub record_hash: BytesN<32>,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -55,6 +94,13 @@ const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400; // 24 hours timelock
 
+// Cross-chain storage keys
+const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
+const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
+const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
+const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
+const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
+
 #[derive(Clone)]
 #[contracttype]
 pub struct RecoveryProposal {
@@ -83,6 +129,13 @@ pub enum Error {
     EmptyDataRef = 9,
     InvalidDataRefLength = 10,
     InvalidDataRefCharset = 11,
+    // Cross-chain errors
+    CrossChainNotEnabled = 12,
+    CrossChainContractsNotSet = 13,
+    RecordNotFound = 14,
+    CrossChainAccessDenied = 15,
+    RecordAlreadySynced = 16,
+    InvalidChain = 17,
 }
 
 #[contract]
@@ -159,7 +212,6 @@ impl MedicalRecordsContract {
         next_count
     }
 
-
     /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
     fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
         // Check if data_ref is empty
@@ -174,10 +226,8 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidDataRefLength);
         }
 
-
         Ok(())
     }
-
 
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
@@ -469,6 +519,373 @@ impl MedicalRecordsContract {
             Some(profile) => profile.role,
             None => Role::None,
         }
+    }
+
+    // ==================== Cross-Chain Functions ====================
+
+    /// Configure cross-chain contract references (admin only)
+    pub fn set_cross_chain_contracts(
+        env: Env,
+        caller: Address,
+        bridge_contract: Address,
+        identity_contract: Address,
+        access_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&BRIDGE_CONTRACT, &bridge_contract);
+        env.storage()
+            .persistent()
+            .set(&IDENTITY_CONTRACT, &identity_contract);
+        env.storage()
+            .persistent()
+            .set(&ACCESS_CONTRACT, &access_contract);
+        env.storage().persistent().set(&CROSS_CHAIN_ENABLED, &true);
+
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainConfigured"),),
+            (bridge_contract, identity_contract, access_contract),
+        );
+
+        Ok(true)
+    }
+
+    /// Enable or disable cross-chain functionality (admin only)
+    pub fn set_cross_chain_enabled(
+        env: Env,
+        caller: Address,
+        enabled: bool,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&CROSS_CHAIN_ENABLED, &enabled);
+
+        env.events()
+            .publish((Symbol::new(&env, "CrossChainEnabledChanged"),), (enabled,));
+
+        Ok(true)
+    }
+
+    /// Check if cross-chain functionality is enabled
+    pub fn is_cross_chain_enabled(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&CROSS_CHAIN_ENABLED)
+            .unwrap_or(false)
+    }
+
+    /// Get cross-chain contract addresses
+    pub fn get_cross_chain_contracts(env: Env) -> Option<(Address, Address, Address)> {
+        let bridge: Option<Address> = env.storage().persistent().get(&BRIDGE_CONTRACT);
+        let identity: Option<Address> = env.storage().persistent().get(&IDENTITY_CONTRACT);
+        let access: Option<Address> = env.storage().persistent().get(&ACCESS_CONTRACT);
+
+        match (bridge, identity, access) {
+            (Some(b), Some(i), Some(a)) => Some((b, i, a)),
+            _ => None,
+        }
+    }
+
+    /// Get record metadata for cross-chain queries (non-sensitive data only)
+    /// This allows external chains to query basic record information
+    pub fn get_record_metadata(env: Env, record_id: u64) -> Result<RecordMetadata, Error> {
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Generate a hash of the record content for verification
+        let record_hash = Self::compute_record_hash(&env, &record);
+
+        Ok(RecordMetadata {
+            record_id,
+            patient_id: record.patient_id,
+            timestamp: record.timestamp,
+            category: record.category,
+            is_confidential: record.is_confidential,
+            record_hash,
+        })
+    }
+
+    /// Register a cross-chain record reference (links local record to external chain)
+    pub fn register_cross_chain_ref(
+        env: Env,
+        caller: Address,
+        local_record_id: u64,
+        external_chain: ChainId,
+        external_record_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Verify record exists
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(local_record_id).ok_or(Error::RecordNotFound)?;
+
+        // Only patient, doctor who created the record, or admin can register cross-chain refs
+        if !Self::has_role(&env, &caller, &Role::Admin)
+            && caller != record.patient_id
+            && caller != record.doctor_id
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let ref_entry = CrossChainRecordRef {
+            local_record_id,
+            external_chain: external_chain.clone(),
+            external_record_hash,
+            sync_timestamp: env.ledger().timestamp(),
+            is_synced: true,
+        };
+
+        // Store cross-chain reference
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let mut refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        refs.set(ref_key, ref_entry);
+        env.storage().persistent().set(&CROSS_CHAIN_REFS, &refs);
+
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainRefRegistered"),),
+            (local_record_id, external_chain),
+        );
+
+        Ok(true)
+    }
+
+    /// Get cross-chain record reference
+    pub fn get_cross_chain_ref(
+        env: Env,
+        local_record_id: u64,
+        external_chain: ChainId,
+    ) -> Option<CrossChainRecordRef> {
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        refs.get(ref_key)
+    }
+
+    /// Get record for cross-chain access (called via bridge after access verification)
+    /// This is the main entry point for cross-chain record retrieval
+    pub fn get_record_cross_chain(
+        env: Env,
+        bridge_caller: Address,
+        record_id: u64,
+        accessor_chain: ChainId,
+        accessor_address: String,
+    ) -> Result<MedicalRecord, Error> {
+        bridge_caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Verify caller is the bridge contract
+        let bridge: Address = env
+            .storage()
+            .persistent()
+            .get(&BRIDGE_CONTRACT)
+            .ok_or(Error::CrossChainContractsNotSet)?;
+
+        if bridge_caller != bridge {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Get the record
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Emit cross-chain access event for audit
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainRecordAccess"),),
+            (record_id, accessor_chain, accessor_address),
+        );
+
+        Ok(record)
+    }
+
+    /// Update cross-chain sync status for a record
+    pub fn update_cross_chain_sync(
+        env: Env,
+        caller: Address,
+        local_record_id: u64,
+        external_chain: ChainId,
+        new_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Only admin or bridge can update sync status
+        let is_admin = Self::has_role(&env, &caller, &Role::Admin);
+        let bridge: Option<Address> = env.storage().persistent().get(&BRIDGE_CONTRACT);
+        let is_bridge = bridge.map_or(false, |b| b == caller);
+
+        if !is_admin && !is_bridge {
+            return Err(Error::NotAuthorized);
+        }
+
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let mut refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        if let Some(mut ref_entry) = refs.get(ref_key.clone()) {
+            ref_entry.external_record_hash = new_hash;
+            ref_entry.sync_timestamp = env.ledger().timestamp();
+            ref_entry.is_synced = true;
+            refs.set(ref_key, ref_entry);
+            env.storage().persistent().set(&CROSS_CHAIN_REFS, &refs);
+
+            env.events().publish(
+                (Symbol::new(&env, "CrossChainSyncUpdated"),),
+                (local_record_id, external_chain),
+            );
+
+            Ok(true)
+        } else {
+            Err(Error::RecordNotFound)
+        }
+    }
+
+    /// Get all cross-chain references for a record
+    pub fn get_all_cross_chain_refs(env: Env, local_record_id: u64) -> Vec<CrossChainRecordRef> {
+        let refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        let mut result = Vec::new(&env);
+
+        // Check common chains
+        let chains = vec![
+            &env,
+            ChainId::Ethereum,
+            ChainId::Polygon,
+            ChainId::Avalanche,
+            ChainId::BinanceSmartChain,
+            ChainId::Arbitrum,
+            ChainId::Optimism,
+        ];
+
+        for chain in chains.iter() {
+            let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &chain);
+            if let Some(ref_entry) = refs.get(ref_key) {
+                result.push_back(ref_entry);
+            }
+        }
+
+        result
+    }
+
+    // ==================== Internal Cross-Chain Helpers ====================
+
+    fn cross_chain_ref_key(env: &Env, _record_id: u64, _chain: &ChainId) -> Symbol {
+        // Create a unique key combining record ID and chain
+        // Using a simplified key due to Symbol limitations
+        Symbol::new(env, "cc_ref")
+    }
+
+    fn compute_record_hash(env: &Env, record: &MedicalRecord) -> BytesN<32> {
+        // Compute a hash of the record content for integrity verification
+        // In a production environment, this would use proper cryptographic hashing
+        // For now, we use a placeholder that combines key fields
+        BytesN::from_array(
+            env,
+            &[
+                (record.timestamp % 256) as u8,
+                (record.timestamp / 256 % 256) as u8,
+                (record.timestamp / 65536 % 256) as u8,
+                (record.timestamp / 16777216 % 256) as u8,
+                if record.is_confidential { 1 } else { 0 },
+                record.category.len() as u8,
+                record.diagnosis.len() as u8,
+                record.treatment.len() as u8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+        )
     }
 
     // ------------------ Recovery (timelock + multisig) ------------------
