@@ -208,7 +208,7 @@
     ]
   ],
   "ledger": {
-    "protocol_version": 20,
+    "protocol_version": 21,
     "sequence_number": 0,
     "timestamp": 0,
     "network_id": "0000000000000000000000000000000000000000000000000000000000000000",
@@ -430,6 +430,14 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -451,6 +459,12 @@
                             "val": {
                               "string": "Diagnosis"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -523,6 +537,14 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -544,6 +566,12 @@
                             "val": {
                               "string": "Diagnosis 2"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -656,6 +684,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -685,6 +719,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -711,6 +751,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -837,7 +883,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [
@@ -870,7 +916,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [
@@ -903,7 +949,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [
@@ -936,7 +982,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [
@@ -969,7 +1015,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [
@@ -1002,7 +1048,7 @@
             },
             "ext": "v0"
           },
-          15
+          6311999
         ]
       ],
       [

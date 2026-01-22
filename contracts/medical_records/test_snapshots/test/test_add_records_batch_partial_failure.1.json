@@ -88,104 +88,102 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "add_record",
+              "function_name": "add_records_batch",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "string": "Diagnosis 2"
-                },
-                {
-                  "string": "Treatment 2"
-                },
-                {
-                  "bool": true
                 },
                 {
                   "vec": [
                     {
-                      "string": "spiritual"
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "Malaria"
+                        },
+                        {
+                          "string": "Artemisinin"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": [
+                            {
+                              "string": "tropical"
+                            }
+                          ]
+                        },
+                        {
+                          "string": "Herbal"
+                        },
+                        {
+                          "string": "Acute"
+                        },
+                        {
+                          "string": "ipfs://QmC"
+                        }
+                      ]
+                    },
+                    {
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "A"
+                        },
+                        {
+                          "string": "B"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": []
+                        },
+                        {
+                          "string": "Invalid"
+                        },
+                        {
+                          "string": "C"
+                        },
+                        {
+                          "string": "ipfs://ok"
+                        }
+                      ]
+                    },
+                    {
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "A"
+                        },
+                        {
+                          "string": "B"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": []
+                        },
+                        {
+                          "string": "Modern"
+                        },
+                        {
+                          "string": ""
+                        },
+                        {
+                          "string": "ipfs://ok"
+                        }
+                      ]
                     }
                   ]
-                },
-                {
-                  "string": "Spiritual"
-                },
-                {
-                  "string": "Prayer"
-                },
-                {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "get_record",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "get_record",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-              "function_name": "get_record",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "u64": 1
                 }
               ]
             }
@@ -322,7 +320,7 @@
                               "symbol": "category"
                             },
                             "val": {
-                              "string": "Spiritual"
+                              "string": "Herbal"
                             }
                           },
                           {
@@ -330,7 +328,7 @@
                               "symbol": "data_ref"
                             },
                             "val": {
-                              "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
+                              "string": "ipfs://QmC"
                             }
                           },
                           {
@@ -338,7 +336,7 @@
                               "symbol": "diagnosis"
                             },
                             "val": {
-                              "string": "Diagnosis 2"
+                              "string": "Malaria"
                             }
                           },
                           {
@@ -360,7 +358,7 @@
                               "symbol": "is_confidential"
                             },
                             "val": {
-                              "bool": true
+                              "bool": false
                             }
                           },
                           {
@@ -378,7 +376,7 @@
                             "val": {
                               "vec": [
                                 {
-                                  "string": "spiritual"
+                                  "string": "tropical"
                                 }
                               ]
                             }
@@ -396,7 +394,7 @@
                               "symbol": "treatment"
                             },
                             "val": {
-                              "string": "Treatment 2"
+                              "string": "Artemisinin"
                             }
                           },
                           {
@@ -404,7 +402,7 @@
                               "symbol": "treatment_type"
                             },
                             "val": {
-                              "string": "Prayer"
+                              "string": "Acute"
                             }
                           }
                         ]
@@ -729,72 +727,6 @@
       [
         {
           "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 8370022561469687789
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 8370022561469687789
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 4270020994084947596
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 4270020994084947596
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
             "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
             "key": {
               "ledger_key_nonce": {
@@ -814,39 +746,6 @@
                 "key": {
                   "ledger_key_nonce": {
                     "nonce": 4837995959683129791
-                  }
-                },
-                "durability": "temporary",
-                "val": "void"
-              }
-            },
-            "ext": "v0"
-          },
-          6311999
-        ]
-      ],
-      [
-        {
-          "contract_data": {
-            "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-            "key": {
-              "ledger_key_nonce": {
-                "nonce": 2032731177588607455
-              }
-            },
-            "durability": "temporary"
-          }
-        },
-        [
-          {
-            "last_modified_ledger_seq": 0,
-            "data": {
-              "contract_data": {
-                "ext": "v0",
-                "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-                "key": {
-                  "ledger_key_nonce": {
-                    "nonce": 2032731177588607455
                   }
                 },
                 "durability": "temporary",
@@ -1072,7 +971,7 @@
                 "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
               },
               {
-                "symbol": "add_record"
+                "symbol": "add_records_batch"
               }
             ],
             "data": {
@@ -1081,32 +980,96 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "string": "Diagnosis 2"
-                },
-                {
-                  "string": "Treatment 2"
-                },
-                {
-                  "bool": true
-                },
-                {
                   "vec": [
                     {
-                      "string": "spiritual"
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "Malaria"
+                        },
+                        {
+                          "string": "Artemisinin"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": [
+                            {
+                              "string": "tropical"
+                            }
+                          ]
+                        },
+                        {
+                          "string": "Herbal"
+                        },
+                        {
+                          "string": "Acute"
+                        },
+                        {
+                          "string": "ipfs://QmC"
+                        }
+                      ]
+                    },
+                    {
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "A"
+                        },
+                        {
+                          "string": "B"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": []
+                        },
+                        {
+                          "string": "Invalid"
+                        },
+                        {
+                          "string": "C"
+                        },
+                        {
+                          "string": "ipfs://ok"
+                        }
+                      ]
+                    },
+                    {
+                      "vec": [
+                        {
+                          "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                        },
+                        {
+                          "string": "A"
+                        },
+                        {
+                          "string": "B"
+                        },
+                        {
+                          "bool": false
+                        },
+                        {
+                          "vec": []
+                        },
+                        {
+                          "string": "Modern"
+                        },
+                        {
+                          "string": ""
+                        },
+                        {
+                          "string": "ipfs://ok"
+                        }
+                      ]
                     }
                   ]
-                },
-                {
-                  "string": "Spiritual"
-                },
-                {
-                  "string": "Prayer"
-                },
-                {
-                  "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
                 }
               ]
             }
@@ -1136,7 +1099,7 @@
                   "u64": 1
                 },
                 {
-                  "bool": true
+                  "bool": false
                 }
               ]
             }
@@ -1157,473 +1120,70 @@
                 "symbol": "fn_return"
               },
               {
-                "symbol": "add_record"
-              }
-            ],
-            "data": {
-              "u64": 1
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_record"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_record"
+                "symbol": "add_records_batch"
               }
             ],
             "data": {
               "map": [
                 {
                   "key": {
-                    "symbol": "authorization_credential"
-                  },
-                  "val": {
-                    "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "category"
-                  },
-                  "val": {
-                    "string": "Spiritual"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "data_ref"
-                  },
-                  "val": {
-                    "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "diagnosis"
-                  },
-                  "val": {
-                    "string": "Diagnosis 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_did"
-                  },
-                  "val": "void"
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "is_confidential"
-                  },
-                  "val": {
-                    "bool": true
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "patient_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "tags"
+                    "symbol": "failures"
                   },
                   "val": {
                     "vec": [
                       {
-                        "string": "spiritual"
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "error_code"
+                            },
+                            "val": {
+                              "u32": 10
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "index"
+                            },
+                            "val": {
+                              "u32": 1
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "error_code"
+                            },
+                            "val": {
+                              "u32": 10
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "index"
+                            },
+                            "val": {
+                              "u32": 2
+                            }
+                          }
+                        ]
                       }
                     ]
                   }
                 },
                 {
                   "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment"
-                  },
-                  "val": {
-                    "string": "Treatment 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment_type"
-                  },
-                  "val": {
-                    "string": "Prayer"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_record"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_record"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "authorization_credential"
-                  },
-                  "val": {
-                    "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "category"
-                  },
-                  "val": {
-                    "string": "Spiritual"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "data_ref"
-                  },
-                  "val": {
-                    "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "diagnosis"
-                  },
-                  "val": {
-                    "string": "Diagnosis 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_did"
-                  },
-                  "val": "void"
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "is_confidential"
-                  },
-                  "val": {
-                    "bool": true
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "patient_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "tags"
+                    "symbol": "successes"
                   },
                   "val": {
                     "vec": [
                       {
-                        "string": "spiritual"
+                        "u64": 1
                       }
                     ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment"
-                  },
-                  "val": {
-                    "string": "Treatment 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment_type"
-                  },
-                  "val": {
-                    "string": "Prayer"
-                  }
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": null,
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_call"
-              },
-              {
-                "bytes": "0000000000000000000000000000000000000000000000000000000000000001"
-              },
-              {
-                "symbol": "get_record"
-              }
-            ],
-            "data": {
-              "vec": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
-                },
-                {
-                  "u64": 1
-                }
-              ]
-            }
-          }
-        }
-      },
-      "failed_call": false
-    },
-    {
-      "event": {
-        "ext": "v0",
-        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
-        "type_": "diagnostic",
-        "body": {
-          "v0": {
-            "topics": [
-              {
-                "symbol": "fn_return"
-              },
-              {
-                "symbol": "get_record"
-              }
-            ],
-            "data": {
-              "map": [
-                {
-                  "key": {
-                    "symbol": "authorization_credential"
-                  },
-                  "val": {
-                    "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "category"
-                  },
-                  "val": {
-                    "string": "Spiritual"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "data_ref"
-                  },
-                  "val": {
-                    "string": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "diagnosis"
-                  },
-                  "val": {
-                    "string": "Diagnosis 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_did"
-                  },
-                  "val": "void"
-                },
-                {
-                  "key": {
-                    "symbol": "doctor_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "is_confidential"
-                  },
-                  "val": {
-                    "bool": true
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "patient_id"
-                  },
-                  "val": {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "tags"
-                  },
-                  "val": {
-                    "vec": [
-                      {
-                        "string": "spiritual"
-                      }
-                    ]
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "timestamp"
-                  },
-                  "val": {
-                    "u64": 0
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment"
-                  },
-                  "val": {
-                    "string": "Treatment 2"
-                  }
-                },
-                {
-                  "key": {
-                    "symbol": "treatment_type"
-                  },
-                  "val": {
-                    "string": "Prayer"
                   }
                 }
               ]
