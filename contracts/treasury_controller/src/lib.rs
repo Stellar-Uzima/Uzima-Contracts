@@ -601,6 +601,31 @@ impl TreasuryController {
             Err(_) => Err(Error::TransferFailed),
         }
     }
+
+/// Allows the Governor/Timelock (Admin) to execute transfers immediately
+    /// Bypassing the multisig process.
+    pub fn governance_execute(
+        env: Env,
+        token_contract: Address,
+        to: Address,
+        amount: i128
+    ) -> Result<(), Error> {
+        let config: TreasuryConfig = env.storage().instance().get(&DataKey::Config).ok_or(Error::NotInitialized)?;
+        
+        // strictly require admin auth (The Governor Contract)
+        config.admin.require_auth();
+
+        Self::execute_token_transfer(
+            &env,
+            &token_contract,
+            &env.current_contract_address(),
+            &to,
+            amount,
+        )?;
+
+        env.events().publish((symbol_short!("GOV_EXEC"),), (to, amount));
+        Ok(())
+    }
 }
 
 #[cfg(test)]
