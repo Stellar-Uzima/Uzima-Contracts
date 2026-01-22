@@ -110,22 +110,38 @@ fn test_add_records_batch_partial_failure() {
     let records = vec![
         &env,
         // valid
-        (patient.clone(),
+        (
+            patient.clone(),
             String::from_str(&env, "Malaria"),
             String::from_str(&env, "Artemisinin"),
             false,
             vec![&env, String::from_str(&env, "tropical")],
             String::from_str(&env, "Herbal"),
             String::from_str(&env, "Acute"),
-            String::from_str(&env, "ipfs://QmC")),
+            String::from_str(&env, "ipfs://QmC"),
+        ),
         // invalid category
-        (patient.clone(), String::from_str(&env, "A"), String::from_str(&env, "B"), false,
-         vec![&env], String::from_str(&env, "Invalid"), String::from_str(&env, "C"),
-         String::from_str(&env, "ipfs://ok")),
+        (
+            patient.clone(),
+            String::from_str(&env, "A"),
+            String::from_str(&env, "B"),
+            false,
+            vec![&env],
+            String::from_str(&env, "Invalid"),
+            String::from_str(&env, "C"),
+            String::from_str(&env, "ipfs://ok"),
+        ),
         // empty treatment_type
-        (patient.clone(), String::from_str(&env, "A"), String::from_str(&env, "B"), false,
-         vec![&env], String::from_str(&env, "Modern"), String::from_str(&env, ""),
-         String::from_str(&env, "ipfs://ok")),
+        (
+            patient.clone(),
+            String::from_str(&env, "A"),
+            String::from_str(&env, "B"),
+            false,
+            vec![&env],
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, ""),
+            String::from_str(&env, "ipfs://ok"),
+        ),
     ];
 
     let result = client.add_records_batch(&doctor, &records);
@@ -162,7 +178,7 @@ fn test_add_and_get_record() {
         &tags,
         &category,
         &treatment_type,
-        &data_ref
+        &data_ref,
     );
 
     // Get the record as patient
@@ -188,7 +204,8 @@ fn test_empty_data_ref() {
 
     // Empty data_ref should fail
     let _ = client.add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -213,7 +230,8 @@ fn test_data_ref_too_short() {
 
     // Data ref shorter than 10 chars should fail
     let _ = client.add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -267,7 +285,8 @@ fn test_data_ref_boundary_min_length() {
     // Exactly 10 chars (should pass)
     let min_ref = String::from_str(&env, "Qm12345678");
     let record_id = client.add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -341,7 +360,6 @@ fn test_get_patient_records() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -354,7 +372,6 @@ fn test_get_patient_records() {
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Patient can access both records
@@ -392,7 +409,6 @@ fn test_role_based_access() {
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
     // Patient tries to access the record (should succeed)
     let retrieved_record = client.get_record(&patient, &record_id);
@@ -434,7 +450,6 @@ fn test_deactivate_user() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 }
 
@@ -463,7 +478,6 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Pause the contract
@@ -497,7 +511,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Pause the contract
@@ -518,7 +531,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 }
 
@@ -602,7 +614,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type1"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -615,7 +626,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type2"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id3 = client.add_record(
@@ -628,7 +638,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type3"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify IDs are monotonically increasing
@@ -665,7 +674,6 @@ fn test_unique_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "TypeA"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -678,7 +686,6 @@ fn test_unique_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "TypeB"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify all IDs are unique
@@ -712,7 +719,6 @@ fn test_record_ordering() {
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type"),
             &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
         );
         record_ids.push_back(id);
     }
@@ -747,7 +753,6 @@ fn test_record_counter_isolation() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Create a recovery proposal (also uses the counter)
@@ -769,7 +774,6 @@ fn test_record_counter_isolation() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify all IDs are unique and monotonic
@@ -813,7 +817,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let _ = client.add_record(
@@ -826,7 +829,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id3 = client.add_record(
@@ -839,7 +841,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Surgery"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Patient gets full history (page 0, size 3) - should get all 3
