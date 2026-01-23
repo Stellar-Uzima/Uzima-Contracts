@@ -514,7 +514,7 @@ impl MedicalRecordsContract {
         // Emit RecordAdded event
         env.events().publish(
             (Symbol::new(&env, "RecordAdded"),),
-            (patient, record_id, is_confidential),
+            (patient.clone(), record_id, is_confidential),
         );
 
         // Trigger AI analysis for this new record
@@ -1635,7 +1635,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
@@ -1746,7 +1746,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
