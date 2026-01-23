@@ -135,10 +135,9 @@ pub struct MedicalRecord {
     pub category: String,
     pub treatment_type: String,
     pub data_ref: String,
-    /// DID of the doctor who created this record (for interoperability)
     pub doctor_did: Option<String>,
-    /// Verifiable credential ID used for authorization (if any)
     pub authorization_credential: Option<BytesN<32>>,
+    pub region: String, 
 }
 
 #[derive(Clone)]
@@ -201,6 +200,7 @@ pub enum DataKey {
     PatientRisk(Address),
     /// Latest anomaly detection insight per record (patient, record_id)
     RecordAnomaly(Address, u64),
+    ComplianceContract,
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -361,6 +361,59 @@ impl MedicalRecordsContract {
 
         Ok(())
     }
+
+      pub fn set_compliance_contract(env: Env, caller: Address, contract: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+             return Err(Error::NotAuthorized);
+        }
+        env.storage().persistent().set(&DataKey::ComplianceContract, &contract);
+        Ok(true)
+    }
+
+    /// GDPR Right-to-be-Forgotten: Permanently remove record data
+    pub fn purge_record(env: Env, caller: Address, record_id: u64, reason: String) -> Result<bool, Error> {
+        caller.require_auth();
+
+        let mut records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        
+        if caller != record.patient_id && !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        
+        
+        
+        if let Some(compliance_addr) = env.storage().persistent().get::<_, Address>(&DataKey::ComplianceContract) {
+            
+            
+        }
+
+        
+        records.remove(record_id);
+        env.storage().persistent().set(&RECORDS, &records);
+
+        
+        Self::log_access(
+            &env,
+            &caller,
+            &record.patient_id,
+            record_id,
+            String::from_str(&env, "GDPR_PURGE"),
+            true,
+            None,
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "RecordPurged"),),
+            (record.patient_id, record_id, reason),
+        );
+
+        Ok(true)
+    }
+
 
     /// Internal helper to load AI configuration
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
