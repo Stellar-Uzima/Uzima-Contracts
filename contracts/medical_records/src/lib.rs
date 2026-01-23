@@ -103,6 +103,44 @@ pub struct MedicalRecord {
 
 #[derive(Clone)]
 #[contracttype]
+pub enum AIInsightType {
+    AnomalyScore,
+    RiskScore,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AIInsight {
+    pub patient: Address,
+    pub record_id: u64,
+    pub model_id: BytesN<32>,
+    pub insight_type: AIInsightType,
+    /// Score in basis points (0-10_000)
+    pub score_bps: u32,
+    /// Off-chain reference for detailed explanation (e.g. IPFS CID)
+    pub explanation_ref: String,
+    /// Human-readable explanation summary stored on-chain
+    pub explanation_summary: String,
+    pub created_at: u64,
+    /// AI model version for reproducibility
+    pub model_version: String,
+    /// Feature importance data for explainable AI
+    pub feature_importance: Vec<(String, u32)>, // (feature_name, importance_bps)
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AIConfig {
+    /// Address of the off-chain or on-chain AI coordinator allowed to write insights
+    pub ai_coordinator: Address,
+    /// Differential privacy budget in epsilon units
+    pub dp_epsilon: u32,
+    /// Minimum number of participants required for federated rounds
+    pub min_participants: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     RecordCount,
     /// Identity registry contract address for DID verification
@@ -117,6 +155,12 @@ pub enum DataKey {
     EmergencyAccess(Address, Address), // (grantee, patient)
     /// Patient's emergency access list
     PatientEmergencyGrants(Address),
+    /// Global AI configuration for medical analytics
+    AIConfig,
+    /// Latest risk score per patient
+    PatientRisk(Address),
+    /// Latest anomaly detection insight per record (patient, record_id)
+    RecordAnomaly(Address, u64),
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -168,6 +212,10 @@ pub enum Error {
     IdentityRegistryNotSet = 20,
     BatchTooLarge = 21,
     InvalidBatch = 22,
+  // AI-related errors
+    AIConfigNotSet = 23,
+    NotAICoordinator = 24,
+    InvalidAIScore = 25,
 }
 
 #[derive(Clone)]
@@ -272,6 +320,32 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidDataRefLength);
         }
 
+        Ok(())
+    }
+
+    /// Internal helper to load AI configuration
+    fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
+        env
+            .storage()
+            .persistent()
+            .get(&DataKey::AIConfig)
+            .ok_or(Error::AIConfigNotSet)
+    }
+
+    /// Ensure that the caller is the configured AI coordinator
+    fn ensure_ai_coordinator(env: &Env, caller: &Address) -> Result<AIConfig, Error> {
+        let config = Self::load_ai_config(env)?;
+        if config.ai_coordinator != *caller {
+            return Err(Error::NotAICoordinator);
+        }
+        Ok(config)
+    }
+
+    /// Validate an AI score expressed in basis points (0 - 10_000)
+    fn validate_ai_score(score_bps: u32) -> Result<(), Error> {
+        if score_bps > 10_000 {
+            return Err(Error::InvalidAIScore);
+        }
         Ok(())
     }
 
@@ -442,6 +516,9 @@ impl MedicalRecordsContract {
             (Symbol::new(&env, "RecordAdded"),),
             (patient, record_id, is_confidential),
         );
+
+        // Trigger AI analysis for this new record
+        Self::trigger_ai_analysis(&env, record_id, patient.clone());
 
         Ok(record_id)
     }
@@ -1459,6 +1536,20 @@ impl MedicalRecordsContract {
         }
     }
 
+    /// Internal function to trigger AI analysis when a new record is added
+    fn trigger_ai_analysis(env: &Env, record_id: u64, patient: Address) {
+        // Check if AI analysis is enabled/configured
+        if let Ok(config) = Self::load_ai_config(env) {
+            // In a real implementation, this would trigger an asynchronous
+            // analysis job with the AI coordinator
+            // For now, we just emit an event to signal that analysis should be triggered
+            env.events().publish(
+                (Symbol::new(env, "AIAnalysisTriggered"),),
+                (patient, record_id),
+            );
+        }
+    }
+
     /// Verify a medical professional's credentials
     /// This would typically call the identity registry contract
     pub fn verify_professional_credential(env: Env, professional: Address) -> bool {
@@ -1473,5 +1564,239 @@ impl MedicalRecordsContract {
 
         // For now, check if they have a doctor role and are active
         Self::has_role(&env, &professional, &Role::Doctor)
+    }
+
+    // ========================================================================
+    // AI / ML INTEGRATION POINTS
+    // ========================================================================
+
+    /// Configure the AI coordinator and privacy parameters
+    /// Only admins can call this
+    pub fn set_ai_config(
+        env: Env,
+        caller: Address,
+        ai_coordinator: Address,
+        dp_epsilon: u32,
+        min_participants: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        if min_participants == 0 {
+            panic!("min_participants must be > 0");
+        }
+
+        let config = AIConfig {
+            ai_coordinator,
+            dp_epsilon,
+            min_participants,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AIConfig, &config);
+
+        env.events().publish(
+            (Symbol::new(&env, "AIConfigSet"),),
+            (config.dp_epsilon, config.min_participants),
+        );
+
+        Ok(true)
+    }
+
+    /// Public view of the current AI configuration
+    pub fn get_ai_config(env: Env) -> Option<AIConfig> {
+        env.storage().persistent().get(&DataKey::AIConfig)
+    }
+
+    /// Record an anomaly score for a specific medical record.
+    /// This is called by the AI coordinator after running off-chain models.
+    pub fn submit_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        model_id: BytesN<32>,
+        score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Ensure caller is the configured AI coordinator
+        let _config = Self::ensure_ai_coordinator(&env, &caller)?;
+
+        // Validate score range
+        Self::validate_ai_score(score_bps)?;
+
+        // Validate feature importance vector
+        for (_, importance_bps) in feature_importance.iter() {
+            if *importance_bps > 10_000 {
+                return Err(Error::InvalidAIScore);
+            }
+        }
+
+        // Load the referenced medical record to derive the patient
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records
+            .get(record_id)
+            .unwrap_or_else(|| panic!("Record not found for anomaly score"));
+
+        let patient = record.patient_id.clone();
+
+        if explanation_ref.len() == 0 {
+            panic!("explanation_ref cannot be empty");
+        }
+
+        let insight = AIInsight {
+            patient: patient.clone(),
+            record_id,
+            model_id,
+            insight_type: AIInsightType::AnomalyScore,
+            score_bps,
+            explanation_ref,
+            explanation_summary,
+            created_at: env.ledger().timestamp(),
+            model_version,
+            feature_importance,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::RecordAnomaly(patient.clone(), record_id),
+            &insight,
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "AIAnomalyRecorded"),),
+            (patient, record_id, score_bps),
+        );
+
+        Ok(true)
+    }
+
+    /// Retrieve the latest anomaly score for a record.
+    /// Access is restricted to the same roles that can view the underlying record.
+    pub fn get_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Option<AIInsight> {
+        caller.require_auth();
+
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = match records.get(record_id) {
+            Some(r) => r,
+            None => {
+                return None;
+            }
+        };
+
+        let patient = record.patient_id.clone();
+
+        let has_access = Self::has_role(&env, &caller, &Role::Admin)
+            || caller == record.patient_id
+            || caller == record.doctor_id
+            || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+            || Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), record_id);
+
+        if !has_access {
+            panic!("Unauthorized access to AI anomaly insights");
+        }
+
+        env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAnomaly(patient, record_id))
+    }
+
+    /// Record a predictive risk score for a patient.
+    /// This represents AI-powered predictive analytics for health outcomes.
+    pub fn submit_risk_score(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        model_id: BytesN<32>,
+        risk_score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Ensure caller is the configured AI coordinator
+        let _config = Self::ensure_ai_coordinator(&env, &caller)?;
+
+        // Validate score range
+        Self::validate_ai_score(risk_score_bps)?;
+
+        // Validate feature importance vector
+        for (_, importance_bps) in feature_importance.iter() {
+            if *importance_bps > 10_000 {
+                return Err(Error::InvalidAIScore);
+            }
+        }
+
+        if explanation_ref.len() == 0 {
+            panic!("explanation_ref cannot be empty");
+        }
+
+        let insight = AIInsight {
+            patient: patient.clone(),
+            // 0 denotes a patient-level risk insight not tied to a single record
+            record_id: 0,
+            model_id,
+            insight_type: AIInsightType::RiskScore,
+            score_bps: risk_score_bps,
+            explanation_ref,
+            explanation_summary,
+            created_at: env.ledger().timestamp(),
+            model_version,
+            feature_importance,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRisk(patient.clone()), &insight);
+
+        env.events().publish(
+            (Symbol::new(&env, "AIRiskRecorded"),),
+            (patient, risk_score_bps),
+        );
+
+        Ok(true)
+    }
+
+    /// Retrieve the latest patient-level AI risk score.
+    /// Only the patient, admins, or emergency grantees can view this insight.
+    pub fn get_latest_risk_score(
+        env: Env,
+        caller: Address,
+        patient: Address,
+    ) -> Option<AIInsight> {
+        caller.require_auth();
+
+        if caller != patient
+            && !Self::has_role(&env, &caller, &Role::Admin)
+            && !Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), 0)
+        {
+            panic!("Unauthorized access to AI risk insights");
+        }
+
+        env.storage().persistent().get(&DataKey::PatientRisk(patient))
     }
 }
