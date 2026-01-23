@@ -110,8 +110,9 @@ pub fn set_vesting_schedule(env: &Env, beneficiary: &Address, schedule: &Vesting
         .set(&DataKey::VestingSchedule(beneficiary.clone()), schedule);
 }
 
-pub fn get_vesting_contract(_env: &Env) -> Option<Address> {
-    _env.storage().instance().get(&DataKey::VestingContract)
+#[allow(dead_code)]
+pub fn get_vesting_contract(env: &Env) -> Option<Address> {
+    env.storage().instance().get(&DataKey::VestingContract)
 }
 
 #[allow(dead_code)]

@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::{Error, ProposalType, ProposalStatus};
+    use crate::{Error, ProposalStatus, ProposalType};
 
     // Unit tests for treasury controller functions
     // These tests focus on the core logic without using testutils

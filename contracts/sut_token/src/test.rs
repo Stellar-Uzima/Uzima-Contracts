@@ -264,7 +264,7 @@ fn test_minter_role_management() {
 
     let admin = Address::generate(&env);
     let new_minter = Address::generate(&env);
-    let user = Address::generate(&env);
+    let _user = Address::generate(&env);
     let contract_id = create_token_contract(&env);
 
     initialize_token(&env, &contract_id, &admin);
@@ -582,6 +582,7 @@ fn test_edge_case_approve_zero() {
 use soroban_sdk::contractclient;
 
 #[contractclient(name = "SutTokenClient")]
+#[allow(dead_code)]
 pub trait SutTokenTrait {
     fn initialize(
         env: Env,
