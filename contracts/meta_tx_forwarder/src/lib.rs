@@ -159,14 +159,17 @@ impl MetaTxForwarder {
             return Err(Error::RequestExpired);
         }
 
-        // Verify nonce
-        Self::verify_and_increment_nonce(&env, &request.from, request.nonce)?;
+        // Verify nonce (don't increment yet)
+        Self::verify_nonce(&env, &request.from, request.nonce)?;
 
         // Verify signature
         Self::verify_signature(&env, &request, &signature)?;
 
         // Execute the forwarded call
         let result = Self::forward_call(&env, &request)?;
+
+        // Only increment nonce after successful execution
+        Self::increment_nonce(&env, &request.from);
 
         // Emit forwarding event
         env.events().publish(
@@ -353,12 +356,8 @@ impl MetaTxForwarder {
     // Internal Helper Functions
     // ========================================================================
 
-    /// Verify and increment user nonce
-    fn verify_and_increment_nonce(
-        env: &Env,
-        user: &Address,
-        expected_nonce: u64,
-    ) -> Result<(), Error> {
+    /// Verify user nonce without incrementing
+    fn verify_nonce(env: &Env, user: &Address, expected_nonce: u64) -> Result<(), Error> {
         let current_nonce: u64 = env
             .storage()
             .persistent()
@@ -369,11 +368,31 @@ impl MetaTxForwarder {
             return Err(Error::InvalidNonce);
         }
 
-        // Increment nonce
+        Ok(())
+    }
+
+    /// Increment user nonce
+    fn increment_nonce(env: &Env, user: &Address) {
+        let current_nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Nonce(user.clone()))
+            .unwrap_or(0);
+
         env.storage()
             .persistent()
             .set(&DataKey::Nonce(user.clone()), &(current_nonce + 1));
+    }
 
+    /// Verify and increment user nonce (deprecated - use verify_nonce + increment_nonce)
+    #[allow(dead_code)]
+    fn verify_and_increment_nonce(
+        env: &Env,
+        user: &Address,
+        expected_nonce: u64,
+    ) -> Result<(), Error> {
+        Self::verify_nonce(env, user, expected_nonce)?;
+        Self::increment_nonce(env, user);
         Ok(())
     }
 
