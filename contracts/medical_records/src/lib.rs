@@ -470,6 +470,18 @@ impl MedicalRecordsContract {
     ) -> Result<u64, Error> {
         caller.require_auth();
 
+//validation
+        validate_address(&caller).unwrap();
+    validate_address(&patient).unwrap();
+    validate_string(&diagnosis).unwrap();
+    validate_string(&treatment).unwrap();
+    validate_string(&category).unwrap();
+    validate_string(&treatment_type).unwrap();
+    validate_string(&data_ref).unwrap();
+    for tag in tags.iter() {
+        validate_string(&tag).unwrap();
+    }
+
         // Block when paused
         if Self::is_paused(&env) {
             return Err(Error::ContractPaused);
@@ -1994,4 +2006,51 @@ impl MedicalRecordsContract {
 
         env.storage().persistent().get(&DataKey::PatientRisk(patient))
     }
+}
+
+// ==================== Validation Helpers ====================
+
+const MAX_STRING_LEN: u32 = 256;
+const MAX_PAGE_SIZE: u32 = 100;
+const MAX_EMERGENCY_DURATION: u64 = 7 * 24 * 60 * 60; // for 7 days
+
+fn validate_string(input: &String) -> Result<(), Error> {
+    if input.len() == 0 {
+        return Err(Error::EmptyTreatment); //reuse existing error
+    }
+
+    if input.len() > MAX_STRING_LEN {
+        return Err(Error::NumberOutOfBounds);
+    }
+
+    // what is allowed: letters, numbers, spaces, - _
+    if !input
+        .to_string()
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == ' ' || c == '-' || c == '_')
+    {
+        return Err(Error::InvalidInput);
+    }
+
+    Ok(())
+}
+
+fn validate_page(page: u32, page_size: u32) -> Result<(), Error> {
+    if page_size == 0 || page_size > MAX_PAGE_SIZE {
+        return Err(Error::NumberOutOfBounds);
+    }
+    Ok(())
+}
+
+fn validate_duration(duration: u64) -> Result<(), Error> {
+    if duration == 0 || duration > MAX_EMERGENCY_DURATION {
+        return Err(Error::NumberOutOfBounds);
+    }
+    Ok(())
+}
+
+fn validate_address(addr: &Address) -> Result<(), Error> {
+    // Soroban-native validation
+    addr.require_auth();
+    Ok(())
 }
