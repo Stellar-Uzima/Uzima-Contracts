@@ -2,12 +2,12 @@
 
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
-use soroban_sdk::{log, Address, Env, String, Vec};
+use soroban_sdk::{log, Address, BytesN, Env, String, Vec};
 
 extern crate std;
 use std::format;
 
-fn create_contract(env: &Env) -> (MedicalRecordsContractClient, Address) {
+fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
@@ -45,7 +45,7 @@ fn test_add_and_get_record() {
         &tags,
         &category,
         &treatment_type,
-        &data_ref
+        &data_ref,
     );
 
     // Get the record as patient
@@ -68,7 +68,8 @@ fn test_empty_data_ref() {
 
     // Empty data_ref should fail
     let result = client.try_add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -93,7 +94,8 @@ fn test_data_ref_too_short() {
 
     // Data ref shorter than 10 chars should fail
     let result = client.try_add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -148,7 +150,8 @@ fn test_data_ref_boundary_min_length() {
     // Exactly 10 chars (should pass)
     let min_ref = String::from_str(&env, "Qm12345678");
     let record_id = client.add_record(
-        &doctor, &patient,
+        &doctor,
+        &patient,
         &String::from_str(&env, "Diagnosis"),
         &String::from_str(&env, "Treatment"),
         &false,
@@ -199,12 +202,12 @@ fn test_get_patient_records() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let diagnosis = String::from_str(&env, "Common cold");
-    let treatment = String::from_str(&env, "Rest and fluids");
-    let is_confidential = false;
-    let tags = vec![&env, String::from_str(&env, "respiratory")];
-    let category = String::from_str(&env, "Modern");
-    let treatment_type = String::from_str(&env, "Medication");
+    let _diagnosis = String::from_str(&env, "Common cold");
+    let _treatment = String::from_str(&env, "Rest and fluids");
+    let _is_confidential = false;
+    let _tags = vec![&env, String::from_str(&env, "respiratory")];
+    let _category = String::from_str(&env, "Modern");
+    let _treatment_type = String::from_str(&env, "Medication");
 
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
@@ -220,7 +223,6 @@ fn test_get_patient_records() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -233,7 +235,6 @@ fn test_get_patient_records() {
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Patient can access both records
@@ -249,12 +250,12 @@ fn test_role_based_access() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let diagnosis = String::from_str(&env, "Common cold");
-    let treatment = String::from_str(&env, "Rest and fluids");
-    let is_confidential = false;
-    let tags = vec![&env, String::from_str(&env, "respiratory")];
-    let category = String::from_str(&env, "Modern");
-    let treatment_type = String::from_str(&env, "Medication");
+    let _diagnosis = String::from_str(&env, "Common cold");
+    let _treatment = String::from_str(&env, "Rest and fluids");
+    let _is_confidential = false;
+    let _tags = vec![&env, String::from_str(&env, "respiratory")];
+    let _category = String::from_str(&env, "Modern");
+    let _treatment_type = String::from_str(&env, "Medication");
 
     // Admin manages user roles
     client.manage_user(&admin, &doctor, &Role::Doctor);
@@ -271,7 +272,6 @@ fn test_role_based_access() {
         &String::from_str(&env, "Spiritual"),
         &String::from_str(&env, "Prayer"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
     // Patient tries to access the record (should succeed)
     let _retrieved_record = client.get_record(&patient, &record_id);
@@ -309,7 +309,6 @@ fn test_deactivate_user() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
     assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
@@ -338,7 +337,6 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Pause the contract
@@ -373,7 +371,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Pause the contract
@@ -384,7 +381,7 @@ fn test_pause_unpause_blocks_sensitive_functions() {
 
     // Now mutating calls should succeed
     assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
-    let r3 = client.add_record(
+    let _r3 = client.add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis3"),
@@ -394,7 +391,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 }
 
@@ -478,7 +474,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type1"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -491,7 +486,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type2"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id3 = client.add_record(
@@ -504,7 +498,6 @@ fn test_monotonic_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type3"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify IDs are monotonically increasing
@@ -541,7 +534,6 @@ fn test_unique_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "TypeA"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id2 = client.add_record(
@@ -554,7 +546,6 @@ fn test_unique_record_ids() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "TypeB"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify all IDs are unique
@@ -588,7 +579,6 @@ fn test_record_ordering() {
             &String::from_str(&env, "Modern"),
             &String::from_str(&env, "Type"),
             &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
         );
         record_ids.push_back(id);
     }
@@ -623,7 +613,6 @@ fn test_record_counter_isolation() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Create a recovery proposal (also uses the counter)
@@ -645,7 +634,6 @@ fn test_record_counter_isolation() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Type"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Verify all IDs are unique and monotonic
@@ -662,7 +650,6 @@ fn test_get_history_pagination_and_access() {
     env.mock_all_auths();
 
     let (client, admin) = create_contract(&env);
-    let doctor = Address::generate(&env);
     let doctor1 = Address::generate(&env);
     let doctor2 = Address::generate(&env);
     let patient = Address::generate(&env);
@@ -689,7 +676,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let _ = client.add_record(
@@ -702,7 +688,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Traditional"),
         &String::from_str(&env, "Herbal"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     let record_id3 = client.add_record(
@@ -715,7 +700,6 @@ fn test_get_history_pagination_and_access() {
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Surgery"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
-
     );
 
     // Patient gets full history (page 0, size 3) - should get all 3
@@ -739,4 +723,141 @@ fn test_get_history_pagination_and_access() {
         .mock_all_auths()
         .get_history(&patient, &patient, &3u32, &1u32);
     assert_eq!(empty_page.len(), 0);
+}
+
+#[test]
+fn test_ai_integration_points() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let ai_coordinator = Address::generate(&env);
+
+    // Initialize and set roles
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Add a medical record
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+    );
+
+    // Set AI configuration
+    assert!(client
+        .set_ai_config(&admin, &ai_coordinator, &100u32, &2u32));
+
+    // Verify AI config is set
+    let ai_config = client.get_ai_config().unwrap();
+    assert_eq!(ai_config.ai_coordinator, ai_coordinator);
+    assert_eq!(ai_config.dp_epsilon, 100u32);
+    assert_eq!(ai_config.min_participants, 2u32);
+
+    // Submit anomaly score for the record
+    let model_id = BytesN::from_array(&env, &[1; 32]);
+    let explanation_ref = String::from_str(&env, "ipfs://anomaly-report-1");
+    let explanation_summary = String::from_str(&env, "Anomaly detected in vital signs");
+    let model_version = String::from_str(&env, "v1.0.0");
+    let feature_importance = vec![
+        &env,
+        (String::from_str(&env, "heart_rate"), 8000u32),
+        (String::from_str(&env, "blood_pressure"), 6500u32),
+    ];
+
+    assert!(client
+        .submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &7500u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance));
+
+    // Get the anomaly score (should be accessible by patient)
+    let anomaly_insight = client.get_anomaly_score(&patient, &record_id).unwrap();
+    assert_eq!(anomaly_insight.score_bps, 7500u32);
+    assert_eq!(anomaly_insight.explanation_summary, explanation_summary);
+    assert_eq!(anomaly_insight.model_version, model_version);
+
+    // Submit patient risk score
+    let risk_explanation_ref = String::from_str(&env, "ipfs://risk-assessment-1");
+    let risk_explanation_summary = String::from_str(&env, "High risk for diabetes progression");
+    let risk_model_version = String::from_str(&env, "v1.1.0");
+    let risk_feature_importance = vec![
+        &env,
+        (String::from_str(&env, "glucose_level"), 9000u32),
+        (String::from_str(&env, "family_history"), 7000u32),
+    ];
+
+    assert!(client
+        .submit_risk_score(&ai_coordinator, &patient, &model_id, &8000u32, &risk_explanation_ref, &risk_explanation_summary, &risk_model_version, &risk_feature_importance));
+
+    // Get the risk score
+    let risk_insight = client.get_latest_risk_score(&patient, &patient).unwrap();
+    assert_eq!(risk_insight.score_bps, 8000u32);
+    assert_eq!(risk_insight.explanation_summary, risk_explanation_summary);
+    assert_eq!(risk_insight.model_version, risk_model_version);
+}
+
+#[test]
+fn test_ai_validation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let ai_coordinator = Address::generate(&env);
+    let unauthorized = Address::generate(&env);
+
+    // Initialize and set roles
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Add a medical record
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis"),
+        &String::from_str(&env, "Treatment"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+    );
+
+    // Set AI configuration
+    client.set_ai_config(&admin, &ai_coordinator, &100u32, &2u32);
+
+    // Test invalid score (over 10,000)
+    let model_id = BytesN::from_array(&env, &[1; 32]);
+    let explanation_ref = String::from_str(&env, "ipfs://report");
+    let explanation_summary = String::from_str(&env, "Summary");
+    let model_version = String::from_str(&env, "v1.0.0");
+    let feature_importance = vec![&env, (String::from_str(&env, "test"), 5000u32)];
+
+    // This should panic due to invalid score
+    let result = std::panic::catch_unwind(|| {
+        client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &10001u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+    });
+    assert!(result.is_err());
+
+    // Test unauthorized access to submit scores
+    let result = std::panic::catch_unwind(|| {
+        client.submit_anomaly_score(&unauthorized, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+    });
+    assert!(result.is_err());
+
+    // Test unauthorized access to get anomaly scores
+    client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+    
+    let other_patient = Address::generate(&env);
+    let result = std::panic::catch_unwind(|| {
+        client.get_anomaly_score(&other_patient, &record_id);
+    });
+    assert!(result.is_err());
 }

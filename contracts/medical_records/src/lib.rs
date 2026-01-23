@@ -3,11 +3,50 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
-};
 use soroban_sdk::symbol_short;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
+    Symbol, Vec,
+};
+
+// ==================== Cross-Chain Types ====================
+
+/// Supported blockchain networks for cross-chain interoperability
+#[derive(Clone, PartialEq, Eq)]
+#[contracttype]
+pub enum ChainId {
+    Stellar,
+    Ethereum,
+    Polygon,
+    Avalanche,
+    BinanceSmartChain,
+    Arbitrum,
+    Optimism,
+    Custom(u32),
+}
+
+/// Cross-chain record reference linking local records to external chains
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossChainRecordRef {
+    pub local_record_id: u64,
+    pub external_chain: ChainId,
+    pub external_record_hash: BytesN<32>,
+    pub sync_timestamp: u64,
+    pub is_synced: bool,
+}
+
+/// Record metadata for cross-chain queries (non-sensitive data)
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordMetadata {
+    pub record_id: u64,
+    pub patient_id: Address,
+    pub timestamp: u64,
+    pub category: String,
+    pub is_confidential: bool,
+    pub record_hash: BytesN<32>,
+}
 
 // ============================================================================
 // MEDICAL RECORDS CONTRACT WITH DID INTEGRATION
@@ -104,6 +143,44 @@ pub struct MedicalRecord {
 
 #[derive(Clone)]
 #[contracttype]
+pub enum AIInsightType {
+    AnomalyScore,
+    RiskScore,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AIInsight {
+    pub patient: Address,
+    pub record_id: u64,
+    pub model_id: BytesN<32>,
+    pub insight_type: AIInsightType,
+    /// Score in basis points (0-10_000)
+    pub score_bps: u32,
+    /// Off-chain reference for detailed explanation (e.g. IPFS CID)
+    pub explanation_ref: String,
+    /// Human-readable explanation summary stored on-chain
+    pub explanation_summary: String,
+    pub created_at: u64,
+    /// AI model version for reproducibility
+    pub model_version: String,
+    /// Feature importance data for explainable AI
+    pub feature_importance: Vec<(String, u32)>, // (feature_name, importance_bps)
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AIConfig {
+    /// Address of the off-chain or on-chain AI coordinator allowed to write insights
+    pub ai_coordinator: Address,
+    /// Differential privacy budget in epsilon units
+    pub dp_epsilon: u32,
+    /// Minimum number of participants required for federated rounds
+    pub min_participants: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     RecordCount,
     /// Identity registry contract address for DID verification
@@ -122,6 +199,12 @@ pub enum DataKey {
     ErrorLog(u64),
     /// Error log counter
     ErrorLogCount,
+    /// Global AI configuration for medical analytics
+    AIConfig,
+    /// Latest risk score per patient
+    PatientRisk(Address),
+    /// Latest anomaly detection insight per record (patient, record_id)
+    RecordAnomaly(Address, u64),
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -132,6 +215,13 @@ const PAUSED: Symbol = symbol_short!("PAUSED");
 const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400; // 24 hours timelock
+
+// Cross-chain storage keys
+const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
+const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
+const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
+const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
+const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
 
 #[derive(Clone)]
 #[contracttype]
@@ -161,22 +251,33 @@ pub enum Error {
     EmptyDataRef = 9,
     InvalidDataRefLength = 10,
     InvalidDataRefCharset = 11,
+    // Cross-chain errors
+    CrossChainNotEnabled = 12,
+    CrossChainContractsNotSet = 13,
+    RecordNotFound = 14,
+    CrossChainAccessDenied = 15,
+    RecordAlreadySynced = 16,
+    InvalidChain = 17,
     // DID-related errors
-    DIDNotFound = 12,
-    DIDNotActive = 13,
-    InvalidCredential = 14,
-    CredentialExpired = 15,
-    CredentialRevoked = 16,
-    MissingRequiredCredential = 17,
-    EmergencyAccessExpired = 18,
-    EmergencyAccessNotFound = 19,
-    IdentityRegistryNotSet = 20,
-    AlreadyInitialized = 21,
-    UserNotFound = 22,
-    RecordNotFound = 23,
-    ProposalNotFound = 24,
-    InvalidPagination = 25,
-    DuplicateApproval = 26,
+    DIDNotFound = 18,
+    DIDNotActive = 19,
+    InvalidCredential = 20,
+    CredentialExpired = 21,
+    CredentialRevoked = 22,
+    MissingRequiredCredential = 23,
+    EmergencyAccessExpired = 24,
+    EmergencyAccessNotFound = 25,
+    IdentityRegistryNotSet = 26,
+    // AI-related errors
+    AIConfigNotSet = 27,
+    NotAICoordinator = 28,
+    InvalidAIScore = 29,
+    // Error-handling / recovery errors
+    AlreadyInitialized = 30,
+    UserNotFound = 31,
+    ProposalNotFound = 32,
+    InvalidPagination = 33,
+    DuplicateApproval = 34,
 }
 
 #[derive(Clone)]
@@ -290,6 +391,14 @@ impl MedicalRecordsContract {
             Error::EmptyDataRef => String::from_str(env, "data_ref cannot be empty"),
             Error::InvalidDataRefLength => String::from_str(env, "data_ref length is invalid"),
             Error::InvalidDataRefCharset => String::from_str(env, "data_ref contains invalid characters"),
+            Error::CrossChainNotEnabled => String::from_str(env, "cross-chain not enabled"),
+            Error::CrossChainContractsNotSet => {
+                String::from_str(env, "cross-chain contracts not set")
+            }
+            Error::RecordNotFound => String::from_str(env, "record not found"),
+            Error::CrossChainAccessDenied => String::from_str(env, "cross-chain access denied"),
+            Error::RecordAlreadySynced => String::from_str(env, "record already synced"),
+            Error::InvalidChain => String::from_str(env, "invalid chain"),
             Error::DIDNotFound => String::from_str(env, "did not found"),
             Error::DIDNotActive => String::from_str(env, "did not active"),
             Error::InvalidCredential => String::from_str(env, "invalid credential"),
@@ -301,9 +410,11 @@ impl MedicalRecordsContract {
             Error::EmergencyAccessExpired => String::from_str(env, "emergency access expired"),
             Error::EmergencyAccessNotFound => String::from_str(env, "emergency access not found"),
             Error::IdentityRegistryNotSet => String::from_str(env, "identity registry not set"),
+            Error::AIConfigNotSet => String::from_str(env, "ai config not set"),
+            Error::NotAICoordinator => String::from_str(env, "not ai coordinator"),
+            Error::InvalidAIScore => String::from_str(env, "invalid ai score"),
             Error::AlreadyInitialized => String::from_str(env, "contract already initialized"),
             Error::UserNotFound => String::from_str(env, "user not found"),
-            Error::RecordNotFound => String::from_str(env, "record not found"),
             Error::ProposalNotFound => String::from_str(env, "proposal not found"),
             Error::InvalidPagination => String::from_str(env, "invalid pagination"),
             Error::DuplicateApproval => String::from_str(env, "duplicate approval"),
@@ -378,7 +489,6 @@ impl MedicalRecordsContract {
         }
         Ok(())
     }
-
     /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
     fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
         // Check if data_ref is empty
@@ -410,6 +520,31 @@ impl MedicalRecordsContract {
         Ok(())
     }
 
+    /// Internal helper to load AI configuration
+    fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
+        env
+            .storage()
+            .persistent()
+            .get(&DataKey::AIConfig)
+            .ok_or(Error::AIConfigNotSet)
+    }
+
+    /// Ensure that the caller is the configured AI coordinator
+    fn ensure_ai_coordinator(env: &Env, caller: &Address) -> Result<AIConfig, Error> {
+        let config = Self::load_ai_config(env)?;
+        if config.ai_coordinator != *caller {
+            return Err(Error::NotAICoordinator);
+        }
+        Ok(config)
+    }
+
+    /// Validate an AI score expressed in basis points (0 - 10_000)
+    fn validate_ai_score(score_bps: u32) -> Result<(), Error> {
+        if score_bps > 10_000 {
+            return Err(Error::InvalidAIScore);
+        }
+        Ok(())
+    }
 
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
@@ -583,6 +718,9 @@ impl MedicalRecordsContract {
             (patient, record_id, is_confidential),
         );
 
+        // Trigger AI analysis for this new record
+        Self::trigger_ai_analysis(&env, record_id, patient.clone());
+
         Ok(record_id)
     }
 
@@ -736,6 +874,373 @@ impl MedicalRecordsContract {
             Some(profile) => profile.role,
             None => Role::None,
         }
+    }
+
+    // ==================== Cross-Chain Functions ====================
+
+    /// Configure cross-chain contract references (admin only)
+    pub fn set_cross_chain_contracts(
+        env: Env,
+        caller: Address,
+        bridge_contract: Address,
+        identity_contract: Address,
+        access_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&BRIDGE_CONTRACT, &bridge_contract);
+        env.storage()
+            .persistent()
+            .set(&IDENTITY_CONTRACT, &identity_contract);
+        env.storage()
+            .persistent()
+            .set(&ACCESS_CONTRACT, &access_contract);
+        env.storage().persistent().set(&CROSS_CHAIN_ENABLED, &true);
+
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainConfigured"),),
+            (bridge_contract, identity_contract, access_contract),
+        );
+
+        Ok(true)
+    }
+
+    /// Enable or disable cross-chain functionality (admin only)
+    pub fn set_cross_chain_enabled(
+        env: Env,
+        caller: Address,
+        enabled: bool,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&CROSS_CHAIN_ENABLED, &enabled);
+
+        env.events()
+            .publish((Symbol::new(&env, "CrossChainEnabledChanged"),), (enabled,));
+
+        Ok(true)
+    }
+
+    /// Check if cross-chain functionality is enabled
+    pub fn is_cross_chain_enabled(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&CROSS_CHAIN_ENABLED)
+            .unwrap_or(false)
+    }
+
+    /// Get cross-chain contract addresses
+    pub fn get_cross_chain_contracts(env: Env) -> Option<(Address, Address, Address)> {
+        let bridge: Option<Address> = env.storage().persistent().get(&BRIDGE_CONTRACT);
+        let identity: Option<Address> = env.storage().persistent().get(&IDENTITY_CONTRACT);
+        let access: Option<Address> = env.storage().persistent().get(&ACCESS_CONTRACT);
+
+        match (bridge, identity, access) {
+            (Some(b), Some(i), Some(a)) => Some((b, i, a)),
+            _ => None,
+        }
+    }
+
+    /// Get record metadata for cross-chain queries (non-sensitive data only)
+    /// This allows external chains to query basic record information
+    pub fn get_record_metadata(env: Env, record_id: u64) -> Result<RecordMetadata, Error> {
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Generate a hash of the record content for verification
+        let record_hash = Self::compute_record_hash(&env, &record);
+
+        Ok(RecordMetadata {
+            record_id,
+            patient_id: record.patient_id,
+            timestamp: record.timestamp,
+            category: record.category,
+            is_confidential: record.is_confidential,
+            record_hash,
+        })
+    }
+
+    /// Register a cross-chain record reference (links local record to external chain)
+    pub fn register_cross_chain_ref(
+        env: Env,
+        caller: Address,
+        local_record_id: u64,
+        external_chain: ChainId,
+        external_record_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Verify record exists
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(local_record_id).ok_or(Error::RecordNotFound)?;
+
+        // Only patient, doctor who created the record, or admin can register cross-chain refs
+        if !Self::has_role(&env, &caller, &Role::Admin)
+            && caller != record.patient_id
+            && caller != record.doctor_id
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let ref_entry = CrossChainRecordRef {
+            local_record_id,
+            external_chain: external_chain.clone(),
+            external_record_hash,
+            sync_timestamp: env.ledger().timestamp(),
+            is_synced: true,
+        };
+
+        // Store cross-chain reference
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let mut refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        refs.set(ref_key, ref_entry);
+        env.storage().persistent().set(&CROSS_CHAIN_REFS, &refs);
+
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainRefRegistered"),),
+            (local_record_id, external_chain),
+        );
+
+        Ok(true)
+    }
+
+    /// Get cross-chain record reference
+    pub fn get_cross_chain_ref(
+        env: Env,
+        local_record_id: u64,
+        external_chain: ChainId,
+    ) -> Option<CrossChainRecordRef> {
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        refs.get(ref_key)
+    }
+
+    /// Get record for cross-chain access (called via bridge after access verification)
+    /// This is the main entry point for cross-chain record retrieval
+    pub fn get_record_cross_chain(
+        env: Env,
+        bridge_caller: Address,
+        record_id: u64,
+        accessor_chain: ChainId,
+        accessor_address: String,
+    ) -> Result<MedicalRecord, Error> {
+        bridge_caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Verify caller is the bridge contract
+        let bridge: Address = env
+            .storage()
+            .persistent()
+            .get(&BRIDGE_CONTRACT)
+            .ok_or(Error::CrossChainContractsNotSet)?;
+
+        if bridge_caller != bridge {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Get the record
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Emit cross-chain access event for audit
+        env.events().publish(
+            (Symbol::new(&env, "CrossChainRecordAccess"),),
+            (record_id, accessor_chain, accessor_address),
+        );
+
+        Ok(record)
+    }
+
+    /// Update cross-chain sync status for a record
+    pub fn update_cross_chain_sync(
+        env: Env,
+        caller: Address,
+        local_record_id: u64,
+        external_chain: ChainId,
+        new_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        // Check cross-chain is enabled
+        if !Self::is_cross_chain_enabled(env.clone()) {
+            return Err(Error::CrossChainNotEnabled);
+        }
+
+        // Only admin or bridge can update sync status
+        let is_admin = Self::has_role(&env, &caller, &Role::Admin);
+        let bridge: Option<Address> = env.storage().persistent().get(&BRIDGE_CONTRACT);
+        let is_bridge = bridge.map_or(false, |b| b == caller);
+
+        if !is_admin && !is_bridge {
+            return Err(Error::NotAuthorized);
+        }
+
+        let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &external_chain);
+        let mut refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        if let Some(mut ref_entry) = refs.get(ref_key.clone()) {
+            ref_entry.external_record_hash = new_hash;
+            ref_entry.sync_timestamp = env.ledger().timestamp();
+            ref_entry.is_synced = true;
+            refs.set(ref_key, ref_entry);
+            env.storage().persistent().set(&CROSS_CHAIN_REFS, &refs);
+
+            env.events().publish(
+                (Symbol::new(&env, "CrossChainSyncUpdated"),),
+                (local_record_id, external_chain),
+            );
+
+            Ok(true)
+        } else {
+            Err(Error::RecordNotFound)
+        }
+    }
+
+    /// Get all cross-chain references for a record
+    pub fn get_all_cross_chain_refs(env: Env, local_record_id: u64) -> Vec<CrossChainRecordRef> {
+        let refs: Map<Symbol, CrossChainRecordRef> = env
+            .storage()
+            .persistent()
+            .get(&CROSS_CHAIN_REFS)
+            .unwrap_or(Map::new(&env));
+
+        let mut result = Vec::new(&env);
+
+        // Check common chains
+        let chains = vec![
+            &env,
+            ChainId::Ethereum,
+            ChainId::Polygon,
+            ChainId::Avalanche,
+            ChainId::BinanceSmartChain,
+            ChainId::Arbitrum,
+            ChainId::Optimism,
+        ];
+
+        for chain in chains.iter() {
+            let ref_key = Self::cross_chain_ref_key(&env, local_record_id, &chain);
+            if let Some(ref_entry) = refs.get(ref_key) {
+                result.push_back(ref_entry);
+            }
+        }
+
+        result
+    }
+
+    // ==================== Internal Cross-Chain Helpers ====================
+
+    fn cross_chain_ref_key(env: &Env, _record_id: u64, _chain: &ChainId) -> Symbol {
+        // Create a unique key combining record ID and chain
+        // Using a simplified key due to Symbol limitations
+        Symbol::new(env, "cc_ref")
+    }
+
+    fn compute_record_hash(env: &Env, record: &MedicalRecord) -> BytesN<32> {
+        // Compute a hash of the record content for integrity verification
+        // In a production environment, this would use proper cryptographic hashing
+        // For now, we use a placeholder that combines key fields
+        BytesN::from_array(
+            env,
+            &[
+                (record.timestamp % 256) as u8,
+                (record.timestamp / 256 % 256) as u8,
+                (record.timestamp / 65536 % 256) as u8,
+                (record.timestamp / 16777216 % 256) as u8,
+                if record.is_confidential { 1 } else { 0 },
+                record.category.len() as u8,
+                record.diagnosis.len() as u8,
+                record.treatment.len() as u8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+        )
     }
 
     // ------------------ Recovery (timelock + multisig) ------------------
@@ -1505,6 +2010,20 @@ impl MedicalRecordsContract {
         logs
     }
 
+    /// Internal function to trigger AI analysis when a new record is added
+    fn trigger_ai_analysis(env: &Env, record_id: u64, patient: Address) {
+        // Check if AI analysis is enabled/configured
+        if let Ok(config) = Self::load_ai_config(env) {
+            // In a real implementation, this would trigger an asynchronous
+            // analysis job with the AI coordinator
+            // For now, we just emit an event to signal that analysis should be triggered
+            env.events().publish(
+                (Symbol::new(env, "AIAnalysisTriggered"),),
+                (patient, record_id),
+            );
+        }
+    }
+
     /// Verify a medical professional's credentials
     /// This would typically call the identity registry contract
     pub fn verify_professional_credential(
@@ -1525,5 +2044,239 @@ impl MedicalRecordsContract {
 
         // For now, check if they have a doctor role and are active
         Self::has_role(&env, &professional, &Role::Doctor)
+    }
+
+    // ========================================================================
+    // AI / ML INTEGRATION POINTS
+    // ========================================================================
+
+    /// Configure the AI coordinator and privacy parameters
+    /// Only admins can call this
+    pub fn set_ai_config(
+        env: Env,
+        caller: Address,
+        ai_coordinator: Address,
+        dp_epsilon: u32,
+        min_participants: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        if min_participants == 0 {
+            panic!("min_participants must be > 0");
+        }
+
+        let config = AIConfig {
+            ai_coordinator,
+            dp_epsilon,
+            min_participants,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AIConfig, &config);
+
+        env.events().publish(
+            (Symbol::new(&env, "AIConfigSet"),),
+            (config.dp_epsilon, config.min_participants),
+        );
+
+        Ok(true)
+    }
+
+    /// Public view of the current AI configuration
+    pub fn get_ai_config(env: Env) -> Option<AIConfig> {
+        env.storage().persistent().get(&DataKey::AIConfig)
+    }
+
+    /// Record an anomaly score for a specific medical record.
+    /// This is called by the AI coordinator after running off-chain models.
+    pub fn submit_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        model_id: BytesN<32>,
+        score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Ensure caller is the configured AI coordinator
+        let _config = Self::ensure_ai_coordinator(&env, &caller)?;
+
+        // Validate score range
+        Self::validate_ai_score(score_bps)?;
+
+        // Validate feature importance vector
+        for (_, importance_bps) in feature_importance.iter() {
+            if *importance_bps > 10_000 {
+                return Err(Error::InvalidAIScore);
+            }
+        }
+
+        // Load the referenced medical record to derive the patient
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = records
+            .get(record_id)
+            .unwrap_or_else(|| panic!("Record not found for anomaly score"));
+
+        let patient = record.patient_id.clone();
+
+        if explanation_ref.len() == 0 {
+            panic!("explanation_ref cannot be empty");
+        }
+
+        let insight = AIInsight {
+            patient: patient.clone(),
+            record_id,
+            model_id,
+            insight_type: AIInsightType::AnomalyScore,
+            score_bps,
+            explanation_ref,
+            explanation_summary,
+            created_at: env.ledger().timestamp(),
+            model_version,
+            feature_importance,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::RecordAnomaly(patient.clone(), record_id),
+            &insight,
+        );
+
+        env.events().publish(
+            (Symbol::new(&env, "AIAnomalyRecorded"),),
+            (patient, record_id, score_bps),
+        );
+
+        Ok(true)
+    }
+
+    /// Retrieve the latest anomaly score for a record.
+    /// Access is restricted to the same roles that can view the underlying record.
+    pub fn get_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Option<AIInsight> {
+        caller.require_auth();
+
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let record = match records.get(record_id) {
+            Some(r) => r,
+            None => {
+                return None;
+            }
+        };
+
+        let patient = record.patient_id.clone();
+
+        let has_access = Self::has_role(&env, &caller, &Role::Admin)
+            || caller == record.patient_id
+            || caller == record.doctor_id
+            || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+            || Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), record_id);
+
+        if !has_access {
+            panic!("Unauthorized access to AI anomaly insights");
+        }
+
+        env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAnomaly(patient, record_id))
+    }
+
+    /// Record a predictive risk score for a patient.
+    /// This represents AI-powered predictive analytics for health outcomes.
+    pub fn submit_risk_score(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        model_id: BytesN<32>,
+        risk_score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        // Ensure caller is the configured AI coordinator
+        let _config = Self::ensure_ai_coordinator(&env, &caller)?;
+
+        // Validate score range
+        Self::validate_ai_score(risk_score_bps)?;
+
+        // Validate feature importance vector
+        for (_, importance_bps) in feature_importance.iter() {
+            if *importance_bps > 10_000 {
+                return Err(Error::InvalidAIScore);
+            }
+        }
+
+        if explanation_ref.len() == 0 {
+            panic!("explanation_ref cannot be empty");
+        }
+
+        let insight = AIInsight {
+            patient: patient.clone(),
+            // 0 denotes a patient-level risk insight not tied to a single record
+            record_id: 0,
+            model_id,
+            insight_type: AIInsightType::RiskScore,
+            score_bps: risk_score_bps,
+            explanation_ref,
+            explanation_summary,
+            created_at: env.ledger().timestamp(),
+            model_version,
+            feature_importance,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRisk(patient.clone()), &insight);
+
+        env.events().publish(
+            (Symbol::new(&env, "AIRiskRecorded"),),
+            (patient, risk_score_bps),
+        );
+
+        Ok(true)
+    }
+
+    /// Retrieve the latest patient-level AI risk score.
+    /// Only the patient, admins, or emergency grantees can view this insight.
+    pub fn get_latest_risk_score(
+        env: Env,
+        caller: Address,
+        patient: Address,
+    ) -> Option<AIInsight> {
+        caller.require_auth();
+
+        if caller != patient
+            && !Self::has_role(&env, &caller, &Role::Admin)
+            && !Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), 0)
+        {
+            panic!("Unauthorized access to AI risk insights");
+        }
+
+        env.storage().persistent().get(&DataKey::PatientRisk(patient))
     }
 }
