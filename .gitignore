@@ -87,3 +87,8 @@ secrets.toml
 stellar-cli.tar.gz
 stellar
 soroban
+
+# Deployment files (keep structure, ignore sensitive data)
+deployments/*_backup_*.json
+deployments/alerts.log
+deployments/*.tmp

@@ -1,0 +1,4 @@
+# Deployment files directory
+# This directory stores deployment information and backups
+# Backup files and alert logs are gitignored for security
+
