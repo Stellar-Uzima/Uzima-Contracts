@@ -102,8 +102,10 @@ pub struct AccessRequest {
     pub timestamp: u64,
     /// Whether access was granted
     pub granted: bool,
-    /// Verifiable credential used (if any)
-    pub credential_used: Option<BytesN<32>>,
+
+    // [BYPASS] Commenting out to fix version conflict
+    // /// Verifiable credential used (if any)
+    // pub credential_used: Option<BytesN<32>>,
 }
 
 /// Emergency access grant
@@ -137,8 +139,10 @@ pub struct MedicalRecord {
     pub data_ref: String,
     /// DID of the doctor who created this record (for interoperability)
     pub doctor_did: Option<String>,
-    /// Verifiable credential ID used for authorization (if any)
-    pub authorization_credential: Option<BytesN<32>>,
+
+    // [BYPASS] Commenting out to fix version conflict
+    // /// Verifiable credential ID used for authorization (if any)
+    // pub authorization_credential: Option<BytesN<32>>,
 }
 
 #[derive(Clone)]
@@ -523,7 +527,7 @@ impl MedicalRecordsContract {
             data_ref,
             // DID fields - None for legacy function
             doctor_did: None,
-            authorization_credential: None,
+            //authorization_credential: None, // [BYPASS] Comment this line out
         };
 
         // Store the record
@@ -553,11 +557,17 @@ impl MedicalRecordsContract {
         // Emit RecordAdded event
         env.events().publish(
             (Symbol::new(&env, "RecordAdded"),),
-            (patient, record_id, is_confidential),
+            (patient.clone(), record_id, is_confidential),
         );
 
         // Trigger AI analysis for this new record
         Self::trigger_ai_analysis(&env, record_id, patient.clone());
+        // [INSERTION 2]: STANDARDIZED METRIC EMISSION
+        // Emits: ("METRICS", "add_record", 1) -> Monitoring dashboard counts this
+        env.events().publish(
+        (symbol_short!("METRICS"), symbol_short!("add_rec")), 
+        1u32
+        );
 
         Ok(record_id)
     }
@@ -1447,7 +1457,7 @@ impl MedicalRecordsContract {
         record_id: u64,
         purpose: String,
         granted: bool,
-        credential_used: Option<BytesN<32>>,
+        _credential_used: Option<BytesN<32>>,
     ) {
         let log_count: u64 = env
             .storage()
@@ -1462,7 +1472,7 @@ impl MedicalRecordsContract {
             purpose,
             timestamp: env.ledger().timestamp(),
             granted,
-            credential_used,
+            //credential_used, // [BYPASS] Comment this line out
         };
 
         let new_count = log_count + 1;
@@ -1632,7 +1642,7 @@ impl MedicalRecordsContract {
             treatment_type,
             data_ref,
             doctor_did,
-            authorization_credential: credential_id.clone(),
+            //authorization_credential: credential_id.clone(), // [BYPASS] Comment out
         };
 
         // Store the record
@@ -1728,7 +1738,7 @@ impl MedicalRecordsContract {
     /// Internal function to trigger AI analysis when a new record is added
     fn trigger_ai_analysis(env: &Env, record_id: u64, patient: Address) {
         // Check if AI analysis is enabled/configured
-        if let Ok(config) = Self::load_ai_config(env) {
+        if let Ok(_config) = Self::load_ai_config(env) {
             // In a real implementation, this would trigger an asynchronous
             // analysis job with the AI coordinator
             // For now, we just emit an event to signal that analysis should be triggered
@@ -1830,7 +1840,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
@@ -1941,7 +1951,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
@@ -1994,4 +2004,25 @@ impl MedicalRecordsContract {
 
         env.storage().persistent().get(&DataKey::PatientRisk(patient))
     }
+    // ========================================================================
+    // [INSERTION 1]: MONITORING & HEALTH CHECK
+    // ========================================================================
+
+    /// Health check endpoint for external monitoring systems
+    /// Returns current contract status, version, and ledger timestamp
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        // Simple logic to prove the contract is alive and state can be read
+        let timestamp = env.ledger().timestamp();
+        
+        // Check if paused to report status
+        let status = if Self::is_paused(&env) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
+        };
+        
+        // Return (Status, Protocol_Version, Timestamp)
+        (status, 1, timestamp)
+    }    
 }
+
