@@ -93,3 +93,4 @@ deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
 test_snapshots/
+test_snapshots/

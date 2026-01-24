@@ -7,8 +7,8 @@ mod validation;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, vec, Address, Bytes, BytesN, Env, Map,
+    String, Symbol, Vec,
 };
 
 // ==================== Cross-Chain Types ====================
@@ -89,7 +89,7 @@ pub enum DIDAuthLevel {
 }
 
 /// Access request for DID-based authorization
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 #[contracttype]
 pub struct AccessRequest {
     /// Requester's address
@@ -105,7 +105,7 @@ pub struct AccessRequest {
     /// Whether access was granted
     pub granted: bool,
     /// Verifiable credential used (if any)
-    pub credential_used: Option<BytesN<32>>,
+    pub credential_used: Option<Bytes>,
 }
 
 /// Emergency access grant
@@ -124,7 +124,7 @@ pub struct EmergencyAccess {
     pub is_active: bool,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone)]
 #[contracttype]
 pub struct MedicalRecord {
     pub patient_id: Address,
@@ -140,10 +140,10 @@ pub struct MedicalRecord {
     /// DID of the doctor who created this record (for interoperability)
     pub doctor_did: Option<String>,
     /// Verifiable credential ID used for authorization (if any)
-    pub authorization_credential: Option<BytesN<32>>,
+    pub authorization_credential: Option<Bytes>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AIInsightType {
     AnomalyScore,
@@ -270,7 +270,7 @@ pub enum Error {
     AIConfigNotSet = 27,
     NotAICoordinator = 28,
     InvalidAIScore = 29,
-    
+
     // Validation Errors
     EmptyDiagnosis = 30,
     InvalidDiagnosisLength = 31,
@@ -362,11 +362,9 @@ impl MedicalRecordsContract {
         next_count
     }
 
-
     /// Internal helper to load AI configuration
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
-        env
-            .storage()
+        env.storage()
             .persistent()
             .get(&DataKey::AIConfig)
             .ok_or(Error::AIConfigNotSet)
@@ -380,7 +378,6 @@ impl MedicalRecordsContract {
         }
         Ok(config)
     }
-
 
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
@@ -486,12 +483,12 @@ impl MedicalRecordsContract {
         }
 
         // === Comprehensive Input Validation ===
-        
+
         // Validate addresses
         validation::validate_address(&env, &patient)?;
         validation::validate_address(&env, &caller)?;
         validation::validate_addresses_different(&patient, &caller)?;
-        
+
         // Validate string inputs
         validation::validate_diagnosis(&diagnosis)?;
         validation::validate_treatment(&treatment)?;
@@ -1072,13 +1069,14 @@ impl MedicalRecordsContract {
         if !Self::has_role(&env, &caller, &Role::Admin) {
             panic!("Only admins can propose recovery");
         }
-        
+
         // Validate inputs
-        if validation::validate_address(&env, &token_contract).is_err() || 
-           validation::validate_address(&env, &to).is_err() {
+        if validation::validate_address(&env, &token_contract).is_err()
+            || validation::validate_address(&env, &to).is_err()
+        {
             panic!("Invalid address");
         }
-        
+
         if validation::validate_amount(amount).is_err() {
             panic!("Invalid amount");
         }
@@ -1222,10 +1220,8 @@ impl MedicalRecordsContract {
 
         env.storage().persistent().set(&DataKey::AuthLevel, &level);
 
-        env.events().publish(
-            (Symbol::new(&env, "AuthLevelSet"),),
-            level,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "AuthLevelSet"),), level);
 
         Ok(true)
     }
@@ -1240,9 +1236,7 @@ impl MedicalRecordsContract {
 
     /// Get the identity registry address
     pub fn get_identity_registry(env: Env) -> Option<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::IdentityRegistry)
+        env.storage().persistent().get(&DataKey::IdentityRegistry)
     }
 
     /// Link a DID to a user profile
@@ -1273,10 +1267,8 @@ impl MedicalRecordsContract {
             users.set(user.clone(), profile);
             env.storage().persistent().set(&USERS, &users);
 
-            env.events().publish(
-                (Symbol::new(&env, "DIDLinked"),),
-                (user, did_reference),
-            );
+            env.events()
+                .publish((Symbol::new(&env, "DIDLinked"),), (user, did_reference));
 
             Ok(true)
         } else {
@@ -1471,7 +1463,7 @@ impl MedicalRecordsContract {
         record_id: u64,
         purpose: String,
         granted: bool,
-        credential_used: Option<BytesN<32>>,
+        credential_used: Option<Bytes>,
     ) {
         let log_count: u64 = env
             .storage()
@@ -1504,11 +1496,7 @@ impl MedicalRecordsContract {
     }
 
     /// Get access log entries (paginated)
-    pub fn get_access_logs(
-        env: Env,
-        page: u32,
-        page_size: u32,
-    ) -> Vec<AccessRequest> {
+    pub fn get_access_logs(env: Env, page: u32, page_size: u32) -> Vec<AccessRequest> {
         let total_count: u64 = env
             .storage()
             .persistent()
@@ -1597,7 +1585,7 @@ impl MedicalRecordsContract {
         category: String,
         treatment_type: String,
         data_ref: String,
-        credential_id: Option<BytesN<32>>,
+        credential_id: Option<Bytes>,
     ) -> Result<u64, Error> {
         caller.require_auth();
 
@@ -1712,6 +1700,9 @@ impl MedicalRecordsContract {
     ) -> Result<MedicalRecord, Error> {
         caller.require_auth();
 
+        // Validate purpose
+        validation::validate_purpose(&access_purpose)?;
+
         let records: Map<u64, MedicalRecord> = env
             .storage()
             .persistent()
@@ -1726,7 +1717,12 @@ impl MedicalRecordsContract {
                 || caller == record.patient_id
                 || caller == record.doctor_id
                 || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
-                || Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), record_id);
+                || Self::has_emergency_access(
+                    env.clone(),
+                    caller.clone(),
+                    patient.clone(),
+                    record_id,
+                );
 
             // Log the access attempt
             Self::log_access(
@@ -1752,7 +1748,7 @@ impl MedicalRecordsContract {
     /// Internal function to trigger AI analysis when a new record is added
     fn trigger_ai_analysis(env: &Env, record_id: u64, patient: Address) {
         // Check if AI analysis is enabled/configured
-        if let Ok(config) = Self::load_ai_config(env) {
+        if let Ok(_config) = Self::load_ai_config(env) {
             // In a real implementation, this would trigger an asynchronous
             // analysis job with the AI coordinator
             // For now, we just emit an event to signal that analysis should be triggered
@@ -1765,15 +1761,9 @@ impl MedicalRecordsContract {
 
     /// Verify a medical professional's credentials
     /// This would typically call the identity registry contract
-    pub fn verify_professional_credential(
-        env: Env,
-        professional: Address,
-    ) -> bool {
+    pub fn verify_professional_credential(env: Env, professional: Address) -> bool {
         // Check if identity registry is set
-        let _registry: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::IdentityRegistry);
+        let _registry: Option<Address> = env.storage().persistent().get(&DataKey::IdentityRegistry);
 
         // In a full implementation, this would:
         // 1. Call the identity registry contract
@@ -1815,9 +1805,7 @@ impl MedicalRecordsContract {
             min_participants,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::AIConfig, &config);
+        env.storage().persistent().set(&DataKey::AIConfig, &config);
 
         env.events().publish(
             (Symbol::new(&env, "AIConfigSet"),),
@@ -1902,11 +1890,7 @@ impl MedicalRecordsContract {
 
     /// Retrieve the latest anomaly score for a record.
     /// Access is restricted to the same roles that can view the underlying record.
-    pub fn get_anomaly_score(
-        env: Env,
-        caller: Address,
-        record_id: u64,
-    ) -> Option<AIInsight> {
+    pub fn get_anomaly_score(env: Env, caller: Address, record_id: u64) -> Option<AIInsight> {
         caller.require_auth();
 
         let records: Map<u64, MedicalRecord> = env
@@ -1934,8 +1918,7 @@ impl MedicalRecordsContract {
             panic!("Unauthorized access to AI anomaly insights");
         }
 
-        env
-            .storage()
+        env.storage()
             .persistent()
             .get(&DataKey::RecordAnomaly(patient, record_id))
     }
@@ -1993,11 +1976,7 @@ impl MedicalRecordsContract {
 
     /// Retrieve the latest patient-level AI risk score.
     /// Only the patient, admins, or emergency grantees can view this insight.
-    pub fn get_latest_risk_score(
-        env: Env,
-        caller: Address,
-        patient: Address,
-    ) -> Option<AIInsight> {
+    pub fn get_latest_risk_score(env: Env, caller: Address, patient: Address) -> Option<AIInsight> {
         caller.require_auth();
 
         if caller != patient
@@ -2007,6 +1986,8 @@ impl MedicalRecordsContract {
             panic!("Unauthorized access to AI risk insights");
         }
 
-        env.storage().persistent().get(&DataKey::PatientRisk(patient))
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRisk(patient))
     }
 }

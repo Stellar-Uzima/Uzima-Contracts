@@ -311,6 +311,12 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -332,6 +338,12 @@
                             "val": {
                               "string": "Diagnosis 2"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -444,6 +456,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -473,6 +491,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -499,6 +523,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -1188,6 +1218,12 @@
               "map": [
                 {
                   "key": {
+                    "symbol": "authorization_credential"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "category"
                   },
                   "val": {
@@ -1209,6 +1245,12 @@
                   "val": {
                     "string": "Diagnosis 2"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "doctor_did"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1329,6 +1371,12 @@
               "map": [
                 {
                   "key": {
+                    "symbol": "authorization_credential"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "category"
                   },
                   "val": {
@@ -1350,6 +1398,12 @@
                   "val": {
                     "string": "Diagnosis 2"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "doctor_did"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {
@@ -1470,6 +1524,12 @@
               "map": [
                 {
                   "key": {
+                    "symbol": "authorization_credential"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "category"
                   },
                   "val": {
@@ -1491,6 +1551,12 @@
                   "val": {
                     "string": "Diagnosis 2"
                   }
+                },
+                {
+                  "key": {
+                    "symbol": "doctor_did"
+                  },
+                  "val": "void"
                 },
                 {
                   "key": {

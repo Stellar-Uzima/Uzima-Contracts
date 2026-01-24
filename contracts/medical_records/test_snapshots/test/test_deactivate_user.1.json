@@ -185,6 +185,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -214,6 +220,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -240,6 +252,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {

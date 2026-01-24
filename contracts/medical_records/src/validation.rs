@@ -108,15 +108,15 @@ pub fn validate_string_length(
     error_length: Error,
 ) -> Result<(), Error> {
     let len = value.len();
-    
+
     if len == 0 {
         return Err(error_empty);
     }
-    
+
     if len < min_length || len > max_length {
         return Err(error_length);
     }
-    
+
     Ok(())
 }
 
@@ -128,24 +128,24 @@ pub fn validate_string_length(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidDataRefCharset`
-pub fn validate_string_charset(env: &Env, value: &String) -> Result<(), Error> {
+pub fn validate_string_charset(_env: &Env, value: &String) -> Result<(), Error> {
     if value.len() == 0 {
         return Err(Error::InvalidDataRefCharset);
     }
-    
+
     // Convert to bytes for inspection
     // Note: in a real implementation we would iterate and check ranges
     // For now we assume if it's a valid host String it's UTF-8, but we want to restrict to basic ASCII chars for some fields
-    // Due to current SDK limitations in no_std constraint validation without iterator, 
+    // Due to current SDK limitations in no_std constraint validation without iterator,
     // we strictly rely on length validation for safety and assume client-side sanitization for content,
     // unless we perform a byte-level limit check which is expensive on-chain.
     // However, we can basic check.
-    
+
     // For the purpose of this task (meeting requirements), we will keep it simple but acknowledge the requirement.
-    // Ideally: 
-    // let bytes = value.clone().to_xdr(env); 
+    // Ideally:
+    // let bytes = value.clone().to_xdr(env);
     // But that's expensive.
-    
+
     Ok(())
 }
 
@@ -200,7 +200,7 @@ pub fn validate_category(category: &String, env: &Env) -> Result<(), Error> {
         Error::InvalidCategory,
         Error::InvalidCategory,
     )?;
-    
+
     // Validate against allowed categories
     let allowed_categories = soroban_sdk::vec![
         env,
@@ -209,11 +209,11 @@ pub fn validate_category(category: &String, env: &Env) -> Result<(), Error> {
         String::from_str(env, "Herbal"),
         String::from_str(env, "Spiritual"),
     ];
-    
+
     if !allowed_categories.contains(category) {
         return Err(Error::InvalidCategory);
     }
-    
+
     Ok(())
 }
 
@@ -249,10 +249,10 @@ pub fn validate_data_ref(env: &Env, data_ref: &String) -> Result<(), Error> {
         Error::EmptyDataRef,
         Error::InvalidDataRefLength,
     )?;
-    
+
     // Additional charset validation for data references
     validate_string_charset(env, data_ref)?;
-    
+
     Ok(())
 }
 
@@ -285,12 +285,12 @@ pub fn validate_tags(tags: &Vec<String>) -> Result<(), Error> {
     if tags.len() > MAX_TAGS_COUNT {
         return Err(Error::InvalidTagLength); // Reusing error for count validation or add InvalidTagCount
     }
-    
+
     // Validate each tag
     for tag in tags.iter() {
         validate_tag(&tag)?;
     }
-    
+
     Ok(())
 }
 
@@ -348,7 +348,7 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
     // For now, we'll just verify it's a valid address reference
     let _ = env; // Use env to avoid warning
     let _ = address; // Address validation is implicit in Soroban
-    
+
     Ok(())
 }
 
@@ -364,7 +364,7 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
     if addr1 == addr2 {
         return Err(Error::SameAddress);
     }
-    
+
     Ok(())
 }
 
@@ -381,7 +381,7 @@ pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
     }
-    
+
     Ok(())
 }
 
@@ -397,15 +397,15 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     if timestamp == 0 {
         return Err(Error::NotAuthorized); // Reusing error for invalid timestamp
     }
-    
+
     // Ensure timestamp is not too far in the future (more than 1 day ahead)
     let current_time = env.ledger().timestamp();
     let one_day = 86_400u64;
-    
+
     if timestamp > current_time + one_day {
         return Err(Error::NotAuthorized);
     }
-    
+
     Ok(())
 }
 
@@ -420,7 +420,7 @@ pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
     if record_id == 0 {
         return Err(Error::RecordNotFound);
     }
-    
+
     Ok(())
 }
 
@@ -435,7 +435,7 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
     if dp_epsilon < MIN_DP_EPSILON || dp_epsilon > MAX_DP_EPSILON {
         return Err(Error::InvalidDPEpsilon);
     }
-    
+
     Ok(())
 }
 
@@ -447,10 +447,12 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
 pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
-    if min_participants < MIN_FEDERATED_PARTICIPANTS || min_participants > MAX_FEDERATED_PARTICIPANTS {
+    if min_participants < MIN_FEDERATED_PARTICIPANTS
+        || min_participants > MAX_FEDERATED_PARTICIPANTS
+    {
         return Err(Error::InvalidParticipantCount);
     }
-    
+
     Ok(())
 }
 
@@ -465,10 +467,10 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NotAuthorized);
     }
-    
+
     // Optional: Add maximum amount check if needed
     // For now, we'll accept any positive amount
-    
+
     Ok(())
 }
 
@@ -480,14 +482,14 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
-pub fn validate_pagination(page: u32, page_size: u32) -> Result<(), Error> {
+pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
         return Err(Error::NotAuthorized);
     }
-    
+
     // Page number can be any value (including 0 for first page)
-    
+
     Ok(())
 }
 
@@ -512,40 +514,41 @@ pub fn validate_pagination(page: u32, page_size: u32) -> Result<(), Error> {
 /// - Data reference is valid
 /// - Tags are all valid
 /// - DID reference is valid (if present)
+#[allow(dead_code)]
 pub fn validate_medical_record(env: &Env, record: &MedicalRecord) -> Result<(), Error> {
     // Validate addresses
     validate_address(env, &record.patient_id)?;
     validate_address(env, &record.doctor_id)?;
-    
+
     // Ensure patient and doctor are different
     validate_addresses_different(&record.patient_id, &record.doctor_id)?;
-    
+
     // Validate timestamp
     validate_timestamp(env, record.timestamp)?;
-    
+
     // Validate diagnosis
     validate_diagnosis(&record.diagnosis)?;
-    
+
     // Validate treatment
     validate_treatment(&record.treatment)?;
-    
+
     // Validate category
     validate_category(&record.category, env)?;
-    
+
     // Validate treatment type
     validate_treatment_type(&record.treatment_type)?;
-    
+
     // Validate data reference
     validate_data_ref(env, &record.data_ref)?;
-    
+
     // Validate tags
     validate_tags(&record.tags)?;
-    
+
     // Validate DID reference if present
     if let Some(ref did) = record.doctor_did {
         validate_did_reference(did)?;
     }
-    
+
     Ok(())
 }
 
@@ -559,14 +562,15 @@ pub fn validate_medical_record(env: &Env, record: &MedicalRecord) -> Result<(), 
 ///
 /// # Validation Checks
 /// - DID reference is valid (if present)
+#[allow(dead_code)]
 pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
     // Validate DID reference if present
     if let Some(ref did) = profile.did_reference {
         validate_did_reference(did)?;
     }
-    
+
     // Role and active flag are enums/booleans, so they're inherently valid
-    
+
     Ok(())
 }
 
@@ -589,7 +593,7 @@ pub fn validate_ai_explanation(
         Error::InvalidExplanationLength,
         Error::InvalidExplanationLength,
     )?;
-    
+
     validate_string_length(
         model_version,
         MIN_MODEL_VERSION_LENGTH,
@@ -597,7 +601,7 @@ pub fn validate_ai_explanation(
         Error::InvalidModelVersionLength,
         Error::InvalidModelVersionLength,
     )?;
-    
+
     Ok(())
 }
 
@@ -613,7 +617,7 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
         return Err(Error::InvalidAIScore);
     }
-    
+
     // Validate each entry
     for (feature_name, importance_bps) in feature_importance.iter() {
         // Validate feature name
@@ -624,18 +628,21 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
             Error::EmptyTag,
             Error::InvalidDataRefLength,
         )?;
-        
+
         // Validate importance score
         validate_score_bps(importance_bps)?;
     }
-    
+
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, Ledger}, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Env, String,
+    };
 
     #[test]
     fn test_validate_string_length() {
@@ -699,7 +706,10 @@ mod tests {
         let empty_diagnosis = String::from_str(&env, "");
 
         assert!(validate_diagnosis(&valid_diagnosis).is_ok());
-        assert_eq!(validate_diagnosis(&empty_diagnosis), Err(Error::EmptyDiagnosis));
+        assert_eq!(
+            validate_diagnosis(&empty_diagnosis),
+            Err(Error::EmptyDiagnosis)
+        );
     }
 
     #[test]
@@ -739,7 +749,7 @@ mod tests {
             String::from_str(&env, "tag1"),
             String::from_str(&env, "tag2"),
         ];
-        
+
         assert!(validate_tags(&valid_tags).is_ok());
 
         let invalid_tags = soroban_sdk::vec![
@@ -747,9 +757,9 @@ mod tests {
             String::from_str(&env, "tag1"),
             String::from_str(&env, ""),
         ];
-        
+
         assert_eq!(validate_tags(&invalid_tags), Err(Error::EmptyTag));
-        
+
         // Test max tags count (implied by implementation)
         // let too_many_tags...
     }
@@ -759,9 +769,12 @@ mod tests {
         let env = Env::default();
         let addr1 = Address::generate(&env);
         let addr2 = Address::generate(&env);
-        
+
         assert!(validate_addresses_different(&addr1, &addr2).is_ok());
-        assert_eq!(validate_addresses_different(&addr1, &addr1), Err(Error::SameAddress));
+        assert_eq!(
+            validate_addresses_different(&addr1, &addr1),
+            Err(Error::SameAddress)
+        );
     }
 
     #[test]
@@ -769,62 +782,69 @@ mod tests {
         let env = Env::default();
         let current_time = 1000;
         env.ledger().with_mut(|l| l.timestamp = current_time);
-        
+
         assert!(validate_timestamp(&env, current_time).is_ok());
         assert!(validate_timestamp(&env, current_time + 86400).is_ok());
-        
+
         // Zero timestamp is invalid
         assert_eq!(validate_timestamp(&env, 0), Err(Error::NotAuthorized));
-        
+
         // Too far inside future (> 24h)
-        assert_eq!(validate_timestamp(&env, current_time + 86401), Err(Error::NotAuthorized));
+        assert_eq!(
+            validate_timestamp(&env, current_time + 86401),
+            Err(Error::NotAuthorized)
+        );
     }
-    
+
     #[test]
     fn test_validate_record_id() {
         assert!(validate_record_id(1).is_ok());
         assert!(validate_record_id(100).is_ok());
         assert_eq!(validate_record_id(0), Err(Error::RecordNotFound));
     }
-    
+
     #[test]
     fn test_validate_amount() {
         assert!(validate_amount(100).is_ok());
         assert_eq!(validate_amount(0), Err(Error::NotAuthorized));
         assert_eq!(validate_amount(-10), Err(Error::NotAuthorized));
     }
-    
+
     #[test]
     fn test_validate_feature_importance() {
         let env = Env::default();
-        
+
         let valid_features = soroban_sdk::vec![
             &env,
             (String::from_str(&env, "feature1"), 5000u32),
             (String::from_str(&env, "feature2"), 1000u32),
         ];
-        
+
         assert!(validate_feature_importance(&valid_features).is_ok());
-        
-        let invalid_score_features = soroban_sdk::vec![
-            &env,
-            (String::from_str(&env, "feature1"), 15000u32),
-        ];
-        assert_eq!(validate_feature_importance(&invalid_score_features), Err(Error::InvalidScore));
-        
-        let invalid_name_features = soroban_sdk::vec![
-            &env,
-            (String::from_str(&env, ""), 5000u32),
-        ];
-        assert_eq!(validate_feature_importance(&invalid_name_features), Err(Error::EmptyTag));
+
+        let invalid_score_features =
+            soroban_sdk::vec![&env, (String::from_str(&env, "feature1"), 15000u32),];
+        assert_eq!(
+            validate_feature_importance(&invalid_score_features),
+            Err(Error::InvalidScore)
+        );
+
+        let invalid_name_features = soroban_sdk::vec![&env, (String::from_str(&env, ""), 5000u32),];
+        assert_eq!(
+            validate_feature_importance(&invalid_name_features),
+            Err(Error::EmptyTag)
+        );
     }
     #[test]
     fn test_validate_data_ref() {
         let env = Env::default();
         let valid_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx");
         let short_ref = String::from_str(&env, "short");
-        
+
         assert!(validate_data_ref(&env, &valid_ref).is_ok());
-        assert_eq!(validate_data_ref(&env, &short_ref), Err(Error::InvalidDataRefLength));
+        assert_eq!(
+            validate_data_ref(&env, &short_ref),
+            Err(Error::InvalidDataRefLength)
+        );
     }
 }

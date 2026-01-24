@@ -324,6 +324,12 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -345,6 +351,12 @@
                             "val": {
                               "string": "Diagnosis A"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -417,6 +429,12 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -438,6 +456,12 @@
                             "val": {
                               "string": "Diagnosis B"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -550,6 +574,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -576,6 +606,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -608,6 +644,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -634,6 +676,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {

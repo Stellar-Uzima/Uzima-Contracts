@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
-use soroban_sdk::{log, Address, BytesN, Env, String, Vec};
+use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 extern crate std;
 use std::format;
@@ -760,8 +760,7 @@ fn test_ai_integration_points() {
     );
 
     // Set AI configuration
-    assert!(client
-        .set_ai_config(&admin, &ai_coordinator, &100u32, &2u32));
+    assert!(client.set_ai_config(&admin, &ai_coordinator, &100u32, &2u32));
 
     // Verify AI config is set
     let ai_config = client.get_ai_config().unwrap();
@@ -780,8 +779,16 @@ fn test_ai_integration_points() {
         (String::from_str(&env, "blood_pressure"), 6500u32),
     ];
 
-    assert!(client
-        .submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &7500u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance));
+    assert!(client.submit_anomaly_score(
+        &ai_coordinator,
+        &record_id,
+        &model_id,
+        &7500u32,
+        &explanation_ref,
+        &explanation_summary,
+        &model_version,
+        &feature_importance
+    ));
 
     // Get the anomaly score (should be accessible by patient)
     let anomaly_insight = client.get_anomaly_score(&patient, &record_id).unwrap();
@@ -799,8 +806,16 @@ fn test_ai_integration_points() {
         (String::from_str(&env, "family_history"), 7000u32),
     ];
 
-    assert!(client
-        .submit_risk_score(&ai_coordinator, &patient, &model_id, &8000u32, &risk_explanation_ref, &risk_explanation_summary, &risk_model_version, &risk_feature_importance));
+    assert!(client.submit_risk_score(
+        &ai_coordinator,
+        &patient,
+        &model_id,
+        &8000u32,
+        &risk_explanation_ref,
+        &risk_explanation_summary,
+        &risk_model_version,
+        &risk_feature_importance
+    ));
 
     // Get the risk score
     let risk_insight = client.get_latest_risk_score(&patient, &patient).unwrap();
@@ -843,25 +858,52 @@ fn test_ai_validation() {
     // Test invalid score (over 10,000)
     let model_id = BytesN::from_array(&env, &[1; 32]);
     let explanation_ref = String::from_str(&env, "ipfs://report");
-    let explanation_summary = String::from_str(&env, "Summary");
+    let explanation_summary = String::from_str(&env, "Detailed Summary");
     let model_version = String::from_str(&env, "v1.0.0");
     let feature_importance = vec![&env, (String::from_str(&env, "test"), 5000u32)];
 
     // This should panic due to invalid score
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &10001u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+        client.submit_anomaly_score(
+            &ai_coordinator,
+            &record_id,
+            &model_id,
+            &10001u32,
+            &explanation_ref,
+            &explanation_summary,
+            &model_version,
+            &feature_importance,
+        );
     }));
     assert!(result.is_err());
 
     // Test unauthorized access to submit scores
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        client.submit_anomaly_score(&unauthorized, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+        client.submit_anomaly_score(
+            &unauthorized,
+            &record_id,
+            &model_id,
+            &5000u32,
+            &explanation_ref,
+            &explanation_summary,
+            &model_version,
+            &feature_importance,
+        );
     }));
     assert!(result.is_err());
 
     // Test unauthorized access to get anomaly scores
-    client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
-    
+    client.submit_anomaly_score(
+        &ai_coordinator,
+        &record_id,
+        &model_id,
+        &5000u32,
+        &explanation_ref,
+        &explanation_summary,
+        &model_version,
+        &feature_importance,
+    );
+
     let other_patient = Address::generate(&env);
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.get_anomaly_score(&other_patient, &record_id);
