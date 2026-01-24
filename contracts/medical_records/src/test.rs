@@ -7,7 +7,7 @@ use soroban_sdk::{log, Address, BytesN, Env, String, Vec};
 extern crate std;
 use std::format;
 
-fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
+fn create_contract(env: &Env) -> (MedicalRecordsContractClient, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
@@ -15,6 +15,139 @@ fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     let admin = Address::generate(&env);
     client.initialize(&admin);
     (client, admin)
+}
+
+#[test]
+fn test_add_records_batch_and_get_batch() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient1 = Address::generate(&env);
+    let patient2 = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient1, &Role::Patient);
+    client.manage_user(&admin, &patient2, &Role::Patient);
+
+    let records_input = vec![
+        &env,
+        (
+            patient1.clone(),
+            String::from_str(&env, "Flu"),
+            String::from_str(&env, "Antiviral"),
+            false,
+            vec![&env, String::from_str(&env, "viral")],
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, "Prescription"),
+            String::from_str(&env, "ipfs://QmA"),
+        ),
+        (
+            patient1.clone(),
+            String::from_str(&env, "Hypertension"),
+            String::from_str(&env, "Lifestyle + meds"),
+            true,
+            vec![&env],
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, "Ongoing"),
+            String::from_str(&env, "ipfs://QmB"),
+        ),
+        (
+            patient2.clone(),
+            String::from_str(&env, "Malaria"),
+            String::from_str(&env, "Artemisinin"),
+            false,
+            vec![&env, String::from_str(&env, "tropical")],
+            String::from_str(&env, "Herbal"),
+            String::from_str(&env, "Acute"),
+            String::from_str(&env, "ipfs://QmC"),
+        ),
+    ];
+
+    let result = client.add_records_batch(&doctor, &records_input);
+
+    assert_eq!(result.successes.len(), 3);
+    assert_eq!(result.failures.len(), 0);
+
+    let ids = result.successes;
+
+    // Test batch get - patient1 should see both (one confidential, but owns them)
+    let batch1 = client.get_records_batch(&patient1, &patient1, &0, &10);
+    assert_eq!(batch1.len(), 2);
+
+    // Test pagination + limit
+    let batch2 = client.get_records_batch(&patient1, &patient1, &0, &1);
+    assert_eq!(batch2.len(), 1);
+
+    let batch3 = client.get_records_batch(&patient1, &patient1, &1, &10);
+    assert_eq!(batch3.len(), 1);
+
+    // Test patient2 access
+    let batch_p2 = client.get_records_batch(&patient2, &patient2, &0, &5);
+    assert_eq!(batch_p2.len(), 1);
+
+    // Doctor should see everything
+    let batch_doc = client.get_records_batch(&doctor, &patient1, &0, &10);
+    assert_eq!(batch_doc.len(), 2); // only the non-confidential one
+
+    // Admin sees everything
+    let batch_admin = client.get_records_batch(&admin, &patient1, &0, &10);
+    assert_eq!(batch_admin.len(), 2);
+}
+
+#[test]
+fn test_add_records_batch_partial_failure() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let records = vec![
+        &env,
+        // valid
+        (
+            patient.clone(),
+            String::from_str(&env, "Malaria"),
+            String::from_str(&env, "Artemisinin"),
+            false,
+            vec![&env, String::from_str(&env, "tropical")],
+            String::from_str(&env, "Herbal"),
+            String::from_str(&env, "Acute"),
+            String::from_str(&env, "ipfs://QmC"),
+        ),
+        // invalid category
+        (
+            patient.clone(),
+            String::from_str(&env, "A"),
+            String::from_str(&env, "B"),
+            false,
+            vec![&env],
+            String::from_str(&env, "Invalid"),
+            String::from_str(&env, "C"),
+            String::from_str(&env, "ipfs://ok"),
+        ),
+        // empty treatment_type
+        (
+            patient.clone(),
+            String::from_str(&env, "A"),
+            String::from_str(&env, "B"),
+            false,
+            vec![&env],
+            String::from_str(&env, "Modern"),
+            String::from_str(&env, ""),
+            String::from_str(&env, "ipfs://ok"),
+        ),
+    ];
+
+    let result = client.add_records_batch(&doctor, &records);
+
+    assert_eq!(result.successes.len(), 1);
+    assert_eq!(result.failures.len(), 2);
 }
 
 #[test]
@@ -206,12 +339,12 @@ fn test_get_patient_records() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let _diagnosis = String::from_str(&env, "Common cold");
-    let _treatment = String::from_str(&env, "Rest and fluids");
-    let _is_confidential = false;
-    let _tags = vec![&env, String::from_str(&env, "respiratory")];
-    let _category = String::from_str(&env, "Modern");
-    let _treatment_type = String::from_str(&env, "Medication");
+    let diagnosis = String::from_str(&env, "Common cold");
+    let treatment = String::from_str(&env, "Rest and fluids");
+    let is_confidential = false;
+    let tags = vec![&env, String::from_str(&env, "respiratory")];
+    let category = String::from_str(&env, "Modern");
+    let treatment_type = String::from_str(&env, "Medication");
 
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
@@ -254,12 +387,12 @@ fn test_role_based_access() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let _diagnosis = String::from_str(&env, "Common cold");
-    let _treatment = String::from_str(&env, "Rest and fluids");
-    let _is_confidential = false;
-    let _tags = vec![&env, String::from_str(&env, "respiratory")];
-    let _category = String::from_str(&env, "Modern");
-    let _treatment_type = String::from_str(&env, "Medication");
+    let diagnosis = String::from_str(&env, "Common cold");
+    let treatment = String::from_str(&env, "Rest and fluids");
+    let is_confidential = false;
+    let tags = vec![&env, String::from_str(&env, "respiratory")];
+    let category = String::from_str(&env, "Modern");
+    let treatment_type = String::from_str(&env, "Medication");
 
     // Admin manages user roles
     client.manage_user(&admin, &doctor, &Role::Doctor);
@@ -307,7 +440,7 @@ fn test_deactivate_user() {
     client.deactivate_user(&admin, &doctor);
 
     // // Try to add a record as the deactivated doctor (should fail)
-    let _result = client.add_record(
+    let result = client.add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Cold"),
@@ -351,7 +484,7 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
     client.pause(&admin);
 
     // Mutating functions should be blocked when paused
-    let _r1 = client.manage_user(&admin, &Address::generate(&env), &Role::Doctor);
+    let r1 = client.manage_user(&admin, &Address::generate(&env), &Role::Doctor);
 }
 
 #[test]
@@ -388,7 +521,7 @@ fn test_pause_unpause_blocks_sensitive_functions() {
 
     // Now mutating calls should succeed
     assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
-    let _r3 = client.add_record(
+    let r3 = client.add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis3"),
@@ -454,7 +587,7 @@ fn test_recovery_timelock_and_multisig_success() {
         l.timestamp = now + TIMELOCK_SECS + 1;
     });
 
-    let _res = client.execute_recovery(&admin1, &proposal_id);
+    let res = client.execute_recovery(&admin1, &proposal_id);
 }
 
 #[test]
@@ -657,6 +790,7 @@ fn test_get_history_pagination_and_access() {
     env.mock_all_auths();
 
     let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
     let doctor1 = Address::generate(&env);
     let doctor2 = Address::generate(&env);
     let patient = Address::generate(&env);
@@ -870,4 +1004,3 @@ fn test_ai_validation() {
     let other_patient = Address::generate(&env);
     let result = client.try_get_anomaly_score(&other_patient, &record_id);
     assert!(result.is_err());
-    }

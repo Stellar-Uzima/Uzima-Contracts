@@ -265,6 +265,14 @@
                         "map": [
                           {
                             "key": {
+                              "symbol": "authorization_credential"
+                            },
+                            "val": {
+                              "bytes": "0000000000000000000000000000000000000000000000000000000000000000"
+                            }
+                          },
+                          {
+                            "key": {
                               "symbol": "category"
                             },
                             "val": {
@@ -286,6 +294,12 @@
                             "val": {
                               "string": "Diagnosis"
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "doctor_did"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
@@ -398,6 +412,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -427,6 +447,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "role"
                             },
                             "val": {
@@ -453,6 +479,12 @@
                             "val": {
                               "bool": true
                             }
+                          },
+                          {
+                            "key": {
+                              "symbol": "did_reference"
+                            },
+                            "val": "void"
                           },
                           {
                             "key": {
