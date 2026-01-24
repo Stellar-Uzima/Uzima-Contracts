@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod events;
+
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, BytesN,
@@ -249,9 +251,80 @@ impl MedicalRecordsContract {
         let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
         if !users.is_empty() { panic!("Contract already initialized"); }
 
-        users.set(admin, UserProfile { role: Role::Admin, active: true, did_reference: None });
+        users.set(admin.clone(), UserProfile { role: Role::Admin, active: true, did_reference: None });
         env.storage().persistent().set(&USERS, &users);
         env.storage().persistent().set(&PAUSED, &false);
+
+        // Emit user creation event
+        events::emit_user_created(&env, admin, admin, "Admin", None);
+        true
+    }
+
+    pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let existing_profile = users.get(user.clone());
+
+        let role_str = match role {
+            Role::Admin => "Admin",
+            Role::Doctor => "Doctor",
+            Role::Patient => "Patient",
+            Role::None => "None",
+        };
+
+        if let Some(profile) = existing_profile {
+            // Update existing user
+            let previous_role_str = match profile.role {
+                Role::Admin => "Admin",
+                Role::Doctor => "Doctor",
+                Role::Patient => "Patient",
+                Role::None => "None",
+            };
+            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: profile.did_reference });
+            events::emit_user_role_updated(&env, caller, user, role_str, Some(previous_role_str));
+        } else {
+            // Create new user
+            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: None });
+            events::emit_user_created(&env, caller, user, role_str, None);
+        }
+
+        env.storage().persistent().set(&USERS, &users);
+        true
+    }
+
+    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        if let Some(mut profile) = users.get(user.clone()) {
+            profile.active = false;
+            users.set(user.clone(), profile);
+            env.storage().persistent().set(&USERS, &users);
+            events::emit_user_deactivated(&env, caller, user);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn pause(env: Env, caller: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        env.storage().persistent().set(&PAUSED, &true);
+        events::emit_contract_paused(&env, caller);
+        true
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        env.storage().persistent().set(&PAUSED, &false);
+        events::emit_contract_unpaused(&env, caller);
         true
     }
 
@@ -309,17 +382,21 @@ impl MedicalRecordsContract {
         patient_records.set(patient.clone(), ids);
         env.storage().persistent().set(&PATIENT_RECORDS, &patient_records);
 
-        env.events().publish((symbol_short!("RecordAdd"),), (patient.clone(), record_id, is_confidential));
+        // Emit structured event for record creation
+        events::emit_record_created(&env, caller.clone(), record_id, patient.clone(), is_confidential, category.clone(), tags.clone());
+
         Self::trigger_ai_analysis(&env, record_id, patient.clone());
 
-        // MONITORING: Standardized Metric Emission
-        env.events().publish((symbol_short!("METRICS"), symbol_short!("add_rec")), 1u32);
+        // Emit metric update
+        events::emit_metric_update(&env, "record_created", 1);
 
         Ok(record_id)
     }
 
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
         let status = if Self::is_paused(&env) { symbol_short!("PAUSED") } else { symbol_short!("OK") };
+        let gas_used = env.budget().cpu_instruction_cost();
+        events::emit_health_check(&env, &status.to_string(), gas_used);
         (status, 1, env.ledger().timestamp())
     }
 
@@ -349,8 +426,406 @@ impl MedicalRecordsContract {
 
     fn trigger_ai_analysis(env: &Env, record_id: u64, patient: Address) {
         if env.storage().persistent().has(&DataKey::AIConfig) {
-            env.events().publish((symbol_short!("AITrigger"),), (patient, record_id));
+            events::emit_ai_analysis_triggered(env, record_id, patient);
         }
+    }
+
+    pub fn propose_recovery(env: Env, caller: Address, token_contract: Address, recipient: Address, amount: i128) -> u64 {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { panic_with_error!(&env, Error::NotAuthorized); }
+
+        let proposal_id = Self::get_and_increment_record_count(&env);
+        let proposal = RecoveryProposal {
+            proposal_id,
+            token_contract: token_contract.clone(),
+            to: recipient.clone(),
+            amount,
+            created_at: env.ledger().timestamp(),
+            executed: false,
+            approvals: vec![&env, caller.clone()],
+        };
+
+        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
+        proposals.set(proposal_id, proposal);
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+
+        events::emit_recovery_proposed(&env, caller, proposal_id, token_contract, recipient, amount);
+        proposal_id
+    }
+
+    pub fn approve_recovery(env: Env, caller: Address, proposal_id: u64) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
+        if let Some(mut proposal) = proposals.get(proposal_id) {
+            if proposal.executed { return false; }
+
+            // Check if already approved
+            for approver in proposal.approvals.iter() {
+                if approver == caller { return false; }
+            }
+
+            proposal.approvals.push_back(caller.clone());
+            proposals.set(proposal_id, proposal);
+            env.storage().persistent().set(&PROPOSALS, &proposals);
+
+            events::emit_recovery_approved(&env, caller, proposal_id);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn execute_recovery(env: Env, caller: Address, proposal_id: u64) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut proposals: Map<u64, RecoveryProposal> = env.storage().persistent().get(&PROPOSALS).unwrap_or(Map::new(&env));
+        if let Some(mut proposal) = proposals.get(proposal_id) {
+            if proposal.executed { return false; }
+
+            // Check timelock
+            let current_time = env.ledger().timestamp();
+            if current_time < proposal.created_at + TIMELOCK_SECS { panic_with_error!(&env, Error::TimelockNotElasped); }
+
+            // Check approvals
+            if proposal.approvals.len() < APPROVAL_THRESHOLD { panic_with_error!(&env, Error::NotEnoughApproval); }
+
+            proposal.executed = true;
+            proposals.set(proposal_id, proposal.clone());
+            env.storage().persistent().set(&PROPOSALS, &proposals);
+
+            events::emit_recovery_executed(&env, caller, proposal_id, proposal.token_contract, proposal.to, proposal.amount);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn get_record(env: Env, caller: Address, record_id: u64) -> Option<MedicalRecord> {
+        caller.require_auth();
+
+        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        if let Some(record) = records.get(record_id) {
+            // Check access permissions
+            let can_access = if caller == record.patient_id {
+                true // Patient owns the record
+            } else if Self::has_role(&env, &caller, &Role::Admin) {
+                true // Admin can access all records
+            } else if caller == record.doctor_id {
+                true // Doctor who created the record
+            } else {
+                false // No access
+            };
+
+            if can_access {
+                events::emit_record_accessed(&env, caller, record_id, record.patient_id);
+                Some(record)
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn get_records_batch(env: Env, caller: Address, patient: Address, offset: u32, limit: u32) -> Vec<(u64, MedicalRecord)> {
+        caller.require_auth();
+
+        let patient_records: Map<Address, Vec<u64>> = env.storage().persistent().get(&PATIENT_RECORDS).unwrap_or(Map::new(&env));
+        let record_ids = patient_records.get(patient.clone()).unwrap_or(Vec::new(&env));
+
+        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+
+        let mut result = Vec::new(&env);
+        let start = offset as usize;
+        let end = (start + limit as usize).min(record_ids.len());
+
+        for i in start..end {
+            if let Some(record_id) = record_ids.get(i as u32) {
+                if let Some(record) = records.get(record_id) {
+                    // Check access permissions
+                    let can_access = if caller == record.patient_id {
+                        true // Patient owns the record
+                    } else if Self::has_role(&env, &caller, &Role::Admin) {
+                        true // Admin can access all records
+                    } else if caller == record.doctor_id {
+                        true // Doctor who created the record
+                    } else if !record.is_confidential && Self::has_role(&env, &caller, &Role::Doctor) {
+                        true // Non-confidential records accessible to doctors
+                    } else {
+                        false
+                    };
+
+                    if can_access {
+                        result.push_back((record_id, record));
+                        events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id);
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    pub fn get_history(env: Env, caller: Address, patient: Address, page: u32, page_size: u32) -> Vec<(u64, MedicalRecord)> {
+        Self::get_records_batch(env, caller, patient, page * page_size, page_size)
+    }
+
+    pub fn add_records_batch(
+        env: Env,
+        caller: Address,
+        records: Vec<(Address, String, String, bool, Vec<String>, String, String, String)>
+    ) -> BatchResult {
+        caller.require_auth();
+        if Self::is_paused(&env) { panic_with_error!(&env, Error::ContractPaused); }
+        if !Self::has_role(&env, &caller, &Role::Doctor) { panic_with_error!(&env, Error::NotAuthorized); }
+
+        let mut successes = Vec::new(&env);
+        let mut failures = Vec::new(&env);
+
+        for (index, (patient, diagnosis, treatment, is_confidential, tags, category, treatment_type, data_ref)) in records.iter().enumerate() {
+            // Validation
+            if let Err(error) = validate_address(&patient) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            if let Err(error) = validate_string(&diagnosis) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            if let Err(error) = validate_string(&treatment) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            if let Err(error) = validate_string(&category) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            if let Err(error) = validate_string(&treatment_type) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            if let Err(error) = validate_string(&data_ref) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+            for tag in tags.iter() {
+                if let Err(error) = validate_string(&tag) {
+                    failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                    continue;
+                }
+            }
+            if let Err(error) = Self::validate_data_ref(&data_ref) {
+                failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 });
+                continue;
+            }
+
+            // Add record
+            match Self::add_record(env.clone(), caller.clone(), patient.clone(), diagnosis.clone(), treatment.clone(), is_confidential, tags.clone(), category.clone(), treatment_type.clone(), data_ref.clone()) {
+                Ok(record_id) => successes.push_back(record_id),
+                Err(error) => failures.push_back(FailureInfo { index: index as u32, error_code: error as u32 }),
+            }
+        }
+
+        BatchResult { successes, failures }
+    }
+
+    pub fn set_ai_config(env: Env, caller: Address, ai_coordinator: Address, dp_epsilon: u32, min_participants: u32) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let config = AIConfig {
+            ai_coordinator: ai_coordinator.clone(),
+            dp_epsilon,
+            min_participants,
+        };
+
+        env.storage().persistent().set(&DataKey::AIConfig, &config);
+        events::emit_ai_config_updated(&env, caller, ai_coordinator);
+        true
+    }
+
+    pub fn get_ai_config(env: Env) -> Option<AIConfig> {
+        env.storage().persistent().get(&DataKey::AIConfig)
+    }
+
+    pub fn submit_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        model_id: BytesN<32>,
+        score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>
+    ) -> bool {
+        caller.require_auth();
+
+        // Check if AI coordinator
+        if let Some(config) = env.storage().persistent().get(&DataKey::AIConfig) {
+            if caller != config.ai_coordinator { return false; }
+        } else {
+            return false;
+        }
+
+        if score_bps > 10_000 { panic_with_error!(&env, Error::InvalidAIScore); }
+
+        // Get patient from record
+        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        if let Some(record) = records.get(record_id) {
+            let insight = AIInsight {
+                patient: record.patient_id.clone(),
+                record_id,
+                model_id: model_id.clone(),
+                insight_type: AIInsightType::AnomalyScore,
+                score_bps,
+                explanation_ref: explanation_ref.clone(),
+                explanation_summary: explanation_summary.clone(),
+                created_at: env.ledger().timestamp(),
+                model_version: model_version.clone(),
+                feature_importance,
+            };
+
+            let key = DataKey::RecordAnomaly(record.patient_id.clone(), record_id);
+            env.storage().persistent().set(&key, &insight);
+
+            events::emit_anomaly_score_submitted(&env, caller, record_id, record.patient_id, model_id, score_bps, model_version);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn get_anomaly_score(env: Env, caller: Address, record_id: u64) -> Option<AIInsight> {
+        caller.require_auth();
+
+        // Get patient from record to construct key
+        let records: Map<u64, MedicalRecord> = env.storage().persistent().get(&RECORDS).unwrap_or(Map::new(&env));
+        if let Some(record) = records.get(record_id) {
+            // Check access (patient or admin only)
+            if caller != record.patient_id && !Self::has_role(&env, &caller, &Role::Admin) {
+                return None;
+            }
+
+            let key = DataKey::RecordAnomaly(record.patient_id, record_id);
+            env.storage().persistent().get(&key)
+        } else {
+            None
+        }
+    }
+
+    pub fn submit_risk_score(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        model_id: BytesN<32>,
+        score_bps: u32,
+        explanation_ref: String,
+        explanation_summary: String,
+        model_version: String,
+        feature_importance: Vec<(String, u32)>
+    ) -> bool {
+        caller.require_auth();
+
+        // Check if AI coordinator
+        if let Some(config) = env.storage().persistent().get(&DataKey::AIConfig) {
+            if caller != config.ai_coordinator { return false; }
+        } else {
+            return false;
+        }
+
+        if score_bps > 10_000 { panic_with_error!(&env, Error::InvalidAIScore); }
+
+        let insight = AIInsight {
+            patient: patient.clone(),
+            record_id: 0, // No specific record for patient-level risk
+            model_id: model_id.clone(),
+            insight_type: AIInsightType::RiskScore,
+            score_bps,
+            explanation_ref: explanation_ref.clone(),
+            explanation_summary: explanation_summary.clone(),
+            created_at: env.ledger().timestamp(),
+            model_version: model_version.clone(),
+            feature_importance,
+        };
+
+        let key = DataKey::PatientRisk(patient.clone());
+        env.storage().persistent().set(&key, &insight);
+
+        events::emit_risk_score_submitted(&env, caller, patient, model_id, score_bps, model_version);
+        true
+    }
+
+    pub fn get_latest_risk_score(env: Env, caller: Address, patient: Address) -> Option<AIInsight> {
+        caller.require_auth();
+
+        // Check access (patient or admin only)
+        if caller != patient && !Self::has_role(&env, &caller, &Role::Admin) {
+            return None;
+        }
+
+        let key = DataKey::PatientRisk(patient);
+        env.storage().persistent().get(&key)
+    }
+
+    // ==================== Event System Functions ====================
+
+    pub fn query_events(env: Env, caller: Address, filter: events::EventFilter) -> events::EventQueryResult {
+        caller.require_auth();
+        // For now, return empty result as we don't have persistent event storage
+        // In a real implementation, events would be stored and retrieved from storage
+        events::EventQueryResult {
+            events: Vec::new(&env),
+            total_count: 0,
+            has_more: false,
+        }
+    }
+
+    pub fn get_event_stats(env: Env, caller: Address) -> events::EventStats {
+        caller.require_auth();
+        // For now, return empty stats as we don't have persistent event storage
+        // In a real implementation, this would aggregate stored events
+        events::EventStats {
+            total_events: 0,
+            events_by_type: Map::new(&env),
+            events_by_category: Map::new(&env),
+            events_by_user: Map::new(&env),
+            time_range: (0, 0),
+        }
+    }
+
+    pub fn get_monitoring_dashboard(env: Env, caller: Address, recent_limit: u32) -> events::MonitoringDashboard {
+        caller.require_auth();
+        // For now, return empty dashboard as we don't have persistent event storage
+        // In a real implementation, this would create a dashboard from stored events
+        events::MonitoringDashboard {
+            stats: events::EventStats {
+                total_events: 0,
+                events_by_type: Map::new(&env),
+                events_by_category: Map::new(&env),
+                events_by_user: Map::new(&env),
+                time_range: (0, 0),
+            },
+            recent_events: Vec::new(&env),
+            alerts: Vec::new(&env),
+            health_status: String::from_str(&env, "unknown"),
+        }
+    }
+
+    pub fn replay_events(
+        env: Env,
+        caller: Address,
+        start_time: u64,
+        end_time: u64,
+        event_types: Option<Vec<events::EventType>>
+    ) -> Vec<events::BaseEvent> {
+        caller.require_auth();
+        // For now, return empty result as we don't have persistent event storage
+        // In a real implementation, this would replay events from stored history
+        Vec::new(&env)
     }
 }
 
