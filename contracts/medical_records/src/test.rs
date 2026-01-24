@@ -4,9 +4,6 @@ use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::{log, Address, BytesN, Env, String, Vec};
 
-extern crate std;
-use std::format;
-
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
@@ -169,6 +166,8 @@ fn test_add_and_get_record() {
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
     let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx");
+    let initial_event_count = env.events().all().len();
+
     let record_id = client.add_record(
         &doctor,
         &patient,
@@ -181,6 +180,16 @@ fn test_add_and_get_record() {
         &data_ref,
     );
 
+    // Verify events were emitted
+    let events_after_add = env.events().all();
+    assert!(events_after_add.len() > initial_event_count);
+
+    // Check for record creation events
+    let record_events: Vec<_> = events_after_add.iter()
+        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("RECORD_CREATED"))
+        .collect();
+    assert_eq!(record_events.len(), 1);
+
     // Get the record as patient
     let retrieved_record = client.get_record(&patient, &record_id);
     assert!(retrieved_record.is_some());
@@ -189,6 +198,13 @@ fn test_add_and_get_record() {
     assert_eq!(record.diagnosis, diagnosis);
     assert_eq!(record.treatment, treatment);
     assert_eq!(record.is_confidential, false);
+
+    // Verify record access event was emitted
+    let events_after_get = env.events().all();
+    let access_events: Vec<_> = events_after_get.iter()
+        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("RECORD_ACCESS"))
+        .collect();
+    assert_eq!(access_events.len(), 1);
 }
 #[test]
 #[should_panic(expected = "Error(Contract, #9)")]

@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod events;
+
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, BytesN,
@@ -243,6 +245,76 @@ impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
         env.storage().persistent().set(&PAUSED, &false);
+        // Emit user creation event
+        events::emit_user_created(&env, admin, admin, "Admin", None);
+        true
+    }
+
+    pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let existing_profile = users.get(user.clone());
+
+        let role_str = match role {
+            Role::Admin => "Admin",
+            Role::Doctor => "Doctor",
+            Role::Patient => "Patient",
+            Role::None => "None",
+        };
+
+        if let Some(profile) = existing_profile {
+            // Update existing user
+            let previous_role_str = match profile.role {
+                Role::Admin => "Admin",
+                Role::Doctor => "Doctor",
+                Role::Patient => "Patient",
+                Role::None => "None",
+            };
+            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: profile.did_reference });
+            events::emit_user_role_updated(&env, caller, user, role_str, Some(previous_role_str));
+        } else {
+            // Create new user
+            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: None });
+            events::emit_user_created(&env, caller, user, role_str, None);
+        }
+
+        env.storage().persistent().set(&USERS, &users);
+        true
+    }
+
+    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        if let Some(mut profile) = users.get(user.clone()) {
+            profile.active = false;
+            users.set(user.clone(), profile);
+            env.storage().persistent().set(&USERS, &users);
+            events::emit_user_deactivated(&env, caller, user);
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn pause(env: Env, caller: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        env.storage().persistent().set(&PAUSED, &true);
+        events::emit_contract_paused(&env, caller);
+        true
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> bool {
+        caller.require_auth();
+        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+
+        env.storage().persistent().set(&PAUSED, &false);
+        events::emit_contract_unpaused(&env, caller);
         true
     }
 
@@ -271,7 +343,4 @@ impl MedicalRecordsContract {
             treatment_type,
             data_ref,
             doctor_did: None,
-    }
-}
-
 }
