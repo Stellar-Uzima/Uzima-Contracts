@@ -1002,3 +1002,33 @@ fn test_ai_validation() {
     });
     assert!(result.is_err());
 }
+#[test]
+fn test_monitoring_health_check() {
+    use soroban_sdk::{Env, symbol_short};
+    use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
+
+    let env = Env::default();
+    let contract_id = env.register_contract(None, MedicalRecordsContract);
+    let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+    // 1. Reset budget to track clean execution cost
+    env.budget().reset_unlimited();
+
+    // 2. Call health check
+    let (status, version, _timestamp) = client.health_check();
+
+    // 3. Assertions (Validation)
+    assert_eq!(status, symbol_short!("OK"));
+    assert_eq!(version, 1);
+
+    // 4. Gas Validation (Monitoring)
+    // This prints the cost to the console when you run tests with --nocapture
+    std::println!("==========================================");
+    std::println!("MONITORING: Health Check Gas Usage");
+    env.budget().print(); 
+    std::println!("==========================================");
+
+    // Optional: Fail the test if CPU usage is too high (Performance Requirement)
+    // This ensures your "ping" remains cheap (e.g., < 100,000 instructions)
+    assert!(env.budget().cpu_instruction_cost() < 100_000);
+}

@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # setup.sh - Complete Soroban Project Setup Script
-# This script sets up a complete Soroban development environment
+# Th
+is script sets up a complete Soroban development environment
 
 set -e
 
