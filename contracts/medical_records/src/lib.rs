@@ -4,10 +4,11 @@
 mod test;
 
 mod events;
+mod validation;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, BytesN,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes, BytesN,
     Env, Map, String, Symbol, Vec,
 };
 
@@ -115,14 +116,14 @@ pub struct MedicalRecord {
 
 // ==================== AI & Recovery Types ====================
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AIInsightType {
     AnomalyScore,
     RiskScore,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AIInsight {
     pub patient: Address,
@@ -217,10 +218,24 @@ pub enum Error {
     AIConfigNotSet = 27,
     NotAICoordinator = 28,
     InvalidAIScore = 29,
-    BatchTooLarge = 30,
-    InvalidBatch = 31,
-    InvalidInput = 32,
-    NumberOutOfBounds = 33,
+    // Validation Errors
+    EmptyDiagnosis = 30,
+    InvalidDiagnosisLength = 31,
+    InvalidTreatmentLength = 32,
+    InvalidPurposeLength = 33,
+    InvalidTagLength = 34,
+    InvalidScore = 35,
+    InvalidDPEpsilon = 36,
+    InvalidParticipantCount = 37,
+    InvalidModelVersionLength = 38,
+    InvalidExplanationLength = 39,
+    InvalidAddress = 40,
+    SameAddress = 41,
+    InvalidTreatmentTypeLength = 42,
+    BatchTooLarge = 43,
+    InvalidBatch = 44,
+    InvalidInput = 45,
+    NumberOutOfBounds = 46,
 }
 
 #[derive(Clone)]
@@ -246,8 +261,64 @@ impl MedicalRecordsContract {
         admin.require_auth();
         env.storage().persistent().set(&PAUSED, &false);
         // Emit user creation event
-        events::emit_user_created(&env, admin, admin, "Admin", None);
+        events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
+    }
+
+    /// Internal function to check if an address has a specific role
+    fn has_role(env: &Env, address: &Address, role: &Role) -> bool {
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
+        match users.get(address.clone()) {
+            Some(profile) => {
+                matches!(
+                    (profile.role, role),
+                    (Role::Admin, Role::Admin)
+                        | (Role::Doctor, Role::Doctor)
+                        | (Role::Patient, Role::Patient)
+                ) && profile.active
+            }
+            None => false,
+        }
+    }
+
+    /// Internal function to check paused state
+    fn is_paused(env: &Env) -> bool {
+        env.storage().persistent().get(&PAUSED).unwrap_or(false)
+    }
+
+    /// Internal function to get and increment the record counter
+    fn get_and_increment_record_count(env: &Env) -> u64 {
+        let current_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCount)
+            .unwrap_or(0);
+        let next_count = current_count + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCount, &next_count);
+        next_count
+    }
+
+    /// Internal helper to load AI configuration
+    fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AIConfig)
+            .ok_or(Error::AIConfigNotSet)
+    }
+
+    /// Ensure that the caller is the configured AI coordinator
+    fn ensure_ai_coordinator(env: &Env, caller: &Address) -> Result<AIConfig, Error> {
+        let config = Self::load_ai_config(env)?;
+        if config.ai_coordinator != *caller {
+            return Err(Error::NotAICoordinator);
+        }
+        Ok(config)
     }
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
@@ -318,6 +389,7 @@ impl MedicalRecordsContract {
         true
     }
 
+    /// Add a new medical record with role-based access control
     pub fn add_record(
         env: Env,
         caller: Address,
@@ -338,8 +410,8 @@ impl MedicalRecordsContract {
             diagnosis,
             treatment,
             is_confidential,
-            tags,
-            category,
+            tags: tags.clone(),
+            category: category.clone(),
             treatment_type,
             data_ref,
             doctor_did: None,

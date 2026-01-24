@@ -3,7 +3,8 @@
 **/*.rs.bk
 *.pdb
 Cargo.lock
-contracts/*/*test_snapshots/
+**/test_snapshots/
+contracts/medical_records/test_snapshots/
 
 # IDE
 .vscode/
