@@ -526,7 +526,12 @@ impl MedicalRecordsContract {
                 None
             }
         } else {
-            None
+            Err(Self::log_error(
+                &env,
+                Error::RecordNotFound,
+                "get_record:not_found",
+                Some(caller),
+            ))
         }
     }
 

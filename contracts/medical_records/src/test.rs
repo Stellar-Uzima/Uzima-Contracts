@@ -191,9 +191,7 @@ fn test_add_and_get_record() {
     assert_eq!(record_events.len(), 1);
 
     // Get the record as patient
-    let retrieved_record = client.get_record(&patient, &record_id);
-    assert!(retrieved_record.is_some());
-    let record = retrieved_record.unwrap();
+    let record = client.get_record(&patient, &record_id);
     assert_eq!(record.patient_id, patient);
     assert_eq!(record.diagnosis, diagnosis);
     assert_eq!(record.treatment, treatment);
@@ -207,7 +205,6 @@ fn test_add_and_get_record() {
     assert_eq!(access_events.len(), 1);
 }
 #[test]
-#[should_panic(expected = "Error(Contract, #9)")]
 fn test_empty_data_ref() {
     let env = Env::default();
     env.mock_all_auths();
@@ -219,7 +216,7 @@ fn test_empty_data_ref() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Empty data_ref should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -230,10 +227,10 @@ fn test_empty_data_ref() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, ""),
     );
+    assert_eq!(result, Err(Ok(Error::EmptyDataRef)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_short() {
     let env = Env::default();
     env.mock_all_auths();
@@ -245,7 +242,7 @@ fn test_data_ref_too_short() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Data ref shorter than 10 chars should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -256,10 +253,10 @@ fn test_data_ref_too_short() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, "Qm123"),
     );
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_long() {
     let env = Env::default();
     env.mock_all_auths();
@@ -274,7 +271,7 @@ fn test_data_ref_too_long() {
     // Create a string longer than 200 characters (201 chars)
     let long_ref = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -285,6 +282,7 @@ fn test_data_ref_too_long() {
         &String::from_str(&env, "Medication"),
         &long_ref,
     );
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
@@ -312,8 +310,7 @@ fn test_data_ref_boundary_min_length() {
         &min_ref,
     );
 
-    let record = client.get_record(&patient, &record_id);
-    assert!(record.is_some());
+    let _record = client.get_record(&patient, &record_id);
 }
 
 #[test]
@@ -343,8 +340,7 @@ fn test_data_ref_boundary_max_length() {
         &max_ref,
     );
 
-    let record = client.get_record(&patient, &record_id);
-    assert!(record.is_some());
+    let _record = client.get_record(&patient, &record_id);
 }
 
 #[test]
@@ -391,8 +387,8 @@ fn test_get_patient_records() {
     );
 
     // Patient can access both records
-    assert!(client.get_record(&patient, &record_id1).is_some());
-    assert!(client.get_record(&patient, &record_id2).is_some());
+    let _ = client.get_record(&patient, &record_id1);
+    let _ = client.get_record(&patient, &record_id2);
 }
 
 #[test]
@@ -427,20 +423,16 @@ fn test_role_based_access() {
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
     );
     // Patient tries to access the record (should succeed)
-    let retrieved_record = client.get_record(&patient, &record_id);
-    assert!(retrieved_record.is_some());
+    let _retrieved_record = client.get_record(&patient, &record_id);
 
     // Doctor (creator) tries to access the record (should succeed)
-    let retrieved_record = client.get_record(&doctor, &record_id);
-    assert!(retrieved_record.is_some());
+    let _retrieved_record = client.get_record(&doctor, &record_id);
 
     // Admin tries to access the record (should succeed)
-    let retrieved_record = client.get_record(&admin, &record_id);
-    assert!(retrieved_record.is_some());
+    let _retrieved_record = client.get_record(&admin, &record_id);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2)")]
 fn test_deactivate_user() {
     let env = Env::default();
     env.mock_all_auths();
@@ -467,10 +459,10 @@ fn test_deactivate_user() {
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
     );
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1)")]
 fn test_pause_unpause_blocks_sensitive_functions_panic() {
     let env = Env::default();
     env.mock_all_auths();
@@ -551,7 +543,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #7)")]
 fn test_recovery_timelock_and_multisig() {
     let env = Env::default();
     env.mock_all_auths();
@@ -573,7 +564,8 @@ fn test_recovery_timelock_and_multisig() {
     client.approve_recovery(&admin2, &proposal_id);
 
     // Try execute before timelock elapsed -> should error
-    let _ = client.execute_recovery(&admin1, &proposal_id);
+    let res = client.try_execute_recovery(&admin1, &proposal_id);
+    assert_eq!(res, Err(Ok(Error::TimelockNotElasped)));
 }
 
 #[test]
