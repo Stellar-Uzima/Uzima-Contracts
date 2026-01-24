@@ -5,8 +5,8 @@ mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, BytesN,
+    Env, Map, String, Symbol, Vec,
 };
 
 // ==================== Cross-Chain Types ====================
@@ -103,7 +103,7 @@ pub struct AccessRequest {
     /// Whether access was granted
     pub granted: bool,
     /// Verifiable credential used (if any)
-    pub credential_used: Option<BytesN<32>>,
+    pub credential_used: BytesN<32>,
 }
 
 /// Emergency access grant
@@ -138,7 +138,7 @@ pub struct MedicalRecord {
     /// DID of the doctor who created this record (for interoperability)
     pub doctor_did: Option<String>,
     /// Verifiable credential ID used for authorization (if any)
-    pub authorization_credential: Option<BytesN<32>>,
+    pub authorization_credential: BytesN<32>,
 }
 
 #[derive(Clone)]
@@ -268,8 +268,23 @@ pub enum Error {
     AIConfigNotSet = 27,
     NotAICoordinator = 28,
     InvalidAIScore = 29,
+    BatchTooLarge = 30,
+    InvalidBatch = 31,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct FailureInfo {
+    pub index: u32,
+    pub error_code: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct BatchResult {
+    pub successes: Vec<u64>,
+    pub failures: Vec<FailureInfo>,
+}
 #[contract]
 pub struct MedicalRecordsContract;
 
@@ -523,7 +538,7 @@ impl MedicalRecordsContract {
             data_ref,
             // DID fields - None for legacy function
             doctor_did: None,
-            authorization_credential: None,
+            authorization_credential: BytesN::from_array(&env, &[0u8; 32]),
         };
 
         // Store the record
@@ -553,13 +568,175 @@ impl MedicalRecordsContract {
         // Emit RecordAdded event
         env.events().publish(
             (Symbol::new(&env, "RecordAdded"),),
-            (patient, record_id, is_confidential),
+            (patient.clone(), record_id, is_confidential),
         );
 
         // Trigger AI analysis for this new record
         Self::trigger_ai_analysis(&env, record_id, patient.clone());
 
         Ok(record_id)
+    }
+
+    /// Add a new medical record with role-based access control in batches
+    pub fn add_records_batch(
+        env: Env,
+        caller: Address,
+        batch_records: Vec<(
+            Address,
+            String,
+            String,
+            bool,
+            Vec<String>,
+            String,
+            String,
+            String,
+        )>,
+    ) -> BatchResult {
+        caller.require_auth();
+
+        // Block when paused
+        if Self::is_paused(&env) {
+            panic_with_error!(env, Error::ContractPaused);
+        }
+
+        // Verify caller is a doctor
+        if !Self::has_role(&env, &caller, &Role::Doctor) {
+            panic_with_error!(env, Error::NotAuthorized);
+        }
+
+        // Max batch is 30
+        if batch_records.len() > 30 {
+            panic_with_error!(env, Error::BatchTooLarge);
+        }
+
+        let mut failed: Vec<FailureInfo> = vec![&env];
+        let mut success: Vec<u64> = vec![&env];
+        // Store the record
+        let mut records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        // Track record ID per patient
+        let mut patient_records: Map<Address, Vec<u64>> = env
+            .storage()
+            .persistent()
+            .get(&PATIENT_RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        for (
+            i,
+            (
+                patient,
+                diagnosis,
+                treatment,
+                is_confidential,
+                tags,
+                category,
+                treatment_type,
+                data_ref,
+            ),
+        ) in batch_records.iter().enumerate()
+        {
+            // Validate data_ref per record
+            if let Err(e) = Self::validate_data_ref(&data_ref) {
+                // failed.push_back((i as u32, e));
+                failed.push_back(FailureInfo {
+                    index: i as u32,
+                    error_code: e as u32,
+                });
+                continue;
+            }
+
+            // Validate category
+            let allowed_categories = vec![
+                &env,
+                String::from_str(&env, "Modern"),
+                String::from_str(&env, "Traditional"),
+                String::from_str(&env, "Herbal"),
+                String::from_str(&env, "Spiritual"),
+            ];
+            if !allowed_categories.contains(&category) {
+                // failed.push_back((i as u32, Error::InvalidCategory));
+                failed.push_back(FailureInfo {
+                    index: i as u32,
+                    error_code: Error::InvalidCategory as u32,
+                });
+                continue;
+            }
+
+            // Validate treatment_type (non-empty)
+            if treatment_type.len() == 0 {
+                // failed.push_back((i as u32, Error::EmptyTreatment));
+                failed.push_back(FailureInfo {
+                    index: i as u32,
+                    error_code: Error::EmptyTreatment as u32,
+                });
+                continue;
+            }
+
+            let mut valid_tags = true;
+            for tag in &tags {
+                if tag.len() == 0 {
+                    valid_tags = false;
+                    break;
+                }
+            }
+            if !valid_tags {
+                // failed.push_back((i as u32, Error::EmptyTag));
+                failed.push_back(FailureInfo {
+                    index: i as u32,
+                    error_code: Error::EmptyTag as u32,
+                });
+                continue;
+            }
+
+            let record_id = Self::get_and_increment_record_count(&env);
+            let timestamp = env.ledger().timestamp();
+
+            let record = MedicalRecord {
+                patient_id: patient.clone(),
+                doctor_id: caller.clone(),
+                timestamp,
+                diagnosis,
+                treatment,
+                is_confidential,
+                tags,
+                category,
+                treatment_type,
+                data_ref,
+                // DID fields - None for legacy function
+                doctor_did: None,
+                authorization_credential: BytesN::from_array(&env, &[0u8; 32]),
+            };
+            records.set(record_id, record);
+
+            let mut ids = patient_records
+                .get(patient.clone())
+                .unwrap_or(Vec::new(&env));
+            ids.push_back(record_id);
+            patient_records.set(patient.clone(), ids);
+
+            success.push_back(record_id);
+
+            // Emit RecordAdded event
+            env.events().publish(
+                (Symbol::new(&env, "RecordAdded"),),
+                (patient, record_id, is_confidential),
+            );
+        }
+
+        env.storage().persistent().set(&RECORDS, &records);
+        env.storage()
+            .persistent()
+            .set(&PATIENT_RECORDS, &patient_records);
+
+        // Ok(32)
+        BatchResult {
+            successes: success,
+            failures: failed,
+        }
     }
 
     /// Get a medical record with role-based access control
@@ -590,6 +767,66 @@ impl MedicalRecordsContract {
         } else {
             None
         }
+    }
+
+    pub fn get_records_batch(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        from_index: u32,
+        limit: u32,
+    ) -> Vec<MedicalRecord> {
+        caller.require_auth();
+
+        if limit == 0 || limit > 30 {
+            panic_with_error!(env, Error::InvalidBatch);
+        }
+
+        let patient_records: Map<Address, Vec<u64>> = env
+            .storage()
+            .persistent()
+            .get(&PATIENT_RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let ids = match patient_records.get(patient.clone()) {
+            Some(v) => v,
+            None => return vec![&env],
+        };
+
+        let total = ids.len();
+        if from_index >= total {
+            return vec![&env];
+        }
+
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let mut result = vec![&env];
+        let mut count = 0u32;
+
+        for i in from_index..total {
+            if count >= limit {
+                break;
+            }
+
+            let record_id = ids.get(i).unwrap();
+
+            if let Some(record) = records.get(record_id) {
+                if Self::has_role(&env, &caller, &Role::Admin)
+                    || caller == record.patient_id
+                    || caller == record.doctor_id
+                    || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
+                {
+                    result.push_back(record);
+                    count += 1;
+                }
+            }
+        }
+
+        result
     }
 
     /// Retrieve paginated history of records for a patient with access control
@@ -1214,10 +1451,8 @@ impl MedicalRecordsContract {
 
         env.storage().persistent().set(&DataKey::AuthLevel, &level);
 
-        env.events().publish(
-            (Symbol::new(&env, "AuthLevelSet"),),
-            level,
-        );
+        env.events()
+            .publish((Symbol::new(&env, "AuthLevelSet"),), level);
 
         Ok(true)
     }
@@ -1232,9 +1467,7 @@ impl MedicalRecordsContract {
 
     /// Get the identity registry address
     pub fn get_identity_registry(env: Env) -> Option<Address> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::IdentityRegistry)
+        env.storage().persistent().get(&DataKey::IdentityRegistry)
     }
 
     /// Link a DID to a user profile
@@ -1262,10 +1495,8 @@ impl MedicalRecordsContract {
             users.set(user.clone(), profile);
             env.storage().persistent().set(&USERS, &users);
 
-            env.events().publish(
-                (Symbol::new(&env, "DIDLinked"),),
-                (user, did_reference),
-            );
+            env.events()
+                .publish((Symbol::new(&env, "DIDLinked"),), (user, did_reference));
 
             Ok(true)
         } else {
@@ -1447,7 +1678,7 @@ impl MedicalRecordsContract {
         record_id: u64,
         purpose: String,
         granted: bool,
-        credential_used: Option<BytesN<32>>,
+        credential_used: BytesN<32>,
     ) {
         let log_count: u64 = env
             .storage()
@@ -1480,11 +1711,7 @@ impl MedicalRecordsContract {
     }
 
     /// Get access log entries (paginated)
-    pub fn get_access_logs(
-        env: Env,
-        page: u32,
-        page_size: u32,
-    ) -> Vec<AccessRequest> {
+    pub fn get_access_logs(env: Env, page: u32, page_size: u32) -> Vec<AccessRequest> {
         let total_count: u64 = env
             .storage()
             .persistent()
@@ -1573,7 +1800,7 @@ impl MedicalRecordsContract {
         category: String,
         treatment_type: String,
         data_ref: String,
-        credential_id: Option<BytesN<32>>,
+        credential_id: BytesN<32>,
     ) -> Result<u64, Error> {
         caller.require_auth();
 
@@ -1702,7 +1929,12 @@ impl MedicalRecordsContract {
                 || caller == record.patient_id
                 || caller == record.doctor_id
                 || (Self::has_role(&env, &caller, &Role::Doctor) && !record.is_confidential)
-                || Self::has_emergency_access(env.clone(), caller.clone(), patient.clone(), record_id);
+                || Self::has_emergency_access(
+                    env.clone(),
+                    caller.clone(),
+                    patient.clone(),
+                    record_id,
+                );
 
             // Log the access attempt
             Self::log_access(
@@ -1712,7 +1944,7 @@ impl MedicalRecordsContract {
                 record_id,
                 access_purpose,
                 has_access,
-                None,
+                BytesN::from_array(&env, &[0u8; 32]),
             );
 
             if has_access {
@@ -1741,15 +1973,9 @@ impl MedicalRecordsContract {
 
     /// Verify a medical professional's credentials
     /// This would typically call the identity registry contract
-    pub fn verify_professional_credential(
-        env: Env,
-        professional: Address,
-    ) -> bool {
+    pub fn verify_professional_credential(env: Env, professional: Address) -> bool {
         // Check if identity registry is set
-        let _registry: Option<Address> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::IdentityRegistry);
+        let _registry: Option<Address> = env.storage().persistent().get(&DataKey::IdentityRegistry);
 
         // In a full implementation, this would:
         // 1. Call the identity registry contract
@@ -1830,7 +2056,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
@@ -1941,7 +2167,7 @@ impl MedicalRecordsContract {
 
         // Validate feature importance vector
         for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
+            if importance_bps > 10_000 {
                 return Err(Error::InvalidAIScore);
             }
         }
