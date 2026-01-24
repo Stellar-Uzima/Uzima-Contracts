@@ -848,23 +848,23 @@ fn test_ai_validation() {
     let feature_importance = vec![&env, (String::from_str(&env, "test"), 5000u32)];
 
     // This should panic due to invalid score
-    let result = std::panic::catch_unwind(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &10001u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
-    });
+    }));
     assert!(result.is_err());
 
     // Test unauthorized access to submit scores
-    let result = std::panic::catch_unwind(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.submit_anomaly_score(&unauthorized, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
-    });
+    }));
     assert!(result.is_err());
 
     // Test unauthorized access to get anomaly scores
     client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
     
     let other_patient = Address::generate(&env);
-    let result = std::panic::catch_unwind(|| {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         client.get_anomaly_score(&other_patient, &record_id);
-    });
+    }));
     assert!(result.is_err());
 }

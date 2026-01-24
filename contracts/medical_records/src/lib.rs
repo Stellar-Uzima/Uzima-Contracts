@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod validation;
+
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
@@ -87,7 +89,7 @@ pub enum DIDAuthLevel {
 }
 
 /// Access request for DID-based authorization
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AccessRequest {
     /// Requester's address
@@ -122,7 +124,7 @@ pub struct EmergencyAccess {
     pub is_active: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct MedicalRecord {
     pub patient_id: Address,
@@ -148,7 +150,7 @@ pub enum AIInsightType {
     RiskScore,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AIInsight {
     pub patient: Address,
@@ -268,6 +270,21 @@ pub enum Error {
     AIConfigNotSet = 27,
     NotAICoordinator = 28,
     InvalidAIScore = 29,
+    
+    // Validation Errors
+    EmptyDiagnosis = 30,
+    InvalidDiagnosisLength = 31,
+    InvalidTreatmentLength = 32,
+    InvalidPurposeLength = 33,
+    InvalidTagLength = 34,
+    InvalidScore = 35,
+    InvalidDPEpsilon = 36,
+    InvalidParticipantCount = 37,
+    InvalidModelVersionLength = 38,
+    InvalidExplanationLength = 39,
+    InvalidAddress = 40,
+    SameAddress = 41,
+    InvalidTreatmentTypeLength = 42,
 }
 
 #[contract]
@@ -345,22 +362,6 @@ impl MedicalRecordsContract {
         next_count
     }
 
-    /// Internal function to validate data_ref (IPFS CID or similar off-chain reference)
-    fn validate_data_ref(data_ref: &String) -> Result<(), Error> {
-        // Check if data_ref is empty
-        if data_ref.len() == 0 {
-            return Err(Error::EmptyDataRef);
-        }
-
-        let len = data_ref.len();
-
-        // Check valid length bounds
-        if len < 10 || len > 200 {
-            return Err(Error::InvalidDataRefLength);
-        }
-
-        Ok(())
-    }
 
     /// Internal helper to load AI configuration
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
@@ -380,13 +381,6 @@ impl MedicalRecordsContract {
         Ok(config)
     }
 
-    /// Validate an AI score expressed in basis points (0 - 10_000)
-    fn validate_ai_score(score_bps: u32) -> Result<(), Error> {
-        if score_bps > 10_000 {
-            return Err(Error::InvalidAIScore);
-        }
-        Ok(())
-    }
 
     /// Emergency pause - only admins
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
@@ -456,6 +450,17 @@ impl MedicalRecordsContract {
     }
 
     /// Add a new medical record with role-based access control
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - Check who is calling the function, must be a `Doctor`
+    /// * `patient` - The patient associated with the record
+    /// * `diagnosis` - Minimum 1 char, max 512 chars
+    /// * `treatment` - Minimum 1 char, max 512 chars
+    /// * `tags` - Each tag min 1 char, max 50 chars, max 20 tags
+    /// * `category` - Must be one of: Modern, Traditional, Herbal, Spiritual
+    /// * `treatment_type` - Min 1 char, max 100 chars
+    /// * `data_ref` - IPFS CID or similar, 10-200 chars
     pub fn add_record(
         env: Env,
         caller: Address,
@@ -480,32 +485,20 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        // Validate data_ref
-        Self::validate_data_ref(&data_ref)?;
-
-        // Validate category
-        let allowed_categories = vec![
-            &env,
-            String::from_str(&env, "Modern"),
-            String::from_str(&env, "Traditional"),
-            String::from_str(&env, "Herbal"),
-            String::from_str(&env, "Spiritual"),
-        ];
-        if !allowed_categories.contains(&category) {
-            return Err(Error::InvalidCategory);
-        }
-
-        // Validate treatment_type (non-empty)
-        if treatment_type.len() == 0 {
-            return Err(Error::EmptyTreatment);
-        }
-
-        // Validate tags (all non-empty)
-        for tag in tags.iter() {
-            if tag.len() == 0 {
-                return Err(Error::EmptyTag);
-            }
-        }
+        // === Comprehensive Input Validation ===
+        
+        // Validate addresses
+        validation::validate_address(&env, &patient)?;
+        validation::validate_address(&env, &caller)?;
+        validation::validate_addresses_different(&patient, &caller)?;
+        
+        // Validate string inputs
+        validation::validate_diagnosis(&diagnosis)?;
+        validation::validate_treatment(&treatment)?;
+        validation::validate_category(&category, &env)?;
+        validation::validate_treatment_type(&treatment_type)?;
+        validation::validate_data_ref(&env, &data_ref)?;
+        validation::validate_tags(&tags)?;
 
         let record_id = Self::get_and_increment_record_count(&env);
         let timestamp = env.ledger().timestamp();
@@ -553,11 +546,11 @@ impl MedicalRecordsContract {
         // Emit RecordAdded event
         env.events().publish(
             (Symbol::new(&env, "RecordAdded"),),
-            (patient, record_id, is_confidential),
+            (patient.clone(), record_id, is_confidential),
         );
 
         // Trigger AI analysis for this new record
-        Self::trigger_ai_analysis(&env, record_id, patient.clone());
+        Self::trigger_ai_analysis(&env, record_id, patient);
 
         Ok(record_id)
     }
@@ -601,6 +594,11 @@ impl MedicalRecordsContract {
         page_size: u32,
     ) -> Vec<(u64, MedicalRecord)> {
         caller.require_auth();
+
+        // Validate pagination parameters
+        if validation::validate_pagination(page, page_size).is_err() {
+            panic!("Invalid pagination parameters");
+        }
 
         // Block when paused (optional; reads are generally allowed during pause)
         if Self::is_paused(&env) {
@@ -1074,6 +1072,16 @@ impl MedicalRecordsContract {
         if !Self::has_role(&env, &caller, &Role::Admin) {
             panic!("Only admins can propose recovery");
         }
+        
+        // Validate inputs
+        if validation::validate_address(&env, &token_contract).is_err() || 
+           validation::validate_address(&env, &to).is_err() {
+            panic!("Invalid address");
+        }
+        
+        if validation::validate_amount(amount).is_err() {
+            panic!("Invalid amount");
+        }
 
         let proposal_id = Self::get_and_increment_record_count(&env);
         let created_at = env.ledger().timestamp();
@@ -1246,6 +1254,9 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
+        // Validate DID reference
+        validation::validate_did_reference(&did_reference)?;
+
         // Only admins can link DIDs, or users can link their own
         if caller != user && !Self::has_role(&env, &caller, &Role::Admin) {
             return Err(Error::NotAuthorized);
@@ -1290,6 +1301,9 @@ impl MedicalRecordsContract {
 
     /// Grant emergency access to a healthcare provider
     /// Only patients can grant emergency access to their records
+    ///
+    /// # Arguments
+    /// * `duration_secs` - Must be positive and max 1 year (31,536,000 seconds)
     pub fn grant_emergency_access(
         env: Env,
         patient: Address,
@@ -1299,8 +1313,18 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         patient.require_auth();
 
+        // Validate addresses
+        validation::validate_address(&env, &grantee)?;
+        validation::validate_addresses_different(&patient, &grantee)?;
+
         // Verify patient role
         if !Self::has_role(&env, &patient, &Role::Patient) {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Validate duration (must be positive and reasonable)
+        if duration_secs == 0 || duration_secs > 31_536_000 {
+            // Max 1 year
             return Err(Error::NotAuthorized);
         }
 
@@ -1588,7 +1612,7 @@ impl MedicalRecordsContract {
         }
 
         // Validate data_ref
-        Self::validate_data_ref(&data_ref)?;
+        validation::validate_data_ref(&env, &data_ref)?;
 
         // Validate category
         let allowed_categories = vec![
@@ -1780,9 +1804,10 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        if min_participants == 0 {
-            panic!("min_participants must be > 0");
-        }
+        // Validate AI configuration parameters
+        validation::validate_address(&env, &ai_coordinator)?;
+        validation::validate_dp_epsilon(dp_epsilon)?;
+        validation::validate_min_participants(min_participants)?;
 
         let config = AIConfig {
             ai_coordinator,
@@ -1825,15 +1850,12 @@ impl MedicalRecordsContract {
         // Ensure caller is the configured AI coordinator
         let _config = Self::ensure_ai_coordinator(&env, &caller)?;
 
-        // Validate score range
-        Self::validate_ai_score(score_bps)?;
-
-        // Validate feature importance vector
-        for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
-                return Err(Error::InvalidAIScore);
-            }
-        }
+        // Validate inputs using validation module
+        validation::validate_record_id(record_id)?;
+        validation::validate_score_bps(score_bps)?;
+        validation::validate_data_ref(&env, &explanation_ref)?;
+        validation::validate_ai_explanation(&explanation_summary, &model_version)?;
+        validation::validate_feature_importance(&feature_importance)?;
 
         // Load the referenced medical record to derive the patient
         let records: Map<u64, MedicalRecord> = env
@@ -1936,19 +1958,12 @@ impl MedicalRecordsContract {
         // Ensure caller is the configured AI coordinator
         let _config = Self::ensure_ai_coordinator(&env, &caller)?;
 
-        // Validate score range
-        Self::validate_ai_score(risk_score_bps)?;
-
-        // Validate feature importance vector
-        for (_, importance_bps) in feature_importance.iter() {
-            if *importance_bps > 10_000 {
-                return Err(Error::InvalidAIScore);
-            }
-        }
-
-        if explanation_ref.len() == 0 {
-            panic!("explanation_ref cannot be empty");
-        }
+        // Validate inputs using validation module
+        validation::validate_address(&env, &patient)?;
+        validation::validate_score_bps(risk_score_bps)?;
+        validation::validate_data_ref(&env, &explanation_ref)?;
+        validation::validate_ai_explanation(&explanation_summary, &model_version)?;
+        validation::validate_feature_importance(&feature_importance)?;
 
         let insight = AIInsight {
             patient: patient.clone(),
