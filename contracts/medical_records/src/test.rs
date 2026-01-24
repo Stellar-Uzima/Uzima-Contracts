@@ -1033,141 +1033,26 @@ fn test_ai_validation() {
     let model_version = String::from_str(&env, "v1.0.0");
     let feature_importance = vec![&env, (String::from_str(&env, "test"), 5000u32)];
 
-    // Panic testing requires std - skipping in no_std context
-    // // This should panic due to invalid score
-    // let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-    //     client.submit_anomaly_score(
-    //         &ai_coordinator,
-    //         &record_id,
-    //         &model_id,
-    //         &10001u32,
-    //         &explanation_ref,
-    //         &explanation_summary,
-    //         &model_version,
-    //         &feature_importance,
-    //     );
-    // }));
-    // assert!(result.is_err());
+    // This should panic due to invalid score
+    let result = client.try_submit_anomaly_score(
+    &ai_coordinator, 
+    &record_id, 
+    &model_id, 
+    &10001u32, // The invalid score
+    &explanation_ref, 
+    &explanation_summary, 
+    &model_version, 
+    &feature_importance
+    );
+    assert!(result.is_err());
 
     // Test unauthorized access to submit scores
-//     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-//         client.submit_anomaly_score(
-//             &unauthorized,
-//             &record_id,
-//             &model_id,
-//             &5000u32,
-//             &explanation_ref,
-//             &explanation_summary,
-//             &model_version,
-//             &feature_importance,
-//         );
-//     }));
-//     assert!(result.is_err());
+    let result = client.try_submit_anomaly_score(&unauthorized, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+    assert!(result.is_err());
 
     // Test unauthorized access to get anomaly scores
-    client.submit_anomaly_score(
-        &ai_coordinator,
-        &record_id,
-        &model_id,
-        &5000u32,
-        &explanation_ref,
-        &explanation_summary,
-        &model_version,
-        &feature_importance,
-    );
-
-//     let other_patient = Address::generate(&env);
-//     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-//         client.get_anomaly_score(&other_patient, &record_id);
-//     }));
-//     assert!(result.is_err());
-}
-// #[test]
-// fn test_monitoring_health_check() {
-//     use soroban_sdk::{Env, symbol_short};
-//     use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
-// 
-//     let env = Env::default();
-//     let contract_id = env.register_contract(None, MedicalRecordsContract);
-//     let client = MedicalRecordsContractClient::new(&env, &contract_id);
-// 
-//     // 1. Reset budget to track clean execution cost
-//     env.budget().reset_unlimited();
-// 
-//     // 2. Call health check
-//     let (status, version, _timestamp) = client.health_check();
-// 
-//     // 3. Assertions (Validation)
-//     assert_eq!(status, symbol_short!("OK"));
-//     assert_eq!(version, 1);
-
-//     // 4. Gas Validation (Monitoring)
-//     // This prints the cost to the console when you run tests with --nocapture
-//     std::println!("==========================================");
-//     std::println!("MONITORING: Health Check Gas Usage");
-//     env.budget().print(); 
-//     std::println!("==========================================");
-// 
-//     // Optional: Fail the test if CPU usage is too high (Performance Requirement)
-//     // This ensures your "ping" remains cheap (e.g., < 100,000 instructions)
-//     assert!(env.budget().cpu_instruction_cost() < 100_000);
-// }
-// 
-// #[test]
-// fn test_event_store_filter_aggregate_replay() {
-//     let env = Env::default();
-//     env.mock_all_auths();
-// 
-//     // Prepare identities
-//     let admin = Address::generate(&env);
-// 
-//     // Construct two simple events
-//     let meta = events::EventMetadata {
-//         event_type: events::EventType::MetricUpdate,
-//         category: events::OperationCategory::System,
-//         timestamp: env.ledger().timestamp(),
-//         user_id: admin.clone(),
-//         session_id: None,
-//         ipfs_ref: None,
-//         gas_used: Some(10u64),
-//         block_height: env.ledger().sequence() as u64,
-//     };
-// 
-//     let data = events::EventData::SystemEvent(events::SystemEventData {
-//         status: String::from_str(&env, "active"),
-//         metric_name: Some(String::from_str(&env, "test_metric")),
-//         metric_value: Some(1u64),
-//     });
-// 
-//     let ev = events::BaseEvent { metadata: meta.clone(), data: data.clone() };
-// 
-//     // Create store and add events
-//     let mut store = events::EventStore::new(&env, 100);
-//     store.add_event(ev.clone());
-//     store.add_event(ev.clone());
-// 
-//     // Build a filter for MetricUpdate events by admin
-//     let types = vec![&env, events::EventType::MetricUpdate];
-//     let filter = events::EventFilter {
-//         event_types: Some(types),
-//         categories: None,
-//         user_id: Some(admin.clone()),
-//         start_time: None,
-//         end_time: None,
-//         limit: Some(10u32),
-//     };
-// 
-//     let res = store.query_events(&filter);
-//     assert_eq!(res.total_count, 2);
-//     assert_eq!(res.events.len(), 2);
-// 
-//     // Replay events in the current time window
-//     let start = env.ledger().timestamp() - 1;
-//     let end = env.ledger().timestamp() + 1;
-//     let replayed = store.replay_events(start, end, None);
-//     assert_eq!(replayed.len(), 2);
-// 
-//     // Dashboard aggregation
-//     let dashboard = store.get_dashboard(&env, 10u32);
-//     assert!(dashboard.stats.total_events >= 2);
-// // }}
+    client.submit_anomaly_score(&ai_coordinator, &record_id, &model_id, &5000u32, &explanation_ref, &explanation_summary, &model_version, &feature_importance);
+    
+    let other_patient = Address::generate(&env);
+    let result = client.try_get_anomaly_score(&other_patient, &record_id);
+    assert!(result.is_err());
