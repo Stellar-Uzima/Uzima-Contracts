@@ -1,5 +1,5 @@
 // tests/integration/mod.rs
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{vec, Address, Env, String};
 
 pub mod medical_records_tests {
     use super::*;
@@ -43,15 +43,18 @@ pub mod medical_records_tests {
                 &diagnosis,
                 &treatment,
                 &false,
-                &vec![String::from_str(&env, "herbal"), String::from_str(&env, "spiritual")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![
+                    &env,
+                    String::from_str(&env, "herbal"),
+                    String::from_str(&env, "spiritual"),
+                ],
+                &String::from_str(&env, "Traditional"),
+                &String::from_str(&env, "Herbal Therapy"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
 
         // Verify record was added
-        let record_opt = client.get_record(&patient, &record_id);
-        assert!(record_opt.is_some());
-        let record = record_opt.unwrap();
+        let record = client.get_record(&patient, &record_id);
         assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
         assert_eq!(record.category, String::from_str(&env, "Traditional"));
@@ -83,9 +86,10 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &String::from_str(&env, "Traditional"),
+                &String::from_str(&env, "Herbal Therapy"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
         assert!(res.is_err());
     }
