@@ -9,26 +9,12 @@ repository.workspace = true
 [lib]
 crate-type = ["cdylib"]
 
-
-# [dependencies]
-# soroban-sdk.workspace = true
-# stellar-xdr.workspace = true
-
-
-
-# [dev-dependencies]
-# soroban-sdk = { workspace = true, default-features = false }
-
-
 [dependencies]
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
-
 [features]
 default = []
 testutils = ["soroban-sdk/testutils"]
-
-# No arbitrary or other extra features enabled

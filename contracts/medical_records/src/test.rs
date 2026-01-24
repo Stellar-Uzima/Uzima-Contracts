@@ -4,9 +4,6 @@ use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::{log, Address, BytesN, Env, String, Vec};
 
-extern crate std;
-use std::format;
-
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
@@ -169,6 +166,8 @@ fn test_add_and_get_record() {
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
     let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx");
+    let initial_event_count = env.events().all().len();
+
     let record_id = client.add_record(
         &doctor,
         &patient,
@@ -181,12 +180,29 @@ fn test_add_and_get_record() {
         &data_ref,
     );
 
+    // Verify events were emitted
+    let events_after_add = env.events().all();
+    assert!(events_after_add.len() > initial_event_count);
+
+    // Check for record creation events
+    let record_events: Vec<_> = events_after_add.iter()
+        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("RECORD_CREATED"))
+        .collect();
+    assert_eq!(record_events.len(), 1);
+
     // Get the record as patient
     let record = client.get_record(&patient, &record_id);
     assert_eq!(record.patient_id, patient);
     assert_eq!(record.diagnosis, diagnosis);
     assert_eq!(record.treatment, treatment);
     assert_eq!(record.is_confidential, false);
+
+    // Verify record access event was emitted
+    let events_after_get = env.events().all();
+    let access_events: Vec<_> = events_after_get.iter()
+        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("RECORD_ACCESS"))
+        .collect();
+    assert_eq!(access_events.len(), 1);
 }
 #[test]
 fn test_empty_data_ref() {
@@ -993,4 +1009,93 @@ fn test_ai_validation() {
         client.get_anomaly_score(&other_patient, &record_id);
     });
     assert!(result.is_err());
+}
+#[test]
+fn test_monitoring_health_check() {
+    use soroban_sdk::{Env, symbol_short};
+    use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
+
+    let env = Env::default();
+    let contract_id = env.register_contract(None, MedicalRecordsContract);
+    let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+    // 1. Reset budget to track clean execution cost
+    env.budget().reset_unlimited();
+
+    // 2. Call health check
+    let (status, version, _timestamp) = client.health_check();
+
+    // 3. Assertions (Validation)
+    assert_eq!(status, symbol_short!("OK"));
+    assert_eq!(version, 1);
+
+    // 4. Gas Validation (Monitoring)
+    // This prints the cost to the console when you run tests with --nocapture
+    std::println!("==========================================");
+    std::println!("MONITORING: Health Check Gas Usage");
+    env.budget().print(); 
+    std::println!("==========================================");
+
+    // Optional: Fail the test if CPU usage is too high (Performance Requirement)
+    // This ensures your "ping" remains cheap (e.g., < 100,000 instructions)
+    assert!(env.budget().cpu_instruction_cost() < 100_000);
+}
+
+#[test]
+fn test_event_store_filter_aggregate_replay() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Prepare identities
+    let admin = Address::generate(&env);
+
+    // Construct two simple events
+    let meta = events::EventMetadata {
+        event_type: events::EventType::MetricUpdate,
+        category: events::OperationCategory::System,
+        timestamp: env.ledger().timestamp(),
+        user_id: admin.clone(),
+        session_id: None,
+        ipfs_ref: None,
+        gas_used: Some(10u64),
+        block_height: env.ledger().sequence(),
+    };
+
+    let data = events::EventData::SystemEvent {
+        status: String::from_str(&env, "active"),
+        metric_name: Some(String::from_str(&env, "test_metric")),
+        metric_value: Some(1u64),
+    };
+
+    let ev = events::BaseEvent { metadata: meta.clone(), data: data.clone() };
+
+    // Create store and add events
+    let mut store = events::EventStore::new(&env, 100);
+    store.add_event(ev.clone());
+    store.add_event(ev.clone());
+
+    // Build a filter for MetricUpdate events by admin
+    let types = vec![&env, events::EventType::MetricUpdate];
+    let filter = events::EventFilter {
+        event_types: Some(types),
+        categories: None,
+        user_id: Some(admin.clone()),
+        start_time: None,
+        end_time: None,
+        limit: Some(10u32),
+    };
+
+    let res = store.query_events(&filter);
+    assert_eq!(res.total_count, 2);
+    assert_eq!(res.events.len(), 2);
+
+    // Replay events in the current time window
+    let start = env.ledger().timestamp() - 1;
+    let end = env.ledger().timestamp() + 1;
+    let replayed = store.replay_events(start, end, None);
+    assert_eq!(replayed.len(), 2);
+
+    // Dashboard aggregation
+    let dashboard = store.get_dashboard(&env, 10u32);
+    assert!(dashboard.stats.total_events >= 2);
 }
