@@ -1,13 +1,13 @@
 #![no_std]
-
-use soroban_sdk::{contract, contractimpl};
+use soroban_sdk::{contract, contractimpl, symbol_short, Symbol, Env};
 
 #[contract]
 pub struct AnomalyDetector;
 
 #[contractimpl]
 impl AnomalyDetector {
-    pub fn hello(_env: soroban_sdk::Env) -> &'static str {
-        "Anomaly Detector Placeholder"
+    // Fixed: Returns a Symbol instead of an invalid &str
+    pub fn hello(_env: Env) -> Symbol {
+        symbol_short!("hello")
     }
 }
