@@ -304,6 +304,13 @@ impl MedicalRecordsContract {
         next_count
     }
 
+    pub fn get_record_count(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordCount)
+            .unwrap_or(0)
+    }
+
     /// Internal helper to load AI configuration
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
         env.storage()
