@@ -11,6 +11,8 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes, BytesN,
     Env, Map, String, Symbol, Vec,
 };
+use soroban_sdk::{Env, BytesN, Address};
+use crate::errors::MedicalError;
 
 // ... (Types remain the same until AccessRequest) ...
 
@@ -388,6 +390,28 @@ impl MedicalRecordsContract {
         events::emit_contract_unpaused(&env, caller);
         true
     }
+
+    pub fn access_medical_record(
+    env: Env,
+    requester: Address,
+    zk_verifier: Address,
+    proof: BytesN<128>,
+    public_inputs: BytesN<32>,
+) -> Result<(), MedicalError> {
+    // Call ZK verifier contract
+    let verified: bool = env.invoke_contract(
+        &zk_verifier,
+        &"verify",
+        (proof, public_inputs),
+    );
+
+    if !verified {
+        return Err(MedicalError::ZkVerificationFailed);
+    }
+
+    // Grant access without revealing medical data
+    Ok(())
+}
 
     /// Add a new medical record with role-based access control
     pub fn add_record(
