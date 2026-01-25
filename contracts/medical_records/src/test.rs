@@ -1056,3 +1056,5 @@ fn test_ai_validation() {
     let other_patient = Address::generate(&env);
     let result = client.try_get_anomaly_score(&other_patient, &record_id);
     assert!(result.is_err());
+
+}

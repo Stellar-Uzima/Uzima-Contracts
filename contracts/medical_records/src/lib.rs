@@ -12,8 +12,8 @@ mod validation;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes, BytesN,
-    Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes,
+    BytesN, Env, Map, String, Symbol, Vec,
 };
 
 // ==================== Constants ====================
@@ -71,7 +71,6 @@ pub struct RecordMetadata {
     pub is_confidential: bool,
     pub record_hash: BytesN<32>,
 }
-
 
 #[derive(Clone)]
 #[contracttype]
@@ -280,15 +279,16 @@ pub struct MedicalRecordsContract;
 
 #[contractimpl]
 impl MedicalRecordsContract {
-    
     // --- Initialization & Upgrade System ---
 
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
         env.storage().persistent().set(&PAUSED, &false);
-        
+
         // Initialize version tracking
-        env.storage().instance().set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
 
         // Emit user creation event
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
@@ -299,7 +299,7 @@ impl MedicalRecordsContract {
     /// This is the entry point for all future updates.
     pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
         caller.require_auth();
-        
+
         // 1. Security: Only Admin can upgrade
         if !Self::has_role(&env, &caller, &Role::Admin) {
             return Err(Error::NotAuthorized);
@@ -311,19 +311,23 @@ impl MedicalRecordsContract {
         // 3. Data Migration: execute any necessary data transformations
         // If this fails, the entire upgrade rolls back
         Self::migrate_data(&env);
-        
+
         Ok(())
     }
 
     /// Internal function to handle version-specific migrations
     fn migrate_data(env: &Env) {
         // Get the current stored version (default to 0 if not set)
-        let current_version = env.storage().instance().get(&DataKey::ProtocolVersion).unwrap_or(0u32);
+        let current_version = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProtocolVersion)
+            .unwrap_or(0u32);
 
         // Safety check: Prevent downgrades or re-running the same migration
         if current_version >= CONTRACT_VERSION {
-             // We use panic here to ensure the transaction aborts and no gas is wasted on a no-op
-             panic_with_error!(env, MigrationError::AlreadyOnLatestVersion);
+            // We use panic here to ensure the transaction aborts and no gas is wasted on a no-op
+            panic_with_error!(env, MigrationError::AlreadyOnLatestVersion);
         }
 
         // Migration Router: Apply changes sequentially
@@ -334,7 +338,7 @@ impl MedicalRecordsContract {
                 0 => {
                     // Migration from V0 to V1
                     Self::migrate_v0_to_v1(env);
-                },
+                }
                 // Future versions will be added here:
                 // 1 => Self::migrate_v1_to_v2(env),
                 _ => panic_with_error!(env, MigrationError::MigrationFailed),
@@ -343,7 +347,9 @@ impl MedicalRecordsContract {
         }
 
         // Update the stored version to match the code constant
-        env.storage().instance().set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
     }
 
     /// Actual logic for V0 -> V1 migration
@@ -413,9 +419,15 @@ impl MedicalRecordsContract {
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         let existing_profile = users.get(user.clone());
 
         let role_str = match role {
@@ -433,11 +445,25 @@ impl MedicalRecordsContract {
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
-            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: profile.did_reference });
+            users.set(
+                user.clone(),
+                UserProfile {
+                    role: role.clone(),
+                    active: true,
+                    did_reference: profile.did_reference,
+                },
+            );
             events::emit_user_role_updated(&env, caller, user, role_str, Some(previous_role_str));
         } else {
             // Create new user
-            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: None });
+            users.set(
+                user.clone(),
+                UserProfile {
+                    role: role.clone(),
+                    active: true,
+                    did_reference: None,
+                },
+            );
             events::emit_user_created(&env, caller, user, role_str, None);
         }
 
@@ -447,9 +473,15 @@ impl MedicalRecordsContract {
 
     pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         if let Some(mut profile) = users.get(user.clone()) {
             profile.active = false;
             users.set(user.clone(), profile);
@@ -463,7 +495,9 @@ impl MedicalRecordsContract {
 
     pub fn pause(env: Env, caller: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
         env.storage().persistent().set(&PAUSED, &true);
         events::emit_contract_paused(&env, caller);
@@ -472,7 +506,9 @@ impl MedicalRecordsContract {
 
     pub fn unpause(env: Env, caller: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
         env.storage().persistent().set(&PAUSED, &false);
         events::emit_contract_unpaused(&env, caller);

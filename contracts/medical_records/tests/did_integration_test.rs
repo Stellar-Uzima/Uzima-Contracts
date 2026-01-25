@@ -11,9 +11,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{
-    testutils::Address as _, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 // Import from identity_registry
 mod identity_registry_tests {
