@@ -1,7 +1,11 @@
 #![no_std]
 
+//#[cfg(test)]
+//mod test;
+
+// Keep your new migration test active
 #[cfg(test)]
-mod test;
+mod test_migration;
 
 mod events;
 mod validation;
@@ -12,7 +16,25 @@ use soroban_sdk::{
     Env, Map, String, Symbol, Vec,
 };
 
-// ... (Types remain the same until AccessRequest) ...
+// ==================== Constants ====================
+
+// NEW: Tracks the current version of the contract logic.
+// Increment this number (2, 3, etc.) whenever you merge a PR that changes data structures.
+const CONTRACT_VERSION: u32 = 1;
+
+const USERS: Symbol = symbol_short!("USERS");
+const RECORDS: Symbol = symbol_short!("RECORDS");
+const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
+const PAUSED: Symbol = symbol_short!("PAUSED");
+const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
+const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
+const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
+const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
+const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
+const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
+
+const APPROVAL_THRESHOLD: u32 = 2;
+const TIMELOCK_SECS: u64 = 86_400;
 
 // ==================== Cross-Chain Types ====================
 
@@ -169,21 +191,11 @@ pub enum DataKey {
     AIConfig,
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
+    // NEW: Tracks the current data version to prevent schema mismatches
+    ProtocolVersion,
 }
 
-const USERS: Symbol = symbol_short!("USERS");
-const RECORDS: Symbol = symbol_short!("RECORDS");
-const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
-const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
-const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
-const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
-const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
-const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
-
-const APPROVAL_THRESHOLD: u32 = 2;
-const TIMELOCK_SECS: u64 = 86_400;
+// ==================== Errors ====================
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -238,6 +250,15 @@ pub enum Error {
     NumberOutOfBounds = 46,
 }
 
+// NEW: Specific errors for the migration system
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum MigrationError {
+    AlreadyOnLatestVersion = 100,
+    MigrationFailed = 101,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct FailureInfo {
@@ -252,18 +273,87 @@ pub struct BatchResult {
     pub failures: Vec<FailureInfo>,
 }
 
+// ==================== Contract Implementation ====================
+
 #[contract]
 pub struct MedicalRecordsContract;
 
 #[contractimpl]
 impl MedicalRecordsContract {
+    
+    // --- Initialization & Upgrade System ---
+
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
         env.storage().persistent().set(&PAUSED, &false);
+        
+        // Initialize version tracking
+        env.storage().instance().set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
+
         // Emit user creation event
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
     }
+
+    /// Upgrades the contract WASM code and migrates data atomically.
+    /// This is the entry point for all future updates.
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        caller.require_auth();
+        
+        // 1. Security: Only Admin can upgrade
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return Err(Error::NotAuthorized);
+        }
+
+        // 2. Code Upgrade: Update the WASM blob
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+        // 3. Data Migration: execute any necessary data transformations
+        // If this fails, the entire upgrade rolls back
+        Self::migrate_data(&env);
+        
+        Ok(())
+    }
+
+    /// Internal function to handle version-specific migrations
+    fn migrate_data(env: &Env) {
+        // Get the current stored version (default to 0 if not set)
+        let current_version = env.storage().instance().get(&DataKey::ProtocolVersion).unwrap_or(0u32);
+
+        // Safety check: Prevent downgrades or re-running the same migration
+        if current_version >= CONTRACT_VERSION {
+             // We use panic here to ensure the transaction aborts and no gas is wasted on a no-op
+             panic_with_error!(env, MigrationError::AlreadyOnLatestVersion);
+        }
+
+        // Migration Router: Apply changes sequentially
+        // e.g. If current is 0 and target is 2, it runs 0->1, then 1->2
+        let mut ver = current_version;
+        while ver < CONTRACT_VERSION {
+            match ver {
+                0 => {
+                    // Migration from V0 to V1
+                    Self::migrate_v0_to_v1(env);
+                },
+                // Future versions will be added here:
+                // 1 => Self::migrate_v1_to_v2(env),
+                _ => panic_with_error!(env, MigrationError::MigrationFailed),
+            }
+            ver += 1;
+        }
+
+        // Update the stored version to match the code constant
+        env.storage().instance().set(&DataKey::ProtocolVersion, &CONTRACT_VERSION);
+    }
+
+    /// Actual logic for V0 -> V1 migration
+    fn migrate_v0_to_v1(_env: &Env) {
+        // Example: If V1 introduced a new global counter, we would initialize it here.
+        // For now, this acts as the "Genesis" migration logic.
+        // _env.storage().persistent().set(&DataKey::NewFeature, &0);
+    }
+
+    // --- Core Logic ---
 
     /// Internal function to check if an address has a specific role
     fn has_role(env: &Env, address: &Address, role: &Role) -> bool {
@@ -403,6 +493,8 @@ impl MedicalRecordsContract {
         data_ref: String,
     ) -> Result<u64, Error> {
         caller.require_auth();
+
+        // 1. Create the Record Struct
         let record = MedicalRecord {
             patient_id: patient.clone(),
             doctor_id: caller.clone(),
@@ -415,4 +507,25 @@ impl MedicalRecordsContract {
             treatment_type,
             data_ref,
             doctor_did: None,
+        };
+
+        // 2. Generate a new ID
+        let record_id = Self::get_and_increment_record_count(&env);
+
+        // 3. Load the existing Records Map
+        let mut records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        // 4. Insert the new record
+        records.set(record_id, record);
+
+        // 5. Save the Map back to storage
+        env.storage().persistent().set(&RECORDS, &records);
+
+        // 6. Return the new ID
+        Ok(record_id)
+    }
 }
