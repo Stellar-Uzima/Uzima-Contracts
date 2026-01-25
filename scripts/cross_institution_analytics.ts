@@ -131,6 +131,12 @@ async function collectCrossInstitutionAnalytics() {
     },
     providers: [] as InstitutionAnalytics[],
     networkNodes: [] as InstitutionAnalytics[],
+    aggregates: {
+      providersByType: {} as Record<string, number>,
+      providersByRegion: {} as Record<string, number>,
+      networkNodesByType: {} as Record<string, number>,
+      networkNodesByRegion: {} as Record<string, number>,
+    },
   };
 
   // Global stats that can be associated with each institution for now.
@@ -191,6 +197,17 @@ async function collectCrossInstitutionAnalytics() {
         };
 
         result.providers.push(entry);
+        // Update provider aggregates (in-memory only)
+        if (entry.type) {
+          const key = entry.type;
+          result.aggregates.providersByType[key] =
+            (result.aggregates.providersByType[key] || 0) + 1;
+        }
+        if (entry.region) {
+          const key = entry.region;
+          result.aggregates.providersByRegion[key] =
+            (result.aggregates.providersByRegion[key] || 0) + 1;
+        }
       } catch (e) {
         console.error(`Error fetching provider ${providerId}:`, e);
       }
@@ -231,6 +248,17 @@ async function collectCrossInstitutionAnalytics() {
         };
 
         result.networkNodes.push(entry);
+        // Update network node aggregates (in-memory only)
+        if (entry.type) {
+          const key = entry.type;
+          result.aggregates.networkNodesByType[key] =
+            (result.aggregates.networkNodesByType[key] || 0) + 1;
+        }
+        if (entry.region) {
+          const key = entry.region;
+          result.aggregates.networkNodesByRegion[key] =
+            (result.aggregates.networkNodesByRegion[key] || 0) + 1;
+        }
       } catch (e) {
         console.error(`Error fetching network node ${nodeId}:`, e);
       }
@@ -294,6 +322,29 @@ function printTable(analytics: any) {
   } else {
     console.log('\n[Network Nodes]');
     console.log('  No network nodes configured (set NETWORK_NODE_IDS env var).');
+  }
+
+  // Aggregated view (good for dashboards and quick comparisons)
+  if (analytics.aggregates) {
+    console.log('\n[Aggregates]');
+
+    const agg = analytics.aggregates as any;
+
+    const providerTypes = Object.entries(agg.providersByType || {});
+    if (providerTypes.length > 0) {
+      console.log('  Providers by type:');
+      for (const [t, count] of providerTypes) {
+        console.log(`    ${t}: ${count}`);
+      }
+    }
+
+    const nodeTypes = Object.entries(agg.networkNodesByType || {});
+    if (nodeTypes.length > 0) {
+      console.log('  Network nodes by type:');
+      for (const [t, count] of nodeTypes) {
+        console.log(`    ${t}: ${count}`);
+      }
+    }
   }
 }
 

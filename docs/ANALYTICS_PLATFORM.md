@@ -81,6 +81,7 @@ The script reads configuration from environment variables and defaults:
 - `EXPLAINABLE_AI_ID` – Contract ID of `explainable_ai` (optional).
 - `ANALYTICS_MODEL_ID` – 32-byte model identifier as 64-character hex, matching on-chain `BytesN<32>` for model metrics and bias audits (optional).
 - `FEDERATED_ROUND_ID` – Round identifier (u64) for federated learning analytics (optional).
+- `--sections=...` (CLI flag) – Comma-separated list of sections to query: `health, anomaly, predictive, federated, explainable`. Defaults to all sections.
 
 ### Running the Dashboard
 
@@ -106,6 +107,14 @@ npx ts-node scripts/analytics_dashboard.ts --format json
 
 The JSON output is normalized so that 64-bit integers (usually returned as `bigint`) are converted to strings.
 
+To limit the set of contracts queried (for performance or focused dashboards), use `--sections`:
+
+```bash
+npx ts-node scripts/analytics_dashboard.ts --format json --sections=health,anomaly
+```
+
+This will only query the `medical_records` health check and anomaly detection stats.
+
 ## Privacy-Preserving Analytics
 
 The analytics platform is designed to preserve patient privacy while providing useful aggregate insights:
@@ -130,6 +139,38 @@ Cross-institution metrics can be built by combining:
 
 The same privacy guarantees apply: use counts, rates, and differentially private aggregates, and avoid exporting detailed per-patient histories.
 
+### Cross-Institution Analytics Script
+
+This repository includes a companion script for institution-level analytics:
+
+- `scripts/cross_institution_analytics.ts`
+
+Configuration:
+
+- `FHIR_INTEGRATION_ID` – Contract ID of the FHIR integration contract.
+- `EMR_INTEGRATION_ID` – Contract ID of the EMR integration contract.
+- `ANOMALY_DETECTION_ID` / `PREDICTIVE_ANALYTICS_ID` – Optional IDs for attaching global AI metrics.
+- `ANALYTICS_MODEL_ID` – Optional model identifier used when pulling predictive metrics.
+- `PROVIDER_IDS` – Comma-separated list of FHIR provider IDs to profile.
+- `NETWORK_NODE_IDS` – Comma-separated list of EMR network node IDs to profile.
+
+Example:
+
+```bash
+PROVIDER_IDS="hospital-a,clinic-b" \
+NETWORK_NODE_IDS="node-1,node-2" \
+FHIR_INTEGRATION_ID=... \
+EMR_INTEGRATION_ID=... \
+npx ts-node scripts/cross_institution_analytics.ts --format table
+```
+
+The script returns per-institution analytics plus simple aggregates such as:
+
+- Counts of providers by type and region.
+- Counts of network nodes by type and region.
+
+These aggregates are computed off-chain and are suitable for driving cross-institution dashboards without introducing additional on-chain complexity.
+
 ## Performance Considerations
 
 The on-chain contracts are designed to support analytics efficiently:
@@ -142,3 +183,5 @@ For large deployments:
 
 - Use an off-chain indexer to store and query events and contract state snapshots.
 - Use the `--format json` mode of `analytics_dashboard.ts` as a lightweight health and metrics probe, or as a source for external dashboards (Grafana, Prometheus exporters, etc.).
+- Use the `--sections` flag on `analytics_dashboard.ts` to limit queries to only the sections you need (for example, `health` + `anomaly`), reducing RPC load when dashboards refresh frequently.
+- Use `cross_institution_analytics.ts` for institution-level overviews instead of querying many contracts individually from frontends; it aggregates data once and exposes a compact JSON structure.

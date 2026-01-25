@@ -3,6 +3,7 @@ import { Contract, TransactionBuilder, Networks, rpc, Account, scValToNative, xd
 // Basic configuration - override via environment variables when needed
 const RPC_URL = process.env.RPC_URL || 'https://soroban-testnet.stellar.org';
 const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET;
+const server = new rpc.Server(RPC_URL);
 
 // Contract IDs – set via env vars or by editing these defaults
 const CONTRACT_IDS = {
@@ -26,10 +27,51 @@ const DUMMY_ACCOUNT = new Account(
   '0',
 );
 
+type Section = 'health' | 'anomaly' | 'predictive' | 'federated' | 'explainable';
+
 function getFormat(): 'json' | 'table' {
   if (process.argv.includes('--format=json')) return 'json';
   if (process.argv.includes('--json')) return 'json';
   return 'table';
+}
+
+function getRequestedSections(): Set<Section> {
+  const defaultSections: Section[] = [
+    'health',
+    'anomaly',
+    'predictive',
+    'federated',
+    'explainable',
+  ];
+
+  const argPrefix = '--sections=';
+  const arg = process.argv.find((a) => a.startsWith(argPrefix));
+  if (!arg) {
+    return new Set<Section>(defaultSections);
+  }
+
+  const raw = arg.slice(argPrefix.length);
+  const parts = raw
+    .split(',')
+    .map((s: string) => s.trim().toLowerCase())
+    .filter((s: string) => s.length > 0);
+
+  const sections = new Set<Section>();
+  for (const p of parts) {
+    if (p === 'health' || p === 'medical' || p === 'records') {
+      sections.add('health');
+    } else if (p === 'anomaly' || p === 'anomalies') {
+      sections.add('anomaly');
+    } else if (p === 'predictive' || p === 'prediction' || p === 'model') {
+      sections.add('predictive');
+    } else if (p === 'federated' || p === 'fl' || p === 'round') {
+      sections.add('federated');
+    } else if (p === 'explainable' || p === 'xai' || p === 'bias') {
+      sections.add('explainable');
+    }
+  }
+
+  return sections.size ? sections : new Set<Section>(defaultSections);
 }
 
 function hexToBytes(hex: string): Uint8Array {
@@ -55,7 +97,6 @@ async function simulateCall(
   method: string,
   args: xdr.ScVal[] = [],
 ): Promise<any | null> {
-  const server = new rpc.Server(RPC_URL);
   const contract = new Contract(contractId);
 
   try {
@@ -99,7 +140,7 @@ function normalizeBigInt(value: any): any {
   return value;
 }
 
-async function collectAnalytics() {
+async function collectAnalytics(sections: Set<Section>) {
   const result: any = {
     network: {
       rpcUrl: RPC_URL,
@@ -113,19 +154,27 @@ async function collectAnalytics() {
     biasAudit: null as any,
   };
 
-  if (!CONTRACT_IDS.medicalRecords || CONTRACT_IDS.medicalRecords.startsWith('REPLACE_WITH')) {
-    console.warn('Medical Records contract ID is not configured; set MEDICAL_RECORDS_ID env var.');
-  } else {
+  if (
+    sections.has('health') &&
+    CONTRACT_IDS.medicalRecords &&
+    !CONTRACT_IDS.medicalRecords.startsWith('REPLACE_WITH')
+  ) {
     const health = await simulateCall(CONTRACT_IDS.medicalRecords, 'health_check');
     result.health = normalizeBigInt(health);
+  } else if (sections.has('health')) {
+    console.warn('Medical Records contract ID is not configured; set MEDICAL_RECORDS_ID env var.');
   }
 
-  if (CONTRACT_IDS.anomalyDetection) {
+  if (sections.has('anomaly') && CONTRACT_IDS.anomalyDetection) {
     const stats = await simulateCall(CONTRACT_IDS.anomalyDetection, 'get_stats');
     result.anomalyStats = normalizeBigInt(stats);
   }
 
-  if (CONTRACT_IDS.predictiveAnalytics && ANALYTICS_MODEL_ID_HEX) {
+  if (
+    sections.has('predictive') &&
+    CONTRACT_IDS.predictiveAnalytics &&
+    ANALYTICS_MODEL_ID_HEX
+  ) {
     try {
       const modelIdVal = modelIdToScVal(ANALYTICS_MODEL_ID_HEX);
       const metrics = await simulateCall(
@@ -139,7 +188,11 @@ async function collectAnalytics() {
     }
   }
 
-  if (CONTRACT_IDS.federatedLearning && typeof FEDERATED_ROUND_ID === 'number') {
+  if (
+    sections.has('federated') &&
+    CONTRACT_IDS.federatedLearning &&
+    typeof FEDERATED_ROUND_ID === 'number'
+  ) {
     const roundIdVal = xdr.ScVal.scvU64(BigInt(FEDERATED_ROUND_ID));
     const round = await simulateCall(
       CONTRACT_IDS.federatedLearning,
@@ -149,7 +202,11 @@ async function collectAnalytics() {
     result.federatedRound = normalizeBigInt(round);
   }
 
-  if (CONTRACT_IDS.explainableAi && ANALYTICS_MODEL_ID_HEX) {
+  if (
+    sections.has('explainable') &&
+    CONTRACT_IDS.explainableAi &&
+    ANALYTICS_MODEL_ID_HEX
+  ) {
     try {
       const modelIdVal = modelIdToScVal(ANALYTICS_MODEL_ID_HEX);
       const audit = await simulateCall(
@@ -215,7 +272,8 @@ function printTable(analytics: any) {
 
 async function main() {
   const format = getFormat();
-  const analytics = await collectAnalytics();
+  const sections = getRequestedSections();
+  const analytics = await collectAnalytics(sections);
 
   if (format === 'json') {
     console.log(JSON.stringify(normalizeBigInt(analytics), null, 2));
