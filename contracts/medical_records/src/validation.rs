@@ -447,8 +447,7 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
 pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
-    if !(MIN_FEDERATED_PARTICIPANTS..=MAX_FEDERATED_PARTICIPANTS).contains(&min_participants)
-    {
+    if !(MIN_FEDERATED_PARTICIPANTS..=MAX_FEDERATED_PARTICIPANTS).contains(&min_participants) {
         return Err(Error::InvalidParticipantCount);
     }
 
