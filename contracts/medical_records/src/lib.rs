@@ -12,7 +12,7 @@ mod validation;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address,
     BytesN, Env, Map, String, Symbol, Vec,
 };
 
@@ -367,7 +367,7 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&USERS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env));
         match users.get(address.clone()) {
             Some(profile) => {
                 matches!(

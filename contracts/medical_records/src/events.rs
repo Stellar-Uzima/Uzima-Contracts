@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 // ==================== Event Schema Definitions ====================
 
@@ -654,7 +654,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
 }
 
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
-    let dummy_user = Address::from_string(&String::from_str(
+    let _dummy_user = Address::from_string(&String::from_str(
         env,
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
     ));
@@ -708,7 +708,7 @@ pub struct MonitoringDashboard {
 }
 
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
-    let mut filtered = Vec::new(&events.env());
+    let mut filtered = Vec::new(events.env());
 
     for event in events.iter() {
         let metadata = &event.metadata;
@@ -765,7 +765,7 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
 
     // Apply limit
     if let Some(limit) = filter.limit {
-        let mut limited = Vec::new(&events.env());
+        let mut limited = Vec::new(events.env());
         // Fix: Cast u32 to usize safely
         let len = filtered.len().min(limit);
         for i in 0..len {
@@ -800,14 +800,14 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         }
 
         // Count by type
-        let curr_type = metadata.event_type.clone();
-        let type_count = events_by_type.get(curr_type.clone()).unwrap_or(0) + 1;
-        events_by_type.set(curr_type.clone(), type_count);
+        let curr_type = metadata.event_type;
+        let type_count = events_by_type.get(curr_type).unwrap_or(0) + 1;
+        events_by_type.set(curr_type, type_count);
 
         // Count by category
-        let curr_cat = metadata.category.clone();
-        let category_count = events_by_category.get(curr_cat.clone()).unwrap_or(0) + 1;
-        events_by_category.set(curr_cat.clone(), category_count);
+        let curr_cat = metadata.category;
+        let category_count = events_by_category.get(curr_cat).unwrap_or(0) + 1;
+        events_by_category.set(curr_cat, category_count);
 
         // Count by user
         let user = metadata.user_id.clone();

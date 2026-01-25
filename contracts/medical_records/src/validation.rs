@@ -129,7 +129,7 @@ pub fn validate_string_length(
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidDataRefCharset`
 pub fn validate_string_charset(_env: &Env, value: &String) -> Result<(), Error> {
-    if value.len() == 0 {
+    if value.is_empty() {
         return Err(Error::InvalidDataRefCharset);
     }
 
@@ -432,7 +432,7 @@ pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
 pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
-    if dp_epsilon < MIN_DP_EPSILON || dp_epsilon > MAX_DP_EPSILON {
+    if !(MIN_DP_EPSILON..=MAX_DP_EPSILON).contains(&dp_epsilon) {
         return Err(Error::InvalidDPEpsilon);
     }
 
@@ -447,8 +447,7 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
 pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
-    if min_participants < MIN_FEDERATED_PARTICIPANTS
-        || min_participants > MAX_FEDERATED_PARTICIPANTS
+    if !(MIN_FEDERATED_PARTICIPANTS..=MAX_FEDERATED_PARTICIPANTS).contains(&min_participants)
     {
         return Err(Error::InvalidParticipantCount);
     }
