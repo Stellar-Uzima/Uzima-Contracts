@@ -1056,5 +1056,48 @@ fn test_ai_validation() {
     let other_patient = Address::generate(&env);
     let result = client.try_get_anomaly_score(&other_patient, &record_id);
     assert!(result.is_err());
+}
 
+#[test]
+fn test_get_record_count_getter() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Initially zero records
+    assert_eq!(client.get_record_count(), 0u64);
+
+    // Add first record
+    let _ = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 1"),
+        &String::from_str(&env, "Treatment 1"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag1")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type1"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+
+    // Add second record
+    let _ = client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Diagnosis 2"),
+        &String::from_str(&env, "Treatment 2"),
+        &false,
+        &vec![&env, String::from_str(&env, "tag2")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Type2"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+
+    assert_eq!(client.get_record_count(), 2u64);
 }

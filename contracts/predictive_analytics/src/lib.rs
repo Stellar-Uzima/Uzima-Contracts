@@ -348,6 +348,18 @@ impl PredictiveAnalyticsContract {
         Ok(true)
     }
 
+    pub fn has_high_risk_prediction(env: Env, patient: Address) -> bool {
+        let summary: Option<PatientPredictionsSummary> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PatientSummary(patient));
+
+        match summary {
+            Some(s) => s.high_risk_predictions > 0,
+            None => false,
+        }
+    }
+
     pub fn whitelist_predictor(
         env: Env,
         caller: Address,
@@ -517,5 +529,42 @@ mod test {
         assert_eq!(config.prediction_horizon_days, 60u32);
         assert_eq!(config.min_confidence_bps, 7000u32);
         assert_eq!(config.enabled, false);
+    }
+
+    #[test]
+    fn test_has_high_risk_prediction_helper() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PredictiveAnalyticsContract);
+        let client = PredictiveAnalyticsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let predictor = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client.mock_all_auths().initialize(&admin, &predictor, &30u32, &5000u32);
+
+        // Initially there should be no high-risk predictions
+        assert_eq!(client.has_high_risk_prediction(&patient), false);
+
+        let model_id = BytesN::from_array(&env, &[1; 32]);
+        let outcome_type = String::from_str(&env, "diabetes_risk");
+        let features = vec![&env, String::from_str(&env, "age")];
+        let explanation_ref = String::from_str(&env, "ipfs://prediction-explanation");
+        let risk_factors = vec![&env, String::from_str(&env, "high_bmi")];
+
+        // Create a high-risk prediction (>7500 bps)
+        client.mock_all_auths().make_prediction(
+            &predictor,
+            &patient,
+            &model_id,
+            &outcome_type,
+            &8000u32,
+            &9000u32,
+            &features,
+            &explanation_ref,
+            &risk_factors,
+        ).unwrap();
+
+        assert_eq!(client.has_high_risk_prediction(&patient), true);
     }
 }

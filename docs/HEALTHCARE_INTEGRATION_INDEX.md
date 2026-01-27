@@ -2,11 +2,11 @@
 
 **Version**: 1.0.0  
 **Date**: January 23, 2024  
-**Status**: ✅ Complete & Production-Ready
+**Status**: Complete & Production-Ready
 
 ---
 
-## 📚 Complete Documentation Suite
+## Complete Documentation Suite
 
 ### Start Here
 
@@ -21,6 +21,11 @@
    - Common tasks
    - Error codes
    - Performance guidelines
+
+3. **[Uzima Analytics Platform](ANALYTICS_PLATFORM.md)**
+   - Contract- and script-level analytics
+   - Cross-institution dashboards and KPIs
+   - Privacy-preserving aggregation strategies
 
 ---
 
