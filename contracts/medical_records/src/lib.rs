@@ -24,17 +24,7 @@ const CONTRACT_VERSION: u32 = 1;
 
 const USERS: Symbol = symbol_short!("USERS");
 const RECORDS: Symbol = symbol_short!("RECORDS");
-const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 const PAUSED: Symbol = symbol_short!("PAUSED");
-const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
-const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
-const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
-const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
-const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
-const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
-
-const APPROVAL_THRESHOLD: u32 = 2;
-const TIMELOCK_SECS: u64 = 86_400;
 
 // ==================== Cross-Chain Types ====================
 
@@ -382,6 +372,7 @@ impl MedicalRecordsContract {
     }
 
     /// Internal function to check paused state
+    #[allow(dead_code)]
     fn is_paused(env: &Env) -> bool {
         env.storage().persistent().get(&PAUSED).unwrap_or(false)
     }
@@ -408,6 +399,7 @@ impl MedicalRecordsContract {
     }
 
     /// Internal helper to load AI configuration
+    #[allow(dead_code)]
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
         env.storage()
             .persistent()
@@ -416,6 +408,7 @@ impl MedicalRecordsContract {
     }
 
     /// Ensure that the caller is the configured AI coordinator
+    #[allow(dead_code)]
     fn ensure_ai_coordinator(env: &Env, caller: &Address) -> Result<AIConfig, Error> {
         let config = Self::load_ai_config(env)?;
         if config.ai_coordinator != *caller {
@@ -523,6 +516,7 @@ impl MedicalRecordsContract {
     }
 
     /// Add a new medical record with role-based access control
+    #[allow(clippy::too_many_arguments)]
     pub fn add_record(
         env: Env,
         caller: Address,

@@ -146,14 +146,14 @@ pub struct SystemEventData {
 #[derive(Clone)]
 #[contracttype]
 pub enum EventData {
-    UserEvent(UserEventData),
-    RecordEvent(RecordEventData),
-    AccessEvent(AccessEventData),
-    EmergencyEvent(EmergencyEventData),
-    RecoveryEvent(RecoveryEventData),
-    AIEvent(AIEventData),
-    CrossChainEvent(CrossChainEventData),
-    SystemEvent(SystemEventData),
+    User(UserEventData),
+    Record(RecordEventData),
+    Access(AccessEventData),
+    Emergency(EmergencyEventData),
+    Recovery(RecoveryEventData),
+    AI(AIEventData),
+    CrossChain(CrossChainEventData),
+    System(SystemEventData),
 }
 
 #[derive(Clone)]
@@ -183,7 +183,7 @@ pub fn emit_user_created(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::UserEvent(UserEventData {
+        data: EventData::User(UserEventData {
             target_user: new_user,
             role: Some(String::from_str(env, role)),
             previous_role: None,
@@ -212,7 +212,7 @@ pub fn emit_user_role_updated(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::UserEvent(UserEventData {
+        data: EventData::User(UserEventData {
             target_user,
             role: Some(String::from_str(env, new_role)),
             previous_role: previous_role.map(|r| String::from_str(env, r)),
@@ -235,7 +235,7 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::UserEvent(UserEventData {
+        data: EventData::User(UserEventData {
             target_user,
             role: None,
             previous_role: None,
@@ -246,6 +246,7 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
         .publish(("EVENT", symbol_short!("USR_DEACT")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_record_created(
     env: &Env,
     doctor: Address,
@@ -266,7 +267,7 @@ pub fn emit_record_created(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::RecordEvent(RecordEventData {
+        data: EventData::Record(RecordEventData {
             record_id,
             patient_id: patient,
             doctor_id: Some(doctor),
@@ -279,6 +280,7 @@ pub fn emit_record_created(
         .publish(("EVENT", symbol_short!("REC_NEW")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -291,7 +293,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::RecordEvent(RecordEventData {
+        data: EventData::Record(RecordEventData {
             record_id,
             patient_id: patient,
             doctor_id: None,
@@ -304,6 +306,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         .publish(("EVENT", symbol_short!("REC_ACC")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_access_requested(
     env: &Env,
     requester: Address,
@@ -323,7 +326,7 @@ pub fn emit_access_requested(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AccessEvent(AccessEventData {
+        data: EventData::Access(AccessEventData {
             record_id,
             requester,
             patient,
@@ -336,6 +339,7 @@ pub fn emit_access_requested(
         .publish(("EVENT", symbol_short!("ACC_REQ")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_access_granted(
     env: &Env,
     granter: Address,
@@ -356,7 +360,7 @@ pub fn emit_access_granted(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AccessEvent(AccessEventData {
+        data: EventData::Access(AccessEventData {
             record_id,
             requester,
             patient,
@@ -369,6 +373,7 @@ pub fn emit_access_granted(
         .publish(("EVENT", symbol_short!("ACC_GRANT")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_emergency_access_granted(
     env: &Env,
     granter: Address,
@@ -388,7 +393,7 @@ pub fn emit_emergency_access_granted(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::EmergencyEvent(EmergencyEventData {
+        data: EventData::Emergency(EmergencyEventData {
             grantee,
             patient,
             record_scope,
@@ -412,7 +417,7 @@ pub fn emit_contract_paused(env: &Env, admin: Address) {
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::SystemEvent(SystemEventData {
+        data: EventData::System(SystemEventData {
             status: String::from_str(env, "paused"),
             metric_name: None,
             metric_value: None,
@@ -434,7 +439,7 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::SystemEvent(SystemEventData {
+        data: EventData::System(SystemEventData {
             status: String::from_str(env, "active"),
             metric_name: None,
             metric_value: None,
@@ -444,6 +449,7 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
         .publish(("EVENT", symbol_short!("UNPAUSED")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_recovery_proposed(
     env: &Env,
     proposer: Address,
@@ -463,7 +469,7 @@ pub fn emit_recovery_proposed(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+        data: EventData::Recovery(RecoveryEventData {
             proposal_id,
             token_contract,
             recipient,
@@ -476,6 +482,7 @@ pub fn emit_recovery_proposed(
         .publish(("EVENT", symbol_short!("REC_PROP")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
     // Generate placeholder addresses for required fields in event struct
     // In a real system, we'd look up the proposal, but this is just an event emitter
@@ -493,7 +500,7 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+        data: EventData::Recovery(RecoveryEventData {
             proposal_id,
             token_contract: placeholder.clone(),
             recipient: placeholder,
@@ -506,6 +513,7 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
         .publish(("EVENT", symbol_short!("REC_APPR")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_recovery_executed(
     env: &Env,
     executor: Address,
@@ -525,7 +533,7 @@ pub fn emit_recovery_executed(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+        data: EventData::Recovery(RecoveryEventData {
             proposal_id,
             token_contract,
             recipient,
@@ -538,6 +546,7 @@ pub fn emit_recovery_executed(
         .publish(("EVENT", symbol_short!("REC_EXEC")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -550,7 +559,7 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AIEvent(AIEventData {
+        data: EventData::AI(AIEventData {
             record_id: None,
             patient_id: None,
             model_id: BytesN::from_array(env, &[0u8; 32]), // Placeholder
@@ -563,6 +572,7 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
         .publish(("EVENT", symbol_short!("AI_CFG")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_anomaly_score_submitted(
     env: &Env,
     ai_coordinator: Address,
@@ -583,7 +593,7 @@ pub fn emit_anomaly_score_submitted(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AIEvent(AIEventData {
+        data: EventData::AI(AIEventData {
             record_id: Some(record_id),
             patient_id: Some(patient),
             model_id,
@@ -596,6 +606,7 @@ pub fn emit_anomaly_score_submitted(
         .publish(("EVENT", symbol_short!("ANOMALY")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_risk_score_submitted(
     env: &Env,
     ai_coordinator: Address,
@@ -615,7 +626,7 @@ pub fn emit_risk_score_submitted(
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AIEvent(AIEventData {
+        data: EventData::AI(AIEventData {
             record_id: None,
             patient_id: Some(patient),
             model_id,
@@ -628,6 +639,7 @@ pub fn emit_risk_score_submitted(
         .publish(("EVENT", symbol_short!("RISK_SCR")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -640,7 +652,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
-        data: EventData::AIEvent(AIEventData {
+        data: EventData::AI(AIEventData {
             record_id: Some(record_id),
             patient_id: Some(patient),
             model_id: BytesN::from_array(env, &[0u8; 32]), // Placeholder
@@ -653,6 +665,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         .publish(("EVENT", symbol_short!("AI_TRIG")), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
     let _dummy_user = Address::from_string(&String::from_str(
         env,
@@ -665,6 +678,7 @@ pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
     // We will just do nothing for now to fix compilation as this event is non-critical System event.
 }
 
+#[allow(dead_code)]
 pub fn emit_metric_update(_env: &Env, _metric_name: &str, _value: u64) {
     // Ignoring.
 }
@@ -707,6 +721,7 @@ pub struct MonitoringDashboard {
     pub health_status: String,
 }
 
+#[allow(dead_code)]
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
     let mut filtered = Vec::new(events.env());
 
@@ -779,6 +794,7 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
     }
 }
 
+#[allow(dead_code)]
 pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);

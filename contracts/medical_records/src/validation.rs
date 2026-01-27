@@ -57,34 +57,46 @@ pub const MIN_DID_LENGTH: u32 = 10;
 pub const MAX_DID_LENGTH: u32 = 200;
 
 /// Minimum length for purpose string in access requests
+#[allow(dead_code)]
 pub const MIN_PURPOSE_LENGTH: u32 = 5;
 /// Maximum length for purpose string
+#[allow(dead_code)]
 pub const MAX_PURPOSE_LENGTH: u32 = 256;
 
 /// Minimum length for explanation summary
+#[allow(dead_code)]
 pub const MIN_EXPLANATION_LENGTH: u32 = 10;
 /// Maximum length for explanation summary
+#[allow(dead_code)]
 pub const MAX_EXPLANATION_LENGTH: u32 = 512;
 
 /// Minimum length for model version string
+#[allow(dead_code)]
 pub const MIN_MODEL_VERSION_LENGTH: u32 = 1;
 /// Maximum length for model version string
+#[allow(dead_code)]
 pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
 
 /// Maximum allowed score in basis points
+#[allow(dead_code)]
 pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
+#[allow(dead_code)]
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
 
 /// Minimum number of participants for federated learning
+#[allow(dead_code)]
 pub const MIN_FEDERATED_PARTICIPANTS: u32 = 2;
 /// Maximum number of participants for federated learning
+#[allow(dead_code)]
 pub const MAX_FEDERATED_PARTICIPANTS: u32 = 10_000;
 
 /// Minimum differential privacy epsilon (in units of 0.01)
+#[allow(dead_code)]
 pub const MIN_DP_EPSILON: u32 = 1; // 0.01
 /// Maximum differential privacy epsilon
+#[allow(dead_code)]
 pub const MAX_DP_EPSILON: u32 = 1000; // 10.0
 
 // ==================== STRING VALIDATION ====================
@@ -318,6 +330,7 @@ pub fn validate_did_reference(did: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
     validate_string_length(
         purpose,
@@ -377,6 +390,7 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
@@ -416,6 +430,7 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::RecordNotFound`
+#[allow(dead_code)]
 pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
     if record_id == 0 {
         return Err(Error::RecordNotFound);
@@ -431,6 +446,7 @@ pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
     if !(MIN_DP_EPSILON..=MAX_DP_EPSILON).contains(&dp_epsilon) {
         return Err(Error::InvalidDPEpsilon);
@@ -446,6 +462,7 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
     if !(MIN_FEDERATED_PARTICIPANTS..=MAX_FEDERATED_PARTICIPANTS).contains(&min_participants) {
         return Err(Error::InvalidParticipantCount);
@@ -464,6 +481,7 @@ pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidInput`
+#[allow(dead_code)]
 pub fn validate_duration(duration: u64) -> Result<(), Error> {
     if duration == 0 || duration > MAX_EMERGENCY_DURATION {
         return Err(Error::InvalidInput);
@@ -478,6 +496,7 @@ pub fn validate_duration(duration: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::RecordNotFound`
+#[allow(dead_code)]
 pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
     for id in record_ids.iter() {
         validate_record_id(id)?;
@@ -492,6 +511,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+#[allow(dead_code)]
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NotAuthorized);
@@ -511,6 +531,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+#[allow(dead_code)]
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
@@ -611,6 +632,7 @@ pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_ai_explanation(
     explanation_summary: &String,
     model_version: &String,
@@ -641,6 +663,7 @@ pub fn validate_ai_explanation(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> Result<(), Error> {
     // Check count
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
