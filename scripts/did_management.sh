@@ -31,7 +31,6 @@ set -e
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m'
@@ -148,13 +147,13 @@ cmd_create_did() {
     print_step "Creating DID for: $SUBJECT"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         create_did \
-        --subject $SUBJECT \
-        --primary_public_key $PUBLIC_KEY \
+        --subject "$SUBJECT" \
+        --primary_public_key "$PUBLIC_KEY" \
         --services "[]"
 
     print_success "DID created successfully"
@@ -187,12 +186,12 @@ cmd_resolve_did() {
     print_step "Resolving DID for: $SUBJECT"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         resolve_did \
-        --subject $SUBJECT
+        --subject "$SUBJECT"
 }
 
 # Issue a credential
@@ -248,17 +247,17 @@ cmd_issue_credential() {
     print_step "  URI: $CRED_URI"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         issue_credential \
-        --issuer $ISSUER \
-        --subject $SUBJECT \
-        --credential_type $CRED_TYPE \
-        --credential_hash $CRED_HASH \
+        --issuer "$ISSUER" \
+        --subject "$SUBJECT" \
+        --credential_type "$CRED_TYPE" \
+        --credential_hash "$CRED_HASH" \
         --credential_uri "$CRED_URI" \
-        --expiration_date $EXPIRATION
+        --expiration_date "$EXPIRATION"
 
     print_success "Credential issued successfully"
 }
@@ -290,12 +289,12 @@ cmd_verify_credential() {
     print_step "Verifying credential: $CRED_ID"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         verify_credential \
-        --credential_id $CRED_ID
+        --credential_id "$CRED_ID"
 }
 
 # Add a verifier
@@ -325,12 +324,12 @@ cmd_add_verifier() {
     print_step "Adding verifier: $VERIFIER"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         add_verifier \
-        --verifier $VERIFIER
+        --verifier "$VERIFIER"
 
     print_success "Verifier added successfully"
 }
@@ -372,14 +371,14 @@ cmd_add_guardian() {
     print_step "Adding guardian $GUARDIAN for subject $SUBJECT"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         add_recovery_guardian \
-        --subject $SUBJECT \
-        --guardian $GUARDIAN \
-        --weight $WEIGHT
+        --subject "$SUBJECT" \
+        --guardian "$GUARDIAN" \
+        --weight "$WEIGHT"
 
     print_success "Guardian added successfully"
 }
@@ -421,14 +420,14 @@ cmd_rotate_key() {
     print_step "Rotating key $METHOD_ID for subject $SUBJECT"
 
     stellar contract invoke \
-        --id $CONTRACT_ID \
-        --source $IDENTITY \
-        --network $NETWORK \
+        --id "$CONTRACT_ID" \
+        --source "$IDENTITY" \
+        --network "$NETWORK" \
         -- \
         rotate_key \
-        --subject $SUBJECT \
+        --subject "$SUBJECT" \
         --method_id "$METHOD_ID" \
-        --new_public_key $NEW_KEY
+        --new_public_key "$NEW_KEY"
 
     print_success "Key rotated successfully"
 }

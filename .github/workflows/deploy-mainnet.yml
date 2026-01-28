@@ -46,6 +46,11 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
+
       - name: Install Soroban CLI
         run: |
           cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
@@ -85,6 +90,11 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Install Soroban CLI
         run: |
@@ -146,6 +156,11 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config
 
       - name: Install Soroban CLI
         run: |
@@ -260,4 +275,3 @@ jobs:
           echo "- Verify all contracts are functioning correctly" >> $GITHUB_STEP_SUMMARY
           echo "- Monitor contract health: \`./scripts/monitor_deployments.sh mainnet\`" >> $GITHUB_STEP_SUMMARY
           echo "- Keep deployment logs for audit purposes" >> $GITHUB_STEP_SUMMARY
-
