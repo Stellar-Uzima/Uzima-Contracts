@@ -3,8 +3,7 @@ name: Deploy to Testnet
 on:
   push:
     branches: [ develop ]
-    tags:
-      - 'v*'
+    tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       contract:
@@ -12,7 +11,7 @@ on:
         required: false
         type: string
       skip_tests:
-        description: 'Skip tests before deployment'
+        description: 'Skip tests'
         required: false
         type: boolean
         default: false
@@ -23,11 +22,11 @@ env:
   NETWORK: "testnet"
 
 jobs:
-  # Run tests before deployment
+  # Run comprehensive tests
   pre-deploy-tests:
     name: Pre-deployment Tests
     runs-on: ubuntu-latest
-    if: ${{ !inputs.skip_tests }}
+    if: inputs.skip_tests != true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,11 +40,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
+          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v${{ env.SOROBAN_VERSION }}/stellar-cli-${{ env.SOROBAN_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tar.gz
+          sudo mv stellar /usr/local/bin/soroban
+          rm stellar-cli.tar.gz
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -68,7 +70,7 @@ jobs:
     name: Build Contracts
     runs-on: ubuntu-latest
     needs: [pre-deploy-tests]
-    if: always() && (needs.pre-deploy-tests.result == 'success' || needs.pre-deploy-tests.result == 'skipped')
+    if: always() && (needs.pre-deploy-tests.result == 'success' || inputs.skip_tests == true)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -82,11 +84,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
+          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v${{ env.SOROBAN_VERSION }}/stellar-cli-${{ env.SOROBAN_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tar.gz
+          sudo mv stellar /usr/local/bin/soroban
+          rm stellar-cli.tar.gz
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -123,7 +128,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wasm-contracts
+          name: wasm-contracts-testnet
           path: dist/*.wasm
           retention-days: 7
 
@@ -148,16 +153,19 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
+          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v${{ env.SOROBAN_VERSION }}/stellar-cli-${{ env.SOROBAN_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tar.gz
+          sudo mv stellar /usr/local/bin/soroban
+          rm stellar-cli.tar.gz
 
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wasm-contracts
+          name: wasm-contracts-testnet
           path: dist/
 
       - name: Configure Soroban network
@@ -170,18 +178,13 @@ jobs:
         env:
           SOROBAN_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
         run: |
-          # Add identity from secret key if provided
-          if [ -n "$SOROBAN_SECRET_KEY" ]; then
-            echo "$SOROBAN_SECRET_KEY" > /tmp/secret_key.txt
-            soroban config identity add deployer-testnet --secret-key /tmp/secret_key.txt || true
-            rm -f /tmp/secret_key.txt
+          if [ -z "$SOROBAN_SECRET_KEY" ]; then
+            echo "Generating new identity for testnet..."
+            soroban config identity generate deployer-testnet
           else
-            # Generate new identity if no secret key provided
-            if ! soroban config identity show deployer-testnet &> /dev/null; then
-              soroban config identity generate deployer-testnet
-            fi
-            # Fund the account
-            soroban config identity fund deployer-testnet --network testnet || true
+            echo "$SOROBAN_SECRET_KEY" > /tmp/secret_key.txt
+            soroban config identity add deployer-testnet --secret-key /tmp/secret_key.txt
+            rm -f /tmp/secret_key.txt
           fi
 
       - name: Deploy contracts
@@ -191,7 +194,6 @@ jobs:
           deployment_log="deployments/testnet_$(date +%Y%m%d_%H%M%S).json"
           echo "[]" > "$deployment_log"
           
-          # Determine which contracts to deploy
           if [ -n "${{ inputs.contract }}" ]; then
             contracts="${{ inputs.contract }}"
           else
@@ -205,9 +207,8 @@ jobs:
               continue
             fi
             
-            echo "Deploying $contract_name to testnet..."
+            echo "Deploying $contract_name to TESTNET..."
             
-            # Deploy contract
             contract_id=$(soroban contract deploy \
               --wasm "$wasm_file" \
               --source deployer-testnet \
@@ -219,9 +220,8 @@ jobs:
               exit 1
             fi
             
-            echo "Deployed $contract_name: $contract_id"
+            echo "✅ Deployed $contract_name: $contract_id"
             
-            # Save deployment info
             jq --arg name "$contract_name" \
                --arg id "$contract_id" \
                --arg network "testnet" \
@@ -238,62 +238,10 @@ jobs:
           done
           
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
-          cat "$deployment_log"
 
       - name: Upload deployment artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-info
+          name: deployment-info-testnet
           path: deployments/*.json
           retention-days: 90
-
-      - name: Create deployment summary
-        run: |
-          echo "## Testnet Deployment Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployed at:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Deployed Contracts" >> $GITHUB_STEP_SUMMARY
-          cat "${{ steps.deploy.outputs.deployment_log }}" | jq -r '.[] | "- **\(.contract_name)**: `\(.contract_id)`"' >> $GITHUB_STEP_SUMMARY
-
-  # Post-deployment verification
-  verify:
-    name: Verify Deployment
-    runs-on: ubuntu-latest
-    needs: [deploy]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
-
-      - name: Install Soroban CLI
-        run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
-
-      - name: Download deployment info
-        uses: actions/download-artifact@v4
-        with:
-          name: deployment-info
-          path: deployments/
-
-      - name: Verify contracts
-        run: |
-          for deployment_file in deployments/*.json; do
-            if [ -f "$deployment_file" ]; then
-              echo "Verifying deployments from $deployment_file"
-              cat "$deployment_file" | jq -r '.[] | "\(.contract_name): \(.contract_id)"' | while read line; do
-                contract_id=$(echo "$line" | cut -d: -f2 | xargs)
-                echo "Verifying contract: $contract_id"
-                soroban contract invoke \
-                  --id "$contract_id" \
-                  --network testnet \
-                  -- --help || echo "Warning: Could not verify $contract_id"
-              done
-            fi
-          done

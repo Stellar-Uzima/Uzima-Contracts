@@ -39,7 +39,7 @@ jobs:
             ${{ runner.os }}-cargo-audit-
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --features=fix
+        run: cargo install --locked cargo-audit --features=fix
 
       - name: Run security audit
         run: cargo audit
@@ -57,6 +57,11 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: clippy
           targets: wasm32-unknown-unknown
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Cache cargo registry
         uses: actions/cache@v4
