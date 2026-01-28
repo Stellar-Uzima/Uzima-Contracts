@@ -179,6 +179,10 @@ Uzima-Contracts/
 │       ├── src/
 │       │   └── lib.rs         # Main contract logic
 │       └── Cargo.toml         # Contract dependencies
+│   └── ai_analytics/
+│       ├── src/
+│       │   └── lib.rs         # AI integration logic
+│       └── Cargo.toml         # Contract dependencies
 │
 ├── scripts/                   # Deployment and interaction scripts
 │   ├── deploy.sh             # Contract deployment

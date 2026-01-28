@@ -559,10 +559,7 @@ impl MedicalRecordsContract {
         // 4. Insert the new record
         records.set(record_id, record);
 
-        // 5. Save the Map back to storage
         env.storage().persistent().set(&RECORDS, &records);
-
-        // 6. Return the new ID
         Ok(record_id)
     }
 }

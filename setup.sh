@@ -89,6 +89,7 @@ create_project_structure() {
     
     # Create directories
     mkdir -p contracts/medical_records/src
+    mkdir -p contracts/ai_analytics/src
     mkdir -p scripts
     mkdir -p tests/{integration,unit}
     mkdir -p .github/workflows
