@@ -1,4 +1,9 @@
-#![allow(unused_imports, unused_variables, dead_code, clippy::assertions_on_constants)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    dead_code,
+    clippy::assertions_on_constants
+)]
 //! DID Integration Tests
 //!
 //! Comprehensive tests for W3C DID-compliant decentralized identity integration
