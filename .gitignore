@@ -93,3 +93,5 @@ soroban
 deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
+
+Logs.md
