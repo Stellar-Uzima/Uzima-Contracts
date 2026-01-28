@@ -108,11 +108,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
+          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v${{ env.SOROBAN_VERSION }}/stellar-cli-${{ env.SOROBAN_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tar.gz
+          sudo mv stellar /usr/local/bin/soroban
+          rm stellar-cli.tar.gz
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -148,11 +151,14 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libdbus-1-dev pkg-config
+          sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev
 
       - name: Install Soroban CLI
         run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
+          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v${{ env.SOROBAN_VERSION }}/stellar-cli-${{ env.SOROBAN_VERSION }}-x86_64-unknown-linux-gnu.tar.gz
+          tar -xzf stellar-cli.tar.gz
+          sudo mv stellar /usr/local/bin/soroban
+          rm stellar-cli.tar.gz
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -199,7 +205,6 @@ jobs:
         uses: ludeeus/action-shellcheck@master
         with:
           scandir: 'scripts'
-          ignore: SC2011,SC2012,SC2034,SC2086,SC2155,SC2162,SC2207
 
   # Test summary
   test-summary:

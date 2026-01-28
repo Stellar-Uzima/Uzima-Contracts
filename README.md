@@ -52,7 +52,7 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 
 Before you begin, ensure you have the following installed:
 
-- **Rust 1.78.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
+- **Rust 1.92.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
 - **Soroban CLI v23.1.4+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
 - **Git** - For version control
 - **Make** - For using the provided Makefile (optional but recommended)
@@ -100,6 +100,7 @@ rustup target add wasm32-unknown-unknown
 rustup component add rustfmt clippy rust-src
 
 # Install Soroban CLI
+# Linux users: Ensure libudev-dev is installed (e.g., sudo apt-get install libudev-dev)
 cargo install --locked soroban-cli
 
 # Configure Soroban

@@ -1,8 +1,7 @@
 #!/bin/bash
 
 # setup.sh - Complete Soroban Project Setup Script
-# Th
-is script sets up a complete Soroban development environment
+# This script sets up a complete Soroban development environment
 
 set -e
 
@@ -48,11 +47,11 @@ check_command() {
 }
 
 install_rust() {
-    print_step "Installing Rust 1.78.0..."
-    rustup install 1.78.0
-    rustup override set 1.78.0
+    print_step "Installing Rust 1.92.0..."
+    rustup install 1.92.0
+    rustup override set 1.92.0
     rustc --version
-    print_status "Rust 1.78.0 installed and set"
+    print_status "Rust 1.92.0 installed and set"
 }
 
 setup_rust_targets() {
