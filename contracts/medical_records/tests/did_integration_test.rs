@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_variables, dead_code, clippy::assertions_on_constants)]
 //! DID Integration Tests
 //!
 //! Comprehensive tests for W3C DID-compliant decentralized identity integration
@@ -42,7 +43,6 @@ mod identity_registry_tests {
         // 6. Test DID deactivation
 
         // Placeholder for integration test
-        assert!(true);
     }
 
     /// Test verifiable credential workflow for medical professionals
@@ -61,7 +61,6 @@ mod identity_registry_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 
     /// Test identity recovery workflow
@@ -80,7 +79,6 @@ mod identity_registry_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 
     /// Test cross-platform identity interoperability
@@ -96,7 +94,6 @@ mod identity_registry_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 }
 
@@ -117,7 +114,6 @@ mod medical_records_did_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 
     /// Test DID-linked record creation
@@ -134,7 +130,6 @@ mod medical_records_did_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 
     /// Test access logging
@@ -150,7 +145,6 @@ mod medical_records_did_tests {
         env.mock_all_auths();
 
         // Placeholder for integration test
-        assert!(true);
     }
 }
 
@@ -173,7 +167,6 @@ mod credential_verification_tests {
         env.mock_all_auths();
 
         // Placeholder for credential type tests
-        assert!(true);
     }
 
     /// Test credential expiration
@@ -189,7 +182,6 @@ mod credential_verification_tests {
         env.mock_all_auths();
 
         // Placeholder for expiration test
-        assert!(true);
     }
 
     /// Test credential revocation
@@ -205,7 +197,6 @@ mod credential_verification_tests {
         env.mock_all_auths();
 
         // Placeholder for revocation test
-        assert!(true);
     }
 }
 
@@ -225,7 +216,6 @@ mod verification_method_tests {
         env.mock_all_auths();
 
         // Placeholder for verification method type tests
-        assert!(true);
     }
 
     /// Test verification relationships
@@ -242,7 +232,6 @@ mod verification_method_tests {
         env.mock_all_auths();
 
         // Placeholder for verification relationship tests
-        assert!(true);
     }
 
     /// Test key rotation with cooldown
@@ -258,7 +247,6 @@ mod verification_method_tests {
         env.mock_all_auths();
 
         // Placeholder for key rotation cooldown test
-        assert!(true);
     }
 }
 
@@ -278,7 +266,6 @@ mod service_endpoint_tests {
         env.mock_all_auths();
 
         // Placeholder for service endpoint tests
-        assert!(true);
     }
 }
 
@@ -299,7 +286,6 @@ mod security_tests {
         env.mock_all_auths();
 
         // Placeholder for authorization security tests
-        assert!(true);
     }
 
     /// Test recovery security
@@ -316,7 +302,6 @@ mod security_tests {
         env.mock_all_auths();
 
         // Placeholder for recovery security tests
-        assert!(true);
     }
 
     /// Test DID deactivation security
@@ -331,7 +316,6 @@ mod security_tests {
         env.mock_all_auths();
 
         // Placeholder for deactivation security tests
-        assert!(true);
     }
 }
 
@@ -353,7 +337,6 @@ mod compliance_tests {
         env.mock_all_auths();
 
         // Placeholder for W3C compliance tests
-        assert!(true);
     }
 
     /// Test Verifiable Credentials data model compliance
@@ -371,7 +354,6 @@ mod compliance_tests {
         env.mock_all_auths();
 
         // Placeholder for VC compliance tests
-        assert!(true);
     }
 
     /// Test healthcare-specific compliance (HIPAA considerations)
@@ -387,6 +369,5 @@ mod compliance_tests {
         env.mock_all_auths();
 
         // Placeholder for healthcare compliance tests
-        assert!(true);
     }
 }

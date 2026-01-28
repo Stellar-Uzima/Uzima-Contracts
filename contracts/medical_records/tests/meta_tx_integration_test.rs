@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_variables, dead_code, clippy::assertions_on_constants)]
 #![cfg(test)]
 
 //! # Meta-Transaction Integration Tests
