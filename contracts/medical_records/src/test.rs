@@ -1101,3 +1101,208 @@ fn test_get_record_count_getter() {
 
     assert_eq!(client.get_record_count(), 2u64);
 }
+
+// ==================== Severity System Tests ====================
+
+#[test]
+fn test_severity_levels() {
+    use crate::events::{EventSeverity, EventType};
+    
+    // Verify Error severity events
+    assert_eq!(EventSeverity::from_event_type(EventType::ContractPaused), EventSeverity::Error);
+    assert_eq!(EventSeverity::from_event_type(EventType::ContractUnpaused), EventSeverity::Error);
+    assert_eq!(EventSeverity::from_event_type(EventType::EmergencyAccessGranted), EventSeverity::Error);
+    assert_eq!(EventSeverity::from_event_type(EventType::RecoveryProposed), EventSeverity::Error);
+    assert_eq!(EventSeverity::from_event_type(EventType::RecoveryApproved), EventSeverity::Error);
+    assert_eq!(EventSeverity::from_event_type(EventType::RecoveryExecuted), EventSeverity::Error);
+    
+    // Verify Warning severity events
+    assert_eq!(EventSeverity::from_event_type(EventType::UserRoleUpdated), EventSeverity::Warning);
+    assert_eq!(EventSeverity::from_event_type(EventType::UserDeactivated), EventSeverity::Warning);
+    assert_eq!(EventSeverity::from_event_type(EventType::AccessGranted), EventSeverity::Warning);
+    assert_eq!(EventSeverity::from_event_type(EventType::AIConfigUpdated), EventSeverity::Warning);
+    
+    // Verify Info severity events (default)
+    assert_eq!(EventSeverity::from_event_type(EventType::UserCreated), EventSeverity::Info);
+    assert_eq!(EventSeverity::from_event_type(EventType::RecordCreated), EventSeverity::Info);
+    assert_eq!(EventSeverity::from_event_type(EventType::RecordAccessed), EventSeverity::Info);
+    assert_eq!(EventSeverity::from_event_type(EventType::AccessRequested), EventSeverity::Info);
+    assert_eq!(EventSeverity::from_event_type(EventType::AnomalyScoreSubmitted), EventSeverity::Info);
+}
+
+#[test]
+fn test_filter_by_severity() {
+    use crate::events::{BaseEvent, EventMetadata, EventData, EventType, EventSeverity, OperationCategory, EventFilter, UserEventData, filter_events};
+    
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    
+    // Create events with different severities
+    let mut events = Vec::new(&env);
+    
+    // Info event
+    events.push_back(BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::UserCreated,
+            category: OperationCategory::UserManagement,
+            severity: EventSeverity::Info,
+            timestamp: 1000,
+            user_id: admin.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: 1,
+        },
+        data: EventData::UserEvent(UserEventData {
+            target_user: user.clone(),
+            role: Some(String::from_str(&env, "Patient")),
+            previous_role: None,
+            did_reference: None,
+        }),
+    });
+    
+    // Warning event
+    events.push_back(BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::UserRoleUpdated,
+            category: OperationCategory::UserManagement,
+            severity: EventSeverity::Warning,
+            timestamp: 2000,
+            user_id: admin.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: 2,
+        },
+        data: EventData::UserEvent(UserEventData {
+            target_user: user.clone(),
+            role: Some(String::from_str(&env, "Doctor")),
+            previous_role: Some(String::from_str(&env, "Patient")),
+            did_reference: None,
+        }),
+    });
+    
+    // Error event
+    events.push_back(BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::ContractPaused,
+            category: OperationCategory::Administrative,
+            severity: EventSeverity::Error,
+            timestamp: 3000,
+            user_id: admin.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: 3,
+        },
+        data: EventData::UserEvent(UserEventData {
+            target_user: admin.clone(),
+            role: None,
+            previous_role: None,
+            did_reference: None,
+        }),
+    });
+    
+    // Filter with severity_min = Warning (should return Warning and Error only)
+    let filter = EventFilter {
+        event_types: None,
+        categories: None,
+        severity_min: Some(EventSeverity::Warning),
+        user_id: None,
+        start_time: None,
+        end_time: None,
+        limit: None,
+    };
+    
+    let filtered = filter_events(&events, &filter);
+    assert_eq!(filtered.len(), 2); // Warning + Error
+    assert_eq!(filtered.get(0).unwrap().metadata.severity, EventSeverity::Warning);
+    assert_eq!(filtered.get(1).unwrap().metadata.severity, EventSeverity::Error);
+}
+
+#[test]
+fn test_aggregate_by_severity() {
+    use crate::events::{BaseEvent, EventMetadata, EventData, EventType, EventSeverity, OperationCategory, UserEventData, aggregate_events};
+    
+    let env = Env::default();
+    let admin = Address::generate(&env);
+    let user = Address::generate(&env);
+    
+    // Create events with different severities
+    let mut events = Vec::new(&env);
+    
+    // 3 Info events
+    for i in 0..3 {
+        events.push_back(BaseEvent {
+            metadata: EventMetadata {
+                event_type: EventType::RecordCreated,
+                category: OperationCategory::RecordOperations,
+                severity: EventSeverity::Info,
+                timestamp: 1000 + i,
+                user_id: admin.clone(),
+                session_id: None,
+                ipfs_ref: None,
+                gas_used: None,
+                block_height: 1 + i,
+            },
+            data: EventData::UserEvent(UserEventData {
+                target_user: user.clone(),
+                role: None,
+                previous_role: None,
+                did_reference: None,
+            }),
+        });
+    }
+    
+    // 2 Warning events
+    for i in 0..2 {
+        events.push_back(BaseEvent {
+            metadata: EventMetadata {
+                event_type: EventType::UserRoleUpdated,
+                category: OperationCategory::UserManagement,
+                severity: EventSeverity::Warning,
+                timestamp: 2000 + i,
+                user_id: admin.clone(),
+                session_id: None,
+                ipfs_ref: None,
+                gas_used: None,
+                block_height: 10 + i,
+            },
+            data: EventData::UserEvent(UserEventData {
+                target_user: user.clone(),
+                role: Some(String::from_str(&env, "Doctor")),
+                previous_role: None,
+                did_reference: None,
+            }),
+        });
+    }
+    
+    // 1 Error event
+    events.push_back(BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::ContractPaused,
+            category: OperationCategory::Administrative,
+            severity: EventSeverity::Error,
+            timestamp: 3000,
+            user_id: admin.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: 20,
+        },
+        data: EventData::UserEvent(UserEventData {
+            target_user: admin.clone(),
+            role: None,
+            previous_role: None,
+            did_reference: None,
+        }),
+    });
+    
+    // Aggregate and verify severity counts
+    let stats = aggregate_events(&events);
+    assert_eq!(stats.total_events, 6);
+    assert_eq!(stats.events_by_severity.get(EventSeverity::Info).unwrap(), 3);
+    assert_eq!(stats.events_by_severity.get(EventSeverity::Warning).unwrap(), 2);
+    assert_eq!(stats.events_by_severity.get(EventSeverity::Error).unwrap(), 1);
+}

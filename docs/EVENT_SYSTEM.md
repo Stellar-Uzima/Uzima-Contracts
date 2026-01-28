@@ -69,6 +69,69 @@ Events are categorized for easier filtering and analysis:
 - `CrossChain` - Cross-chain operations
 - `System` - System maintenance
 
+### Event Severity Levels
+
+Events are classified into three severity levels for production monitoring and filtering:
+
+#### Error (Level 2)
+**System-critical operations affecting system availability**
+
+Events that require immediate attention and indicate system-wide control changes or emergency protocols:
+- `ContractPaused`, `ContractUnpaused` - System availability changes
+- `EmergencyAccessGranted` - Bypassing normal access controls
+- `RecoveryProposed`, `RecoveryApproved`, `RecoveryExecuted` - Asset recovery operations
+
+**Use Cases:** Real-time alerting, incident response, 24/7 monitoring
+
+#### Warning (Level 1)
+**Security-sensitive operations requiring audit**
+
+Events that change permissions, roles, or access control:
+- `UserRoleUpdated`, `UserDeactivated` - Privilege changes
+- `AccessGranted` - Permission grants
+- `AIConfigUpdated` - System configuration changes
+
+**Use Cases:** Security audits, compliance reporting, daily review
+
+#### Info (Level 0)
+**Normal operations (default)**
+
+Standard business operations and informational events:
+- `UserCreated`, `RecordCreated`, `RecordAccessed` - Normal operations
+- `AccessRequested` - Access requests (before approval)
+- `AnomalyScoreSubmitted`, `RiskScoreSubmitted`, `AIAnalysisTriggered` - AI analytics
+- `HealthCheck`, `MetricUpdate` - System diagnostics
+- All other events not listed above
+
+**Use Cases:** Operational monitoring, business analytics, audit logs
+
+### Filtering by Severity
+
+Query events by minimum severity level:
+
+```rust
+use events::{EventFilter, EventSeverity};
+
+// Get only Error-level events
+let error_filter = EventFilter {
+    severity_min: Some(EventSeverity::Error),
+    event_types: None,
+    categories: None,
+    user_id: None,
+    start_time: None,
+    end_time: None,
+    limit: Some(100),
+};
+
+let critical_events = filter_events(&all_events, &error_filter);
+
+// Get Warning and Error events (security monitoring)
+let security_filter = EventFilter {
+    severity_min: Some(EventSeverity::Warning),
+    // ... other fields
+};
+```
+
 ## Event Schema
 
 ### Base Event Structure
