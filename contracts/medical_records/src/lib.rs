@@ -12,7 +12,29 @@ use soroban_sdk::{
     Env, Map, String, Symbol, Vec,
 };
 
+use soroban_sdk::{contract, contractimpl, Env};
+
+pub const CONTRACT_VERSION: u32 = 1;
+
 // ... (Types remain the same until AccessRequest) ...
+
+#[contract]
+pub struct MedicalRecords;
+
+#[contractimpl]
+impl MedicalRecords {
+    pub fn get_version() -> u32 {
+        CONTRACT_VERSION
+    }
+
+    // IMPORTANT:
+    // ❌ DO NOT initialize storage here
+    // ✅ Proxy owns storage
+
+    pub fn add_record(env: Env, record: String) {
+        // normal logic, but storage comes from proxy
+    }
+}
 
 // ==================== Cross-Chain Types ====================
 
