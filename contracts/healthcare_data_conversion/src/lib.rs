@@ -132,7 +132,7 @@ const CONVERSION_RULES: Symbol = symbol_short!("RULES");
 const CODING_MAPPINGS: Symbol = symbol_short!("CODINGS");
 const FORMAT_SPECS: Symbol = symbol_short!("FORMATS");
 const CONVERSION_REQUESTS: Symbol = symbol_short!("REQUESTS");
-const VALIDATION_RESULTS: Symbol = symbol_short!("VALIDATIONS");
+const VALIDATION_RESULTS: Symbol = symbol_short!("VALIDATE");
 const LOSSY_WARNINGS: Symbol = symbol_short!("WARNINGS");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
@@ -408,7 +408,7 @@ impl HealthcareDataConversionContract {
 
         let validation_id = String::from_str(
             &env,
-            &format!("validation-{}", env.ledger().timestamp()),
+            "validation",
         );
 
         let result = ValidationResult {
@@ -452,7 +452,7 @@ impl HealthcareDataConversionContract {
 
         let request_id = String::from_str(
             &env,
-            &format!("conversion-{}", env.ledger().timestamp()),
+            "conversion",
         );
 
         let request = ConversionRequest {

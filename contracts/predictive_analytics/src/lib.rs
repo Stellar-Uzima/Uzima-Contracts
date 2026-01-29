@@ -195,7 +195,7 @@ impl PredictiveAnalyticsContract {
 
         env.storage().instance().set(&DataKey::Config, &config);
         env.events()
-            .publish((symbol_short!("ConfigUpdated"),), true);
+            .publish((symbol_short!("CfgUpdate"),), true);
 
         Ok(true)
     }
@@ -286,11 +286,11 @@ impl PredictiveAnalyticsContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::PatientSummary(patient), &summary);
+            .set(&DataKey::PatientSummary(patient.clone()), &summary);
 
         // Emit event
         env.events().publish(
-            (symbol_short!("PredictionMade"),),
+            (symbol_short!("PredMade"),),
             (prediction_id, patient, predicted_value, confidence_bps),
         );
 
@@ -338,10 +338,10 @@ impl PredictiveAnalyticsContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::ModelMetrics(model_id), &metrics);
+            .set(&DataKey::ModelMetrics(model_id.clone()), &metrics);
 
         env.events()
-            .publish((symbol_short!("ModelMetricsUpdated"),), model_id);
+            .publish((symbol_short!("MdlMetric"),), model_id);
 
         Ok(true)
     }
@@ -364,10 +364,10 @@ impl PredictiveAnalyticsContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::Whitelist(predictor_addr), &true);
+            .set(&DataKey::Whitelist(predictor_addr.clone()), &true);
 
         env.events()
-            .publish((symbol_short!("PredictorWhitelisted"),), predictor_addr);
+            .publish((symbol_short!("PredictWL"),), predictor_addr);
 
         Ok(true)
     }

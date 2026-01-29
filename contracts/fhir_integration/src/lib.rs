@@ -5,7 +5,7 @@ mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String,
     Symbol, Vec,
 };
 
@@ -378,7 +378,7 @@ impl FHIRIntegrationContract {
         provider.credential_id = Some(credential_id);
 
         providers.set(provider_id, provider);
-        env.storage().persistent().set(&PROVIDERS, &providers_map);
+        env.storage().persistent().set(&PROVIDERS, &providers);
 
         Ok(true)
     }
@@ -673,20 +673,13 @@ impl FHIRIntegrationContract {
             return Err(Error::NotAuthorized);
         }
 
-        let mut mappings: Map<String, DataMapping> = env
+        let mut mappings: Map<(String, String), DataMapping> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .unwrap_or(Map::new(&env));
 
-        let key = String::from_str(
-            &env,
-            &format!(
-                "{}-{}",
-                &mapping.source_system,
-                &mapping.source_field
-            ),
-        );
+        let key = (mapping.source_system.clone(), mapping.source_field.clone());
 
         mappings.set(key, mapping);
         env.storage().persistent().set(&DATA_MAPPINGS, &mappings);
@@ -700,16 +693,13 @@ impl FHIRIntegrationContract {
         source_system: String,
         source_field: String,
     ) -> Result<DataMapping, Error> {
-        let mappings: Map<String, DataMapping> = env
+        let mappings: Map<(String, String), DataMapping> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .ok_or(Error::MappingNotFound)?;
 
-        let key = String::from_str(
-            &env,
-            &format!("{}-{}", &source_system, &source_field),
-        );
+        let key = (source_system, source_field);
 
         mappings.get(key).ok_or(Error::MappingNotFound)
     }

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env, String, Symbol, Vec, Map, symbol_short};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol, Vec};
 
 // ==================== Event Schema Definitions ====================
 
@@ -35,6 +35,8 @@ pub enum EventType {
     CrossChainRecordReferenced,
     HealthCheck,
     MetricUpdate,
+    PermissionGranted,
+    PermissionRevoked,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -145,6 +147,16 @@ pub struct SystemEventData {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct PermissionEventData {
+    pub grantee: Address,
+    pub permission_bit: u32,
+    pub granter: Address,
+    pub expiration: u64,
+    pub is_delegatable: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum EventData {
     UserEvent(UserEventData),
     RecordEvent(RecordEventData),
@@ -154,6 +166,7 @@ pub enum EventData {
     AIEvent(AIEventData),
     CrossChainEvent(CrossChainEventData),
     SystemEvent(SystemEventData),
+    PermissionEvent(PermissionEventData),
 }
 
 #[derive(Clone)]
@@ -165,7 +178,13 @@ pub struct BaseEvent {
 
 // ==================== Event Publishing Functions ====================
 
-pub fn emit_user_created(env: &Env, admin: Address, new_user: Address, role: &str, did_ref: Option<String>) {
+pub fn emit_user_created(
+    env: &Env,
+    admin: Address,
+    new_user: Address,
+    role: &str,
+    did_ref: Option<String>,
+) {
     let event = BaseEvent {
         metadata: EventMetadata {
             event_type: EventType::UserCreated,
@@ -184,10 +203,17 @@ pub fn emit_user_created(env: &Env, admin: Address, new_user: Address, role: &st
             did_reference: did_ref,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("USER_ADD")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("USER_ADD")), event);
 }
 
-pub fn emit_user_role_updated(env: &Env, admin: Address, target_user: Address, new_role: &str, previous_role: Option<&str>) {
+pub fn emit_user_role_updated(
+    env: &Env,
+    admin: Address,
+    target_user: Address,
+    new_role: &str,
+    previous_role: Option<&str>,
+) {
     let event = BaseEvent {
         metadata: EventMetadata {
             event_type: EventType::UserRoleUpdated,
@@ -206,7 +232,8 @@ pub fn emit_user_role_updated(env: &Env, admin: Address, target_user: Address, n
             did_reference: None,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("ROLE_UPD")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("ROLE_UPD")), event);
 }
 
 pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
@@ -228,7 +255,8 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
             did_reference: None,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("USR_DEACT")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("USR_DEACT")), event);
 }
 
 pub fn emit_record_created(
@@ -238,7 +266,7 @@ pub fn emit_record_created(
     patient: Address,
     is_confidential: bool,
     category: String,
-    tags: Vec<String>
+    tags: Vec<String>,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -260,7 +288,8 @@ pub fn emit_record_created(
             tags,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("REC_NEW")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("REC_NEW")), event);
 }
 
 pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patient: Address) {
@@ -284,7 +313,8 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
             tags: Vec::new(env),
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("REC_ACC")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("REC_ACC")), event);
 }
 
 pub fn emit_access_requested(
@@ -293,7 +323,7 @@ pub fn emit_access_requested(
     patient: Address,
     record_id: u64,
     purpose: String,
-    credential_hash: Option<String>
+    credential_hash: Option<String>,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -315,7 +345,8 @@ pub fn emit_access_requested(
             credential_hash,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("ACC_REQ")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("ACC_REQ")), event);
 }
 
 pub fn emit_access_granted(
@@ -325,7 +356,7 @@ pub fn emit_access_granted(
     patient: Address,
     record_id: u64,
     purpose: String,
-    credential_hash: Option<String>
+    credential_hash: Option<String>,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -347,7 +378,8 @@ pub fn emit_access_granted(
             credential_hash,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("ACC_GRANT")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("ACC_GRANT")), event);
 }
 
 pub fn emit_emergency_access_granted(
@@ -356,7 +388,7 @@ pub fn emit_emergency_access_granted(
     grantee: Address,
     patient: Address,
     record_scope: Vec<u64>,
-    expires_at: u64
+    expires_at: u64,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -377,7 +409,8 @@ pub fn emit_emergency_access_granted(
             is_active: true,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("EM_GRANT")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("EM_GRANT")), event);
 }
 
 pub fn emit_contract_paused(env: &Env, admin: Address) {
@@ -398,7 +431,8 @@ pub fn emit_contract_paused(env: &Env, admin: Address) {
             metric_value: None,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("PAUSED")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("PAUSED")), event);
 }
 
 pub fn emit_contract_unpaused(env: &Env, admin: Address) {
@@ -419,7 +453,8 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
             metric_value: None,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("UNPAUSED")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("UNPAUSED")), event);
 }
 
 pub fn emit_recovery_proposed(
@@ -428,7 +463,7 @@ pub fn emit_recovery_proposed(
     proposal_id: u64,
     token_contract: Address,
     recipient: Address,
-    amount: i128
+    amount: i128,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -450,15 +485,16 @@ pub fn emit_recovery_proposed(
             approver_count: 1,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("REC_PROP")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("REC_PROP")), event);
 }
 
 pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
     // Generate placeholder addresses for required fields in event struct
     // In a real system, we'd look up the proposal, but this is just an event emitter
     // Optimized to avoid lookups
-    let placeholder = approver.clone(); 
-    
+    let placeholder = approver.clone();
+
     let event = BaseEvent {
         metadata: EventMetadata {
             event_type: EventType::RecoveryApproved,
@@ -479,7 +515,8 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
             approver_count: 0,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("REC_APPR")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("REC_APPR")), event);
 }
 
 pub fn emit_recovery_executed(
@@ -488,7 +525,7 @@ pub fn emit_recovery_executed(
     proposal_id: u64,
     token_contract: Address,
     recipient: Address,
-    amount: i128
+    amount: i128,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -510,7 +547,8 @@ pub fn emit_recovery_executed(
             approver_count: 0,
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("REC_EXEC")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("REC_EXEC")), event);
 }
 
 pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Address) {
@@ -534,7 +572,8 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
             analysis_type: String::from_str(env, "config_update"),
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("AI_CFG")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("AI_CFG")), event);
 }
 
 pub fn emit_anomaly_score_submitted(
@@ -544,7 +583,7 @@ pub fn emit_anomaly_score_submitted(
     patient: Address,
     model_id: BytesN<32>,
     score_bps: u32,
-    model_version: String
+    model_version: String,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -566,7 +605,8 @@ pub fn emit_anomaly_score_submitted(
             analysis_type: String::from_str(env, "anomaly_detection"),
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("ANOMALY")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("ANOMALY")), event);
 }
 
 pub fn emit_risk_score_submitted(
@@ -575,7 +615,7 @@ pub fn emit_risk_score_submitted(
     patient: Address,
     model_id: BytesN<32>,
     score_bps: u32,
-    model_version: String
+    model_version: String,
 ) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -597,7 +637,8 @@ pub fn emit_risk_score_submitted(
             analysis_type: String::from_str(env, "risk_assessment"),
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("RISK_SCR")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("RISK_SCR")), event);
 }
 
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
@@ -621,20 +662,75 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
             analysis_type: String::from_str(env, "analysis_triggered"),
         }),
     };
-    env.events().publish(("EVENT", symbol_short!("AI_TRIG")), event);
+    env.events()
+        .publish(("EVENT", symbol_short!("AI_TRIG")), event);
 }
 
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
-    let dummy_user = Address::from_string(&String::from_str(env, "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM")); 
-    
+    let _dummy_user = Address::from_string(&String::from_str(
+        env,
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+    ));
+
     // WORKAROUND: In tests this address might work as a mock if strict auth isn't checked for events.
     // However, creating arbitrary addresses in contract execution is generally not possible without a valid strkey.
     // The previous implementation was failing.
     // We will just do nothing for now to fix compilation as this event is non-critical System event.
 }
 
-pub fn emit_metric_update(_env: &Env, _metric_name: &str, _value: u64) {
-    // Ignoring.
+pub fn emit_permission_granted(
+    env: &Env,
+    granter: Address,
+    grantee: Address,
+    permission: u32,
+    expiration: u64,
+    is_delegatable: bool,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::PermissionGranted,
+            category: OperationCategory::AccessControl,
+            timestamp: env.ledger().timestamp(),
+            user_id: granter.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::PermissionEvent(PermissionEventData {
+            grantee,
+            permission_bit: permission,
+            granter,
+            expiration,
+            is_delegatable,
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("PERM_GRNT")), event);
+}
+
+pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, permission: u32) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::PermissionRevoked,
+            category: OperationCategory::AccessControl,
+            timestamp: env.ledger().timestamp(),
+            user_id: revoker.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::PermissionEvent(PermissionEventData {
+            grantee,
+            permission_bit: permission,
+            granter: revoker,
+            expiration: 0,
+            is_delegatable: false,
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("PERM_REV")), event);
 }
 
 #[derive(Clone)]
@@ -690,7 +786,9 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
                     break;
                 }
             }
-            if !found { continue; }
+            if !found {
+                continue;
+            }
         }
 
         // Filter by categories
@@ -702,20 +800,28 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
                     break;
                 }
             }
-            if !found { continue; }
+            if !found {
+                continue;
+            }
         }
 
         // Filter by user
         if let Some(ref user_filter) = filter.user_id {
-            if metadata.user_id != *user_filter { continue; }
+            if metadata.user_id != *user_filter {
+                continue;
+            }
         }
 
         // Filter by time range
         if let Some(start_time) = filter.start_time {
-            if metadata.timestamp < start_time { continue; }
+            if metadata.timestamp < start_time {
+                continue;
+            }
         }
         if let Some(end_time) = filter.end_time {
-            if metadata.timestamp > end_time { continue; }
+            if metadata.timestamp > end_time {
+                continue;
+            }
         }
 
         filtered.push_back(event.clone());
@@ -750,8 +856,12 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         let metadata = &event.metadata;
 
         // Track time range
-        if metadata.timestamp < min_time { min_time = metadata.timestamp; }
-        if metadata.timestamp > max_time { max_time = metadata.timestamp; }
+        if metadata.timestamp < min_time {
+            min_time = metadata.timestamp;
+        }
+        if metadata.timestamp > max_time {
+            max_time = metadata.timestamp;
+        }
 
         // Count by type
         let curr_type = metadata.event_type.clone();
@@ -770,7 +880,9 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     }
 
     // Handle empty case
-    if min_time == u64::MAX { min_time = 0; }
+    if min_time == u64::MAX {
+        min_time = 0;
+    }
 
     EventStats {
         total_events: events.len() as u64,
