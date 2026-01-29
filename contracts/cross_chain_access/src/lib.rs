@@ -1,5 +1,4 @@
 #![no_std]
-#![allow(clippy::too_many_arguments)] // <-- Moved here to apply to the generated Test Client
 
 #[cfg(test)]
 mod test;
@@ -9,22 +8,22 @@ use soroban_sdk::{
     String, Symbol, Vec,
 };
 
-/// Permission levels for medical record access
+// ==================== Data Structures ====================
+
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum PermissionLevel {
     None,
-    Read,             // Can view non-confidential records
-    ReadConfidential, // Can view all records
-    Write,            // Can create records
-    Admin,            // Full access
+    Read,             
+    ReadConfidential, 
+    Write,            
+    Admin,            
 }
 
-/// Supported blockchain networks
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum ChainId {
-    None, // Used when chain is not specified
+    None, 
     Stellar,
     Ethereum,
     Polygon,
@@ -35,14 +34,13 @@ pub enum ChainId {
     Custom(u32),
 }
 
-/// Cross-chain access grant
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessGrant {
     pub grant_id: u64,
-    pub grantor: Address,        // Patient who grants access
-    pub grantee_chain: ChainId,  // Chain of the grantee
-    pub grantee_address: String, // Address on external chain
+    pub grantor: Address,        
+    pub grantee_chain: ChainId,  
+    pub grantee_address: String, 
     pub permission_level: PermissionLevel,
     pub record_scope: AccessScope,
     pub granted_at: u64,
@@ -51,28 +49,25 @@ pub struct AccessGrant {
     pub conditions: Vec<AccessCondition>,
 }
 
-/// Scope of access granted
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessScope {
-    AllRecords,                    // Access to all patient's records
-    SpecificRecords(Vec<u64>), // Access to specific record IDs
-    CategoryBased(String),     // Access based on record category
-    TimeRanged(u64, u64),      // Access to records in time range
+    AllRecords,                    
+    SpecificRecords(Vec<u64>), 
+    CategoryBased(String),     
+    TimeRanged(u64, u64),      
 }
 
-/// Conditions for access
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessCondition {
-    EmergencyOnly,                // Only for emergency access
-    RequireConsent,           // Requires explicit consent each time
-    AuditRequired,            // All access must be audited
-    SingleUse,                // Can only be used once
-    TimeRestricted(u64, u64), // Only valid during specific hours (start, end in seconds from midnight)
+    EmergencyOnly,                
+    RequireConsent,           
+    AuditRequired,            
+    SingleUse,                
+    TimeRestricted(u64, u64), 
 }
 
-/// Access request from external chain
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessRequest {
@@ -89,7 +84,6 @@ pub struct AccessRequest {
     pub decision_at: Option<u64>,
 }
 
-/// Status of access request
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum RequestStatus {
@@ -100,7 +94,6 @@ pub enum RequestStatus {
     Revoked,
 }
 
-/// Audit log entry for access events
 #[derive(Clone)]
 #[contracttype]
 pub struct AuditEntry {
@@ -111,11 +104,10 @@ pub struct AuditEntry {
     pub record_id: u64,
     pub action: AccessAction,
     pub timestamp: u64,
-    pub ip_hash: BytesN<32>, // Hashed IP for privacy
+    pub ip_hash: BytesN<32>, 
     pub success: bool,
 }
 
-/// Types of access actions
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessAction {
@@ -126,14 +118,13 @@ pub enum AccessAction {
     EmergencyAccess,
 }
 
-/// Delegation of access management
 #[derive(Clone)]
 #[contracttype]
 pub struct Delegation {
-    pub delegator: Address,       // Patient delegating
-    pub delegate: Address,        // Trusted party
-    pub delegate_chain: ChainId,  // Use ChainId::None when not specified
-    pub delegate_address: String, // Empty string when not specified
+    pub delegator: Address,       
+    pub delegate: Address,        
+    pub delegate_chain: ChainId,  
+    pub delegate_address: String, 
     pub can_grant: bool,
     pub can_revoke: bool,
     pub can_manage_emergency: bool,
@@ -142,18 +133,57 @@ pub struct Delegation {
     pub is_active: bool,
 }
 
-/// Emergency access configuration
 #[derive(Clone)]
 #[contracttype]
 pub struct EmergencyConfig {
     pub patient: Address,
     pub is_enabled: bool,
-    pub auto_approve_duration: u64, // How long emergency access lasts
-    pub required_attestations: u32, // Number of validators needed
-    pub trusted_providers: Vec<String>, // Pre-approved emergency providers
+    pub auto_approve_duration: u64, 
+    pub required_attestations: u32, 
+    pub trusted_providers: Vec<String>, 
 }
 
-// Storage keys
+// ==================== Helper Structs for Arguments ====================
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GrantAccessArgs {
+    pub grantor: Address,
+    pub grantee_chain: ChainId,
+    pub grantee_address: String,
+    pub permission_level: PermissionLevel,
+    pub record_scope: AccessScope,
+    pub duration: u64,
+    pub conditions: Vec<AccessCondition>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DelegationArgs {
+    pub delegator: Address,
+    pub delegate: Address,
+    pub delegate_chain: ChainId,
+    pub delegate_address: String,
+    pub can_grant: bool,
+    pub can_revoke: bool,
+    pub can_manage_emergency: bool,
+    pub duration: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct LogAccessArgs {
+    pub accessor_chain: ChainId,
+    pub accessor_address: String,
+    pub patient: Address,
+    pub record_id: u64,
+    pub action: AccessAction,
+    pub ip_hash: BytesN<32>,
+    pub success: bool,
+}
+
+// ==================== Storage Keys & Constants ====================
+
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const BRIDGE: Symbol = symbol_short!("BRIDGE");
 const IDENTITY: Symbol = symbol_short!("IDENTITY");
@@ -167,9 +197,8 @@ const GRANT_COUNT: Symbol = symbol_short!("GR_CNT");
 const REQUEST_COUNT: Symbol = symbol_short!("REQ_CNT");
 const AUDIT_COUNT: Symbol = symbol_short!("AUD_CNT");
 
-// Constants
-const DEFAULT_GRANT_DURATION: u64 = 2_592_000; // 30 days in seconds
-const REQUEST_EXPIRY: u64 = 86_400; // 24 hours
+const DEFAULT_GRANT_DURATION: u64 = 2_592_000; 
+const REQUEST_EXPIRY: u64 = 86_400; 
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -201,7 +230,6 @@ pub struct CrossChainAccessContract;
 
 #[contractimpl]
 impl CrossChainAccessContract {
-    /// Initialize the access control contract
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -216,9 +244,7 @@ impl CrossChainAccessContract {
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage().persistent().set(&BRIDGE, &bridge_contract);
-        env.storage()
-            .persistent()
-            .set(&IDENTITY, &identity_contract);
+        env.storage().persistent().set(&IDENTITY, &identity_contract);
         env.storage().persistent().set(&PAUSED, &false);
         env.storage().persistent().set(&GRANT_COUNT, &0u64);
         env.storage().persistent().set(&REQUEST_COUNT, &0u64);
@@ -234,18 +260,8 @@ impl CrossChainAccessContract {
 
     // ==================== Access Grant Functions ====================
 
-    /// Grant cross-chain access to medical records
-    pub fn grant_access(
-        env: Env,
-        grantor: Address,
-        grantee_chain: ChainId,
-        grantee_address: String,
-        permission_level: PermissionLevel,
-        record_scope: AccessScope,
-        duration: u64,
-        conditions: Vec<AccessCondition>,
-    ) -> Result<u64, Error> {
-        grantor.require_auth();
+    pub fn grant_access(env: Env, args: GrantAccessArgs) -> Result<u64, Error> {
+        args.grantor.require_auth();
         Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
@@ -253,15 +269,15 @@ impl CrossChainAccessContract {
 
         let grant = AccessGrant {
             grant_id,
-            grantor: grantor.clone(),
-            grantee_chain: grantee_chain.clone(),
-            grantee_address: grantee_address.clone(),
-            permission_level,
-            record_scope,
+            grantor: args.grantor.clone(),
+            grantee_chain: args.grantee_chain.clone(),
+            grantee_address: args.grantee_address.clone(),
+            permission_level: args.permission_level,
+            record_scope: args.record_scope,
             granted_at: now,
-            expires_at: now + duration,
+            expires_at: now + args.duration,
             is_active: true,
-            conditions,
+            conditions: args.conditions,
         };
 
         let mut grants: Map<u64, AccessGrant> = env
@@ -275,13 +291,12 @@ impl CrossChainAccessContract {
 
         env.events().publish(
             (Symbol::new(&env, "AccessGranted"),),
-            (grantor, grantee_chain, grantee_address, grant_id),
+            (args.grantor, args.grantee_chain, args.grantee_address, grant_id),
         );
 
         Ok(grant_id)
     }
 
-    /// Revoke an access grant
     pub fn revoke_access(env: Env, caller: Address, grant_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_not_paused(env.clone())?;
@@ -294,7 +309,6 @@ impl CrossChainAccessContract {
 
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
 
-        // Check authorization: must be grantor, admin, or authorized delegate
         if !Self::can_revoke_access(env.clone(), &caller, &grant) {
             return Err(Error::NotAuthorized);
         }
@@ -309,7 +323,6 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Update access grant conditions
     pub fn update_grant_conditions(
         env: Env,
         caller: Address,
@@ -327,7 +340,6 @@ impl CrossChainAccessContract {
 
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
 
-        // Only grantor can update conditions
         if caller != grant.grantor {
             return Err(Error::NotAuthorized);
         }
@@ -339,7 +351,6 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Extend access grant duration
     pub fn extend_grant(
         env: Env,
         caller: Address,
@@ -370,7 +381,6 @@ impl CrossChainAccessContract {
 
     // ==================== Access Request Functions ====================
 
-    /// Request access from external chain (called via bridge)
     pub fn request_access(
         env: Env,
         requester_chain: ChainId,
@@ -408,7 +418,6 @@ impl CrossChainAccessContract {
         requests.set(request_id, request);
         env.storage().persistent().set(&REQUESTS, &requests);
 
-        // If emergency, check if auto-approve is possible
         if is_emergency {
             Self::handle_emergency_request(env.clone(), request_id, &requester_address, &patient)?;
         }
@@ -427,7 +436,6 @@ impl CrossChainAccessContract {
         Ok(request_id)
     }
 
-    /// Approve or reject an access request
     pub fn process_request(
         env: Env,
         caller: Address,
@@ -445,12 +453,10 @@ impl CrossChainAccessContract {
 
         let mut request = requests.get(request_id).ok_or(Error::RequestNotFound)?;
 
-        // Check status
         if request.status != RequestStatus::Pending {
             return Err(Error::RequestAlreadyProcessed);
         }
 
-        // Check expiry
         let now = env.ledger().timestamp();
         if now > request.created_at + REQUEST_EXPIRY {
             request.status = RequestStatus::Expired;
@@ -459,7 +465,6 @@ impl CrossChainAccessContract {
             return Err(Error::RequestExpired);
         }
 
-        // Check authorization: must be patient or authorized delegate
         if !Self::can_process_request(env.clone(), &caller, &request) {
             return Err(Error::NotAuthorized);
         }
@@ -475,7 +480,6 @@ impl CrossChainAccessContract {
         requests.set(request_id, request.clone());
         env.storage().persistent().set(&REQUESTS, &requests);
 
-        // If approved, create temporary access grant
         if approve {
             Self::create_request_grant(env.clone(), &request)?;
         }
@@ -490,37 +494,26 @@ impl CrossChainAccessContract {
 
     // ==================== Delegation Functions ====================
 
-    /// Delegate access management to a trusted party
-    pub fn create_delegation(
-        env: Env,
-        delegator: Address,
-        delegate: Address,
-        delegate_chain: ChainId,
-        delegate_address: String,
-        can_grant: bool,
-        can_revoke: bool,
-        can_manage_emergency: bool,
-        duration: u64,
-    ) -> Result<bool, Error> {
-        delegator.require_auth();
+    pub fn create_delegation(env: Env, args: DelegationArgs) -> Result<bool, Error> {
+        args.delegator.require_auth();
         Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
 
         let delegation = Delegation {
-            delegator: delegator.clone(),
-            delegate: delegate.clone(),
-            delegate_chain,
-            delegate_address,
-            can_grant,
-            can_revoke,
-            can_manage_emergency,
+            delegator: args.delegator.clone(),
+            delegate: args.delegate.clone(),
+            delegate_chain: args.delegate_chain,
+            delegate_address: args.delegate_address,
+            can_grant: args.can_grant,
+            can_revoke: args.can_revoke,
+            can_manage_emergency: args.can_manage_emergency,
             created_at: now,
-            expires_at: now + duration,
+            expires_at: now + args.duration,
             is_active: true,
         };
 
-        let deleg_key = Self::delegation_key(env.clone(), &delegator, &delegate);
+        let deleg_key = Self::delegation_key(env.clone(), &args.delegator, &args.delegate);
         let mut delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -532,13 +525,12 @@ impl CrossChainAccessContract {
 
         env.events().publish(
             (Symbol::new(&env, "DelegationCreated"),),
-            (delegator, delegate),
+            (args.delegator, args.delegate),
         );
 
         Ok(true)
     }
 
-    /// Revoke a delegation
     pub fn revoke_delegation(
         env: Env,
         delegator: Address,
@@ -572,7 +564,6 @@ impl CrossChainAccessContract {
 
     // ==================== Emergency Access Functions ====================
 
-    /// Configure emergency access settings
     pub fn configure_emergency(
         env: Env,
         patient: Address,
@@ -612,17 +603,7 @@ impl CrossChainAccessContract {
 
     // ==================== Audit Functions ====================
 
-    /// Log an access event
-    pub fn log_access(
-        env: Env,
-        accessor_chain: ChainId,
-        accessor_address: String,
-        patient: Address,
-        record_id: u64,
-        action: AccessAction,
-        ip_hash: BytesN<32>,
-        success: bool,
-    ) -> Result<u64, Error> {
+    pub fn log_access(env: Env, args: LogAccessArgs) -> Result<u64, Error> {
         Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
@@ -630,14 +611,14 @@ impl CrossChainAccessContract {
 
         let entry = AuditEntry {
             entry_id,
-            accessor_chain: accessor_chain.clone(),
-            accessor_address: accessor_address.clone(),
-            patient: patient.clone(),
-            record_id,
-            action: action.clone(),
+            accessor_chain: args.accessor_chain.clone(),
+            accessor_address: args.accessor_address.clone(),
+            patient: args.patient.clone(),
+            record_id: args.record_id,
+            action: args.action.clone(),
             timestamp: now,
-            ip_hash,
-            success,
+            ip_hash: args.ip_hash,
+            success: args.success,
         };
 
         let mut audit_log: Map<u64, AuditEntry> = env
@@ -651,15 +632,14 @@ impl CrossChainAccessContract {
 
         env.events().publish(
             (Symbol::new(&env, "AccessLogged"),),
-            (accessor_chain, patient, record_id, action, success),
+            (args.accessor_chain, args.patient, args.record_id, args.action, args.success),
         );
 
         Ok(entry_id)
     }
 
-    // ==================== Verification Functions ====================
+    // ==================== Verification & Query Functions ====================
 
-    /// Verify if an entity has access to a record
     pub fn verify_access(
         env: Env,
         accessor_chain: ChainId,
@@ -668,7 +648,6 @@ impl CrossChainAccessContract {
         record_id: u64,
         required_permission: PermissionLevel,
     ) -> bool {
-        // Get all active grants for this grantee
         let grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
@@ -679,18 +658,14 @@ impl CrossChainAccessContract {
 
         for grant_id in 1..=Self::get_grant_count(env.clone()) {
             if let Some(grant) = grants.get(grant_id) {
-                // Check if grant matches
                 if grant.grantor == patient
                     && grant.grantee_chain == accessor_chain
                     && grant.grantee_address == accessor_address
                     && grant.is_active
                     && now <= grant.expires_at
                 {
-                    // Check permission level
                     if Self::permission_sufficient(&grant.permission_level, &required_permission) {
-                        // Check scope
                         if Self::record_in_scope(&grant.record_scope, record_id) {
-                            // Check conditions
                             if Self::conditions_met(env.clone(), &grant.conditions, now) {
                                 return true;
                             }
@@ -699,35 +674,27 @@ impl CrossChainAccessContract {
                 }
             }
         }
-
         false
     }
 
-    // ==================== Query Functions ====================
-
-    /// Get access grant by ID
     pub fn get_grant(env: Env, grant_id: u64) -> Option<AccessGrant> {
         let grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
             .get(&GRANTS)
             .unwrap_or(Map::new(&env));
-
         grants.get(grant_id)
     }
 
-    /// Get access request by ID
     pub fn get_request(env: Env, request_id: u64) -> Option<AccessRequest> {
         let requests: Map<u64, AccessRequest> = env
             .storage()
             .persistent()
             .get(&REQUESTS)
             .unwrap_or(Map::new(&env));
-
         requests.get(request_id)
     }
 
-    /// Get delegation
     pub fn get_delegation(env: Env, delegator: Address, delegate: Address) -> Option<Delegation> {
         let deleg_key = Self::delegation_key(env.clone(), &delegator, &delegate);
         let delegations: Map<Symbol, Delegation> = env
@@ -735,11 +702,9 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&DELEGATIONS)
             .unwrap_or(Map::new(&env));
-
         delegations.get(deleg_key)
     }
 
-    /// Get emergency configuration
     pub fn get_emergency_config(env: Env, patient: Address) -> Option<EmergencyConfig> {
         let config_key = Self::emergency_config_key(env.clone(), &patient);
         let configs: Map<Symbol, EmergencyConfig> = env
@@ -747,29 +712,24 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&EMERGENCY_CONFIG)
             .unwrap_or(Map::new(&env));
-
         configs.get(config_key)
     }
 
-    /// Get audit entry
     pub fn get_audit_entry(env: Env, entry_id: u64) -> Option<AuditEntry> {
         let audit_log: Map<u64, AuditEntry> = env
             .storage()
             .persistent()
             .get(&AUDIT_LOG)
             .unwrap_or(Map::new(&env));
-
         audit_log.get(entry_id)
     }
 
-    /// Check if contract is paused
     pub fn is_paused(env: Env) -> bool {
         env.storage().persistent().get(&PAUSED).unwrap_or(false)
     }
 
     // ==================== Admin Functions ====================
 
-    /// Pause contract
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(env.clone(), &caller)?;
@@ -784,7 +744,6 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Unpause contract
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(env.clone(), &caller)?;
@@ -799,7 +758,7 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    // ==================== Internal Helper Functions ====================
+    // ==================== Internal Helpers ====================
 
     fn require_admin(env: Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
@@ -852,19 +811,14 @@ impl CrossChainAccessContract {
     }
 
     fn can_revoke_access(env: Env, caller: &Address, grant: &AccessGrant) -> bool {
-        // Grantor can always revoke
         if caller == &grant.grantor {
             return true;
         }
-
-        // Check if admin
         if let Some(admin) = env.storage().persistent().get::<Symbol, Address>(&ADMIN) {
             if caller == &admin {
                 return true;
             }
         }
-
-        // Check delegation
         let deleg_key = Self::delegation_key(env.clone(), &grant.grantor, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
@@ -876,17 +830,13 @@ impl CrossChainAccessContract {
             let now = env.ledger().timestamp();
             return delegation.is_active && delegation.can_revoke && now <= delegation.expires_at;
         }
-
         false
     }
 
     fn can_process_request(env: Env, caller: &Address, request: &AccessRequest) -> bool {
-        // Patient can always process
         if caller == &request.patient {
             return true;
         }
-
-        // Check delegation
         let deleg_key = Self::delegation_key(env.clone(), &request.patient, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
@@ -898,7 +848,6 @@ impl CrossChainAccessContract {
             let now = env.ledger().timestamp();
             return delegation.is_active && delegation.can_grant && now <= delegation.expires_at;
         }
-
         false
     }
 
@@ -917,9 +866,7 @@ impl CrossChainAccessContract {
 
         if let Some(config) = configs.get(config_key) {
             if config.is_enabled {
-                // Check if requester is a trusted provider
                 if config.trusted_providers.contains(requester_address) {
-                    // Auto-approve for trusted providers
                     let mut requests: Map<u64, AccessRequest> = env
                         .storage()
                         .persistent()
@@ -941,7 +888,6 @@ impl CrossChainAccessContract {
                 }
             }
         }
-
         Ok(())
     }
 
@@ -970,7 +916,6 @@ impl CrossChainAccessContract {
 
         grants.set(grant_id, grant);
         env.storage().persistent().set(&GRANTS, &grants);
-
         Ok(())
     }
 
@@ -992,8 +937,8 @@ impl CrossChainAccessContract {
         match scope {
             AccessScope::AllRecords => true,
             AccessScope::SpecificRecords(ids) => ids.iter().any(|id| id == record_id),
-            AccessScope::CategoryBased(_) => true, // Would need record info to verify
-            AccessScope::TimeRanged(_, _) => true, // Would need record info to verify
+            AccessScope::CategoryBased(_) => true, 
+            AccessScope::TimeRanged(_, _) => true, 
         }
     }
 
@@ -1001,14 +946,12 @@ impl CrossChainAccessContract {
         for condition in conditions.iter() {
             match condition {
                 AccessCondition::TimeRestricted(start, end) => {
-                    // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
                     if time_of_day < *start || time_of_day > *end {
                         return false;
                     }
                 }
                 AccessCondition::SingleUse => {
-                    // Would need to track usage
                     return true;
                 }
                 _ => {}

@@ -38,15 +38,18 @@ fn test_grant_access() {
     
     let conditions: Vec<AccessCondition> = Vec::new(&env);
 
-    let grant_id = client.grant_access(
-        &patient,
-        &ChainId::Ethereum,
-        &grantee_addr,
-        &PermissionLevel::Read,
-        &AccessScope::AllRecords,
-        &3600, // 1 hour
-        &conditions
-    );
+    // Construct the args struct
+    let args = GrantAccessArgs {
+        grantor: patient.clone(),
+        grantee_chain: ChainId::Ethereum,
+        grantee_address: grantee_addr,
+        permission_level: PermissionLevel::Read,
+        record_scope: AccessScope::AllRecords,
+        duration: 3600,
+        conditions,
+    };
+
+    let grant_id = client.grant_access(&args);
 
     assert_eq!(grant_id, 1);
 
@@ -54,7 +57,7 @@ fn test_grant_access() {
     let grant = client.get_grant(&grant_id).unwrap();
     assert_eq!(grant.grantor, patient);
     
-    // Fixed: bool comparison
+    // Fixed boolean assertion
     assert!(grant.is_active);
 }
 
@@ -75,20 +78,22 @@ fn test_revoke_access() {
     let grantee_addr = String::from_str(&env, "0x123...");
     let conditions: Vec<AccessCondition> = Vec::new(&env);
 
-    let grant_id = client.grant_access(
-        &patient,
-        &ChainId::Ethereum,
-        &grantee_addr,
-        &PermissionLevel::Read,
-        &AccessScope::AllRecords,
-        &3600,
-        &conditions
-    );
+    let args = GrantAccessArgs {
+        grantor: patient.clone(),
+        grantee_chain: ChainId::Ethereum,
+        grantee_address: grantee_addr,
+        permission_level: PermissionLevel::Read,
+        record_scope: AccessScope::AllRecords,
+        duration: 3600,
+        conditions,
+    };
+
+    let grant_id = client.grant_access(&args);
 
     client.revoke_access(&patient, &grant_id);
     
     let grant = client.get_grant(&grant_id).unwrap();
     
-    // Fixed: bool comparison
+    // Fixed boolean assertion
     assert!(!grant.is_active);
 }
