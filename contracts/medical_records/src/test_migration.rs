@@ -1,4 +1,4 @@
-#![cfg(test)] // Only compile this file when running tests
+// Removed the redundant #![cfg(test)] line
 
 // Allow unused imports temporarily while you build the test
 #[allow(unused_imports)]
