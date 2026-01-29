@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "contracts/medical_records",
     "contracts/ai_analytics",
+    "contracts/anomaly_detection",
 ]
 
 [workspace.package]
