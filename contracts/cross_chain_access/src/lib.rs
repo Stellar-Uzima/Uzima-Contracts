@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)] // <-- Moved here to apply to the generated Test Client
 
 #[cfg(test)]
 mod test;
@@ -199,7 +200,6 @@ pub enum Error {
 pub struct CrossChainAccessContract;
 
 #[contractimpl]
-#[allow(clippy::too_many_arguments)] // Suppress warning for functions with > 7 args
 impl CrossChainAccessContract {
     /// Initialize the access control contract
     pub fn initialize(
@@ -997,13 +997,13 @@ impl CrossChainAccessContract {
         }
     }
 
-    fn conditions_met(env: Env, conditions: &Vec<AccessCondition>, now: u64) -> bool {
+    fn conditions_met(_env: Env, conditions: &Vec<AccessCondition>, now: u64) -> bool {
         for condition in conditions.iter() {
             match condition {
                 AccessCondition::TimeRestricted(start, end) => {
                     // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
-                    if time_of_day < start || time_of_day > end {
+                    if time_of_day < *start || time_of_day > *end {
                         return false;
                     }
                 }

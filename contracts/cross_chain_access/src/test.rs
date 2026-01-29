@@ -53,7 +53,9 @@ fn test_grant_access() {
     // Verify grant exists
     let grant = client.get_grant(&grant_id).unwrap();
     assert_eq!(grant.grantor, patient);
-    assert_eq!(grant.is_active, true);
+    
+    // Fixed: bool comparison
+    assert!(grant.is_active);
 }
 
 #[test]
@@ -86,5 +88,7 @@ fn test_revoke_access() {
     client.revoke_access(&patient, &grant_id);
     
     let grant = client.get_grant(&grant_id).unwrap();
-    assert_eq!(grant.is_active, false);
+    
+    // Fixed: bool comparison
+    assert!(!grant.is_active);
 }
