@@ -88,7 +88,9 @@ impl FederatedLearningContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Coordinator, &coordinator);
+        env.storage()
+            .instance()
+            .set(&DataKey::Coordinator, &coordinator);
         true
     }
 
@@ -123,9 +125,7 @@ impl FederatedLearningContract {
             .get(&DataKey::RoundCounter)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&DataKey::RoundCounter, &next);
+        env.storage().instance().set(&DataKey::RoundCounter, &next);
         next
     }
 
@@ -160,8 +160,7 @@ impl FederatedLearningContract {
         };
 
         env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events()
-            .publish((symbol_short!("RndStart"),), id);
+        env.events().publish((symbol_short!("RndStart"),), id);
         id
     }
 
@@ -191,18 +190,18 @@ impl FederatedLearningContract {
 
         // Check privacy budget for the participant
         let budget_key = DataKey::PrivacyBudget(participant.clone());
-        let mut budget: PrivacyBudget = env
-            .storage()
-            .instance()
-            .get(&budget_key)
-            .unwrap_or(PrivacyBudget {
-                epsilon_consumed: 0,
-                epsilon_total: round.dp_epsilon, // Use round's epsilon as default budget
-            });
+        let mut budget: PrivacyBudget =
+            env.storage()
+                .instance()
+                .get(&budget_key)
+                .unwrap_or(PrivacyBudget {
+                    epsilon_consumed: 0,
+                    epsilon_total: round.dp_epsilon, // Use round's epsilon as default budget
+                });
 
         // Calculate privacy cost (simplified model: each sample consumes some epsilon)
         let privacy_cost = num_samples / 100; // Simplified: every 100 samples consume 1 epsilon unit
-        
+
         if budget.epsilon_consumed + privacy_cost > budget.epsilon_total {
             return Err(Error::PrivacyBudgetExceeded);
         }
@@ -221,12 +220,12 @@ impl FederatedLearningContract {
         env.storage().instance().set(&budget_key, &budget);
 
         round.total_updates += 1;
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
-        env.events().publish(
-            (symbol_short!("UpdSubmit"),),
-            (round_id, participant),
-        );
+        env.events()
+            .publish((symbol_short!("UpdSubmit"),), (round_id, participant));
 
         Ok(true)
     }
@@ -259,7 +258,9 @@ impl FederatedLearningContract {
 
         round.is_finalized = true;
         round.finalized_at = env.ledger().timestamp();
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
         let metadata = ModelMetadata {
             model_id: new_model_id.clone(),
@@ -274,10 +275,8 @@ impl FederatedLearningContract {
             .instance()
             .set(&DataKey::Model(new_model_id.clone()), &metadata);
 
-        env.events().publish(
-            (symbol_short!("RndFinal"),),
-            (round_id, new_model_id),
-        );
+        env.events()
+            .publish((symbol_short!("RndFinal"),), (round_id, new_model_id));
 
         Ok(true)
     }
@@ -419,12 +418,10 @@ mod test {
             .is_ok());
 
         // Submit an update that exceeds the budget
-        let result = client.mock_all_auths().submit_update(
-            &participant,
-            &round_id,
-            &update_hash,
-            &600u32,
-        );
+        let result =
+            client
+                .mock_all_auths()
+                .submit_update(&participant, &round_id, &update_hash, &600u32);
         assert!(result.is_err());
     }
 }

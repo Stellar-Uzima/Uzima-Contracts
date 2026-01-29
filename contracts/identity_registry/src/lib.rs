@@ -309,14 +309,17 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
-        env.storage().instance().set(&DataKey::NetworkId, &network_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::NetworkId, &network_id);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::KeyRotationCooldown, &DEFAULT_KEY_ROTATION_COOLDOWN);
+        env.storage().instance().set(
+            &DataKey::KeyRotationCooldown,
+            &DEFAULT_KEY_ROTATION_COOLDOWN,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "Initialized"),),
@@ -339,7 +342,8 @@ impl IdentityRegistryContract {
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
 
-        env.events().publish((symbol_short!("Init"),), owner.clone());
+        env.events()
+            .publish((symbol_short!("Init"),), owner.clone());
     }
 
     // ========================================================================
@@ -433,9 +437,10 @@ impl IdentityRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::RecoveryGuardians(subject.clone()), &guardians);
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecoveryThreshold(subject.clone()), &DEFAULT_RECOVERY_THRESHOLD);
+        env.storage().persistent().set(
+            &DataKey::RecoveryThreshold(subject.clone()),
+            &DEFAULT_RECOVERY_THRESHOLD,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "DIDCreated"),),
@@ -683,10 +688,8 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::LastKeyRotation(subject.clone()), &timestamp);
 
-        env.events().publish(
-            (Symbol::new(&env, "KeyRotated"),),
-            (subject, method_id),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "KeyRotated"),), (subject, method_id));
 
         Ok(())
     }
@@ -819,9 +822,10 @@ impl IdentityRegistryContract {
             .get(&DataKey::SubjectCredentials(subject.clone()))
             .unwrap_or(Vec::new(&env));
         subject_creds.push_back(credential_id.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::SubjectCredentials(subject.clone()), &subject_creds);
+        env.storage().persistent().set(
+            &DataKey::SubjectCredentials(subject.clone()),
+            &subject_creds,
+        );
 
         // Add to issuer's issued credentials
         let mut issuer_creds: Vec<BytesN<32>> = env
@@ -1022,20 +1026,14 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::RecoveryGuardians(subject.clone()), &new_guardians);
 
-        env.events().publish(
-            (Symbol::new(&env, "GuardianRemoved"),),
-            (subject, guardian),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "GuardianRemoved"),), (subject, guardian));
 
         Ok(())
     }
 
     /// Set recovery threshold
-    pub fn set_recovery_threshold(
-        env: Env,
-        subject: Address,
-        threshold: u32,
-    ) -> Result<(), Error> {
+    pub fn set_recovery_threshold(env: Env, subject: Address, threshold: u32) -> Result<(), Error> {
         subject.require_auth();
 
         env.storage()
@@ -1132,11 +1130,7 @@ impl IdentityRegistryContract {
     }
 
     /// Approve a recovery request
-    pub fn approve_recovery(
-        env: Env,
-        guardian: Address,
-        request_id: u64,
-    ) -> Result<(), Error> {
+    pub fn approve_recovery(env: Env, guardian: Address, request_id: u64) -> Result<(), Error> {
         guardian.require_auth();
 
         let mut request: RecoveryRequest = env
@@ -1364,20 +1358,14 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
-        env.events().publish(
-            (Symbol::new(&env, "ServiceAdded"),),
-            (subject, service_id),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "ServiceAdded"),), (subject, service_id));
 
         Ok(())
     }
 
     /// Remove/deactivate a service endpoint
-    pub fn remove_service(
-        env: Env,
-        subject: Address,
-        service_id: String,
-    ) -> Result<(), Error> {
+    pub fn remove_service(env: Env, subject: Address, service_id: String) -> Result<(), Error> {
         subject.require_auth();
 
         let mut did_doc: DIDDocument = env
@@ -1541,8 +1529,10 @@ impl IdentityRegistryContract {
             &attestations,
         );
 
-        env.events()
-            .publish((symbol_short!("Attested"),), (subject, verifier, claim_hash));
+        env.events().publish(
+            (symbol_short!("Attested"),),
+            (subject, verifier, claim_hash),
+        );
     }
 
     /// Revoke an attestation (legacy)
@@ -1674,10 +1664,16 @@ impl IdentityRegistryContract {
         // Append addresses as their Val representations converted to bytes
         let issuer_val: soroban_sdk::Val = issuer.to_val();
         let subject_val: soroban_sdk::Val = subject.to_val();
-        data.append(&Bytes::from_array(env, &issuer_val.get_payload().to_be_bytes()));
-        data.append(&Bytes::from_array(env, &subject_val.get_payload().to_be_bytes()));
+        data.append(&Bytes::from_array(
+            env,
+            &issuer_val.get_payload().to_be_bytes(),
+        ));
+        data.append(&Bytes::from_array(
+            env,
+            &subject_val.get_payload().to_be_bytes(),
+        ));
         data.append(&Bytes::from_array(env, &timestamp.to_be_bytes()));
-        
+
         env.crypto().sha256(&data).into()
     }
 
@@ -1690,7 +1686,7 @@ impl IdentityRegistryContract {
         data.append(&Bytes::from_array(env, &id_val.get_payload().to_be_bytes()));
         data.append(&Bytes::from_array(env, &doc.version.to_be_bytes()));
         data.append(&Bytes::from_array(env, &doc.updated.to_be_bytes()));
-        
+
         env.crypto().sha256(&data).into()
     }
 
@@ -2341,7 +2337,9 @@ mod tests {
         client.create_did(&subject, &public_key, &services);
 
         // Should be authorized for authentication (default key is added to auth)
-        assert!(client.verify_did_authorization(&subject, &VerificationRelationship::Authentication));
+        assert!(
+            client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
 
         // Should not be authorized for key agreement (no key agreement method added)
         assert!(!client.verify_did_authorization(&subject, &VerificationRelationship::KeyAgreement));
@@ -2358,6 +2356,8 @@ mod tests {
         client.deactivate_did(&subject);
 
         // Should not be authorized after deactivation
-        assert!(!client.verify_did_authorization(&subject, &VerificationRelationship::Authentication));
+        assert!(
+            !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
     }
 }

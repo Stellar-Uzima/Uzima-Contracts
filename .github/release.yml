@@ -5,28 +5,61 @@ on:
     tags:
       - "v*.*.*"
 
+env:
+  RUST_VERSION: "1.92.0"
+  SOROBAN_VERSION: "23.1.4"
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.78.0
-          target: wasm32-unknown-unknown
-          components: rustfmt, clippy, rust-src
-          profile: minimal
-          override: true
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+          components: rustfmt, clippy
 
-      - name: Install Soroban CLI v23.1.4
+      - name: Install Soroban CLI
         run: |
-          curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v23.1.4/stellar-cli-23.1.4-x86_64-unknown-linux-gnu.tar.gz
-          tar -xzf stellar-cli.tar.gz
-          sudo mv stellar /usr/local/bin/
-          sudo ln -sf /usr/local/bin/stellar /usr/local/bin/soroban
-          soroban --version
+          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
 
-      - name: Bu
+      - name: Build optimized contracts
+        run: |
+          mkdir -p dist/
+          for contract in contracts/*/; do
+            if [ -d "$contract" ]; then
+              contract_name=$(basename "$contract")
+              echo "Building contract: $contract_name"
+              cd "$contract"
+              cargo build --target wasm32-unknown-unknown --release
+              wasm_file="target/wasm32-unknown-unknown/release/$contract_name.wasm"
+              if [ -f "$wasm_file" ]; then
+                cp "$wasm_file" "../../dist/$contract_name.wasm"
+                echo "Copied: $contract_name.wasm"
+              fi
+              cd - > /dev/null
+            fi
+          done
+
+      - name: Generate checksums
+        run: |
+          cd dist/
+          sha256sum *.wasm > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.wasm
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
