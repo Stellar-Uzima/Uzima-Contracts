@@ -4,6 +4,7 @@ members = [
     "contracts/medical_records",
     "contracts/ai_analytics",
     "contracts/anomaly_detection",
+    "contracts/anomaly_detector",
 ]
 
 [workspace.package]
