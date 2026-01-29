@@ -1003,7 +1003,7 @@ impl CrossChainAccessContract {
                 AccessCondition::TimeRestricted(start, end) => {
                     // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
-                    if time_of_day < *start || time_of_day > *end {
+                    if time_of_day < start || time_of_day > end {
                         return false;
                     }
                 }
