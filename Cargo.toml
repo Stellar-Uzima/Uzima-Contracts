@@ -5,6 +5,7 @@ members = [
     "contracts/ai_analytics",
     "contracts/anomaly_detection",
     "contracts/anomaly_detector",
+    "contracts/cross_chain_access",
 ]
 
 [workspace.package]
