@@ -1,10 +1,10 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, symbol_short, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, Env};
 
 #[contract]
-pub struct AnomalyDetector;
+pub struct AnomalyDetectionContract;
 
 #[contractimpl]
-impl AnomalyDetector {
+impl AnomalyDetectionContract {
     pub fn init(_env: Env) {}
 }

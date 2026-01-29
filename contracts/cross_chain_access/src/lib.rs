@@ -54,7 +54,7 @@ pub struct AccessGrant {
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessScope {
-    AllRecords,                // Access to all patient's records
+    AllRecords,                    // Access to all patient's records
     SpecificRecords(Vec<u64>), // Access to specific record IDs
     CategoryBased(String),     // Access based on record category
     TimeRanged(u64, u64),      // Access to records in time range
@@ -64,7 +64,7 @@ pub enum AccessScope {
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessCondition {
-    EmergencyOnly,            // Only for emergency access
+    EmergencyOnly,                // Only for emergency access
     RequireConsent,           // Requires explicit consent each time
     AuditRequired,            // All access must be audited
     SingleUse,                // Can only be used once
@@ -199,6 +199,7 @@ pub enum Error {
 pub struct CrossChainAccessContract;
 
 #[contractimpl]
+#[allow(clippy::too_many_arguments)] // Suppress warning for functions with > 7 args
 impl CrossChainAccessContract {
     /// Initialize the access control contract
     pub fn initialize(
@@ -245,10 +246,10 @@ impl CrossChainAccessContract {
         conditions: Vec<AccessCondition>,
     ) -> Result<u64, Error> {
         grantor.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
-        let grant_id = Self::get_and_increment_grant_count(&env);
+        let grant_id = Self::get_and_increment_grant_count(env.clone());
 
         let grant = AccessGrant {
             grant_id,
@@ -283,7 +284,7 @@ impl CrossChainAccessContract {
     /// Revoke an access grant
     pub fn revoke_access(env: Env, caller: Address, grant_id: u64) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
@@ -294,7 +295,7 @@ impl CrossChainAccessContract {
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
 
         // Check authorization: must be grantor, admin, or authorized delegate
-        if !Self::can_revoke_access(&env, &caller, &grant) {
+        if !Self::can_revoke_access(env.clone(), &caller, &grant) {
             return Err(Error::NotAuthorized);
         }
 
@@ -316,7 +317,7 @@ impl CrossChainAccessContract {
         new_conditions: Vec<AccessCondition>,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
@@ -346,7 +347,7 @@ impl CrossChainAccessContract {
         additional_duration: u64,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
@@ -379,10 +380,10 @@ impl CrossChainAccessContract {
         purpose: String,
         is_emergency: bool,
     ) -> Result<u64, Error> {
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
-        let request_id = Self::get_and_increment_request_count(&env);
+        let request_id = Self::get_and_increment_request_count(env.clone());
 
         let request = AccessRequest {
             request_id,
@@ -409,7 +410,7 @@ impl CrossChainAccessContract {
 
         // If emergency, check if auto-approve is possible
         if is_emergency {
-            Self::handle_emergency_request(&env, request_id, &requester_address, &patient)?;
+            Self::handle_emergency_request(env.clone(), request_id, &requester_address, &patient)?;
         }
 
         env.events().publish(
@@ -434,7 +435,7 @@ impl CrossChainAccessContract {
         approve: bool,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let mut requests: Map<u64, AccessRequest> = env
             .storage()
@@ -459,7 +460,7 @@ impl CrossChainAccessContract {
         }
 
         // Check authorization: must be patient or authorized delegate
-        if !Self::can_process_request(&env, &caller, &request) {
+        if !Self::can_process_request(env.clone(), &caller, &request) {
             return Err(Error::NotAuthorized);
         }
 
@@ -476,7 +477,7 @@ impl CrossChainAccessContract {
 
         // If approved, create temporary access grant
         if approve {
-            Self::create_request_grant(&env, &request)?;
+            Self::create_request_grant(env.clone(), &request)?;
         }
 
         env.events().publish(
@@ -502,7 +503,7 @@ impl CrossChainAccessContract {
         duration: u64,
     ) -> Result<bool, Error> {
         delegator.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
 
@@ -519,7 +520,7 @@ impl CrossChainAccessContract {
             is_active: true,
         };
 
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
+        let deleg_key = Self::delegation_key(env.clone(), &delegator, &delegate);
         let mut delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -544,9 +545,9 @@ impl CrossChainAccessContract {
         delegate: Address,
     ) -> Result<bool, Error> {
         delegator.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
+        let deleg_key = Self::delegation_key(env.clone(), &delegator, &delegate);
         let mut delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -581,7 +582,7 @@ impl CrossChainAccessContract {
         trusted_providers: Vec<String>,
     ) -> Result<bool, Error> {
         patient.require_auth();
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let config = EmergencyConfig {
             patient: patient.clone(),
@@ -591,7 +592,7 @@ impl CrossChainAccessContract {
             trusted_providers,
         };
 
-        let config_key = Self::emergency_config_key(&env, &patient);
+        let config_key = Self::emergency_config_key(env.clone(), &patient);
         let mut configs: Map<Symbol, EmergencyConfig> = env
             .storage()
             .persistent()
@@ -622,10 +623,10 @@ impl CrossChainAccessContract {
         ip_hash: BytesN<32>,
         success: bool,
     ) -> Result<u64, Error> {
-        Self::require_not_paused(&env)?;
+        Self::require_not_paused(env.clone())?;
 
         let now = env.ledger().timestamp();
-        let entry_id = Self::get_and_increment_audit_count(&env);
+        let entry_id = Self::get_and_increment_audit_count(env.clone());
 
         let entry = AuditEntry {
             entry_id,
@@ -676,7 +677,7 @@ impl CrossChainAccessContract {
 
         let now = env.ledger().timestamp();
 
-        for grant_id in 1..=Self::get_grant_count(&env) {
+        for grant_id in 1..=Self::get_grant_count(env.clone()) {
             if let Some(grant) = grants.get(grant_id) {
                 // Check if grant matches
                 if grant.grantor == patient
@@ -690,7 +691,7 @@ impl CrossChainAccessContract {
                         // Check scope
                         if Self::record_in_scope(&grant.record_scope, record_id) {
                             // Check conditions
-                            if Self::conditions_met(&env, &grant.conditions, now) {
+                            if Self::conditions_met(env.clone(), &grant.conditions, now) {
                                 return true;
                             }
                         }
@@ -728,7 +729,7 @@ impl CrossChainAccessContract {
 
     /// Get delegation
     pub fn get_delegation(env: Env, delegator: Address, delegate: Address) -> Option<Delegation> {
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
+        let deleg_key = Self::delegation_key(env.clone(), &delegator, &delegate);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -740,7 +741,7 @@ impl CrossChainAccessContract {
 
     /// Get emergency configuration
     pub fn get_emergency_config(env: Env, patient: Address) -> Option<EmergencyConfig> {
-        let config_key = Self::emergency_config_key(&env, &patient);
+        let config_key = Self::emergency_config_key(env.clone(), &patient);
         let configs: Map<Symbol, EmergencyConfig> = env
             .storage()
             .persistent()
@@ -771,7 +772,7 @@ impl CrossChainAccessContract {
     /// Pause contract
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        Self::require_admin(env.clone(), &caller)?;
 
         env.storage().persistent().set(&PAUSED, &true);
 
@@ -786,7 +787,7 @@ impl CrossChainAccessContract {
     /// Unpause contract
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        Self::require_admin(env.clone(), &caller)?;
 
         env.storage().persistent().set(&PAUSED, &false);
 
@@ -800,7 +801,7 @@ impl CrossChainAccessContract {
 
     // ==================== Internal Helper Functions ====================
 
-    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+    fn require_admin(env: Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .persistent()
@@ -813,44 +814,44 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
-    fn require_not_paused(env: &Env) -> Result<(), Error> {
+    fn require_not_paused(env: Env) -> Result<(), Error> {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
         }
         Ok(())
     }
 
-    fn get_and_increment_grant_count(env: &Env) -> u64 {
+    fn get_and_increment_grant_count(env: Env) -> u64 {
         let count: u64 = env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0);
         env.storage().persistent().set(&GRANT_COUNT, &(count + 1));
         count + 1
     }
 
-    fn get_grant_count(env: &Env) -> u64 {
+    fn get_grant_count(env: Env) -> u64 {
         env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0)
     }
 
-    fn get_and_increment_request_count(env: &Env) -> u64 {
+    fn get_and_increment_request_count(env: Env) -> u64 {
         let count: u64 = env.storage().persistent().get(&REQUEST_COUNT).unwrap_or(0);
         env.storage().persistent().set(&REQUEST_COUNT, &(count + 1));
         count + 1
     }
 
-    fn get_and_increment_audit_count(env: &Env) -> u64 {
+    fn get_and_increment_audit_count(env: Env) -> u64 {
         let count: u64 = env.storage().persistent().get(&AUDIT_COUNT).unwrap_or(0);
         env.storage().persistent().set(&AUDIT_COUNT, &(count + 1));
         count + 1
     }
 
-    fn delegation_key(_env: &Env, _delegator: &Address, _delegate: &Address) -> Symbol {
-        Symbol::new(&_env, "deleg_key")
+    fn delegation_key(env: Env, _delegator: &Address, _delegate: &Address) -> Symbol {
+        Symbol::new(&env, "deleg_key")
     }
 
-    fn emergency_config_key(_env: &Env, _patient: &Address) -> Symbol {
-        Symbol::new(&_env, "emerg_key")
+    fn emergency_config_key(env: Env, _patient: &Address) -> Symbol {
+        Symbol::new(&env, "emerg_key")
     }
 
-    fn can_revoke_access(env: &Env, caller: &Address, grant: &AccessGrant) -> bool {
+    fn can_revoke_access(env: Env, caller: &Address, grant: &AccessGrant) -> bool {
         // Grantor can always revoke
         if caller == &grant.grantor {
             return true;
@@ -864,7 +865,7 @@ impl CrossChainAccessContract {
         }
 
         // Check delegation
-        let deleg_key = Self::delegation_key(&env, &grant.grantor, caller);
+        let deleg_key = Self::delegation_key(env.clone(), &grant.grantor, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -879,14 +880,14 @@ impl CrossChainAccessContract {
         false
     }
 
-    fn can_process_request(env: &Env, caller: &Address, request: &AccessRequest) -> bool {
+    fn can_process_request(env: Env, caller: &Address, request: &AccessRequest) -> bool {
         // Patient can always process
         if caller == &request.patient {
             return true;
         }
 
         // Check delegation
-        let deleg_key = Self::delegation_key(&env, &request.patient, caller);
+        let deleg_key = Self::delegation_key(env.clone(), &request.patient, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
@@ -902,12 +903,12 @@ impl CrossChainAccessContract {
     }
 
     fn handle_emergency_request(
-        env: &Env,
+        env: Env,
         request_id: u64,
         requester_address: &String,
         patient: &Address,
     ) -> Result<(), Error> {
-        let config_key = Self::emergency_config_key(&env, patient);
+        let config_key = Self::emergency_config_key(env.clone(), patient);
         let configs: Map<Symbol, EmergencyConfig> = env
             .storage()
             .persistent()
@@ -944,9 +945,9 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
-    fn create_request_grant(env: &Env, request: &AccessRequest) -> Result<(), Error> {
+    fn create_request_grant(env: Env, request: &AccessRequest) -> Result<(), Error> {
         let now = env.ledger().timestamp();
-        let grant_id = Self::get_and_increment_grant_count(&env);
+        let grant_id = Self::get_and_increment_grant_count(env.clone());
 
         let grant = AccessGrant {
             grant_id,
@@ -973,6 +974,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[allow(clippy::match_like_matches_macro)]
     fn permission_sufficient(granted: &PermissionLevel, required: &PermissionLevel) -> bool {
         match (granted, required) {
             (PermissionLevel::Admin, _) => true,
@@ -995,13 +997,13 @@ impl CrossChainAccessContract {
         }
     }
 
-    fn conditions_met(_env: &Env, conditions: &Vec<AccessCondition>, now: u64) -> bool {
+    fn conditions_met(env: Env, conditions: &Vec<AccessCondition>, now: u64) -> bool {
         for condition in conditions.iter() {
             match condition {
                 AccessCondition::TimeRestricted(start, end) => {
                     // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
-                    if time_of_day < start || time_of_day > end {
+                    if time_of_day < *start || time_of_day > *end {
                         return false;
                     }
                 }
