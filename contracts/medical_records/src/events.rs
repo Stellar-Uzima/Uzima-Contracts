@@ -40,21 +40,21 @@ pub enum EventType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[contracttype]
 pub enum EventSeverity {
-    Info = 0,     // Normal operations (user creation, records, access requests)
-    Warning = 1,  // Security events (role changes, deactivation, access grants)
-    Error = 2,    // System-critical errors (pause, emergency access, recovery)
+    Info = 0,     // Normal operations
+    Warning = 1,  // Security-sensitive operations
+    Err = 2,      // System-critical errors (named Err to avoid Rust trait conflict)
 }
 
 impl EventSeverity {
     pub fn from_event_type(event_type: EventType) -> EventSeverity {
         match event_type {
-            // Error: System control and recovery
+            // Err: System control and recovery
             EventType::ContractPaused
             | EventType::ContractUnpaused
             | EventType::EmergencyAccessGranted
             | EventType::RecoveryProposed
             | EventType::RecoveryApproved
-            | EventType::RecoveryExecuted => EventSeverity::Error,
+            | EventType::RecoveryExecuted => EventSeverity::Err,
 
             // Warning: Security and access control
             EventType::UserRoleUpdated
@@ -691,7 +691,7 @@ pub fn emit_metric_update(_env: &Env, _metric_name: &str, _value: u64) {
 pub struct EventFilter {
     pub event_types: Option<Vec<EventType>>,
     pub categories: Option<Vec<OperationCategory>>,
-    pub severity_min: Option<EventSeverity>,
+    pub severity_min: Option<u32>,  // 0=Info, 1=Warning, 2=Err
     pub user_id: Option<Address>,
     pub start_time: Option<u64>,
     pub end_time: Option<u64>,
@@ -712,7 +712,7 @@ pub struct EventStats {
     pub total_events: u64,
     pub events_by_type: Map<EventType, u64>,
     pub events_by_category: Map<OperationCategory, u64>,
-    pub events_by_severity: Map<EventSeverity, u64>,
+    pub events_by_severity: Map<u32, u64>,  // 0=Info, 1=Warning, 2=Err
     pub events_by_user: Map<Address, u64>,
     pub time_range: (u64, u64), // (start, end)
 }
@@ -756,9 +756,9 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
             if !found { continue; }
         }
 
-        // Filter by minimum severity
+        // Filter by minimum severity (compare as u32)
         if let Some(min_sev) = filter.severity_min {
-            if metadata.severity < min_sev { continue; }
+            if (metadata.severity as u32) < min_sev { continue; }
         }
 
         // Filter by user
@@ -797,7 +797,7 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);
     let mut events_by_category: Map<OperationCategory, u64> = Map::new(env);
-    let mut events_by_severity: Map<EventSeverity, u64> = Map::new(env);
+    let mut events_by_severity: Map<u32, u64> = Map::new(env);
     let mut events_by_user: Map<Address, u64> = Map::new(env);
 
     let mut min_time = u64::MAX;
@@ -820,10 +820,10 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         let category_count = events_by_category.get(curr_cat.clone()).unwrap_or(0) + 1;
         events_by_category.set(curr_cat.clone(), category_count);
 
-        // Count by severity
-        let curr_sev = metadata.severity.clone();
-        let severity_count = events_by_severity.get(curr_sev.clone()).unwrap_or(0) + 1;
-        events_by_severity.set(curr_sev.clone(), severity_count);
+        // Count by severity (as u32: 0=Info, 1=Warning, 2=Err)
+        let curr_sev = metadata.severity as u32;
+        let severity_count = events_by_severity.get(curr_sev).unwrap_or(0) + 1;
+        events_by_severity.set(curr_sev, severity_count);
 
         // Count by user
         let user = metadata.user_id.clone();
