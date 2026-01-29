@@ -997,13 +997,17 @@ impl CrossChainAccessContract {
         }
     }
 
+    // ... inside contracts/cross_chain_access/src/lib.rs ...
+
     fn conditions_met(env: Env, conditions: &Vec<AccessCondition>, now: u64) -> bool {
         for condition in conditions.iter() {
             match condition {
                 AccessCondition::TimeRestricted(start, end) => {
                     // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
-                    if time_of_day < *start || time_of_day > *end {
+                    
+                    // FIX: Removed the '*' dereference here
+                    if time_of_day < start || time_of_day > end {
                         return false;
                     }
                 }
@@ -1016,4 +1020,5 @@ impl CrossChainAccessContract {
         }
         true
     }
+}
 }

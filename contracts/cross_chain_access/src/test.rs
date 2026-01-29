@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::{Address as _, Ledger}, Env};
+use soroban_sdk::{testutils::Address as _, Env}; // Removed Ledger
 
 #[test]
 fn test_initialize() {
