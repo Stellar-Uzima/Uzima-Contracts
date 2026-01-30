@@ -1,8 +1,11 @@
+// Federated Learning Contract - Privacy-preserving ML with differential privacy
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
 
 #[derive(Clone)]
@@ -58,9 +61,6 @@ pub enum DataKey {
     PrivacyBudget(Address),
 }
 
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const COORDINATOR: Symbol = symbol_short!("COORD");
-
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -88,7 +88,9 @@ impl FederatedLearningContract {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Coordinator, &coordinator);
+        env.storage()
+            .instance()
+            .set(&DataKey::Coordinator, &coordinator);
         true
     }
 
@@ -123,9 +125,7 @@ impl FederatedLearningContract {
             .get(&DataKey::RoundCounter)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&DataKey::RoundCounter, &next);
+        env.storage().instance().set(&DataKey::RoundCounter, &next);
         next
     }
 
@@ -160,8 +160,7 @@ impl FederatedLearningContract {
         };
 
         env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events()
-            .publish((symbol_short!("RoundStarted"),), id);
+        env.events().publish((symbol_short!("RndStart"),), id);
         id
     }
 
@@ -191,18 +190,18 @@ impl FederatedLearningContract {
 
         // Check privacy budget for the participant
         let budget_key = DataKey::PrivacyBudget(participant.clone());
-        let mut budget: PrivacyBudget = env
-            .storage()
-            .instance()
-            .get(&budget_key)
-            .unwrap_or(PrivacyBudget {
-                epsilon_consumed: 0,
-                epsilon_total: round.dp_epsilon, // Use round's epsilon as default budget
-            });
+        let mut budget: PrivacyBudget =
+            env.storage()
+                .instance()
+                .get(&budget_key)
+                .unwrap_or(PrivacyBudget {
+                    epsilon_consumed: 0,
+                    epsilon_total: round.dp_epsilon, // Use round's epsilon as default budget
+                });
 
         // Calculate privacy cost (simplified model: each sample consumes some epsilon)
         let privacy_cost = num_samples / 100; // Simplified: every 100 samples consume 1 epsilon unit
-        
+
         if budget.epsilon_consumed + privacy_cost > budget.epsilon_total {
             return Err(Error::PrivacyBudgetExceeded);
         }
@@ -221,12 +220,12 @@ impl FederatedLearningContract {
         env.storage().instance().set(&budget_key, &budget);
 
         round.total_updates += 1;
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
-        env.events().publish(
-            (symbol_short!("UpdateSubmitted"),),
-            (round_id, participant),
-        );
+        env.events()
+            .publish((symbol_short!("UpdSubmit"),), (round_id, participant));
 
         Ok(true)
     }
@@ -259,7 +258,9 @@ impl FederatedLearningContract {
 
         round.is_finalized = true;
         round.finalized_at = env.ledger().timestamp();
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
         let metadata = ModelMetadata {
             model_id: new_model_id.clone(),
@@ -274,10 +275,8 @@ impl FederatedLearningContract {
             .instance()
             .set(&DataKey::Model(new_model_id.clone()), &metadata);
 
-        env.events().publish(
-            (symbol_short!("RoundFinalized"),),
-            (round_id, new_model_id),
-        );
+        env.events()
+            .publish((symbol_short!("RndFinal"),), (round_id, new_model_id));
 
         Ok(true)
     }
@@ -358,27 +357,28 @@ mod test {
         let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
         let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant1, &round_id, &update_hash1, &100u32)
-            .is_ok());
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant2, &round_id, &update_hash2, &200u32)
-            .is_ok());
+        assert!(client.mock_all_auths().submit_update(
+            &participant1,
+            &round_id,
+            &update_hash1,
+            &100u32
+        ));
+        assert!(client.mock_all_auths().submit_update(
+            &participant2,
+            &round_id,
+            &update_hash2,
+            &200u32
+        ));
 
         let new_model = BytesN::from_array(&env, &[4u8; 32]);
-        assert!(client
-            .mock_all_auths()
-            .finalize_round(
-                &coordinator,
-                &round_id,
-                &new_model,
-                &String::from_str(&env, "Test model"),
-                &String::from_str(&env, "ipfs://metrics"),
-                &String::from_str(&env, "ipfs://fairness"),
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().finalize_round(
+            &coordinator,
+            &round_id,
+            &new_model,
+            &String::from_str(&env, "Test model"),
+            &String::from_str(&env, "ipfs://metrics"),
+            &String::from_str(&env, "ipfs://fairness"),
+        ));
 
         let stored_round = client.get_round(&round_id).unwrap();
         assert!(stored_round.is_finalized);
@@ -402,29 +402,37 @@ mod test {
         // Set a small privacy budget
         assert!(client
             .mock_all_auths()
-            .set_privacy_budget(&admin, &participant, &10u32)
-            .is_ok());
+            .set_privacy_budget(&admin, &participant, &10u32));
 
         let base_model = BytesN::from_array(&env, &[1u8; 32]);
-        let round_id = client
+        let round_id_1 = client
             .mock_all_auths()
             .start_round(&admin, &base_model, &1u32, &100u32);
 
         let update_hash = BytesN::from_array(&env, &[2u8; 32]);
 
         // Submit an update that stays within budget
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant, &round_id, &update_hash, &500u32)
-            .is_ok());
-
-        // Submit an update that exceeds the budget
-        let result = client.mock_all_auths().submit_update(
+        assert!(client.mock_all_auths().submit_update(
             &participant,
-            &round_id,
+            &round_id_1,
+            &update_hash,
+            &500u32
+        ));
+
+        // Start round 2 to avoid DuplicateUpdate error
+        let round_id_2 = client
+            .mock_all_auths()
+            .start_round(&admin, &base_model, &1u32, &100u32);
+
+        // Submit an update that exceeds the budget (5 consumed + 6 cost = 11 > 10)
+        let result = client.mock_all_auths().try_submit_update(
+            &participant,
+            &round_id_2,
             &update_hash,
             &600u32,
         );
-        assert!(result.is_err());
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
     }
 }

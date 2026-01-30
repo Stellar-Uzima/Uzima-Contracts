@@ -79,8 +79,7 @@ jobs:
             -W clippy::unwrap_used \
             -W clippy::expect_used \
             -W clippy::panic \
-            -W clippy::arithmetic_side_effects \
-            -W clippy::integer_arithmetic
+            -W clippy::arithmetic_side_effects
 
   # Check for hardcoded secrets
   secret-scanning:
@@ -92,24 +91,30 @@ jobs:
         with:
           fetch-depth: 0  # Full history for secret scanning
 
+      - name: Install Gitleaks
+        run: |
+          wget https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
+          chmod +x gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
       - name: Run Gitleaks
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gitleaks detect --source . --verbose --redact
 
-  # Dependency review for PRs
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: moderate
+  # NOTE: Dependency Review requires Dependency Graph to be enabled in repo settings
+  # See: https://github.com/YOUR_ORG/YOUR_REPO/settings/security_analysis
+  # Uncomment the job below once Dependency Graph is enabled
+  # dependency-review:
+  #   name: Dependency Review
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'pull_request'
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     - name: Dependency Review
+  #       uses: actions/dependency-review-action@v4
+  #       with:
+  #         fail-on-severity: moderate
 
   # Security summary
   security-summary:

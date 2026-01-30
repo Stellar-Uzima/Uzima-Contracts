@@ -12,13 +12,3 @@ soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-strip = true
-
-[profile.release-with-logs]
-inherits = "release"
-debug = true
-strip = false

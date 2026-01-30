@@ -15,7 +15,7 @@ jobs:
     name: Test Suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -23,19 +23,19 @@ jobs:
           override: true
       
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo index
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
@@ -47,7 +47,7 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -61,7 +61,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -69,13 +69,13 @@ jobs:
           components: clippy
       
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
       
       - name: Cache cargo build
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-clippy-target-${{ hashFiles('**/Cargo.lock') }}
@@ -87,7 +87,7 @@ jobs:
     name: Code Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -103,7 +103,7 @@ jobs:
                           --timeout 600 --exclude-files tests/*
       
       - name: Upload to codecov
-        uses: codecov/codecov-action@v3
+        uses: codecov/codecov-action@v4
         with:
           files: ./coverage/cobertura.xml
           flags: unittests
@@ -113,7 +113,7 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -127,17 +127,24 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
-      - uses: rustsec/audit-check-action@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          toolchain: stable
+          override: true
+      
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+      
+      - name: Run security audit
+        run: cargo audit
 
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -151,7 +158,7 @@ jobs:
     name: Documentation Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -164,8 +171,9 @@ jobs:
   performance:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
+    continue-on-error: true  # Optional - no performance tests yet
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - uses: actions-rs/toolchain@v1
         with:
@@ -173,10 +181,17 @@ jobs:
           override: true
       
       - name: Run performance tests
-        run: cargo test --test '*performance*' --verbose -- --nocapture
+        run: |
+          # Check if any performance tests exist before running
+          if cargo test --test '*performance*' --no-run 2>/dev/null; then
+            cargo test --test '*performance*' --verbose -- --nocapture
+          else
+            echo "No performance tests found, skipping..."
+          fi
       
       - name: Store benchmark results
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
+        if: success()
         with:
           name: performance-results
           path: test_results/

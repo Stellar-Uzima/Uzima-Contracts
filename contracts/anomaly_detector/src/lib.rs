@@ -7,7 +7,7 @@ pub struct AnomalyDetector;
 
 #[contractimpl]
 impl AnomalyDetector {
-    pub fn hello(_env: soroban_sdk::Env) -> &'static str {
-        "Anomaly Detector Placeholder"
+    pub fn hello(env: soroban_sdk::Env) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(&env, "Anomaly Detector Placeholder")
     }
 }

@@ -15,6 +15,7 @@ NC='\033[0m' # No Color
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TEST_RESULTS_DIR="${PROJECT_ROOT}/test_results"
+# shellcheck disable=SC2034  # Reserved for future use in quality gates
 COVERAGE_THRESHOLD=90
 
 # Ensure test results directory exists
@@ -109,9 +110,11 @@ fi
 print_header "Checking Dependencies"
 if cargo deny check 2>/dev/null || echo "cargo-deny not installed"; then
     print_success "Dependency checks passed"
+    # shellcheck disable=SC2034  # Reserved for future use in quality gates
     DEPS_PASS=true
 else
     print_warning "Dependency checks failed (may not be installed)"
+    # shellcheck disable=SC2034  # Setting to true to not fail build when tool not installed
     DEPS_PASS=true
 fi
 
@@ -119,15 +122,17 @@ fi
 print_header "Running Security Audit"
 if cargo audit 2>/dev/null || echo "cargo-audit not installed"; then
     print_success "Security audit passed"
+    # shellcheck disable=SC2034  # Reserved for future use in quality gates
     AUDIT_PASS=true
 else
     print_warning "Security audit failed (may not be installed)"
+    # shellcheck disable=SC2034  # Setting to true to not fail build when tool not installed
     AUDIT_PASS=true
 fi
 
 # 9. Generate Test Report
 print_header "Generating Test Report"
-cat > "${TEST_RESULTS_DIR}/test_report.md" << 'EOF'
+cat > "${TEST_RESULTS_DIR}/test_report.md" << EOF
 # Uzima Contracts - Test Report
 
 ## Test Summary
@@ -151,10 +156,10 @@ cat > "${TEST_RESULTS_DIR}/test_report.md" << 'EOF'
 
 ### Coverage by Module
 
-- `medical_records`: 95%
-- `identity_registry`: 90%
-- `governor`: 88%
-- `meta_tx_forwarder`: 85%
+- \`medical_records\`: 95%
+- \`identity_registry\`: 90%
+- \`governor\`: 88%
+- \`meta_tx_forwarder\`: 85%
 
 ## Performance Metrics
 

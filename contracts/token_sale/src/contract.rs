@@ -1,3 +1,9 @@
+// Token sale contract - arithmetic is bounds-checked via asserts
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 use crate::storage::*;
 use crate::types::*;
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};

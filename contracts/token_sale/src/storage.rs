@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use crate::types::*;
 use soroban_sdk::{Address, Env};
 

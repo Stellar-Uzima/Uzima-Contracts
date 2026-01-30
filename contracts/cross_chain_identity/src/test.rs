@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use crate::{
     ChainId, CrossChainIdentityContract, CrossChainIdentityContractClient, Error, RequestStatus,
     SyncStatus, VerificationStatus,
