@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
 
 #[derive(Clone)]
@@ -48,8 +47,6 @@ pub enum DataKey {
     Model(BytesN<32>),
 }
 
-const ADMIN: Symbol = symbol_short!("ADMIN");
-
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -59,6 +56,8 @@ pub enum Error {
     RoundFinalized = 3,
     NotEnoughParticipants = 4,
     DuplicateUpdate = 5,
+    AlreadyInitialized = 6,
+    AdminNotSet = 7,
 }
 
 #[contract]
@@ -66,27 +65,28 @@ pub struct AiAnalyticsContract;
 
 #[contractimpl]
 impl AiAnalyticsContract {
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        true
+        Ok(true)
     }
 
-    fn ensure_admin(env: &Env, caller: &Address) {
+    fn ensure_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("AI analytics admin not set"));
+            .ok_or(Error::AdminNotSet)?;
 
         if admin != *caller {
-            panic!("Not authorized: caller is not AI admin");
+            return Err(Error::NotAuthorized);
         }
+        Ok(())
     }
 
     fn next_round_id(env: &Env) -> u64 {
@@ -95,10 +95,8 @@ impl AiAnalyticsContract {
             .instance()
             .get(&DataKey::RoundCounter)
             .unwrap_or(0);
-        let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&DataKey::RoundCounter, &next);
+        let next = current.saturating_add(1);
+        env.storage().instance().set(&DataKey::RoundCounter, &next);
         next
     }
 
@@ -108,31 +106,30 @@ impl AiAnalyticsContract {
         base_model_id: BytesN<32>,
         min_participants: u32,
         dp_epsilon: u32,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         caller.require_auth();
-        Self::ensure_admin(&env, &caller);
+        Self::ensure_admin(&env, &caller)?;
 
         if min_participants == 0 {
-            panic!("min_participants must be > 0");
+            return Err(Error::NotEnoughParticipants);
         }
 
         let id = Self::next_round_id(&env);
-        let round = FederatedRound {
-            id,
-            base_model_id,
-            min_participants,
-            dp_epsilon,
-            started_at: env.ledger().timestamp(),
-            finalized_at: 0,
-            total_updates: 0,
-            is_finalized: false,
-        };
+	        let round = FederatedRound {
+	            id,
+	            base_model_id,
+	            min_participants,
+	            dp_epsilon,
+	            started_at: env.ledger().timestamp(),
+	            finalized_at: 0,
+	            total_updates: 0,
+	            is_finalized: false,
+	        };
 
-        env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events()
-            .publish((symbol_short!("RND_STRT"),), id);
-        id
-    }
+	        env.storage().instance().set(&DataKey::Round(id), &round);
+	        env.events().publish((symbol_short!("RndStart"),), id);
+	        Ok(id)
+	    }
 
     pub fn submit_update(
         env: Env,
@@ -167,13 +164,13 @@ impl AiAnalyticsContract {
 
         env.storage().instance().set(&key, &update);
 
-        round.total_updates += 1;
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        round.total_updates = round.total_updates.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
-        env.events().publish(
-            (symbol_short!("UPD_SUB"),),
-            (round_id, participant),
-        );
+        env.events()
+            .publish((symbol_short!("UpdSubmit"),), (round_id, participant));
 
         Ok(true)
     }
@@ -188,7 +185,7 @@ impl AiAnalyticsContract {
         fairness_report_ref: String,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Self::ensure_admin(&env, &caller);
+        Self::ensure_admin(&env, &caller)?;
 
         let mut round: FederatedRound = env
             .storage()
@@ -206,7 +203,9 @@ impl AiAnalyticsContract {
 
         round.is_finalized = true;
         round.finalized_at = env.ledger().timestamp();
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
 
         let metadata = ModelMetadata {
             model_id: new_model_id.clone(),
@@ -221,10 +220,8 @@ impl AiAnalyticsContract {
             .instance()
             .set(&DataKey::Model(new_model_id.clone()), &metadata);
 
-        env.events().publish(
-            (symbol_short!("RND_FIN"),),
-            (round_id, new_model_id),
-        );
+        env.events()
+            .publish((symbol_short!("RndFinal"),), (round_id, new_model_id));
 
         Ok(true)
     }
@@ -239,6 +236,7 @@ impl AiAnalyticsContract {
 }
 
 #[cfg(all(test, feature = "testutils"))]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
@@ -253,6 +251,7 @@ mod test {
         let participant1 = Address::generate(&env);
         let participant2 = Address::generate(&env);
 
+        // Soroban contract clients auto-unwrap Result types
         client.mock_all_auths().initialize(&admin);
 
         let base_model = BytesN::from_array(&env, &[1u8; 32]);
@@ -263,27 +262,28 @@ mod test {
         let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
         let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant1, &round_id, &update_hash1, &10u32)
-            .is_ok());
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant2, &round_id, &update_hash2, &20u32)
-            .is_ok());
+        assert!(client.mock_all_auths().submit_update(
+            &participant1,
+            &round_id,
+            &update_hash1,
+            &10u32
+        ));
+        assert!(client.mock_all_auths().submit_update(
+            &participant2,
+            &round_id,
+            &update_hash2,
+            &20u32
+        ));
 
         let new_model = BytesN::from_array(&env, &[4u8; 32]);
-        assert!(client
-            .mock_all_auths()
-            .finalize_round(
-                &admin,
-                &round_id,
-                &new_model,
-                &String::from_str(&env, "Test model"),
-                &String::from_str(&env, "ipfs://metrics"),
-                &String::from_str(&env, "ipfs://fairness"),
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().finalize_round(
+            &admin,
+            &round_id,
+            &new_model,
+            &String::from_str(&env, "Test model"),
+            &String::from_str(&env, "ipfs://metrics"),
+            &String::from_str(&env, "ipfs://fairness"),
+        ));
 
         let stored_round = client.get_round(&round_id).unwrap();
         assert!(stored_round.is_finalized);

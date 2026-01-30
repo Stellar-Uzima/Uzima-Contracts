@@ -219,7 +219,7 @@ mod verification_method_tests {
 	    fn test_verification_method_types() {
 	        // Test all verification method types:
 	        // - Ed25519VerificationKey2020
-	        // - EcdsaSecp256k1VKey2019
+	        // - EcdsaSecp256k1VerifKey2019
 	        // - X25519KeyAgreementKey2020
 	        // - JsonWebKey2020
 

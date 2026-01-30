@@ -1,4 +1,6 @@
+// SUT Token - Stellar Utility Token with checked arithmetic throughout
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, contracttype, Address, Env, String,
@@ -23,6 +25,8 @@ pub enum Error {
     InvalidAmount = 7,
     InvalidAddress = 8,
     SnapshotNotFound = 9,
+    Overflow = 10,
+    IndexOutOfBounds = 11,
 }
 
 // Data structures
@@ -366,20 +370,28 @@ impl SutToken {
             .ok_or(Error::NotInitialized)?;
 
         // Check supply cap
-        if token_info.total_supply + amount > token_info.supply_cap {
+        if token_info
+            .total_supply
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?
+            > token_info.supply_cap
+        {
             return Err(Error::ExceedsSupplyCap);
         }
 
         // Update total supply
-        token_info.total_supply += amount;
+        token_info.total_supply = token_info
+            .total_supply
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
         env.storage()
             .instance()
             .set(&DataKey::TokenInfo, &token_info);
 
         // Update recipient balance
         let current_balance = Self::balance_of(env.clone(), to.clone());
-        Self::update_checkpoint(&env, &to, current_balance);
-        let new_balance = current_balance + amount;
+        Self::update_checkpoint(&env, &to, current_balance)?;
+        let new_balance = current_balance.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_balance);
@@ -419,7 +431,7 @@ impl SutToken {
             return Err(Error::InsufficientBalance);
         }
 
-        Self::update_checkpoint(&env, &from, current_balance);
+        Self::update_checkpoint(&env, &from, current_balance)?;
 
         // Get current token info
         let mut token_info: TokenInfo = env
@@ -429,13 +441,16 @@ impl SutToken {
             .ok_or(Error::NotInitialized)?;
 
         // Update total supply
-        token_info.total_supply -= amount;
+        token_info.total_supply = token_info
+            .total_supply
+            .checked_sub(amount)
+            .ok_or(Error::Overflow)?;
         env.storage()
             .instance()
             .set(&DataKey::TokenInfo, &token_info);
 
         // Update sender balance
-        let new_balance = current_balance - amount;
+        let new_balance = current_balance.checked_sub(amount).ok_or(Error::Overflow)?;
         if new_balance == 0 {
             env.storage()
                 .persistent()
@@ -577,7 +592,7 @@ impl SutToken {
         }
 
         // Update balances
-        let new_from_balance = from_balance - amount;
+        let new_from_balance = from_balance.checked_sub(amount).ok_or(Error::Overflow)?;
         if new_from_balance == 0 {
             env.storage()
                 .persistent()
@@ -589,19 +604,19 @@ impl SutToken {
         }
 
         let to_balance = Self::balance_of(env.clone(), to.clone());
-        let new_to_balance = to_balance + amount;
+        let new_to_balance = to_balance.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_to_balance);
 
         // Update checkpoints for both accounts
-        Self::update_checkpoint(env, from, from_balance);
-        Self::update_checkpoint(env, to, to_balance);
+        Self::update_checkpoint(env, from, from_balance)?;
+        Self::update_checkpoint(env, to, to_balance)?;
 
         Ok(())
     }
 
-    fn update_checkpoint(env: &Env, user: &Address, balance_before_change: i128) {
+    fn update_checkpoint(env: &Env, user: &Address, balance_before_change: i128) -> Result<(), Error> {
         let current_snapshot_count: u32 = env
             .storage()
             .instance()
@@ -609,7 +624,7 @@ impl SutToken {
             .unwrap_or(0);
 
         if current_snapshot_count == 0 {
-            return;
+            return Ok(());
         }
 
         let mut checkpoints: Vec<Checkpoint> = env
@@ -636,6 +651,7 @@ impl SutToken {
                 &checkpoints.len(),
             );
         }
+        Ok(())
     }
 
     fn get_balance_at_snapshot(env: &Env, user: &Address, snapshot_id: u32) -> i128 {

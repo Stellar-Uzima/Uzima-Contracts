@@ -1,4 +1,8 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(dead_code)]
 
 #[cfg(test)]
 mod test;
@@ -163,6 +167,7 @@ pub enum Error {
     RecordRefNotFound = 18,
     AlreadyInitialized = 19,
     InvalidPayload = 20,
+    Overflow = 21,
 }
 
 #[contract]
@@ -409,7 +414,9 @@ impl CrossChainBridgeContract {
 
         // Increment message count
         let count: u64 = env.storage().persistent().get(&MSG_COUNT).unwrap_or(0);
-        env.storage().persistent().set(&MSG_COUNT, &(count + 1));
+        env.storage()
+            .persistent()
+            .set(&MSG_COUNT, &(count.checked_add(1).ok_or(Error::Overflow)?));
 
         env.events().publish(
             (Symbol::new(&env, "MessageSubmitted"),),
@@ -446,7 +453,12 @@ impl CrossChainBridgeContract {
 
         // Check if message has expired
         let now = env.ledger().timestamp();
-        if now > message.timestamp + MESSAGE_EXPIRY_SECS {
+        if now
+            > message
+                .timestamp
+                .checked_add(MESSAGE_EXPIRY_SECS)
+                .ok_or(Error::Overflow)?
+        {
             return Err(Error::MessageExpired);
         }
 
@@ -523,7 +535,12 @@ impl CrossChainBridgeContract {
 
         // Check expiry
         let now = env.ledger().timestamp();
-        if now > message.timestamp + MESSAGE_EXPIRY_SECS {
+        if now
+            > message
+                .timestamp
+                .checked_add(MESSAGE_EXPIRY_SECS)
+                .ok_or(Error::Overflow)?
+        {
             let mut expired_message = message;
             expired_message.status = MessageStatus::Expired;
             messages.set(message_id.clone(), expired_message);
@@ -564,7 +581,7 @@ impl CrossChainBridgeContract {
             messages: message_ids,
             status: AtomicTxStatus::Initiated,
             created_at: now,
-            timeout: now + ATOMIC_TX_TIMEOUT,
+            timeout: now.checked_add(ATOMIC_TX_TIMEOUT).ok_or(Error::Overflow)?,
             confirmations: Vec::new(&env),
         };
 
@@ -941,7 +958,7 @@ impl CrossChainBridgeContract {
             .unwrap_or(Map::new(&env));
 
         if let Some(mut v) = validators.get(validator.clone()) {
-            v.confirmed_messages += 1;
+            v.confirmed_messages = v.confirmed_messages.saturating_add(1);
             validators.set(validator.clone(), v);
             env.storage().persistent().set(&VALIDATORS, &validators);
         }

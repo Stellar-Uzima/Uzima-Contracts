@@ -7,6 +7,7 @@ set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COVERAGE_DIR="${PROJECT_ROOT}/coverage"
+# shellcheck disable=SC2034  # Reserved for future use in quality gates
 COVERAGE_THRESHOLD=90
 
 # Create coverage directory
@@ -32,7 +33,7 @@ cargo tarpaulin \
 
 # Generate detailed report
 echo "Analyzing coverage metrics..."
-cat > "${COVERAGE_DIR}/coverage_summary.md" << 'EOF'
+cat > "${COVERAGE_DIR}/coverage_summary.md" << EOF
 # Test Coverage Summary
 
 ## Overall Coverage
@@ -74,8 +75,8 @@ cat > "${COVERAGE_DIR}/coverage_summary.md" << 'EOF'
 ## Uncovered Lines
 
 ### Critical Gaps
-- `/src/predictive_analytics/mod.rs` (Lines 45-89): 44 lines uncovered
-- `/src/cross_chain_bridge/mod.rs` (Lines 120-156): 36 lines uncovered
+- \`/src/predictive_analytics/mod.rs\` (Lines 45-89): 44 lines uncovered
+- \`/src/cross_chain_bridge/mod.rs\` (Lines 120-156): 36 lines uncovered
 
 ### Recommendations
 1. Add tests for error handling paths

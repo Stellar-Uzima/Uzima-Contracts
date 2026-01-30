@@ -1,5 +1,5 @@
-use soroban_sdk::{testutils::Address as _, Address, Env};
 use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 // Added <'a> to struct definition
 pub struct UzimaTest<'a> {
@@ -13,7 +13,7 @@ pub struct UzimaTest<'a> {
 
 // Added <'a> to function and argument
 pub fn setup_uzima<'a>(env: &'a Env) -> UzimaTest<'a> {
-    env.mock_all_auths(); 
+    env.mock_all_auths();
 
     let admin1 = Address::generate(env);
     let admin2 = Address::generate(env);
@@ -28,10 +28,10 @@ pub fn setup_uzima<'a>(env: &'a Env) -> UzimaTest<'a> {
 
     // Make the second admin an Admin (for multisig tests)
     client.manage_user(&admin1, &admin2, &Role::Admin);
-    
+
     // IMPORTANT FIX: Add the Patient to the USERS map!
     client.manage_user(&admin1, &patient, &Role::Patient);
-    
+
     // IMPORTANT FIX: Add the Doctor to the USERS map (required for link_did_to_user to find a profile)
     client.manage_user(&admin1, &doctor, &Role::Doctor);
 
