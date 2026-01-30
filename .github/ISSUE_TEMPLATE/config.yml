@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔐 Security Vulnerability (Private)
+    url: https://github.com/rinafcode/teachLink_contract/security/advisories/new
+    about: Report critical security vulnerabilities privately through GitHub Security Advisories
+  - name: 💬 Discussions
+    url: https://github.com/rinafcode/teachLink_contract/discussions
+    about: Ask questions, share ideas, or discuss features with the community
+  - name: 📖 Documentation
+    url: https://docs.teachlink.io
+    about: Check our documentation before opening an issue
+  - name: 💬 Discord Community
+    url: https://discord.gg/teachlink
+    about: Get real-time help from the community

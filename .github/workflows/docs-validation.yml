@@ -1,0 +1,27 @@
+name: Docs Validation Pipeline
+
+on:
+  push:
+    branches: [ main, feat/docs-pipeline-42 ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      # 1. Link checking system (Temporarily disabled)
+      # - name: Lychee Link Checker
+      #   uses: lycheeverse/lychee-action@v1.9.0
+      #   with:
+      #     args: --config lychee.toml "./**/*.md"
+      #     fail: true
+
+      # 2. Validate code examples (This stays!)
+      - name: Verify Code Snippets
+        run: cargo test --doc
