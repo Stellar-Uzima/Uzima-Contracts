@@ -101,20 +101,20 @@ jobs:
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose --redact
 
-  # Dependency review for PRs
-  dependency-review:
-    name: Dependency Review
-    runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
-    continue-on-error: true  # Continue if Dependency Graph is not enabled
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Dependency Review
-        uses: actions/dependency-review-action@v4
-        with:
-          fail-on-severity: moderate
+  # NOTE: Dependency Review requires Dependency Graph to be enabled in repo settings
+  # See: https://github.com/YOUR_ORG/YOUR_REPO/settings/security_analysis
+  # Uncomment the job below once Dependency Graph is enabled
+  # dependency-review:
+  #   name: Dependency Review
+  #   runs-on: ubuntu-latest
+  #   if: github.event_name == 'pull_request'
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #     - name: Dependency Review
+  #       uses: actions/dependency-review-action@v4
+  #       with:
+  #         fail-on-severity: moderate
 
   # Security summary
   security-summary:
