@@ -1,7 +1,8 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
 
@@ -133,14 +134,6 @@ impl PredictiveAnalyticsContract {
         if config.predictor != *caller {
             return Err(Error::NotAuthorized);
         }
-        if !config.enabled {
-            return Err(Error::Disabled);
-        }
-        Ok(config)
-    }
-
-    fn ensure_enabled(env: &Env) -> Result<PredictionConfig, Error> {
-        let config = Self::load_config(env)?;
         if !config.enabled {
             return Err(Error::Disabled);
         }
@@ -326,7 +319,7 @@ impl PredictiveAnalyticsContract {
         metrics: PredictionMetrics,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        let config = Self::ensure_admin(&env, &caller)?;
+        let _config = Self::ensure_admin(&env, &caller)?;
 
         // Validate metrics
         if metrics.accuracy_bps > 10_000
@@ -365,7 +358,7 @@ impl PredictiveAnalyticsContract {
         predictor_addr: Address,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        let config = Self::ensure_admin(&env, &caller)?;
+        let _config = Self::ensure_admin(&env, &caller)?;
 
         env.storage()
             .instance()
@@ -389,6 +382,7 @@ impl PredictiveAnalyticsContract {
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::vec;
 
     #[test]
     fn test_prediction_flow() {
@@ -411,7 +405,7 @@ mod test {
         assert_eq!(config.predictor, predictor);
         assert_eq!(config.prediction_horizon_days, 30u32);
         assert_eq!(config.min_confidence_bps, 5000u32);
-        assert_eq!(config.enabled, true);
+        assert!(config.enabled);
 
         // Make a prediction
         let model_id = BytesN::from_array(&env, &[1; 32]);
@@ -429,20 +423,17 @@ mod test {
             String::from_str(&env, "family_history"),
         ];
 
-        let prediction_id = client
-            .mock_all_auths()
-            .make_prediction(
-                &predictor,
-                &patient,
-                &model_id,
-                &outcome_type,
-                &7500u32, // High risk (75%)
-                &8000u32, // High confidence (80%)
-                &features,
-                &explanation_ref,
-                &risk_factors,
-            )
-            .unwrap();
+        let prediction_id = client.mock_all_auths().make_prediction(
+            &predictor,
+            &patient,
+            &model_id,
+            &outcome_type,
+            &7500u32, // High risk (75%)
+            &8000u32, // High confidence (80%)
+            &features,
+            &explanation_ref,
+            &risk_factors,
+        );
 
         assert_eq!(prediction_id, 1u64);
 
@@ -483,7 +474,7 @@ mod test {
         let explanation_ref = String::from_str(&env, "ipfs://low-confidence-prediction");
         let risk_factors = vec![&env, String::from_str(&env, "age")];
 
-        let result = client.mock_all_auths().make_prediction(
+        let result = client.mock_all_auths().try_make_prediction(
             &predictor,
             &patient,
             &model_id,
@@ -495,7 +486,8 @@ mod test {
             &risk_factors,
         );
 
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
     }
 
     #[test]
@@ -513,21 +505,18 @@ mod test {
             .initialize(&admin, &predictor, &30u32, &5000u32);
 
         // Update config
-        assert!(client
-            .mock_all_auths()
-            .update_config(
-                &admin,
-                Some(Address::generate(&env)), // new predictor
-                Some(60u32),                   // new horizon
-                Some(7000u32),                 // new min confidence
-                Some(false),                   // disable
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().update_config(
+            &admin,
+            &Some(Address::generate(&env)), // new predictor
+            &Some(60u32),                   // new horizon
+            &Some(7000u32),                 // new min confidence
+            &Some(false),                   // disable
+        ));
 
         let config = client.get_config().unwrap();
         assert_eq!(config.prediction_horizon_days, 60u32);
         assert_eq!(config.min_confidence_bps, 7000u32);
-        assert_eq!(config.enabled, false);
+        assert!(!config.enabled);
     }
 
     #[test]
@@ -545,7 +534,7 @@ mod test {
             .initialize(&admin, &predictor, &30u32, &5000u32);
 
         // Initially there should be no high-risk predictions
-        assert_eq!(client.has_high_risk_prediction(&patient), false);
+        assert!(!client.has_high_risk_prediction(&patient));
 
         let model_id = BytesN::from_array(&env, &[1; 32]);
         let outcome_type = String::from_str(&env, "diabetes_risk");
@@ -554,21 +543,18 @@ mod test {
         let risk_factors = vec![&env, String::from_str(&env, "high_bmi")];
 
         // Create a high-risk prediction (>7500 bps)
-        client
-            .mock_all_auths()
-            .make_prediction(
-                &predictor,
-                &patient,
-                &model_id,
-                &outcome_type,
-                &8000u32,
-                &9000u32,
-                &features,
-                &explanation_ref,
-                &risk_factors,
-            )
-            .unwrap();
+        client.mock_all_auths().make_prediction(
+            &predictor,
+            &patient,
+            &model_id,
+            &outcome_type,
+            &8000u32,
+            &9000u32,
+            &features,
+            &explanation_ref,
+            &risk_factors,
+        );
 
-        assert_eq!(client.has_high_risk_prediction(&patient), true);
+        assert!(client.has_high_risk_prediction(&patient));
     }
 }

@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
 
 #[derive(Clone)]
@@ -47,8 +46,6 @@ pub enum DataKey {
     ParticipantUpdate(u64, Address),
     Model(BytesN<32>),
 }
-
-const ADMIN: Symbol = symbol_short!("ADMIN");
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -260,27 +257,28 @@ mod test {
         let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
         let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant1, &round_id, &update_hash1, &10u32)
-            .is_ok());
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant2, &round_id, &update_hash2, &20u32)
-            .is_ok());
+        assert!(client.mock_all_auths().submit_update(
+            &participant1,
+            &round_id,
+            &update_hash1,
+            &10u32
+        ));
+        assert!(client.mock_all_auths().submit_update(
+            &participant2,
+            &round_id,
+            &update_hash2,
+            &20u32
+        ));
 
         let new_model = BytesN::from_array(&env, &[4u8; 32]);
-        assert!(client
-            .mock_all_auths()
-            .finalize_round(
-                &admin,
-                &round_id,
-                &new_model,
-                &String::from_str(&env, "Test model"),
-                &String::from_str(&env, "ipfs://metrics"),
-                &String::from_str(&env, "ipfs://fairness"),
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().finalize_round(
+            &admin,
+            &round_id,
+            &new_model,
+            &String::from_str(&env, "Test model"),
+            &String::from_str(&env, "ipfs://metrics"),
+            &String::from_str(&env, "ipfs://fairness"),
+        ));
 
         let stored_round = client.get_round(&round_id).unwrap();
         assert!(stored_round.is_finalized);

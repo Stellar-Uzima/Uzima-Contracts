@@ -1,15 +1,13 @@
-#![cfg(test)]
-
 use super::*;
-use soroban_sdk::testutils::{Address as _, Events, Ledger};
-use soroban_sdk::{vec, Address, BytesN, Env, IntoVal, String, TryFromVal, Val, Vec};
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{vec, Address, Env, String, TryFromVal, Vec};
 
-fn create_contract(env: &Env) -> (MedicalRecordsContractClient, Address) {
+fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
     let client = MedicalRecordsContractClient::new(env, &contract_id);
-    let admin = Address::generate(&env);
+    let admin = Address::generate(env);
     client.initialize(&admin);
     (client, admin)
 }
@@ -19,9 +17,9 @@ fn test_add_records_batch_and_get_batch() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let (client, admin) = create_contract(&env);
-    let doctor = Address::generate(&env);
-    let patient1 = Address::generate(&env);
+    let (_client, _admin) = create_contract(&env);
+    let _doctor = Address::generate(&env);
+    let _patient1 = Address::generate(&env);
     //     let patient2 = Address::generate(&env);
     //
     //     client.manage_user(&admin, &doctor, &Role::Doctor);
@@ -203,7 +201,7 @@ fn test_add_and_get_record() {
     assert_eq!(record.patient_id, patient);
     assert_eq!(record.diagnosis, diagnosis);
     assert_eq!(record.treatment, treatment);
-    assert_eq!(record.is_confidential, false);
+    assert!(!record.is_confidential);
 
     // Verify record access event was emitted
     let events_after_get = env.events().all();
@@ -369,12 +367,12 @@ fn test_get_patient_records() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let diagnosis = String::from_str(&env, "Common cold");
-    let treatment = String::from_str(&env, "Rest and fluids");
-    let is_confidential = false;
-    let tags = vec![&env, String::from_str(&env, "respiratory")];
-    let category = String::from_str(&env, "Modern");
-    let treatment_type = String::from_str(&env, "Medication");
+    let _diagnosis = String::from_str(&env, "Common cold");
+    let _treatment = String::from_str(&env, "Rest and fluids");
+    let _is_confidential = false;
+    let _tags = vec![&env, String::from_str(&env, "respiratory")];
+    let _category = String::from_str(&env, "Modern");
+    let _treatment_type = String::from_str(&env, "Medication");
 
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
@@ -417,12 +415,12 @@ fn test_role_based_access() {
     let (client, admin) = create_contract(&env);
     let doctor = Address::generate(&env);
     let patient = Address::generate(&env);
-    let diagnosis = String::from_str(&env, "Common cold");
-    let treatment = String::from_str(&env, "Rest and fluids");
-    let is_confidential = false;
-    let tags = vec![&env, String::from_str(&env, "respiratory")];
-    let category = String::from_str(&env, "Modern");
-    let treatment_type = String::from_str(&env, "Medication");
+    let _diagnosis = String::from_str(&env, "Common cold");
+    let _treatment = String::from_str(&env, "Rest and fluids");
+    let _is_confidential = false;
+    let _tags = vec![&env, String::from_str(&env, "respiratory")];
+    let _category = String::from_str(&env, "Modern");
+    let _treatment_type = String::from_str(&env, "Medication");
 
     // Admin manages user roles
     client.manage_user(&admin, &doctor, &Role::Doctor);
@@ -467,7 +465,7 @@ fn test_deactivate_user() {
     client.deactivate_user(&admin, &doctor);
 
     // // Try to add a record as the deactivated doctor (should fail)
-    let result = client.add_record(
+    let _result = client.add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Cold"),
@@ -559,7 +557,7 @@ fn test_pause_unpause_blocks_sensitive_functions() {
 
     // Now mutating calls should succeed
     assert!(client.manage_user(&admin, &Address::generate(&env), &Role::Doctor));
-    let r3 = client.add_record(
+    let _r3 = client.add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis3"),
@@ -572,18 +570,6 @@ fn test_pause_unpause_blocks_sensitive_functions() {
     );
 }
 
-#[test]
-/*
-#[test]
-fn test_recovery_timelock_and_multisig() {
-    // ... (commented out)
-}
-
-#[test]
-fn test_recovery_timelock_and_multisig_success() {
-   // ...
-}
-*/
 #[test]
 fn test_monotonic_record_ids() {
     let env = Env::default();

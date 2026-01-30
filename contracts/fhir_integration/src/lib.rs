@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(dead_code)]
 
 // #[cfg(test)]
 // mod test;
@@ -29,7 +31,7 @@ pub enum FHIRResourceType {
 }
 
 /// FHIR Coding System (standard healthcare coding systems)
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CodingSystem {
     /// ICD-10 - International Classification of Diseases
@@ -45,11 +47,11 @@ pub enum CodingSystem {
     /// RxNorm - Medications
     RxNorm,
     /// HL7 Custom
-    Custom(String),
+    Custom,
 }
 
 /// FHIR Code structure (coding + text)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub struct FHIRCode {
     pub system: CodingSystem,
@@ -93,7 +95,7 @@ pub struct FHIRObservation {
     pub effective_datetime: String, // ISO 8601 timestamp
     pub value_quantity_value: i64,
     pub value_quantity_unit: String,
-    pub interpretation: Option<FHIRCode>,
+    pub interpretation: Vec<FHIRCode>,
     pub reference_range: String, // Human-readable reference range
 }
 
@@ -107,7 +109,7 @@ pub struct FHIRCondition {
     pub subject_reference: String, // Reference to Patient
     pub onset_date_time: String,
     pub recorded_date: String,
-    pub severity: Option<FHIRCode>,
+    pub severity: Vec<FHIRCode>,
 }
 
 /// FHIR Medication Statement

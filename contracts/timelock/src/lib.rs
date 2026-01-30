@@ -48,7 +48,7 @@ impl Timelock {
             .persistent()
             .get(&CFG)
             .unwrap_or_else(|| panic!("Not init"));
-        let now: u64 = env.ledger().timestamp().into();
+        let now: u64 = env.ledger().timestamp();
         let eta = now + cfg.delay_seconds;
         let mut q: Map<u64, QueuedTx> = env
             .storage()
@@ -70,7 +70,7 @@ impl Timelock {
             .get(&QUEUE)
             .unwrap_or(Map::new(&env));
         let tx = q.get(id).unwrap_or_else(|| panic!("Not queued"));
-        let now: u64 = env.ledger().timestamp().into();
+        let now: u64 = env.ledger().timestamp();
         if now < tx.eta {
             panic!("Not ready");
         }
@@ -86,32 +86,26 @@ impl Timelock {
 #[cfg(all(test, feature = "testutils"))]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{Address, BytesN, Env, LedgerInfo};
+    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use soroban_sdk::{Address, BytesN, Env};
 
     #[test]
-    fn queue_and_execute_respects_delay() {
+    fn queue_and_execute_success() {
         let env = Env::default();
         env.mock_all_auths();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
         Timelock::initialize(env.clone(), admin, 10);
-        let target = Address::random(&env);
-        let call: BytesN<32> = BytesN::random(&env);
+        let target = Address::generate(&env);
+        let call = BytesN::from_array(&env, &[0u8; 32]);
         Timelock::queue(env.clone(), 1, target.clone(), call.clone());
-        // Advance time below eta
-        env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 5,
-            ..Default::default()
-        });
-        // should panic if executing early
-        let res = std::panic::catch_unwind(|| Timelock::execute(env.clone(), 1));
-        assert!(res.is_err());
+
         // Advance time past eta
         env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 10,
+            timestamp: env.ledger().timestamp() + 15,
             ..Default::default()
         });
         Timelock::execute(env.clone(), 1);
+
         // ensure queue cleared
         let q: Map<u64, QueuedTx> = env
             .storage()
@@ -119,5 +113,24 @@ mod test {
             .get(&QUEUE)
             .unwrap_or(Map::new(&env));
         assert!(!q.contains_key(1));
+    }
+
+    #[test]
+    #[should_panic(expected = "Not ready")]
+    fn execution_too_early_panics() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        Timelock::initialize(env.clone(), admin, 10);
+        let target = Address::generate(&env);
+        let call = BytesN::from_array(&env, &[0u8; 32]);
+        Timelock::queue(env.clone(), 1, target.clone(), call.clone());
+
+        // Advance time below eta
+        env.ledger().set(LedgerInfo {
+            timestamp: env.ledger().timestamp() + 5,
+            ..Default::default()
+        });
+        Timelock::execute(env.clone(), 1);
     }
 }

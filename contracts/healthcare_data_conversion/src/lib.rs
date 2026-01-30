@@ -308,11 +308,11 @@ impl HealthcareDataConversionContract {
     /// Get coding mapping by source and target codes
     pub fn find_coding_mapping(
         env: Env,
-        source_system: String,
-        target_system: String,
-        source_code: String,
+        _source_system: String,
+        _target_system: String,
+        _source_code: String,
     ) -> Result<CodingMapping, Error> {
-        let mappings: Map<String, CodingMapping> = env
+        let _mappings: Map<String, CodingMapping> = env
             .storage()
             .persistent()
             .get(&CODING_MAPPINGS)
@@ -373,7 +373,7 @@ impl HealthcareDataConversionContract {
         validator: Address,
         source_format: DataFormat,
         target_format: DataFormat,
-        source_data_hash: BytesN<32>,
+        _source_data_hash: BytesN<32>,
     ) -> Result<ValidationResult, Error> {
         validator.require_auth();
 

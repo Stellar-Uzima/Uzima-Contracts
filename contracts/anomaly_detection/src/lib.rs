@@ -1,8 +1,9 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
 };
 
 #[derive(Clone)]
@@ -182,7 +183,7 @@ impl AnomalyDetectionContract {
     ) -> Result<u64, Error> {
         caller.require_auth();
 
-        let config = Self::ensure_detector(&env, &caller)?;
+        let _config = Self::ensure_detector(&env, &caller)?;
 
         // Validate inputs
         if score_bps > 10_000 {
@@ -290,7 +291,7 @@ impl AnomalyDetectionContract {
         detector_addr: Address,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        let config = Self::ensure_admin(&env, &caller)?;
+        let _config = Self::ensure_admin(&env, &caller)?;
 
         env.storage()
             .instance()
@@ -335,24 +336,21 @@ mod test {
         assert_eq!(config.admin, admin);
         assert_eq!(config.detector, detector);
         assert_eq!(config.threshold_bps, 7500u32);
-        assert_eq!(config.enabled, true);
+        assert!(config.enabled);
 
         // Detect an anomaly
         let metadata = String::from_str(&env, r#"{"feature_importance": [0.1, 0.8, 0.1]}"#);
         let explanation_ref = String::from_str(&env, "ipfs://anomaly-explanation-123");
 
-        let anomaly_id = client
-            .mock_all_auths()
-            .detect_anomaly(
-                &detector,
-                &1u64, // record_id
-                &patient,
-                &8000u32, // score_bps (above threshold)
-                &4u32,    // severity
-                &metadata,
-                &explanation_ref,
-            )
-            .unwrap();
+        let anomaly_id = client.mock_all_auths().detect_anomaly(
+            &detector,
+            &1u64, // record_id
+            &patient,
+            &8000u32, // score_bps (above threshold)
+            &4u32,    // severity
+            &metadata,
+            &explanation_ref,
+        );
 
         assert_eq!(anomaly_id, 1u64);
 
@@ -388,21 +386,18 @@ mod test {
             .initialize(&admin, &detector, &7500u32);
 
         // Update config
-        assert!(client
-            .mock_all_auths()
-            .update_config(
-                &admin,
-                Some(Address::generate(&env)), // new detector
-                Some(8000u32),                 // new threshold
-                Some(7u32),                    // new sensitivity
-                Some(false),                   // disable
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().update_config(
+            &admin,
+            &Some(Address::generate(&env)), // new detector
+            &Some(8000u32),                 // new threshold
+            &Some(7u32),                    // new sensitivity
+            &Some(false),                   // disable
+        ));
 
         let config = client.get_config().unwrap();
         assert_eq!(config.threshold_bps, 8000u32);
         assert_eq!(config.sensitivity, 7u32);
-        assert_eq!(config.enabled, false);
+        assert!(!config.enabled);
     }
 
     #[test]
@@ -420,15 +415,14 @@ mod test {
             .initialize(&admin, &detector, &7500u32);
 
         // Check that detector is not whitelisted initially
-        assert_eq!(client.is_whitelisted_detector(&detector), false);
+        assert!(!client.is_whitelisted_detector(&detector));
 
         // Whitelist the detector
         assert!(client
             .mock_all_auths()
-            .whitelist_detector(&admin, &detector)
-            .is_ok());
+            .whitelist_detector(&admin, &detector));
 
         // Check that detector is now whitelisted
-        assert_eq!(client.is_whitelisted_detector(&detector), true);
+        assert!(client.is_whitelisted_detector(&detector));
     }
 }

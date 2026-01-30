@@ -1,9 +1,7 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
-fn create_token_contract<'a>(env: &Env) -> Address {
+fn create_token_contract(env: &Env) -> Address {
     env.register_contract(None, SutToken)
 }
 
@@ -42,7 +40,7 @@ fn test_initialize() {
     // Test initial state
     assert_eq!(client.total_supply(), 0);
     assert_eq!(client.supply_cap(), supply_cap);
-    assert_eq!(client.is_minter(&admin), true);
+    assert!(client.is_minter(&admin));
 }
 
 #[test]
@@ -271,16 +269,16 @@ fn test_minter_role_management() {
     let client = SutTokenClient::new(&env, &contract_id);
 
     // Admin should be initial minter
-    assert_eq!(client.is_minter(&admin), true);
-    assert_eq!(client.is_minter(&new_minter), false);
+    assert!(client.is_minter(&admin));
+    assert!(!client.is_minter(&new_minter));
 
     // Add new minter
     client.add_minter(&new_minter);
-    assert_eq!(client.is_minter(&new_minter), true);
+    assert!(client.is_minter(&new_minter));
 
     // Remove minter
     client.remove_minter(&new_minter);
-    assert_eq!(client.is_minter(&new_minter), false);
+    assert!(!client.is_minter(&new_minter));
 }
 
 #[test]

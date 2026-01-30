@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
 
 use super::*;

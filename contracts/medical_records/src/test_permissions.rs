@@ -1,10 +1,5 @@
-#![cfg(test)]
-
 use crate::{MedicalRecordsContract, MedicalRecordsContractClient, Permission};
-use soroban_sdk::{
-    testutils::{Address as _, Events},
-    vec, Address, Env, String, Symbol,
-};
+use soroban_sdk::{testutils::Address as _, vec, Address, Env, String};
 
 #[test]
 fn test_permission_grant_revoke_check() {

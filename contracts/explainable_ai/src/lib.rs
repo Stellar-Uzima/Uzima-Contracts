@@ -1,4 +1,6 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
@@ -39,7 +41,7 @@ pub struct ExplanationMetadata {
     pub explanation_ref: String, // Off-chain reference to detailed explanation
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub enum ExplanationStatus {
     Pending,
@@ -262,9 +264,9 @@ impl ExplainableAiContract {
 
     pub fn get_explanations_for_patient(
         env: Env,
-        patient: Address,
-        page: u32,
-        page_size: u32,
+        _patient: Address,
+        _page: u32,
+        _page_size: u32,
     ) -> Vec<ExplanationMetadata> {
         // This is a simplified implementation
         // In a real contract, we'd need a way to track explanations by patient
@@ -325,10 +327,10 @@ impl ExplainableAiContract {
     pub fn run_fairness_metrics(
         env: Env,
         caller: Address,
-        model_id: BytesN<32>,
-        protected_attribute: String,
-        privileged_group: String,
-        unprivileged_group: String,
+        _model_id: BytesN<32>,
+        _protected_attribute: String,
+        _privileged_group: String,
+        _unprivileged_group: String,
     ) -> Result<(u32, u32, u32), Error> {
         // Returns (demographic_parity_diff, equalized_odds_diff, calibration_diff)
         caller.require_auth();
@@ -352,6 +354,7 @@ impl ExplainableAiContract {
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::vec;
 
     #[test]
     fn test_explanation_workflow() {
@@ -401,19 +404,16 @@ mod test {
 
         let explanation_ref = String::from_str(&env, "ipfs://explanation-details-123");
 
-        assert!(client
-            .mock_all_auths()
-            .fulfill_explanation_request(
-                &admin,
-                &request_id,
-                &model_id,
-                &explanation_method,
-                &feature_importance,
-                &primary_factors,
-                &5000u32,
-                &explanation_ref,
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().fulfill_explanation_request(
+            &admin,
+            &request_id,
+            &model_id,
+            &explanation_method,
+            &feature_importance,
+            &primary_factors,
+            &5000u32,
+            &explanation_ref,
+        ));
 
         // Verify the request is now completed
         let updated_request = client.get_explanation_request(&request_id).unwrap();
@@ -447,10 +447,12 @@ mod test {
             String::from_str(&env, "Adjust model weights for underrepresented groups"),
         ];
 
-        let audit_id = client
-            .mock_all_auths()
-            .submit_bias_audit(&admin, &model_id, &audit_summary, &recommendations)
-            .unwrap();
+        let audit_id = client.mock_all_auths().submit_bias_audit(
+            &admin,
+            &model_id,
+            &audit_summary,
+            &recommendations,
+        );
 
         assert_eq!(audit_id, 1u64);
 
@@ -461,16 +463,13 @@ mod test {
         assert_eq!(audit.recommendations.len(), 2);
 
         // Run fairness metrics
-        let (dp_diff, eo_diff, cal_diff) = client
-            .mock_all_auths()
-            .run_fairness_metrics(
-                &admin,
-                &model_id,
-                &String::from_str(&env, "gender"),
-                &String::from_str(&env, "male"),
-                &String::from_str(&env, "female"),
-            )
-            .unwrap();
+        let (dp_diff, eo_diff, cal_diff) = client.mock_all_auths().run_fairness_metrics(
+            &admin,
+            &model_id,
+            &String::from_str(&env, "gender"),
+            &String::from_str(&env, "male"),
+            &String::from_str(&env, "female"),
+        );
 
         assert!(dp_diff > 0);
         assert!(eo_diff > 0);

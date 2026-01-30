@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
 
 #[derive(Clone)]
@@ -57,9 +56,6 @@ pub enum DataKey {
     Model(BytesN<32>),
     PrivacyBudget(Address),
 }
-
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const COORDINATOR: Symbol = symbol_short!("COORD");
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -357,27 +353,28 @@ mod test {
         let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
         let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant1, &round_id, &update_hash1, &100u32)
-            .is_ok());
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant2, &round_id, &update_hash2, &200u32)
-            .is_ok());
+        assert!(client.mock_all_auths().submit_update(
+            &participant1,
+            &round_id,
+            &update_hash1,
+            &100u32
+        ));
+        assert!(client.mock_all_auths().submit_update(
+            &participant2,
+            &round_id,
+            &update_hash2,
+            &200u32
+        ));
 
         let new_model = BytesN::from_array(&env, &[4u8; 32]);
-        assert!(client
-            .mock_all_auths()
-            .finalize_round(
-                &coordinator,
-                &round_id,
-                &new_model,
-                &String::from_str(&env, "Test model"),
-                &String::from_str(&env, "ipfs://metrics"),
-                &String::from_str(&env, "ipfs://fairness"),
-            )
-            .is_ok());
+        assert!(client.mock_all_auths().finalize_round(
+            &coordinator,
+            &round_id,
+            &new_model,
+            &String::from_str(&env, "Test model"),
+            &String::from_str(&env, "ipfs://metrics"),
+            &String::from_str(&env, "ipfs://fairness"),
+        ));
 
         let stored_round = client.get_round(&round_id).unwrap();
         assert!(stored_round.is_finalized);
@@ -401,27 +398,37 @@ mod test {
         // Set a small privacy budget
         assert!(client
             .mock_all_auths()
-            .set_privacy_budget(&admin, &participant, &10u32)
-            .is_ok());
+            .set_privacy_budget(&admin, &participant, &10u32));
 
         let base_model = BytesN::from_array(&env, &[1u8; 32]);
-        let round_id = client
+        let round_id_1 = client
             .mock_all_auths()
             .start_round(&admin, &base_model, &1u32, &100u32);
 
         let update_hash = BytesN::from_array(&env, &[2u8; 32]);
 
         // Submit an update that stays within budget
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant, &round_id, &update_hash, &500u32)
-            .is_ok());
+        assert!(client.mock_all_auths().submit_update(
+            &participant,
+            &round_id_1,
+            &update_hash,
+            &500u32
+        ));
 
-        // Submit an update that exceeds the budget
-        let result =
-            client
-                .mock_all_auths()
-                .submit_update(&participant, &round_id, &update_hash, &600u32);
-        assert!(result.is_err());
+        // Start round 2 to avoid DuplicateUpdate error
+        let round_id_2 = client
+            .mock_all_auths()
+            .start_round(&admin, &base_model, &1u32, &100u32);
+
+        // Submit an update that exceeds the budget (5 consumed + 6 cost = 11 > 10)
+        let result = client.mock_all_auths().try_submit_update(
+            &participant,
+            &round_id_2,
+            &update_hash,
+            &600u32,
+        );
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_err());
     }
 }

@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::enum_variant_names)]
 
 #[cfg(test)]
 mod test;
@@ -205,9 +208,9 @@ pub enum DataKey {
 
 const USERS: Symbol = symbol_short!("USERS");
 const RECORDS: Symbol = symbol_short!("RECORDS");
-const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
+const _PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 const PAUSED: Symbol = symbol_short!("PAUSED");
-const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
+const _PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
 const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
 const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
@@ -288,6 +291,7 @@ pub struct BatchResult {
 pub struct MedicalRecordsContract;
 
 #[contractimpl]
+#[allow(clippy::too_many_arguments)]
 impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
@@ -315,7 +319,7 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&USERS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env));
         match users.get(address.clone()) {
             Some(profile) => profile.role == *role && profile.active,
             None => false,
@@ -396,7 +400,7 @@ impl MedicalRecordsContract {
             users.set(
                 user.clone(),
                 UserProfile {
-                    role: role.clone(),
+                    role,
                     active: true,
                     did_reference: profile.did_reference,
                 },
@@ -407,7 +411,7 @@ impl MedicalRecordsContract {
             users.set(
                 user.clone(),
                 UserProfile {
-                    role: role.clone(),
+                    role,
                     active: true,
                     did_reference: None,
                 },
@@ -470,7 +474,7 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&USERS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env));
 
         if let Some(profile) = users.get(user.clone()) {
             if !profile.active {
@@ -552,10 +556,10 @@ impl MedicalRecordsContract {
         for grant in grants.iter() {
             if grant.permission == permission {
                 new_grants.push_back(PermissionGrant {
-                    permission: permission, // Copy
+                    permission, // Copy
                     granter: granter.clone(),
                     expires_at: expiration,
-                    is_delegatable: is_delegatable,
+                    is_delegatable,
                 });
                 found = true;
             } else {
@@ -753,12 +757,8 @@ impl MedicalRecordsContract {
         // Permission Check
         let mut allowed = false;
 
-        // 1. Own record
-        if record.patient_id == caller {
-            allowed = true;
-        }
-        // 2. Doctor who created it
-        else if record.doctor_id == caller {
+        // 1. Own record OR Doctor who created it
+        if record.patient_id == caller || record.doctor_id == caller {
             allowed = true;
         }
         // 3. Permission

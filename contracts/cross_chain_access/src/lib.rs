@@ -1,4 +1,8 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::match_like_matches_macro)]
+#![allow(dead_code)]
 
 #[cfg(test)]
 mod test;

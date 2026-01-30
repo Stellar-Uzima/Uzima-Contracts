@@ -109,11 +109,7 @@ impl VestingContract {
         let current_time = get_ledger_timestamp(&env);
         let vested_amount = Self::get_vested_amount(env, beneficiary, current_time);
 
-        if vested_amount > schedule.released_amount {
-            vested_amount - schedule.released_amount
-        } else {
-            0
-        }
+        vested_amount.saturating_sub(schedule.released_amount)
     }
 
     /// Calculate vested amount at a specific timestamp
