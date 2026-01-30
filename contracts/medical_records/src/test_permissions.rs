@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 use crate::{MedicalRecordsContract, MedicalRecordsContractClient, Permission};
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, String};
 

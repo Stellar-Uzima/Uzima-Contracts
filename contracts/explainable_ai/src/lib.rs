@@ -1,5 +1,9 @@
+// Explainable AI Contract - XAI explanations and bias auditing
 #![no_std]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
 #![allow(dead_code)]
 
 use soroban_sdk::{

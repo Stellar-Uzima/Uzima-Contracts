@@ -271,6 +271,7 @@ pub enum Error {
     InvalidBatch = 44,
     InvalidInput = 45,
     NumberOutOfBounds = 46,
+    Overflow = 47,
 }
 
 #[derive(Clone)]
@@ -332,17 +333,17 @@ impl MedicalRecordsContract {
     }
 
     /// Internal function to get and increment the record counter
-    fn get_and_increment_record_count(env: &Env) -> u64 {
+    fn get_and_increment_record_count(env: &Env) -> Result<u64, Error> {
         let current_count: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0);
-        let next_count = current_count + 1;
+        let next_count = current_count.checked_add(1).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::RecordCount, &next_count);
-        next_count
+        Ok(next_count)
     }
 
     pub fn get_record_count(env: Env) -> u64 {
@@ -668,7 +669,7 @@ impl MedicalRecordsContract {
             return Err(Error::SameAddress);
         }
 
-        let record_id = Self::get_and_increment_record_count(&env);
+        let record_id = Self::get_and_increment_record_count(&env)?;
 
         let record = MedicalRecord {
             patient_id: patient.clone(),

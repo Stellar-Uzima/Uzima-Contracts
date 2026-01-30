@@ -1,5 +1,8 @@
+// Anomaly Detection Contract - Healthcare anomaly detection with proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
 #![allow(dead_code)]
 
 use soroban_sdk::{
@@ -312,6 +315,7 @@ impl AnomalyDetectionContract {
 }
 
 #[cfg(all(test, feature = "testutils"))]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;

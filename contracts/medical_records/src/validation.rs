@@ -401,7 +401,7 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     let current_time = env.ledger().timestamp();
     let one_day = 86_400u64;
 
-    if timestamp > current_time + one_day {
+    if timestamp > current_time.saturating_add(one_day) {
         return Err(Error::NotAuthorized);
     }
 
@@ -666,6 +666,8 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::expect_used)]
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},

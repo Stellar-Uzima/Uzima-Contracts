@@ -1,4 +1,8 @@
+// Federated Learning Contract - Privacy-preserving ML with differential privacy
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,

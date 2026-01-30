@@ -197,6 +197,7 @@ pub enum Error {
     AuditRequired = 17,
     SingleUseConsumed = 18,
     TimeRestrictionViolated = 19,
+    Overflow = 20,
 }
 
 #[contract]
@@ -252,7 +253,7 @@ impl CrossChainAccessContract {
         Self::require_not_paused(&env)?;
 
         let now = env.ledger().timestamp();
-        let grant_id = Self::get_and_increment_grant_count(&env);
+        let grant_id = Self::get_and_increment_grant_count(&env)?;
 
         let grant = AccessGrant {
             grant_id,
@@ -262,7 +263,7 @@ impl CrossChainAccessContract {
             permission_level,
             record_scope,
             granted_at: now,
-            expires_at: now + duration,
+            expires_at: now.checked_add(duration).ok_or(Error::Overflow)?,
             is_active: true,
             conditions,
         };
@@ -364,7 +365,10 @@ impl CrossChainAccessContract {
             return Err(Error::NotAuthorized);
         }
 
-        grant.expires_at += additional_duration;
+        grant.expires_at = grant
+            .expires_at
+            .checked_add(additional_duration)
+            .ok_or(Error::Overflow)?;
         grants.set(grant_id, grant);
         env.storage().persistent().set(&GRANTS, &grants);
 
@@ -386,7 +390,7 @@ impl CrossChainAccessContract {
         Self::require_not_paused(&env)?;
 
         let now = env.ledger().timestamp();
-        let request_id = Self::get_and_increment_request_count(&env);
+        let request_id = Self::get_and_increment_request_count(&env)?;
 
         let request = AccessRequest {
             request_id,
@@ -455,7 +459,12 @@ impl CrossChainAccessContract {
 
         // Check expiry
         let now = env.ledger().timestamp();
-        if now > request.created_at + REQUEST_EXPIRY {
+        if now
+            > request
+                .created_at
+                .checked_add(REQUEST_EXPIRY)
+                .ok_or(Error::Overflow)?
+        {
             request.status = RequestStatus::Expired;
             requests.set(request_id, request);
             env.storage().persistent().set(&REQUESTS, &requests);
@@ -519,7 +528,7 @@ impl CrossChainAccessContract {
             can_revoke,
             can_manage_emergency,
             created_at: now,
-            expires_at: now + duration,
+            expires_at: now.checked_add(duration).ok_or(Error::Overflow)?,
             is_active: true,
         };
 
@@ -629,7 +638,7 @@ impl CrossChainAccessContract {
         Self::require_not_paused(&env)?;
 
         let now = env.ledger().timestamp();
-        let entry_id = Self::get_and_increment_audit_count(&env);
+        let entry_id = Self::get_and_increment_audit_count(&env)?;
 
         let entry = AuditEntry {
             entry_id,
@@ -824,26 +833,29 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
-    fn get_and_increment_grant_count(env: &Env) -> u64 {
+    fn get_and_increment_grant_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0);
-        env.storage().persistent().set(&GRANT_COUNT, &(count + 1));
-        count + 1
+        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        env.storage().persistent().set(&GRANT_COUNT, &new_count);
+        Ok(new_count)
     }
 
     fn get_grant_count(env: &Env) -> u64 {
         env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0)
     }
 
-    fn get_and_increment_request_count(env: &Env) -> u64 {
+    fn get_and_increment_request_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env.storage().persistent().get(&REQUEST_COUNT).unwrap_or(0);
-        env.storage().persistent().set(&REQUEST_COUNT, &(count + 1));
-        count + 1
+        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        env.storage().persistent().set(&REQUEST_COUNT, &new_count);
+        Ok(new_count)
     }
 
-    fn get_and_increment_audit_count(env: &Env) -> u64 {
+    fn get_and_increment_audit_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env.storage().persistent().get(&AUDIT_COUNT).unwrap_or(0);
-        env.storage().persistent().set(&AUDIT_COUNT, &(count + 1));
-        count + 1
+        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        env.storage().persistent().set(&AUDIT_COUNT, &new_count);
+        Ok(new_count)
     }
 
     fn delegation_key(_env: &Env, _delegator: &Address, _delegate: &Address) -> Symbol {
@@ -950,7 +962,7 @@ impl CrossChainAccessContract {
 
     fn create_request_grant(env: &Env, request: &AccessRequest) -> Result<(), Error> {
         let now = env.ledger().timestamp();
-        let grant_id = Self::get_and_increment_grant_count(&env);
+        let grant_id = Self::get_and_increment_grant_count(&env)?;
 
         let grant = AccessGrant {
             grant_id,
@@ -960,7 +972,9 @@ impl CrossChainAccessContract {
             permission_level: PermissionLevel::Read,
             record_scope: AccessScope::SpecificRecords(request.requested_records.clone()),
             granted_at: now,
-            expires_at: now + DEFAULT_GRANT_DURATION,
+            expires_at: now
+                .checked_add(DEFAULT_GRANT_DURATION)
+                .ok_or(Error::Overflow)?,
             is_active: true,
             conditions: Vec::new(&env),
         };

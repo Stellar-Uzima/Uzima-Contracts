@@ -79,8 +79,7 @@ jobs:
             -W clippy::unwrap_used \
             -W clippy::expect_used \
             -W clippy::panic \
-            -W clippy::arithmetic_side_effects \
-            -W clippy::integer_arithmetic
+            -W clippy::arithmetic_side_effects
 
   # Check for hardcoded secrets
   secret-scanning:

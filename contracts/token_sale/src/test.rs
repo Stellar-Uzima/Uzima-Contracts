@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
 
 use super::*;

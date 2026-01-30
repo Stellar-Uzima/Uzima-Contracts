@@ -866,17 +866,23 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
 
         // Count by type
         let curr_type = metadata.event_type;
-        let type_count = events_by_type.get(curr_type).unwrap_or(0) + 1;
+        let type_count = events_by_type.get(curr_type).unwrap_or(0).saturating_add(1);
         events_by_type.set(curr_type, type_count);
 
         // Count by category
         let curr_cat = metadata.category;
-        let category_count = events_by_category.get(curr_cat).unwrap_or(0) + 1;
+        let category_count = events_by_category
+            .get(curr_cat)
+            .unwrap_or(0)
+            .saturating_add(1);
         events_by_category.set(curr_cat, category_count);
 
         // Count by user
         let user = metadata.user_id.clone();
-        let user_count = events_by_user.get(user.clone()).unwrap_or(0) + 1;
+        let user_count = events_by_user
+            .get(user.clone())
+            .unwrap_or(0)
+            .saturating_add(1);
         events_by_user.set(user.clone(), user_count);
     }
 

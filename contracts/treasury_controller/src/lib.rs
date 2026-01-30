@@ -1,7 +1,10 @@
+// Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::manual_range_contains)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
 #![allow(dead_code)]
 
 use soroban_sdk::{

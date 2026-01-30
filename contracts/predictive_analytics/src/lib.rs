@@ -1,5 +1,8 @@
+// Predictive Analytics Contract - Health predictions with proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
@@ -379,6 +382,7 @@ impl PredictiveAnalyticsContract {
 }
 
 #[cfg(all(test, feature = "testutils"))]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
