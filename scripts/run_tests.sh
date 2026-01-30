@@ -127,7 +127,7 @@ fi
 
 # 9. Generate Test Report
 print_header "Generating Test Report"
-cat > "${TEST_RESULTS_DIR}/test_report.md" << 'EOF'
+cat > "${TEST_RESULTS_DIR}/test_report.md" << EOF
 # Uzima Contracts - Test Report
 
 ## Test Summary
@@ -151,10 +151,10 @@ cat > "${TEST_RESULTS_DIR}/test_report.md" << 'EOF'
 
 ### Coverage by Module
 
-- `medical_records`: 95%
-- `identity_registry`: 90%
-- `governor`: 88%
-- `meta_tx_forwarder`: 85%
+- \`medical_records\`: 95%
+- \`identity_registry\`: 90%
+- \`governor\`: 88%
+- \`meta_tx_forwarder\`: 85%
 
 ## Performance Metrics
 

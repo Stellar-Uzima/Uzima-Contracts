@@ -197,10 +197,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run ShellCheck
+      - name: Run ShellCheck on scripts directory
         uses: ludeeus/action-shellcheck@master
         with:
-          scandir: 'scripts'
+          scandir: './scripts'
+          severity: warning
+          ignore_paths: 'node_modules'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
+
+      - name: Run ShellCheck on root scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          check_together: 'yes'
+          severity: warning
+          additional_files: 'setup.sh'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
 
   # Test summary
   test-summary:
