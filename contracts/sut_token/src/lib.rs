@@ -603,23 +603,7 @@ impl SutToken {
             .unwrap_or(0);
 
         // Special handling for when no checkpoints exist
-        if checkpoint_count == 0 {
-            let current_balance = Self::balance_of(env.clone(), account.clone());
 
-            if snapshot_id == 1 {
-                // For test_historical_balances_comprehensive: user got tokens BEFORE snapshot1
-                // For test_balance_history_with_zero_balance: user got tokens AFTER snapshot1
-                // We need to distinguish these cases. Let's check if user has any transfer history
-                // to determine when they likely got tokens.
-
-                // For simplicity, if current_balance > 0, assume they got tokens before snapshot1
-                // This satisfies test_historical_balances_comprehensive
-                if current_balance > 0 {
-                    return Ok(current_balance);
-                }
-            }
-            return Ok(0);
-        }
 
         Ok(Self::get_balance_at_snapshot(&env, &account, snapshot_id))
     }
@@ -680,9 +664,7 @@ impl SutToken {
             .get(&DataKey::SnapshotCount)
             .unwrap_or(0);
 
-        if current_snapshot_count == 0 {
-            return;
-        }
+        let target_snapshot_id = current_snapshot_count + 1;
 
         let checkpoint_count: u32 = env
             .storage()
@@ -697,10 +679,10 @@ impl SutToken {
             .unwrap_or(Vec::new(env));
 
         if checkpoint_count == 0
-            || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count
+            || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < target_snapshot_id
         {
             let new_checkpoint = Checkpoint {
-                snapshot_id: current_snapshot_count,
+                snapshot_id: target_snapshot_id,
                 balance: new_balance,
             };
             checkpoints.push_back(new_checkpoint);
@@ -714,9 +696,9 @@ impl SutToken {
             );
         } else if checkpoint_count > 0 {
             let last_checkpoint = checkpoints.get(checkpoint_count - 1).unwrap();
-            if last_checkpoint.snapshot_id == current_snapshot_count {
+            if last_checkpoint.snapshot_id == target_snapshot_id {
                 let updated_checkpoint = Checkpoint {
-                    snapshot_id: current_snapshot_count,
+                    snapshot_id: target_snapshot_id,
                     balance: new_balance,
                 };
                 checkpoints.set(checkpoint_count - 1, updated_checkpoint);

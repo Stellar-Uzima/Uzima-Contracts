@@ -1597,7 +1597,7 @@ impl IdentityRegistryContract {
             .instance()
             .get(&DataKey::Attestation(subject, claim_hash));
 
-        attestation.map_or(false, |a| a.is_active)
+        attestation.is_some_and(|a| a.is_active)
     }
 
     /// Get all active attestations for a subject (legacy)
@@ -1764,7 +1764,7 @@ impl IdentityRegistryContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
     use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
     fn create_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
@@ -1798,7 +1798,7 @@ mod tests {
 
     #[test]
     fn test_initialize() {
-        let (env, client, owner) = create_contract();
+        let (_env, client, owner) = create_contract();
 
         assert!(client.is_verifier(&owner));
         assert_eq!(client.get_owner(), owner);
@@ -1825,7 +1825,7 @@ mod tests {
         let public_key = BytesN::from_array(&env, &[1u8; 32]);
         let services: Vec<ServiceEndpoint> = Vec::new(&env);
 
-        let did_string = client.create_did(&subject, &public_key, &services);
+        let _did_string = client.create_did(&subject, &public_key, &services);
 
         // Verify DID was created
         let did_doc = client.resolve_did(&subject);
@@ -1951,6 +1951,11 @@ mod tests {
 
         client.create_did(&subject, &public_key, &services);
 
+        env.ledger().set(LedgerInfo {
+            timestamp: 4000,
+            ..Default::default()
+        });
+
         // Rotate the primary key
         let new_key = BytesN::from_array(&env, &[3u8; 32]);
         let method_id = String::from_str(&env, "#key-1");
@@ -2043,6 +2048,11 @@ mod tests {
             &credential_uri,
             &expiration,
         );
+
+        env.ledger().set(LedgerInfo {
+            timestamp: 2000,
+            ..Default::default()
+        });
 
         // Credential should be expired (timestamp is > 1000)
         let status = client.verify_credential(&credential_id);
@@ -2253,7 +2263,7 @@ mod tests {
 
     #[test]
     fn test_add_and_remove_verifier() {
-        let (env, client, owner) = create_contract();
+        let (env, client, _owner) = create_contract();
         let verifier = Address::generate(&env);
 
         // Add verifier
