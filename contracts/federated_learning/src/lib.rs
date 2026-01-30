@@ -160,8 +160,7 @@ impl FederatedLearningContract {
         };
 
         env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events()
-            .publish((symbol_short!("RoundStarted"),), id);
+        env.events().publish((symbol_short!("RND_STRT"),), id);
         id
     }
 
@@ -223,10 +222,8 @@ impl FederatedLearningContract {
         round.total_updates += 1;
         env.storage().instance().set(&DataKey::Round(round_id), &round);
 
-        env.events().publish(
-            (symbol_short!("UpdateSubmitted"),),
-            (round_id, participant),
-        );
+        env.events()
+            .publish((symbol_short!("UPD_SUB"),), (round_id, participant));
 
         Ok(true)
     }
@@ -274,10 +271,8 @@ impl FederatedLearningContract {
             .instance()
             .set(&DataKey::Model(new_model_id.clone()), &metadata);
 
-        env.events().publish(
-            (symbol_short!("RoundFinalized"),),
-            (round_id, new_model_id),
-        );
+        env.events()
+            .publish((symbol_short!("RND_FIN"),), (round_id, new_model_id));
 
         Ok(true)
     }

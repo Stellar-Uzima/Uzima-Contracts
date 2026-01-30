@@ -216,12 +216,12 @@ mod verification_method_tests {
 
     /// Test verification method types
     #[test]
-    fn test_verification_method_types() {
-        // Test all verification method types:
-        // - Ed25519VerificationKey2020
-        // - EcdsaSecp256k1VerificationKey2019
-        // - X25519KeyAgreementKey2020
-        // - JsonWebKey2020
+	    fn test_verification_method_types() {
+	        // Test all verification method types:
+	        // - Ed25519VerificationKey2020
+	        // - EcdsaSecp256k1VKey2019
+	        // - X25519KeyAgreementKey2020
+	        // - JsonWebKey2020
 
         let env = Env::default();
         env.mock_all_auths();

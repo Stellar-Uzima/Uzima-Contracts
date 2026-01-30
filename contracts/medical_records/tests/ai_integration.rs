@@ -1,4 +1,6 @@
-use soroban_sdk::{Address, Env, String, Vec};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
+use soroban_sdk::testutils::Address as _;
+use soroban_sdk::vec;
 use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role, AIInsightType, AIConfig};
 use federated_learning::{FederatedLearningContract, FederatedLearningContractClient};
 use anomaly_detection::{AnomalyDetectionContract, AnomalyDetectionContractClient};
@@ -7,6 +9,8 @@ use explainable_ai::{ExplainableAiContract, ExplainableAiContractClient, Feature
 
 pub mod ai_integration_tests {
     use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::vec;
 
     #[test]
     fn test_full_ai_integration_workflow() {
@@ -58,7 +62,7 @@ pub mod ai_integration_tests {
         );
 
         // Submit anomaly score
-        let model_id = [1u8; 32].into();
+        let model_id = BytesN::from_array(&env, &[1u8; 32]);
         let explanation_ref = String::from_str(&env, "ipfs://anomaly-explanation");
         let explanation_summary = String::from_str(&env, "Anomaly detected in lab values");
         let model_version = String::from_str(&env, "v1.0.0");
@@ -115,18 +119,18 @@ pub mod ai_integration_tests {
         federated_client.initialize(&admin, &coordinator);
 
         // Start a federated learning round with differential privacy
-        let base_model = [1u8; 32].into();
+        let base_model = BytesN::from_array(&env, &[1u8; 32]);
         let round_id = federated_client.start_round(&admin, &base_model, &2u32, &100u32);
 
         // Participants submit updates
-        let update1 = [2u8; 32].into();
-        let update2 = [3u8; 32].into();
+        let update1 = BytesN::from_array(&env, &[2u8; 32]);
+        let update2 = BytesN::from_array(&env, &[3u8; 32]);
 
-        federated_client.submit_update(&participant1, &round_id, &update1, &100u32).unwrap();
-        federated_client.submit_update(&participant2, &round_id, &update2, &200u32).unwrap();
+        federated_client.submit_update(&participant1, &round_id, &update1, &100u32);
+        federated_client.submit_update(&participant2, &round_id, &update2, &200u32);
 
         // Finalize round
-        let new_model = [4u8; 32].into();
+        let new_model = BytesN::from_array(&env, &[4u8; 32]);
         federated_client.finalize_round(
             &coordinator,
             &round_id,
@@ -134,7 +138,7 @@ pub mod ai_integration_tests {
             &String::from_str(&env, "Improved federated model"),
             &String::from_str(&env, "ipfs://model-metrics"),
             &String::from_str(&env, "ipfs://fairness-report"),
-        ).unwrap();
+        );
 
         // Verify round is finalized
         let round = federated_client.get_round(&round_id).unwrap();
@@ -180,7 +184,7 @@ pub mod ai_integration_tests {
             &4u32,
             &metadata,
             &explanation_ref,
-        ).unwrap();
+        );
 
         // Verify anomaly was detected
         let anomaly_record = anomaly_client.get_anomaly_record(&anomaly_id).unwrap();
@@ -188,7 +192,7 @@ pub mod ai_integration_tests {
         assert_eq!(anomaly_record.severity, 4u32);
 
         // Submit bias audit for the anomaly detection model
-        let model_id = [1u8; 32].into();
+        let model_id = BytesN::from_array(&env, &[1u8; 32]);
         let audit_summary = String::from_str(&env, "Bias audit for anomaly detection model");
         let recommendations = vec![
             &env,
@@ -201,7 +205,7 @@ pub mod ai_integration_tests {
             &model_id,
             &audit_summary,
             &recommendations,
-        ).unwrap();
+        );
 
         assert!(audit_id > 0);
 
@@ -212,7 +216,7 @@ pub mod ai_integration_tests {
             &String::from_str(&env, "age_group"),
             &String::from_str(&env, "young"),
             &String::from_str(&env, "elderly"),
-        ).unwrap();
+        );
 
         assert!(dp_diff < 500); // Less than 5% difference is acceptable
         assert!(eo_diff < 500); // Less than 5% difference is acceptable
@@ -243,7 +247,7 @@ pub mod ai_integration_tests {
         explainable_client.initialize(&admin);
 
         // Make a prediction
-        let model_id = [1u8; 32].into();
+        let model_id = BytesN::from_array(&env, &[1u8; 32]);
         let outcome_type = String::from_str(&env, "diabetes_risk");
         let features = vec![
             &env,
@@ -268,7 +272,7 @@ pub mod ai_integration_tests {
             &features,
             &explanation_ref,
             &risk_factors,
-        ).unwrap();
+        );
 
         // Verify prediction
         let prediction = predictive_client.get_prediction(&prediction_id).unwrap();
@@ -309,7 +313,7 @@ pub mod ai_integration_tests {
             &primary_factors,
             &5000u32,
             &String::from_str(&env, "ipfs://detailed-explanation"),
-        ).unwrap();
+        );
 
         // Verify explanation was created
         let explanation = explainable_client.get_explanation(&1u64).unwrap(); // First explanation
@@ -346,8 +350,8 @@ pub mod ai_integration_tests {
         predictive_client.initialize(&admin, &predictor, &30u32, &5000u32);
 
         // Test federated learning with privacy budget
-        federated_client.set_privacy_budget(&admin, &participant1, &100u32).unwrap();
-        federated_client.set_privacy_budget(&admin, &participant2, &100u32).unwrap();
+        assert!(federated_client.set_privacy_budget(&admin, &participant1, &100u32));
+        assert!(federated_client.set_privacy_budget(&admin, &participant2, &100u32));
 
         let budget1 = federated_client.get_privacy_budget(&participant1).unwrap();
         let budget2 = federated_client.get_privacy_budget(&participant2).unwrap();
@@ -356,12 +360,14 @@ pub mod ai_integration_tests {
         assert_eq!(budget2.epsilon_total, 100u32);
 
         // Start round with DP parameters
-        let base_model = [1u8; 32].into();
+        let base_model = BytesN::from_array(&env, &[1u8; 32]);
         let round_id = federated_client.start_round(&admin, &base_model, &2u32, &50u32);
 
         // Participants submit updates respecting privacy budget
-        federated_client.submit_update(&participant1, &round_id, &[2u8; 32].into(), &50u32).unwrap();
-        federated_client.submit_update(&participant2, &round_id, &[3u8; 32].into(), &40u32).unwrap();
+        let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
+        let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
+        federated_client.submit_update(&participant1, &round_id, &update_hash1, &250u32);
+        federated_client.submit_update(&participant2, &round_id, &update_hash2, &350u32);
 
         // Verify that privacy budgets were consumed appropriately
         let updated_budget1 = federated_client.get_privacy_budget(&participant1).unwrap();
@@ -375,7 +381,7 @@ pub mod ai_integration_tests {
         let metadata = String::from_str(&env, "{}");
         let explanation_ref = String::from_str(&env, "ipfs://privacy-safe-report");
 
-        anomaly_client.detect_anomaly(
+        let _ = anomaly_client.detect_anomaly(
             &detector,
             &1u64,
             &patient,
@@ -383,14 +389,14 @@ pub mod ai_integration_tests {
             &4u32,
             &metadata,
             &explanation_ref,
-        ).unwrap();
+        );
 
         // Verify that sensitive information is not exposed
         let config = anomaly_client.get_config().unwrap();
         assert_eq!(config.threshold_bps, 7500u32); // Threshold protects privacy
 
         // Test predictive analytics confidence thresholds
-        let model_id = [1u8; 32].into();
+        let model_id = BytesN::from_array(&env, &[1u8; 32]);
         let features = vec![&env, String::from_str(&env, "age")];
         let risk_factors = vec![&env, String::from_str(&env, "age")];
 
@@ -405,7 +411,7 @@ pub mod ai_integration_tests {
             &features,
             &explanation_ref,
             &risk_factors,
-        ).unwrap();
+        );
 
         assert!(pred_id > 0);
 

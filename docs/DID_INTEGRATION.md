@@ -114,7 +114,7 @@ Supported verification method types:
 | Type | Use Case |
 |------|----------|
 | `Ed25519VerificationKey2020` | Authentication, assertion |
-| `EcdsaSecp256k1VerificationKey2019` | Bitcoin/Ethereum compatibility |
+| `EcdsaSecp256k1VKey2019` | Bitcoin/Ethereum compatibility |
 | `X25519KeyAgreementKey2020` | Key agreement, encryption |
 | `JsonWebKey2020` | Web standards compatibility |
 

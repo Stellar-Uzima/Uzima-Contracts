@@ -91,7 +91,7 @@ pub struct FormatSpecification {
 #[derive(Clone)]
 #[contracttype]
 pub struct ConversionRequest {
-    pub request_id: String,
+    pub request_id: u64,
     pub source_format: DataFormat,
     pub target_format: DataFormat,
     pub source_data_hash: BytesN<32>,  // Hash of source data
@@ -106,7 +106,7 @@ pub struct ConversionRequest {
 #[derive(Clone)]
 #[contracttype]
 pub struct ValidationResult {
-    pub validation_id: String,
+    pub validation_id: u64,
     pub source_format: DataFormat,
     pub target_format: DataFormat,
     pub is_valid: bool,
@@ -120,7 +120,7 @@ pub struct ValidationResult {
 #[contracttype]
 pub struct LossyConversionWarning {
     pub warning_id: String,
-    pub conversion_request_id: String,
+    pub conversion_request_id: u64,
     pub lost_fields: Vec<String>,
     pub data_loss_percentage: u32,     // 0-100
     pub mitigation_recommendation: String,
@@ -132,9 +132,12 @@ const CONVERSION_RULES: Symbol = symbol_short!("RULES");
 const CODING_MAPPINGS: Symbol = symbol_short!("CODINGS");
 const FORMAT_SPECS: Symbol = symbol_short!("FORMATS");
 const CONVERSION_REQUESTS: Symbol = symbol_short!("REQUESTS");
-const VALIDATION_RESULTS: Symbol = symbol_short!("VALIDATIONS");
+const VALIDATION_RESULTS: Symbol = symbol_short!("VAL_RES");
 const LOSSY_WARNINGS: Symbol = symbol_short!("WARNINGS");
 const PAUSED: Symbol = symbol_short!("PAUSED");
+
+const NEXT_CONVERSION_ID: Symbol = symbol_short!("REQ_NXT");
+const NEXT_VALIDATION_ID: Symbol = symbol_short!("VAL_NXT");
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -173,6 +176,8 @@ impl HealthcareDataConversionContract {
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage().persistent().set(&PAUSED, &false);
+        env.storage().persistent().set(&NEXT_CONVERSION_ID, &0u64);
+        env.storage().persistent().set(&NEXT_VALIDATION_ID, &0u64);
 
         // Initialize default FHIR format specification
         let fhir_spec = FormatSpecification {
@@ -406,13 +411,10 @@ impl HealthcareDataConversionContract {
             return Err(Error::TargetFormatNotSupported);
         }
 
-        let validation_id = String::from_str(
-            &env,
-            &format!("validation-{}", env.ledger().timestamp()),
-        );
+        let validation_id = Self::next_id(&env, &NEXT_VALIDATION_ID);
 
         let result = ValidationResult {
-            validation_id: validation_id.clone(),
+            validation_id,
             source_format,
             target_format,
             is_valid: true,
@@ -421,7 +423,7 @@ impl HealthcareDataConversionContract {
             validated_at: env.ledger().timestamp(),
         };
 
-        let mut results: Map<String, ValidationResult> = env
+        let mut results: Map<u64, ValidationResult> = env
             .storage()
             .persistent()
             .get(&VALIDATION_RESULTS)
@@ -443,20 +445,17 @@ impl HealthcareDataConversionContract {
         target_format: DataFormat,
         source_data_hash: BytesN<32>,
         target_data_hash: BytesN<32>,
-    ) -> Result<String, Error> {
+    ) -> Result<u64, Error> {
         requester.require_auth();
 
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
         }
 
-        let request_id = String::from_str(
-            &env,
-            &format!("conversion-{}", env.ledger().timestamp()),
-        );
+        let request_id = Self::next_id(&env, &NEXT_CONVERSION_ID);
 
         let request = ConversionRequest {
-            request_id: request_id.clone(),
+            request_id,
             source_format,
             target_format,
             source_data_hash,
@@ -467,13 +466,13 @@ impl HealthcareDataConversionContract {
             error_details: String::from_str(&env, ""),
         };
 
-        let mut requests: Map<String, ConversionRequest> = env
+        let mut requests: Map<u64, ConversionRequest> = env
             .storage()
             .persistent()
             .get(&CONVERSION_REQUESTS)
             .unwrap_or(Map::new(&env));
 
-        requests.set(request_id.clone(), request);
+        requests.set(request_id, request);
         env.storage()
             .persistent()
             .set(&CONVERSION_REQUESTS, &requests);
@@ -484,9 +483,9 @@ impl HealthcareDataConversionContract {
     /// Get conversion request details
     pub fn get_conversion_request(
         env: Env,
-        request_id: String,
+        request_id: u64,
     ) -> Result<ConversionRequest, Error> {
-        let requests: Map<String, ConversionRequest> = env
+        let requests: Map<u64, ConversionRequest> = env
             .storage()
             .persistent()
             .get(&CONVERSION_REQUESTS)
@@ -495,6 +494,13 @@ impl HealthcareDataConversionContract {
         requests
             .get(request_id)
             .ok_or(Error::InvalidConversionRequest)
+    }
+
+    fn next_id(env: &Env, counter_key: &Symbol) -> u64 {
+        let current: u64 = env.storage().persistent().get(counter_key).unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage().persistent().set(counter_key, &next);
+        next
     }
 
     /// Record lossy conversion warning

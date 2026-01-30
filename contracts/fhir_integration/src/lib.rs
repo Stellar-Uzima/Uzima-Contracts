@@ -93,7 +93,8 @@ pub struct FHIRObservation {
     pub effective_datetime: String, // ISO 8601 timestamp
     pub value_quantity_value: i64,
     pub value_quantity_unit: String,
-    pub interpretation: Option<FHIRCode>,
+    pub has_interpretation: bool,
+    pub interpretation: FHIRCode,
     pub reference_range: String,    // Human-readable reference range
 }
 
@@ -107,7 +108,8 @@ pub struct FHIRCondition {
     pub subject_reference: String,  // Reference to Patient
     pub onset_date_time: String,
     pub recorded_date: String,
-    pub severity: Option<FHIRCode>,
+    pub has_severity: bool,
+    pub severity: FHIRCode,
 }
 
 /// FHIR Medication Statement
@@ -176,7 +178,7 @@ pub struct HealthcareProvider {
     pub fhir_endpoint: String,      // Base URL for FHIR API
     pub is_verified: bool,
     pub verification_timestamp: u64,
-    pub credential_id: Option<BytesN<32>>,
+    pub credential_id: BytesN<32>,
 }
 
 /// EMR Integration Configuration
@@ -330,7 +332,7 @@ impl FHIRIntegrationContract {
             fhir_endpoint,
             is_verified: false,
             verification_timestamp: 0,
-            credential_id: None,
+            credential_id: BytesN::from_array(&env, &[0u8; 32]),
         };
 
         let mut providers_map = providers;
@@ -375,10 +377,10 @@ impl FHIRIntegrationContract {
 
         provider.is_verified = true;
         provider.verification_timestamp = env.ledger().timestamp();
-        provider.credential_id = Some(credential_id);
+        provider.credential_id = credential_id;
 
         providers.set(provider_id, provider);
-        env.storage().persistent().set(&PROVIDERS, &providers_map);
+        env.storage().persistent().set(&PROVIDERS, &providers);
 
         Ok(true)
     }
@@ -673,22 +675,17 @@ impl FHIRIntegrationContract {
             return Err(Error::NotAuthorized);
         }
 
-        let mut mappings: Map<String, DataMapping> = env
+        let mut mappings: Map<String, Map<String, DataMapping>> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .unwrap_or(Map::new(&env));
 
-        let key = String::from_str(
-            &env,
-            &format!(
-                "{}-{}",
-                &mapping.source_system,
-                &mapping.source_field
-            ),
-        );
-
-        mappings.set(key, mapping);
+        let source_system = mapping.source_system.clone();
+        let source_field = mapping.source_field.clone();
+        let mut system_map = mappings.get(source_system.clone()).unwrap_or(Map::new(&env));
+        system_map.set(source_field, mapping);
+        mappings.set(source_system, system_map);
         env.storage().persistent().set(&DATA_MAPPINGS, &mappings);
 
         Ok(true)
@@ -700,18 +697,14 @@ impl FHIRIntegrationContract {
         source_system: String,
         source_field: String,
     ) -> Result<DataMapping, Error> {
-        let mappings: Map<String, DataMapping> = env
+        let mappings: Map<String, Map<String, DataMapping>> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .ok_or(Error::MappingNotFound)?;
 
-        let key = String::from_str(
-            &env,
-            &format!("{}-{}", &source_system, &source_field),
-        );
-
-        mappings.get(key).ok_or(Error::MappingNotFound)
+        let system_map = mappings.get(source_system).ok_or(Error::MappingNotFound)?;
+        system_map.get(source_field).ok_or(Error::MappingNotFound)
     }
 
     /// Pause contract operations (emergency)

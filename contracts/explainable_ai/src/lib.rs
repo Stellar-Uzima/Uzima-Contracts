@@ -187,10 +187,8 @@ impl ExplainableAiContract {
             .instance()
             .set(&DataKey::Request(request_id), &request);
 
-        env.events().publish(
-            (symbol_short!("ExplanationRequested"),),
-            (request_id, ai_insight_id, caller),
-        );
+        env.events()
+            .publish((symbol_short!("EXP_REQ"),), (request_id, ai_insight_id, caller));
 
         request_id
     }
@@ -261,7 +259,7 @@ impl ExplainableAiContract {
             .set(&DataKey::Request(request_id), &request);
 
         env.events().publish(
-            (symbol_short!("ExplanationFulfilled"),),
+            (symbol_short!("EXP_FUL"),),
             (request_id, explanation_id, request.patient),
         );
 
@@ -319,7 +317,7 @@ impl ExplainableAiContract {
         calibration_by_group.set(String::from_str(&env, "age_elderly"), 9400u32);
 
         let audit_result = BiasAuditResult {
-            model_id,
+            model_id: model_id.clone(),
             audit_date: timestamp,
             demographic_fairness_metrics: demographic_fairness,
             equalized_odds: false,  // Simplified for example
@@ -330,12 +328,9 @@ impl ExplainableAiContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::BiasAudit(model_id), &audit_result);
+            .set(&DataKey::BiasAudit(model_id.clone()), &audit_result);
 
-        env.events().publish(
-            (symbol_short!("BiasAuditSubmitted"),),
-            (audit_id, model_id),
-        );
+        env.events().publish((symbol_short!("BIAS_AUD"),), (audit_id, model_id));
 
         Ok(audit_id)
     }

@@ -171,8 +171,7 @@ impl AnomalyDetectionContract {
         }
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.events()
-            .publish((symbol_short!("ConfigUpdated"),), true);
+        env.events().publish((symbol_short!("CFG_UPD"),), true);
 
         Ok(true)
     }
@@ -253,10 +252,8 @@ impl AnomalyDetectionContract {
         env.storage().instance().set(&DataKey::Stats, &stats);
 
         // Emit event
-        env.events().publish(
-            (symbol_short!("AnomalyDetected"),),
-            (anomaly_id, record_id, score_bps, severity),
-        );
+        env.events()
+            .publish((symbol_short!("ANOM_DET"),), (anomaly_id, record_id, score_bps, severity));
 
         Ok(anomaly_id)
     }
@@ -295,10 +292,9 @@ impl AnomalyDetectionContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::Whitelist(detector_addr), &true);
+            .set(&DataKey::Whitelist(detector_addr.clone()), &true);
 
-        env.events()
-            .publish((symbol_short!("DetectorWhitelisted"),), detector_addr);
+        env.events().publish((symbol_short!("DET_WL"),), detector_addr);
 
         Ok(true)
     }

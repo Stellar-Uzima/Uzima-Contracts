@@ -1,8 +1,9 @@
 #![no_std]
 
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
+    Env, String, Symbol, Vec,
 };
 
 // ============================================================================
@@ -49,7 +50,7 @@ pub enum Error {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VerificationMethodType {
     Ed25519VerificationKey2020,
-    EcdsaSecp256k1VerificationKey2019,
+    EcdsaSecp256k1VKey2019,
     X25519KeyAgreementKey2020,
     JsonWebKey2020,
 }
@@ -1644,21 +1645,28 @@ impl IdentityRegistryContract {
 
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
-        // Format: did:stellar:uzima:<network>:<address_string>
-        // For simplicity, we create a deterministic string representation
-        let mut did = String::from_str(env, "did:stellar:uzima:");
+        const MAX_PART_LEN: usize = 128;
+        const MAX_DID_LEN: usize = 512;
 
-        // Append network
-        did = Self::concat_strings(env, &did, network_id);
-        did = Self::concat_strings(env, &did, &String::from_str(env, ":"));
+        let subject_str = subject.to_string();
 
-        // For the address, we'll use a hash representation
-        // In production, this would be the actual address encoding
-        let addr_hash = env.crypto().sha256(&subject.to_xdr(env));
-        let hash_str = Self::bytes_to_hex_string(env, &addr_hash);
-        did = Self::concat_strings(env, &did, &hash_str);
+        let network_len = network_id.len() as usize;
+        let subject_len = subject_str.len() as usize;
 
-        did
+        let mut network_buf = [0u8; MAX_PART_LEN];
+        network_id.copy_into_slice(&mut network_buf[..network_len]);
+
+        let mut subject_buf = [0u8; MAX_PART_LEN];
+        subject_str.copy_into_slice(&mut subject_buf[..subject_len]);
+
+        let mut did_bytes = Bytes::new(env);
+        did_bytes.extend_from_slice(b"did:stellar:uzima:");
+        did_bytes.extend_from_slice(&network_buf[..network_len]);
+        did_bytes.extend_from_slice(b":");
+        did_bytes.extend_from_slice(&subject_buf[..subject_len]);
+
+        let did_buf = did_bytes.to_buffer::<MAX_DID_LEN>();
+        String::from_bytes(env, did_buf.as_slice())
     }
 
     /// Generate credential ID
@@ -1673,49 +1681,13 @@ impl IdentityRegistryContract {
         data.append(&subject.to_xdr(env));
         data.append(&timestamp.to_xdr(env));
 
-        env.crypto().sha256(&data)
+        env.crypto().sha256(&data).into()
     }
 
     /// Compute document hash for audit trail
     fn compute_document_hash(env: &Env, doc: &DIDDocument) -> BytesN<32> {
-        let data = doc.to_xdr(env);
-        env.crypto().sha256(&data)
-    }
-
-    /// Helper to concatenate strings
-    fn concat_strings(env: &Env, a: &String, b: &String) -> String {
-        let mut result = a.clone();
-        // Note: In Soroban, string concatenation requires manual byte manipulation
-        // This is a simplified version - in production would need proper implementation
-        let a_bytes = a.to_xdr(env);
-        let b_bytes = b.to_xdr(env);
-
-        // Create combined bytes (simplified - actual implementation would parse XDR properly)
-        let mut combined = a_bytes.clone();
-        combined.append(&b_bytes);
-
-        // For now, return a formatted string based on length
-        result = String::from_str(env, "did:stellar:uzima:");
-        result
-    }
-
-    /// Convert bytes to hex string (simplified)
-    fn bytes_to_hex_string(env: &Env, bytes: &BytesN<32>) -> String {
-        // Simplified hex encoding - in production would convert each byte
-        let arr = bytes.to_array();
-        let hex_chars = [
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-        ];
-
-        // Take first 8 bytes for a shorter representation
-        let mut hex_str = [0u8; 16];
-        for i in 0..8 {
-            hex_str[i * 2] = hex_chars[(arr[i] >> 4) as usize] as u8;
-            hex_str[i * 2 + 1] = hex_chars[(arr[i] & 0x0f) as usize] as u8;
-        }
-
-        // Convert to String - this is a simplified version
-        String::from_str(env, core::str::from_utf8(&hex_str).unwrap_or("00000000"))
+        let data = doc.clone().to_xdr(env);
+        env.crypto().sha256(&data).into()
     }
 
     /// DID-based authorization check
@@ -1766,12 +1738,13 @@ impl IdentityRegistryContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
     use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
     fn create_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -1785,6 +1758,7 @@ mod tests {
     fn create_legacy_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
