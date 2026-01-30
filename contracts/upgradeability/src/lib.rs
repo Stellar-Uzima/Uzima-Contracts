@@ -1,0 +1,138 @@
+#![no_std]
+
+use soroban_sdk::{
+    contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec,
+};
+
+pub mod migration;
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum UpgradeError {
+    NotAuthorized = 100,
+    InvalidWasmHash = 101,
+    VersionAlreadyExists = 102,
+    MigrationFailed = 103,
+    IncompatibleVersion = 104,
+    ContractPaused = 105,
+    HistoryNotFound = 106,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct UpgradeHistory {
+    pub wasm_hash: BytesN<32>,
+    pub version: u32,
+    pub upgraded_at: u64,
+    pub description: Symbol,
+}
+
+pub mod storage {
+    use super::*;
+
+    pub const VERSION: Symbol = symbol_short!("VERSION");
+    pub const ADMIN: Symbol = symbol_short!("UP_ADMIN");
+    pub const HISTORY: Symbol = symbol_short!("HISTORY");
+    pub const IS_FROZEN: Symbol = symbol_short!("FROZEN");
+
+    pub fn get_version(env: &Env) -> u32 {
+        env.storage().instance().get(&VERSION).unwrap_or(0)
+    }
+
+    pub fn set_version(env: &Env, version: u32) {
+        env.storage().instance().set(&VERSION, &version);
+    }
+
+    pub fn get_admin(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&ADMIN)
+    }
+
+    pub fn set_admin(env: &Env, admin: &Address) {
+        env.storage().instance().set(&ADMIN, admin);
+    }
+
+    pub fn is_frozen(env: &Env) -> bool {
+        env.storage().instance().get(&IS_FROZEN).unwrap_or(false)
+    }
+
+    pub fn freeze(env: &Env) {
+        env.storage().instance().set(&IS_FROZEN, &true);
+    }
+
+    pub fn add_history(env: &Env, history: UpgradeHistory) {
+        let mut list: Vec<UpgradeHistory> = env
+            .storage()
+            .persistent()
+            .get(&HISTORY)
+            .unwrap_or(Vec::new(env));
+        list.push_back(history);
+        env.storage().persistent().set(&HISTORY, &list);
+    }
+
+    pub fn get_history(env: &Env) -> Vec<UpgradeHistory> {
+        env.storage().persistent().get(&HISTORY).unwrap_or(Vec::new(env))
+    }
+}
+
+pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
+    if storage::is_frozen(env) {
+        return Err(UpgradeError::ContractPaused);
+    }
+    let admin = storage::get_admin(env).ok_or(UpgradeError::NotAuthorized)?;
+    admin.require_auth();
+    Ok(admin)
+}
+
+pub fn execute_upgrade(
+    env: &Env,
+    new_wasm_hash: BytesN<32>,
+    new_version: u32,
+    description: Symbol,
+) -> Result<(), UpgradeError> {
+    authorize_upgrade(env)?;
+
+    let current_version = storage::get_version(env);
+    if new_version <= current_version {
+        return Err(UpgradeError::IncompatibleVersion);
+    }
+
+    let old_wasm_hash = env.deployer().at_current_contract_address().wasm_hash();
+
+    storage::add_history(
+        env,
+        UpgradeHistory {
+            wasm_hash: old_wasm_hash,
+            version: current_version,
+            upgraded_at: env.ledger().timestamp(),
+            description,
+        },
+    );
+
+    storage::set_version(env, new_version);
+    env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+    Ok(())
+}
+
+pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
+    authorize_upgrade(env)?;
+
+    let history = storage::get_history(env);
+    if history.is_empty() {
+        return Err(UpgradeError::HistoryNotFound);
+    }
+
+    let last_index = history.len() - 1;
+    let last_version = history.get(last_index).unwrap();
+
+    // Note: Rollback is just another upgrade but to an older hash
+    // We increment version to avoid conflicts, or handle it differently?
+    // Usually rollback should be explicit.
+    
+    let current_version = storage::get_version(env);
+    storage::set_version(env, current_version + 1); // Increment even on rollback to signify an event
+    env.deployer().update_current_contract_wasm(last_version.wasm_hash);
+
+    Ok(())
+}

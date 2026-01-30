@@ -1,0 +1,11 @@
+[package]
+name = "upgrade-manager"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { workspace = true }
+upgradeability = { path = "../upgradeability" }
+
+[lib]
+crate-type = ["cdylib"]
