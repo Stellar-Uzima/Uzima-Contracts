@@ -1,0 +1,42 @@
+name: Build and Test
+
+on:
+  push:
+    branches: ["main", "master"]
+  pull_request:
+    branches: ["main", "master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  soroban-test:
+    name: Soroban Contracts CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: wasm32-unknown-unknown
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Stellar CLI
+        run: |
+          cargo install --locked --version 22.0.1 stellar-cli --features opt || true
+          stellar --version || echo "Stellar CLI install skipped/failed but usually not needed for unit tests"
+
+      - name: Check Formatting (Optional)
+        run: cargo fmt --all -- --check || echo "Formatting issues found, but proceeding..."
+
+      - name: Build Contracts (Release)
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Run Tests
+        run: cargo test
