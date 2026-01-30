@@ -553,11 +553,6 @@ impl SutToken {
             .ok_or(Error::SnapshotNotFound)?;
 
         // Special handling for snapshot 1 when no checkpoints exist
-        let checkpoint_count: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserCheckpointCount(account.clone()))
-            .unwrap_or(0);
 
         // Special handling for when no checkpoints exist
 
