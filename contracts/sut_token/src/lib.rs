@@ -561,7 +561,6 @@ impl SutToken {
 
         // Special handling for when no checkpoints exist
 
-
         Ok(Self::get_balance_at_snapshot(&env, &account, snapshot_id))
     }
 
