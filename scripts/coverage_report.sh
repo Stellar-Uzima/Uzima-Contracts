@@ -7,6 +7,7 @@ set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COVERAGE_DIR="${PROJECT_ROOT}/coverage"
+# shellcheck disable=SC2034  # Reserved for future use in quality gates
 COVERAGE_THRESHOLD=90
 
 # Create coverage directory
