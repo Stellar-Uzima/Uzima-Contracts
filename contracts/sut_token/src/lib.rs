@@ -386,49 +386,6 @@ impl SutToken {
         // Update checkpoint for recipient
         Self::update_checkpoint(&env, &to, new_balance);
 
-        // If this is mint happening after snapshots exist, we need to ensure
-        // the checkpoint for the latest snapshot is created correctly
-        let current_snapshot_count: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::SnapshotCount)
-            .unwrap_or(0);
-
-        if current_snapshot_count > 0 {
-            // Ensure checkpoint exists for the latest snapshot
-            let checkpoint_count: u32 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::UserCheckpointCount(to.clone()))
-                .unwrap_or(0);
-
-            let mut checkpoints: Vec<Checkpoint> = env
-                .storage()
-                .persistent()
-                .get(&DataKey::UserCheckpoints(to.clone()))
-                .unwrap_or(Vec::new(&env));
-
-            // If no checkpoints exist or last checkpoint is older than current snapshot, add one
-            if checkpoint_count == 0
-                || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id
-                    < current_snapshot_count
-            {
-                let new_checkpoint = Checkpoint {
-                    snapshot_id: current_snapshot_count,
-                    balance: new_balance,
-                };
-                checkpoints.push_back(new_checkpoint);
-
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::UserCheckpoints(to.clone()), &checkpoints);
-                env.storage().persistent().set(
-                    &DataKey::UserCheckpointCount(to.clone()),
-                    &(checkpoint_count + 1),
-                );
-            }
-        }
-
         // Emit mint event
         let event = MintEvent {
             to: to.clone(),
