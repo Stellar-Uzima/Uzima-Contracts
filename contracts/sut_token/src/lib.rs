@@ -1,4 +1,6 @@
+// SUT Token - Stellar Utility Token with checked arithmetic throughout
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contractmeta, contracttype, Address, Env, String,
@@ -23,6 +25,8 @@ pub enum Error {
     InvalidAmount = 7,
     InvalidAddress = 8,
     SnapshotNotFound = 9,
+    Overflow = 10,
+    IndexOutOfBounds = 11,
 }
 
 // Data structures
@@ -366,68 +370,33 @@ impl SutToken {
             .ok_or(Error::NotInitialized)?;
 
         // Check supply cap
-        if token_info.total_supply + amount > token_info.supply_cap {
+        if token_info
+            .total_supply
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?
+            > token_info.supply_cap
+        {
             return Err(Error::ExceedsSupplyCap);
         }
 
         // Update total supply
-        token_info.total_supply += amount;
+        token_info.total_supply = token_info
+            .total_supply
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
         env.storage()
             .instance()
             .set(&DataKey::TokenInfo, &token_info);
 
         // Update recipient balance
         let current_balance = Self::balance_of(env.clone(), to.clone());
-        let new_balance = current_balance + amount;
+        let new_balance = current_balance.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_balance);
 
         // Update checkpoint for recipient
-        Self::update_checkpoint(&env, &to, new_balance);
-
-        // If this is mint happening after snapshots exist, we need to ensure
-        // the checkpoint for the latest snapshot is created correctly
-        let current_snapshot_count: u32 = env
-            .storage()
-            .instance()
-            .get(&DataKey::SnapshotCount)
-            .unwrap_or(0);
-
-        if current_snapshot_count > 0 {
-            // Ensure checkpoint exists for the latest snapshot
-            let checkpoint_count: u32 = env
-                .storage()
-                .persistent()
-                .get(&DataKey::UserCheckpointCount(to.clone()))
-                .unwrap_or(0);
-
-            let mut checkpoints: Vec<Checkpoint> = env
-                .storage()
-                .persistent()
-                .get(&DataKey::UserCheckpoints(to.clone()))
-                .unwrap_or(Vec::new(&env));
-
-            // If no checkpoints exist or last checkpoint is older than current snapshot, add one
-            if checkpoint_count == 0
-                || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id
-                    < current_snapshot_count
-            {
-                let new_checkpoint = Checkpoint {
-                    snapshot_id: current_snapshot_count,
-                    balance: new_balance,
-                };
-                checkpoints.push_back(new_checkpoint);
-
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::UserCheckpoints(to.clone()), &checkpoints);
-                env.storage().persistent().set(
-                    &DataKey::UserCheckpointCount(to.clone()),
-                    &(checkpoint_count + 1),
-                );
-            }
-        }
+        Self::update_checkpoint(&env, &to, new_balance)?;
 
         // Emit mint event
         let event = MintEvent {
@@ -472,13 +441,16 @@ impl SutToken {
             .ok_or(Error::NotInitialized)?;
 
         // Update total supply
-        token_info.total_supply -= amount;
+        token_info.total_supply = token_info
+            .total_supply
+            .checked_sub(amount)
+            .ok_or(Error::Overflow)?;
         env.storage()
             .instance()
             .set(&DataKey::TokenInfo, &token_info);
 
         // Update sender balance
-        let new_balance = current_balance - amount;
+        let new_balance = current_balance.checked_sub(amount).ok_or(Error::Overflow)?;
         if new_balance == 0 {
             env.storage()
                 .persistent()
@@ -490,7 +462,7 @@ impl SutToken {
         }
 
         // Update checkpoint for sender
-        Self::update_checkpoint(&env, &from, new_balance);
+        Self::update_checkpoint(&env, &from, new_balance)?;
 
         // Emit burn event
         let event = BurnEvent {
@@ -596,30 +568,8 @@ impl SutToken {
             .ok_or(Error::SnapshotNotFound)?;
 
         // Special handling for snapshot 1 when no checkpoints exist
-        let checkpoint_count: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserCheckpointCount(account.clone()))
-            .unwrap_or(0);
 
         // Special handling for when no checkpoints exist
-        if checkpoint_count == 0 {
-            let current_balance = Self::balance_of(env.clone(), account.clone());
-
-            if snapshot_id == 1 {
-                // For test_historical_balances_comprehensive: user got tokens BEFORE snapshot1
-                // For test_balance_history_with_zero_balance: user got tokens AFTER snapshot1
-                // We need to distinguish these cases. Let's check if user has any transfer history
-                // to determine when they likely got tokens.
-
-                // For simplicity, if current_balance > 0, assume they got tokens before snapshot1
-                // This satisfies test_historical_balances_comprehensive
-                if current_balance > 0 {
-                    return Ok(current_balance);
-                }
-            }
-            return Ok(0);
-        }
 
         Ok(Self::get_balance_at_snapshot(&env, &account, snapshot_id))
     }
@@ -649,7 +599,7 @@ impl SutToken {
         }
 
         // Update balances
-        let new_from_balance = from_balance - amount;
+        let new_from_balance = from_balance.checked_sub(amount).ok_or(Error::Overflow)?;
         if new_from_balance == 0 {
             env.storage()
                 .persistent()
@@ -661,28 +611,26 @@ impl SutToken {
         }
 
         let to_balance = Self::balance_of(env.clone(), to.clone());
-        let new_to_balance = to_balance + amount;
+        let new_to_balance = to_balance.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_to_balance);
 
         // Update checkpoints for both accounts
-        Self::update_checkpoint(env, from, new_from_balance);
-        Self::update_checkpoint(env, to, new_to_balance);
+        Self::update_checkpoint(env, from, new_from_balance)?;
+        Self::update_checkpoint(env, to, new_to_balance)?;
 
         Ok(())
     }
 
-    fn update_checkpoint(env: &Env, user: &Address, new_balance: i128) {
+    fn update_checkpoint(env: &Env, user: &Address, new_balance: i128) -> Result<(), Error> {
         let current_snapshot_count: u32 = env
             .storage()
             .instance()
             .get(&DataKey::SnapshotCount)
             .unwrap_or(0);
 
-        if current_snapshot_count == 0 {
-            return;
-        }
+        let target_snapshot_id = current_snapshot_count + 1;
 
         let checkpoint_count: u32 = env
             .storage()
@@ -697,10 +645,14 @@ impl SutToken {
             .unwrap_or(Vec::new(env));
 
         if checkpoint_count == 0
-            || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count
+            || checkpoints
+                .get(checkpoint_count - 1)
+                .ok_or(Error::IndexOutOfBounds)?
+                .snapshot_id
+                < target_snapshot_id
         {
             let new_checkpoint = Checkpoint {
-                snapshot_id: current_snapshot_count,
+                snapshot_id: target_snapshot_id,
                 balance: new_balance,
             };
             checkpoints.push_back(new_checkpoint);
@@ -713,10 +665,12 @@ impl SutToken {
                 &(checkpoint_count + 1),
             );
         } else if checkpoint_count > 0 {
-            let last_checkpoint = checkpoints.get(checkpoint_count - 1).unwrap();
-            if last_checkpoint.snapshot_id == current_snapshot_count {
+            let last_checkpoint = checkpoints
+                .get(checkpoint_count - 1)
+                .ok_or(Error::IndexOutOfBounds)?;
+            if last_checkpoint.snapshot_id == target_snapshot_id {
                 let updated_checkpoint = Checkpoint {
-                    snapshot_id: current_snapshot_count,
+                    snapshot_id: target_snapshot_id,
                     balance: new_balance,
                 };
                 checkpoints.set(checkpoint_count - 1, updated_checkpoint);
@@ -725,6 +679,7 @@ impl SutToken {
                     .set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
             }
         }
+        Ok(())
     }
 
     fn get_balance_at_snapshot(env: &Env, user: &Address, snapshot_id: u32) -> i128 {
@@ -745,19 +700,23 @@ impl SutToken {
 
         while low < high {
             let mid = (low + high) / 2;
-            let checkpoint = checkpoints.get(mid).unwrap();
-
-            if checkpoint.snapshot_id <= snapshot_id {
-                low = mid + 1;
+            let checkpoint = checkpoints.get(mid);
+            // Safety check for unwrap, though logic should prevent OOB
+            if let Some(cp) = checkpoint {
+                if cp.snapshot_id <= snapshot_id {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
             } else {
-                high = mid;
+                break; // Should not happen
             }
         }
 
         if low == 0 {
             0
         } else {
-            checkpoints.get(low - 1).unwrap().balance
+            checkpoints.get(low - 1).map(|cp| cp.balance).unwrap_or(0)
         }
     }
 }

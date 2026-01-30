@@ -1,4 +1,8 @@
+// Medical Consent NFT - Patient consent management with proper validation
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,

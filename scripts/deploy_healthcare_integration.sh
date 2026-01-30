@@ -66,7 +66,7 @@ deploy_fhir() {
         --source-account "$ADMIN_ADDRESS" \
         --network "$NETWORK" \
         --sign-with-key-pair "$ADMIN_ADDRESS" \
-        2>&1 | grep -oP 'Contract deployed at \K[A-Z0-9]+' || echo "")
+        2>&1 | sed -n 's/.*Contract deployed at \([A-Z0-9]*\).*/\1/p' || echo "")
     
     if [ -z "$FHIR_CONTRACT" ]; then
         echo -e "${RED}Failed to deploy FHIR contract${NC}"
@@ -101,7 +101,7 @@ deploy_emr() {
         --source-account "$ADMIN_ADDRESS" \
         --network "$NETWORK" \
         --sign-with-key-pair "$ADMIN_ADDRESS" \
-        2>&1 | grep -oP 'Contract deployed at \K[A-Z0-9]+' || echo "")
+        2>&1 | sed -n 's/.*Contract deployed at \([A-Z0-9]*\).*/\1/p' || echo "")
     
     if [ -z "$EMR_CONTRACT" ]; then
         echo -e "${RED}Failed to deploy EMR contract${NC}"

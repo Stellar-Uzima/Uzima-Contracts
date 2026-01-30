@@ -1,15 +1,20 @@
 #![no_std]
+#![allow(dead_code)]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::enum_variant_names)]
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_permissions;
 
 mod events;
 mod validation;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Bytes, BytesN,
-    Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
+    Vec,
 };
 
 // ... (Types remain the same until AccessRequest) ...
@@ -50,14 +55,43 @@ pub struct RecordMetadata {
     pub record_hash: BytesN<32>,
 }
 
-
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum Role {
     Admin,
     Doctor,
     Patient,
     None,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum Permission {
+    // Admin / Management
+    ManageUsers = 1,
+    ManageSystem = 2,
+
+    // Record Access
+    CreateRecord = 10,
+    ReadRecord = 11,
+    UpdateRecord = 12,
+    DeleteRecord = 13,
+
+    // Privacy
+    ReadConfidential = 20,
+
+    // Advanced
+    DelegatePermission = 30,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct PermissionGrant {
+    pub permission: Permission,
+    pub granter: Address,
+    pub expires_at: u64, // 0 means no expiration
+    pub is_delegatable: bool,
 }
 
 #[derive(Clone)]
@@ -169,13 +203,14 @@ pub enum DataKey {
     AIConfig,
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
+    UserPermissions(Address),
 }
 
 const USERS: Symbol = symbol_short!("USERS");
 const RECORDS: Symbol = symbol_short!("RECORDS");
-const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
+const _PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 const PAUSED: Symbol = symbol_short!("PAUSED");
-const PROPOSALS: Symbol = symbol_short!("PROPOSALS");
+const _PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
 const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
 const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
@@ -236,6 +271,7 @@ pub enum Error {
     InvalidBatch = 44,
     InvalidInput = 45,
     NumberOutOfBounds = 46,
+    Overflow = 47,
 }
 
 #[derive(Clone)]
@@ -256,10 +292,23 @@ pub struct BatchResult {
 pub struct MedicalRecordsContract;
 
 #[contractimpl]
+#[allow(clippy::too_many_arguments)]
 impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
         env.storage().persistent().set(&PAUSED, &false);
+
+        let mut users: Map<Address, UserProfile> = Map::new(&env);
+        users.set(
+            admin.clone(),
+            UserProfile {
+                role: Role::Admin,
+                active: true,
+                did_reference: None,
+            },
+        );
+        env.storage().persistent().set(&USERS, &users);
+
         // Emit user creation event
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
@@ -271,16 +320,9 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&USERS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env));
         match users.get(address.clone()) {
-            Some(profile) => {
-                matches!(
-                    (profile.role, role),
-                    (Role::Admin, Role::Admin)
-                        | (Role::Doctor, Role::Doctor)
-                        | (Role::Patient, Role::Patient)
-                ) && profile.active
-            }
+            Some(profile) => profile.role == *role && profile.active,
             None => false,
         }
     }
@@ -291,17 +333,17 @@ impl MedicalRecordsContract {
     }
 
     /// Internal function to get and increment the record counter
-    fn get_and_increment_record_count(env: &Env) -> u64 {
+    fn get_and_increment_record_count(env: &Env) -> Result<u64, Error> {
         let current_count: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0);
-        let next_count = current_count + 1;
+        let next_count = current_count.checked_add(1).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::RecordCount, &next_count);
-        next_count
+        Ok(next_count)
     }
 
     pub fn get_record_count(env: Env) -> u64 {
@@ -330,9 +372,15 @@ impl MedicalRecordsContract {
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         let existing_profile = users.get(user.clone());
 
         let role_str = match role {
@@ -350,11 +398,25 @@ impl MedicalRecordsContract {
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
-            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: profile.did_reference });
+            users.set(
+                user.clone(),
+                UserProfile {
+                    role,
+                    active: true,
+                    did_reference: profile.did_reference,
+                },
+            );
             events::emit_user_role_updated(&env, caller, user, role_str, Some(previous_role_str));
         } else {
             // Create new user
-            users.set(user.clone(), UserProfile { role: role.clone(), active: true, did_reference: None });
+            users.set(
+                user.clone(),
+                UserProfile {
+                    role,
+                    active: true,
+                    did_reference: None,
+                },
+            );
             events::emit_user_created(&env, caller, user, role_str, None);
         }
 
@@ -364,9 +426,15 @@ impl MedicalRecordsContract {
 
     pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
-        let mut users: Map<Address, UserProfile> = env.storage().persistent().get(&USERS).unwrap_or(Map::new(&env));
+        let mut users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(&env));
         if let Some(mut profile) = users.get(user.clone()) {
             profile.active = false;
             users.set(user.clone(), profile);
@@ -380,7 +448,9 @@ impl MedicalRecordsContract {
 
     pub fn pause(env: Env, caller: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
         env.storage().persistent().set(&PAUSED, &true);
         events::emit_contract_paused(&env, caller);
@@ -389,11 +459,178 @@ impl MedicalRecordsContract {
 
     pub fn unpause(env: Env, caller: Address) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) { return false; }
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            return false;
+        }
 
         env.storage().persistent().set(&PAUSED, &false);
         events::emit_contract_unpaused(&env, caller);
         true
+    }
+
+    /// Internal function to check granular permissions
+    fn check_permission(env: &Env, user: &Address, permission: Permission) -> bool {
+        // 1. Role-based default permissions (Imply logic)
+        let users: Map<Address, UserProfile> = env
+            .storage()
+            .persistent()
+            .get(&USERS)
+            .unwrap_or(Map::new(env));
+
+        if let Some(profile) = users.get(user.clone()) {
+            if !profile.active {
+                return false;
+            }
+            match profile.role {
+                Role::Admin => return true, // Admin has all permissions
+                Role::Doctor => {
+                    if matches!(
+                        permission,
+                        Permission::CreateRecord
+                            | Permission::ReadRecord
+                            | Permission::UpdateRecord
+                            | Permission::ReadConfidential
+                            | Permission::DelegatePermission
+                    ) {
+                        return true;
+                    }
+                }
+                Role::Patient => {
+                    // Patients might have specific permissions contextually, but generally strict.
+                }
+                _ => {}
+            }
+        }
+
+        // 2. Explicit Granular permissions
+        let key = DataKey::UserPermissions(user.clone());
+        let grants: Vec<PermissionGrant> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
+        let now = env.ledger().timestamp();
+
+        for grant in grants.iter() {
+            if grant.permission == permission {
+                // Check expiration
+                if grant.expires_at == 0 || grant.expires_at > now {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
+    /// Grant a specific permission to a user
+    pub fn grant_permission(
+        env: Env,
+        granter: Address,
+        grantee: Address,
+        permission: Permission,
+        expiration: u64, // 0 = permanent
+        is_delegatable: bool,
+    ) -> Result<bool, Error> {
+        granter.require_auth();
+
+        // Granter must satisfy one of:
+        // 1. Is Admin
+        // 2. Has DelegatePermission permission (and if we tracked scope, within scope)
+        if !Self::check_permission(&env, &granter, Permission::DelegatePermission)
+            && !Self::has_role(&env, &granter, &Role::Admin)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let key = DataKey::UserPermissions(grantee.clone());
+        let grants: Vec<PermissionGrant> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        // Check if already exists, update if so
+        let mut found = false;
+        let mut new_grants = Vec::new(&env);
+
+        for grant in grants.iter() {
+            if grant.permission == permission {
+                new_grants.push_back(PermissionGrant {
+                    permission, // Copy
+                    granter: granter.clone(),
+                    expires_at: expiration,
+                    is_delegatable,
+                });
+                found = true;
+            } else {
+                new_grants.push_back(grant);
+            }
+        }
+
+        if !found {
+            new_grants.push_back(PermissionGrant {
+                permission,
+                granter: granter.clone(),
+                expires_at: expiration,
+                is_delegatable,
+            });
+        }
+
+        env.storage().persistent().set(&key, &new_grants);
+
+        // Emit event
+        events::emit_permission_granted(
+            &env,
+            granter,
+            grantee,
+            permission as u32,
+            expiration,
+            is_delegatable,
+        );
+
+        Ok(true)
+    }
+
+    /// Revoke a permission from a user
+    pub fn revoke_permission(
+        env: Env,
+        revoker: Address,
+        grantee: Address,
+        permission: Permission,
+    ) -> Result<bool, Error> {
+        revoker.require_auth();
+
+        // Revoker must have authority
+        if !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
+            && !Self::has_role(&env, &revoker, &Role::Admin)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let key = DataKey::UserPermissions(grantee.clone());
+        let grants: Vec<PermissionGrant> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        let mut new_grants = Vec::new(&env);
+        let mut removed = false;
+
+        for grant in grants.iter() {
+            if grant.permission == permission {
+                removed = true;
+            } else {
+                new_grants.push_back(grant);
+            }
+        }
+
+        if removed {
+            env.storage().persistent().set(&key, &new_grants);
+            events::emit_permission_revoked(&env, revoker, grantee, permission as u32);
+        }
+
+        Ok(removed)
     }
 
     /// Add a new medical record with role-based access control
@@ -411,12 +648,36 @@ impl MedicalRecordsContract {
     ) -> Result<u64, Error> {
         caller.require_auth();
 
+
         // Check if contract is paused
+
         if Self::is_paused(&env) {
             return Err(Error::ContractPaused);
         }
 
+
         // Build the record
+
+        // Granular Permission Check
+        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Validation
+        validation::validate_diagnosis(&diagnosis)?;
+        validation::validate_treatment(&treatment)?;
+        validation::validate_category(&category, &env)?;
+        validation::validate_treatment_type(&treatment_type)?;
+        validation::validate_data_ref(&env, &data_ref)?;
+        validation::validate_tags(&tags)?;
+
+        if patient == caller {
+            return Err(Error::SameAddress);
+        }
+
+        let record_id = Self::get_and_increment_record_count(&env)?;
+
+
         let record = MedicalRecord {
             patient_id: patient.clone(),
             doctor_id: caller.clone(),
@@ -431,6 +692,7 @@ impl MedicalRecordsContract {
             doctor_did: None,
         };
 
+
         // Validate the record
         validation::validate_medical_record(&env, &record)?;
 
@@ -438,11 +700,14 @@ impl MedicalRecordsContract {
         let record_id = Self::get_and_increment_record_count(&env);
 
         // Store record in RECORDS map
+
+
         let mut records: Map<u64, MedicalRecord> = env
             .storage()
             .persistent()
             .get(&RECORDS)
             .unwrap_or(Map::new(&env));
+
         records.set(record_id, record);
         env.storage().persistent().set(&RECORDS, &records);
 
@@ -460,6 +725,11 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&PATIENT_RECORDS, &patient_records);
 
         // Emit event for record creation
+
+        records.set(record_id, record.clone());
+        env.storage().persistent().set(&RECORDS, &records);
+
+
         events::emit_record_created(
             &env,
             caller,
@@ -467,9 +737,97 @@ impl MedicalRecordsContract {
             patient,
             is_confidential,
             category,
+
             tags
+
+            tags,
+
         );
 
         Ok(record_id)
     }
+
 }
+
+
+    pub fn update_record(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        new_diagnosis: String,
+        new_treatment: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+
+        if Self::is_paused(&env) {
+            return Err(Error::ContractPaused);
+        }
+
+        if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let mut records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+        let mut record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Additional check: If confidential, might need ReadConfidential to even know about it?
+        // But for update, we assume they know ID.
+
+        record.diagnosis = new_diagnosis;
+        record.treatment = new_treatment;
+        // record.timestamp = env.ledger().timestamp(); // preserve original timestamp? or update? usually keep created_at
+
+        records.set(record_id, record);
+        env.storage().persistent().set(&RECORDS, &records);
+
+        // events::emit_record_updated(&env, caller, record_id); // Assuming this exists or I add it
+
+        Ok(true)
+    }
+
+    pub fn get_record(env: Env, caller: Address, record_id: u64) -> Result<MedicalRecord, Error> {
+        caller.require_auth();
+
+        let records: Map<u64, MedicalRecord> = env
+            .storage()
+            .persistent()
+            .get(&RECORDS)
+            .unwrap_or(Map::new(&env));
+        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
+
+        // Permission Check
+        let mut allowed = false;
+
+        // 1. Own record OR Doctor who created it
+        if record.patient_id == caller || record.doctor_id == caller {
+            allowed = true;
+        }
+        // 3. Permission
+        else if Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            allowed = true;
+            // If confidential, check ReadConfidential
+            if record.is_confidential
+                && !Self::check_permission(&env, &caller, Permission::ReadConfidential)
+            {
+                allowed = false;
+            }
+        } else if record.is_confidential {
+            // If no generic ReadRecord, maybe they have ReadConfidential specific to this record?
+            // Granular scope isn't implemented per record in PermissionGrant (it's boolean per user).
+            // We stick to simple logic: ReadRecord allows reading public records. ReadConfidential allows confidential.
+        }
+
+        if !allowed {
+            return Err(Error::NotAuthorized);
+        }
+
+        events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+
+        Ok(record)
+    }
+}
+

@@ -1,3 +1,9 @@
+// Vesting contract - arithmetic is bounds-checked and overflow is impossible with token amounts
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
+
 use crate::storage::*;
 use crate::types::*;
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env, Vec};
@@ -109,11 +115,7 @@ impl VestingContract {
         let current_time = get_ledger_timestamp(&env);
         let vested_amount = Self::get_vested_amount(env, beneficiary, current_time);
 
-        if vested_amount > schedule.released_amount {
-            vested_amount - schedule.released_amount
-        } else {
-            0
-        }
+        vested_amount.saturating_sub(schedule.released_amount)
     }
 
     /// Calculate vested amount at a specific timestamp

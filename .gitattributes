@@ -1,0 +1,19 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Force Unix line endings for shell scripts and related files
+*.sh text eol=lf
+.shellcheckrc text eol=lf
+*.bash text eol=lf
+
+# Force Windows line endings for Windows-specific files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files
+*.wasm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
