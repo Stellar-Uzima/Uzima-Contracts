@@ -99,7 +99,7 @@ main() {
     mkdir -p "$DEPLOYMENTS_DIR"
     
     # Find all deployment files for this network
-    DEPLOYMENT_FILES=($(find "$DEPLOYMENTS_DIR" -name "${NETWORK}_*.json" -type f ! -name "*_backup_*" ! -name "*_alerts*"))
+    mapfile -t DEPLOYMENT_FILES < <(find "$DEPLOYMENTS_DIR" -name "${NETWORK}_*.json" -type f ! -name "*_backup_*" ! -name "*_alerts*")
     
     if [ ${#DEPLOYMENT_FILES[@]} -eq 0 ]; then
         print_warning "No deployment files found for network: $NETWORK"

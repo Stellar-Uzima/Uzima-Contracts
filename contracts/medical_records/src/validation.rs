@@ -12,8 +12,6 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-#![allow(dead_code)]
-
 use soroban_sdk::{Address, Env, String, Vec};
 
 use crate::{Error, MedicalRecord, UserProfile};
@@ -111,11 +109,11 @@ pub fn validate_string_length(
 ) -> Result<(), Error> {
     let len = value.len();
 
-    if value.is_empty() {
+    if len == 0 {
         return Err(error_empty);
     }
 
-    if !(min_length..=max_length).contains(&len) {
+    if len < min_length || len > max_length {
         return Err(error_length);
     }
 
@@ -134,7 +132,6 @@ pub fn validate_string_charset(_env: &Env, value: &String) -> Result<(), Error> 
     if value.is_empty() {
         return Err(Error::InvalidDataRefCharset);
     }
-
     // Convert to bytes for inspection
     // Note: in a real implementation we would iterate and check ranges
     // For now we assume if it's a valid host String it's UTF-8, but we want to restrict to basic ASCII chars for some fields
@@ -404,7 +401,7 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     let current_time = env.ledger().timestamp();
     let one_day = 86_400u64;
 
-    if timestamp > current_time + one_day {
+    if timestamp > current_time.saturating_add(one_day) {
         return Err(Error::NotAuthorized);
     }
 
@@ -669,6 +666,8 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used)]
+    #![allow(clippy::expect_used)]
     use super::*;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},

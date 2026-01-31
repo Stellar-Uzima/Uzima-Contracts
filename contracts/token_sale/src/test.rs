@@ -1,5 +1,26 @@
-use crate::{TokenSaleContract, TokenSaleContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Env};
+#![allow(clippy::unwrap_used)]
+
+use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
+
+use super::*;
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, Env,
+};
+
+fn create_token_contract<'a>(
+    e: &Env,
+    admin: &Address,
+) -> (Address, token::Client<'a>, token::StellarAssetClient<'a>) {
+    let contract_address = e
+        .register_stellar_asset_contract_v2(admin.clone())
+        .address();
+    (
+        contract_address.clone(),
+        token::Client::new(e, &contract_address),
+        token::StellarAssetClient::new(e, &contract_address),
+    )
+}
 
 #[test]
 fn test_sale_flow() {

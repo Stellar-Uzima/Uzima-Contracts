@@ -1,5 +1,11 @@
-use crate::{MetaTxForwarder, MetaTxForwarderClient};
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
+use super::*;
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env};
+
+fn create_forwarder_contract<'a>(env: &Env) -> (Address, MetaTxForwarderClient<'a>) {
+    let contract_id = env.register_contract(None, MetaTxForwarder);
+    let client = MetaTxForwarderClient::new(env, &contract_id);
+    (contract_id, client)
+}
 
 #[test]
 fn test_signature_verification() {

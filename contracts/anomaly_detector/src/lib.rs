@@ -6,8 +6,7 @@ pub struct AnomalyDetector;
 
 #[contractimpl]
 impl AnomalyDetector {
-    pub fn hello(_env: Env) -> Symbol {
-        // We use symbol_short! because the string is 32 characters or fewer
-        symbol_short!("Anomaly")
+    pub fn hello(env: soroban_sdk::Env) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(&env, "Anomaly Detector Placeholder")
     }
 }

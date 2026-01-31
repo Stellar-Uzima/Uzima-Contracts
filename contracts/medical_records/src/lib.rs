@@ -9,9 +9,11 @@ use rate_limiting::{enforce_rate_limit, RateLimitError, UserRole as RLRole};
 use soroban_sdk::symbol_short;
 #[allow(unused_imports)]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
+    Vec,
 };
+
+// ... (Types remain the same until AccessRequest) ...
 
 // ==================== Cross-Chain Types ====================
 
@@ -56,6 +58,36 @@ pub enum Role {
     Doctor,
     Patient,
     None,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum Permission {
+    // Admin / Management
+    ManageUsers = 1,
+    ManageSystem = 2,
+
+    // Record Access
+    CreateRecord = 10,
+    ReadRecord = 11,
+    UpdateRecord = 12,
+    DeleteRecord = 13,
+
+    // Privacy
+    ReadConfidential = 20,
+
+    // Advanced
+    DelegatePermission = 30,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct PermissionGrant {
+    pub permission: Permission,
+    pub granter: Address,
+    pub expires_at: u64, // 0 means no expiration
+    pub is_delegatable: bool,
 }
 
 #[derive(Clone)]
@@ -114,13 +146,16 @@ pub struct MedicalRecord {
     pub authorization_credential: BytesN<32>,
 }
 
-#[derive(Clone)]
+// ==================== AI & Recovery Types ====================
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AIInsightType {
     AnomalyScore,
     RiskScore,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AIInsight {
@@ -146,6 +181,18 @@ pub struct AIConfig {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct RecoveryProposal {
+    pub proposal_id: u64,
+    pub token_contract: Address,
+    pub to: Address,
+    pub amount: i128,
+    pub created_at: u64,
+    pub executed: bool,
+    pub approvals: Vec<Address>,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     RecordCount,
     IdentityRegistry,
@@ -157,6 +204,7 @@ pub enum DataKey {
     AIConfig,
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
+    UserPermissions(Address),
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -233,6 +281,7 @@ impl From<RateLimitError> for Error {
 pub struct MedicalRecordsContract;
 
 #[contractimpl]
+#[allow(clippy::too_many_arguments)]
 impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
@@ -265,16 +314,9 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&USERS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env));
         match users.get(address.clone()) {
-            Some(profile) => {
-                matches!(
-                    (profile.role, role),
-                    (Role::Admin, Role::Admin)
-                        | (Role::Doctor, Role::Doctor)
-                        | (Role::Patient, Role::Patient)
-                ) && profile.active
-            }
+            Some(profile) => profile.role == *role && profile.active,
             None => false,
         }
     }
@@ -307,7 +349,7 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0);
-        let next_count = current_count + 1;
+        let next_count = current_count.checked_add(1).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::RecordCount, &next_count);
@@ -326,6 +368,7 @@ impl MedicalRecordsContract {
     }
 
     fn load_ai_config(env: &Env) -> Result<AIConfig, Error> {
+        env.storage()
         env.storage()
             .persistent()
             .get(&DataKey::AIConfig)
@@ -669,7 +712,7 @@ impl MedicalRecordsContract {
         }
 
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            panic!("Only admins can deactivate users");
+            return false;
         }
         let mut users: Map<Address, UserProfile> = env
             .storage()
@@ -678,7 +721,7 @@ impl MedicalRecordsContract {
             .unwrap_or(Map::new(&env));
         if let Some(mut profile) = users.get(user.clone()) {
             profile.active = false;
-            users.set(user, profile);
+            users.set(user.clone(), profile);
             env.storage().persistent().set(&USERS, &users);
             Ok(true)
         } else {
@@ -712,7 +755,7 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
+            return false;
         }
         env.storage()
             .persistent()
@@ -738,7 +781,7 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
         if !Self::has_role(&env, &caller, &Role::Admin) {
-            return Err(Error::NotAuthorized);
+            return false;
         }
         env.storage()
             .persistent()
@@ -1100,10 +1143,13 @@ impl MedicalRecordsContract {
 
     pub fn set_identity_registry(
         env: Env,
-        caller: Address,
-        registry_address: Address,
+        granter: Address,
+        grantee: Address,
+        permission: Permission,
+        expiration: u64, // 0 = permanent
+        is_delegatable: bool,
     ) -> Result<bool, Error> {
-        caller.require_auth();
+        granter.require_auth();
 
         Self::ensure_role(&env, &caller, Role::Admin, "set_identity_registry:admin")?;
 
@@ -1246,8 +1292,9 @@ impl MedicalRecordsContract {
 
     pub fn revoke_emergency_access(
         env: Env,
-        patient: Address,
+        revoker: Address,
         grantee: Address,
+        permission: Permission,
     ) -> Result<bool, Error> {
         patient.require_auth();
 
@@ -1500,12 +1547,12 @@ impl MedicalRecordsContract {
         let record = MedicalRecord {
             patient_id: patient.clone(),
             doctor_id: caller.clone(),
-            timestamp,
+            timestamp: env.ledger().timestamp(),
             diagnosis,
             treatment,
             is_confidential,
-            tags,
-            category,
+            tags: tags.clone(),
+            category: category.clone(),
             treatment_type,
             data_ref,
             doctor_did,
@@ -1518,7 +1565,7 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&RECORDS)
             .unwrap_or(Map::new(&env));
-        records.set(record_id, record);
+        records.set(record_id, record.clone());
         env.storage().persistent().set(&RECORDS, &records);
 
         let mut patient_records: Map<Address, Vec<u64>> = env
@@ -1537,8 +1584,7 @@ impl MedicalRecordsContract {
 
         Self::log_access(
             &env,
-            &caller,
-            &patient,
+            caller,
             record_id,
             String::from_str(&env, "CREATE_RECORD"),
             true,
@@ -1557,8 +1603,9 @@ impl MedicalRecordsContract {
         env: Env,
         caller: Address,
         record_id: u64,
-        access_purpose: String,
-    ) -> Result<MedicalRecord, Error> {
+        new_diagnosis: String,
+        new_treatment: String,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         let records: Map<u64, MedicalRecord> = env
             .storage()

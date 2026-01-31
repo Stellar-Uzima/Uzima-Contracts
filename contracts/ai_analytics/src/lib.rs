@@ -2,66 +2,243 @@
 #![allow(clippy::len_zero)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
 };
+
+#[derive(Clone)]
+#[contracttype]
+pub struct FederatedRound {
+    pub id: u64,
+    pub base_model_id: BytesN<32>,
+    pub min_participants: u32,
+    pub dp_epsilon: u32,
+    pub started_at: u64,
+    pub finalized_at: u64,
+    pub total_updates: u32,
+    pub is_finalized: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ParticipantUpdateMeta {
+    pub round_id: u64,
+    pub participant: Address,
+    pub update_hash: BytesN<32>,
+    pub num_samples: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ModelMetadata {
+    pub model_id: BytesN<32>,
+    pub round_id: u64,
+    pub description: String,
+    pub metrics_ref: String,
+    pub fairness_report_ref: String,
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub enum DataKey {
+    Admin,
+    RoundCounter,
+    Round(u64),
+    ParticipantUpdate(u64, Address),
+    Model(BytesN<32>),
+}
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
     NotAuthorized = 1,
-    InvalidInput = 2,
-    ModelExecutionFailed = 3,
-    InsufficientGas = 4,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ModelExecutionResult {
-    pub model_id: BytesN<32>,
-    pub timestamp: u64,
-    pub output: String,
-    pub confidence_score: u32,
-    pub used_gas: u64,
+    RoundNotFound = 2,
+    RoundFinalized = 3,
+    NotEnoughParticipants = 4,
+    DuplicateUpdate = 5,
+    AlreadyInitialized = 6,
+    AdminNotSet = 7,
 }
 
 #[contract]
 pub struct AIAnalyticsContract;
 
 #[contractimpl]
-impl AIAnalyticsContract {
-    /// Initialize the AI Analytics contract
-    pub fn initialize(_env: Env, _admin: Address) -> Result<bool, Error> {
+impl AiAnalyticsContract {
+    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
+        admin.require_auth();
+
+        if env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::AlreadyInitialized);
+        }
+
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        Ok(true)
+    }
+
+    fn ensure_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::AdminNotSet)?;
+
+        if admin != *caller {
+            return Err(Error::NotAuthorized);
+        }
+        Ok(())
+    }
+
+    fn next_round_id(env: &Env) -> u64 {
+        let current: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::RoundCounter)
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage().instance().set(&DataKey::RoundCounter, &next);
+        next
+    }
+
+    pub fn start_round(
+        env: Env,
+        caller: Address,
+        base_model_id: BytesN<32>,
+        min_participants: u32,
+        dp_epsilon: u32,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        if min_participants == 0 {
+            return Err(Error::NotEnoughParticipants);
+        }
+
+        let id = Self::next_round_id(&env);
+        let round = FederatedRound {
+            id,
+            base_model_id,
+            min_participants,
+            dp_epsilon,
+            started_at: env.ledger().timestamp(),
+            finalized_at: 0,
+            total_updates: 0,
+            is_finalized: false,
+        };
+
+        env.storage().instance().set(&DataKey::Round(id), &round);
+        env.events().publish((symbol_short!("RndStart"),), id);
+        Ok(id)
+    }
+
+    pub fn submit_update(
+        env: Env,
+        participant: Address,
+        round_id: u64,
+        update_hash: BytesN<32>,
+        num_samples: u32,
+    ) -> Result<bool, Error> {
+        participant.require_auth();
+
+        let mut round: FederatedRound = env
+            .storage()
+            .instance()
+            .get(&DataKey::Round(round_id))
+            .ok_or(Error::RoundNotFound)?;
+
+        if round.is_finalized {
+            return Err(Error::RoundFinalized);
+        }
+
+        let key = DataKey::ParticipantUpdate(round_id, participant.clone());
+        if env.storage().instance().has(&key) {
+            return Err(Error::DuplicateUpdate);
+        }
+
+        let update = ParticipantUpdateMeta {
+            round_id,
+            participant: participant.clone(),
+            update_hash,
+            num_samples,
+        };
+
+        env.storage().instance().set(&key, &update);
+
+        round.total_updates = round.total_updates.saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
+
+        env.events()
+            .publish((symbol_short!("UpdSubmit"),), (round_id, participant));
+
         Ok(true)
     }
 
     /// Execute an AI model (Mock implementation)
     pub fn execute_model(
         env: Env,
-        model_id: BytesN<32>,
-        input_data: String,
-    ) -> Result<ModelExecutionResult, Error> {
-        if input_data.len() == 0 {
-            return Err(Error::InvalidInput);
+        caller: Address,
+        round_id: u64,
+        new_model_id: BytesN<32>,
+        description: String,
+        metrics_ref: String,
+        fairness_report_ref: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let mut round: FederatedRound = env
+            .storage()
+            .instance()
+            .get(&DataKey::Round(round_id))
+            .ok_or(Error::RoundNotFound)?;
+
+        if round.is_finalized {
+            return Err(Error::RoundFinalized);
         }
 
-        let result = ModelExecutionResult {
-            model_id,
-            timestamp: env.ledger().timestamp(),
-            output: String::from_str(&env, "Positive detection"),
-            confidence_score: 9500, // 95.00%
-            used_gas: 1000,
+        if round.total_updates < round.min_participants {
+            return Err(Error::NotEnoughParticipants);
+        }
+
+        round.is_finalized = true;
+        round.finalized_at = env.ledger().timestamp();
+        env.storage()
+            .instance()
+            .set(&DataKey::Round(round_id), &round);
+
+        let metadata = ModelMetadata {
+            model_id: new_model_id.clone(),
+            round_id,
+            description,
+            metrics_ref,
+            fairness_report_ref,
+            created_at: round.finalized_at,
         };
 
-        // Emit event
-        env.events()
-            .publish((Symbol::new(&env, "ModelExecuted"),), (result.clone(),));
+        env.storage()
+            .instance()
+            .set(&DataKey::Model(new_model_id.clone()), &metadata);
 
-        Ok(result)
+        env.events()
+            .publish((symbol_short!("RndFinal"),), (round_id, new_model_id));
+
+        Ok(true)
+    }
+
+    pub fn get_round(env: Env, round_id: u64) -> Option<FederatedRound> {
+        env.storage().instance().get(&DataKey::Round(round_id))
+    }
+
+    pub fn get_model(env: Env, model_id: BytesN<32>) -> Option<ModelMetadata> {
+        env.storage().instance().get(&DataKey::Model(model_id))
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "testutils"))]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     // Fixed: Removed unused import Address as _
@@ -72,12 +249,48 @@ mod test {
         let contract_id = env.register_contract(None, AIAnalyticsContract);
         let client = AIAnalyticsContractClient::new(&env, &contract_id);
 
-        let model_id = BytesN::from_array(&env, &[0u8; 32]);
-        let input = String::from_str(&env, "patient_vitals_json");
+        let admin = Address::generate(&env);
+        let participant1 = Address::generate(&env);
+        let participant2 = Address::generate(&env);
 
-        let result = client.execute_model(&model_id, &input);
+        // Soroban contract clients auto-unwrap Result types
+        client.mock_all_auths().initialize(&admin);
 
-        assert_eq!(result.confidence_score, 9500);
-        assert_eq!(result.output, String::from_str(&env, "Positive detection"));
+        let base_model = BytesN::from_array(&env, &[1u8; 32]);
+        let round_id = client
+            .mock_all_auths()
+            .start_round(&admin, &base_model, &2u32, &1u32);
+
+        let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
+        let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
+
+        assert!(client.mock_all_auths().submit_update(
+            &participant1,
+            &round_id,
+            &update_hash1,
+            &10u32
+        ));
+        assert!(client.mock_all_auths().submit_update(
+            &participant2,
+            &round_id,
+            &update_hash2,
+            &20u32
+        ));
+
+        let new_model = BytesN::from_array(&env, &[4u8; 32]);
+        assert!(client.mock_all_auths().finalize_round(
+            &admin,
+            &round_id,
+            &new_model,
+            &String::from_str(&env, "Test model"),
+            &String::from_str(&env, "ipfs://metrics"),
+            &String::from_str(&env, "ipfs://fairness"),
+        ));
+
+        let stored_round = client.get_round(&round_id).unwrap();
+        assert!(stored_round.is_finalized);
+
+        let stored_model = client.get_model(&new_model).unwrap();
+        assert_eq!(stored_model.round_id, round_id);
     }
 }

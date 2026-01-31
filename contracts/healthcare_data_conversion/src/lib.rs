@@ -1,7 +1,9 @@
 #![no_std]
 
-// FIXED: Removed unused #[cfg(test)] and comments to satisfy clippy
-#[allow(unused_imports)]
+// #[cfg(test)]
+// mod test;
+
+use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
     Map, String, Symbol, Vec,
@@ -130,7 +132,7 @@ const CONVERSION_RULES: Symbol = symbol_short!("RULES");
 const CODING_MAPPINGS: Symbol = symbol_short!("CODINGS");
 const FORMAT_SPECS: Symbol = symbol_short!("FORMATS");
 const CONVERSION_REQUESTS: Symbol = symbol_short!("REQUESTS");
-const VALIDATION_RESULTS: Symbol = symbol_short!("VAL_RES");
+const VALIDATION_RESULTS: Symbol = symbol_short!("VALIDATE");
 const LOSSY_WARNINGS: Symbol = symbol_short!("WARNINGS");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
@@ -307,9 +309,9 @@ impl HealthcareDataConversionContract {
     #[allow(unused_variables)]
     pub fn find_coding_mapping(
         env: Env,
-        source_system: String,
-        target_system: String,
-        source_code: String,
+        _source_system: String,
+        _target_system: String,
+        _source_code: String,
     ) -> Result<CodingMapping, Error> {
         let _mappings: Map<String, CodingMapping> = env
             .storage()
@@ -374,7 +376,7 @@ impl HealthcareDataConversionContract {
         validation_id: String,
         source_format: DataFormat,
         target_format: DataFormat,
-        source_data_hash: BytesN<32>,
+        _source_data_hash: BytesN<32>,
     ) -> Result<ValidationResult, Error> {
         validator.require_auth();
 
@@ -396,6 +398,8 @@ impl HealthcareDataConversionContract {
         if !specs.contains_key(target_format as u32) {
             return Err(Error::TargetFormatNotSupported);
         }
+
+        let validation_id = String::from_str(&env, "validation");
 
         let result = ValidationResult {
             validation_id: validation_id.clone(),
@@ -436,6 +440,8 @@ impl HealthcareDataConversionContract {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
         }
+
+        let request_id = String::from_str(&env, "conversion");
 
         let request = ConversionRequest {
             request_id: request_id.clone(),

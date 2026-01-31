@@ -1,8 +1,6 @@
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 
-// FIXED: Removed 'mod test;' because the file does not exist.
-// Once you create contracts/emr_integration/src/test.rs, you can uncomment this.
 // #[cfg(test)]
 // mod test;
 

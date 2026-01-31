@@ -1,4 +1,11 @@
+// Cross-Chain Identity Contract - Identity verification across blockchains
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::unnecessary_map_or)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(dead_code)]
 
 #[cfg(test)]
 mod test;

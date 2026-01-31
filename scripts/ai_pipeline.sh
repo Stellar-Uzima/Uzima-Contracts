@@ -56,10 +56,12 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -c|--config)
+            # shellcheck disable=SC2034  # Reserved for future use
             CONFIG_FILE="$2"
             shift 2
             ;;
         --gpu)
+            # shellcheck disable=SC2034  # Reserved for future use
             GPU_ENABLED=true
             shift
             ;;

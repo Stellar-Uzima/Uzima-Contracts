@@ -1,5 +1,14 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Map, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Vec};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    NotInitialized = 1,
+    NotArbiter = 2,
+    DisputeNotFound = 3,
+}
 
 #[contract]
 pub struct DisputeResolution;
@@ -31,22 +40,27 @@ impl DisputeResolution {
 
     // Arbiters can resolve the dispute.
     // valid_proposal = true (clear dispute), false (kill proposal)
-    pub fn resolve(env: Env, proposal_id: u64, arbiter: Address, valid_proposal: bool) {
+    pub fn resolve(
+        env: Env,
+        proposal_id: u64,
+        arbiter: Address,
+        valid_proposal: bool,
+    ) -> Result<(), Error> {
         arbiter.require_auth();
         let arbiters: Vec<Address> = env
             .storage()
             .instance()
             .get(&symbol_short!("arbiters"))
-            .unwrap();
+            .ok_or(Error::NotInitialized)?;
         if !arbiters.contains(&arbiter) {
-            panic!("not arbiter");
+            return Err(Error::NotArbiter);
         }
 
         let mut disputes: Map<u64, bool> = env
             .storage()
             .persistent()
             .get(&symbol_short!("disputes"))
-            .unwrap();
+            .ok_or(Error::DisputeNotFound)?;
 
         if valid_proposal {
             disputes.remove(proposal_id); // Remove dispute, allow execution
@@ -57,6 +71,7 @@ impl DisputeResolution {
         env.storage()
             .persistent()
             .set(&symbol_short!("disputes"), &disputes);
+        Ok(())
     }
 
     pub fn is_disputed(env: Env, proposal_id: u64) -> bool {

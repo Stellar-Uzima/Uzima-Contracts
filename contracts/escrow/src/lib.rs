@@ -1,8 +1,28 @@
 #![no_std]
+#![allow(clippy::needless_borrow)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
+    Vec,
 };
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    InvalidFeeBps = 1,
+    FeeNotSet = 2,
+    InvalidAmount = 3,
+    EscrowExists = 4,
+    EscrowNotFound = 5,
+    AlreadySettled = 6,
+    InsufficientApprovals = 7,
+    NoBasisToRefund = 8,
+    NoCredit = 9,
+    ReentrancyGuard = 10,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -33,16 +53,17 @@ const CREDITS: Symbol = symbol_short!("credits");
 #[contract]
 pub struct EscrowContract;
 
-fn require_not_reentrant(env: &Env) {
+fn require_not_reentrant(env: &Env) -> Result<(), Error> {
     let locked: bool = env
         .storage()
         .temporary()
         .get(&REENTRANCY_LOCK)
         .unwrap_or(false);
     if locked {
-        panic!("ReentrancyGuard: reentrant call");
+        return Err(Error::ReentrancyGuard);
     }
     env.storage().temporary().set(&REENTRANCY_LOCK, &true);
+    Ok(())
 }
 
 fn clear_reentrancy(env: &Env) {
@@ -57,23 +78,28 @@ fn add_credit(env: &Env, addr: &Address, delta: i128) {
         // FIXED: Removed redundant borrow &env -> env
         .unwrap_or(Map::new(env));
     let current = credits.get(addr.clone()).unwrap_or(0);
-    let new_bal = current + delta;
+    let new_bal = current.saturating_add(delta);
     credits.set(addr.clone(), new_bal);
     env.storage().persistent().set(&CREDITS, &credits);
 }
 
 #[contractimpl]
 impl EscrowContract {
-    pub fn set_fee_config(env: Env, fee_receiver: Address, platform_fee_bps: u32) {
+    pub fn set_fee_config(
+        env: Env,
+        fee_receiver: Address,
+        platform_fee_bps: u32,
+    ) -> Result<(), Error> {
         // basic bounds: <= 10000 bps
         if platform_fee_bps > 10_000 {
-            panic!("Invalid fee bps");
+            return Err(Error::InvalidFeeBps);
         }
         let conf = FeeConfig {
             fee_receiver,
             platform_fee_bps,
         };
         env.storage().persistent().set(&FEE_CONF, &conf);
+        Ok(())
     }
 
     pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
@@ -87,10 +113,10 @@ impl EscrowContract {
         payee: Address,
         amount: i128,
         token: Address,
-    ) -> bool {
+    ) -> Result<bool, Error> {
         // effects: write escrow record, no external calls here
         if amount <= 0 {
-            panic!("Invalid amount");
+            return Err(Error::InvalidAmount);
         }
         let mut escrows: Map<u64, Escrow> = env
             .storage()
@@ -98,7 +124,7 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         if escrows.contains_key(order_id) {
-            panic!("Escrow exists");
+            return Err(Error::EscrowExists);
         }
 
         let approvals = Vec::new(&env);
@@ -119,33 +145,34 @@ impl EscrowContract {
         // event
         let topics = (symbol_short!("EscNew"), order_id);
         env.events().publish(topics, (payer, payee, amount, token));
-        true
+        Ok(true)
     }
 
-    pub fn mark_disputed(env: Env, order_id: u64) {
+    pub fn mark_disputed(env: Env, order_id: u64) -> Result<(), Error> {
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
-        let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
+        let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
         e.disputed = true;
         escrows.set(order_id, e.clone());
         env.storage().persistent().set(&ESCROWS, &escrows);
         env.events()
             .publish((symbol_short!("EscDisput"), order_id), ());
+        Ok(())
     }
 
-    pub fn approve_release(env: Env, order_id: u64, approver: Address) {
+    pub fn approve_release(env: Env, order_id: u64, approver: Address) -> Result<(), Error> {
         // add unique approval; off-chain oracle/admins can be approvers
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
-        let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
+        let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
         if e.released || e.refunded {
-            panic!("Already settled");
+            return Err(Error::AlreadySettled);
         }
         let mut approvals = e.approvals.clone();
         if !approvals.contains(&approver) {
@@ -154,29 +181,30 @@ impl EscrowContract {
         e.approvals = approvals;
         escrows.set(order_id, e);
         env.storage().persistent().set(&ESCROWS, &escrows);
+        Ok(())
     }
 
-    pub fn release_escrow(env: Env, order_id: u64) -> bool {
-        require_not_reentrant(&env);
+    pub fn release_escrow(env: Env, order_id: u64) -> Result<bool, Error> {
+        require_not_reentrant(&env)?;
         // checks
         let fee_conf: FeeConfig = env
             .storage()
             .persistent()
             .get(&FEE_CONF)
-            .unwrap_or_else(|| panic!("Fee not set"));
+            .ok_or(Error::FeeNotSet)?;
 
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
-        let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
+        let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
         if e.released || e.refunded {
-            panic!("Already settled");
+            return Err(Error::AlreadySettled);
         }
         // simple threshold: at least 2 approvals (payer + oracle/admin)
         if e.approvals.len() < 2 {
-            panic!("Insufficient approvals");
+            return Err(Error::InsufficientApprovals);
         }
 
         // effects: mark released and record owed balances (pull-payment)
@@ -185,9 +213,8 @@ impl EscrowContract {
         env.storage().persistent().set(&ESCROWS, &escrows);
 
         // interactions: credit balances via pull-payment pattern
-        // FIXED: Removed unnecessary cast (e.amount as i128)
-        let fee = e.amount * (fee_conf.platform_fee_bps as i128) / 10_000;
-        let provider_amount = e.amount - fee;
+        let fee = (e.amount as i128).saturating_mul(fee_conf.platform_fee_bps as i128) / 10_000;
+        let provider_amount = e.amount.saturating_sub(fee);
         add_credit(&env, &e.payee, provider_amount);
         add_credit(&env, &fee_conf.fee_receiver, fee);
         env.events().publish(
@@ -202,24 +229,23 @@ impl EscrowContract {
         );
 
         clear_reentrancy(&env);
-        true
+        Ok(true)
     }
 
-    pub fn refund_escrow(env: Env, order_id: u64) -> bool {
-        require_not_reentrant(&env);
+    pub fn refund_escrow(env: Env, order_id: u64) -> Result<bool, Error> {
+        require_not_reentrant(&env)?;
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
-        let mut e = escrows.get(order_id).unwrap_or_else(|| panic!("Not found"));
+        let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
         if e.released || e.refunded {
-            panic!("Already settled");
+            return Err(Error::AlreadySettled);
         }
         // require at least one approval (oracle/admin) or disputed flag
-        // FIXED: Changed len() == 0 to is_empty()
         if e.approvals.is_empty() && !e.disputed {
-            panic!("No basis to refund");
+            return Err(Error::NoBasisToRefund);
         }
 
         e.refunded = true;
@@ -233,7 +259,7 @@ impl EscrowContract {
             (e.payer, e.amount, e.token),
         );
         clear_reentrancy(&env);
-        true
+        Ok(true)
     }
 
     pub fn get_escrow(env: Env, order_id: u64) -> Option<Escrow> {
@@ -254,8 +280,8 @@ impl EscrowContract {
         credits.get(addr).unwrap_or(0)
     }
 
-    pub fn withdraw(env: Env, token: Address, to: Address) -> i128 {
-        require_not_reentrant(&env);
+    pub fn withdraw(env: Env, token: Address, to: Address) -> Result<i128, Error> {
+        require_not_reentrant(&env)?;
         let mut credits: Map<Address, i128> = env
             .storage()
             .persistent()
@@ -263,18 +289,19 @@ impl EscrowContract {
             .unwrap_or(Map::new(&env));
         let amount = credits.get(to.clone()).unwrap_or(0);
         if amount <= 0 {
-            panic!("No credit");
+            return Err(Error::NoCredit);
         }
         credits.set(to.clone(), 0);
         env.storage().persistent().set(&CREDITS, &credits);
         env.events()
             .publish((symbol_short!("Withdrawn"),), (to.clone(), amount, token));
         clear_reentrancy(&env);
-        amount
+        Ok(amount)
     }
 }
 
 #[cfg(all(test, feature = "testutils"))]
+#[allow(clippy::unwrap_used)]
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
@@ -289,6 +316,7 @@ mod test {
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
         let token = Address::generate(&env);
+        // Soroban contract clients auto-unwrap Result types
         client.set_fee_config(&Address::generate(&env), &250u32); // 2.5%
 
         assert!(client.create_escrow(&1u64, &payer, &payee, &1000i128, &token));
@@ -299,9 +327,6 @@ mod test {
         assert!(e.released);
         // credits: payee 975, fee 25
         let payee_credit = client.get_credit(&payee);
-        let _fee_credit = client.get_credit(&Address::generate(&env)); // not the same; need fee receiver used above
-                                                                       // Retrieve exact fee receiver credit
-                                                                       // We can't read fee receiver here; just assert payee credit equals expected
         assert_eq!(payee_credit, 975);
     }
 

@@ -1,7 +1,7 @@
 #![no_std]
-#![allow(clippy::too_many_arguments)] // Global allow to fix macro expansion issues
+#![allow(clippy::too_many_arguments)]
+#![allow(dead_code)]
 
-// FIXED: Commented out 'mod test;' because the file contracts/fhir_integration/src/test.rs does not exist.
 // #[cfg(test)]
 // mod test;
 
@@ -31,20 +31,27 @@ pub enum FHIRResourceType {
 }
 
 /// FHIR Coding System (standard healthcare coding systems)
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CodingSystem {
-    ICD10 = 0,
-    ICD9 = 1,
-    CPT = 2,
-    SNOMEDCT = 3,
-    LOINC = 4,
-    RxNorm = 5,
-    Custom = 6,
+    /// ICD-10 - International Classification of Diseases
+    ICD10,
+    /// ICD-9 - Legacy diagnosis codes
+    ICD9,
+    /// CPT - Current Procedural Terminology
+    CPT,
+    /// SNOMED CT - Clinical coding terminology
+    SNOMEDCT,
+    /// LOINC - Laboratory codes
+    LOINC,
+    /// RxNorm - Medications
+    RxNorm,
+    /// HL7 Custom
+    Custom,
 }
 
 /// FHIR Code structure (coding + text)
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub struct FHIRCode {
     pub system: CodingSystem,
@@ -657,7 +664,6 @@ impl FHIRIntegrationContract {
             return Err(Error::NotAuthorized);
         }
 
-        // Key is tuple of (source_system, source_field) instead of format!
         let mut mappings: Map<(String, String), DataMapping> = env
             .storage()
             .persistent()

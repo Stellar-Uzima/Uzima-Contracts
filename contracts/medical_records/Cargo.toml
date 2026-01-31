@@ -14,11 +14,6 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-# Add these lines to fix the "unresolved import" errors
-federated_learning = { path = "../federated_learning" }
-anomaly_detection = { path = "../anomaly_detection" }
-predictive_analytics = { path = "../predictive_analytics" }
-explainable_ai = { path = "../explainable_ai" }
 
 [features]
 default = []

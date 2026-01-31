@@ -16,8 +16,8 @@
 pub mod erc2771_context;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Bytes, BytesN, Env, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    Vec,
 };
 
 // ============================================================================
@@ -34,6 +34,8 @@ pub enum Error {
     ExecutionFailed = 4,
     Unauthorized = 5,
     AlreadyInitialized = 6,
+    OwnerNotSet = 7,
+    BatchLengthMismatch = 8,
 }
 
 // ============================================================================
@@ -204,14 +206,14 @@ impl MetaTxForwarder {
 
         // Verify same length
         if requests.len() != signatures.len() {
-            panic_with_error!(&env, Error::InvalidSignature);
+            return Err(Error::BatchLengthMismatch);
         }
 
         let mut results = Vec::new(&env);
 
         for i in 0..requests.len() {
-            let request = requests.get(i).unwrap();
-            let signature = signatures.get(i).unwrap();
+            let request = requests.get(i).ok_or(Error::InvalidSignature)?;
+            let signature = signatures.get(i).ok_or(Error::InvalidSignature)?;
 
             // Execute each request
             let result = Self::execute(env.clone(), relayer.clone(), request, signature)?;
@@ -241,7 +243,11 @@ impl MetaTxForwarder {
         owner.require_auth();
 
         // Verify caller is owner
-        let stored_owner: Address = env.storage().instance().get(&DataKey::Owner).unwrap();
+        let stored_owner: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owner)
+            .ok_or(Error::OwnerNotSet)?;
 
         if owner != stored_owner {
             return Err(Error::Unauthorized);
@@ -277,7 +283,11 @@ impl MetaTxForwarder {
         owner.require_auth();
 
         // Verify caller is owner
-        let stored_owner: Address = env.storage().instance().get(&DataKey::Owner).unwrap();
+        let stored_owner: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owner)
+            .ok_or(Error::OwnerNotSet)?;
 
         if owner != stored_owner {
             return Err(Error::Unauthorized);
@@ -379,9 +389,10 @@ impl MetaTxForwarder {
             .get(&DataKey::Nonce(user.clone()))
             .unwrap_or(0);
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Nonce(user.clone()), &(current_nonce + 1));
+        env.storage().persistent().set(
+            &DataKey::Nonce(user.clone()),
+            &(current_nonce.saturating_add(1)),
+        );
     }
 
     /// Verify and increment user nonce (deprecated - use verify_nonce + increment_nonce)

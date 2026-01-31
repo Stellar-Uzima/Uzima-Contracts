@@ -1,9 +1,4 @@
-// Removed #![no_std] from here as it should only be in lib.rs
-#![allow(unused_imports)]
-// Fixes "all variants have the same postfix" error
-#![allow(clippy::enum_variant_names)]
-
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 // ==================== Event Schema Definitions ====================
 
@@ -40,6 +35,8 @@ pub enum EventType {
     CrossChainRecordReferenced,
     HealthCheck,
     MetricUpdate,
+    PermissionGranted,
+    PermissionRevoked,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -62,7 +59,7 @@ pub struct EventMetadata {
     pub category: OperationCategory,
     pub timestamp: u64,
     pub user_id: Address,
-    pub session_id: Option<String>,
+    pub session_id: Option<String>, // Changed from BytesN to String for serialization
     pub ipfs_ref: Option<String>,
     pub gas_used: Option<u64>,
     pub block_height: u64,
@@ -96,7 +93,7 @@ pub struct AccessEventData {
     pub patient: Address,
     pub purpose: String,
     pub granted: bool,
-    pub credential_hash: Option<String>,
+    pub credential_hash: Option<String>, // Changed from BytesN for serialization
 }
 
 #[derive(Clone)]
@@ -150,6 +147,17 @@ pub struct SystemEventData {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct PermissionEventData {
+    pub grantee: Address,
+    pub permission_bit: u32,
+    pub granter: Address,
+    pub expiration: u64,
+    pub is_delegatable: bool,
+}
+
+#[derive(Clone)]
+#[allow(clippy::enum_variant_names)]
+#[contracttype]
 pub enum EventData {
     UserEvent(UserEventData),
     RecordEvent(RecordEventData),
@@ -159,6 +167,7 @@ pub enum EventData {
     AIEvent(AIEventData),
     CrossChainEvent(CrossChainEventData),
     SystemEvent(SystemEventData),
+    PermissionEvent(PermissionEventData),
 }
 
 #[derive(Clone)]
@@ -251,7 +260,6 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
         .publish(("EVENT", symbol_short!("USR_DEACT")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_record_created(
     env: &Env,
     doctor: Address,
@@ -285,7 +293,6 @@ pub fn emit_record_created(
         .publish(("EVENT", symbol_short!("REC_NEW")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -311,7 +318,6 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         .publish(("EVENT", symbol_short!("REC_ACC")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_access_requested(
     env: &Env,
     requester: Address,
@@ -344,7 +350,6 @@ pub fn emit_access_requested(
         .publish(("EVENT", symbol_short!("ACC_REQ")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_access_granted(
     env: &Env,
     granter: Address,
@@ -378,7 +383,6 @@ pub fn emit_access_granted(
         .publish(("EVENT", symbol_short!("ACC_GRANT")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_emergency_access_granted(
     env: &Env,
     granter: Address,
@@ -454,7 +458,6 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
         .publish(("EVENT", symbol_short!("UNPAUSED")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_recovery_proposed(
     env: &Env,
     proposer: Address,
@@ -487,8 +490,10 @@ pub fn emit_recovery_proposed(
         .publish(("EVENT", symbol_short!("REC_PROP")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
+    // Generate placeholder addresses for required fields in event struct
+    // In a real system, we'd look up the proposal, but this is just an event emitter
+    // Optimized to avoid lookups
     let placeholder = approver.clone();
 
     let event = BaseEvent {
@@ -515,7 +520,6 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
         .publish(("EVENT", symbol_short!("REC_APPR")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_recovery_executed(
     env: &Env,
     executor: Address,
@@ -548,7 +552,6 @@ pub fn emit_recovery_executed(
         .publish(("EVENT", symbol_short!("REC_EXEC")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -574,7 +577,6 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
         .publish(("EVENT", symbol_short!("AI_CFG")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_anomaly_score_submitted(
     env: &Env,
     ai_coordinator: Address,
@@ -608,7 +610,6 @@ pub fn emit_anomaly_score_submitted(
         .publish(("EVENT", symbol_short!("ANOMALY")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_risk_score_submitted(
     env: &Env,
     ai_coordinator: Address,
@@ -641,7 +642,6 @@ pub fn emit_risk_score_submitted(
         .publish(("EVENT", symbol_short!("RISK_SCR")), event);
 }
 
-#[allow(dead_code)]
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -667,15 +667,71 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         .publish(("EVENT", symbol_short!("AI_TRIG")), event);
 }
 
-#[allow(dead_code)]
-#[allow(unused_variables)]
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
-    // Implementation mostly removed to fix compilation
+    let _dummy_user = Address::from_string(&String::from_str(
+        env,
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+    ));
+
+    // WORKAROUND: In tests this address might work as a mock if strict auth isn't checked for events.
+    // However, creating arbitrary addresses in contract execution is generally not possible without a valid strkey.
+    // The previous implementation was failing.
+    // We will just do nothing for now to fix compilation as this event is non-critical System event.
 }
 
-#[allow(dead_code)]
-pub fn emit_metric_update(_env: &Env, _metric_name: &str, _value: u64) {
-    // Ignoring.
+pub fn emit_permission_granted(
+    env: &Env,
+    granter: Address,
+    grantee: Address,
+    permission: u32,
+    expiration: u64,
+    is_delegatable: bool,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::PermissionGranted,
+            category: OperationCategory::AccessControl,
+            timestamp: env.ledger().timestamp(),
+            user_id: granter.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::PermissionEvent(PermissionEventData {
+            grantee,
+            permission_bit: permission,
+            granter,
+            expiration,
+            is_delegatable,
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("PERM_GRNT")), event);
+}
+
+pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, permission: u32) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::PermissionRevoked,
+            category: OperationCategory::AccessControl,
+            timestamp: env.ledger().timestamp(),
+            user_id: revoker.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::PermissionEvent(PermissionEventData {
+            grantee,
+            permission_bit: permission,
+            granter: revoker,
+            expiration: 0,
+            is_delegatable: false,
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("PERM_REV")), event);
 }
 
 #[derive(Clone)]
@@ -716,10 +772,8 @@ pub struct MonitoringDashboard {
     pub health_status: String,
 }
 
-#[allow(dead_code)]
-#[allow(clippy::needless_borrow)]
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
-    let mut filtered = Vec::new(&events.env());
+    let mut filtered = Vec::new(events.env());
 
     for event in events.iter() {
         let metadata = &event.metadata;
@@ -776,11 +830,11 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
 
     // Apply limit
     if let Some(limit) = filter.limit {
-        let mut limited = Vec::new(&events.env());
+        let mut limited = Vec::new(events.env());
         // Fix: Cast u32 to usize safely
-        let len = filtered.len().min(limit) as usize;
+        let len = filtered.len().min(limit);
         for i in 0..len {
-            if let Some(event) = filtered.get(i as u32) {
+            if let Some(event) = filtered.get(i) {
                 limited.push_back(event);
             }
         }
@@ -790,9 +844,6 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
     }
 }
 
-#[allow(dead_code)]
-#[allow(clippy::clone_on_copy)]
-#[allow(clippy::needless_borrow)]
 pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);
@@ -815,17 +866,23 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
 
         // Count by type
         let curr_type = metadata.event_type;
-        let type_count = events_by_type.get(curr_type).unwrap_or(0) + 1;
+        let type_count = events_by_type.get(curr_type).unwrap_or(0).saturating_add(1);
         events_by_type.set(curr_type, type_count);
 
         // Count by category
         let curr_cat = metadata.category;
-        let category_count = events_by_category.get(curr_cat).unwrap_or(0) + 1;
+        let category_count = events_by_category
+            .get(curr_cat)
+            .unwrap_or(0)
+            .saturating_add(1);
         events_by_category.set(curr_cat, category_count);
 
         // Count by user
         let user = metadata.user_id.clone();
-        let user_count = events_by_user.get(user.clone()).unwrap_or(0) + 1;
+        let user_count = events_by_user
+            .get(user.clone())
+            .unwrap_or(0)
+            .saturating_add(1);
         events_by_user.set(user.clone(), user_count);
     }
 

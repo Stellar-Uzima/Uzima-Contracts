@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 use crate::{
     AtomicTxStatus, ChainId, CrossChainBridgeContract, CrossChainBridgeContractClient, Error,
     MessageStatus, MessageType, SyncStatus,

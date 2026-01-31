@@ -1,8 +1,11 @@
+// Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
-#![allow(clippy::too_many_arguments)] // FIXED: Global allow for Soroban contract functions
-
-#[cfg(test)]
-mod test;
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Map,
@@ -260,14 +263,162 @@ impl TreasuryControllerContract {
     fn require_signer(env: &Env, signer: &Address) -> Result<(), Error> {
         let signers: Vec<Address> = env
             .storage()
-            .persistent()
-            .get(&SIGNERS)
-            .ok_or(Error::InvalidConfig)?;
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
 
-        if signers.contains(signer) {
-            Ok(())
-        } else {
-            Err(Error::NotAuthorized)
+        // Only admin can resume operations
+        if caller != config.admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        config.emergency_halted = false;
+        env.storage().instance().set(&DataKey::Config, &config);
+
+        // Emit resume event
+        env.events().publish((symbol_short!("RESUMED"),), caller);
+
+        Ok(())
+    }
+
+    // === View Functions ===
+
+    /// Get treasury configuration
+    pub fn get_config(env: Env) -> TreasuryConfig {
+        env.storage().instance().get(&DataKey::Config).unwrap()
+    }
+
+    /// Get proposal details
+    pub fn get_proposal(env: Env, proposal_id: u64) -> TreasuryProposal {
+        let proposals: Map<u64, TreasuryProposal> =
+            env.storage().persistent().get(&DataKey::Proposals).unwrap();
+
+        proposals.get(proposal_id).unwrap()
+    }
+
+    /// Get total number of proposals
+    pub fn get_proposal_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ProposalCount)
+            .unwrap_or(0)
+    }
+
+    /// Check if proposal is ready for execution
+    pub fn is_proposal_executable(env: Env, proposal_id: u64) -> bool {
+        let proposals: Map<u64, TreasuryProposal> =
+            match env.storage().persistent().get(&DataKey::Proposals) {
+                Some(p) => p,
+                None => return false,
+            };
+
+        let proposal = match proposals.get(proposal_id) {
+            Some(p) => p,
+            None => return false,
+        };
+
+        let config: TreasuryConfig = match env.storage().instance().get(&DataKey::Config) {
+            Some(c) => c,
+            None => return false,
+        };
+
+        if !matches!(proposal.status, ProposalStatus::Approved) {
+            return false;
+        }
+
+        let current_time = env.ledger().timestamp();
+
+        // Check timelock
+        if current_time < proposal.timelock_end {
+            return false;
+        }
+
+        // Check expiry
+        if current_time > proposal.created_at + PROPOSAL_EXPIRY {
+            return false;
+        }
+
+        // Check if emergency halted
+        if config.emergency_halted {
+            return false;
+        }
+
+        true
+    }
+
+    // === Gnosis Safe Compatibility Interface ===
+
+    /// Get threshold for Gnosis Safe compatibility
+    pub fn gnosis_get_threshold(env: Env) -> u32 {
+        let config = Self::get_config(env);
+        config.multisig_config.threshold
+    }
+
+    /// Get owners for Gnosis Safe compatibility
+    pub fn gnosis_get_owners(env: Env) -> Vec<Address> {
+        let config = Self::get_config(env);
+        config.multisig_config.signers
+    }
+
+    // === Private Helper Functions ===
+
+    /// Execute token transfer using standard transfer interface
+    fn execute_token_transfer(
+        env: &Env,
+        token_contract: &Address,
+        from: &Address,
+        to: &Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        // Use env.invoke_contract to call the token's transfer function
+        let result: Result<(), soroban_sdk::InvokeError> = env.invoke_contract(
+            token_contract,
+            &Symbol::new(env, "transfer"),
+            soroban_sdk::vec![
+                env,
+                from.into_val(env),
+                to.into_val(env),
+                amount.into_val(env)
+            ],
+        );
+
+        // Convert invoke error to our custom error
+        match result {
+            Ok(_) => Ok(()),
+            Err(_) => Err(Error::TransferFailed),
         }
     }
+
+    /// Allows the Governor/Timelock (Admin) to execute transfers immediately
+    /// Bypassing the multisig process.
+    pub fn governance_execute(
+        env: Env,
+        token_contract: Address,
+        to: Address,
+        amount: i128,
+    ) -> Result<(), Error> {
+        let config: TreasuryConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
+
+        // strictly require admin auth (The Governor Contract)
+        config.admin.require_auth();
+
+        Self::execute_token_transfer(
+            &env,
+            &token_contract,
+            &env.current_contract_address(),
+            &to,
+            amount,
+        )?;
+
+        env.events()
+            .publish((symbol_short!("GOV_EXEC"),), (to, amount));
+        Ok(())
+    }
 }
+
+#[cfg(test)]
+mod test;
