@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(unused_variables)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::too_many_arguments)]
 
