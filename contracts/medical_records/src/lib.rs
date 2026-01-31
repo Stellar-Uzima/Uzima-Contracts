@@ -732,6 +732,9 @@ impl MedicalRecordsContract {
 
     // The Main Upgrade Function
     // Updates WASM code and migrates data atomically.
+   // The Main Upgrade Function
+    // Updates WASM code and migrates data atomically.
+    #[allow(clippy::panic)] // <--- THIS IS THE FIX
     pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
         // A. Security Check
         caller.require_auth();
