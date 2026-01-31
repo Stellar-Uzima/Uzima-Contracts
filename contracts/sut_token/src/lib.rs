@@ -616,7 +616,11 @@ impl SutToken {
         Ok(())
     }
 
-    fn update_checkpoint(env: &Env, user: &Address, balance_before_change: i128) -> Result<(), Error> {
+    fn update_checkpoint(
+        env: &Env,
+        user: &Address,
+        balance_before_change: i128,
+    ) -> Result<(), Error> {
         let current_snapshot_count: u32 = env
             .storage()
             .instance()

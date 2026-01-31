@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    String, Symbol, Vec,
+};
 
 // =============================================================================
 // Types
@@ -125,7 +128,11 @@ impl MPCManager {
         if ttl_secs == 0 {
             return Err(Error::InvalidInput);
         }
-        if env.storage().persistent().has(&DataKey::Session(session_id.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Session(session_id.clone()))
+        {
             return Err(Error::InvalidInput);
         }
 
@@ -149,7 +156,9 @@ impl MPCManager {
             proof_hash: zero_hash,
         };
 
-        env.storage().persistent().set(&DataKey::Session(session_id.clone()), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id.clone()), &session);
         env.events().publish(
             (symbol_short!("mpc"), symbol_short!("start")),
             (initiator, session_id),
@@ -183,7 +192,9 @@ impl MPCManager {
         if env.storage().persistent().has(&commit_key) {
             return Err(Error::DuplicateCommit);
         }
-        env.storage().persistent().set(&commit_key, &commitment_hash);
+        env.storage()
+            .persistent()
+            .set(&commit_key, &commitment_hash);
 
         session.commits = session.commits.saturating_add(1);
 
@@ -191,7 +202,9 @@ impl MPCManager {
         if session.commits >= session.threshold {
             session.status = SessionStatus::RevealPhase;
         }
-        env.storage().persistent().set(&DataKey::Session(session_id.clone()), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id.clone()), &session);
 
         env.events().publish(
             (symbol_short!("mpc"), symbol_short!("commit")),
@@ -239,7 +252,9 @@ impl MPCManager {
         env.storage().persistent().set(&reveal_key, &reveal);
 
         session.reveals = session.reveals.saturating_add(1);
-        env.storage().persistent().set(&DataKey::Session(session_id.clone()), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id.clone()), &session);
 
         env.events().publish(
             (symbol_short!("mpc"), symbol_short!("reveal")),
@@ -298,7 +313,9 @@ impl MPCManager {
         session.result_hash = result_hash;
         session.proof_ref = proof_ref;
         session.proof_hash = proof_hash;
-        env.storage().persistent().set(&DataKey::Session(session_id.clone()), &session);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Session(session_id.clone()), &session);
 
         env.events().publish(
             (symbol_short!("mpc"), symbol_short!("final")),
@@ -309,17 +326,34 @@ impl MPCManager {
 
     pub fn get_session(env: Env, session_id: BytesN<32>) -> Result<Option<MPCSession>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Session(session_id)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Session(session_id)))
     }
 
-    pub fn get_commitment(env: Env, session_id: BytesN<32>, participant: Address) -> Result<Option<BytesN<32>>, Error> {
+    pub fn get_commitment(
+        env: Env,
+        session_id: BytesN<32>,
+        participant: Address,
+    ) -> Result<Option<BytesN<32>>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Commit(session_id, participant)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Commit(session_id, participant)))
     }
 
-    pub fn get_reveal(env: Env, session_id: BytesN<32>, participant: Address) -> Result<Option<ShareReveal>, Error> {
+    pub fn get_reveal(
+        env: Env,
+        session_id: BytesN<32>,
+        participant: Address,
+    ) -> Result<Option<ShareReveal>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Reveal(session_id, participant)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Reveal(session_id, participant)))
     }
 
     // -------------------------------------------------------------------------

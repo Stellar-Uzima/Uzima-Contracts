@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    Symbol,
+};
 
 // =============================================================================
 // Types
@@ -113,7 +116,8 @@ impl CryptoRegistry {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&INIT, &true);
 
-        env.events().publish((symbol_short!("crypto"), symbol_short!("init")), admin);
+        env.events()
+            .publish((symbol_short!("crypto"), symbol_short!("init")), admin);
         Ok(())
     }
 
@@ -196,7 +200,11 @@ impl CryptoRegistry {
         Self::require_initialized(&env)?;
 
         let key = DataKey::Bundle(owner.clone(), version);
-        let mut bundle: KeyBundle = env.storage().persistent().get(&key).ok_or(Error::KeyNotFound)?;
+        let mut bundle: KeyBundle = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::KeyNotFound)?;
         if bundle.revoked {
             return Err(Error::KeyAlreadyRevoked);
         }
@@ -233,9 +241,16 @@ impl CryptoRegistry {
         Ok(env.storage().persistent().get(&DataKey::Bundle(owner, v)))
     }
 
-    pub fn get_key_bundle(env: Env, owner: Address, version: u32) -> Result<Option<KeyBundle>, Error> {
+    pub fn get_key_bundle(
+        env: Env,
+        owner: Address,
+        version: u32,
+    ) -> Result<Option<KeyBundle>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Bundle(owner, version)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Bundle(owner, version)))
     }
 
     // -------------------------------------------------------------------------

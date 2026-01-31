@@ -411,7 +411,9 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
         env.storage().persistent().set(&DataKey::RecordCount, &0u64);
-        env.storage().persistent().set(&DataKey::DidAuthLevel, &DIDAuthLevel::None);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DidAuthLevel, &DIDAuthLevel::None);
         env.storage()
             .persistent()
             .set(&DataKey::CrossChainEnabled, &false);
@@ -436,7 +438,12 @@ impl MedicalRecordsContract {
         true
     }
 
-    pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> Result<bool, Error> {
+    pub fn manage_user(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role: Role,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -541,7 +548,9 @@ impl MedicalRecordsContract {
                 Role::Doctor => {
                     if matches!(
                         permission,
-                        Permission::CreateRecord | Permission::ReadRecord | Permission::UpdateRecord
+                        Permission::CreateRecord
+                            | Permission::ReadRecord
+                            | Permission::UpdateRecord
                     ) {
                         return true;
                     }
@@ -724,7 +733,15 @@ impl MedicalRecordsContract {
         Self::append_patient_record(&env, &patient, record_id);
         Self::increment_record_count(&env);
 
-        events::emit_record_created(&env, caller, record_id, patient, is_confidential, category, tags);
+        events::emit_record_created(
+            &env,
+            caller,
+            record_id,
+            patient,
+            is_confidential,
+            category,
+            tags,
+        );
         Ok(record_id)
     }
 
@@ -783,7 +800,15 @@ impl MedicalRecordsContract {
         Self::append_patient_record(&env, &patient, record_id);
         Self::increment_record_count(&env);
 
-        events::emit_record_created(&env, caller, record_id, patient, is_confidential, category, tags);
+        events::emit_record_created(
+            &env,
+            caller,
+            record_id,
+            patient,
+            is_confidential,
+            category,
+            tags,
+        );
         Ok(record_id)
     }
 
@@ -816,13 +841,21 @@ impl MedicalRecordsContract {
 
         validation::validate_purpose(&purpose)?;
 
-        let record: MedicalRecord = match env.storage().persistent().get(&DataKey::Record(record_id)) {
-            Some(r) => r,
-            None => return Ok(None),
-        };
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(r) => r,
+                None => return Ok(None),
+            };
 
         let granted = Self::can_view_record(&env, &caller, &record, record_id);
-        Self::log_access(&env, &record.patient_id, record_id, &caller, &purpose, granted);
+        Self::log_access(
+            &env,
+            &record.patient_id,
+            record_id,
+            &caller,
+            &purpose,
+            granted,
+        );
 
         if !granted {
             return Err(Error::NotAuthorized);
@@ -852,7 +885,10 @@ impl MedicalRecordsContract {
         validation::validate_pagination(page, page_size)?;
 
         // Minimal gating: allow patients, admins, and active doctors to query.
-        if caller != patient && !Self::is_admin(&env, &caller) && !Self::is_active_doctor(&env, &caller) {
+        if caller != patient
+            && !Self::is_admin(&env, &caller)
+            && !Self::is_active_doctor(&env, &caller)
+        {
             return Err(Error::NotAuthorized);
         }
 
@@ -876,9 +912,17 @@ impl MedicalRecordsContract {
         let mut i = start;
         while i < end {
             if let Some(id) = ids.get(i) {
-                if let Some(r) = env.storage().persistent().get::<_, MedicalRecord>(&DataKey::Record(id)) {
+                if let Some(r) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, MedicalRecord>(&DataKey::Record(id))
+                {
                     if Self::can_view_record(&env, &caller, &r, id) {
-                        if let Some(meta) = env.storage().persistent().get::<_, RecordMetadata>(&DataKey::RecordMeta(id)) {
+                        if let Some(meta) = env
+                            .storage()
+                            .persistent()
+                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                        {
                             out.push_back((id, meta));
                         }
                     }
@@ -901,13 +945,19 @@ impl MedicalRecordsContract {
     // Crypto config
     // ---------------------------------------------------------------------
 
-    pub fn set_crypto_registry(env: Env, caller: Address, registry: Address) -> Result<bool, Error> {
+    pub fn set_crypto_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::CryptoRegistry, &registry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CryptoRegistry, &registry);
         Self::log_crypto_event(
             &env,
             &caller,
@@ -923,7 +973,11 @@ impl MedicalRecordsContract {
         env.storage().persistent().get(&DataKey::CryptoRegistry)
     }
 
-    pub fn set_homomorphic_registry(env: Env, caller: Address, registry: Address) -> Result<bool, Error> {
+    pub fn set_homomorphic_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -944,7 +998,9 @@ impl MedicalRecordsContract {
     }
 
     pub fn get_homomorphic_registry(env: Env) -> Option<Address> {
-        env.storage().persistent().get(&DataKey::HomomorphicRegistry)
+        env.storage()
+            .persistent()
+            .get(&DataKey::HomomorphicRegistry)
     }
 
     pub fn set_mpc_manager(env: Env, caller: Address, manager: Address) -> Result<bool, Error> {
@@ -953,7 +1009,9 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::MpcManager, &manager);
+        env.storage()
+            .persistent()
+            .set(&DataKey::MpcManager, &manager);
         Self::log_crypto_event(
             &env,
             &caller,
@@ -969,7 +1027,11 @@ impl MedicalRecordsContract {
         env.storage().persistent().get(&DataKey::MpcManager)
     }
 
-    pub fn set_encryption_required(env: Env, caller: Address, required: bool) -> Result<bool, Error> {
+    pub fn set_encryption_required(
+        env: Env,
+        caller: Address,
+        required: bool,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -996,7 +1058,11 @@ impl MedicalRecordsContract {
             .unwrap_or(false)
     }
 
-    pub fn set_require_pq_envelopes(env: Env, caller: Address, required: bool) -> Result<bool, Error> {
+    pub fn set_require_pq_envelopes(
+        env: Env,
+        caller: Address,
+        required: bool,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -1083,14 +1149,22 @@ impl MedicalRecordsContract {
         Ok(proposal_id)
     }
 
-    pub fn approve_crypto_config_update(env: Env, caller: Address, proposal_id: u64) -> Result<bool, Error> {
+    pub fn approve_crypto_config_update(
+        env: Env,
+        caller: Address,
+        proposal_id: u64,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::CryptoConfigProposal(proposal_id);
-        let mut proposal: CryptoConfigProposal = env.storage().persistent().get(&key).ok_or(Error::RecordNotFound)?;
+        let mut proposal: CryptoConfigProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::RecordNotFound)?;
         if proposal.executed {
             return Err(Error::ProposalAlreadyExecuted);
         }
@@ -1119,14 +1193,22 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn execute_crypto_config_update(env: Env, caller: Address, proposal_id: u64) -> Result<bool, Error> {
+    pub fn execute_crypto_config_update(
+        env: Env,
+        caller: Address,
+        proposal_id: u64,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::CryptoConfigProposal(proposal_id);
-        let mut proposal: CryptoConfigProposal = env.storage().persistent().get(&key).ok_or(Error::RecordNotFound)?;
+        let mut proposal: CryptoConfigProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::RecordNotFound)?;
         if proposal.executed {
             return Err(Error::ProposalAlreadyExecuted);
         }
@@ -1141,7 +1223,9 @@ impl MedicalRecordsContract {
         }
 
         if let Some(registry) = proposal.new_crypto_registry.clone() {
-            env.storage().persistent().set(&DataKey::CryptoRegistry, &registry);
+            env.storage()
+                .persistent()
+                .set(&DataKey::CryptoRegistry, &registry);
             let details_hash = Self::hash_crypto_config_field_update(&env, proposal_id, 1);
             Self::log_crypto_event(
                 &env,
@@ -1167,7 +1251,9 @@ impl MedicalRecordsContract {
             );
         }
         if let Some(manager) = proposal.new_mpc_manager.clone() {
-            env.storage().persistent().set(&DataKey::MpcManager, &manager);
+            env.storage()
+                .persistent()
+                .set(&DataKey::MpcManager, &manager);
             let details_hash = Self::hash_crypto_config_field_update(&env, proposal_id, 3);
             Self::log_crypto_event(
                 &env,
@@ -1226,7 +1312,11 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn get_crypto_config_proposal(env: Env, caller: Address, proposal_id: u64) -> Result<Option<CryptoConfigProposal>, Error> {
+    pub fn get_crypto_config_proposal(
+        env: Env,
+        caller: Address,
+        proposal_id: u64,
+    ) -> Result<Option<CryptoConfigProposal>, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &caller)?;
@@ -1237,17 +1327,33 @@ impl MedicalRecordsContract {
             .get(&DataKey::CryptoConfigProposal(proposal_id)))
     }
 
-    fn hash_crypto_config_proposal(env: &Env, proposal_id: u64, proposal: &CryptoConfigProposal) -> BytesN<32> {
+    fn hash_crypto_config_proposal(
+        env: &Env,
+        proposal_id: u64,
+        proposal: &CryptoConfigProposal,
+    ) -> BytesN<32> {
         let mut payload = Bytes::new(env);
         payload.append(&Bytes::from_slice(env, &proposal_id.to_be_bytes()));
-        payload.append(&Bytes::from_slice(env, &[proposal.new_crypto_registry.is_some() as u8]));
+        payload.append(&Bytes::from_slice(
+            env,
+            &[proposal.new_crypto_registry.is_some() as u8],
+        ));
         payload.append(&Bytes::from_slice(
             env,
             &[proposal.new_homomorphic_registry.is_some() as u8],
         ));
-        payload.append(&Bytes::from_slice(env, &[proposal.new_mpc_manager.is_some() as u8]));
-        payload.append(&Bytes::from_slice(env, &[proposal.encryption_required.is_some() as u8]));
-        payload.append(&Bytes::from_slice(env, &[proposal.require_pq_envelopes.is_some() as u8]));
+        payload.append(&Bytes::from_slice(
+            env,
+            &[proposal.new_mpc_manager.is_some() as u8],
+        ));
+        payload.append(&Bytes::from_slice(
+            env,
+            &[proposal.encryption_required.is_some() as u8],
+        ));
+        payload.append(&Bytes::from_slice(
+            env,
+            &[proposal.require_pq_envelopes.is_some() as u8],
+        ));
         env.crypto().sha256(&payload).into()
     }
 
@@ -1258,7 +1364,12 @@ impl MedicalRecordsContract {
         env.crypto().sha256(&payload).into()
     }
 
-    fn hash_crypto_config_bool_update(env: &Env, proposal_id: u64, field_id: u32, value: bool) -> BytesN<32> {
+    fn hash_crypto_config_bool_update(
+        env: &Env,
+        proposal_id: u64,
+        field_id: u32,
+        value: bool,
+    ) -> BytesN<32> {
         let mut payload = Bytes::new(env);
         payload.append(&Bytes::from_slice(env, &proposal_id.to_be_bytes()));
         payload.append(&Bytes::from_slice(env, &field_id.to_be_bytes()));
@@ -1366,7 +1477,9 @@ impl MedicalRecordsContract {
             is_confidential,
             record_hash,
         };
-        env.storage().persistent().set(&DataKey::RecordMeta(record_id), &meta);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
 
         Self::increment_record_count(&env);
 
@@ -1390,7 +1503,11 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
-        let record: EncryptedRecord = match env.storage().persistent().get(&DataKey::EncryptedRecord(record_id)) {
+        let record: EncryptedRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+        {
             Some(r) => r,
             None => return Ok(None),
         };
@@ -1422,7 +1539,11 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
-        let record: EncryptedRecord = match env.storage().persistent().get(&DataKey::EncryptedRecord(record_id)) {
+        let record: EncryptedRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+        {
             Some(r) => r,
             None => return Ok(None),
         };
@@ -1513,7 +1634,11 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
         validation::validate_pagination(page, page_size)?;
 
-        let count: u64 = env.storage().persistent().get(&DataKey::CryptoAuditCount).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CryptoAuditCount)
+            .unwrap_or(0);
         let start = (page as u64).saturating_mul(page_size as u64);
         if start >= count {
             return Ok(Vec::new(&env));
@@ -1527,7 +1652,11 @@ impl MedicalRecordsContract {
         let mut i = start;
         while i < end {
             let id = i.saturating_add(1);
-            if let Some(entry) = env.storage().persistent().get::<_, CryptoAuditEntry>(&DataKey::CryptoAudit(id)) {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<_, CryptoAuditEntry>(&DataKey::CryptoAudit(id))
+            {
                 out.push_back(entry);
             }
             i += 1;
@@ -1539,12 +1668,18 @@ impl MedicalRecordsContract {
     // DID / Identity hooks
     // ---------------------------------------------------------------------
 
-    pub fn set_identity_registry(env: Env, caller: Address, registry: Address) -> Result<bool, Error> {
+    pub fn set_identity_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
-        env.storage().persistent().set(&DataKey::IdentityRegistry, &registry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::IdentityRegistry, &registry);
         Ok(true)
     }
 
@@ -1552,12 +1687,18 @@ impl MedicalRecordsContract {
         env.storage().persistent().get(&DataKey::IdentityRegistry)
     }
 
-    pub fn set_did_auth_level(env: Env, caller: Address, level: DIDAuthLevel) -> Result<bool, Error> {
+    pub fn set_did_auth_level(
+        env: Env,
+        caller: Address,
+        level: DIDAuthLevel,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
-        env.storage().persistent().set(&DataKey::DidAuthLevel, &level);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DidAuthLevel, &level);
         Ok(true)
     }
 
@@ -1568,7 +1709,12 @@ impl MedicalRecordsContract {
             .unwrap_or(DIDAuthLevel::None)
     }
 
-    pub fn link_did_to_user(env: Env, caller: Address, user: Address, did: String) -> Result<bool, Error> {
+    pub fn link_did_to_user(
+        env: Env,
+        caller: Address,
+        user: Address,
+        did: String,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -1587,7 +1733,9 @@ impl MedicalRecordsContract {
     }
 
     pub fn get_user_did(env: Env, user: Address) -> Option<String> {
-        Self::read_users(&env).get(user).and_then(|p| p.did_reference)
+        Self::read_users(&env)
+            .get(user)
+            .and_then(|p| p.did_reference)
     }
 
     /// Minimal on-chain verifier used by tests:
@@ -1656,7 +1804,9 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidAIScore);
         }
         // Integration tests use short summaries/versions; enforce only non-empty + max bounds.
-        if explanation_summary.len() == 0 || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH {
+        if explanation_summary.len() == 0
+            || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH
+        {
             return Err(Error::InvalidExplanationLength);
         }
         if model_version.len() == 0 || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
@@ -1696,7 +1846,11 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn get_anomaly_score(env: Env, caller: Address, record_id: u64) -> Result<Option<AIInsight>, Error> {
+    pub fn get_anomaly_score(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<Option<AIInsight>, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
@@ -1709,7 +1863,10 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        Ok(env.storage().persistent().get(&DataKey::RecordAnomaly(record_id)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAnomaly(record_id)))
     }
 
     pub fn submit_risk_score(
@@ -1739,7 +1896,9 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidAIScore);
         }
         // Integration tests use short summaries/versions; enforce only non-empty + max bounds.
-        if explanation_summary.len() == 0 || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH {
+        if explanation_summary.len() == 0
+            || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH
+        {
             return Err(Error::InvalidExplanationLength);
         }
         if model_version.len() == 0 || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
@@ -1785,7 +1944,10 @@ impl MedicalRecordsContract {
         if caller != patient && !Self::is_admin(&env, &caller) {
             return Err(Error::NotAuthorized);
         }
-        Ok(env.storage().persistent().get(&DataKey::PatientRisk(patient)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRisk(patient)))
     }
 
     // ---------------------------------------------------------------------
@@ -1836,11 +1998,20 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn has_emergency_access(env: Env, grantee: Address, patient: Address, record_id: u64) -> bool {
+    pub fn has_emergency_access(
+        env: Env,
+        grantee: Address,
+        patient: Address,
+        record_id: u64,
+    ) -> bool {
         Self::has_emergency_access_internal(&env, &grantee, &patient, record_id)
     }
 
-    pub fn revoke_emergency_access(env: Env, caller: Address, grantee: Address) -> Result<bool, Error> {
+    pub fn revoke_emergency_access(
+        env: Env,
+        caller: Address,
+        grantee: Address,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
@@ -1851,7 +2022,9 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::PatientEmergencyGrants(caller.clone()))
             .unwrap_or(Map::new(&env));
-        let mut entry = grants.get(grantee.clone()).ok_or(Error::EmergencyAccessNotFound)?;
+        let mut entry = grants
+            .get(grantee.clone())
+            .ok_or(Error::EmergencyAccessNotFound)?;
         entry.is_active = false;
         grants.set(grantee, entry);
         env.storage()
@@ -1916,15 +2089,15 @@ impl MedicalRecordsContract {
         let mut i = start;
         while i < end {
             let idx = i.saturating_add(1);
-            if let Some(global_id) =
-                env.storage()
-                    .persistent()
-                    .get::<_, u64>(&DataKey::PatientAccessLog(patient.clone(), idx))
+            if let Some(global_id) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PatientAccessLog(patient.clone(), idx))
             {
-                if let Some(entry) =
-                    env.storage()
-                        .persistent()
-                        .get::<_, AccessRequest>(&DataKey::AccessLog(global_id))
+                if let Some(entry) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, AccessRequest>(&DataKey::AccessLog(global_id))
                 {
                     out.push_back(entry);
                 }
@@ -1939,7 +2112,11 @@ impl MedicalRecordsContract {
             return Vec::new(&env);
         }
 
-        let count: u64 = env.storage().persistent().get(&DataKey::AccessLogCount).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
         let start = (page as u64).saturating_mul(page_size as u64);
         if start >= count {
             return Vec::new(&env);
@@ -1953,7 +2130,11 @@ impl MedicalRecordsContract {
         let mut i = start;
         while i < end {
             let id = i.saturating_add(1);
-            if let Some(entry) = env.storage().persistent().get::<_, AccessRequest>(&DataKey::AccessLog(id)) {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<_, AccessRequest>(&DataKey::AccessLog(id))
+            {
                 out.push_back(entry);
             }
             i += 1;
@@ -2005,7 +2186,11 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env.storage().persistent().get(&key).ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::RecordNotFound)?;
         if proposal.executed {
             return Err(Error::ProposalAlreadyExecuted);
         }
@@ -2026,7 +2211,11 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env.storage().persistent().get(&key).ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::RecordNotFound)?;
         if proposal.executed {
             return Err(Error::ProposalAlreadyExecuted);
         }
@@ -2069,7 +2258,9 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::BridgeContract, &bridge);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BridgeContract, &bridge);
         env.storage()
             .persistent()
             .set(&DataKey::CrossChainIdentityContract, &identity);
@@ -2079,12 +2270,18 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn set_cross_chain_enabled(env: Env, caller: Address, enabled: bool) -> Result<bool, Error> {
+    pub fn set_cross_chain_enabled(
+        env: Env,
+        caller: Address,
+        enabled: bool,
+    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
-        env.storage().persistent().set(&DataKey::CrossChainEnabled, &enabled);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CrossChainEnabled, &enabled);
         Ok(true)
     }
 
@@ -2126,7 +2323,11 @@ impl MedicalRecordsContract {
         }
 
         let key = DataKey::CrossChainRef(record_id, chain.clone());
-        if let Some(existing) = env.storage().persistent().get::<_, CrossChainRecordRef>(&key) {
+        if let Some(existing) = env
+            .storage()
+            .persistent()
+            .get::<_, CrossChainRecordRef>(&key)
+        {
             if existing.is_synced {
                 return Err(Error::RecordAlreadySynced);
             }
@@ -2163,7 +2364,11 @@ impl MedicalRecordsContract {
         }
 
         let key = DataKey::CrossChainRef(record_id, chain);
-        let mut r: CrossChainRecordRef = env.storage().persistent().get(&key).ok_or(Error::RecordNotFound)?;
+        let mut r: CrossChainRecordRef = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::RecordNotFound)?;
         r.external_record_hash = new_external_hash;
         r.is_synced = true;
         r.sync_timestamp = env.ledger().timestamp();
@@ -2171,8 +2376,14 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn get_cross_chain_ref(env: Env, record_id: u64, chain: ChainId) -> Option<CrossChainRecordRef> {
-        env.storage().persistent().get(&DataKey::CrossChainRef(record_id, chain))
+    pub fn get_cross_chain_ref(
+        env: Env,
+        record_id: u64,
+        chain: ChainId,
+    ) -> Option<CrossChainRecordRef> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CrossChainRef(record_id, chain))
     }
 
     pub fn get_all_cross_chain_refs(env: Env, record_id: u64) -> Vec<CrossChainRecordRef> {
@@ -2285,7 +2496,11 @@ impl MedicalRecordsContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        let paused: bool = env.storage().persistent().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             Err(Error::ContractPaused)
         } else {
@@ -2346,20 +2561,34 @@ impl MedicalRecordsContract {
     }
 
     fn next_id(env: &Env) -> u64 {
-        let current: u64 = env.storage().persistent().get(&DataKey::NextId).unwrap_or(0);
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextId)
+            .unwrap_or(0);
         let next = current.saturating_add(1);
         env.storage().persistent().set(&DataKey::NextId, &next);
         next
     }
 
     fn increment_record_count(env: &Env) {
-        let current: u64 = env.storage().persistent().get(&DataKey::RecordCount).unwrap_or(0);
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCount)
+            .unwrap_or(0);
         env.storage()
             .persistent()
             .set(&DataKey::RecordCount, &current.saturating_add(1));
     }
 
-    fn store_record(env: &Env, record_id: u64, record: &MedicalRecord, category: &String, is_confidential: bool) {
+    fn store_record(
+        env: &Env,
+        record_id: u64,
+        record: &MedicalRecord,
+        category: &String,
+        is_confidential: bool,
+    ) {
         env.storage()
             .persistent()
             .set(&DataKey::Record(record_id), record);
@@ -2395,7 +2624,12 @@ impl MedicalRecordsContract {
             .set(&DataKey::PatientRecords(patient.clone()), &ids);
     }
 
-    fn has_emergency_access_internal(env: &Env, grantee: &Address, patient: &Address, record_id: u64) -> bool {
+    fn has_emergency_access_internal(
+        env: &Env,
+        grantee: &Address,
+        patient: &Address,
+        record_id: u64,
+    ) -> bool {
         let now = env.ledger().timestamp();
         let grants: Map<Address, EmergencyAccess> = env
             .storage()
@@ -2418,7 +2652,12 @@ impl MedicalRecordsContract {
         grant.record_scope.contains(&record_id)
     }
 
-    fn can_view_record(env: &Env, caller: &Address, record: &MedicalRecord, record_id: u64) -> bool {
+    fn can_view_record(
+        env: &Env,
+        caller: &Address,
+        record: &MedicalRecord,
+        record_id: u64,
+    ) -> bool {
         if Self::is_admin(env, caller) {
             return true;
         }
@@ -2438,12 +2677,25 @@ impl MedicalRecordsContract {
         }
     }
 
-    fn log_access(env: &Env, patient: &Address, record_id: u64, requester: &Address, purpose: &String, granted: bool) {
+    fn log_access(
+        env: &Env,
+        patient: &Address,
+        record_id: u64,
+        requester: &Address,
+        purpose: &String,
+        granted: bool,
+    ) {
         let now = env.ledger().timestamp();
 
-        let current: u64 = env.storage().persistent().get(&DataKey::AccessLogCount).unwrap_or(0);
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
         let next = current.saturating_add(1);
-        env.storage().persistent().set(&DataKey::AccessLogCount, &next);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLogCount, &next);
 
         let entry = AccessRequest {
             requester: requester.clone(),
@@ -2453,7 +2705,9 @@ impl MedicalRecordsContract {
             timestamp: now,
             granted,
         };
-        env.storage().persistent().set(&DataKey::AccessLog(next), &entry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLog(next), &entry);
 
         let pc: u64 = env
             .storage()
@@ -2475,10 +2729,18 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::BridgeContract)
             .ok_or(Error::CrossChainContractsNotSet)?;
-        if !env.storage().persistent().has(&DataKey::CrossChainIdentityContract) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::CrossChainIdentityContract)
+        {
             return Err(Error::CrossChainContractsNotSet);
         }
-        if !env.storage().persistent().has(&DataKey::CrossChainAccessContract) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::CrossChainAccessContract)
+        {
             return Err(Error::CrossChainContractsNotSet);
         }
         Ok(bridge)
@@ -2505,7 +2767,12 @@ impl MedicalRecordsContract {
             .unwrap_or(false)
     }
 
-    fn can_view_encrypted_record(env: &Env, caller: &Address, record: &EncryptedRecord, record_id: u64) -> bool {
+    fn can_view_encrypted_record(
+        env: &Env,
+        caller: &Address,
+        record: &EncryptedRecord,
+        record_id: u64,
+    ) -> bool {
         if Self::is_admin(env, caller) {
             return true;
         }
@@ -2538,7 +2805,9 @@ impl MedicalRecordsContract {
             .get(&DataKey::CryptoAuditCount)
             .unwrap_or(0);
         let next = current.saturating_add(1);
-        env.storage().persistent().set(&DataKey::CryptoAuditCount, &next);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CryptoAuditCount, &next);
 
         let entry = CryptoAuditEntry {
             id: next,

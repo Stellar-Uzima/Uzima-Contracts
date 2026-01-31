@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    String, Symbol,
+};
 
 // =============================================================================
 // Types
@@ -119,7 +122,9 @@ impl HomomorphicRegistry {
             created_at: env.ledger().timestamp(),
             is_active: true,
         };
-        env.storage().persistent().set(&DataKey::Context(context_id.clone()), &ctx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Context(context_id.clone()), &ctx);
         env.events().publish(
             (symbol_short!("he"), symbol_short!("ctx")),
             (context_id, ctx.created_at),
@@ -127,7 +132,11 @@ impl HomomorphicRegistry {
         Ok(())
     }
 
-    pub fn deactivate_context(env: Env, admin: Address, context_id: BytesN<32>) -> Result<(), Error> {
+    pub fn deactivate_context(
+        env: Env,
+        admin: Address,
+        context_id: BytesN<32>,
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &admin)?;
@@ -138,7 +147,9 @@ impl HomomorphicRegistry {
             .get(&DataKey::Context(context_id.clone()))
             .ok_or(Error::ContextNotFound)?;
         ctx.is_active = false;
-        env.storage().persistent().set(&DataKey::Context(context_id.clone()), &ctx);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Context(context_id.clone()), &ctx);
         env.events()
             .publish((symbol_short!("he"), symbol_short!("ctx_off")), context_id);
         Ok(())
@@ -157,7 +168,11 @@ impl HomomorphicRegistry {
         submitter.require_auth();
         Self::require_initialized(&env)?;
 
-        if env.storage().persistent().has(&DataKey::Computation(computation_id.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Computation(computation_id.clone()))
+        {
             return Err(Error::ComputationAlreadyExists);
         }
 
@@ -208,12 +223,21 @@ impl HomomorphicRegistry {
 
     pub fn get_context(env: Env, context_id: BytesN<32>) -> Result<Option<HEContext>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Context(context_id)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Context(context_id)))
     }
 
-    pub fn get_computation(env: Env, computation_id: BytesN<32>) -> Result<Option<EncryptedComputation>, Error> {
+    pub fn get_computation(
+        env: Env,
+        computation_id: BytesN<32>,
+    ) -> Result<Option<EncryptedComputation>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env.storage().persistent().get(&DataKey::Computation(computation_id)))
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::Computation(computation_id)))
     }
 
     // -------------------------------------------------------------------------
@@ -229,7 +253,11 @@ impl HomomorphicRegistry {
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         if &admin != caller {
             return Err(Error::NotAuthorized);
         }

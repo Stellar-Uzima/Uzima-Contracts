@@ -7,7 +7,11 @@ use medical_records::{CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Bytes, BytesN, String, Vec};
 
-fn make_envelopes(env: &soroban_sdk::Env, patient: &soroban_sdk::Address, doctor: &soroban_sdk::Address) -> Vec<KeyEnvelope> {
+fn make_envelopes(
+    env: &soroban_sdk::Env,
+    patient: &soroban_sdk::Address,
+    doctor: &soroban_sdk::Address,
+) -> Vec<KeyEnvelope> {
     let mut envs = Vec::new(env);
 
     let patient_env = KeyEnvelope {
@@ -131,7 +135,9 @@ fn test_encrypted_record_access_control_and_envelope_scoping() {
     assert_eq!(doctor_env.recipient, t.doctor);
 
     let intruder = soroban_sdk::Address::generate(&env);
-    let denied = t.client.try_get_encrypted_record_header(&intruder, &record_id);
+    let denied = t
+        .client
+        .try_get_encrypted_record_header(&intruder, &record_id);
     assert!(denied.is_err());
     let inner = denied.err().unwrap().unwrap();
     assert_eq!(inner, Error::NotAuthorized.into());
@@ -183,7 +189,9 @@ fn test_envelope_update_and_crypto_audit_log() {
 
     let logs = t.client.get_crypto_audit_logs(&t.admin1, &0u32, &50u32);
     assert!(logs.len() > 0);
-    assert!(logs.iter().any(|e| e.action == CryptoAuditAction::EnvelopeUpdated));
+    assert!(logs
+        .iter()
+        .any(|e| e.action == CryptoAuditAction::EnvelopeUpdated));
 }
 
 #[test]

@@ -115,21 +115,21 @@ impl AiAnalyticsContract {
         }
 
         let id = Self::next_round_id(&env);
-	        let round = FederatedRound {
-	            id,
-	            base_model_id,
-	            min_participants,
-	            dp_epsilon,
-	            started_at: env.ledger().timestamp(),
-	            finalized_at: 0,
-	            total_updates: 0,
-	            is_finalized: false,
-	        };
+        let round = FederatedRound {
+            id,
+            base_model_id,
+            min_participants,
+            dp_epsilon,
+            started_at: env.ledger().timestamp(),
+            finalized_at: 0,
+            total_updates: 0,
+            is_finalized: false,
+        };
 
-	        env.storage().instance().set(&DataKey::Round(id), &round);
-	        env.events().publish((symbol_short!("RndStart"),), id);
-	        Ok(id)
-	    }
+        env.storage().instance().set(&DataKey::Round(id), &round);
+        env.events().publish((symbol_short!("RndStart"),), id);
+        Ok(id)
+    }
 
     pub fn submit_update(
         env: Env,

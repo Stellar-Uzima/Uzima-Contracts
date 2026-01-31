@@ -26,38 +26,32 @@ fn mpc_session_lifecycle() {
     let sid = BytesN::from_array(&env, &[3u8; 32]);
     let purpose = String::from_str(&env, "cohort-risk-analysis");
 
-    client
-        .start_session(&initiator, &sid, &participants, &2u32, &purpose, &100u64);
+    client.start_session(&initiator, &sid, &participants, &2u32, &purpose, &100u64);
 
-    client
-        .commit_share(&p1, &sid, &BytesN::from_array(&env, &[1u8; 32]));
-    client
-        .commit_share(&p2, &sid, &BytesN::from_array(&env, &[2u8; 32]));
+    client.commit_share(&p1, &sid, &BytesN::from_array(&env, &[1u8; 32]));
+    client.commit_share(&p2, &sid, &BytesN::from_array(&env, &[2u8; 32]));
 
-    client
-        .reveal_share(
-            &p1,
-            &sid,
-            &String::from_str(&env, "ipfs://share1"),
-            &BytesN::from_array(&env, &[4u8; 32]),
-        );
-    client
-        .reveal_share(
-            &p2,
-            &sid,
-            &String::from_str(&env, "ipfs://share2"),
-            &BytesN::from_array(&env, &[5u8; 32]),
-        );
+    client.reveal_share(
+        &p1,
+        &sid,
+        &String::from_str(&env, "ipfs://share1"),
+        &BytesN::from_array(&env, &[4u8; 32]),
+    );
+    client.reveal_share(
+        &p2,
+        &sid,
+        &String::from_str(&env, "ipfs://share2"),
+        &BytesN::from_array(&env, &[5u8; 32]),
+    );
 
-    client
-        .finalize_session(
-            &initiator,
-            &sid,
-            &String::from_str(&env, "ipfs://result"),
-            &BytesN::from_array(&env, &[9u8; 32]),
-            &String::from_str(&env, ""),
-            &BytesN::from_array(&env, &[0u8; 32]),
-        );
+    client.finalize_session(
+        &initiator,
+        &sid,
+        &String::from_str(&env, "ipfs://result"),
+        &BytesN::from_array(&env, &[9u8; 32]),
+        &String::from_str(&env, ""),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let session = client.get_session(&sid).unwrap();
     assert!(session.status == SessionStatus::Finalized);

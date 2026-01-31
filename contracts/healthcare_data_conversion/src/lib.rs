@@ -471,10 +471,7 @@ impl HealthcareDataConversionContract {
     }
 
     /// Get conversion request details
-    pub fn get_conversion_request(
-        env: Env,
-        request_id: u64,
-    ) -> Result<ConversionRequest, Error> {
+    pub fn get_conversion_request(env: Env, request_id: u64) -> Result<ConversionRequest, Error> {
         let requests: Map<u64, ConversionRequest> = env
             .storage()
             .persistent()
