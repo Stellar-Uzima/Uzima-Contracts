@@ -217,8 +217,8 @@ fn test_add_and_get_record() {
         .count();
     assert_eq!(access_events_count, 1);
 }
+
 #[test]
-#[should_panic(expected = "Error(Contract, #9)")]
 fn test_empty_data_ref() {
     let env = Env::default();
     env.mock_all_auths();
@@ -230,7 +230,7 @@ fn test_empty_data_ref() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Empty data_ref should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -241,10 +241,11 @@ fn test_empty_data_ref() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, ""),
     );
+
+    assert_eq!(result, Err(Ok(Error::EmptyDataRef)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_short() {
     let env = Env::default();
     env.mock_all_auths();
@@ -256,7 +257,7 @@ fn test_data_ref_too_short() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Data ref shorter than 10 chars should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -267,10 +268,11 @@ fn test_data_ref_too_short() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, "Qm123"),
     );
+
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_long() {
     let env = Env::default();
     env.mock_all_auths();
@@ -285,7 +287,7 @@ fn test_data_ref_too_long() {
     // Create a string longer than 200 characters (201 chars)
     let long_ref = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -296,6 +298,8 @@ fn test_data_ref_too_long() {
         &String::from_str(&env, "Medication"),
         &long_ref,
     );
+
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
@@ -448,7 +452,6 @@ fn test_role_based_access() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2)")]
 fn test_deactivate_user() {
     let env = Env::default();
     env.mock_all_auths();
@@ -463,8 +466,8 @@ fn test_deactivate_user() {
     // Deactivate the doctor
     client.deactivate_user(&admin, &doctor);
 
-    // // Try to add a record as the deactivated doctor (should fail)
-    let _result = client.add_record(
+    // Try to add a record as the deactivated doctor (should fail)
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Cold"),
@@ -475,10 +478,11 @@ fn test_deactivate_user() {
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
+
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
 
 #[test]
-#[should_panic(expected = "Error")]
 fn test_pause_unpause_blocks_sensitive_functions_panic() {
     let env = Env::default();
     env.mock_all_auths();
@@ -508,8 +512,7 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
     client.pause(&admin);
 
     // Mutating functions should be blocked when paused
-    // Mutating functions should be blocked when paused
-    client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Blocked"),
@@ -518,8 +521,10 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
         &vec![&env],
         &String::from_str(&env, "General"),
         &String::from_str(&env, "General"),
-        &String::from_str(&env, "IPFS"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
+
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
 }
 
 #[test]

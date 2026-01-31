@@ -14,7 +14,8 @@
 
 use soroban_sdk::{Address, Env, String, Vec};
 
-use crate::{Error, MedicalRecord, UserProfile};
+use crate::errors::Error;
+use crate::{MedicalRecord, UserProfile};
 
 // ==================== CONSTANTS ====================
 
@@ -177,7 +178,7 @@ pub fn validate_treatment(treatment: &String) -> Result<(), Error> {
         treatment,
         MIN_TREATMENT_LENGTH,
         MAX_TREATMENT_LENGTH,
-        Error::EmptyTreatment,
+        Error::InvalidInput,
         Error::InvalidTreatmentLength,
     )
 }
@@ -305,7 +306,7 @@ pub fn validate_did_reference(did: &String) -> Result<(), Error> {
         did,
         MIN_DID_LENGTH,
         MAX_DID_LENGTH,
-        Error::DIDNotFound,
+        Error::EmptyDataRef,
         Error::InvalidDataRefLength,
     )
 }
@@ -347,6 +348,9 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
     // For now, we'll just verify it's a valid address reference
     let _ = env; // Use env to avoid warning
     let _ = address; // Address validation is implicit in Soroban
+    if address == &env.current_contract_address() {
+        return Err(Error::InvalidAddress);
+    }
 
     Ok(())
 }
@@ -394,7 +398,7 @@ pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
 /// `Ok(())` if valid, otherwise returns an appropriate error
 pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     if timestamp == 0 {
-        return Err(Error::NotAuthorized); // Reusing error for invalid timestamp
+        return Err(Error::InvalidInput); // Reusing error for invalid timestamp
     }
 
     // Ensure timestamp is not too far in the future (more than 1 day ahead)
@@ -402,7 +406,7 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     let one_day = 86_400u64;
 
     if timestamp > current_time.saturating_add(one_day) {
-        return Err(Error::NotAuthorized);
+        return Err(Error::InvalidInput);
     }
 
     Ok(())
@@ -493,7 +497,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 /// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
-        return Err(Error::NotAuthorized);
+        return Err(Error::NumberOutOfBounds);
     }
 
     // Optional: Add maximum amount check if needed
@@ -513,7 +517,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
-        return Err(Error::NotAuthorized);
+        return Err(Error::BatchTooLarge);
     }
 
     // Page number can be any value (including 0 for first page)
@@ -767,8 +771,8 @@ mod tests {
     fn test_validate_pagination() {
         assert!(validate_pagination(0, 10).is_ok());
         assert!(validate_pagination(5, 50).is_ok());
-        assert_eq!(validate_pagination(0, 0), Err(Error::NotAuthorized));
-        assert_eq!(validate_pagination(0, 101), Err(Error::NotAuthorized));
+        assert_eq!(validate_pagination(0, 0), Err(Error::BatchTooLarge));
+        assert_eq!(validate_pagination(0, 101), Err(Error::BatchTooLarge));
     }
 
     #[test]
@@ -817,12 +821,12 @@ mod tests {
         assert!(validate_timestamp(&env, current_time + 86400).is_ok());
 
         // Zero timestamp is invalid
-        assert_eq!(validate_timestamp(&env, 0), Err(Error::NotAuthorized));
+        assert_eq!(validate_timestamp(&env, 0), Err(Error::InvalidInput));
 
         // Too far inside future (> 24h)
         assert_eq!(
             validate_timestamp(&env, current_time + 86401),
-            Err(Error::NotAuthorized)
+            Err(Error::InvalidInput)
         );
     }
 
@@ -836,8 +840,8 @@ mod tests {
     #[test]
     fn test_validate_amount() {
         assert!(validate_amount(100).is_ok());
-        assert_eq!(validate_amount(0), Err(Error::NotAuthorized));
-        assert_eq!(validate_amount(-10), Err(Error::NotAuthorized));
+        assert_eq!(validate_amount(0), Err(Error::NumberOutOfBounds));
+        assert_eq!(validate_amount(-10), Err(Error::NumberOutOfBounds));
     }
 
     #[test]
