@@ -6,6 +6,8 @@
 #[cfg(test)]
 mod test;
 #[cfg(test)]
+mod test_migration;
+#[cfg(test)]
 mod test_permissions;
 
 mod errors;
@@ -302,6 +304,7 @@ pub enum DataKey {
     // Lifecycle
     Initialized,
     Paused,
+    ContractVersion,
 
     // Users / DID
     Users,
@@ -2224,19 +2227,45 @@ impl MedicalRecordsContract {
         Ok(env.storage().persistent().get(&DataKey::Record(record_id)))
     }
 
-    // ---------------------------------------------------------------------
-    // Upgradeability
-    // ---------------------------------------------------------------------
+    // =================================================================
+    // MIGRATION & UPGRADE SYSTEM
+    // =================================================================
 
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
-        let admin: Address = env
-            .storage()
+    fn get_contract_version(env: &Env) -> u32 {
+        env.storage()
             .instance()
-            .get(&UPGRADE_ADMIN)
-            .ok_or(Error::NotAuthorized)?;
-        admin.require_auth();
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(0)
+    }
+
+    fn set_contract_version(env: &Env, new_version: u32) {
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractVersion, &new_version);
+    }
+
+    #[allow(clippy::panic)]
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        caller.require_auth();
+
+        if !Self::is_admin(&env, &caller) {
+            panic!("Not authorized to upgrade contract");
+        }
+
         env.deployer().update_current_contract_wasm(new_wasm_hash);
-        Ok(())
+        Self::migrate_data(&env);
+    }
+
+    fn migrate_data(env: &Env) {
+        const CURRENT_CONTRACT_VERSION: u32 = 1;
+
+        let current_version = Self::get_contract_version(env);
+        if current_version < CURRENT_CONTRACT_VERSION {
+            if current_version < 1 {
+                // Future migration hooks (V0 -> V1), etc.
+            }
+            Self::set_contract_version(env, CURRENT_CONTRACT_VERSION);
+        }
     }
 
     pub fn version(env: Env) -> u32 {
