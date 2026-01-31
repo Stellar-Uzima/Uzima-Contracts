@@ -14,11 +14,13 @@ fn create_contract(
     Address,
 ) {
     let contract_id = env.register_contract(None, CrossChainBridgeContract);
-    let client = CrossChainBridgeContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let medical_contract = Address::generate(&env);
-    let identity_contract = Address::generate(&env);
-    let access_contract = Address::generate(&env);
+    // FIXED: Removed redundant borrow &env
+    let client = CrossChainBridgeContractClient::new(env, &contract_id);
+    // FIXED: Removed redundant borrow &env
+    let admin = Address::generate(env);
+    let medical_contract = Address::generate(env);
+    let identity_contract = Address::generate(env);
+    let access_contract = Address::generate(env);
     (
         client,
         admin,

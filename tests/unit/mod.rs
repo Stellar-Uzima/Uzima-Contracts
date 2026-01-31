@@ -2,7 +2,10 @@
 mod tests {
     use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::testutils::{Address as _, AuthorizedFunction, MockAuth, MockAuthInvoke};
-    use soroban_sdk::{Address, Env, String};
+    use soroban_sdk::{vec, Address, Env, String};
+
+pub mod property_based_tests;
+pub mod performance_tests;
 
     #[test]
     fn test_initialize_and_roles() {
@@ -64,22 +67,23 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &true,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &String::from_str(&env, "Traditional"),
+                &String::from_str(&env, "Herbal Therapy"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
 
         // Patient can access their record
         let patient_view = client
             .mock_all_auths()
             .get_record(&patient, &record_id);
-        assert!(patient_view.is_some());
+        assert_eq!(patient_view.patient_id, patient);
 
         // Doctor1 (creator) can access the record
         let doctor1_view = client
             .mock_all_auths()
             .get_record(&doctor1, &record_id);
-        assert!(doctor1_view.is_some());
+        assert_eq!(doctor1_view.doctor_id, doctor1);
 
         // Doctor2 cannot access confidential record
         let result = client
@@ -91,7 +95,7 @@ mod tests {
         let admin_view = client
             .mock_all_auths()
             .get_record(&admin, &record_id);
-        assert!(admin_view.is_some());
+        assert_eq!(admin_view.patient_id, patient);
     }
 
     #[test]
@@ -119,9 +123,10 @@ mod tests {
                 &String::from_str(&env, "Diagnosis"),
                 &String::from_str(&env, "Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &String::from_str(&env, "Traditional"),
+                &String::from_str(&env, "Herbal Therapy"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
 
         // Deactivate doctor
@@ -138,9 +143,10 @@ mod tests {
                 &String::from_str(&env, "New Diagnosis"),
                 &String::from_str(&env, "New Treatment"),
                 &false,
-                &vec![String::from_str(&env, "herbal")],
-                String::from_str(&env, "Traditional"),
-                String::from_str(&env, "Herbal Therapy"),
+                &vec![&env, String::from_str(&env, "herbal")],
+                &String::from_str(&env, "Traditional"),
+                &String::from_str(&env, "Herbal Therapy"),
+                &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
         assert!(result.is_err());
     }

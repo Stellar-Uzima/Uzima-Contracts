@@ -1,18 +1,20 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)] // Global allow to fix macro expansion issues
 
-#[cfg(test)]
-mod test;
+// FIXED: Commented out 'mod test;' because the file contracts/fhir_integration/src/test.rs does not exist.
+// #[cfg(test)]
+// mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
+    Vec,
 };
 
 // ==================== FHIR Data Types ====================
 
 /// FHIR Resource Types supported
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum FHIRResourceType {
     Patient = 0,
@@ -29,27 +31,20 @@ pub enum FHIRResourceType {
 }
 
 /// FHIR Coding System (standard healthcare coding systems)
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum CodingSystem {
-    /// ICD-10 - International Classification of Diseases
-    ICD10,
-    /// ICD-9 - Legacy diagnosis codes
-    ICD9,
-    /// CPT - Current Procedural Terminology
-    CPT,
-    /// SNOMED CT - Clinical coding terminology
-    SNOMEDCT,
-    /// LOINC - Laboratory codes
-    LOINC,
-    /// RxNorm - Medications
-    RxNorm,
-    /// HL7 Custom
-    Custom(String),
+    ICD10 = 0,
+    ICD9 = 1,
+    CPT = 2,
+    SNOMEDCT = 3,
+    LOINC = 4,
+    RxNorm = 5,
+    Custom = 6,
 }
 
 /// FHIR Code structure (coding + text)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRCode {
     pub system: CodingSystem,
@@ -58,66 +53,66 @@ pub struct FHIRCode {
 }
 
 /// FHIR Identifier (unique identifier with system)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRIdentifier {
-    pub system: String,        // e.g., "urn:mrn:hospital-a"
-    pub value: String,         // Actual identifier value
-    pub use_type: String,      // e.g., "official", "usual", "secondary"
+    pub system: String,   // e.g., "urn:mrn:hospital-a"
+    pub value: String,    // Actual identifier value
+    pub use_type: String, // e.g., "official", "usual", "secondary"
 }
 
 /// FHIR Patient Information (simplified)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRPatient {
     pub identifiers: Vec<FHIRIdentifier>,
     pub given_name: String,
     pub family_name: String,
     pub birth_date: String,    // YYYY-MM-DD format
-    pub gender: String,         // male, female, other, unknown
-    pub contact_point: String,  // Email/phone
+    pub gender: String,        // male, female, other, unknown
+    pub contact_point: String, // Email/phone
     pub address: String,
     pub communication: Vec<String>, // Language codes (e.g., "en", "es")
     pub marital_status: String,
 }
 
 /// FHIR Observation (vital signs, lab results, etc.)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRObservation {
     pub identifier: String,
-    pub status: String,         // registered, preliminary, final, amended, cancelled
+    pub status: String, // registered, preliminary, final, amended, cancelled
     pub category: FHIRCode,
     pub code: FHIRCode,
     pub subject_reference: String,  // Reference to Patient
     pub effective_datetime: String, // ISO 8601 timestamp
     pub value_quantity_value: i64,
     pub value_quantity_unit: String,
-    pub interpretation: Option<FHIRCode>,
-    pub reference_range: String,    // Human-readable reference range
+    pub interpretation: Vec<FHIRCode>,
+    pub reference_range: String, // Human-readable reference range
 }
 
 /// FHIR Condition (diagnosis)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRCondition {
     pub identifier: String,
-    pub clinical_status: String,    // active, recurrence, remission, inactive
+    pub clinical_status: String, // active, recurrence, remission, inactive
     pub code: FHIRCode,
-    pub subject_reference: String,  // Reference to Patient
+    pub subject_reference: String, // Reference to Patient
     pub onset_date_time: String,
     pub recorded_date: String,
-    pub severity: Option<FHIRCode>,
+    pub severity: Vec<FHIRCode>,
 }
 
 /// FHIR Medication Statement
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRMedicationStatement {
     pub identifier: String,
-    pub status: String,             // active, completed, entered-in-error, intended, stopped, on-hold
+    pub status: String, // active, completed, entered-in-error, intended, stopped, on-hold
     pub medication_code: FHIRCode,
-    pub subject_reference: String,  // Reference to Patient
+    pub subject_reference: String, // Reference to Patient
     pub effective_period_start: String,
     pub effective_period_end: String,
     pub dosage: String,
@@ -125,76 +120,76 @@ pub struct FHIRMedicationStatement {
 }
 
 /// FHIR Procedure
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRProcedure {
     pub identifier: String,
-    pub status: String,             // preparation, in-progress, not-done, on-hold, stopped, completed, entered-in-error, unknown
+    pub status: String, // preparation, in-progress, not-done, on-hold, stopped, completed, entered-in-error, unknown
     pub code: FHIRCode,
-    pub subject_reference: String,  // Reference to Patient
+    pub subject_reference: String, // Reference to Patient
     pub performed_date_time: String,
-    pub performer: Vec<String>,     // References to practitioners
+    pub performer: Vec<String>, // References to practitioners
     pub reason_code: Vec<FHIRCode>,
 }
 
 /// FHIR AllergyIntolerance
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRAllergyIntolerance {
     pub identifier: String,
-    pub clinical_status: String,    // active, inactive, resolved
+    pub clinical_status: String,     // active, inactive, resolved
     pub verification_status: String, // unconfirmed, confirmed, refuted, entered-in-error
     pub substance_code: FHIRCode,
     pub patient_reference: String,
     pub recorded_date: String,
     pub manifestation: Vec<FHIRCode>,
-    pub severity: String,           // mild, moderate, severe
+    pub severity: String, // mild, moderate, severe
 }
 
 /// FHIR Bundle for batch operations
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct FHIRBundle {
     pub bundle_id: String,
     pub timestamp: u64,
-    pub bundle_type: String,        // document, message, transaction, transaction-response, batch, batch-response, history, searchset, collection
+    pub bundle_type: String, // document, message, transaction, transaction-response, batch, batch-response, history, searchset, collection
     pub total: u32,
 }
 
 /// Healthcare Provider Information (for EMR integration)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct HealthcareProvider {
     pub provider_id: String,
     pub name: String,
-    pub facility_type: String,      // hospital, clinic, lab, pharmacy, etc.
-    pub npi: String,                // National Provider Identifier
+    pub facility_type: String, // hospital, clinic, lab, pharmacy, etc.
+    pub npi: String,           // National Provider Identifier
     pub tax_id: String,
     pub address: String,
     pub contact_point: String,
-    pub emr_system: String,         // EHR system vendor name
-    pub fhir_endpoint: String,      // Base URL for FHIR API
+    pub emr_system: String,    // EHR system vendor name
+    pub fhir_endpoint: String, // Base URL for FHIR API
     pub is_verified: bool,
     pub verification_timestamp: u64,
     pub credential_id: Option<BytesN<32>>,
 }
 
 /// EMR Integration Configuration
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct EMRConfiguration {
     pub provider_id: String,
-    pub fhir_version: String,       // e.g., "R4", "R5"
+    pub fhir_version: String, // e.g., "R4", "R5"
     pub supported_resources: Vec<FHIRResourceType>,
     pub authentication_type: String, // "oauth2", "api-key", "mutual-tls"
     pub oauth_endpoint: String,
-    pub data_format: String,        // "json", "xml"
+    pub data_format: String, // "json", "xml"
     pub batch_size: u32,
-    pub retry_policy: String,       // Retry configuration
+    pub retry_policy: String, // Retry configuration
 }
 
 /// Healthcare Data Mapping (for format conversion)
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub struct DataMapping {
     pub source_system: String,
@@ -202,7 +197,7 @@ pub struct DataMapping {
     pub target_system: String,
     pub target_field: String,
     pub transformation_rule: String, // Description of transformation
-    pub status: String,             // active, deprecated, deprecated
+    pub status: String,              // active, deprecated, deprecated
 }
 
 // Storage Keys
@@ -212,12 +207,12 @@ const CONDITIONS: Symbol = symbol_short!("CONDITION");
 const MEDICATIONS: Symbol = symbol_short!("MEDICATE");
 const PROCEDURES: Symbol = symbol_short!("PROCEDURE");
 const ALLERGIES: Symbol = symbol_short!("ALLERGIES");
-const BUNDLES: Symbol = symbol_short!("BUNDLES");
+// const BUNDLES: Symbol = symbol_short!("BUNDLES"); // Unused
 const EMR_CONFIG: Symbol = symbol_short!("EMR_CFG");
 const DATA_MAPPINGS: Symbol = symbol_short!("MAPPINGS");
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const MEDICAL_RECORD_CONTRACT: Symbol = symbol_short!("MED_REC");
-const PROVIDER_COUNT: Symbol = symbol_short!("PROV_CNT");
+// const PROVIDER_COUNT: Symbol = symbol_short!("PROV_CNT"); // Unused
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
 #[contracterror]
@@ -252,7 +247,11 @@ pub struct FHIRIntegrationContract;
 #[contractimpl]
 impl FHIRIntegrationContract {
     /// Initialize the FHIR integration contract
-    pub fn initialize(env: Env, admin: Address, medical_records_contract: Address) -> Result<bool, Error> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        medical_records_contract: Address,
+    ) -> Result<bool, Error> {
         admin.require_auth();
 
         // Check if already initialized
@@ -261,7 +260,9 @@ impl FHIRIntegrationContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&MEDICAL_RECORD_CONTRACT, &medical_records_contract);
+        env.storage()
+            .persistent()
+            .set(&MEDICAL_RECORD_CONTRACT, &medical_records_contract);
         env.storage().persistent().set(&PAUSED, &false);
 
         Ok(true)
@@ -297,12 +298,12 @@ impl FHIRIntegrationContract {
             return Err(Error::ContractPaused);
         }
 
-        // Validate NPI format (simple validation - should be 10 digits)
+        // Validate NPI format
         if npi.len() != 10 {
             return Err(Error::InvalidNPI);
         }
 
-        // Validate Tax ID format (simple validation)
+        // Validate Tax ID format
         if tax_id.is_empty() || tax_id.len() > 20 {
             return Err(Error::InvalidTaxId);
         }
@@ -378,7 +379,7 @@ impl FHIRIntegrationContract {
         provider.credential_id = Some(credential_id);
 
         providers.set(provider_id, provider);
-        env.storage().persistent().set(&PROVIDERS, &providers_map);
+        env.storage().persistent().set(&PROVIDERS, &providers);
 
         Ok(true)
     }
@@ -391,9 +392,7 @@ impl FHIRIntegrationContract {
             .get(&PROVIDERS)
             .ok_or(Error::ProviderNotFound)?;
 
-        providers
-            .get(provider_id)
-            .ok_or(Error::ProviderNotFound)
+        providers.get(provider_id).ok_or(Error::ProviderNotFound)
     }
 
     /// Configure EMR system for a provider
@@ -459,7 +458,7 @@ impl FHIRIntegrationContract {
         Ok(true)
     }
 
-    /// Store an observation (vital signs, lab results, etc.)
+    /// Store an observation
     pub fn store_observation(
         env: Env,
         provider: Address,
@@ -478,18 +477,13 @@ impl FHIRIntegrationContract {
             .unwrap_or(Map::new(&env));
 
         observations.set(observation.identifier.clone(), observation);
-        env.storage()
-            .persistent()
-            .set(&OBSERVATIONS, &observations);
+        env.storage().persistent().set(&OBSERVATIONS, &observations);
 
         Ok(true)
     }
 
     /// Get observation by identifier
-    pub fn get_observation(
-        env: Env,
-        observation_id: String,
-    ) -> Result<FHIRObservation, Error> {
+    pub fn get_observation(env: Env, observation_id: String) -> Result<FHIRObservation, Error> {
         let observations: Map<String, FHIRObservation> = env
             .storage()
             .persistent()
@@ -501,7 +495,7 @@ impl FHIRIntegrationContract {
             .ok_or(Error::ObservationNotFound)
     }
 
-    /// Store a condition (diagnosis)
+    /// Store a condition
     pub fn store_condition(
         env: Env,
         provider: Address,
@@ -533,9 +527,7 @@ impl FHIRIntegrationContract {
             .get(&CONDITIONS)
             .ok_or(Error::ConditionNotFound)?;
 
-        conditions
-            .get(condition_id)
-            .ok_or(Error::ConditionNotFound)
+        conditions.get(condition_id).ok_or(Error::ConditionNotFound)
     }
 
     /// Store medication statement
@@ -557,9 +549,7 @@ impl FHIRIntegrationContract {
             .unwrap_or(Map::new(&env));
 
         medications.set(medication.identifier.clone(), medication);
-        env.storage()
-            .persistent()
-            .set(&MEDICATIONS, &medications);
+        env.storage().persistent().set(&MEDICATIONS, &medications);
 
         Ok(true)
     }
@@ -599,9 +589,7 @@ impl FHIRIntegrationContract {
             .unwrap_or(Map::new(&env));
 
         procedures.set(procedure.identifier.clone(), procedure);
-        env.storage()
-            .persistent()
-            .set(&PROCEDURES, &procedures);
+        env.storage().persistent().set(&PROCEDURES, &procedures);
 
         Ok(true)
     }
@@ -614,9 +602,7 @@ impl FHIRIntegrationContract {
             .get(&PROCEDURES)
             .ok_or(Error::ConditionNotFound)?;
 
-        procedures
-            .get(procedure_id)
-            .ok_or(Error::ConditionNotFound)
+        procedures.get(procedure_id).ok_or(Error::ConditionNotFound)
     }
 
     /// Store allergy intolerance
@@ -651,9 +637,7 @@ impl FHIRIntegrationContract {
             .get(&ALLERGIES)
             .ok_or(Error::ConditionNotFound)?;
 
-        allergies
-            .get(allergy_id)
-            .ok_or(Error::ConditionNotFound)
+        allergies.get(allergy_id).ok_or(Error::ConditionNotFound)
     }
 
     /// Register data mapping for format conversion
@@ -673,20 +657,14 @@ impl FHIRIntegrationContract {
             return Err(Error::NotAuthorized);
         }
 
-        let mut mappings: Map<String, DataMapping> = env
+        // Key is tuple of (source_system, source_field) instead of format!
+        let mut mappings: Map<(String, String), DataMapping> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .unwrap_or(Map::new(&env));
 
-        let key = String::from_str(
-            &env,
-            &format!(
-                "{}-{}",
-                &mapping.source_system,
-                &mapping.source_field
-            ),
-        );
+        let key = (mapping.source_system.clone(), mapping.source_field.clone());
 
         mappings.set(key, mapping);
         env.storage().persistent().set(&DATA_MAPPINGS, &mappings);
@@ -700,21 +678,18 @@ impl FHIRIntegrationContract {
         source_system: String,
         source_field: String,
     ) -> Result<DataMapping, Error> {
-        let mappings: Map<String, DataMapping> = env
+        let mappings: Map<(String, String), DataMapping> = env
             .storage()
             .persistent()
             .get(&DATA_MAPPINGS)
             .ok_or(Error::MappingNotFound)?;
 
-        let key = String::from_str(
-            &env,
-            &format!("{}-{}", &source_system, &source_field),
-        );
+        let key = (source_system, source_field);
 
         mappings.get(key).ok_or(Error::MappingNotFound)
     }
 
-    /// Pause contract operations (emergency)
+    /// Pause contract operations
     pub fn pause(env: Env, admin: Address) -> Result<bool, Error> {
         admin.require_auth();
 

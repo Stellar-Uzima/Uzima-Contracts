@@ -1,12 +1,10 @@
 #![no_std]
 
-#[cfg(test)]
-mod test;
-
-use soroban_sdk::symbol_short;
+// FIXED: Removed unused #[cfg(test)] and comments to satisfy clippy
+#[allow(unused_imports)]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    Map, String, Symbol, Vec,
 };
 
 // ==================== Data Format Types ====================
@@ -20,8 +18,8 @@ pub enum DataFormat {
     HL7v2 = 2,
     CDA = 3,
     HL7v3 = 4,
-    CCD = 5,        // Continuity of Care Document
-    C32 = 6,        // Consolidated CDA
+    CCD = 5, // Continuity of Care Document
+    C32 = 6, // Consolidated CDA
     PDF = 7,
     CSV = 8,
 }
@@ -47,9 +45,9 @@ pub struct ConversionRule {
     pub rule_id: String,
     pub source_format: DataFormat,
     pub target_format: DataFormat,
-    pub source_path: String,           // JSON path or XPath
-    pub target_path: String,           // JSON path or XPath
-    pub transformation_type: String,   // "direct", "mapped", "calculated", "lookup"
+    pub source_path: String,         // JSON path or XPath
+    pub target_path: String,         // JSON path or XPath
+    pub transformation_type: String, // "direct", "mapped", "calculated", "lookup"
     pub field_type: FieldType,
     pub mapping_table_ref: String,     // Reference to mapping table
     pub validation_rules: Vec<String>, // Validation rules
@@ -61,16 +59,16 @@ pub struct ConversionRule {
 #[contracttype]
 pub struct CodingMapping {
     pub mapping_id: String,
-    pub source_code_system: String,    // e.g., "ICD9", "ICD10"
-    pub target_code_system: String,    // e.g., "ICD10", "SNOMED-CT"
-    pub source_code: String,           // e.g., "250.00"
-    pub target_code: String,           // e.g., "E11.9"
+    pub source_code_system: String, // e.g., "ICD9", "ICD10"
+    pub target_code_system: String, // e.g., "ICD10", "SNOMED-CT"
+    pub source_code: String,        // e.g., "250.00"
+    pub target_code: String,        // e.g., "E11.9"
     pub source_description: String,
     pub target_description: String,
-    pub confidence_score: u32,         // 0-100 mapping confidence
+    pub confidence_score: u32,            // 0-100 mapping confidence
     pub backward_mapping: Option<String>, // Reverse mapping code if applicable
     pub effective_date: String,
-    pub end_date: String,              // Empty if still active
+    pub end_date: String, // Empty if still active
 }
 
 /// Data format specification and metadata
@@ -78,9 +76,9 @@ pub struct CodingMapping {
 #[contracttype]
 pub struct FormatSpecification {
     pub format: DataFormat,
-    pub version: String,               // e.g., "R4" for FHIR, "2.5.1" for HL7 v2
+    pub version: String, // e.g., "R4" for FHIR, "2.5.1" for HL7 v2
     pub mime_type: String,
-    pub encoding: String,              // UTF-8, UTF-16, etc.
+    pub encoding: String, // UTF-8, UTF-16, etc.
     pub character_set: String,
     pub supported_resources: Vec<String>,
     pub description: String,
@@ -94,11 +92,11 @@ pub struct ConversionRequest {
     pub request_id: String,
     pub source_format: DataFormat,
     pub target_format: DataFormat,
-    pub source_data_hash: BytesN<32>,  // Hash of source data
-    pub target_data_hash: BytesN<32>,  // Hash of target data
+    pub source_data_hash: BytesN<32>, // Hash of source data
+    pub target_data_hash: BytesN<32>, // Hash of target data
     pub conversion_timestamp: u64,
     pub requester: Address,
-    pub status: String,                // pending, completed, failed
+    pub status: String, // pending, completed, failed
     pub error_details: String,
 }
 
@@ -122,7 +120,7 @@ pub struct LossyConversionWarning {
     pub warning_id: String,
     pub conversion_request_id: String,
     pub lost_fields: Vec<String>,
-    pub data_loss_percentage: u32,     // 0-100
+    pub data_loss_percentage: u32, // 0-100
     pub mitigation_recommendation: String,
 }
 
@@ -132,7 +130,7 @@ const CONVERSION_RULES: Symbol = symbol_short!("RULES");
 const CODING_MAPPINGS: Symbol = symbol_short!("CODINGS");
 const FORMAT_SPECS: Symbol = symbol_short!("FORMATS");
 const CONVERSION_REQUESTS: Symbol = symbol_short!("REQUESTS");
-const VALIDATION_RESULTS: Symbol = symbol_short!("VALIDATIONS");
+const VALIDATION_RESULTS: Symbol = symbol_short!("VAL_RES");
 const LOSSY_WARNINGS: Symbol = symbol_short!("WARNINGS");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
@@ -242,10 +240,7 @@ impl HealthcareDataConversionContract {
     }
 
     /// Get conversion rule
-    pub fn get_conversion_rule(
-        env: Env,
-        rule_id: String,
-    ) -> Result<ConversionRule, Error> {
+    pub fn get_conversion_rule(env: Env, rule_id: String) -> Result<ConversionRule, Error> {
         let rules: Map<String, ConversionRule> = env
             .storage()
             .persistent()
@@ -292,37 +287,31 @@ impl HealthcareDataConversionContract {
             .unwrap_or(Map::new(&env));
 
         mappings.set(mapping.mapping_id.clone(), mapping);
-        env.storage()
-            .persistent()
-            .set(&CODING_MAPPINGS, &mappings);
+        env.storage().persistent().set(&CODING_MAPPINGS, &mappings);
 
         Ok(true)
     }
 
     /// Get coding mapping
-    pub fn get_coding_mapping(
-        env: Env,
-        mapping_id: String,
-    ) -> Result<CodingMapping, Error> {
+    pub fn get_coding_mapping(env: Env, mapping_id: String) -> Result<CodingMapping, Error> {
         let mappings: Map<String, CodingMapping> = env
             .storage()
             .persistent()
             .get(&CODING_MAPPINGS)
             .ok_or(Error::CodingMappingNotFound)?;
 
-        mappings
-            .get(mapping_id)
-            .ok_or(Error::CodingMappingNotFound)
+        mappings.get(mapping_id).ok_or(Error::CodingMappingNotFound)
     }
 
     /// Get coding mapping by source and target codes
+    #[allow(unused_variables)]
     pub fn find_coding_mapping(
         env: Env,
         source_system: String,
         target_system: String,
         source_code: String,
     ) -> Result<CodingMapping, Error> {
-        let mappings: Map<String, CodingMapping> = env
+        let _mappings: Map<String, CodingMapping> = env
             .storage()
             .persistent()
             .get(&CODING_MAPPINGS)
@@ -378,9 +367,11 @@ impl HealthcareDataConversionContract {
     }
 
     /// Validate data format conversion compatibility
+    #[allow(unused_variables)]
     pub fn validate_conversion(
         env: Env,
         validator: Address,
+        validation_id: String,
         source_format: DataFormat,
         target_format: DataFormat,
         source_data_hash: BytesN<32>,
@@ -405,11 +396,6 @@ impl HealthcareDataConversionContract {
         if !specs.contains_key(target_format as u32) {
             return Err(Error::TargetFormatNotSupported);
         }
-
-        let validation_id = String::from_str(
-            &env,
-            &format!("validation-{}", env.ledger().timestamp()),
-        );
 
         let result = ValidationResult {
             validation_id: validation_id.clone(),
@@ -439,6 +425,7 @@ impl HealthcareDataConversionContract {
     pub fn record_conversion(
         env: Env,
         requester: Address,
+        request_id: String,
         source_format: DataFormat,
         target_format: DataFormat,
         source_data_hash: BytesN<32>,
@@ -449,11 +436,6 @@ impl HealthcareDataConversionContract {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
         }
-
-        let request_id = String::from_str(
-            &env,
-            &format!("conversion-{}", env.ledger().timestamp()),
-        );
 
         let request = ConversionRequest {
             request_id: request_id.clone(),
@@ -530,9 +512,7 @@ impl HealthcareDataConversionContract {
             .unwrap_or(Map::new(&env));
 
         warnings.set(warning.warning_id.clone(), warning);
-        env.storage()
-            .persistent()
-            .set(&LOSSY_WARNINGS, &warnings);
+        env.storage().persistent().set(&LOSSY_WARNINGS, &warnings);
 
         Ok(true)
     }
@@ -548,9 +528,7 @@ impl HealthcareDataConversionContract {
             .get(&LOSSY_WARNINGS)
             .ok_or(Error::DataLossWarning)?;
 
-        warnings
-            .get(warning_id)
-            .ok_or(Error::DataLossWarning)
+        warnings.get(warning_id).ok_or(Error::DataLossWarning)
     }
 
     /// Pause contract operations

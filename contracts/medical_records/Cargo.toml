@@ -7,28 +7,19 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
-
-
-# [dependencies]
-# soroban-sdk.workspace = true
-# stellar-xdr.workspace = true
-
-
-
-# [dev-dependencies]
-# soroban-sdk = { workspace = true, default-features = false }
-
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
+# Add these lines to fix the "unresolved import" errors
+federated_learning = { path = "../federated_learning" }
+anomaly_detection = { path = "../anomaly_detection" }
+predictive_analytics = { path = "../predictive_analytics" }
+explainable_ai = { path = "../explainable_ai" }
 
 [features]
 default = []
 testutils = ["soroban-sdk/testutils"]
-
-# No arbitrary or other extra features enabled

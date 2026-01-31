@@ -462,7 +462,8 @@ impl CrossChainIdentityContract {
             .get(&MIN_ATTESTATIONS)
             .unwrap_or(DEFAULT_MIN_ATTESTATIONS);
 
-        if is_valid && request.validator_attestations.len() as u32 >= min_attestations {
+        // FIXED: Removed unnecessary cast 'as u32'
+        if is_valid && request.validator_attestations.len() >= min_attestations {
             request.status = RequestStatus::Approved;
 
             // Create verified identity
@@ -709,7 +710,8 @@ impl CrossChainIdentityContract {
 
     fn is_admin(env: &Env, caller: &Address) -> bool {
         let admin: Option<Address> = env.storage().persistent().get(&ADMIN);
-        admin.map_or(false, |a| &a == caller)
+        // FIXED: Replaced map_or with is_some_and
+        admin.is_some_and(|a| &a == caller)
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
@@ -724,7 +726,7 @@ impl CrossChainIdentityContract {
             .storage()
             .persistent()
             .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Removed &
 
         match validators.get(validator.clone()) {
             Some(v) if v.is_active => Ok(()),
@@ -739,12 +741,14 @@ impl CrossChainIdentityContract {
         count + 1
     }
 
-    fn identity_key(_env: &Env, _stellar_address: &Address, _chain: &ChainId) -> Symbol {
-        Symbol::new(&_env, "id_key")
+    fn identity_key(env: &Env, _stellar_address: &Address, _chain: &ChainId) -> Symbol {
+        // Fixed: Removed _
+        Symbol::new(env, "id_key")
     }
 
-    fn attestation_key(_env: &Env, _request_id: u64, _validator: &Address) -> Symbol {
-        Symbol::new(&_env, "att_key")
+    fn attestation_key(env: &Env, _request_id: u64, _validator: &Address) -> Symbol {
+        // Fixed: Removed _
+        Symbol::new(env, "att_key")
     }
 
     fn create_verified_identity(env: &Env, request: &VerificationRequest) -> Result<(), Error> {
@@ -763,22 +767,22 @@ impl CrossChainIdentityContract {
             verified_at: now,
             expires_at: now + ttl,
             attestations: request.validator_attestations.len(),
-            metadata_hash: BytesN::from_array(&env, &[0u8; 32]),
+            metadata_hash: BytesN::from_array(env, &[0u8; 32]), // Fixed: Removed &
         };
 
         let identity_key =
-            Self::identity_key(&env, &request.stellar_address, &request.external_chain);
+            Self::identity_key(env, &request.stellar_address, &request.external_chain); // Fixed: Removed &
         let mut identities: Map<Symbol, CrossChainIdentity> = env
             .storage()
             .persistent()
             .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Removed &
 
         identities.set(identity_key, identity);
         env.storage().persistent().set(&IDENTITIES, &identities);
 
         env.events().publish(
-            (Symbol::new(&env, "IdentityVerified"),),
+            (Symbol::new(env, "IdentityVerified"),), // Fixed: Removed &
             (
                 request.stellar_address.clone(),
                 request.external_chain.clone(),
@@ -793,7 +797,7 @@ impl CrossChainIdentityContract {
             .storage()
             .persistent()
             .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Removed &
 
         if let Some(mut v) = validators.get(validator.clone()) {
             v.total_attestations += 1;

@@ -54,7 +54,8 @@ fn add_credit(env: &Env, addr: &Address, delta: i128) {
         .storage()
         .persistent()
         .get(&CREDITS)
-        .unwrap_or(Map::new(&env));
+        // FIXED: Removed redundant borrow &env -> env
+        .unwrap_or(Map::new(env));
     let current = credits.get(addr.clone()).unwrap_or(0);
     let new_bal = current + delta;
     credits.set(addr.clone(), new_bal);
@@ -184,7 +185,8 @@ impl EscrowContract {
         env.storage().persistent().set(&ESCROWS, &escrows);
 
         // interactions: credit balances via pull-payment pattern
-        let fee = (e.amount as i128) * (fee_conf.platform_fee_bps as i128) / 10_000;
+        // FIXED: Removed unnecessary cast (e.amount as i128)
+        let fee = e.amount * (fee_conf.platform_fee_bps as i128) / 10_000;
         let provider_amount = e.amount - fee;
         add_credit(&env, &e.payee, provider_amount);
         add_credit(&env, &fee_conf.fee_receiver, fee);
@@ -215,7 +217,8 @@ impl EscrowContract {
             panic!("Already settled");
         }
         // require at least one approval (oracle/admin) or disputed flag
-        if e.approvals.len() == 0 && !e.disputed {
+        // FIXED: Changed len() == 0 to is_empty()
+        if e.approvals.is_empty() && !e.disputed {
             panic!("No basis to refund");
         }
 
@@ -296,9 +299,9 @@ mod test {
         assert!(e.released);
         // credits: payee 975, fee 25
         let payee_credit = client.get_credit(&payee);
-        let fee_credit = client.get_credit(&Address::generate(&env)); // not the same; need fee receiver used above
-                                                                      // Retrieve exact fee receiver credit
-                                                                      // We can't read fee receiver here; just assert payee credit equals expected
+        let _fee_credit = client.get_credit(&Address::generate(&env)); // not the same; need fee receiver used above
+                                                                       // Retrieve exact fee receiver credit
+                                                                       // We can't read fee receiver here; just assert payee credit equals expected
         assert_eq!(payee_credit, 975);
     }
 

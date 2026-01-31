@@ -1,7 +1,10 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
-#[cfg(test)]
-mod test;
+// FIXED: Removed 'mod test;' because the file does not exist.
+// Once you create contracts/emr_integration/src/test.rs, you can uncomment this.
+// #[cfg(test)]
+// mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
@@ -40,8 +43,8 @@ pub struct EMRSystem {
     pub vendor_name: String,
     pub vendor_contact: String,
     pub system_version: String,
-    pub supported_standards: Vec<String>,  // HL7 v2, HL7 FHIR, CDA, etc.
-    pub api_endpoints: Vec<String>,        // Available API endpoints
+    pub supported_standards: Vec<String>, // HL7 v2, HL7 FHIR, CDA, etc.
+    pub api_endpoints: Vec<String>,       // Available API endpoints
     pub status: EMRStatus,
     pub last_activity: u64,
     pub integration_date: u64,
@@ -80,7 +83,7 @@ pub struct ProviderVerification {
     pub board_certification: Vec<String>,
     pub malpractice_insurance: String,
     pub background_check_id: String,
-    pub verification_status: String,  // approved, rejected, pending, expired
+    pub verification_status: String, // approved, rejected, pending, expired
 }
 
 /// Healthcare Network Node (for provider directory)
@@ -89,16 +92,16 @@ pub struct ProviderVerification {
 pub struct NetworkNode {
     pub node_id: String,
     pub provider_id: String,
-    pub node_type: String,              // hospital, clinic, lab, pharmacy, specialist
+    pub node_type: String, // hospital, clinic, lab, pharmacy, specialist
     pub network_name: String,
     pub geographic_region: String,
     pub specialties: Vec<String>,
-    pub bed_capacity: u32,              // 0 for non-hospital
+    pub bed_capacity: u32, // 0 for non-hospital
     pub operating_hours: String,
     pub emergency_services: bool,
     pub telemedicine_enabled: bool,
-    pub coordinates: String,            // lat,long format
-    pub connectivity_score: u32,        // 0-100
+    pub coordinates: String,     // lat,long format
+    pub connectivity_score: u32, // 0-100
 }
 
 /// Interoperability Agreement
@@ -111,10 +114,10 @@ pub struct InteroperabilityAgreement {
     pub effective_date: String,
     pub expiration_date: String,
     pub supported_data_types: Vec<String>,
-    pub access_level: String,           // read-only, read-write, limited, full
-    pub audit_requirement: String,      // none, monthly, quarterly, yearly
-    pub data_encryption: String,        // TLS, end-to-end, both
-    pub status: String,                 // active, suspended, terminated
+    pub access_level: String,      // read-only, read-write, limited, full
+    pub audit_requirement: String, // none, monthly, quarterly, yearly
+    pub data_encryption: String,   // TLS, end-to-end, both
+    pub status: String,            // active, suspended, terminated
 }
 
 /// Interoperability Test Result
@@ -125,10 +128,10 @@ pub struct InteroperabilityTest {
     pub test_date: u64,
     pub provider_a: String,
     pub provider_b: String,
-    pub test_type: String,              // data-exchange, api-connectivity, format-conversion, performance
-    pub result_status: String,          // passed, failed, partial
-    pub success_rate: u32,              // 0-100
-    pub data_exchanged: u64,            // bytes
+    pub test_type: String, // data-exchange, api-connectivity, format-conversion, performance
+    pub result_status: String, // passed, failed, partial
+    pub success_rate: u32, // 0-100
+    pub data_exchanged: u64, // bytes
     pub latency_ms: u32,
     pub error_details: String,
     pub tester_address: Address,
@@ -188,7 +191,9 @@ impl EMRIntegrationContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&FHIR_CONTRACT, &fhir_contract);
+        env.storage()
+            .persistent()
+            .set(&FHIR_CONTRACT, &fhir_contract);
         env.storage().persistent().set(&PAUSED, &false);
 
         Ok(true)
@@ -256,9 +261,7 @@ impl EMRIntegrationContract {
             .get(&EMR_SYSTEMS)
             .ok_or(Error::EMRSystemNotFound)?;
 
-        systems
-            .get(system_id)
-            .ok_or(Error::EMRSystemNotFound)
+        systems.get(system_id).ok_or(Error::EMRSystemNotFound)
     }
 
     /// Start provider onboarding process
@@ -534,9 +537,7 @@ impl EMRIntegrationContract {
             .get(&INTEROP_AGREEMENTS)
             .ok_or(Error::AgreementNotFound)?;
 
-        agreements
-            .get(agreement_id)
-            .ok_or(Error::AgreementNotFound)
+        agreements.get(agreement_id).ok_or(Error::AgreementNotFound)
     }
 
     /// Record interoperability test results

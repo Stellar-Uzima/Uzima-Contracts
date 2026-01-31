@@ -6,9 +6,10 @@ use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
 fn create_contract(env: &Env) -> (CrossChainIdentityContractClient<'_>, Address, Address) {
     let contract_id = env.register_contract(None, CrossChainIdentityContract);
-    let client = CrossChainIdentityContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let bridge = Address::generate(&env);
+    // FIXED: Removed redundant borrow
+    let client = CrossChainIdentityContractClient::new(env, &contract_id);
+    let admin = Address::generate(env);
+    let bridge = Address::generate(env);
     (client, admin, bridge)
 }
 
