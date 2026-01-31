@@ -7,6 +7,8 @@
 mod test;
 #[cfg(test)]
 mod test_permissions;
+#[cfg(test)]             // <--- Add this
+mod test_migration;      // <--- Add this
 
 mod events;
 mod validation;
@@ -194,6 +196,7 @@ pub struct RecoveryProposal {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    Admin,
     RecordCount,
     IdentityRegistry,
     AuthLevel,
@@ -204,6 +207,7 @@ pub enum DataKey {
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
     UserPermissions(Address),
+    ContractVersion, // <--- Add this
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -785,4 +789,65 @@ impl MedicalRecordsContract {
 
         Ok(record)
     }
+    // ... (Your existing get_record function ends here) ...
+    //    Ok(record)
+    // }
+
+    // =================================================================
+    // MIGRATION & UPGRADE SYSTEM
+    // =================================================================
+
+    // Helper to get the current version
+    fn get_contract_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(0) // Default to 0 if not set
+    }
+
+    // Helper to set the version
+    fn set_contract_version(env: &Env, new_version: u32) {
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractVersion, &new_version);
+    }
+
+    // The Main Upgrade Function
+    // Updates WASM code and migrates data atomically.
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        // A. Security Check
+        caller.require_auth();
+        
+        // Use existing Role system instead of missing DataKey::Admin
+        if !Self::has_role(&env, &caller, &Role::Admin) {
+            panic!("Not authorized to upgrade contract");
+        }
+
+        // B. Update the Contract Code
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+        // C. Run Data Migration
+        Self::migrate_data(&env);
+    }
+
+    // The Data Migration Logic
+    fn migrate_data(env: &Env) {
+        // Define the version this code represents
+        const CURRENT_CONTRACT_VERSION: u32 = 1; 
+
+        let current_version = Self::get_contract_version(env);
+
+        // If the stored data is older than the code's version, run migration
+        if current_version < CURRENT_CONTRACT_VERSION {
+            
+            // Example: Migration from V0 to V1
+            if current_version < 1 {
+                // e.g., Self::migrate_v0_to_v1(env);
+            }
+
+            // Update the stored version to match the current code
+            Self::set_contract_version(env, CURRENT_CONTRACT_VERSION);
+        }
+    }
 }
+
