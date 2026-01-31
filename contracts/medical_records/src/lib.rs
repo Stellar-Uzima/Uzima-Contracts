@@ -1,5 +1,7 @@
 #![no_std]
 #![allow(unused_variables)]
+#![allow(dead_code)] // <--- NEW LINE 1
+#![allow(clippy::enum_variant_names)] // <--- NEW LINE 2
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::too_many_arguments)]
 
