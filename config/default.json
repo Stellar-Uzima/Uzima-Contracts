@@ -1,0 +1,58 @@
+{
+  "contracts": {
+    "ai_analytics": {
+      "enabled": true
+    },
+    "anomaly_detection": {
+      "enabled": true
+    },
+    "cross_chain_bridge": {
+      "enabled": true
+    },
+    "dispute_resolution": {
+      "enabled": true
+    },
+    "emr_integration": {
+      "enabled": true
+    },
+    "escrow": {
+      "enabled": true
+    },
+    "governor": {
+      "enabled": true,
+      "voting_period": 6570
+    },
+    "identity_registry": {
+      "enabled": true
+    },
+    "medical_consent_nft": {
+      "enabled": true
+    },
+    "medical_records": {
+      "enabled": true
+    },
+    "payment_router": {
+      "enabled": true
+    },
+    "reputation": {
+      "enabled": true
+    },
+    "sut_token": {
+      "enabled": true,
+      "name": "SUT Token",
+      "symbol": "SUT"
+    },
+    "timelock": {
+      "enabled": true
+    },
+    "token_sale": {
+      "enabled": true
+    },
+    "treasury_controller": {
+      "enabled": true
+    },
+    "upgrade_manager": {
+      "enabled": true
+    }
+  }
+}

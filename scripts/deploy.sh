@@ -52,16 +52,12 @@ print_status "Starting deployment of '$CONTRACT_NAME' to '$NETWORK' network"
 
 # Build the contract
 print_step "Building contract..."
-if ! cd "$CONTRACT_DIR"; then
-    print_error "Failed to cd into $CONTRACT_DIR"
-    exit 1
-fi
 
 # Clean previous builds
-cargo clean || { print_error "Cargo clean failed"; exit 1; }
+# cargo clean -p "$CONTRACT_NAME" || { print_error "Cargo clean failed"; exit 1; }
 
 # Build for WebAssembly target
-if ! cargo build --target wasm32-unknown-unknown --release; then
+if ! cargo build -p "$CONTRACT_NAME" --target wasm32-unknown-unknown --release; then
     print_error "Cargo build failed"
     exit 1
 fi
@@ -82,8 +78,6 @@ if command -v soroban &> /dev/null; then
         print_warning "Optimization failed, continuing with unoptimized contract"
     fi
 fi
-
-cd - > /dev/null || { print_error "Failed to cd back"; exit 1; }
 
 # Configure network if not already configured
 print_step "Configuring network..."
@@ -148,7 +142,7 @@ fi
 # Deploy the contract
 print_step "Deploying contract..."
 CONTRACT_ID=$(soroban contract deploy \
-    --wasm "$CONTRACT_DIR/$WASM_FILE" \
+    --wasm "$WASM_FILE" \
     --source "$IDENTITY" \
     --network "$NETWORK" 2>/dev/null) || { print_error "Deployment command failed"; exit 1; }
 
