@@ -5,10 +5,10 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)] // <--- Add this
+mod test_migration;
 #[cfg(test)]
-mod test_permissions;
-#[cfg(test)]             // <--- Add this
-mod test_migration;      // <--- Add this
+mod test_permissions; // <--- Add this
 
 mod events;
 mod validation;
@@ -817,7 +817,7 @@ impl MedicalRecordsContract {
     pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
         // A. Security Check
         caller.require_auth();
-        
+
         // Use existing Role system instead of missing DataKey::Admin
         if !Self::has_role(&env, &caller, &Role::Admin) {
             panic!("Not authorized to upgrade contract");
@@ -833,13 +833,12 @@ impl MedicalRecordsContract {
     // The Data Migration Logic
     fn migrate_data(env: &Env) {
         // Define the version this code represents
-        const CURRENT_CONTRACT_VERSION: u32 = 1; 
+        const CURRENT_CONTRACT_VERSION: u32 = 1;
 
         let current_version = Self::get_contract_version(env);
 
         // If the stored data is older than the code's version, run migration
         if current_version < CURRENT_CONTRACT_VERSION {
-            
             // Example: Migration from V0 to V1
             if current_version < 1 {
                 // e.g., Self::migrate_v0_to_v1(env);
@@ -850,4 +849,3 @@ impl MedicalRecordsContract {
         }
     }
 }
-
