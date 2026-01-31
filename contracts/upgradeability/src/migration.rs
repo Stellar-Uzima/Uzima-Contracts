@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Symbol};
 use super::UpgradeError;
+use soroban_sdk::Env;
 
 pub trait Migratable {
     /// Function called after an upgrade to perform data migration

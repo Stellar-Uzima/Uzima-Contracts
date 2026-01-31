@@ -7,12 +7,10 @@
 mod test;
 #[cfg(test)]
 mod test_permissions;
-
 mod events;
 mod validation;
 
-use upgradeability;
-
+use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
@@ -218,7 +216,6 @@ const IDENTITY_CONTRACT: Symbol = symbol_short!("IDENTITY");
 const ACCESS_CONTRACT: Symbol = symbol_short!("ACCESS");
 const CROSS_CHAIN_REFS: Symbol = symbol_short!("CC_REFS");
 const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
@@ -290,7 +287,6 @@ pub struct BatchResult {
     pub successes: Vec<u64>,
     pub failures: Vec<FailureInfo>,
 }
-
 #[contract]
 pub struct MedicalRecordsContract;
 

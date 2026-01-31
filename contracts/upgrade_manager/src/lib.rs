@@ -3,7 +3,6 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol, Vec,
 };
-use upgradeability::{storage as up_storage, UpgradeError, UpgradeHistory};
 
 #[cfg(test)]
 mod test;
@@ -39,6 +38,12 @@ pub struct Config {
     pub validators: Vec<Address>,
 }
 
+// Minimal interface for target contracts
+#[soroban_sdk::contractclient(name = "TargetContractClient")]
+pub trait TargetContract {
+    fn upgrade(env: Env, new_wasm_hash: BytesN<32>);
+}
+
 #[contractimpl]
 impl UpgradeManager {
     pub fn initialize(env: Env, admin: Address, validators: Vec<Address>) {
@@ -64,13 +69,13 @@ impl UpgradeManager {
     ) -> u64 {
         proposer.require_auth();
         let config: Config = env.storage().instance().get(&CONFIG).unwrap();
-        
+
         let mut proposals: Map<u64, UpgradeProposal> = env
             .storage()
             .persistent()
             .get(&PROPOSALS)
             .unwrap_or(Map::new(&env));
-        
+
         let id = proposals.len() as u64;
         let proposal = UpgradeProposal {
             target,
@@ -84,46 +89,41 @@ impl UpgradeManager {
             canceled: false,
             approvals: Vec::new(&env),
         };
-        
+
         proposals.set(id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        
-        env.events().publish((symbol_short!("proposed"), id), proposer);
+
+        env.events()
+            .publish((symbol_short!("proposed"), id), proposer);
         id
     }
 
     pub fn approve(env: Env, validator: Address, proposal_id: u64) {
         validator.require_auth();
         let config: Config = env.storage().instance().get(&CONFIG).unwrap();
-        
+
         if !config.validators.contains(&validator) {
             panic!("Not a validator");
         }
 
-        let mut proposals: Map<u64, UpgradeProposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPOSALS)
-            .unwrap();
-        
+        let mut proposals: Map<u64, UpgradeProposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap();
+
         let mut proposal = proposals.get(proposal_id).expect("Proposal not found");
-        
+
         if proposal.approvals.contains(&validator) {
             panic!("Already approved");
         }
-        
+
         proposal.approvals.push_back(validator);
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
     }
 
     pub fn execute(env: Env, proposal_id: u64) {
-        let mut proposals: Map<u64, UpgradeProposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPOSALS)
-            .unwrap();
-        
+        let mut proposals: Map<u64, UpgradeProposal> =
+            env.storage().persistent().get(&PROPOSALS).unwrap();
+
         let mut proposal = proposals.get(proposal_id).expect("Proposal not found");
         let config: Config = env.storage().instance().get(&CONFIG).unwrap();
 
@@ -135,7 +135,7 @@ impl UpgradeManager {
             panic!("Timelock not expired");
         }
 
-        if (proposal.approvals.len() as u32) < config.required_approvals {
+        if proposal.approvals.len() < config.required_approvals {
             panic!("Not enough approvals");
         }
 
@@ -147,13 +147,8 @@ impl UpgradeManager {
         proposal.executed = true;
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        
-        env.events().publish((symbol_short!("executed"), proposal_id), ());
-    }
-}
 
-// Minimal interface for target contracts
-#[soroban_sdk::contractclient(name = "TargetContractClient")]
-pub trait TargetContract {
-    fn upgrade(env: Env, new_wasm_hash: BytesN<32>);
+        env.events()
+            .publish((symbol_short!("executed"), proposal_id), ());
+    }
 }

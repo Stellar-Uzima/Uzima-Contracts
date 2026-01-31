@@ -1,8 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{
-    contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec,
-};
+use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 pub mod migration;
 
@@ -71,7 +69,10 @@ pub mod storage {
     }
 
     pub fn get_history(env: &Env) -> Vec<UpgradeHistory> {
-        env.storage().persistent().get(&HISTORY).unwrap_or(Vec::new(env))
+        env.storage()
+            .persistent()
+            .get(&HISTORY)
+            .unwrap_or(Vec::new(env))
     }
 }
 
@@ -97,13 +98,11 @@ pub fn execute_upgrade(
         return Err(UpgradeError::IncompatibleVersion);
     }
 
-    let old_wasm_hash = env.deployer().at_current_contract_address().wasm_hash();
-
     storage::add_history(
         env,
         UpgradeHistory {
-            wasm_hash: old_wasm_hash,
-            version: current_version,
+            wasm_hash: new_wasm_hash.clone(),
+            version: new_version,
             upgraded_at: env.ledger().timestamp(),
             description,
         },
@@ -119,20 +118,18 @@ pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
     authorize_upgrade(env)?;
 
     let history = storage::get_history(env);
-    if history.is_empty() {
+    if history.len() < 2 {
         return Err(UpgradeError::HistoryNotFound);
     }
 
-    let last_index = history.len() - 1;
-    let last_version = history.get(last_index).unwrap();
+    // To rollback, we go to the second to last version in history
+    let last_index = history.len() - 2;
+    let target_version = history.get(last_index).unwrap();
 
-    // Note: Rollback is just another upgrade but to an older hash
-    // We increment version to avoid conflicts, or handle it differently?
-    // Usually rollback should be explicit.
-    
     let current_version = storage::get_version(env);
-    storage::set_version(env, current_version + 1); // Increment even on rollback to signify an event
-    env.deployer().update_current_contract_wasm(last_version.wasm_hash);
+    storage::set_version(env, current_version + 1);
+    env.deployer()
+        .update_current_contract_wasm(target_version.wasm_hash);
 
     Ok(())
 }
