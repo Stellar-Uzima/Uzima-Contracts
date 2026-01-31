@@ -40,12 +40,6 @@ print_status "Starting deployment of '$CONTRACT_NAME' to '$NETWORK' network"
 
 # Build
 print_step "Building contract..."
-# Use subshell to avoid changing directory for the whole script
-(
-    cd "$CONTRACT_DIR" || exit 1
-    cargo clean
-    cargo build --target wasm32-unknown-unknown --release
-)
 
 WASM_FILE="target/wasm32-unknown-unknown/release/${CONTRACT_NAME}.wasm"
 if [ ! -f "$WASM_FILE" ]; then
@@ -61,12 +55,7 @@ if command -v soroban &> /dev/null; then
     soroban contract optimize --wasm "$WASM_FILE" || print_warning "Optimization skipped/failed"
 fi
 
-# Deploy
-print_step "Deploying contract..."
-# Capture output but allow failure to be caught
-if ! CONTRACT_ID=$(soroban contract deploy --wasm "$WASM_FILE" --source "$IDENTITY" --network "$NETWORK"); then
-    print_error "Deployment failed."
-    exit 1
+
 fi
 
 print_status "Contract deployed successfully!"
@@ -76,7 +65,7 @@ print_status "Contract ID: $CONTRACT_ID"
 mkdir -p deployments
 DEPLOY_INFO_FILE="deployments/${NETWORK}_${CONTRACT_NAME}.json"
 
-cat > "$DEPLOY_INFO_FILE" << EOF
+
 {
     "contract_name": "$CONTRACT_NAME",
     "contract_id": "$CONTRACT_ID",

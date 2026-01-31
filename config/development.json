@@ -1,0 +1,12 @@
+{
+  "extends": "./default.json",
+  "contracts": {
+    "governor": {
+      "voting_period": 10
+    },
+    "sut_token": {
+      "name": "SUT Token (Dev)",
+      "symbol": "SUTD"
+    }
+  }
+}
