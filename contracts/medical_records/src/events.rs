@@ -39,6 +39,37 @@ pub enum EventType {
     PermissionRevoked,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[contracttype]
+pub enum EventSeverity {
+    Info = 0,    // Normal operations
+    Warning = 1, // Security-sensitive operations
+    Err = 2,     // System-critical errors (named Err to avoid Rust trait conflict)
+}
+
+impl EventSeverity {
+    pub fn from_event_type(event_type: EventType) -> EventSeverity {
+        match event_type {
+            // Err: System control and recovery
+            EventType::ContractPaused
+            | EventType::ContractUnpaused
+            | EventType::EmergencyAccessGranted
+            | EventType::RecoveryProposed
+            | EventType::RecoveryApproved
+            | EventType::RecoveryExecuted => EventSeverity::Err,
+
+            // Warning: Security and access control
+            EventType::UserRoleUpdated
+            | EventType::UserDeactivated
+            | EventType::AccessGranted
+            | EventType::AIConfigUpdated => EventSeverity::Warning,
+
+            // Info: Normal operations (default for all others)
+            _ => EventSeverity::Info,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum OperationCategory {
@@ -57,6 +88,7 @@ pub enum OperationCategory {
 pub struct EventMetadata {
     pub event_type: EventType,
     pub category: OperationCategory,
+    pub severity: EventSeverity,
     pub timestamp: u64,
     pub user_id: Address,
     pub session_id: Option<String>, // Changed from BytesN to String for serialization
@@ -190,6 +222,7 @@ pub fn emit_user_created(
         metadata: EventMetadata {
             event_type: EventType::UserCreated,
             category: OperationCategory::UserManagement,
+            severity: EventSeverity::from_event_type(EventType::UserCreated),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -219,6 +252,7 @@ pub fn emit_user_role_updated(
         metadata: EventMetadata {
             event_type: EventType::UserRoleUpdated,
             category: OperationCategory::UserManagement,
+            severity: EventSeverity::from_event_type(EventType::UserRoleUpdated),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -242,6 +276,7 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
         metadata: EventMetadata {
             event_type: EventType::UserDeactivated,
             category: OperationCategory::UserManagement,
+            severity: EventSeverity::from_event_type(EventType::UserDeactivated),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -273,6 +308,7 @@ pub fn emit_record_created(
         metadata: EventMetadata {
             event_type: EventType::RecordCreated,
             category: OperationCategory::RecordOperations,
+            severity: EventSeverity::from_event_type(EventType::RecordCreated),
             timestamp: env.ledger().timestamp(),
             user_id: doctor.clone(),
             session_id: None,
@@ -298,6 +334,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         metadata: EventMetadata {
             event_type: EventType::RecordAccessed,
             category: OperationCategory::RecordOperations,
+            severity: EventSeverity::from_event_type(EventType::RecordAccessed),
             timestamp: env.ledger().timestamp(),
             user_id: accessor,
             session_id: None,
@@ -330,6 +367,7 @@ pub fn emit_access_requested(
         metadata: EventMetadata {
             event_type: EventType::AccessRequested,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::AccessRequested),
             timestamp: env.ledger().timestamp(),
             user_id: requester.clone(),
             session_id: None,
@@ -363,6 +401,7 @@ pub fn emit_access_granted(
         metadata: EventMetadata {
             event_type: EventType::AccessGranted,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::AccessGranted),
             timestamp: env.ledger().timestamp(),
             user_id: granter,
             session_id: None,
@@ -395,6 +434,7 @@ pub fn emit_emergency_access_granted(
         metadata: EventMetadata {
             event_type: EventType::EmergencyAccessGranted,
             category: OperationCategory::EmergencyAccess,
+            severity: EventSeverity::from_event_type(EventType::EmergencyAccessGranted),
             timestamp: env.ledger().timestamp(),
             user_id: granter,
             session_id: None,
@@ -419,6 +459,7 @@ pub fn emit_contract_paused(env: &Env, admin: Address) {
         metadata: EventMetadata {
             event_type: EventType::ContractPaused,
             category: OperationCategory::Administrative,
+            severity: EventSeverity::from_event_type(EventType::ContractPaused),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -441,6 +482,7 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
         metadata: EventMetadata {
             event_type: EventType::ContractUnpaused,
             category: OperationCategory::Administrative,
+            severity: EventSeverity::from_event_type(EventType::ContractUnpaused),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -470,6 +512,7 @@ pub fn emit_recovery_proposed(
         metadata: EventMetadata {
             event_type: EventType::RecoveryProposed,
             category: OperationCategory::Administrative,
+            severity: EventSeverity::from_event_type(EventType::RecoveryProposed),
             timestamp: env.ledger().timestamp(),
             user_id: proposer,
             session_id: None,
@@ -500,6 +543,7 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
         metadata: EventMetadata {
             event_type: EventType::RecoveryApproved,
             category: OperationCategory::Administrative,
+            severity: EventSeverity::from_event_type(EventType::RecoveryApproved),
             timestamp: env.ledger().timestamp(),
             user_id: approver,
             session_id: None,
@@ -532,6 +576,7 @@ pub fn emit_recovery_executed(
         metadata: EventMetadata {
             event_type: EventType::RecoveryExecuted,
             category: OperationCategory::Administrative,
+            severity: EventSeverity::from_event_type(EventType::RecoveryExecuted),
             timestamp: env.ledger().timestamp(),
             user_id: executor,
             session_id: None,
@@ -557,6 +602,7 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
         metadata: EventMetadata {
             event_type: EventType::AIConfigUpdated,
             category: OperationCategory::AIIntegration,
+            severity: EventSeverity::from_event_type(EventType::AIConfigUpdated),
             timestamp: env.ledger().timestamp(),
             user_id: admin,
             session_id: None,
@@ -590,6 +636,7 @@ pub fn emit_anomaly_score_submitted(
         metadata: EventMetadata {
             event_type: EventType::AnomalyScoreSubmitted,
             category: OperationCategory::AIIntegration,
+            severity: EventSeverity::from_event_type(EventType::AnomalyScoreSubmitted),
             timestamp: env.ledger().timestamp(),
             user_id: ai_coordinator,
             session_id: None,
@@ -622,6 +669,7 @@ pub fn emit_risk_score_submitted(
         metadata: EventMetadata {
             event_type: EventType::RiskScoreSubmitted,
             category: OperationCategory::AIIntegration,
+            severity: EventSeverity::from_event_type(EventType::RiskScoreSubmitted),
             timestamp: env.ledger().timestamp(),
             user_id: ai_coordinator,
             session_id: None,
@@ -647,6 +695,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         metadata: EventMetadata {
             event_type: EventType::AIAnalysisTriggered,
             category: OperationCategory::AIIntegration,
+            severity: EventSeverity::from_event_type(EventType::AIAnalysisTriggered),
             timestamp: env.ledger().timestamp(),
             user_id: patient.clone(), // Context user
             session_id: None,
@@ -691,6 +740,7 @@ pub fn emit_permission_granted(
         metadata: EventMetadata {
             event_type: EventType::PermissionGranted,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::PermissionGranted),
             timestamp: env.ledger().timestamp(),
             user_id: granter.clone(),
             session_id: None,
@@ -715,6 +765,7 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
         metadata: EventMetadata {
             event_type: EventType::PermissionRevoked,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::PermissionRevoked),
             timestamp: env.ledger().timestamp(),
             user_id: revoker.clone(),
             session_id: None,
@@ -739,6 +790,7 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
 pub struct EventFilter {
     pub event_types: Option<Vec<EventType>>,
     pub categories: Option<Vec<OperationCategory>>,
+    pub severity_min: Option<u32>, // 0=Info, 1=Warning, 2=Err
     pub user_id: Option<Address>,
     pub start_time: Option<u64>,
     pub end_time: Option<u64>,
@@ -759,6 +811,7 @@ pub struct EventStats {
     pub total_events: u64,
     pub events_by_type: Map<EventType, u64>,
     pub events_by_category: Map<OperationCategory, u64>,
+    pub events_by_severity: Map<u32, u64>, // 0=Info, 1=Warning, 2=Err
     pub events_by_user: Map<Address, u64>,
     pub time_range: (u64, u64), // (start, end)
 }
@@ -806,6 +859,13 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
             }
         }
 
+        // Filter by minimum severity (compare as u32)
+        if let Some(min_sev) = filter.severity_min {
+            if (metadata.severity as u32) < min_sev {
+                continue;
+            }
+        }
+
         // Filter by user
         if let Some(ref user_filter) = filter.user_id {
             if metadata.user_id != *user_filter {
@@ -848,6 +908,7 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);
     let mut events_by_category: Map<OperationCategory, u64> = Map::new(env);
+    let mut events_by_severity: Map<u32, u64> = Map::new(env);
     let mut events_by_user: Map<Address, u64> = Map::new(env);
 
     let mut min_time = u64::MAX;
@@ -877,6 +938,11 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
             .saturating_add(1);
         events_by_category.set(curr_cat, category_count);
 
+        // Count by severity (as u32: 0=Info, 1=Warning, 2=Err)
+        let curr_sev = metadata.severity as u32;
+        let severity_count = events_by_severity.get(curr_sev).unwrap_or(0) + 1;
+        events_by_severity.set(curr_sev, severity_count);
+
         // Count by user
         let user = metadata.user_id.clone();
         let user_count = events_by_user
@@ -895,6 +961,7 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         total_events: events.len() as u64,
         events_by_type,
         events_by_category,
+        events_by_severity,
         events_by_user,
         time_range: (min_time, max_time),
     }
