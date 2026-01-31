@@ -1,14 +1,20 @@
 [package]
 name = "fhir_integration"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
-soroban-sdk = "22.0.0"
+soroban-sdk.workspace = true
 
 [dev-dependencies]
-soroban-sdk = { version = "22.0.0", features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [lib]
-crate-type = ["cdylib", "rlib"]
+crate-type = ["cdylib"]
 
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

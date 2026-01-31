@@ -10,6 +10,9 @@ pub enum Error {
     TimelockNotElasped = 7,
     NotEnoughApproval = 8,
     Overflow = 47,
+    NotInitialized = 48,
+    CryptoRegistryNotSet = 49,
+    EncryptionRequired = 50,
 
     // --- Access & Auth Errors (10-19) ---
     NotAuthorized = 2,

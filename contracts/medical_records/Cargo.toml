@@ -15,6 +15,10 @@ upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+federated_learning = { path = "../federated_learning" }
+anomaly_detection = { path = "../anomaly_detection" }
+predictive_analytics = { path = "../predictive_analytics" }
+explainable_ai = { path = "../explainable_ai" }
 
 [features]
 default = []

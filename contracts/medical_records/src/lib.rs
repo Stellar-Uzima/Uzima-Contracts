@@ -9,12 +9,8 @@
 mod events;
 mod rate_limiting;
 mod validation;
-
-use soroban_sdk::symbol_short;
-use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
 };
+use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -39,7 +35,6 @@ pub struct CrossChainRecordRef {
     pub is_synced: bool,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum Role {
     Admin,
@@ -65,7 +60,6 @@ pub enum DIDAuthLevel {
     Full,
 }
 
-#[derive(Clone, Debug)]
 #[contracttype]
 pub struct MedicalRecord {
     pub patient_id: Address,
@@ -102,73 +96,22 @@ pub struct AIConfig {
 
 #[derive(Clone)]
 #[contracttype]
-pub enum DataKey {
-    RecordCount,
-    AIConfig,
-    Users,
-    Records,
-    Paused,
-    Emergency(Address, Address),
-    CcEnabled,
-    CcRefs(u64, ChainId),
-    Did(Address),
-    IdentityRegistry,
-    AuthLevel,
 }
 
-const USERS_MAP: Symbol = symbol_short!("USERS");
-const RECORDS_MAP: Symbol = symbol_short!("RECORDS");
-const PAUSED_FLAG: Symbol = symbol_short!("PAUSED");
+// ==================== Constants ====================
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    ContractPaused = 1,
-    NotAuthorized = 2,
-    InvalidCategory = 3,
-    EmptyTreatment = 4,
-    EmptyTag = 5,
-    EmptyDataRef = 9,
-    InvalidDataRefLength = 10,
-    InvalidDataRefCharset = 11,
-    RecordNotFound = 14,
-    DIDNotFound = 18,
-    InvalidAIScore = 29,
-    AIConfigNotSet = 27,
-    NotAICoordinator = 28,
-    Overflow = 30,
-    UserNotFound = 31,
-    EmptyDiagnosis = 34,
-    EmergencyAccessNotFound = 35,
-    CrossChainNotEnabled = 36,
-    InvalidDiagnosisLength = 40,
-    InvalidTreatmentLength = 41,
-    InvalidTreatmentTypeLength = 42,
-    InvalidTagLength = 43,
-    InvalidPurposeLength = 44,
-    SameAddress = 45,
-    InvalidScore = 46,
-    InvalidDPEpsilon = 47,
-    InvalidParticipantCount = 48,
-    InvalidInput = 49,
-    InvalidExplanationLength = 50,
-    InvalidModelVersionLength = 51,
-    InvalidAddress = 52,
-    NumberOutOfBounds = 53,
-    BatchTooLarge = 54,
-}
+const APPROVAL_THRESHOLD: u32 = 2;
+const TIMELOCK_SECS: u64 = 86_400;
+
+const CHAIN_LIST_LEN: usize = 6;
+
+// ==================== Contract ====================
 
 #[contract]
 pub struct MedicalRecordsContract;
 
 #[contractimpl]
 impl MedicalRecordsContract {
-    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
-        admin.require_auth();
-        if env.storage().persistent().has(&USERS_MAP) {
-            return Err(Error::NotAuthorized);
-        }
         let mut users: Map<Address, UserProfile> = Map::new(&env);
         users.set(
             admin.clone(),
@@ -178,10 +121,6 @@ impl MedicalRecordsContract {
                 did_reference: None,
             },
         );
-        env.storage().persistent().set(&USERS_MAP, &users);
-        env.storage().persistent().set(&PAUSED_FLAG, &false);
-        env.storage().persistent().set(&DataKey::RecordCount, &0u64);
-        Ok(true)
     }
 
     pub fn manage_user(
@@ -191,90 +130,6 @@ impl MedicalRecordsContract {
         role: Role,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        let mut users: Map<Address, UserProfile> = env
-            .storage()
-            .persistent()
-            .get(&USERS_MAP)
-            .unwrap_or(Map::new(&env));
-        users.set(
-            user,
-            UserProfile {
-                role,
-                active: true,
-                did_reference: None,
-            },
-        );
-        env.storage().persistent().set(&USERS_MAP, &users);
-        Ok(true)
-    }
-
-    pub fn add_record(
-        env: Env,
-        caller: Address,
-        patient: Address,
-        diagnosis: String,
-        treatment: String,
-        is_confidential: bool,
-        tags: Vec<String>,
-        category: String,
-        treatment_type: String,
-        data_ref: String,
-    ) -> Result<u64, Error> {
-        caller.require_auth();
-        let id = env
-            .storage()
-            .persistent()
-            .get(&DataKey::RecordCount)
-            .unwrap_or(0u64)
-            + 1;
-        let record = MedicalRecord {
-            patient_id: patient,
-            doctor_id: caller,
-            timestamp: env.ledger().timestamp(),
-            diagnosis,
-            treatment,
-            is_confidential,
-            tags,
-            category,
-            treatment_type,
-            data_ref,
-            doctor_did: Some(String::from_str(&env, "did")),
-            authorization_credential: BytesN::from_array(&env, &[0; 32]),
-        };
-        let mut records: Map<u64, MedicalRecord> = env
-            .storage()
-            .persistent()
-            .get(&RECORDS_MAP)
-            .unwrap_or(Map::new(&env));
-        records.set(id, record);
-        env.storage().persistent().set(&RECORDS_MAP, &records);
-        env.storage().persistent().set(&DataKey::RecordCount, &id);
-        Ok(id)
-    }
-
-    pub fn get_record(env: Env, _caller: Address, id: u64) -> Option<MedicalRecord> {
-        let records: Map<u64, MedicalRecord> = env
-            .storage()
-            .persistent()
-            .get(&RECORDS_MAP)
-            .unwrap_or(Map::new(&env));
-        records.get(id)
-    }
-
-    pub fn get_user_role(env: Env, user: Address) -> Role {
-        let users: Map<Address, UserProfile> = env
-            .storage()
-            .persistent()
-            .get(&USERS_MAP)
-            .unwrap_or(Map::new(&env));
-        users.get(user).map(|p| p.role).unwrap_or(Role::None)
-    }
-
-    pub fn pause(env: Env, admin: Address) -> Result<bool, Error> {
-        admin.require_auth();
-        env.storage().persistent().set(&PAUSED_FLAG, &true);
-        Ok(true)
-    }
 
     pub fn unpause(env: Env, admin: Address) -> Result<bool, Error> {
         admin.require_auth();
@@ -282,80 +137,10 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn propose_recovery(
-        env: Env,
-        admin: Address,
-        _token: Address,
-        _recipient: Address,
-        _amount: i128,
-    ) -> Result<u64, Error> {
-        admin.require_auth();
-        Ok(1)
-    }
-
-    pub fn approve_recovery(env: Env, admin: Address, _id: u64) -> Result<bool, Error> {
-        admin.require_auth();
-        Ok(true)
-    }
-
-    pub fn execute_recovery(env: Env, admin: Address, _id: u64) -> bool {
-        admin.require_auth();
-        true
-    }
-
-    pub fn get_history(
-        env: Env,
-        _patient: Address,
-        _viewer: Address,
-        _page: u32,
-        _size: u32,
-    ) -> Vec<MedicalRecord> {
-        Vec::new(&env)
-    }
-
-    pub fn set_identity_registry(
-        env: Env,
-        admin: Address,
-        registry: Address,
-    ) -> Result<bool, Error> {
-        admin.require_auth();
-        env.storage()
-            .persistent()
-            .set(&DataKey::IdentityRegistry, &registry);
-        Ok(true)
-    }
-
-    pub fn get_identity_registry(env: Env) -> Option<Address> {
-        env.storage().persistent().get(&DataKey::IdentityRegistry)
-    }
-
-    pub fn set_did_auth_level(
-        env: Env,
-        admin: Address,
-        level: DIDAuthLevel,
-    ) -> Result<bool, Error> {
-        admin.require_auth();
-        env.storage().persistent().set(&DataKey::AuthLevel, &level);
-        Ok(true)
-    }
-
-    pub fn get_did_auth_level(env: Env) -> DIDAuthLevel {
-        env.storage()
-            .persistent()
-            .get(&DataKey::AuthLevel)
-            .unwrap_or(DIDAuthLevel::None)
     }
 
     pub fn link_did_to_user(
         env: Env,
-        admin: Address,
-        user: Address,
-        did: String,
-    ) -> Result<bool, Error> {
-        admin.require_auth();
-        env.storage().persistent().set(&DataKey::Did(user), &did);
-        Ok(true)
-    }
 
     pub fn get_user_did(env: Env, user: Address) -> Option<String> {
         env.storage().persistent().get(&DataKey::Did(user))
@@ -384,11 +169,6 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    pub fn get_latest_risk_score(_env: Env, _patient: Address, _viewer: Address) -> Option<u32> {
-        Some(0)
-    }
-
-    pub fn submit_risk_score(
         env: Env,
         caller: Address,
         _patient: Address,
@@ -401,152 +181,349 @@ impl MedicalRecordsContract {
         _feat: Vec<(String, u32)>,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Ok(true)
     }
 
-    pub fn submit_anomaly_score(
-        env: Env,
-        caller: Address,
-        _patient: Address,
-        _record_id: Address,
-        _model_id: BytesN<32>,
-        _score: u32,
-        _summary: String,
-        _ver: String,
-        _ref: String,
-        _feat: Vec<String>,
-    ) -> Result<bool, Error> {
-        caller.require_auth();
-        Ok(true)
+    pub fn version(env: Env) -> u32 {
+        env.storage().instance().get(&VERSION).unwrap_or(0)
     }
 
-    pub fn grant_emergency_access(
-        env: Env,
-        patient: Address,
-        grantee: Address,
-        duration: u64,
-        scope: Vec<u64>,
-    ) -> Result<bool, Error> {
-        patient.require_auth();
-        let access = EmergencyAccess {
-            grantee: grantee.clone(),
-            patient: patient.clone(),
-            expires_at: env.ledger().timestamp() + duration,
-            record_scope: scope,
-            is_active: true,
+    // ---------------------------------------------------------------------
+    // Internal helpers
+    // ---------------------------------------------------------------------
+
+    fn require_initialized(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().has(&UPGRADE_ADMIN) {
+            Ok(())
+        } else {
+            Err(Error::NotInitialized)
+        }
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        let paused: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            Err(Error::ContractPaused)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn read_users(env: &Env) -> Map<Address, UserProfile> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Users)
+            .unwrap_or(Map::new(env))
+    }
+
+    fn is_admin(env: &Env, address: &Address) -> bool {
+        match Self::read_users(env).get(address.clone()) {
+            Some(profile) => matches!(profile.role, Role::Admin) && profile.active,
+            None => false,
+        }
+    }
+
+    fn is_active_doctor(env: &Env, address: &Address) -> bool {
+        match Self::read_users(env).get(address.clone()) {
+            Some(profile) => matches!(profile.role, Role::Doctor) && profile.active,
+            None => false,
+        }
+    }
+
+    fn is_active_patient(env: &Env, address: &Address) -> bool {
+        match Self::read_users(env).get(address.clone()) {
+            Some(profile) => matches!(profile.role, Role::Patient) && profile.active,
+            None => false,
+        }
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        if Self::is_admin(env, caller) {
+            Ok(())
+        } else {
+            Err(Error::NotAuthorized)
+        }
+    }
+
+    fn require_active_doctor(env: &Env, caller: &Address) -> Result<(), Error> {
+        if Self::is_active_doctor(env, caller) {
+            Ok(())
+        } else {
+            Err(Error::NotAuthorized)
+        }
+    }
+
+    fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
+        if Self::is_active_patient(env, patient) {
+            Ok(())
+        } else {
+            Err(Error::NotAuthorized)
+        }
+    }
+
+    fn next_id(env: &Env) -> u64 {
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextId)
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage().persistent().set(&DataKey::NextId, &next);
+        next
+    }
+
+    fn increment_record_count(env: &Env) {
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCount, &current.saturating_add(1));
+    }
+
+    fn store_record(
+        env: &Env,
+        record_id: u64,
+        record: &MedicalRecord,
+        category: &String,
+        is_confidential: bool,
+    ) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Record(record_id), record);
+
+        // Lightweight hash anchor: unique per record id (sufficient for tests; off-chain can use stronger binding).
+        let mut payload = Bytes::new(env);
+        payload.append(&Bytes::from_slice(env, &record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
+        let record_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+
+        let meta = RecordMetadata {
+            record_id,
+            patient_id: record.patient_id.clone(),
+            timestamp: record.timestamp,
+            category: category.clone(),
+            is_confidential,
+            record_hash,
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Emergency(grantee, patient), &access);
-        Ok(true)
+            .set(&DataKey::RecordMeta(record_id), &meta);
     }
 
-    pub fn has_emergency_access(
-        env: Env,
-        grantee: Address,
-        patient: Address,
-        _record_id: u64,
-    ) -> bool {
-        if let Some(access) = env
+    fn append_patient_record(env: &Env, patient: &Address, record_id: u64) {
+        let mut ids: Vec<u64> = env
             .storage()
             .persistent()
-            .get::<_, EmergencyAccess>(&DataKey::Emergency(grantee, patient))
+            .get(&DataKey::PatientRecords(patient.clone()))
+            .unwrap_or(Vec::new(env));
+        ids.push_back(record_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecords(patient.clone()), &ids);
+    }
+
+    fn has_emergency_access_internal(
+        env: &Env,
+        grantee: &Address,
+        patient: &Address,
+        record_id: u64,
+    ) -> bool {
+        let now = env.ledger().timestamp();
+        let grants: Map<Address, EmergencyAccess> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientEmergencyGrants(patient.clone()))
+            .unwrap_or(Map::new(env));
+        let grant = match grants.get(grantee.clone()) {
+            Some(g) => g,
+            None => return false,
+        };
+        if !grant.is_active {
+            return false;
+        }
+        if grant.expires_at <= now {
+            return false;
+        }
+        if grant.record_scope.is_empty() {
+            return true;
+        }
+        grant.record_scope.contains(record_id)
+    }
+
+    fn can_view_record(
+        env: &Env,
+        caller: &Address,
+        record: &MedicalRecord,
+        record_id: u64,
+    ) -> bool {
+        if Self::is_admin(env, caller) {
+            return true;
+        }
+        if *caller == record.patient_id {
+            return true;
+        }
+        if *caller == record.doctor_id {
+            return true;
+        }
+        if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
+            return true;
+        }
+        if record.is_confidential {
+            Self::check_permission(env, caller, Permission::ReadConfidential)
+        } else {
+            Self::check_permission(env, caller, Permission::ReadRecord)
+        }
+    }
+
+    fn log_access(
+        env: &Env,
+        patient: &Address,
+        record_id: u64,
+        requester: &Address,
+        purpose: &String,
+        granted: bool,
+    ) {
+        let now = env.ledger().timestamp();
+
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessLogCount)
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLogCount, &next);
+
+        let entry = AccessRequest {
+            requester: requester.clone(),
+            patient: patient.clone(),
+            record_id,
+            purpose: purpose.clone(),
+            timestamp: now,
+            granted,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessLog(next), &entry);
+
+        let pc: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientAccessLogCount(patient.clone()))
+            .unwrap_or(0);
+        let pnext = pc.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientAccessLogCount(patient.clone()), &pnext);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientAccessLog(patient.clone(), pnext), &next);
+    }
+
+    fn require_cross_chain_contracts(env: &Env) -> Result<Address, Error> {
+        let bridge: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BridgeContract)
+            .ok_or(Error::CrossChainContractsNotSet)?;
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::CrossChainIdentityContract)
         {
-            return access.is_active && env.ledger().timestamp() < access.expires_at;
+            return Err(Error::CrossChainContractsNotSet);
+        }
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::CrossChainAccessContract)
+        {
+            return Err(Error::CrossChainContractsNotSet);
+        }
+        Ok(bridge)
+    }
+
+    fn require_crypto_registry(env: &Env) -> Result<Address, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CryptoRegistry)
+            .ok_or(Error::CryptoRegistryNotSet)
+    }
+
+    fn is_encryption_required_internal(env: &Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EncryptionRequired)
+            .unwrap_or(false)
+    }
+
+    fn is_require_pq_envelopes_internal(env: &Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RequirePqEnvelopes)
+            .unwrap_or(false)
+    }
+
+    fn can_view_encrypted_record(
+        env: &Env,
+        caller: &Address,
+        record: &EncryptedRecord,
+        record_id: u64,
+    ) -> bool {
+        if Self::is_admin(env, caller) {
+            return true;
+        }
+        if *caller == record.patient_id {
+            return true;
+        }
+        if *caller == record.doctor_id {
+            return true;
+        }
+        if Self::is_active_doctor(env, caller) && !record.is_confidential {
+            return true;
+        }
+        if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
+            return true;
         }
         false
     }
 
-    pub fn revoke_emergency_access(
-        env: Env,
-        patient: Address,
-        grantee: Address,
-    ) -> Result<bool, Error> {
-        patient.require_auth();
+    fn log_crypto_event(
+        env: &Env,
+        actor: &Address,
+        action: CryptoAuditAction,
+        record_id: Option<u64>,
+        details_hash: BytesN<32>,
+        details_ref: Option<String>,
+    ) {
+        let current: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CryptoAuditCount)
+            .unwrap_or(0);
+        let next = current.saturating_add(1);
         env.storage()
             .persistent()
-            .remove(&DataKey::Emergency(grantee, patient));
-        Ok(true)
-    }
+            .set(&DataKey::CryptoAuditCount, &next);
 
-    pub fn set_cross_chain_contracts(
-        env: Env,
-        admin: Address,
-        _bridge: Address,
-        _id: Address,
-        _acc: Address,
-    ) -> Result<bool, Error> {
-        admin.require_auth();
-        Ok(true)
-    }
-
-    pub fn set_cross_chain_enabled(env: Env, admin: Address, enabled: bool) -> Result<bool, Error> {
-        admin.require_auth();
+        let entry = CryptoAuditEntry {
+            id: next,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            action,
+            record_id,
+            details_hash,
+            details_ref,
+        };
         env.storage()
             .persistent()
-            .set(&DataKey::CcEnabled, &enabled);
-        Ok(true)
-    }
-
-    pub fn register_cross_chain_ref(
-        env: Env,
-        user: Address,
-        _id: u64,
-        _chain: ChainId,
-        _hash: BytesN<32>,
-    ) -> Result<bool, Error> {
-        user.require_auth();
-        Ok(true)
-    }
-
-    pub fn update_cross_chain_sync(
-        env: Env,
-        admin: Address,
-        _id: u64,
-        _chain: ChainId,
-        _hash: BytesN<32>,
-    ) -> Result<bool, Error> {
-        admin.require_auth();
-        Ok(true)
-    }
-
-    pub fn get_cross_chain_ref(
-        _env: Env,
-        _id: u64,
-        _chain: ChainId,
-    ) -> Result<Option<Option<CrossChainRecordRef>>, Error> {
-        Ok(Some(None))
-    }
-
-    pub fn get_record_cross_chain(
-        _env: Env,
-        _caller: Address,
-        _id: u64,
-        _chain: ChainId,
-    ) -> Result<MedicalRecord, Error> {
-        Err(Error::RecordNotFound)
-    }
-
-    pub fn get_record_with_did(
-        _env: Env,
-        _caller: Address,
-        _id: u64,
-        _did: String,
-    ) -> Result<MedicalRecord, Error> {
-        Err(Error::RecordNotFound)
-    }
-
-    pub fn get_patient_access_logs(
-        _env: Env,
-        _caller: Address,
-        _patient: Address,
-        _page: u32,
-        _size: u32,
-    ) -> Vec<String> {
-        Vec::new(&_env)
-    }
-
-    pub fn verify_professional_credential(_env: Env, _provider: Address) -> bool {
-        true
+            .set(&DataKey::CryptoAudit(next), &entry);
     }
 }

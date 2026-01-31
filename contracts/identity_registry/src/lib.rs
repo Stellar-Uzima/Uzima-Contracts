@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
 
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Vec,
 };
@@ -210,4 +211,5 @@ impl IdentityRegistry {
             .get(&DataKey::Owner)
             .ok_or(Error::NotInitialized)
     }
+
 }

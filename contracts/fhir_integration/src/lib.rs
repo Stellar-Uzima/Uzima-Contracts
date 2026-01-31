@@ -156,7 +156,7 @@ pub struct HealthcareProvider {
     pub fhir_endpoint: String,
     pub is_verified: bool,
     pub verification_timestamp: u64,
-    pub credential_id: Option<BytesN<32>>,
+    pub credential_id: BytesN<32>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -294,7 +294,7 @@ impl FHIRIntegrationContract {
             fhir_endpoint,
             is_verified: false,
             verification_timestamp: 0,
-            credential_id: None,
+            credential_id: BytesN::from_array(&env, &[0u8; 32]),
         };
         providers.set(provider_id, provider);
         env.storage().persistent().set(&PROVIDERS, &providers);

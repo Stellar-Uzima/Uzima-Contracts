@@ -1,12 +1,6 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 use super::*;
-use soroban_sdk::testutils::{Address as _, Ledger, Events};
-use soroban_sdk::{Address, BytesN, Env, IntoVal, TryFromVal, String, Vec, Val};
-
-extern crate std;
-use std::format;
-
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
