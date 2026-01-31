@@ -1,6 +1,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 use super::*;
+use crate::errors::Error;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
@@ -13,139 +14,6 @@ fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     client.initialize(&admin);
     (client, admin)
 }
-
-#[test]
-fn test_add_records_batch_and_get_batch() {
-    let env = Env::default();
-    env.mock_all_auths();
-
-    let (_client, _admin) = create_contract(&env);
-    let _doctor = Address::generate(&env);
-    let _patient1 = Address::generate(&env);
-    //     let patient2 = Address::generate(&env);
-    //
-    //     client.manage_user(&admin, &doctor, &Role::Doctor);
-    //     client.manage_user(&admin, &patient1, &Role::Patient);
-    //     client.manage_user(&admin, &patient2, &Role::Patient);
-    //
-    //     let records_input = vec![
-    //         &env,
-    //         (
-    //             patient1.clone(),
-    //             String::from_str(&env, "Flu"),
-    //             String::from_str(&env, "Antiviral"),
-    //             false,
-    //             vec![&env, String::from_str(&env, "viral")],
-    //             String::from_str(&env, "Modern"),
-    //             String::from_str(&env, "Prescription"),
-    //             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXA"),
-    //         ),
-    //         (
-    //             patient1.clone(),
-    //             String::from_str(&env, "Hypertension"),
-    //             String::from_str(&env, "Lifestyle + meds"),
-    //             true,
-    //             vec![&env],
-    //             String::from_str(&env, "Modern"),
-    //             String::from_str(&env, "Ongoing"),
-    //             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXB"),
-    //         ),
-    //         (
-    //             patient2.clone(),
-    //             String::from_str(&env, "Malaria"),
-    //             String::from_str(&env, "Artemisinin"),
-    //             false,
-    //             vec![&env, String::from_str(&env, "tropical")],
-    //             String::from_str(&env, "Modern"),
-    //             String::from_str(&env, "Acute"),
-    //             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXC"),
-    //         ),
-    //     ];
-    //
-    //     let result = client.add_records_batch(&doctor, &records_input);
-    //
-    //     assert_eq!(result.successes.len(), 3);
-    //     assert_eq!(result.failures.len(), 0);
-    //
-    //     let ids = result.successes;
-    //
-    //     // Test batch get - patient1 should see both (one confidential, but owns them)
-    //     let batch1 = client.get_records_batch(&patient1, &patient1, &0, &10);
-    //     assert_eq!(batch1.len(), 2);
-    //
-    //     // Test pagination + limit
-    //     let batch2 = client.get_records_batch(&patient1, &patient1, &0, &1);
-    //     assert_eq!(batch2.len(), 1);
-    //
-    //     let batch3 = client.get_records_batch(&patient1, &patient1, &1, &10);
-    //     assert_eq!(batch3.len(), 1);
-    //
-    //     // Test patient2 access
-    //     let batch_p2 = client.get_records_batch(&patient2, &patient2, &0, &5);
-    //     assert_eq!(batch_p2.len(), 1);
-    //
-    //     // Doctor should see everything
-    //     let batch_doc = client.get_records_batch(&doctor, &patient1, &0, &10);
-    //     assert_eq!(batch_doc.len(), 2); // only the non-confidential one
-    //
-    //     // Admin sees everything
-    //     let batch_admin = client.get_records_batch(&admin, &patient1, &0, &10);
-    //     assert_eq!(batch_admin.len(), 2);
-}
-//
-// #[test]
-// fn test_add_records_batch_partial_failure() {
-//     let env = Env::default();
-//     env.mock_all_auths();
-//     let (client, admin) = create_contract(&env);
-//     let doctor = Address::generate(&env);
-//     let patient = Address::generate(&env);
-//
-//     client.manage_user(&admin, &doctor, &Role::Doctor);
-//     client.manage_user(&admin, &patient, &Role::Patient);
-//
-//     let records = vec![
-//         &env,
-//         // valid
-//         (
-//             patient.clone(),
-//             String::from_str(&env, "Malaria"),
-//             String::from_str(&env, "Artemisinin"),
-//             false,
-//             vec![&env, String::from_str(&env, "tropical")],
-//             String::from_str(&env, "Modern"),
-//             String::from_str(&env, "Acute"),
-//             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXC"),
-//         ),
-//         // invalid category
-//         (
-//             patient.clone(),
-//             String::from_str(&env, "A"),
-//             String::from_str(&env, "B"),
-//             false,
-//             vec![&env],
-//             String::from_str(&env, "Invalid"),
-//             String::from_str(&env, "C"),
-//             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXD"),
-//         ),
-//         // empty treatment_type
-//         (
-//             patient.clone(),
-//             String::from_str(&env, "A"),
-//             String::from_str(&env, "B"),
-//             false,
-//             vec![&env],
-//             String::from_str(&env, "Modern"),
-//             String::from_str(&env, ""),
-//             String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXE"),
-//         ),
-//     ];
-//
-//     let result = client.add_records_batch(&doctor, &records);
-//
-//     assert_eq!(result.successes.len(), 1);
-// //     assert_eq!(result.failures.len(), 2);
-// }
 
 #[test]
 fn test_add_and_get_record() {
@@ -220,8 +88,8 @@ fn test_add_and_get_record() {
         .count();
     assert_eq!(access_events_count, 1);
 }
+
 #[test]
-#[should_panic(expected = "Error(Contract, #9)")]
 fn test_empty_data_ref() {
     let env = Env::default();
     env.mock_all_auths();
@@ -233,7 +101,7 @@ fn test_empty_data_ref() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Empty data_ref should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -244,10 +112,11 @@ fn test_empty_data_ref() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, ""),
     );
+
+    assert_eq!(result, Err(Ok(Error::EmptyDataRef)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_short() {
     let env = Env::default();
     env.mock_all_auths();
@@ -259,7 +128,7 @@ fn test_data_ref_too_short() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     // Data ref shorter than 10 chars should fail
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -270,10 +139,11 @@ fn test_data_ref_too_short() {
         &String::from_str(&env, "Medication"),
         &String::from_str(&env, "Qm123"),
     );
+
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
 fn test_data_ref_too_long() {
     let env = Env::default();
     env.mock_all_auths();
@@ -288,7 +158,7 @@ fn test_data_ref_too_long() {
     // Create a string longer than 200 characters (201 chars)
     let long_ref = String::from_str(&env, "Qmaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 
-    let _ = client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Diagnosis"),
@@ -299,6 +169,8 @@ fn test_data_ref_too_long() {
         &String::from_str(&env, "Medication"),
         &long_ref,
     );
+
+    assert_eq!(result, Err(Ok(Error::InvalidDataRefLength)));
 }
 
 #[test]
@@ -451,7 +323,6 @@ fn test_role_based_access() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2)")]
 fn test_deactivate_user() {
     let env = Env::default();
     env.mock_all_auths();
@@ -466,8 +337,8 @@ fn test_deactivate_user() {
     // Deactivate the doctor
     client.deactivate_user(&admin, &doctor);
 
-    // // Try to add a record as the deactivated doctor (should fail)
-    let _result = client.add_record(
+    // Try to add a record as the deactivated doctor (should fail)
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Cold"),
@@ -478,10 +349,11 @@ fn test_deactivate_user() {
         &String::from_str(&env, "Herbal Therapy"),
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
+
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
 
 #[test]
-#[should_panic(expected = "Error")]
 fn test_pause_unpause_blocks_sensitive_functions_panic() {
     let env = Env::default();
     env.mock_all_auths();
@@ -511,8 +383,7 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
     client.pause(&admin);
 
     // Mutating functions should be blocked when paused
-    // Mutating functions should be blocked when paused
-    client.add_record(
+    let result = client.try_add_record(
         &doctor,
         &patient,
         &String::from_str(&env, "Blocked"),
@@ -521,8 +392,10 @@ fn test_pause_unpause_blocks_sensitive_functions_panic() {
         &vec![&env],
         &String::from_str(&env, "General"),
         &String::from_str(&env, "General"),
-        &String::from_str(&env, "IPFS"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
+
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
 }
 
 #[test]

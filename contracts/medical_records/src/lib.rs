@@ -8,13 +8,16 @@ mod test;
 #[cfg(test)]
 mod test_permissions;
 
+mod errors;
 mod events;
 mod validation;
 
+pub use errors::Error;
+
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String,
-    Vec,
+    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
+use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
 
@@ -355,63 +358,7 @@ pub enum DataKey {
 }
 
 // ==================== Errors ====================
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    ContractPaused = 1,
-    NotAuthorized = 2,
-    InvalidCategory = 3,
-    EmptyTreatment = 4,
-    EmptyTag = 5,
-    ProposalAlreadyExecuted = 6,
-    TimelockNotElasped = 7,
-    NotEnoughApproval = 8,
-    EmptyDataRef = 9,
-    InvalidDataRefLength = 10,
-    InvalidDataRefCharset = 11,
-    CrossChainNotEnabled = 12,
-    CrossChainContractsNotSet = 13,
-    RecordNotFound = 14,
-    CrossChainAccessDenied = 15,
-    RecordAlreadySynced = 16,
-    InvalidChain = 17,
-    DIDNotFound = 18,
-    DIDNotActive = 19,
-    InvalidCredential = 20,
-    CredentialExpired = 21,
-    CredentialRevoked = 22,
-    MissingRequiredCredential = 23,
-    EmergencyAccessExpired = 24,
-    EmergencyAccessNotFound = 25,
-    IdentityRegistryNotSet = 26,
-    AIConfigNotSet = 27,
-    NotAICoordinator = 28,
-    InvalidAIScore = 29,
-    // Validation Errors
-    EmptyDiagnosis = 30,
-    InvalidDiagnosisLength = 31,
-    InvalidTreatmentLength = 32,
-    InvalidPurposeLength = 33,
-    InvalidTagLength = 34,
-    InvalidScore = 35,
-    InvalidDPEpsilon = 36,
-    InvalidParticipantCount = 37,
-    InvalidModelVersionLength = 38,
-    InvalidExplanationLength = 39,
-    InvalidAddress = 40,
-    SameAddress = 41,
-    InvalidTreatmentTypeLength = 42,
-    BatchTooLarge = 43,
-    InvalidBatch = 44,
-    InvalidInput = 45,
-    NumberOutOfBounds = 46,
-    AlreadyInitialized = 47,
-    NotInitialized = 48,
-    CryptoRegistryNotSet = 49,
-    EncryptionRequired = 50,
-}
+// NOTE: `Error` lives in `errors.rs` and is re-exported above.
 
 // ==================== Batch (Optional) ====================
 
@@ -448,14 +395,16 @@ impl MedicalRecordsContract {
     // Initialization / Admin
     // ---------------------------------------------------------------------
 
-    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
+    pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
 
-        if env.storage().persistent().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
+        if env.storage().instance().has(&UPGRADE_ADMIN) {
+            return false;
         }
 
-        env.storage().persistent().set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&UPGRADE_ADMIN, &admin);
+        env.storage().instance().set(&VERSION, &1u32);
+
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
         env.storage().persistent().set(&DataKey::RecordCount, &0u64);
@@ -481,7 +430,7 @@ impl MedicalRecordsContract {
         );
         env.storage().persistent().set(&DataKey::Users, &users);
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
-        Ok(true)
+        true
     }
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> Result<bool, Error> {
@@ -2276,11 +2225,30 @@ impl MedicalRecordsContract {
     }
 
     // ---------------------------------------------------------------------
+    // Upgradeability
+    // ---------------------------------------------------------------------
+
+    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&UPGRADE_ADMIN)
+            .ok_or(Error::NotAuthorized)?;
+        admin.require_auth();
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+        Ok(())
+    }
+
+    pub fn version(env: Env) -> u32 {
+        env.storage().instance().get(&VERSION).unwrap_or(0)
+    }
+
+    // ---------------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------------
 
     fn require_initialized(env: &Env) -> Result<(), Error> {
-        if env.storage().persistent().has(&DataKey::Initialized) {
+        if env.storage().instance().has(&UPGRADE_ADMIN) {
             Ok(())
         } else {
             Err(Error::NotInitialized)
