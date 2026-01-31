@@ -208,7 +208,7 @@ pub enum DataKey {
 
 const USERS: Symbol = symbol_short!("USERS");
 const RECORDS: Symbol = symbol_short!("RECORDS");
-const _PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
+const PATIENT_RECORDS: Symbol = symbol_short!("PATIENT_R");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const _PROPOSALS: Symbol = symbol_short!("PROPOSALS");
 const BRIDGE_CONTRACT: Symbol = symbol_short!("BRIDGE");
@@ -484,14 +484,12 @@ impl MedicalRecordsContract {
             match profile.role {
                 Role::Admin => return true, // Admin has all permissions
                 Role::Doctor => {
-                    if matches!(
-                        permission,
-                        Permission::CreateRecord
-                            | Permission::ReadRecord
-                            | Permission::UpdateRecord
-                            | Permission::ReadConfidential
-                            | Permission::DelegatePermission
-                    ) {
+                    if permission == Permission::CreateRecord
+                        || permission == Permission::ReadRecord
+                        || permission == Permission::UpdateRecord
+                        || permission == Permission::ReadConfidential
+                        || permission == Permission::DelegatePermission
+                    {
                         return true;
                     }
                 }
@@ -648,13 +646,11 @@ impl MedicalRecordsContract {
     ) -> Result<u64, Error> {
         caller.require_auth();
 
-
         // Check if contract is paused
 
         if Self::is_paused(&env) {
             return Err(Error::ContractPaused);
         }
-
 
         // Build the record
 
@@ -675,9 +671,6 @@ impl MedicalRecordsContract {
             return Err(Error::SameAddress);
         }
 
-        let record_id = Self::get_and_increment_record_count(&env)?;
-
-
         let record = MedicalRecord {
             patient_id: patient.clone(),
             doctor_id: caller.clone(),
@@ -692,15 +685,13 @@ impl MedicalRecordsContract {
             doctor_did: None,
         };
 
-
         // Validate the record
         validation::validate_medical_record(&env, &record)?;
 
         // Get next record ID
-        let record_id = Self::get_and_increment_record_count(&env);
+        let record_id = Self::get_and_increment_record_count(&env)?;
 
         // Store record in RECORDS map
-
 
         let mut records: Map<u64, MedicalRecord> = env
             .storage()
@@ -722,14 +713,11 @@ impl MedicalRecordsContract {
             .unwrap_or(Vec::new(&env));
         patient_record_ids.push_back(record_id);
         patient_records.set(patient.clone(), patient_record_ids);
-        env.storage().persistent().set(&PATIENT_RECORDS, &patient_records);
+        env.storage()
+            .persistent()
+            .set(&PATIENT_RECORDS, &patient_records);
 
         // Emit event for record creation
-
-        records.set(record_id, record.clone());
-        env.storage().persistent().set(&RECORDS, &records);
-
-
         events::emit_record_created(
             &env,
             caller,
@@ -737,18 +725,11 @@ impl MedicalRecordsContract {
             patient,
             is_confidential,
             category,
-
-            tags
-
             tags,
-
         );
 
         Ok(record_id)
     }
-
-}
-
 
     pub fn update_record(
         env: Env,
@@ -830,4 +811,3 @@ impl MedicalRecordsContract {
         Ok(record)
     }
 }
-

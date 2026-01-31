@@ -42,9 +42,9 @@ pub enum EventType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[contracttype]
 pub enum EventSeverity {
-    Info = 0,     // Normal operations
-    Warning = 1,  // Security-sensitive operations
-    Err = 2,      // System-critical errors (named Err to avoid Rust trait conflict)
+    Info = 0,    // Normal operations
+    Warning = 1, // Security-sensitive operations
+    Err = 2,     // System-critical errors (named Err to avoid Rust trait conflict)
 }
 
 impl EventSeverity {
@@ -740,6 +740,7 @@ pub fn emit_permission_granted(
         metadata: EventMetadata {
             event_type: EventType::PermissionGranted,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::PermissionGranted),
             timestamp: env.ledger().timestamp(),
             user_id: granter.clone(),
             session_id: None,
@@ -764,6 +765,7 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
         metadata: EventMetadata {
             event_type: EventType::PermissionRevoked,
             category: OperationCategory::AccessControl,
+            severity: EventSeverity::from_event_type(EventType::PermissionRevoked),
             timestamp: env.ledger().timestamp(),
             user_id: revoker.clone(),
             session_id: None,
@@ -788,7 +790,7 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
 pub struct EventFilter {
     pub event_types: Option<Vec<EventType>>,
     pub categories: Option<Vec<OperationCategory>>,
-    pub severity_min: Option<u32>,  // 0=Info, 1=Warning, 2=Err
+    pub severity_min: Option<u32>, // 0=Info, 1=Warning, 2=Err
     pub user_id: Option<Address>,
     pub start_time: Option<u64>,
     pub end_time: Option<u64>,
@@ -809,7 +811,7 @@ pub struct EventStats {
     pub total_events: u64,
     pub events_by_type: Map<EventType, u64>,
     pub events_by_category: Map<OperationCategory, u64>,
-    pub events_by_severity: Map<u32, u64>,  // 0=Info, 1=Warning, 2=Err
+    pub events_by_severity: Map<u32, u64>, // 0=Info, 1=Warning, 2=Err
     pub events_by_user: Map<Address, u64>,
     pub time_range: (u64, u64), // (start, end)
 }
@@ -859,7 +861,9 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
 
         // Filter by minimum severity (compare as u32)
         if let Some(min_sev) = filter.severity_min {
-            if (metadata.severity as u32) < min_sev { continue; }
+            if (metadata.severity as u32) < min_sev {
+                continue;
+            }
         }
 
         // Filter by user
