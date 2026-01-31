@@ -1,7 +1,10 @@
 use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
-use soroban_sdk::{testutils::{Address as _, BytesN as _}, Address, BytesN, Env};
+use soroban_sdk::{
+    testutils::{Address as _, BytesN as _},
+    Address, BytesN, Env,
+};
 
-// NOTE: We commented out the WASM import because CI environments 
+// NOTE: We commented out the WASM import because CI environments
 // might not have the compiled WASM file ready, causing build failures.
 // mod contract {
 //     soroban_sdk::contractimport!(
@@ -31,7 +34,7 @@ fn test_migration_admin_check() {
     let user = Address::generate(&env);
     // This verifies the security guard is working
     let result = client.try_upgrade(&user, &dummy_hash);
-    assert!(result.is_err()); 
+    assert!(result.is_err());
 }
 
 #[test]
