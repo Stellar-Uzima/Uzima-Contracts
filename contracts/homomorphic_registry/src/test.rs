@@ -1,10 +1,8 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, String};
 
-fn setup(env: &Env) -> (HomomorphicRegistryClient, Address) {
+fn setup(env: &Env) -> (HomomorphicRegistryClient<'_>, Address) {
     let id = Address::generate(env);
     env.register_contract(&id, HomomorphicRegistry);
     (HomomorphicRegistryClient::new(env, &id), id)
@@ -47,6 +45,6 @@ fn context_and_submission_flow() {
         &zero_hash,
     );
 
-    let fetched = client.get_computation(&comp_id).unwrap();
-    assert_eq!(fetched.ciphertext_ref, c_ref);
+    let ciphertext_ref = client.get_computation(&comp_id).map(|c| c.ciphertext_ref);
+    assert_eq!(ciphertext_ref, Some(c_ref));
 }

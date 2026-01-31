@@ -15,6 +15,9 @@ NC='\033[0m'
 print_header() { echo -e "\n${BLUE}>>> $1${NC}"; }
 print_ok() { echo -e "${GREEN}✓ $1${NC}"; }
 print_warn() { echo -e "${YELLOW}⚠ $1${NC}"; }
+print_err() { echo -e "${RED}✗ $1${NC}" >&2; }
+
+trap 'print_err "crypto audit failed"' ERR
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$PROJECT_ROOT"
@@ -43,4 +46,3 @@ else
   print_warn "cargo-audit not installed"
   print_warn "Install with: cargo install cargo-audit"
 fi
-

@@ -1,10 +1,8 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Bytes, Env};
 
-fn register_contract(env: &Env) -> (CryptoRegistryClient, soroban_sdk::Address) {
+fn register_contract(env: &Env) -> (CryptoRegistryClient<'_>, soroban_sdk::Address) {
     let id = soroban_sdk::Address::generate(env);
     env.register_contract(&id, CryptoRegistry);
     (CryptoRegistryClient::new(env, &id), id)
@@ -32,9 +30,9 @@ fn key_bundle_registration_and_rotation() {
     let v1 = client.register_key_bundle(&alice, &enc_key, &empty, &false, &empty, &false);
     assert_eq!(v1, 1);
 
-    let current = client.get_current_key_bundle(&alice).unwrap();
-    assert_eq!(current.version, 1);
-    assert!(!current.revoked);
+    let current = client.get_current_key_bundle(&alice);
+    assert_eq!(current.as_ref().map(|b| b.version), Some(1));
+    assert_eq!(current.as_ref().map(|b| b.revoked), Some(false));
     assert_eq!(client.get_current_version(&alice), 1);
 
     // Rotate
@@ -69,6 +67,6 @@ fn revoke_bundle_marks_revoked() {
     let v1 = client.register_key_bundle(&alice, &enc_key, &empty, &false, &empty, &false);
     client.revoke_key_bundle(&alice, &v1);
 
-    let b1 = client.get_key_bundle(&alice, &v1).unwrap();
-    assert!(b1.revoked);
+    let revoked = client.get_key_bundle(&alice, &v1).map(|b| b.revoked);
+    assert_eq!(revoked, Some(true));
 }

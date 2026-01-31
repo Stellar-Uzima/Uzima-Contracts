@@ -59,7 +59,7 @@ fn test_encrypted_record_requires_crypto_registry() {
         &envelopes,
     );
 
-    assert_eq!(res, Err(Ok(Error::CryptoRegistryNotSet.into())));
+    assert_eq!(res, Err(Ok(Error::CryptoRegistryNotSet)));
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn test_plaintext_add_record_blocked_when_encryption_required() {
         &String::from_str(&env, "ipfs://plaintextcid0001"),
     );
 
-    assert_eq!(res, Err(Ok(Error::EncryptionRequired.into())));
+    assert_eq!(res, Err(Ok(Error::EncryptionRequired)));
 }
 
 #[test]
@@ -114,33 +114,30 @@ fn test_encrypted_record_access_control_and_envelope_scoping() {
     );
 
     // Patient can view header and get their own envelope.
-    let header = t
+    let header_fields = t
         .client
         .get_encrypted_record_header(&t.patient, &record_id)
-        .unwrap();
-    assert_eq!(header.record_id, record_id);
-    assert_eq!(header.ciphertext_hash, ciphertext_hash);
+        .map(|h| (h.record_id, h.ciphertext_hash));
+    assert_eq!(header_fields, Some((record_id, ciphertext_hash)));
 
-    let patient_env = t
+    let patient_recipient = t
         .client
         .get_encrypted_record_envelope(&t.patient, &record_id)
-        .unwrap();
-    assert_eq!(patient_env.recipient, t.patient);
+        .map(|e| e.recipient);
+    assert_eq!(patient_recipient, Some(t.patient.clone()));
 
     // Doctor can fetch their envelope; patient cannot see doctor's envelope via this API.
-    let doctor_env = t
+    let doctor_recipient = t
         .client
         .get_encrypted_record_envelope(&t.doctor, &record_id)
-        .unwrap();
-    assert_eq!(doctor_env.recipient, t.doctor);
+        .map(|e| e.recipient);
+    assert_eq!(doctor_recipient, Some(t.doctor.clone()));
 
     let intruder = soroban_sdk::Address::generate(&env);
     let denied = t
         .client
         .try_get_encrypted_record_header(&intruder, &record_id);
-    assert!(denied.is_err());
-    let inner = denied.err().unwrap().unwrap();
-    assert_eq!(inner, Error::NotAuthorized.into());
+    assert!(matches!(denied, Err(Ok(Error::NotAuthorized))));
 }
 
 #[test]
@@ -181,14 +178,14 @@ fn test_envelope_update_and_crypto_audit_log() {
         .client
         .upsert_encrypted_record_envelope(&t.doctor, &record_id, &updated));
 
-    let fetched = t
+    let fetched_key_version = t
         .client
         .get_encrypted_record_envelope(&t.doctor, &record_id)
-        .unwrap();
-    assert_eq!(fetched.key_version, 2);
+        .map(|e| e.key_version);
+    assert_eq!(fetched_key_version, Some(2u32));
 
     let logs = t.client.get_crypto_audit_logs(&t.admin1, &0u32, &50u32);
-    assert!(logs.len() > 0);
+    assert!(!logs.is_empty());
     assert!(logs
         .iter()
         .any(|e| e.action == CryptoAuditAction::EnvelopeUpdated));
@@ -212,7 +209,7 @@ fn test_crypto_config_threshold_proposal_flow() {
     let early = t
         .client
         .try_execute_crypto_config_update(&t.admin1, &proposal_id);
-    assert_eq!(early, Err(Ok(Error::TimelockNotElasped.into())));
+    assert_eq!(early, Err(Ok(Error::TimelockNotElasped)));
 
     // Fast forward past timelock.
     env.ledger()
@@ -222,7 +219,7 @@ fn test_crypto_config_threshold_proposal_flow() {
     let insufficient = t
         .client
         .try_execute_crypto_config_update(&t.admin1, &proposal_id);
-    assert_eq!(insufficient, Err(Ok(Error::NotEnoughApproval.into())));
+    assert_eq!(insufficient, Err(Ok(Error::NotEnoughApproval)));
 
     // Approve by second admin and execute.
     assert!(t
@@ -235,11 +232,11 @@ fn test_crypto_config_threshold_proposal_flow() {
     assert!(t.client.is_encryption_required());
     assert!(t.client.is_require_pq_envelopes());
 
-    let proposal = t
+    let proposal_executed = t
         .client
         .get_crypto_config_proposal(&t.admin1, &proposal_id)
-        .unwrap();
-    assert!(proposal.executed);
+        .map(|p| p.executed);
+    assert_eq!(proposal_executed, Some(true));
 }
 
 #[test]
@@ -270,7 +267,7 @@ fn test_require_pq_envelopes_gates_encrypted_records() {
         &ciphertext_hash,
         &envelopes,
     );
-    assert_eq!(res, Err(Ok(Error::InvalidInput.into())));
+    assert_eq!(res, Err(Ok(Error::InvalidInput)));
 
     // Provide PQ wrapped keys and retry.
     let mut pq_envs = Vec::new(&env);

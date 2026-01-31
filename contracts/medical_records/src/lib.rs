@@ -928,7 +928,7 @@ impl MedicalRecordsContract {
                     }
                 }
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
 
         Ok(out)
@@ -1177,7 +1177,7 @@ impl MedicalRecordsContract {
             approval_payload.append(&Bytes::from_slice(&env, &proposal_id.to_be_bytes()));
             approval_payload.append(&Bytes::from_slice(
                 &env,
-                &(proposal.approvals.len() as u32).to_be_bytes(),
+                &proposal.approvals.len().to_be_bytes(),
             ));
             let details_hash: BytesN<32> = env.crypto().sha256(&approval_payload).into();
             Self::log_crypto_event(
@@ -1408,7 +1408,7 @@ impl MedicalRecordsContract {
         validation::validate_treatment_type(&treatment_type)?;
         validation::validate_data_ref(&env, &ciphertext_ref)?;
 
-        if envelopes.len() == 0 {
+        if envelopes.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -1416,7 +1416,7 @@ impl MedicalRecordsContract {
         let mut has_patient_envelope = false;
         let require_pq = Self::is_require_pq_envelopes_internal(&env);
         for envlp in envelopes.iter() {
-            if envlp.key_version == 0 || envlp.wrapped_key.len() == 0 {
+            if envlp.key_version == 0 || envlp.wrapped_key.is_empty() {
                 return Err(Error::InvalidInput);
             }
             if require_pq && envlp.pq_wrapped_key.is_none() {
@@ -1583,7 +1583,7 @@ impl MedicalRecordsContract {
         if envelope.recipient != caller {
             return Err(Error::NotAuthorized);
         }
-        if envelope.key_version == 0 || envelope.wrapped_key.len() == 0 {
+        if envelope.key_version == 0 || envelope.wrapped_key.is_empty() {
             return Err(Error::InvalidInput);
         }
         if Self::is_require_pq_envelopes_internal(&env) && envelope.pq_wrapped_key.is_none() {
@@ -1659,7 +1659,7 @@ impl MedicalRecordsContract {
             {
                 out.push_back(entry);
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
         Ok(out)
     }
@@ -1804,12 +1804,12 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidAIScore);
         }
         // Integration tests use short summaries/versions; enforce only non-empty + max bounds.
-        if explanation_summary.len() == 0
+        if explanation_summary.is_empty()
             || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH
         {
             return Err(Error::InvalidExplanationLength);
         }
-        if model_version.len() == 0 || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
+        if model_version.is_empty() || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
             return Err(Error::InvalidModelVersionLength);
         }
 
@@ -1896,12 +1896,12 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidAIScore);
         }
         // Integration tests use short summaries/versions; enforce only non-empty + max bounds.
-        if explanation_summary.len() == 0
+        if explanation_summary.is_empty()
             || explanation_summary.len() > validation::MAX_EXPLANATION_LENGTH
         {
             return Err(Error::InvalidExplanationLength);
         }
-        if model_version.len() == 0 || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
+        if model_version.is_empty() || model_version.len() > validation::MAX_MODEL_VERSION_LENGTH {
             return Err(Error::InvalidModelVersionLength);
         }
 
@@ -2102,7 +2102,7 @@ impl MedicalRecordsContract {
                     out.push_back(entry);
                 }
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
         out
     }
@@ -2137,7 +2137,7 @@ impl MedicalRecordsContract {
             {
                 out.push_back(entry);
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
         out
     }
@@ -2646,10 +2646,10 @@ impl MedicalRecordsContract {
         if grant.expires_at <= now {
             return false;
         }
-        if grant.record_scope.len() == 0 {
+        if grant.record_scope.is_empty() {
             return true;
         }
-        grant.record_scope.contains(&record_id)
+        grant.record_scope.contains(record_id)
     }
 
     fn can_view_record(

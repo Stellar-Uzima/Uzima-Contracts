@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
 mod test;
@@ -110,7 +111,7 @@ impl HomomorphicRegistry {
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &admin)?;
 
-        if params_ref.len() == 0 {
+        if params_ref.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -184,21 +185,19 @@ impl HomomorphicRegistry {
         if !ctx.is_active {
             return Err(Error::ContextInactive);
         }
-        if ciphertext_ref.len() == 0 {
+        if ciphertext_ref.is_empty() {
             return Err(Error::InvalidInput);
         }
 
         let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
-        if proof_ref.len() == 0 {
+        if proof_ref.is_empty() {
             // No proof: require the sentinel hash.
             if proof_hash != zero_hash {
                 return Err(Error::InvalidInput);
             }
-        } else {
+        } else if proof_hash == zero_hash {
             // Proof supplied: require a non-zero hash anchor.
-            if proof_hash == zero_hash {
-                return Err(Error::InvalidInput);
-            }
+            return Err(Error::InvalidInput);
         }
 
         let item = EncryptedComputation {

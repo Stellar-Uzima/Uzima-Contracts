@@ -119,10 +119,10 @@ impl MPCManager {
         initiator.require_auth();
         Self::require_initialized(&env)?;
 
-        if participants.len() == 0 {
+        if participants.is_empty() {
             return Err(Error::InvalidInput);
         }
-        if threshold == 0 || threshold > participants.len() as u32 {
+        if threshold == 0 || threshold > participants.len() {
             return Err(Error::InvalidInput);
         }
         if ttl_secs == 0 {
@@ -235,7 +235,7 @@ impl MPCManager {
         if !session.participants.contains(&participant) {
             return Err(Error::NotAuthorized);
         }
-        if share_ref.len() == 0 {
+        if share_ref.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -287,7 +287,7 @@ impl MPCManager {
         if session.status != SessionStatus::RevealPhase {
             return Err(Error::InvalidState);
         }
-        if result_ref.len() == 0 {
+        if result_ref.is_empty() {
             return Err(Error::InvalidInput);
         }
         let zero_hash = BytesN::from_array(&env, &[0u8; 32]);
@@ -298,14 +298,12 @@ impl MPCManager {
             return Err(Error::ThresholdNotMet);
         }
 
-        if proof_ref.len() == 0 {
+        if proof_ref.is_empty() {
             if proof_hash != zero_hash {
                 return Err(Error::InvalidInput);
             }
-        } else {
-            if proof_hash == zero_hash {
-                return Err(Error::InvalidInput);
-            }
+        } else if proof_hash == zero_hash {
+            return Err(Error::InvalidInput);
         }
 
         session.status = SessionStatus::Finalized;

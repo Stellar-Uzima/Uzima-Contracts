@@ -638,9 +638,12 @@ impl SutToken {
             .unwrap_or(Vec::new(env));
         let checkpoint_count = checkpoints.len();
 
-        if checkpoint_count == 0
-            || checkpoints.get(checkpoint_count - 1).unwrap().snapshot_id < current_snapshot_count
-        {
+        let should_add_checkpoint = match checkpoints.get(checkpoint_count.saturating_sub(1)) {
+            Some(last) => last.snapshot_id < current_snapshot_count,
+            None => true,
+        };
+
+        if should_add_checkpoint {
             let new_checkpoint = Checkpoint {
                 snapshot_id: current_snapshot_count,
                 balance: balance_before_change,
@@ -670,8 +673,11 @@ impl SutToken {
             return Self::balance_of(env.clone(), user.clone());
         }
 
-        let last_checkpoint = checkpoints.get(checkpoint_count - 1).unwrap();
-        if snapshot_id > last_checkpoint.snapshot_id {
+        let last_snapshot_id = match checkpoints.get(checkpoint_count.saturating_sub(1)) {
+            Some(last) => last.snapshot_id,
+            None => return Self::balance_of(env.clone(), user.clone()),
+        };
+        if snapshot_id > last_snapshot_id {
             return Self::balance_of(env.clone(), user.clone());
         }
 
@@ -680,7 +686,10 @@ impl SutToken {
 
         while low < high {
             let mid = (low + high) / 2;
-            let checkpoint = checkpoints.get(mid).unwrap();
+            let checkpoint = match checkpoints.get(mid) {
+                Some(checkpoint) => checkpoint,
+                None => return Self::balance_of(env.clone(), user.clone()),
+            };
 
             if checkpoint.snapshot_id < snapshot_id {
                 low = mid + 1;
@@ -689,7 +698,10 @@ impl SutToken {
             }
         }
 
-        checkpoints.get(low).unwrap().balance
+        match checkpoints.get(low) {
+            Some(checkpoint) => checkpoint.balance,
+            None => Self::balance_of(env.clone(), user.clone()),
+        }
     }
 }
 

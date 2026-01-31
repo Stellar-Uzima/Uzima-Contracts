@@ -1,10 +1,8 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{vec, Address, BytesN, Env, String};
 
-fn setup(env: &Env) -> (MPCManagerClient, Address) {
+fn setup(env: &Env) -> (MPCManagerClient<'_>, Address) {
     let id = Address::generate(env);
     env.register_contract(&id, MPCManager);
     (MPCManagerClient::new(env, &id), id)
@@ -53,6 +51,6 @@ fn mpc_session_lifecycle() {
         &BytesN::from_array(&env, &[0u8; 32]),
     );
 
-    let session = client.get_session(&sid).unwrap();
-    assert!(session.status == SessionStatus::Finalized);
+    let status = client.get_session(&sid).map(|s| s.status);
+    assert!(matches!(status, Some(SessionStatus::Finalized)));
 }
