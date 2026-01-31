@@ -14,7 +14,7 @@
 
 use soroban_sdk::{Address, Env, String, Vec};
 
-use crate::errors::Error;
+use crate::Error;
 use crate::{MedicalRecord, UserProfile};
 
 // ==================== CONSTANTS ====================
