@@ -178,7 +178,7 @@ pub struct HealthcareProvider {
     pub fhir_endpoint: String, // Base URL for FHIR API
     pub is_verified: bool,
     pub verification_timestamp: u64,
-    pub credential_id: Option<BytesN<32>>,
+    pub credential_id: BytesN<32>,
 }
 
 /// EMR Integration Configuration
@@ -338,7 +338,7 @@ impl FHIRIntegrationContract {
             fhir_endpoint,
             is_verified: false,
             verification_timestamp: 0,
-            credential_id: None,
+            credential_id: BytesN::from_array(&env, &[0u8; 32]),
         };
 
         let mut providers_map = providers;
@@ -383,7 +383,7 @@ impl FHIRIntegrationContract {
 
         provider.is_verified = true;
         provider.verification_timestamp = env.ledger().timestamp();
-        provider.credential_id = Some(credential_id);
+        provider.credential_id = credential_id;
 
         providers.set(provider_id, provider);
         env.storage().persistent().set(&PROVIDERS, &providers);

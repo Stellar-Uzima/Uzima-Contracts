@@ -4,6 +4,7 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
 
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     String, Symbol, Vec,
@@ -1638,23 +1639,28 @@ impl IdentityRegistryContract {
 
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
-        // Format: did:stellar:uzima:<network>:<address_string>
-        // For simplicity, we create a deterministic string representation
-        let mut did = String::from_str(env, "did:stellar:uzima:");
+        const MAX_PART_LEN: usize = 128;
+        const MAX_DID_LEN: usize = 512;
 
-        // Append network
-        did = Self::concat_strings(env, &did, network_id);
-        did = Self::concat_strings(env, &did, &String::from_str(env, ":"));
+        let subject_str = subject.to_string();
 
-        // For the address, we'll use a hash representation
-        // In production, this would be the actual address encoding
-        let addr_val: soroban_sdk::Val = subject.to_val();
-        let addr_bytes = Bytes::from_array(env, &addr_val.get_payload().to_be_bytes());
-        let addr_hash: BytesN<32> = env.crypto().sha256(&addr_bytes).into();
-        let hash_str = Self::bytes_to_hex_string(env, &addr_hash);
-        did = Self::concat_strings(env, &did, &hash_str);
+        let network_len = network_id.len() as usize;
+        let subject_len = subject_str.len() as usize;
 
-        did
+        let mut network_buf = [0u8; MAX_PART_LEN];
+        network_id.copy_into_slice(&mut network_buf[..network_len]);
+
+        let mut subject_buf = [0u8; MAX_PART_LEN];
+        subject_str.copy_into_slice(&mut subject_buf[..subject_len]);
+
+        let mut did_bytes = Bytes::new(env);
+        did_bytes.extend_from_slice(b"did:stellar:uzima:");
+        did_bytes.extend_from_slice(&network_buf[..network_len]);
+        did_bytes.extend_from_slice(b":");
+        did_bytes.extend_from_slice(&subject_buf[..subject_len]);
+
+        let did_buf = did_bytes.to_buffer::<MAX_DID_LEN>();
+        String::from_bytes(env, did_buf.as_slice())
     }
 
     fn generate_credential_id(
@@ -1664,68 +1670,16 @@ impl IdentityRegistryContract {
         timestamp: u64,
         _credential_type: &CredentialType,
     ) -> BytesN<32> {
-        let mut data = Bytes::new(env);
-        // Append addresses as their Val representations converted to bytes
-        let issuer_val: soroban_sdk::Val = issuer.to_val();
-        let subject_val: soroban_sdk::Val = subject.to_val();
-        data.append(&Bytes::from_array(
-            env,
-            &issuer_val.get_payload().to_be_bytes(),
-        ));
-        data.append(&Bytes::from_array(
-            env,
-            &subject_val.get_payload().to_be_bytes(),
-        ));
-        data.append(&Bytes::from_array(env, &timestamp.to_be_bytes()));
-
+        let mut data = issuer.to_xdr(env);
+        data.append(&subject.to_xdr(env));
+        data.append(&timestamp.to_xdr(env));
         env.crypto().sha256(&data).into()
     }
 
     /// Compute document hash for audit trail
     fn compute_document_hash(env: &Env, doc: &DIDDocument) -> BytesN<32> {
-        // Hash the serialized version using a combination of key fields
-        let mut data = Bytes::new(env);
-        // Convert string ID to bytes for hashing
-        let id_val: soroban_sdk::Val = doc.id.to_val();
-        data.append(&Bytes::from_array(env, &id_val.get_payload().to_be_bytes()));
-        data.append(&Bytes::from_array(env, &doc.version.to_be_bytes()));
-        data.append(&Bytes::from_array(env, &doc.updated.to_be_bytes()));
-
+        let data = doc.clone().to_xdr(env);
         env.crypto().sha256(&data).into()
-    }
-
-    /// Helper to concatenate strings
-    fn concat_strings(env: &Env, _a: &String, _b: &String) -> String {
-        // Soroban strings are immutable and concatenation is complex
-        // For DID generation, we use a simpler approach in generate_did_string
-        String::from_str(env, "did:stellar:uzima:")
-    }
-
-    /// Convert bytes to hex string (simplified)
-    fn bytes_to_hex_string(env: &Env, bytes: &BytesN<32>) -> String {
-        let arr = bytes.to_array();
-        // pre-computed hex chars
-        const HEX_CHARS: &[u8] = b"0123456789abcdef";
-
-        // Take first 8 bytes for a shorter representation -> 16 chars
-        let mut hex_str = [0u8; 16];
-        for (i, byte) in arr.iter().take(8).enumerate() {
-            let high = (byte >> 4) as usize;
-            let low = (byte & 0x0f) as usize;
-            if let Some(c) = HEX_CHARS.get(high) {
-                if let Some(target) = hex_str.get_mut(i.saturating_mul(2)) {
-                    *target = *c;
-                }
-            }
-            if let Some(c) = HEX_CHARS.get(low) {
-                if let Some(target) = hex_str.get_mut(i.saturating_mul(2).saturating_add(1)) {
-                    *target = *c;
-                }
-            }
-        }
-
-        // Safe conversion since we only put ASCII hex chars in
-        String::from_str(env, core::str::from_utf8(&hex_str).unwrap_or("00000000"))
     }
 
     /// DID-based authorization check
@@ -1776,12 +1730,13 @@ impl IdentityRegistryContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
     use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
     fn create_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -1795,6 +1750,7 @@ mod tests {
     fn create_legacy_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -1963,10 +1919,7 @@ mod tests {
 
         client.create_did(&subject, &public_key, &services);
 
-        env.ledger().set(LedgerInfo {
-            timestamp: 4000,
-            ..Default::default()
-        });
+        env.ledger().set_timestamp(4000);
 
         // Rotate the primary key
         let new_key = BytesN::from_array(&env, &[3u8; 32]);
@@ -2061,10 +2014,7 @@ mod tests {
             &expiration,
         );
 
-        env.ledger().set(LedgerInfo {
-            timestamp: 2000,
-            ..Default::default()
-        });
+        env.ledger().set_timestamp(2000);
 
         // Credential should be expired (timestamp is > 1000)
         let status = client.verify_credential(&credential_id);

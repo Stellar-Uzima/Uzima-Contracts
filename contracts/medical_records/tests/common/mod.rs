@@ -3,7 +3,6 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 
 // Added <'a> to struct definition
 pub struct UzimaTest<'a> {
-    pub env: Env,
     pub client: MedicalRecordsContractClient<'a>, // Client needs lifetime
     pub admin1: Address,
     pub admin2: Address,
@@ -36,7 +35,6 @@ pub fn setup_uzima<'a>(env: &'a Env) -> UzimaTest<'a> {
     client.manage_user(&admin1, &doctor, &Role::Doctor);
 
     UzimaTest {
-        env: env.clone(),
         client,
         admin1,
         admin2,

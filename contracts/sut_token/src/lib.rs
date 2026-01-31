@@ -390,13 +390,11 @@ impl SutToken {
 
         // Update recipient balance
         let current_balance = Self::balance_of(env.clone(), to.clone());
+        Self::update_checkpoint(&env, &to, current_balance)?;
         let new_balance = current_balance.checked_add(amount).ok_or(Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::Balance(to.clone()), &new_balance);
-
-        // Update checkpoint for recipient
-        Self::update_checkpoint(&env, &to, new_balance)?;
 
         // Emit mint event
         let event = MintEvent {
@@ -433,6 +431,8 @@ impl SutToken {
             return Err(Error::InsufficientBalance);
         }
 
+        Self::update_checkpoint(&env, &from, current_balance)?;
+
         // Get current token info
         let mut token_info: TokenInfo = env
             .storage()
@@ -460,9 +460,6 @@ impl SutToken {
                 .persistent()
                 .set(&DataKey::Balance(from.clone()), &new_balance);
         }
-
-        // Update checkpoint for sender
-        Self::update_checkpoint(&env, &from, new_balance)?;
 
         // Emit burn event
         let event = BurnEvent {
@@ -567,10 +564,6 @@ impl SutToken {
             .get(&DataKey::Snapshot(snapshot_id))
             .ok_or(Error::SnapshotNotFound)?;
 
-        // Special handling for snapshot 1 when no checkpoints exist
-
-        // Special handling for when no checkpoints exist
-
         Ok(Self::get_balance_at_snapshot(&env, &account, snapshot_id))
     }
 
@@ -617,43 +610,43 @@ impl SutToken {
             .set(&DataKey::Balance(to.clone()), &new_to_balance);
 
         // Update checkpoints for both accounts
-        Self::update_checkpoint(env, from, new_from_balance)?;
-        Self::update_checkpoint(env, to, new_to_balance)?;
+        Self::update_checkpoint(env, from, from_balance)?;
+        Self::update_checkpoint(env, to, to_balance)?;
 
         Ok(())
     }
 
-    fn update_checkpoint(env: &Env, user: &Address, new_balance: i128) -> Result<(), Error> {
+    fn update_checkpoint(
+        env: &Env,
+        user: &Address,
+        balance_before_change: i128,
+    ) -> Result<(), Error> {
         let current_snapshot_count: u32 = env
             .storage()
             .instance()
             .get(&DataKey::SnapshotCount)
             .unwrap_or(0);
 
-        let target_snapshot_id = current_snapshot_count + 1;
-
-        let checkpoint_count: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserCheckpointCount(user.clone()))
-            .unwrap_or(0);
+        if current_snapshot_count == 0 {
+            return Ok(());
+        }
 
         let mut checkpoints: Vec<Checkpoint> = env
             .storage()
             .persistent()
             .get(&DataKey::UserCheckpoints(user.clone()))
             .unwrap_or(Vec::new(env));
+        let checkpoint_count = checkpoints.len();
 
-        if checkpoint_count == 0
-            || checkpoints
-                .get(checkpoint_count - 1)
-                .ok_or(Error::IndexOutOfBounds)?
-                .snapshot_id
-                < target_snapshot_id
-        {
+        let should_add_checkpoint = match checkpoints.get(checkpoint_count.saturating_sub(1)) {
+            Some(last) => last.snapshot_id < current_snapshot_count,
+            None => true,
+        };
+
+        if should_add_checkpoint {
             let new_checkpoint = Checkpoint {
-                snapshot_id: target_snapshot_id,
-                balance: new_balance,
+                snapshot_id: current_snapshot_count,
+                balance: balance_before_change,
             };
             checkpoints.push_back(new_checkpoint);
 
@@ -662,22 +655,8 @@ impl SutToken {
                 .set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
             env.storage().persistent().set(
                 &DataKey::UserCheckpointCount(user.clone()),
-                &(checkpoint_count + 1),
+                &checkpoints.len(),
             );
-        } else if checkpoint_count > 0 {
-            let last_checkpoint = checkpoints
-                .get(checkpoint_count - 1)
-                .ok_or(Error::IndexOutOfBounds)?;
-            if last_checkpoint.snapshot_id == target_snapshot_id {
-                let updated_checkpoint = Checkpoint {
-                    snapshot_id: target_snapshot_id,
-                    balance: new_balance,
-                };
-                checkpoints.set(checkpoint_count - 1, updated_checkpoint);
-                env.storage()
-                    .persistent()
-                    .set(&DataKey::UserCheckpoints(user.clone()), &checkpoints);
-            }
         }
         Ok(())
     }
@@ -689,34 +668,39 @@ impl SutToken {
             .get(&DataKey::UserCheckpoints(user.clone()))
             .unwrap_or(Vec::new(env));
 
-        let checkpoint_count: u32 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserCheckpointCount(user.clone()))
-            .unwrap_or(0);
+        let checkpoint_count = checkpoints.len();
+        if checkpoint_count == 0 {
+            return Self::balance_of(env.clone(), user.clone());
+        }
+
+        let last_snapshot_id = match checkpoints.get(checkpoint_count.saturating_sub(1)) {
+            Some(last) => last.snapshot_id,
+            None => return Self::balance_of(env.clone(), user.clone()),
+        };
+        if snapshot_id > last_snapshot_id {
+            return Self::balance_of(env.clone(), user.clone());
+        }
 
         let mut low = 0u32;
         let mut high = checkpoint_count;
 
         while low < high {
             let mid = (low + high) / 2;
-            let checkpoint = checkpoints.get(mid);
-            // Safety check for unwrap, though logic should prevent OOB
-            if let Some(cp) = checkpoint {
-                if cp.snapshot_id <= snapshot_id {
-                    low = mid + 1;
-                } else {
-                    high = mid;
-                }
+            let checkpoint = match checkpoints.get(mid) {
+                Some(checkpoint) => checkpoint,
+                None => return Self::balance_of(env.clone(), user.clone()),
+            };
+
+            if checkpoint.snapshot_id < snapshot_id {
+                low = mid + 1;
             } else {
-                break; // Should not happen
+                high = mid;
             }
         }
 
-        if low == 0 {
-            0
-        } else {
-            checkpoints.get(low - 1).map(|cp| cp.balance).unwrap_or(0)
+        match checkpoints.get(low) {
+            Some(checkpoint) => checkpoint.balance,
+            None => Self::balance_of(env.clone(), user.clone()),
         }
     }
 }

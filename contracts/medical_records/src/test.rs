@@ -3,7 +3,7 @@
 use super::*;
 use crate::errors::Error;
 use soroban_sdk::testutils::{Address as _, Events};
-use soroban_sdk::{vec, Address, Env, String, TryFromVal, Vec};
+use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
     let contract_id = Address::generate(env);
