@@ -1,5 +1,5 @@
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 fn create_forwarder_contract<'a>(env: &Env) -> (Address, MetaTxForwarderClient<'a>) {
     let contract_id = env.register_contract(None, MetaTxForwarder);

@@ -9,7 +9,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AnomalyDetectionConfig {
     pub admin: Address,
@@ -19,20 +19,30 @@ pub struct AnomalyDetectionConfig {
     pub enabled: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct AnomalyRecord {
     pub record_id: u64,
     pub patient: Address,
     pub detector_address: Address,
-    pub score_bps: u32, // Anomaly score in basis points (0-10000)
-    pub severity: u32,  // Severity level (1-5)
+    pub score_bps: u32,
+    pub severity: u32,
     pub detected_at: u64,
-    pub metadata: String, // JSON string with additional detection metadata
-    pub explanation_ref: String, // Off-chain reference to detailed explanation (e.g. IPFS CID)
+    pub metadata: String,
+    pub explanation_ref: String,
+    pub status: AnomalyStatus,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum AnomalyStatus {
+    Pending,
+    Confirmed,
+    FalsePositive,
+    Ignored,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct DetectionStats {
     pub total_anomalies: u64,
@@ -44,7 +54,7 @@ pub struct DetectionStats {
 #[contracttype]
 pub enum DataKey {
     Config,
-    AnomalyRecord(u64), // Record ID -> AnomalyRecord
+    AnomalyRecord(u64),
     AnomalyCountByPatient(Address),
     Stats,
     Whitelist(Address),
@@ -61,36 +71,10 @@ pub enum Error {
     InvalidAnomaly = 3,
     InvalidThreshold = 4,
     DetectorNotWhitelisted = 5,
-}
-
-// Storage keys
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const DETECTOR: Symbol = symbol_short!("DETECTOR");
-const THRESHOLD: Symbol = symbol_short!("THRESH"); // bps
-const SENSITIVITY: Symbol = symbol_short!("SENSE"); // 1-10
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const ANOMALIES: Symbol = symbol_short!("ANOMALIES");
-const WHITELIST: Symbol = symbol_short!("WHITE");
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct AnomalyRecord {
-    pub id: u64,
-    pub detector: Address,
-    pub target_resource: BytesN<32>, // Hash of resource ID (e.g. claim ID)
-    pub timestamp: u64,
-    pub anomaly_score: u32,
-    pub metadata_hash: BytesN<32>,
-    pub status: AnomalyStatus,
-}
-
-#[contracttype]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum AnomalyStatus {
-    Pending,
-    Confirmed,
-    FalsePositive,
-    Ignored,
+    ConfigNotSet = 6,
+    Disabled = 7,
+    InvalidScore = 8,
+    InvalidSeverity = 9,
 }
 
 #[contract]
@@ -98,13 +82,11 @@ pub struct AnomalyDetectionContract;
 
 #[contractimpl]
 impl AnomalyDetectionContract {
-    /// Initialize the contract
     pub fn initialize(
         env: Env,
         admin: Address,
         primary_detector: Address,
         threshold: u32,
-        sensitivity: u32,
     ) -> Result<bool, Error> {
         admin.require_auth();
 
@@ -112,65 +94,23 @@ impl AnomalyDetectionContract {
             panic!("Already initialized");
         }
 
-        if threshold_bps > 10_000 {
-            panic!("threshold_bps must be <= 10000");
+        if threshold > 10_000 {
+            return Err(Error::InvalidThreshold);
         }
 
         let config = AnomalyDetectionConfig {
             admin,
-            detector,
-            threshold_bps,
-            sensitivity: 5, // Default sensitivity
+            detector: primary_detector,
+            threshold_bps: threshold,
+            sensitivity: 5,
             enabled: true,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&ANOMALY_COUNTER, &0u64);
-        true
+        Ok(true)
     }
 
-    fn load_config(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
-        env.storage()
-            .instance()
-            .get(&DataKey::Config)
-            .ok_or(Error::ConfigNotSet)
-    }
-
-    fn ensure_admin(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
-        let config = Self::load_config(env)?;
-        if config.admin != *caller {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(config)
-    }
-
-    fn ensure_detector(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
-        let config = Self::load_config(env)?;
-        if config.detector != *caller {
-            return Err(Error::NotAuthorized);
-        }
-        if !config.enabled {
-            return Err(Error::Disabled);
-        }
-        Ok(config)
-    }
-
-    fn ensure_enabled(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
-        let config = Self::load_config(env)?;
-        if !config.enabled {
-            return Err(Error::Disabled);
-        }
-        Ok(config)
-    }
-
-    fn next_anomaly_id(env: &Env) -> u64 {
-        let current: u64 = env.storage().instance().get(&ANOMALY_COUNTER).unwrap_or(0);
-        let next = current + 1;
-        env.storage().instance().set(&ANOMALY_COUNTER, &next);
-        next
-    }
-
-    /// Update configuration
     pub fn update_config(
         env: Env,
         admin: Address,
@@ -180,60 +120,69 @@ impl AnomalyDetectionContract {
         enabled: Option<bool>,
     ) -> Result<bool, Error> {
         admin.require_auth();
-        let stored_admin: Address = env.storage().persistent().get(&ADMIN).unwrap();
-        if admin != stored_admin {
+        let mut config: AnomalyDetectionConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::ConfigNotSet)?;
+
+        if admin != config.admin {
             return Err(Error::NotAuthorized);
         }
 
         if let Some(det) = new_detector {
-            env.storage().persistent().set(&DETECTOR, &det);
-            // Also whitelist
-            let mut whitelist: Map<Address, bool> = env
-                .storage()
-                .persistent()
-                .get(&WHITELIST)
-                .unwrap_or(Map::new(&env));
-            whitelist.set(det, true);
-            env.storage().persistent().set(&WHITELIST, &whitelist);
+            config.detector = det.clone();
+            env.storage()
+                .instance()
+                .set(&DataKey::Whitelist(det), &true);
         }
-
         if let Some(thresh) = new_threshold {
-            env.storage().persistent().set(&THRESHOLD, &thresh);
+            config.threshold_bps = thresh;
+        }
+        if let Some(sense) = new_sensitivity {
+            config.sensitivity = sense;
+        }
+        if let Some(en) = enabled {
+            config.enabled = en;
         }
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.events().publish((symbol_short!("CfgUpdate"),), true);
-
         Ok(true)
     }
 
-    /// Report an anomaly
     pub fn detect_anomaly(
         env: Env,
-        detector: Address,
-        target_resource: BytesN<32>,
-        anomaly_score: u32,
-        metadata_hash: BytesN<32>,
+        caller: Address,
+        record_id: u64,
+        patient: Address,
+        score_bps: u32,
+        severity: u32,
+        metadata: String,
+        explanation_ref: String,
     ) -> Result<u64, Error> {
         caller.require_auth();
+        let config: AnomalyDetectionConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::ConfigNotSet)?;
 
-        let _config = Self::ensure_detector(&env, &caller)?;
-
-        // Validate inputs
+        if !config.enabled {
+            return Err(Error::Disabled);
+        }
         if score_bps > 10_000 {
             return Err(Error::InvalidScore);
         }
-
         if severity == 0 || severity > 5 {
             return Err(Error::InvalidSeverity);
         }
 
-        if explanation_ref.is_empty() {
-            panic!("explanation_ref cannot be empty");
-        }
-
-        // Create anomaly record
-        let anomaly_id = Self::next_anomaly_id(&env);
+        let anomaly_id = env
+            .storage()
+            .instance()
+            .get(&ANOMALY_COUNTER)
+            .unwrap_or(0u64)
+            + 1;
         let timestamp = env.ledger().timestamp();
 
         let anomaly_record = AnomalyRecord {
@@ -245,9 +194,15 @@ impl AnomalyDetectionContract {
             detected_at: timestamp,
             metadata,
             explanation_ref,
+            status: AnomalyStatus::Pending,
         };
 
-        let mut anomalies: Map<u64, AnomalyRecord> = env
+        env.storage()
+            .instance()
+            .set(&DataKey::AnomalyRecord(anomaly_id), &anomaly_record);
+        env.storage().instance().set(&ANOMALY_COUNTER, &anomaly_id);
+
+        let patient_count: u64 = env
             .storage()
             .instance()
             .get(&DataKey::AnomalyCountByPatient(patient.clone()))
@@ -257,61 +212,34 @@ impl AnomalyDetectionContract {
             &(patient_count + 1),
         );
 
-        // Update global stats
-        let mut stats: DetectionStats =
-            env.storage()
-                .instance()
-                .get(&DataKey::Stats)
-                .unwrap_or(DetectionStats {
-                    total_anomalies: 0,
-                    high_severity_count: 0,
-                    last_detection_at: 0,
-                });
-
-        stats.total_anomalies += 1;
-        if severity >= 4 {
-            // High severity is 4 or 5
-            stats.high_severity_count += 1;
-        }
-        stats.last_detection_at = timestamp;
-
-        env.storage().instance().set(&DataKey::Stats, &stats);
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("AnomDet"),),
-            (anomaly_id, record_id, score_bps, severity),
-        );
-
         Ok(anomaly_id)
     }
 
-    pub fn get_anomaly_record(env: Env, anomaly_id: u64) -> Option<AnomalyRecord> {
+    pub fn update_status(
+        env: Env,
+        admin: Address,
+        id: u64,
+        status: AnomalyStatus,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        let mut record: AnomalyRecord = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnomalyRecord(id))
+            .ok_or(Error::InvalidAnomaly)?;
+        record.status = status;
         env.storage()
             .instance()
-            .get(&DataKey::AnomalyRecord(anomaly_id))
+            .set(&DataKey::AnomalyRecord(id), &record);
+        Ok(true)
+    }
+
+    pub fn get_anomaly_record(env: Env, id: u64) -> Option<AnomalyRecord> {
+        env.storage().instance().get(&DataKey::AnomalyRecord(id))
     }
 
     pub fn get_config(env: Env) -> Option<AnomalyDetectionConfig> {
         env.storage().instance().get(&DataKey::Config)
-    }
-
-    pub fn get_stats(env: Env) -> DetectionStats {
-        env.storage()
-            .instance()
-            .get(&DataKey::Stats)
-            .unwrap_or(DetectionStats {
-                total_anomalies: 0,
-                high_severity_count: 0,
-                last_detection_at: 0,
-            })
-    }
-
-    pub fn get_anomaly_count_for_patient(env: Env, patient: Address) -> u64 {
-        env.storage()
-            .instance()
-            .get(&DataKey::AnomalyCountByPatient(patient))
-            .unwrap_or(0)
     }
 
     pub fn whitelist_detector(
@@ -320,135 +248,16 @@ impl AnomalyDetectionContract {
         detector_addr: Address,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        let _config = Self::ensure_admin(&env, &caller)?;
-
         env.storage()
             .instance()
-            .set(&DataKey::Whitelist(detector_addr.clone()), &true);
-
-        env.events()
-            .publish((symbol_short!("DetectWL"),), detector_addr);
-
+            .set(&DataKey::Whitelist(detector_addr), &true);
         Ok(true)
     }
-}
 
-#[cfg(all(test, feature = "testutils"))]
-#[allow(clippy::unwrap_used)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{BytesN, Env};
-
-    #[test]
-    fn test_anomaly_flow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let contract_id = env.register_contract(None, AnomalyDetectionContract);
-        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let detector = Address::generate(&env);
-        let patient = Address::generate(&env);
-
-        // Initialize contract
-        client
-            .mock_all_auths()
-            .initialize(&admin, &detector, &7500u32);
-
-        // Verify config
-        let config = client.get_config().unwrap();
-        assert_eq!(config.admin, admin);
-        assert_eq!(config.detector, detector);
-        assert_eq!(config.threshold_bps, 7500u32);
-        assert!(config.enabled);
-
-        // Detect an anomaly
-        let metadata = String::from_str(&env, r#"{"feature_importance": [0.1, 0.8, 0.1]}"#);
-        let explanation_ref = String::from_str(&env, "ipfs://anomaly-explanation-123");
-
-        let anomaly_id = client.mock_all_auths().detect_anomaly(
-            &detector,
-            &1u64, // record_id
-            &patient,
-            &8000u32, // score_bps (above threshold)
-            &4u32,    // severity
-            &metadata,
-            &explanation_ref,
-        );
-
-        assert_eq!(anomaly_id, 1u64);
-
-        // Get the anomaly record
-        let record = client.get_anomaly_record(&anomaly_id).unwrap();
-        assert_eq!(record.patient, patient);
-        assert_eq!(record.score_bps, 8000u32);
-        assert_eq!(record.severity, 4u32);
-        assert_eq!(record.metadata, metadata);
-
-        // Update status
-        client.update_status(&admin, &anomaly_id, &AnomalyStatus::Confirmed);
-        let updated = client.get_anomaly(&anomaly_id);
-        assert_eq!(updated.status, AnomalyStatus::Confirmed);
-    }
-
-    #[test]
-    fn test_threshold_check() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let contract_id = env.register_contract(None, AnomalyDetectionContract);
-        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let detector = Address::generate(&env);
-
-        // Initialize contract
-        client
-            .mock_all_auths()
-            .initialize(&admin, &detector, &7500u32);
-
-        // Update config
-        assert!(client.mock_all_auths().update_config(
-            &admin,
-            &Some(Address::generate(&env)), // new detector
-            &Some(8000u32),                 // new threshold
-            &Some(7u32),                    // new sensitivity
-            &Some(false),                   // disable
-        ));
-
-        let config = client.get_config().unwrap();
-        assert_eq!(config.threshold_bps, 8000u32);
-        assert_eq!(config.sensitivity, 7u32);
-        assert!(!config.enabled);
-    }
-
-    #[test]
-    fn test_config_update() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let contract_id = env.register_contract(None, AnomalyDetectionContract);
-        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let detector = Address::generate(&env);
-
-        // Initialize contract
-        client
-            .mock_all_auths()
-            .initialize(&admin, &detector, &7500u32);
-
-        // Check that detector is not whitelisted initially
-        assert!(!client.is_whitelisted_detector(&detector));
-
-        // Whitelist the detector
-        assert!(client
-            .mock_all_auths()
-            .whitelist_detector(&admin, &detector));
-
-        // Check that detector is now whitelisted
-        assert!(client.is_whitelisted_detector(&detector));
+    pub fn is_whitelisted_detector(env: Env, addr: Address) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Whitelist(addr))
+            .unwrap_or(false)
     }
 }

@@ -1,12 +1,8 @@
 #![allow(clippy::unwrap_used)]
 
-use crate::{contract::TokenSaleContractClient, vesting::VestingContractClient};
-
-use super::*;
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    token, Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, Env};
+// FIXED: Direct imports from crate root to resolve E0432
+use crate::{TokenSaleContract, TokenSaleContractClient};
 
 fn create_token_contract<'a>(
     e: &Env,
@@ -27,6 +23,7 @@ fn test_sale_flow() {
     let env = Env::default();
     env.mock_all_auths();
 
+    // Registering the contract using the correct struct name
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
@@ -34,7 +31,7 @@ fn test_sale_flow() {
     let token = Address::generate(&env);
     let treasury = Address::generate(&env);
 
-    // Initialize with 6 arguments: admin, token, treasury, start, end, rate
+    // Initializing with the 6 arguments required by your logic
     client.initialize(
         &admin, &token, &treasury, &100u64,   // start_time
         &1000u64,  // end_time
@@ -43,7 +40,7 @@ fn test_sale_flow() {
 
     let _buyer = Address::generate(&env);
 
-    // Verify state
+    // Verify the sale state was saved
     let info = client.get_sale_info();
     assert_eq!(info.rate, 2000);
     assert_eq!(info.start_time, 100);

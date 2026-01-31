@@ -14,6 +14,9 @@ fn test_create_and_resolve_did() {
     env.mock_all_auths();
     let (client, owner) = create_contract(&env);
 
+    let network_id = String::from_str(&env, "testnet");
+    client.initialize(&owner, &network_id);
+
     let initial_key = String::from_str(&env, "z6MkpTHR8VNsBxYAAWHut2Geadd9jSwuBV8xRoAnwWsdvktH");
     let services: Vec<Service> = Vec::new(&env);
 
@@ -22,7 +25,6 @@ fn test_create_and_resolve_did() {
     let doc = client.resolve_did(&owner);
     assert_eq!(doc.id, did_string);
     assert_eq!(doc.version, 1);
-    // FIXED: Changed assert_eq!(..., false) to assert!(!...)
     assert!(!doc.deactivated);
 }
 
@@ -32,6 +34,9 @@ fn test_deactivate_did() {
     env.mock_all_auths();
     let (client, owner) = create_contract(&env);
 
+    let network_id = String::from_str(&env, "testnet");
+    client.initialize(&owner, &network_id);
+
     let initial_key = String::from_str(&env, "key1");
     let services: Vec<Service> = Vec::new(&env);
     client.create_did(&owner, &initial_key, &services);
@@ -39,6 +44,5 @@ fn test_deactivate_did() {
     client.deactivate_did(&owner);
 
     let doc = client.resolve_did(&owner);
-    // FIXED: Changed assert_eq!(..., true) to assert!(...)
     assert!(doc.deactivated);
 }
