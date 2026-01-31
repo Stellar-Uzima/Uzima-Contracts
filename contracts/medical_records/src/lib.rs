@@ -5,10 +5,10 @@
 
 #[cfg(test)]
 mod test;
-#[cfg(test)] // <--- Add this
+#[cfg(test)]
 mod test_migration;
 #[cfg(test)]
-mod test_permissions; // <--- Add this
+mod test_permissions;
 
 mod events;
 mod validation;
@@ -18,8 +18,6 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
     Vec,
 };
-
-// ... (Types remain the same until AccessRequest) ...
 
 // ==================== Cross-Chain Types ====================
 
@@ -207,7 +205,7 @@ pub enum DataKey {
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
     UserPermissions(Address),
-    ContractVersion, // <--- Add this
+    ContractVersion, // <--- Added for migration system
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -376,7 +374,8 @@ impl MedicalRecordsContract {
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
         caller.require_auth();
-        if Self::has_role(&env, &caller, &Role::Admin).is_err() {
+        // FIXED: Using ! because has_role returns a bool
+        if !Self::has_role(&env, &caller, &Role::Admin) {
             return false;
         }
 
@@ -789,9 +788,6 @@ impl MedicalRecordsContract {
 
         Ok(record)
     }
-    // ... (Your existing get_record function ends here) ...
-    //    Ok(record)
-    // }
 
     // =================================================================
     // MIGRATION & UPGRADE SYSTEM
