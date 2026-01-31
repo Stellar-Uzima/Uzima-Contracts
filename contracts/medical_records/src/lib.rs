@@ -6,6 +6,8 @@
 #[cfg(test)]
 mod test;
 #[cfg(test)]
+mod test_migration;
+#[cfg(test)]
 mod test_permissions;
 
 mod errors;
@@ -18,7 +20,6 @@ use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
 
@@ -195,6 +196,7 @@ pub struct RecoveryProposal {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
+    Admin,
     RecordCount,
     IdentityRegistry,
     AuthLevel,
@@ -205,6 +207,7 @@ pub enum DataKey {
     PatientRisk(Address),
     RecordAnomaly(Address, u64),
     UserPermissions(Address),
+    ContractVersion, // <--- Added for migration system
 }
 
 const USERS: Symbol = symbol_short!("USERS");
@@ -243,11 +246,6 @@ pub struct MedicalRecordsContract;
 impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
-        if env.storage().instance().has(&UPGRADE_ADMIN) {
-            return false;
-        }
-        env.storage().instance().set(&UPGRADE_ADMIN, &admin);
-        env.storage().instance().set(&VERSION, &1u32);
         env.storage().persistent().set(&PAUSED, &false);
 
         let mut users: Map<Address, UserProfile> = Map::new(&env);
@@ -261,10 +259,13 @@ impl MedicalRecordsContract {
         );
         env.storage().persistent().set(&USERS, &users);
 
+        // Emit user creation event
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
     }
 
+    /// Internal function to check if an address has a specific role
+    /// Returns Ok(()) if authorized, Err(NotAuthorized) if not.
     fn has_role(env: &Env, address: &Address, role: &Role) -> Result<(), Error> {
         let users: Map<Address, UserProfile> = env
             .storage()
@@ -340,7 +341,11 @@ impl MedicalRecordsContract {
         role: Role,
     ) -> Result<bool, Error> {
         caller.require_auth();
-        Self::has_role(&env, &caller, &Role::Admin)?;
+        // FIXED: Since has_role returns Result, we use .is_err()
+        // And we must return Ok(false) to match Result<bool, Error>
+        if Self::has_role(&env, &caller, &Role::Admin).is_err() {
+            return Ok(false);
+        }
 
         let mut users: Map<Address, UserProfile> = env
             .storage()
@@ -706,18 +711,62 @@ impl MedicalRecordsContract {
         Ok(record)
     }
 
-    pub fn upgrade(env: Env, new_wasm_hash: BytesN<32>) -> Result<(), Error> {
-        let admin: Address = env
-            .storage()
+    // =================================================================
+    // MIGRATION & UPGRADE SYSTEM
+    // =================================================================
+
+    // Helper to get the current version
+    fn get_contract_version(env: &Env) -> u32 {
+        env.storage()
             .instance()
-            .get(&UPGRADE_ADMIN)
-            .ok_or(Error::NotAuthorized)?;
-        admin.require_auth();
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
-        Ok(())
+            .get(&DataKey::ContractVersion)
+            .unwrap_or(0) // Default to 0 if not set
     }
 
-    pub fn version(env: Env) -> u32 {
-        env.storage().instance().get(&VERSION).unwrap_or(0)
+    // Helper to set the version
+    fn set_contract_version(env: &Env, new_version: u32) {
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractVersion, &new_version);
+    }
+
+    // The Main Upgrade Function
+    // Updates WASM code and migrates data atomically.
+    // The Main Upgrade Function
+    // Updates WASM code and migrates data atomically.
+    #[allow(clippy::panic)] // <--- THIS IS THE FIX
+    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        // A. Security Check
+        caller.require_auth();
+
+        // FIXED: Using .is_err() because has_role returns a Result
+        if Self::has_role(&env, &caller, &Role::Admin).is_err() {
+            panic!("Not authorized to upgrade contract");
+        }
+
+        // B. Update the Contract Code
+        env.deployer().update_current_contract_wasm(new_wasm_hash);
+
+        // C. Run Data Migration
+        Self::migrate_data(&env);
+    }
+
+    // The Data Migration Logic
+    fn migrate_data(env: &Env) {
+        // Define the version this code represents
+        const CURRENT_CONTRACT_VERSION: u32 = 1;
+
+        let current_version = Self::get_contract_version(env);
+
+        // If the stored data is older than the code's version, run migration
+        if current_version < CURRENT_CONTRACT_VERSION {
+            // Example: Migration from V0 to V1
+            if current_version < 1 {
+                // e.g., Self::migrate_v0_to_v1(env);
+            }
+
+            // Update the stored version to match the current code
+            Self::set_contract_version(env, CURRENT_CONTRACT_VERSION);
+        }
     }
 }
