@@ -21,8 +21,6 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
 
-// ... (Types remain the same until AccessRequest) ...
-
 // ==================== Cross-Chain Types ====================
 
 #[derive(Clone, PartialEq, Eq)]
@@ -248,11 +246,6 @@ pub struct MedicalRecordsContract;
 impl MedicalRecordsContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
-        if env.storage().instance().has(&UPGRADE_ADMIN) {
-            return false;
-        }
-        env.storage().instance().set(&UPGRADE_ADMIN, &admin);
-        env.storage().instance().set(&VERSION, &1u32);
         env.storage().persistent().set(&PAUSED, &false);
 
         let mut users: Map<Address, UserProfile> = Map::new(&env);
@@ -266,10 +259,13 @@ impl MedicalRecordsContract {
         );
         env.storage().persistent().set(&USERS, &users);
 
+        // Emit user creation event
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
     }
 
+    /// Internal function to check if an address has a specific role
+    /// Returns Ok(()) if authorized, Err(NotAuthorized) if not.
     fn has_role(env: &Env, address: &Address, role: &Role) -> Result<(), Error> {
         let users: Map<Address, UserProfile> = env
             .storage()
@@ -345,8 +341,10 @@ impl MedicalRecordsContract {
         role: Role,
     ) -> Result<bool, Error> {
         caller.require_auth();
+        // FIXED: Since has_role returns Result, we use .is_err()
+        // And we must return Ok(false) to match Result<bool, Error>
         if Self::has_role(&env, &caller, &Role::Admin).is_err() {
-            return false;
+            return Ok(false);
         }
 
         let mut users: Map<Address, UserProfile> = env
@@ -712,9 +710,6 @@ impl MedicalRecordsContract {
         events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
         Ok(record)
     }
-    // ... (Your existing get_record function ends here) ...
-    //    Ok(record)
-    // }
 
     // =================================================================
     // MIGRATION & UPGRADE SYSTEM
@@ -741,8 +736,8 @@ impl MedicalRecordsContract {
         // A. Security Check
         caller.require_auth();
 
-        // Use existing Role system instead of missing DataKey::Admin
-        if !Self::has_role(&env, &caller, &Role::Admin) {
+        // FIXED: Using .is_err() because has_role returns a Result
+        if Self::has_role(&env, &caller, &Role::Admin).is_err() {
             panic!("Not authorized to upgrade contract");
         }
 
