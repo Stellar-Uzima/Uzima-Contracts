@@ -143,11 +143,11 @@ impl UpgradeManager {
             return Err(UpgradeManagerError::NotAValidator);
         }
 
-        let mut proposals: Map<u64, UpgradeProposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPOSALS)
-            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+        let mut proposals: Map<u64, UpgradeProposal> =
+            env.storage()
+                .persistent()
+                .get(&PROPOSALS)
+                .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
         let mut proposal = proposals
             .get(proposal_id)
@@ -164,11 +164,11 @@ impl UpgradeManager {
     }
 
     pub fn execute(env: Env, proposal_id: u64) -> Result<(), UpgradeManagerError> {
-        let mut proposals: Map<u64, UpgradeProposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPOSALS)
-            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+        let mut proposals: Map<u64, UpgradeProposal> =
+            env.storage()
+                .persistent()
+                .get(&PROPOSALS)
+                .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
         let mut proposal = proposals
             .get(proposal_id)

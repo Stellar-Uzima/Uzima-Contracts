@@ -7,7 +7,7 @@ set -e
 CONTRACT_ID=$1
 WASM_PATH=$2
 VERSION=$3
-DESC=$4
+# DESC=$4
 
 if [ -z "$CONTRACT_ID" ] || [ -z "$WASM_PATH" ] || [ -z "$VERSION" ]; then
     echo "Usage: $0 <contract_id> <new_wasm_path> <version> [description]"
