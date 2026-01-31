@@ -8,13 +8,14 @@ mod test;
 #[cfg(test)]
 mod test_permissions;
 
+mod errors;
 mod events;
 mod validation;
 
+use crate::errors::Error;
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
+    contract, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
 
 // ... (Types remain the same until AccessRequest) ...
@@ -220,60 +221,6 @@ const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    ContractPaused = 1,
-    NotAuthorized = 2,
-    InvalidCategory = 3,
-    EmptyTreatment = 4,
-    EmptyTag = 5,
-    ProposalAlreadyExecuted = 6,
-    TimelockNotElasped = 7,
-    NotEnoughApproval = 8,
-    EmptyDataRef = 9,
-    InvalidDataRefLength = 10,
-    InvalidDataRefCharset = 11,
-    CrossChainNotEnabled = 12,
-    CrossChainContractsNotSet = 13,
-    RecordNotFound = 14,
-    CrossChainAccessDenied = 15,
-    RecordAlreadySynced = 16,
-    InvalidChain = 17,
-    DIDNotFound = 18,
-    DIDNotActive = 19,
-    InvalidCredential = 20,
-    CredentialExpired = 21,
-    CredentialRevoked = 22,
-    MissingRequiredCredential = 23,
-    EmergencyAccessExpired = 24,
-    EmergencyAccessNotFound = 25,
-    IdentityRegistryNotSet = 26,
-    AIConfigNotSet = 27,
-    NotAICoordinator = 28,
-    InvalidAIScore = 29,
-    // Validation Errors
-    EmptyDiagnosis = 30,
-    InvalidDiagnosisLength = 31,
-    InvalidTreatmentLength = 32,
-    InvalidPurposeLength = 33,
-    InvalidTagLength = 34,
-    InvalidScore = 35,
-    InvalidDPEpsilon = 36,
-    InvalidParticipantCount = 37,
-    InvalidModelVersionLength = 38,
-    InvalidExplanationLength = 39,
-    InvalidAddress = 40,
-    SameAddress = 41,
-    InvalidTreatmentTypeLength = 42,
-    BatchTooLarge = 43,
-    InvalidBatch = 44,
-    InvalidInput = 45,
-    NumberOutOfBounds = 46,
-    Overflow = 47,
-}
-
 #[derive(Clone)]
 #[contracttype]
 pub struct FailureInfo {
@@ -315,35 +262,53 @@ impl MedicalRecordsContract {
     }
 
     /// Internal function to check if an address has a specific role
-    fn has_role(env: &Env, address: &Address, role: &Role) -> bool {
+    fn has_role(env: &Env, address: &Address, role: &Role) -> Result<(), Error> {
         let users: Map<Address, UserProfile> = env
             .storage()
             .persistent()
             .get(&USERS)
             .unwrap_or(Map::new(env));
         match users.get(address.clone()) {
-            Some(profile) => profile.role == *role && profile.active,
-            None => false,
+            Some(profile) if profile.role == *role && profile.active => Ok(()),
+            _ => {
+                // AC: Context information (parameters involved: the address)
+                env.events().publish(
+                    (symbol_short!("ERR_LOG"), symbol_short!("AUTH_FL")),
+                    (address.clone(), Error::NotAuthorized as u32),
+                );
+                Err(Error::NotAuthorized)
+            }
         }
     }
 
     /// Internal function to check paused state
-    fn is_paused(env: &Env) -> bool {
-        env.storage().persistent().get(&PAUSED).unwrap_or(false)
+    fn is_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            env.events().publish(
+                (symbol_short!("ERR_LOG"), symbol_short!("PAUSED")),
+                Error::ContractPaused as u32,
+            );
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
     }
 
     /// Internal function to get and increment the record counter
     fn get_and_increment_record_count(env: &Env) -> Result<u64, Error> {
-        let current_count: u64 = env
+        let current: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0);
-        let next_count = current_count.checked_add(1).ok_or(Error::Overflow)?;
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecordCount, &next_count);
-        Ok(next_count)
+        let next = current.checked_add(1).ok_or_else(|| {
+            env.events().publish(
+                (symbol_short!("ERR_LOG"), symbol_short!("OVERFLOW")),
+                Error::Overflow as u32,
+            );
+            Error::Overflow
+        })?;
+        env.storage().persistent().set(&DataKey::RecordCount, &next);
+        Ok(next)
     }
 
     pub fn get_record_count(env: Env) -> u64 {
@@ -370,17 +335,21 @@ impl MedicalRecordsContract {
         Ok(config)
     }
 
-    pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
+    pub fn manage_user(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role: Role,
+    ) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return false;
-        }
+        Self::has_role(&env, &caller, &Role::Admin)?;
 
         let mut users: Map<Address, UserProfile> = env
             .storage()
             .persistent()
             .get(&USERS)
             .unwrap_or(Map::new(&env));
+
         let existing_profile = users.get(user.clone());
 
         let role_str = match role {
@@ -391,13 +360,14 @@ impl MedicalRecordsContract {
         };
 
         if let Some(profile) = existing_profile {
-            // Update existing user
+            // Update existing user: Capture context for detailed feedback
             let previous_role_str = match profile.role {
                 Role::Admin => "Admin",
                 Role::Doctor => "Doctor",
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
+
             users.set(
                 user.clone(),
                 UserProfile {
@@ -406,9 +376,11 @@ impl MedicalRecordsContract {
                     did_reference: profile.did_reference,
                 },
             );
+
+            // AC: Provide specific feedback via events on what changed
             events::emit_user_role_updated(&env, caller, user, role_str, Some(previous_role_str));
         } else {
-            // Create new user
+            // Create new user: Log context for monitoring
             users.set(
                 user.clone(),
                 UserProfile {
@@ -421,55 +393,55 @@ impl MedicalRecordsContract {
         }
 
         env.storage().persistent().set(&USERS, &users);
-        true
+
+        // Return Ok(true) to signify successful execution with full context logged
+        Ok(true)
     }
 
-    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> bool {
+    pub fn deactivate_user(env: Env, caller: Address, user: Address) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return false;
-        }
+        Self::has_role(&env, &caller, &Role::Admin)?;
 
         let mut users: Map<Address, UserProfile> = env
             .storage()
             .persistent()
             .get(&USERS)
             .unwrap_or(Map::new(&env));
-        if let Some(mut profile) = users.get(user.clone()) {
-            profile.active = false;
-            users.set(user.clone(), profile);
-            env.storage().persistent().set(&USERS, &users);
-            events::emit_user_deactivated(&env, caller, user);
-            true
-        } else {
-            false
-        }
+        let mut profile = users.get(user.clone()).ok_or_else(|| {
+            env.events().publish(
+                (symbol_short!("ERR_LOG"), symbol_short!("USR_404")),
+                user.clone(),
+            );
+            Error::NotAuthorized // Better for security: don't reveal existence, just deny
+        })?;
+
+        profile.active = false;
+        users.set(user.clone(), profile);
+        env.storage().persistent().set(&USERS, &users);
+        events::emit_user_deactivated(&env, caller, user);
+        Ok(true)
     }
 
-    pub fn pause(env: Env, caller: Address) -> bool {
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return false;
-        }
+        Self::has_role(&env, &caller, &Role::Admin)?;
 
         env.storage().persistent().set(&PAUSED, &true);
         events::emit_contract_paused(&env, caller);
-        true
+        Ok(true)
     }
 
-    pub fn unpause(env: Env, caller: Address) -> bool {
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
-            return false;
-        }
+        Self::has_role(&env, &caller, &Role::Admin)?;
 
         env.storage().persistent().set(&PAUSED, &false);
         events::emit_contract_unpaused(&env, caller);
-        true
+        Ok(true)
     }
 
     /// Internal function to check granular permissions
-    fn check_permission(env: &Env, user: &Address, permission: Permission) -> bool {
+    fn check_permission(env: &Env, user: &Address, permission: Permission) -> Result<(), Error> {
         // 1. Role-based default permissions (Imply logic)
         let users: Map<Address, UserProfile> = env
             .storage()
@@ -479,10 +451,15 @@ impl MedicalRecordsContract {
 
         if let Some(profile) = users.get(user.clone()) {
             if !profile.active {
-                return false;
+                // Log that a deactivated user tried to access the system
+                env.events().publish(
+                    (symbol_short!("ERR_LOG"), symbol_short!("DEACTIVE")),
+                    (user.clone(), Error::NotAuthorized as u32),
+                );
+                return Err(Error::NotAuthorized);
             }
             match profile.role {
-                Role::Admin => return true, // Admin has all permissions
+                Role::Admin => return Ok(()), // Admin has all permissions
                 Role::Doctor => {
                     if matches!(
                         permission,
@@ -492,7 +469,7 @@ impl MedicalRecordsContract {
                             | Permission::ReadConfidential
                             | Permission::DelegatePermission
                     ) {
-                        return true;
+                        return Ok(());
                     }
                 }
                 Role::Patient => {
@@ -515,12 +492,27 @@ impl MedicalRecordsContract {
             if grant.permission == permission {
                 // Check expiration
                 if grant.expires_at == 0 || grant.expires_at > now {
-                    return true;
+                    return Ok(());
+                } else {
+                    // Specific log for expired permissions
+                    env.events().publish(
+                        (symbol_short!("ERR_LOG"), symbol_short!("EXPIRED")),
+                        (user.clone(), permission as u32),
+                    );
+                    return Err(Error::NotAuthorized);
                 }
             }
         }
 
-        false
+        // --- THE CRITICAL UPDATE: Detailed Error Feedback ---
+        // If we reach this point, no permission was found.
+        // AC: Detailed context for debugging (User + Permission tried)
+        env.events().publish(
+            (symbol_short!("ERR_LOG"), symbol_short!("PERM_DENY")),
+            (user.clone(), permission as u32, Error::NotAuthorized as u32),
+        );
+
+        Err(Error::NotAuthorized)
     }
 
     /// Grant a specific permission to a user
@@ -537,10 +529,13 @@ impl MedicalRecordsContract {
         // Granter must satisfy one of:
         // 1. Is Admin
         // 2. Has DelegatePermission permission (and if we tracked scope, within scope)
-        if !Self::check_permission(&env, &granter, Permission::DelegatePermission)
-            && !Self::has_role(&env, &granter, &Role::Admin)
-        {
-            return Err(Error::NotAuthorized);
+        // 1. Try the first permission.
+        // If it fails (is_err), we try the second check.
+        if Self::check_permission(&env, &granter, Permission::DelegatePermission).is_err() {
+            // 2. If the user isn't a delegate, check if they are an Admin.
+            // We use '?' here because if they aren't an Admin either,
+            // we want to return the Error::NotAuthorized immediately.
+            Self::has_role(&env, &granter, &Role::Admin)?;
         }
 
         let key = DataKey::UserPermissions(grantee.clone());
@@ -602,12 +597,10 @@ impl MedicalRecordsContract {
         revoker.require_auth();
 
         // Revoker must have authority
-        if !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
-            && !Self::has_role(&env, &revoker, &Role::Admin)
-        {
-            return Err(Error::NotAuthorized);
-        }
 
+        if Self::check_permission(&env, &revoker, Permission::DelegatePermission).is_err() {
+            Self::has_role(&env, &revoker, &Role::Admin)?;
+        }
         let key = DataKey::UserPermissions(grantee.clone());
         let grants: Vec<PermissionGrant> = env
             .storage()
@@ -648,16 +641,12 @@ impl MedicalRecordsContract {
     ) -> Result<u64, Error> {
         caller.require_auth();
 
-        if Self::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
+        // 1. System & Permission Checks (Using ? for automatic detailed logging)
+        Self::is_paused(&env)?;
+        Self::check_permission(&env, &caller, Permission::CreateRecord)?;
 
-        // Granular Permission Check
-        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
-            return Err(Error::NotAuthorized);
-        }
-
-        // Validation
+        // 2. Comprehensive Validation
+        // These now return specific Error variants (e.g., EmptyDiagnosis)
         validation::validate_diagnosis(&diagnosis)?;
         validation::validate_treatment(&treatment)?;
         validation::validate_category(&category, &env)?;
@@ -665,10 +654,17 @@ impl MedicalRecordsContract {
         validation::validate_data_ref(&env, &data_ref)?;
         validation::validate_tags(&tags)?;
 
+        // 3. Logic Check: Prevent self-diagnosis for integrity
         if patient == caller {
+            // AC: Add context information (the address involved)
+            env.events().publish(
+                (symbol_short!("ERR_LOG"), symbol_short!("SELF_REC")),
+                (caller.clone(), Error::SameAddress as u32),
+            );
             return Err(Error::SameAddress);
         }
 
+        // 4. State Management
         let record_id = Self::get_and_increment_record_count(&env)?;
 
         let record = MedicalRecord {
@@ -690,9 +686,11 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&RECORDS)
             .unwrap_or(Map::new(&env));
+
         records.set(record_id, record.clone());
         env.storage().persistent().set(&RECORDS, &records);
 
+        // 5. Success Feedback
         events::emit_record_created(
             &env,
             caller,
@@ -715,13 +713,8 @@ impl MedicalRecordsContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
-        if Self::is_paused(&env) {
-            return Err(Error::ContractPaused);
-        }
-
-        if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
-            return Err(Error::NotAuthorized);
-        }
+        Self::is_paused(&env)?;
+        Self::check_permission(&env, &caller, Permission::UpdateRecord)?;
 
         let mut records: Map<u64, MedicalRecord> = env
             .storage()
@@ -753,36 +746,43 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&RECORDS)
             .unwrap_or(Map::new(&env));
-        let record = records.get(record_id).ok_or(Error::RecordNotFound)?;
 
-        // Permission Check
-        let mut allowed = false;
+        // AC: Specific error for missing records with event logging for debugging
+        let record = records.get(record_id).ok_or_else(|| {
+            env.events().publish(
+                (symbol_short!("ERR_LOG"), symbol_short!("REC_404")),
+                (record_id, Error::RecordNotFound as u32),
+            );
+            Error::RecordNotFound
+        })?;
 
-        // 1. Own record OR Doctor who created it
+        // --- ENHANCED PERMISSION LOGIC ---
+
+        // 1. Direct Ownership (Patient or Original Doctor) - Always allowed
         if record.patient_id == caller || record.doctor_id == caller {
-            allowed = true;
+            events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+            return Ok(record);
         }
-        // 3. Permission
-        else if Self::check_permission(&env, &caller, Permission::ReadRecord) {
-            allowed = true;
-            // If confidential, check ReadConfidential
-            if record.is_confidential
-                && !Self::check_permission(&env, &caller, Permission::ReadConfidential)
-            {
-                allowed = false;
+
+        // 2. Third-Party Access (Other Doctors/Authorities)
+        // Check general read permission first
+        Self::check_permission(&env, &caller, Permission::ReadRecord)?;
+
+        // 3. Confidentiality Check
+        // If the record is marked confidential, verify specific 'ReadConfidential' grant
+        if record.is_confidential {
+            if let Err(e) = Self::check_permission(&env, &caller, Permission::ReadConfidential) {
+                // AC: Detailed context - Log that general read was OK but confidential was denied
+                env.events().publish(
+                    (symbol_short!("ERR_LOG"), symbol_short!("CONF_DEN")),
+                    (caller.clone(), record_id, Error::NotAuthorized as u32),
+                );
+                return Err(e);
             }
-        } else if record.is_confidential {
-            // If no generic ReadRecord, maybe they have ReadConfidential specific to this record?
-            // Granular scope isn't implemented per record in PermissionGrant (it's boolean per user).
-            // We stick to simple logic: ReadRecord allows reading public records. ReadConfidential allows confidential.
         }
 
-        if !allowed {
-            return Err(Error::NotAuthorized);
-        }
-
+        // 4. Success Feedback
         events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
-
         Ok(record)
     }
 }
