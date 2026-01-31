@@ -7,5 +7,8 @@ edition = "2021"
 soroban-sdk = { workspace = true }
 upgradeability = { path = "../upgradeability" }
 
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]

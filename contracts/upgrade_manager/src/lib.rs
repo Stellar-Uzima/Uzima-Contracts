@@ -22,6 +22,20 @@ pub struct UpgradeProposal {
     pub approvals: Vec<Address>,
 }
 
+#[soroban_sdk::contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum UpgradeManagerError {
+    AlreadyInitialized = 1,
+    NotAValidator = 2,
+    ProposalNotFound = 3,
+    AlreadyApproved = 4,
+    InvalidState = 5,
+    TimelockNotExpired = 6,
+    NotEnoughApprovals = 7,
+    ConfigNotFound = 8,
+}
+
 #[contract]
 pub struct UpgradeManager;
 
@@ -46,9 +60,13 @@ pub trait TargetContract {
 
 #[contractimpl]
 impl UpgradeManager {
-    pub fn initialize(env: Env, admin: Address, validators: Vec<Address>) {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        validators: Vec<Address>,
+    ) -> Result<(), UpgradeManagerError> {
         if env.storage().instance().has(&CONFIG) {
-            panic!("Already initialized");
+            return Err(UpgradeManagerError::AlreadyInitialized);
         }
         let config = Config {
             admin,
@@ -57,6 +75,7 @@ impl UpgradeManager {
             validators,
         };
         env.storage().instance().set(&CONFIG, &config);
+        Ok(())
     }
 
     pub fn propose_upgrade(
@@ -66,9 +85,13 @@ impl UpgradeManager {
         new_wasm_hash: BytesN<32>,
         new_version: u32,
         description: Symbol,
-    ) -> u64 {
+    ) -> Result<u64, UpgradeManagerError> {
         proposer.require_auth();
-        let config: Config = env.storage().instance().get(&CONFIG).unwrap();
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&CONFIG)
+            .ok_or(UpgradeManagerError::ConfigNotFound)?;
 
         let mut proposals: Map<u64, UpgradeProposal> = env
             .storage()
@@ -77,6 +100,12 @@ impl UpgradeManager {
             .unwrap_or(Map::new(&env));
 
         let id = proposals.len() as u64;
+        let executable_at = env
+            .ledger()
+            .timestamp()
+            .checked_add(config.min_delay)
+            .ok_or(UpgradeManagerError::InvalidState)?; // Should not happen
+
         let proposal = UpgradeProposal {
             target,
             new_wasm_hash,
@@ -84,7 +113,7 @@ impl UpgradeManager {
             description,
             proposer: proposer.clone(),
             created_at: env.ledger().timestamp(),
-            executable_at: env.ledger().timestamp() + config.min_delay,
+            executable_at,
             executed: false,
             canceled: false,
             approvals: Vec::new(&env),
@@ -95,48 +124,71 @@ impl UpgradeManager {
 
         env.events()
             .publish((symbol_short!("proposed"), id), proposer);
-        id
+        Ok(id)
     }
 
-    pub fn approve(env: Env, validator: Address, proposal_id: u64) {
+    pub fn approve(
+        env: Env,
+        validator: Address,
+        proposal_id: u64,
+    ) -> Result<(), UpgradeManagerError> {
         validator.require_auth();
-        let config: Config = env.storage().instance().get(&CONFIG).unwrap();
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&CONFIG)
+            .ok_or(UpgradeManagerError::ConfigNotFound)?;
 
         if !config.validators.contains(&validator) {
-            panic!("Not a validator");
+            return Err(UpgradeManagerError::NotAValidator);
         }
 
-        let mut proposals: Map<u64, UpgradeProposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap();
+        let mut proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
-        let mut proposal = proposals.get(proposal_id).expect("Proposal not found");
+        let mut proposal = proposals
+            .get(proposal_id)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
         if proposal.approvals.contains(&validator) {
-            panic!("Already approved");
+            return Err(UpgradeManagerError::AlreadyApproved);
         }
 
         proposal.approvals.push_back(validator);
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
+        Ok(())
     }
 
-    pub fn execute(env: Env, proposal_id: u64) {
-        let mut proposals: Map<u64, UpgradeProposal> =
-            env.storage().persistent().get(&PROPOSALS).unwrap();
+    pub fn execute(env: Env, proposal_id: u64) -> Result<(), UpgradeManagerError> {
+        let mut proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
-        let mut proposal = proposals.get(proposal_id).expect("Proposal not found");
-        let config: Config = env.storage().instance().get(&CONFIG).unwrap();
+        let mut proposal = proposals
+            .get(proposal_id)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&CONFIG)
+            .ok_or(UpgradeManagerError::ConfigNotFound)?;
 
         if proposal.executed || proposal.canceled {
-            panic!("Invalid state");
+            return Err(UpgradeManagerError::InvalidState);
         }
 
         if env.ledger().timestamp() < proposal.executable_at {
-            panic!("Timelock not expired");
+            return Err(UpgradeManagerError::TimelockNotExpired);
         }
 
         if proposal.approvals.len() < config.required_approvals {
-            panic!("Not enough approvals");
+            return Err(UpgradeManagerError::NotEnoughApprovals);
         }
 
         // Call target.upgrade(new_wasm_hash)
@@ -150,5 +202,6 @@ impl UpgradeManager {
 
         env.events()
             .publish((symbol_short!("executed"), proposal_id), ());
+        Ok(())
     }
 }

@@ -8,15 +8,17 @@ mod test;
 #[cfg(test)]
 mod test_permissions;
 
+mod errors;
 mod events;
 mod validation;
 
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
+pub use errors::Error;
+
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
+    contract, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
+use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
 
@@ -218,59 +220,6 @@ const CROSS_CHAIN_ENABLED: Symbol = symbol_short!("CC_ON");
 
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    ContractPaused = 1,
-    NotAuthorized = 2,
-    InvalidCategory = 3,
-    EmptyTreatment = 4,
-    EmptyTag = 5,
-    ProposalAlreadyExecuted = 6,
-    TimelockNotElasped = 7,
-    NotEnoughApproval = 8,
-    EmptyDataRef = 9,
-    InvalidDataRefLength = 10,
-    InvalidDataRefCharset = 11,
-    CrossChainNotEnabled = 12,
-    CrossChainContractsNotSet = 13,
-    RecordNotFound = 14,
-    CrossChainAccessDenied = 15,
-    RecordAlreadySynced = 16,
-    InvalidChain = 17,
-    DIDNotFound = 18,
-    DIDNotActive = 19,
-    InvalidCredential = 20,
-    CredentialExpired = 21,
-    CredentialRevoked = 22,
-    MissingRequiredCredential = 23,
-    EmergencyAccessExpired = 24,
-    EmergencyAccessNotFound = 25,
-    IdentityRegistryNotSet = 26,
-    AIConfigNotSet = 27,
-    NotAICoordinator = 28,
-    InvalidAIScore = 29,
-    EmptyDiagnosis = 30,
-    InvalidDiagnosisLength = 31,
-    InvalidTreatmentLength = 32,
-    InvalidPurposeLength = 33,
-    InvalidTagLength = 34,
-    InvalidScore = 35,
-    InvalidDPEpsilon = 36,
-    InvalidParticipantCount = 37,
-    InvalidModelVersionLength = 38,
-    InvalidExplanationLength = 39,
-    InvalidAddress = 40,
-    SameAddress = 41,
-    InvalidTreatmentTypeLength = 42,
-    BatchTooLarge = 43,
-    InvalidBatch = 44,
-    InvalidInput = 45,
-    NumberOutOfBounds = 46,
-    Overflow = 47,
-}
 
 #[derive(Clone)]
 #[contracttype]
@@ -588,7 +537,14 @@ impl MedicalRecordsContract {
         }
 
         env.storage().persistent().set(&key, &new_grants);
-        events::emit_permission_granted(&env, granter, grantee, permission as u32, expiration, is_delegatable);
+        events::emit_permission_granted(
+            &env,
+            granter,
+            grantee,
+            permission as u32,
+            expiration,
+            is_delegatable,
+        );
         Ok(true)
     }
 
@@ -678,7 +634,15 @@ impl MedicalRecordsContract {
         records.set(record_id, record);
         env.storage().persistent().set(&RECORDS, &records);
 
-        events::emit_record_created(&env, caller, record_id, patient, is_confidential, category, tags);
+        events::emit_record_created(
+            &env,
+            caller,
+            record_id,
+            patient,
+            is_confidential,
+            category,
+            tags,
+        );
         Ok(record_id)
     }
 

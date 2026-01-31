@@ -1,5 +1,5 @@
-
-
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::expect_used)]
 use crate::{UpgradeManager, UpgradeManagerClient};
 use soroban_sdk::{
     symbol_short,

@@ -123,11 +123,19 @@ pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
     }
 
     // To rollback, we go to the second to last version in history
-    let last_index = history.len() - 2;
-    let target_version = history.get(last_index).unwrap();
+    let last_index = history
+        .len()
+        .checked_sub(2)
+        .ok_or(UpgradeError::HistoryNotFound)?;
+    let target_version = history
+        .get(last_index)
+        .ok_or(UpgradeError::HistoryNotFound)?;
 
     let current_version = storage::get_version(env);
-    storage::set_version(env, current_version + 1);
+    let next_version = current_version
+        .checked_add(1)
+        .ok_or(UpgradeError::IncompatibleVersion)?;
+    storage::set_version(env, next_version);
     env.deployer()
         .update_current_contract_wasm(target_version.wasm_hash);
 
