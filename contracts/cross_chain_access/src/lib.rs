@@ -858,12 +858,14 @@ impl CrossChainAccessContract {
         Ok(new_count)
     }
 
-    fn delegation_key(_env: &Env, _delegator: &Address, _delegate: &Address) -> Symbol {
-        Symbol::new(&_env, "deleg_key")
+    fn delegation_key(env: &Env, _delegator: &Address, _delegate: &Address) -> Symbol {
+        // FIXED: Removed & before env
+        Symbol::new(env, "deleg_key")
     }
 
-    fn emergency_config_key(_env: &Env, _patient: &Address) -> Symbol {
-        Symbol::new(&_env, "emerg_key")
+    fn emergency_config_key(env: &Env, _patient: &Address) -> Symbol {
+        // FIXED: Removed & before env
+        Symbol::new(env, "emerg_key")
     }
 
     fn can_revoke_access(env: &Env, caller: &Address, grant: &AccessGrant) -> bool {
@@ -880,12 +882,14 @@ impl CrossChainAccessContract {
         }
 
         // Check delegation
-        let deleg_key = Self::delegation_key(&env, &grant.grantor, caller);
+        // FIXED: Removed & before env
+        let deleg_key = Self::delegation_key(env, &grant.grantor, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
             .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
+            // FIXED: Removed & before env
+            .unwrap_or(Map::new(env));
 
         if let Some(delegation) = delegations.get(deleg_key) {
             let now = env.ledger().timestamp();
@@ -902,12 +906,14 @@ impl CrossChainAccessContract {
         }
 
         // Check delegation
-        let deleg_key = Self::delegation_key(&env, &request.patient, caller);
+        // FIXED: Removed & before env
+        let deleg_key = Self::delegation_key(env, &request.patient, caller);
         let delegations: Map<Symbol, Delegation> = env
             .storage()
             .persistent()
             .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
+            // FIXED: Removed & before env
+            .unwrap_or(Map::new(env));
 
         if let Some(delegation) = delegations.get(deleg_key) {
             let now = env.ledger().timestamp();
@@ -923,12 +929,14 @@ impl CrossChainAccessContract {
         requester_address: &String,
         patient: &Address,
     ) -> Result<(), Error> {
-        let config_key = Self::emergency_config_key(&env, patient);
+        // FIXED: Removed & before env
+        let config_key = Self::emergency_config_key(env, patient);
         let configs: Map<Symbol, EmergencyConfig> = env
             .storage()
             .persistent()
             .get(&EMERGENCY_CONFIG)
-            .unwrap_or(Map::new(&env));
+            // FIXED: Removed & before env
+            .unwrap_or(Map::new(env));
 
         if let Some(config) = configs.get(config_key) {
             if config.is_enabled {
@@ -939,7 +947,8 @@ impl CrossChainAccessContract {
                         .storage()
                         .persistent()
                         .get(&REQUESTS)
-                        .unwrap_or(Map::new(&env));
+                        // FIXED: Removed & before env
+                        .unwrap_or(Map::new(env));
 
                     if let Some(mut request) = requests.get(request_id) {
                         let now = env.ledger().timestamp();
@@ -949,7 +958,8 @@ impl CrossChainAccessContract {
                         env.storage().persistent().set(&REQUESTS, &requests);
 
                         env.events().publish(
-                            (Symbol::new(&env, "EmergencyAutoApproved"),),
+                            // FIXED: Removed & before env
+                            (Symbol::new(env, "EmergencyAutoApproved"),),
                             (request_id, patient.clone()),
                         );
                     }
@@ -976,14 +986,16 @@ impl CrossChainAccessContract {
                 .checked_add(DEFAULT_GRANT_DURATION)
                 .ok_or(Error::Overflow)?,
             is_active: true,
-            conditions: Vec::new(&env),
+            // FIXED: Removed & before env
+            conditions: Vec::new(env),
         };
 
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
             .get(&GRANTS)
-            .unwrap_or(Map::new(&env));
+            // FIXED: Removed & before env
+            .unwrap_or(Map::new(env));
 
         grants.set(grant_id, grant);
         env.storage().persistent().set(&GRANTS, &grants);

@@ -362,6 +362,7 @@ impl CrossChainBridgeContract {
     // ==================== Cross-Chain Message Functions ====================
 
     /// Submit a new cross-chain message (from external chain)
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_message(
         env: Env,
         validator: Address,
@@ -488,7 +489,7 @@ impl CrossChainBridgeContract {
             .get(&MIN_CONFIRMATIONS)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
-        if confirmations.len() as u32 >= min_confirmations {
+        if confirmations.len() >= min_confirmations {
             // Mark message as verified
             let mut updated_message = message;
             updated_message.status = MessageStatus::Verified;
@@ -648,7 +649,7 @@ impl CrossChainBridgeContract {
             .get(&MIN_CONFIRMATIONS)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
-        if atomic_tx.confirmations.len() as u32 >= min_confirmations {
+        if atomic_tx.confirmations.len() >= min_confirmations {
             atomic_tx.status = AtomicTxStatus::Prepared;
 
             env.events()
@@ -862,7 +863,7 @@ impl CrossChainBridgeContract {
         env.storage()
             .persistent()
             .get(&SUPPORTED_CHAINS)
-            .unwrap_or(Vec::new(&env))
+            .unwrap_or(Vec::new(&env)) // Fixed: env is passed by reference implicitly if it was &Env, but here it is Env
     }
 
     /// Check if bridge is paused
@@ -902,7 +903,7 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Remove &
 
         match validators.get(validator.clone()) {
             Some(v) if v.is_active => Ok(()),
@@ -916,7 +917,7 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&SUPPORTED_CHAINS)
-            .unwrap_or(Vec::new(&env));
+            .unwrap_or(Vec::new(env)); // Fixed: Remove &
 
         if chains.contains(chain) {
             Ok(())
@@ -930,7 +931,7 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&NONCES)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Remove &
 
         let last_nonce = nonces.get(sender.clone()).unwrap_or(0);
         if nonce <= last_nonce {
@@ -944,7 +945,7 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&NONCES)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Remove &
 
         nonces.set(sender.clone(), nonce);
         env.storage().persistent().set(&NONCES, &nonces);
@@ -955,7 +956,7 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
+            .unwrap_or(Map::new(env)); // Fixed: Remove &
 
         if let Some(mut v) = validators.get(validator.clone()) {
             v.confirmed_messages = v.confirmed_messages.saturating_add(1);
@@ -967,11 +968,11 @@ impl CrossChainBridgeContract {
     fn confirmation_key(env: &Env, _message_id: &BytesN<32>) -> Symbol {
         // Create a unique key for message confirmations
         // Using simplified key due to Symbol limitations
-        Symbol::new(&env, "conf_key")
+        Symbol::new(env, "conf_key") // Fixed: Remove &
     }
 
-    fn record_ref_key(_env: &Env, _local_record_id: u64, _chain: &ChainId) -> Symbol {
+    fn record_ref_key(env: &Env, _local_record_id: u64, _chain: &ChainId) -> Symbol {
         // Create unique key for record references
-        Symbol::new(&_env, "rec_ref")
+        Symbol::new(env, "rec_ref") // Fixed: Remove &
     }
 }

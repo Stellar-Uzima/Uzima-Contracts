@@ -75,7 +75,8 @@ fn add_credit(env: &Env, addr: &Address, delta: i128) {
         .storage()
         .persistent()
         .get(&CREDITS)
-        .unwrap_or(Map::new(&env));
+        // FIXED: Removed redundant borrow &env -> env
+        .unwrap_or(Map::new(env));
     let current = credits.get(addr.clone()).unwrap_or(0);
     let new_bal = current.saturating_add(delta);
     credits.set(addr.clone(), new_bal);

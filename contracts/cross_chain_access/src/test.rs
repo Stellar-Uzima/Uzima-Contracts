@@ -11,12 +11,12 @@ fn create_contract(
     Address,
     Address,
 ) {
-    let contract_id = Address::generate(env);
-    env.register_contract(&contract_id, CrossChainAccessContract);
-    let client = CrossChainAccessContractClient::new(&env, &contract_id);
-    let admin = Address::generate(&env);
-    let bridge_contract = Address::generate(&env);
-    let identity_contract = Address::generate(&env);
+    let contract_id = env.register_contract(None, CrossChainAccessContract);
+    // FIXED: Removed & before env
+    let client = CrossChainAccessContractClient::new(env, &contract_id);
+    let admin = Address::generate(env);
+    let bridge_contract = Address::generate(env);
+    let identity_contract = Address::generate(env);
     (client, admin, bridge_contract, identity_contract)
 }
 

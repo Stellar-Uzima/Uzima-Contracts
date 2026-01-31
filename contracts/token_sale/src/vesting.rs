@@ -65,40 +65,47 @@ impl VestingContract {
             released_amount: 0,
         };
 
-        set_vesting_schedule(&env, &beneficiary, &schedule);
+    let mut schedules: Map<Address, VestingSchedule> = env
+        .storage()
+        .persistent()
+        .get(&VESTING_SCHEDULES)
+        .unwrap_or(Map::new(env));
 
-        env.events().publish(
-            ("vesting_schedule_created",),
-            (beneficiary, cliff_duration, vesting_duration, total_amount),
-        );
+    schedules.set(beneficiary, schedule);
+    env.storage().persistent().set(&VESTING_SCHEDULES, &schedules);
+}
+
+pub fn release_vested_tokens(env: &Env, beneficiary: Address) -> i128 {
+    let mut schedules: Map<Address, VestingSchedule> = env
+        .storage()
+        .persistent()
+        .get(&VESTING_SCHEDULES)
+        .expect("No vesting schedule");
+
+    let mut schedule = schedules.get(beneficiary.clone()).expect("No vesting schedule");
+    let now = env.ledger().timestamp();
+
+    if now < schedule.start_time + schedule.cliff {
+        return 0;
     }
 
-    /// Release vested tokens to beneficiary
-    pub fn release_tokens(env: Env, beneficiary: Address) -> u128 {
-        beneficiary.require_auth();
+    let time_vested = now.saturating_sub(schedule.start_time);
+    let vested_amount = if time_vested >= schedule.duration {
+        schedule.total_amount
+    } else {
+        schedule.total_amount * (time_vested as i128) / (schedule.duration as i128)
+    };
 
-        let releasable = Self::get_releasable_amount(env.clone(), beneficiary.clone());
-        assert!(releasable > 0, "No tokens to release");
+    let releasable = vested_amount.saturating_sub(schedule.released_amount);
 
-        // Update released amount
-        let mut schedule = get_vesting_schedule(&env, &beneficiary).expect("No vesting schedule");
+    if releasable > 0 {
         schedule.released_amount += releasable;
-        set_vesting_schedule(&env, &beneficiary, &schedule);
-
-        // Transfer tokens
-        let config = get_config(&env);
-        let token_client = token::Client::new(&env, &config.token_address);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &beneficiary,
-            &(releasable as i128),
-        );
-
-        env.events()
-            .publish(("tokens_released",), (beneficiary, releasable));
-
-        releasable
+        schedules.set(beneficiary, schedule);
+        env.storage().persistent().set(&VESTING_SCHEDULES, &schedules);
     }
+
+    releasable
+}
 
     /// Get vesting schedule for a beneficiary
     pub fn get_vesting_schedule(env: Env, beneficiary: Address) -> Option<VestingSchedule> {

@@ -73,6 +73,7 @@ fn now(env: &Env) -> u64 {
 
 #[contractimpl]
 impl Governor {
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         token: Address,
