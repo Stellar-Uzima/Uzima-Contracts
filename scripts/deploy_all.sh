@@ -12,7 +12,6 @@ DEFAULT_CONFIG="$CONFIG_DIR/default.json"
 # --- Colors for output ---
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
@@ -81,7 +80,7 @@ for CONTRACT_NAME in $ENABLED_CONTRACTS; do
         print_error "Deployment of '$CONTRACT_NAME' failed. Aborting."
     fi
     
-    print_status "Successfully deployed contract: $CONTRACT_name"
+    print_status "Successfully deployed contract: $CONTRACT_NAME"
 done
 
 print_status "All enabled contracts deployed successfully for '$ENVIRONMENT' environment. ✅"
