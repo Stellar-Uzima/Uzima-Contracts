@@ -376,7 +376,7 @@ impl MedicalRecordsContract {
 
     pub fn manage_user(env: Env, caller: Address, user: Address, role: Role) -> bool {
         caller.require_auth();
-        if !Self::has_role(&env, &caller, &Role::Admin) {
+        if Self::has_role(&env, &caller, &Role::Admin).is_err() {
             return false;
         }
 
