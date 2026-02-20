@@ -277,10 +277,10 @@ fn test_gas_tracking() {
     );
 
     // Check gas statistics
-    let total_gas = client.get_gas_stats(&sid);
+    let _total_gas = client.get_gas_stats(&sid);
     // Note: gas tracking might not work in test environment
     // In production, this would track actual gas consumption
-    assert!(total_gas >= 0); // Allow 0 for test environment
+    // u64 is always >= 0, so we just verify the function works
 }
 
 #[test]
