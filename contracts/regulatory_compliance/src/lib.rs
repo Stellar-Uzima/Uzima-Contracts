@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, contracterror, Address, Env, String, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -63,7 +63,11 @@ impl RegulatoryComplianceContract {
     }
 
     pub fn set_rule(env: Env, framework: String, rule: ComplianceRule) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
         env.storage()
             .instance()
@@ -125,9 +129,14 @@ impl RegulatoryComplianceContract {
     }
 
     pub fn get_audit_logs(env: Env, user: Address) -> Result<Vec<AuditLog>, Error> {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         admin.require_auth();
-        Ok(env.storage()
+        Ok(env
+            .storage()
             .persistent()
             .get(&DataKey::AuditLogs(user))
             .unwrap_or(Vec::new(&env)))
