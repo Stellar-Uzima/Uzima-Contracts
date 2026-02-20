@@ -541,7 +541,7 @@ impl MPCManager {
             .set(&DataKey::ComputationProof(session_id.clone()), &proof);
 
         // Update session gas tracking
-        session.total_gas_used += proof.gas_used;
+        session.total_gas_used = session.total_gas_used.saturating_add(proof.gas_used);
         env.storage()
             .persistent()
             .set(&DataKey::Session(session_id.clone()), &session);
