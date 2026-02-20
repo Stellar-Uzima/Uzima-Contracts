@@ -358,6 +358,9 @@ pub enum DataKey {
     // Crypto audit log
     CryptoAuditCount,
     CryptoAudit(u64),
+
+    // Compliance
+    RegulatoryCompliance,
 }
 
 // ==================== Errors ====================
@@ -706,6 +709,9 @@ impl MedicalRecordsContract {
         }
 
         // Validate inputs
+        if Self::is_patient_forgotten(&env, &patient) {
+            return Err(Error::NotAuthorized);
+        }
         validation::validate_diagnosis(&diagnosis)?;
         validation::validate_treatment(&treatment)?;
         validation::validate_tags(&tags)?;
@@ -766,6 +772,10 @@ impl MedicalRecordsContract {
         }
 
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        if Self::is_patient_forgotten(&env, &patient) {
             return Err(Error::NotAuthorized);
         }
 
@@ -1056,6 +1066,28 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::EncryptionRequired)
             .unwrap_or(false)
+    }
+
+    pub fn set_regulatory_compliance(
+        env: Env,
+        caller: Address,
+        compliance: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RegulatoryCompliance, &compliance);
+        Ok(true)
+    }
+
+    pub fn get_regulatory_compliance(env: &Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RegulatoryCompliance)
     }
 
     pub fn set_require_pq_envelopes(
@@ -2652,12 +2684,48 @@ impl MedicalRecordsContract {
         grant.record_scope.contains(record_id)
     }
 
+    fn is_patient_forgotten(env: &Env, patient: &Address) -> bool {
+        if let Some(compliance_addr) = Self::get_regulatory_compliance(env) {
+            env.invoke_contract(
+                &compliance_addr,
+                &soroban_sdk::Symbol::new(env, "is_forgotten"),
+                soroban_sdk::vec![env, patient.to_val()],
+            )
+        } else {
+            false
+        }
+    }
+
+    fn compliance_log_audit(
+        env: &Env,
+        actor: &Address,
+        action: &str,
+        details: soroban_sdk::String,
+    ) {
+        if let Some(compliance_addr) = Self::get_regulatory_compliance(env) {
+            env.invoke_contract::<()>(
+                &compliance_addr,
+                &soroban_sdk::Symbol::new(env, "log_audit"),
+                soroban_sdk::vec![
+                    env,
+                    actor.to_val(),
+                    soroban_sdk::String::from_str(env, action).to_val(),
+                    details.to_val()
+                ],
+            );
+        }
+    }
+
     fn can_view_record(
         env: &Env,
         caller: &Address,
         record: &MedicalRecord,
         record_id: u64,
     ) -> bool {
+        if Self::is_patient_forgotten(env, &record.patient_id) {
+            return false;
+        }
+
         if Self::is_admin(env, caller) {
             return true;
         }
@@ -2708,6 +2776,13 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::AccessLog(next), &entry);
+
+        let action = if granted {
+            "AccessGranted"
+        } else {
+            "AccessDenied"
+        };
+        Self::compliance_log_audit(env, requester, action, purpose.clone());
 
         let pc: u64 = env
             .storage()

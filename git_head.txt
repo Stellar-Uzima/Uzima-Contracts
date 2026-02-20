@@ -1,0 +1,7 @@
+commit a52d5976a0847d109f1386d5c54e2aecb1264077
+Author: walterthesmart <nwaugowalter@gmail.com>
+Date:   Thu Jan 29 14:48:09 2026 +0100
+
+    Fix contract warnings, validation logic, and clean up tests
+    
+    Refactor internal logic in lib.rs and events.rs. Implement strict validation in add_record. Fix test suite compilation and remove broken tests.
