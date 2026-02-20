@@ -1,0 +1,19 @@
+[package]
+name = "audit_forensics"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+upgradeability = { path = "../upgradeability" }
+anomaly_detection = { path = "../anomaly_detection" }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
