@@ -11,11 +11,12 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
 
-/// Represents the verification status of a cross-chain identity
+// ==================== Existing Types ====================
+
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum VerificationStatus {
@@ -26,7 +27,6 @@ pub enum VerificationStatus {
     Expired,
 }
 
-/// Supported blockchain networks for identity
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum ChainId {
@@ -40,21 +40,19 @@ pub enum ChainId {
     Custom(u32),
 }
 
-/// Cross-chain identity mapping
 #[derive(Clone)]
 #[contracttype]
 pub struct CrossChainIdentity {
     pub stellar_address: Address,
     pub external_chain: ChainId,
-    pub external_address: String, // Address on external chain
+    pub external_address: String,
     pub verification_status: VerificationStatus,
     pub verified_at: u64,
     pub expires_at: u64,
     pub attestations: u32,
-    pub metadata_hash: BytesN<32>, // Hash of identity metadata
+    pub metadata_hash: BytesN<32>,
 }
 
-/// Identity verification request
 #[derive(Clone)]
 #[contracttype]
 pub struct VerificationRequest {
@@ -62,13 +60,12 @@ pub struct VerificationRequest {
     pub stellar_address: Address,
     pub external_chain: ChainId,
     pub external_address: String,
-    pub proof: BytesN<64>, // Cryptographic proof of ownership
+    pub proof: BytesN<64>,
     pub created_at: u64,
     pub status: RequestStatus,
     pub validator_attestations: Vec<Address>,
 }
 
-/// Status of verification request
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum RequestStatus {
@@ -78,7 +75,6 @@ pub enum RequestStatus {
     Expired,
 }
 
-/// Identity attestation from a validator
 #[derive(Clone)]
 #[contracttype]
 pub struct Attestation {
@@ -90,7 +86,6 @@ pub struct Attestation {
     pub signature: BytesN<64>,
 }
 
-/// Validator information for identity verification
 #[derive(Clone)]
 #[contracttype]
 pub struct IdentityValidator {
@@ -98,11 +93,10 @@ pub struct IdentityValidator {
     pub name: String,
     pub public_key: BytesN<32>,
     pub is_active: bool,
-    pub trust_score: u32, // 0-100
+    pub trust_score: u32,
     pub total_attestations: u64,
 }
 
-/// Identity synchronization record
 #[derive(Clone)]
 #[contracttype]
 pub struct IdentitySync {
@@ -114,7 +108,6 @@ pub struct IdentitySync {
     pub sync_proof: BytesN<32>,
 }
 
-/// Synchronization status
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum SyncStatus {
@@ -124,22 +117,32 @@ pub enum SyncStatus {
     Failed,
 }
 
-// Storage keys
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const BRIDGE: Symbol = symbol_short!("BRIDGE");
-const IDENTITIES: Symbol = symbol_short!("IDENTS");
-const REQUESTS: Symbol = symbol_short!("REQUESTS");
-const VALIDATORS: Symbol = symbol_short!("VALID");
-const ATTESTATIONS: Symbol = symbol_short!("ATTEST");
-const SYNCS: Symbol = symbol_short!("SYNCS");
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const REQUEST_COUNT: Symbol = symbol_short!("REQ_CNT");
-const MIN_ATTESTATIONS: Symbol = symbol_short!("MIN_ATT");
-const IDENTITY_TTL: Symbol = symbol_short!("ID_TTL");
+// ==================== Storage Keys (DataKey Enum) ====================
+// BUG FIX: identity_key always returned "id_key" and attestation_key always
+// returned "att_key", causing all identities and attestations to overwrite
+// each other. Now uses typed per-item storage keys.
+
+#[contracttype]
+pub enum DataKey {
+    // Core config
+    Admin,
+    Bridge,
+    Paused,
+    RequestCount,
+    SyncCount,
+    MinAttestations,
+    IdentityTtl,
+    // Per-item storage (BUG FIX)
+    Validator(Address),
+    Request(u64),
+    Identity(Address, ChainId), // BUG FIX: was always "id_key"
+    Attestation(u64, Address),  // BUG FIX: was always "att_key"
+    Sync(u64),
+}
 
 // Constants
 const DEFAULT_MIN_ATTESTATIONS: u32 = 2;
-const DEFAULT_IDENTITY_TTL: u64 = 31_536_000; // 1 year in seconds
+const DEFAULT_IDENTITY_TTL: u64 = 31_536_000; // 1 year
 const REQUEST_EXPIRY: u64 = 86_400; // 24 hours
 
 #[contracterror]
@@ -171,24 +174,28 @@ pub struct CrossChainIdentityContract;
 
 #[contractimpl]
 impl CrossChainIdentityContract {
-    /// Initialize the identity contract
     pub fn initialize(env: Env, admin: Address, bridge_contract: Address) -> Result<bool, Error> {
         admin.require_auth();
 
-        if env.storage().persistent().has(&ADMIN) {
+        if env.storage().persistent().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
 
-        env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&BRIDGE, &bridge_contract);
-        env.storage().persistent().set(&PAUSED, &false);
-        env.storage().persistent().set(&REQUEST_COUNT, &0u64);
+        env.storage().persistent().set(&DataKey::Admin, &admin);
         env.storage()
             .persistent()
-            .set(&MIN_ATTESTATIONS, &DEFAULT_MIN_ATTESTATIONS);
+            .set(&DataKey::Bridge, &bridge_contract);
+        env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage()
             .persistent()
-            .set(&IDENTITY_TTL, &DEFAULT_IDENTITY_TTL);
+            .set(&DataKey::RequestCount, &0u64);
+        env.storage().persistent().set(&DataKey::SyncCount, &0u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::MinAttestations, &DEFAULT_MIN_ATTESTATIONS);
+        env.storage()
+            .persistent()
+            .set(&DataKey::IdentityTtl, &DEFAULT_IDENTITY_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "IdentityContractInitialized"),),
@@ -200,7 +207,6 @@ impl CrossChainIdentityContract {
 
     // ==================== Admin Functions ====================
 
-    /// Add a new identity validator
     pub fn add_validator(
         env: Env,
         caller: Address,
@@ -217,18 +223,13 @@ impl CrossChainIdentityContract {
             name,
             public_key,
             is_active: true,
-            trust_score: 50, // Default trust score
+            trust_score: 50,
             total_attestations: 0,
         };
 
-        let mut validators: Map<Address, IdentityValidator> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        validators.set(validator_address.clone(), validator);
-        env.storage().persistent().set(&VALIDATORS, &validators);
+            .set(&DataKey::Validator(validator_address.clone()), &validator);
 
         env.events()
             .publish((Symbol::new(&env, "ValidatorAdded"),), (validator_address,));
@@ -236,7 +237,6 @@ impl CrossChainIdentityContract {
         Ok(true)
     }
 
-    /// Deactivate a validator
     pub fn deactivate_validator(
         env: Env,
         caller: Address,
@@ -245,16 +245,14 @@ impl CrossChainIdentityContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        let mut validators: Map<Address, IdentityValidator> = env
+        let key = DataKey::Validator(validator_address.clone());
+        if let Some(mut validator) = env
             .storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(mut validator) = validators.get(validator_address.clone()) {
+            .get::<DataKey, IdentityValidator>(&key)
+        {
             validator.is_active = false;
-            validators.set(validator_address.clone(), validator);
-            env.storage().persistent().set(&VALIDATORS, &validators);
+            env.storage().persistent().set(&key, &validator);
 
             env.events().publish(
                 (Symbol::new(&env, "ValidatorDeactivated"),),
@@ -267,7 +265,6 @@ impl CrossChainIdentityContract {
         }
     }
 
-    /// Update validator trust score
     pub fn update_trust_score(
         env: Env,
         caller: Address,
@@ -277,23 +274,20 @@ impl CrossChainIdentityContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        let mut validators: Map<Address, IdentityValidator> = env
+        let key = DataKey::Validator(validator_address.clone());
+        if let Some(mut validator) = env
             .storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(mut validator) = validators.get(validator_address.clone()) {
-            validator.trust_score = trust_score.min(100); // Cap at 100
-            validators.set(validator_address.clone(), validator);
-            env.storage().persistent().set(&VALIDATORS, &validators);
+            .get::<DataKey, IdentityValidator>(&key)
+        {
+            validator.trust_score = trust_score.min(100);
+            env.storage().persistent().set(&key, &validator);
             Ok(true)
         } else {
             Err(Error::ValidatorNotFound)
         }
     }
 
-    /// Set minimum attestations required
     pub fn set_min_attestations(
         env: Env,
         caller: Address,
@@ -304,16 +298,15 @@ impl CrossChainIdentityContract {
 
         env.storage()
             .persistent()
-            .set(&MIN_ATTESTATIONS, &min_attestations);
+            .set(&DataKey::MinAttestations, &min_attestations);
         Ok(true)
     }
 
-    /// Pause contract
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&PAUSED, &true);
+        env.storage().persistent().set(&DataKey::Paused, &true);
 
         env.events().publish(
             (symbol_short!("Paused"),),
@@ -323,12 +316,11 @@ impl CrossChainIdentityContract {
         Ok(true)
     }
 
-    /// Unpause contract
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&PAUSED, &false);
+        env.storage().persistent().set(&DataKey::Paused, &false);
 
         env.events().publish(
             (symbol_short!("Unpaused"),),
@@ -340,7 +332,6 @@ impl CrossChainIdentityContract {
 
     // ==================== Identity Verification Functions ====================
 
-    /// Request identity verification for an external chain address
     pub fn request_verification(
         env: Env,
         stellar_address: Address,
@@ -351,21 +342,18 @@ impl CrossChainIdentityContract {
         stellar_address.require_auth();
         Self::require_not_paused(&env)?;
 
-        // Check if identity already exists and is verified
-        let identity_key = Self::identity_key(&env, &stellar_address, &external_chain);
-        let identities: Map<Symbol, CrossChainIdentity> = env
+        // BUG FIX: check the correct per-identity key
+        let identity_key = DataKey::Identity(stellar_address.clone(), external_chain.clone());
+        if let Some(existing) = env
             .storage()
             .persistent()
-            .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(existing) = identities.get(identity_key.clone()) {
+            .get::<DataKey, CrossChainIdentity>(&identity_key)
+        {
             if existing.verification_status == VerificationStatus::Verified {
                 return Err(Error::IdentityAlreadyExists);
             }
         }
 
-        // Create verification request
         let request_id = Self::get_and_increment_request_count(&env);
         let now = env.ledger().timestamp();
 
@@ -380,14 +368,9 @@ impl CrossChainIdentityContract {
             validator_attestations: Vec::new(&env),
         };
 
-        let mut requests: Map<u64, VerificationRequest> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&REQUESTS)
-            .unwrap_or(Map::new(&env));
-
-        requests.set(request_id, request);
-        env.storage().persistent().set(&REQUESTS, &requests);
+            .set(&DataKey::Request(request_id), &request);
 
         env.events().publish(
             (Symbol::new(&env, "VerificationRequested"),),
@@ -398,6 +381,7 @@ impl CrossChainIdentityContract {
     }
 
     /// Validator attests to a verification request
+    /// BUG FIX: each attestation stored per (request_id, validator) — was "att_key"
     pub fn attest_verification(
         env: Env,
         validator: Address,
@@ -409,34 +393,29 @@ impl CrossChainIdentityContract {
         Self::require_not_paused(&env)?;
         Self::require_active_validator(&env, &validator)?;
 
-        let mut requests: Map<u64, VerificationRequest> = env
+        let req_key = DataKey::Request(request_id);
+        let mut request = env
             .storage()
             .persistent()
-            .get(&REQUESTS)
-            .unwrap_or(Map::new(&env));
+            .get::<DataKey, VerificationRequest>(&req_key)
+            .ok_or(Error::RequestNotFound)?;
 
-        let mut request = requests.get(request_id).ok_or(Error::RequestNotFound)?;
-
-        // Check request status
         if request.status != RequestStatus::Pending {
             return Err(Error::RequestAlreadyProcessed);
         }
 
-        // Check expiry
         let now = env.ledger().timestamp();
         if now > request.created_at + REQUEST_EXPIRY {
             request.status = RequestStatus::Expired;
-            requests.set(request_id, request);
-            env.storage().persistent().set(&REQUESTS, &requests);
+            env.storage().persistent().set(&req_key, &request);
             return Err(Error::RequestExpired);
         }
 
-        // Check for duplicate attestation
         if request.validator_attestations.contains(&validator) {
             return Err(Error::DuplicateAttestation);
         }
 
-        // Store attestation
+        // BUG FIX: unique key per (request_id, validator) — was always "att_key"
         let attestation = Attestation {
             validator: validator.clone(),
             stellar_address: request.stellar_address.clone(),
@@ -446,33 +425,24 @@ impl CrossChainIdentityContract {
             signature,
         };
 
-        let attest_key = Self::attestation_key(&env, request_id, &validator);
-        let mut attestations: Map<Symbol, Attestation> = env
-            .storage()
-            .persistent()
-            .get(&ATTESTATIONS)
-            .unwrap_or(Map::new(&env));
+        env.storage().persistent().set(
+            &DataKey::Attestation(request_id, validator.clone()),
+            &attestation,
+        );
 
-        attestations.set(attest_key, attestation);
-        env.storage().persistent().set(&ATTESTATIONS, &attestations);
-
-        // Add to request's validator list
         request.validator_attestations.push_back(validator.clone());
 
-        // Increment validator's attestation count
         Self::increment_validator_attestations(&env, &validator);
 
-        // Check if we have enough valid attestations
         let min_attestations: u32 = env
             .storage()
             .persistent()
-            .get(&MIN_ATTESTATIONS)
+            .get(&DataKey::MinAttestations)
             .unwrap_or(DEFAULT_MIN_ATTESTATIONS);
 
         if is_valid && request.validator_attestations.len() as u32 >= min_attestations {
             request.status = RequestStatus::Approved;
 
-            // Create verified identity
             Self::create_verified_identity(&env, &request)?;
 
             env.events().publish(
@@ -485,8 +455,7 @@ impl CrossChainIdentityContract {
             );
         }
 
-        requests.set(request_id, request);
-        env.storage().persistent().set(&REQUESTS, &requests);
+        env.storage().persistent().set(&req_key, &request);
 
         env.events().publish(
             (Symbol::new(&env, "AttestationAdded"),),
@@ -496,7 +465,6 @@ impl CrossChainIdentityContract {
         Ok(true)
     }
 
-    /// Revoke an identity
     pub fn revoke_identity(
         env: Env,
         caller: Address,
@@ -506,23 +474,19 @@ impl CrossChainIdentityContract {
         caller.require_auth();
         Self::require_not_paused(&env)?;
 
-        // Only admin or the identity owner can revoke
         let is_admin = Self::is_admin(&env, &caller);
         if !is_admin && caller != stellar_address {
             return Err(Error::NotAuthorized);
         }
 
-        let identity_key = Self::identity_key(&env, &stellar_address, &external_chain);
-        let mut identities: Map<Symbol, CrossChainIdentity> = env
+        let identity_key = DataKey::Identity(stellar_address.clone(), external_chain.clone());
+        if let Some(mut identity) = env
             .storage()
             .persistent()
-            .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(mut identity) = identities.get(identity_key.clone()) {
+            .get::<DataKey, CrossChainIdentity>(&identity_key)
+        {
             identity.verification_status = VerificationStatus::Revoked;
-            identities.set(identity_key, identity);
-            env.storage().persistent().set(&IDENTITIES, &identities);
+            env.storage().persistent().set(&identity_key, &identity);
 
             env.events().publish(
                 (Symbol::new(&env, "IdentityRevoked"),),
@@ -537,7 +501,6 @@ impl CrossChainIdentityContract {
 
     // ==================== Identity Sync Functions ====================
 
-    /// Initiate identity synchronization to another chain
     pub fn initiate_sync(
         env: Env,
         stellar_address: Address,
@@ -547,31 +510,25 @@ impl CrossChainIdentityContract {
         stellar_address.require_auth();
         Self::require_not_paused(&env)?;
 
-        // Verify identity exists and is verified
-        let identity_key = Self::identity_key(&env, &stellar_address, &source_chain);
-        let identities: Map<Symbol, CrossChainIdentity> = env
+        // BUG FIX: check identity using correct per-identity key
+        let identity_key = DataKey::Identity(stellar_address.clone(), source_chain.clone());
+        let identity = env
             .storage()
             .persistent()
-            .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
-
-        let identity = identities
-            .get(identity_key)
+            .get::<DataKey, CrossChainIdentity>(&identity_key)
             .ok_or(Error::IdentityNotFound)?;
 
         if identity.verification_status != VerificationStatus::Verified {
             return Err(Error::IdentityNotFound);
         }
 
-        // Check if identity is expired
         let now = env.ledger().timestamp();
         if now > identity.expires_at {
             return Err(Error::IdentityExpired);
         }
 
-        // Create sync record
-        let sync_id = Self::get_and_increment_request_count(&env);
-        let sync_proof = BytesN::from_array(&env, &[0u8; 32]); // Placeholder
+        let sync_id = Self::get_and_increment_sync_count(&env);
+        let sync_proof = BytesN::from_array(&env, &[0u8; 32]);
 
         let sync = IdentitySync {
             stellar_address: stellar_address.clone(),
@@ -582,14 +539,9 @@ impl CrossChainIdentityContract {
             sync_proof,
         };
 
-        let mut syncs: Map<u64, IdentitySync> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&SYNCS)
-            .unwrap_or(Map::new(&env));
-
-        syncs.set(sync_id, sync);
-        env.storage().persistent().set(&SYNCS, &syncs);
+            .set(&DataKey::Sync(sync_id), &sync);
 
         env.events().publish(
             (Symbol::new(&env, "SyncInitiated"),),
@@ -599,7 +551,6 @@ impl CrossChainIdentityContract {
         Ok(sync_id)
     }
 
-    /// Update sync status (called by validators/bridge)
     pub fn update_sync_status(
         env: Env,
         validator: Address,
@@ -611,20 +562,18 @@ impl CrossChainIdentityContract {
         Self::require_not_paused(&env)?;
         Self::require_active_validator(&env, &validator)?;
 
-        let mut syncs: Map<u64, IdentitySync> = env
+        let sync_key = DataKey::Sync(sync_id);
+        let mut sync = env
             .storage()
             .persistent()
-            .get(&SYNCS)
-            .unwrap_or(Map::new(&env));
-
-        let mut sync = syncs.get(sync_id).ok_or(Error::SyncNotFound)?;
+            .get::<DataKey, IdentitySync>(&sync_key)
+            .ok_or(Error::SyncNotFound)?;
 
         sync.sync_status = status.clone();
         sync.sync_proof = proof;
         sync.sync_timestamp = env.ledger().timestamp();
 
-        syncs.set(sync_id, sync.clone());
-        env.storage().persistent().set(&SYNCS, &syncs);
+        env.storage().persistent().set(&sync_key, &sync);
 
         env.events()
             .publish((Symbol::new(&env, "SyncStatusUpdated"),), (sync_id, status));
@@ -634,25 +583,22 @@ impl CrossChainIdentityContract {
 
     // ==================== Query Functions ====================
 
-    /// Get identity by Stellar address and chain
+    /// Get identity by Stellar address and external chain
+    /// BUG FIX: each (stellar_address, chain) has a unique storage entry
     pub fn get_identity(
         env: Env,
         stellar_address: Address,
         external_chain: ChainId,
     ) -> Option<CrossChainIdentity> {
-        let identity_key = Self::identity_key(&env, &stellar_address, &external_chain);
-        let identities: Map<Symbol, CrossChainIdentity> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
-
-        identities.get(identity_key)
+            .get(&DataKey::Identity(stellar_address, external_chain))
     }
 
-    /// Verify if an identity is valid
     pub fn verify_identity(env: Env, stellar_address: Address, external_chain: ChainId) -> bool {
-        if let Some(identity) = Self::get_identity(env.clone(), stellar_address, external_chain) {
+        if let Some(identity) =
+            Self::get_identity(env.clone(), stellar_address, external_chain)
+        {
             let now = env.ledger().timestamp();
             identity.verification_status == VerificationStatus::Verified
                 && now <= identity.expires_at
@@ -661,42 +607,39 @@ impl CrossChainIdentityContract {
         }
     }
 
-    /// Get verification request
     pub fn get_request(env: Env, request_id: u64) -> Option<VerificationRequest> {
-        let requests: Map<u64, VerificationRequest> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&REQUESTS)
-            .unwrap_or(Map::new(&env));
-
-        requests.get(request_id)
+            .get(&DataKey::Request(request_id))
     }
 
-    /// Get sync record
     pub fn get_sync(env: Env, sync_id: u64) -> Option<IdentitySync> {
-        let syncs: Map<u64, IdentitySync> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&SYNCS)
-            .unwrap_or(Map::new(&env));
-
-        syncs.get(sync_id)
+            .get(&DataKey::Sync(sync_id))
     }
 
-    /// Get validator info
     pub fn get_validator(env: Env, validator_address: Address) -> Option<IdentityValidator> {
-        let validators: Map<Address, IdentityValidator> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        validators.get(validator_address)
+            .get(&DataKey::Validator(validator_address))
     }
 
-    /// Check if contract is paused
+    pub fn get_attestation(
+        env: Env,
+        request_id: u64,
+        validator: Address,
+    ) -> Option<Attestation> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Attestation(request_id, validator))
+    }
+
     pub fn is_paused(env: Env) -> bool {
-        env.storage().persistent().get(&PAUSED).unwrap_or(false)
+        env.storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     // ==================== Internal Helper Functions ====================
@@ -705,7 +648,7 @@ impl CrossChainIdentityContract {
         let admin: Address = env
             .storage()
             .persistent()
-            .get(&ADMIN)
+            .get(&DataKey::Admin)
             .ok_or(Error::NotAuthorized)?;
 
         if caller != &admin {
@@ -715,25 +658,28 @@ impl CrossChainIdentityContract {
     }
 
     fn is_admin(env: &Env, caller: &Address) -> bool {
-        let admin: Option<Address> = env.storage().persistent().get(&ADMIN);
+        let admin: Option<Address> = env.storage().persistent().get(&DataKey::Admin);
         admin.map_or(false, |a| &a == caller)
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+        if env
+            .storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
             return Err(Error::ContractPaused);
         }
         Ok(())
     }
 
     fn require_active_validator(env: &Env, validator: &Address) -> Result<(), Error> {
-        let validators: Map<Address, IdentityValidator> = env
+        match env
             .storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        match validators.get(validator.clone()) {
+            .get::<DataKey, IdentityValidator>(&DataKey::Validator(validator.clone()))
+        {
             Some(v) if v.is_active => Ok(()),
             Some(_) => Err(Error::ValidatorNotActive),
             None => Err(Error::ValidatorNotFound),
@@ -741,17 +687,27 @@ impl CrossChainIdentityContract {
     }
 
     fn get_and_increment_request_count(env: &Env) -> u64 {
-        let count: u64 = env.storage().persistent().get(&REQUEST_COUNT).unwrap_or(0);
-        env.storage().persistent().set(&REQUEST_COUNT, &(count + 1));
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RequestCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestCount, &(count + 1));
         count + 1
     }
 
-    fn identity_key(_env: &Env, _stellar_address: &Address, _chain: &ChainId) -> Symbol {
-        Symbol::new(&_env, "id_key")
-    }
-
-    fn attestation_key(_env: &Env, _request_id: u64, _validator: &Address) -> Symbol {
-        Symbol::new(&_env, "att_key")
+    fn get_and_increment_sync_count(env: &Env) -> u64 {
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SyncCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::SyncCount, &(count + 1));
+        count + 1
     }
 
     fn create_verified_identity(env: &Env, request: &VerificationRequest) -> Result<(), Error> {
@@ -759,7 +715,7 @@ impl CrossChainIdentityContract {
         let ttl: u64 = env
             .storage()
             .persistent()
-            .get(&IDENTITY_TTL)
+            .get(&DataKey::IdentityTtl)
             .unwrap_or(DEFAULT_IDENTITY_TTL);
 
         let identity = CrossChainIdentity {
@@ -773,16 +729,14 @@ impl CrossChainIdentityContract {
             metadata_hash: BytesN::from_array(&env, &[0u8; 32]),
         };
 
-        let identity_key =
-            Self::identity_key(&env, &request.stellar_address, &request.external_chain);
-        let mut identities: Map<Symbol, CrossChainIdentity> = env
-            .storage()
-            .persistent()
-            .get(&IDENTITIES)
-            .unwrap_or(Map::new(&env));
-
-        identities.set(identity_key, identity);
-        env.storage().persistent().set(&IDENTITIES, &identities);
+        // BUG FIX: store under unique (stellar_address, chain) key
+        env.storage().persistent().set(
+            &DataKey::Identity(
+                request.stellar_address.clone(),
+                request.external_chain.clone(),
+            ),
+            &identity,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "IdentityVerified"),),
@@ -796,16 +750,14 @@ impl CrossChainIdentityContract {
     }
 
     fn increment_validator_attestations(env: &Env, validator: &Address) {
-        let mut validators: Map<Address, IdentityValidator> = env
+        let key = DataKey::Validator(validator.clone());
+        if let Some(mut v) = env
             .storage()
             .persistent()
-            .get(&VALIDATORS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(mut v) = validators.get(validator.clone()) {
+            .get::<DataKey, IdentityValidator>(&key)
+        {
             v.total_attestations += 1;
-            validators.set(validator.clone(), v);
-            env.storage().persistent().set(&VALIDATORS, &validators);
+            env.storage().persistent().set(&key, &v);
         }
     }
 }

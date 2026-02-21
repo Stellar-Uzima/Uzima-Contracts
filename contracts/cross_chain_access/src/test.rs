@@ -2,6 +2,7 @@
 #![allow(clippy::expect_used)]
 use super::*;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use crate::{SwapStatus};
 
 fn create_contract(
     env: &Env,
@@ -982,4 +983,389 @@ fn test_custom_chain_id() {
     );
 
     assert!(has_access);
+}
+
+// ==================== Storage Key Uniqueness Regression Tests ====================
+
+/// Regression test: multiple delegations must be independent (was "deleg_key" collision)
+#[test]
+fn test_multiple_delegations_independent() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let patient1 = Address::generate(&env);
+    let patient2 = Address::generate(&env);
+    let delegate1 = Address::generate(&env);
+    let delegate2 = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // patient1 delegates to delegate1 (can_grant=true, can_revoke=false)
+    client.create_delegation(
+        &patient1,
+        &delegate1,
+        &ChainId::Stellar,
+        &String::from_str(&env, ""),
+        &true,
+        &false,
+        &false,
+        &86400,
+    );
+
+    // patient2 delegates to delegate2 (can_grant=false, can_revoke=true)
+    client.create_delegation(
+        &patient2,
+        &delegate2,
+        &ChainId::Stellar,
+        &String::from_str(&env, ""),
+        &false,
+        &true,
+        &false,
+        &86400,
+    );
+
+    let d1 = client.get_delegation(&patient1, &delegate1).unwrap();
+    let d2 = client.get_delegation(&patient2, &delegate2).unwrap();
+
+    // Verify each delegation has its own settings
+    assert!(d1.can_grant);
+    assert!(!d1.can_revoke);
+    assert!(!d2.can_grant);
+    assert!(d2.can_revoke);
+
+    // Cross-lookup should return None
+    assert!(client.get_delegation(&patient1, &delegate2).is_none());
+    assert!(client.get_delegation(&patient2, &delegate1).is_none());
+}
+
+/// Regression test: multiple patients can each have their own emergency config
+#[test]
+fn test_emergency_configs_independent_per_patient() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let patient1 = Address::generate(&env);
+    let patient2 = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // patient1: emergency enabled
+    client.configure_emergency(
+        &patient1,
+        &true,
+        &3600,
+        &2,
+        &Vec::new(&env),
+    );
+
+    // patient2: emergency disabled
+    client.configure_emergency(
+        &patient2,
+        &false,
+        &0,
+        &0,
+        &Vec::new(&env),
+    );
+
+    let config1 = client.get_emergency_config(&patient1).unwrap();
+    let config2 = client.get_emergency_config(&patient2).unwrap();
+
+    assert!(config1.is_enabled);
+    assert_eq!(config1.auto_approve_duration, 3600);
+
+    assert!(!config2.is_enabled);
+    assert_eq!(config2.auto_approve_duration, 0);
+}
+
+// ==================== Atomic Access Swap Tests ====================
+
+#[test]
+fn test_initiate_access_swap() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let grantee_address = String::from_str(&env, "0xdoctor123");
+
+    env.mock_all_auths();
+
+    // Create a grant for the initiator to offer
+    let grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_address,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let hash_lock = BytesN::from_array(&env, &[0x42u8; 32]);
+    let counterpart = String::from_str(&env, "0xhospital456");
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &counterpart,
+        &grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &hash_lock,
+        &7200, // 2 hour timelock
+    );
+
+    assert_eq!(swap_id, 1);
+
+    let swap = client.get_swap(&swap_id).unwrap();
+    assert_eq!(swap.initiator, initiator);
+    assert_eq!(swap.status, SwapStatus::Proposed);
+    assert_eq!(swap.offered_grant_id, grant_id);
+    assert_eq!(swap.counterpart_chain, ChainId::Polygon);
+}
+
+#[test]
+fn test_accept_access_swap() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let acceptor = Address::generate(&env);
+    let grantee_addr = String::from_str(&env, "0xgrantee");
+
+    env.mock_all_auths();
+
+    // Create offered grant
+    let offered_grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    // Create counterpart grant (acceptor offering)
+    let acceptor_grant_id = client.grant_access(
+        &acceptor,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let hash_lock = BytesN::from_array(&env, &[0x55u8; 32]);
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &offered_grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &hash_lock,
+        &7200,
+    );
+
+    let result = client.accept_access_swap(&acceptor, &swap_id, &acceptor_grant_id);
+    assert!(result);
+
+    let swap = client.get_swap(&swap_id).unwrap();
+    assert_eq!(swap.status, SwapStatus::Accepted);
+    assert_eq!(swap.accepted_grant_id, acceptor_grant_id);
+}
+
+#[test]
+fn test_finalize_access_swap() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let acceptor = Address::generate(&env);
+    let grantee_addr = String::from_str(&env, "0xgrantee");
+
+    env.mock_all_auths();
+
+    // The secret and its hash
+    let secret = BytesN::from_array(&env, &[0x99u8; 32]);
+    let secret_hash: BytesN<32> = env.crypto().sha256(&secret.clone().into()).into();
+
+    let offered_grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let acceptor_grant_id = client.grant_access(
+        &acceptor,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &offered_grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &secret_hash,
+        &7200,
+    );
+
+    client.accept_access_swap(&acceptor, &swap_id, &acceptor_grant_id);
+
+    let result = client.finalize_access_swap(&initiator, &swap_id, &secret);
+    assert!(result);
+
+    let swap = client.get_swap(&swap_id).unwrap();
+    assert_eq!(swap.status, SwapStatus::Completed);
+}
+
+#[test]
+fn test_finalize_swap_wrong_secret_fails() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let acceptor = Address::generate(&env);
+    let grantee_addr = String::from_str(&env, "0xgrantee");
+
+    env.mock_all_auths();
+
+    let secret = BytesN::from_array(&env, &[0x99u8; 32]);
+    let wrong_secret = BytesN::from_array(&env, &[0x00u8; 32]);
+    let secret_hash: BytesN<32> = env.crypto().sha256(&secret.clone().into()).into();
+
+    let offered_grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let acceptor_grant_id = client.grant_access(
+        &acceptor,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &offered_grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &secret_hash,
+        &7200,
+    );
+
+    client.accept_access_swap(&acceptor, &swap_id, &acceptor_grant_id);
+
+    // Wrong secret should fail
+    let result = client.try_finalize_access_swap(&initiator, &swap_id, &wrong_secret);
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
+}
+
+#[test]
+fn test_cancel_swap() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let grantee_addr = String::from_str(&env, "0xgrantee");
+
+    env.mock_all_auths();
+
+    let offered_grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let hash_lock = BytesN::from_array(&env, &[0x11u8; 32]);
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &offered_grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &hash_lock,
+        &7200,
+    );
+
+    let result = client.cancel_access_swap(&initiator, &swap_id);
+    assert!(result);
+
+    let swap = client.get_swap(&swap_id).unwrap();
+    assert_eq!(swap.status, SwapStatus::Cancelled);
+}
+
+#[test]
+fn test_swap_not_initiator_cannot_cancel() {
+    let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    let initiator = Address::generate(&env);
+    let other = Address::generate(&env);
+    let grantee_addr = String::from_str(&env, "0xgrantee");
+
+    env.mock_all_auths();
+
+    let offered_grant_id = client.grant_access(
+        &initiator,
+        &ChainId::Ethereum,
+        &grantee_addr,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &86400,
+        &Vec::new(&env),
+    );
+
+    let swap_id = client.initiate_access_swap(
+        &initiator,
+        &ChainId::Polygon,
+        &grantee_addr,
+        &offered_grant_id,
+        &PermissionLevel::Read,
+        &AccessScope::AllRecords,
+        &BytesN::from_array(&env, &[0x11u8; 32]),
+        &7200,
+    );
+
+    // Non-initiator cannot cancel before timelock
+    let result = client.try_cancel_access_swap(&other, &swap_id);
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
