@@ -19,7 +19,6 @@ echo -e "${BLUE}========================================${NC}"
 # Test environment setup
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CONTRACTS_DIR="$PROJECT_ROOT/contracts"
-COMPLIANCE_CONTRACT_DIR="$CONTRACTS_DIR/healthcare_compliance"
 
 # Function to print test status
 print_status() {

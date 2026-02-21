@@ -5,20 +5,20 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, Map, 
-    String, Symbol, Vec
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    Map, String, Symbol, Vec,
 };
 
 // ==================== Compliance Framework Types ====================
 
 /// Healthcare Compliance Framework Standards
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum ComplianceFramework {
     HIPAA,
     GDPR,
     HL7FHIR,
-    SOX,  // Sarbanes-Oxley for financial healthcare data
+    SOX,    // Sarbanes-Oxley for financial healthcare data
     HITECH, // Health Information Technology for Economic and Clinical Health Act
 }
 
@@ -48,7 +48,7 @@ pub enum GDPRProcessingCategory {
 }
 
 /// HL7 FHIR Resource Types for compliance
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum FHIRResourceType {
     Patient,
@@ -76,7 +76,7 @@ pub enum ConsentStatus {
 }
 
 /// Audit Event Types
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum AuditEventType {
     Create,
@@ -158,8 +158,8 @@ pub struct AuditLogEntry {
     pub ip_address: String,
     pub user_agent: String,
     pub compliance_framework: ComplianceFramework,
-    pub hipaa_category: Option<HIPAACategory>,
-    pub gdpr_category: Option<GDPRProcessingCategory>,
+    pub hipaa_category: u32, // 0 = None, 1-7 = HIPAACategory variants
+    pub gdpr_category: u32,  // 0 = None, 1-6 = GDPRProcessingCategory variants
 }
 
 /// Data Breach Report
@@ -274,14 +274,14 @@ impl HealthcareComplianceContract {
     /// Initialize the compliance contract
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
-        
+
         if env.storage().instance().has(&ADMIN) {
             return Err(Error::ConsentAlreadyExists);
         }
-        
+
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&PAUSED, &false);
-        
+
         // Set default configuration
         let default_config = ComplianceConfig {
             hipaa_enabled: true,
@@ -294,62 +294,61 @@ impl HealthcareComplianceContract {
             admin_addresses: vec![&env, admin.clone()],
             compliance_officers: vec![&env, admin],
         };
-        
+
         env.storage().instance().set(&CONFIG, &default_config);
         env.storage().instance().set(&COMPLIANCE_SCORE, &100u32);
-        
+
         Ok(())
     }
-    
+
     /// Update compliance configuration
     pub fn update_config(env: Env, admin: Address, config: ComplianceConfig) -> Result<(), Error> {
         admin.require_auth();
-        
+
         Self::check_admin(&env, &admin)?;
         Self::check_paused(&env)?;
-        
+
         env.storage().instance().set(&CONFIG, &config);
         Ok(())
     }
-    
+
     /// Get current compliance configuration
     pub fn get_config(env: Env) -> Result<ComplianceConfig, Error> {
-        env.storage().instance().get(&CONFIG).ok_or(Error::ComplianceConfigNotSet)
+        env.storage()
+            .instance()
+            .get(&CONFIG)
+            .ok_or(Error::ComplianceConfigNotSet)
     }
-    
+
     /// Grant patient consent for data processing
-    pub fn grant_consent(
-        env: Env,
-        patient: Address,
-        consent: ConsentRecord,
-    ) -> Result<(), Error> {
+    pub fn grant_consent(env: Env, patient: Address, consent: ConsentRecord) -> Result<(), Error> {
         patient.require_auth();
         Self::check_paused(&env)?;
-        
+
         // Validate consent
         if consent.patient != patient {
             return Err(Error::InvalidPatientAddress);
         }
-        
+
         if consent.expires_at <= env.ledger().timestamp() {
             return Err(Error::ConsentExpired);
         }
-        
+
         // Store consent
         let mut consents: Map<String, ConsentRecord> = env
             .storage()
             .persistent()
             .get(&CONSENTS)
             .unwrap_or(Map::new(&env));
-            
+
         if consents.contains_key(consent.consent_id.clone()) {
             return Err(Error::ConsentAlreadyExists);
         }
-        
+
         let consent_id = consent.consent_id.clone();
         consents.set(consent_id.clone(), consent);
         env.storage().persistent().set(&CONSENTS, &consents);
-        
+
         // Log audit event
         Self::log_audit_event(
             env.clone(),
@@ -360,13 +359,13 @@ impl HealthcareComplianceContract {
             String::from_str(&env, ""),
             String::from_str(&env, "Consent granted"),
             ComplianceFramework::GDPR,
-            None,
-            Some(GDPRProcessingCategory::Consent),
+            0, // None
+            1, // Consent
         )?;
-        
+
         Ok(())
     }
-    
+
     /// Revoke patient consent
     pub fn revoke_consent(
         env: Env,
@@ -376,31 +375,35 @@ impl HealthcareComplianceContract {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::check_paused(&env)?;
-        
+
         let mut consents: Map<String, ConsentRecord> = env
             .storage()
             .persistent()
             .get(&CONSENTS)
             .ok_or(Error::ConsentNotFound)?;
-            
-        let mut consent = consents.get(consent_id.clone()).ok_or(Error::ConsentNotFound)?;
-        
+
+        let mut consent = consents
+            .get(consent_id.clone())
+            .ok_or(Error::ConsentNotFound)?;
+
         if consent.patient != patient {
             return Err(Error::NotAuthorized);
         }
-        
-        if consent.status == ConsentStatus::Inactive || consent.status == ConsentStatus::EnteredInError {
+
+        if consent.status == ConsentStatus::Inactive
+            || consent.status == ConsentStatus::EnteredInError
+        {
             return Err(Error::InvalidConsentStatus);
         }
-        
+
         // Update consent status
         consent.status = ConsentStatus::Inactive;
         consent.revoked_at = env.ledger().timestamp();
         consent.revocation_reason = reason;
-        
+
         consents.set(consent_id.clone(), consent);
         env.storage().persistent().set(&CONSENTS, &consents);
-        
+
         // Log audit event
         Self::log_audit_event(
             env.clone(),
@@ -411,13 +414,13 @@ impl HealthcareComplianceContract {
             String::from_str(&env, ""),
             String::from_str(&env, "Consent revoked"),
             ComplianceFramework::GDPR,
-            None,
-            Some(GDPRProcessingCategory::Consent),
+            0, // None
+            1, // Consent
         )?;
-        
+
         Ok(())
     }
-    
+
     /// Check if patient has valid consent for specific purpose
     pub fn has_valid_consent(
         env: Env,
@@ -430,16 +433,16 @@ impl HealthcareComplianceContract {
             .persistent()
             .get(&CONSENTS)
             .unwrap_or(Map::new(&env));
-            
+
         let current_time = env.ledger().timestamp();
-        
+
         for (_id, consent) in consents.iter() {
-            if consent.patient == patient 
+            if consent.patient == patient
                 && consent.status == ConsentStatus::Active
                 && consent.granted_at <= current_time
                 && (consent.expires_at == 0 || consent.expires_at > current_time)
-                && consent.purpose == purpose {
-                
+                && consent.purpose == purpose
+            {
                 // Check if data category is covered
                 for category in consent.data_categories.iter() {
                     if category == data_category {
@@ -448,10 +451,10 @@ impl HealthcareComplianceContract {
                 }
             }
         }
-        
+
         Ok(false)
     }
-    
+
     /// Log audit event for compliance tracking
     pub fn log_audit_event(
         env: Env,
@@ -462,19 +465,19 @@ impl HealthcareComplianceContract {
         patient_id: String,
         details: String,
         framework: ComplianceFramework,
-        hipaa_category: Option<HIPAACategory>,
-        gdpr_category: Option<GDPRProcessingCategory>,
+        hipaa_category: u32,
+        gdpr_category: u32,
     ) -> Result<(), Error> {
         Self::check_paused(&env)?;
-        
+
         let config = Self::get_config(env.clone())?;
         if !config.audit_logging_enabled {
             return Ok(());
         }
-        
+
         let log_id = Self::generate_id(&env);
         let timestamp = env.ledger().timestamp();
-        
+
         let audit_entry = AuditLogEntry {
             log_id: log_id.clone(),
             timestamp,
@@ -488,28 +491,28 @@ impl HealthcareComplianceContract {
             ip_address: String::from_str(&env, "127.0.0.1"), // Would be provided by client
             user_agent: String::from_str(&env, "Uzima-Client/1.0"), // Would be provided by client
             compliance_framework: framework,
-            hipaa_category,
-            gdpr_category,
+            hipaa_category: hipaa_category as u32,
+            gdpr_category: gdpr_category as u32,
         };
-        
+
         let mut logs: Map<Address, Vec<AuditLogEntry>> = env
             .storage()
             .persistent()
             .get(&AUDIT_LOGS)
             .unwrap_or(Map::new(&env));
-            
+
         let mut user_logs = logs.get(actor.clone()).unwrap_or(Vec::new(&env));
         user_logs.push_back(audit_entry);
         logs.set(actor, user_logs);
-        
+
         env.storage().persistent().set(&AUDIT_LOGS, &logs);
-        
+
         // Update compliance score based on audit activity
         Self::update_compliance_score(&env, true)?;
-        
+
         Ok(())
     }
-    
+
     /// Get audit logs for a specific user
     pub fn get_audit_logs(
         env: Env,
@@ -521,51 +524,51 @@ impl HealthcareComplianceContract {
             .persistent()
             .get(&AUDIT_LOGS)
             .unwrap_or(Map::new(&env));
-            
+
         let user_logs = logs.get(user).unwrap_or(Vec::new(&env));
-        
+
         // Return last N logs (most recent first)
         let mut result = Vec::new(&env);
         let len = user_logs.len();
-        let start = if len > limit as u32 { len - limit as u32 } else { 0 };
-        
+        let start = if len > limit as u32 {
+            len - limit as u32
+        } else {
+            0
+        };
+
         for i in start..len {
             if let Some(log) = user_logs.get(i) {
                 result.push_back(log);
             }
         }
-        
+
         Ok(result)
     }
-    
+
     /// Report data breach
-    pub fn report_breach(
-        env: Env,
-        reporter: Address,
-        breach: BreachReport,
-    ) -> Result<(), Error> {
+    pub fn report_breach(env: Env, reporter: Address, breach: BreachReport) -> Result<(), Error> {
         reporter.require_auth();
         Self::check_paused(&env)?;
-        
+
         let config = Self::get_config(env.clone())?;
         if !config.breach_notification_enabled {
             return Err(Error::NotificationFailed);
         }
-        
+
         // Store breach report
         let mut reports: Map<String, BreachReport> = env
             .storage()
             .persistent()
             .get(&BREACH_REPORTS)
             .unwrap_or(Map::new(&env));
-            
+
         if reports.contains_key(breach.report_id.clone()) {
             return Err(Error::DataBreachAlreadyReported);
         }
-        
+
         reports.set(breach.report_id.clone(), breach.clone());
         env.storage().persistent().set(&BREACH_REPORTS, &reports);
-        
+
         // Log audit event
         Self::log_audit_event(
             env.clone(),
@@ -576,29 +579,33 @@ impl HealthcareComplianceContract {
             String::from_str(&env, ""),
             String::from_str(&env, "Data breach reported"),
             ComplianceFramework::HIPAA,
-            Some(HIPAACategory::PublicHealth),
-            None,
+            5, // PublicHealth
+            0, // None
         )?;
-        
+
         // Update compliance score
         Self::update_compliance_score(&env, false)?;
-        
+
         // In a real implementation, this would trigger:
         // 1. Automated notifications to affected patients
         // 2. Notifications to regulatory authorities
         // 3. Incident response workflows
-        
+
         Ok(())
     }
-    
+
     /// Get compliance dashboard metrics
     pub fn get_compliance_metrics(env: Env) -> Result<ComplianceMetrics, Error> {
         let total_audits = Self::count_audit_logs(&env);
         let total_consents = Self::count_consents(&env);
         let total_breaches = Self::count_breaches(&env);
         let pending_violations = Self::count_pending_violations(&env);
-        let compliance_score = env.storage().instance().get(&COMPLIANCE_SCORE).unwrap_or(100u32);
-        
+        let compliance_score = env
+            .storage()
+            .instance()
+            .get(&COMPLIANCE_SCORE)
+            .unwrap_or(100u32);
+
         let metrics = ComplianceMetrics {
             total_audits,
             successful_audits: total_audits, // Simplified - in real implementation would track failures
@@ -612,30 +619,30 @@ impl HealthcareComplianceContract {
             compliance_score,
             last_audit_timestamp: env.ledger().timestamp(),
         };
-        
+
         Ok(metrics)
     }
-    
+
     /// Pause contract operations (emergency)
     pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         Self::check_admin(&env, &admin)?;
-        
+
         env.storage().instance().set(&PAUSED, &true);
         Ok(())
     }
-    
+
     /// Resume contract operations
     pub fn resume(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         Self::check_admin(&env, &admin)?;
-        
+
         env.storage().instance().set(&PAUSED, &false);
         Ok(())
     }
-    
+
     // ==================== Helper Functions ====================
-    
+
     fn check_admin(env: &Env, address: &Address) -> Result<(), Error> {
         let config = Self::get_config(env.clone())?;
         for admin in config.admin_addresses.iter() {
@@ -645,7 +652,7 @@ impl HealthcareComplianceContract {
         }
         Err(Error::NotAuthorized)
     }
-    
+
     fn check_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             Err(Error::ContractPaused)
@@ -653,7 +660,7 @@ impl HealthcareComplianceContract {
             Ok(())
         }
     }
-    
+
     fn generate_id(env: &Env) -> String {
         // Simple ID generation - in production use cryptographic random
         let timestamp = env.ledger().timestamp();
@@ -671,38 +678,42 @@ impl HealthcareComplianceContract {
             ((timestamp / 10) % 10) as u8 + b'0',
             (timestamp % 10) as u8 + b'0',
         ];
-        
+
         // For now, return a simple ID - would use proper ID generation in production
         id_str
     }
-    
+
     fn update_compliance_score(env: &Env, positive: bool) -> Result<(), Error> {
-        let mut score = env.storage().instance().get(&COMPLIANCE_SCORE).unwrap_or(100u32);
-        
+        let mut score = env
+            .storage()
+            .instance()
+            .get(&COMPLIANCE_SCORE)
+            .unwrap_or(100u32);
+
         if positive && score < 100 {
             score = score.saturating_add(1);
         } else if !positive && score > 0 {
             score = score.saturating_sub(5); // Larger penalty for violations
         }
-        
+
         env.storage().instance().set(&COMPLIANCE_SCORE, &score);
         Ok(())
     }
-    
+
     fn count_audit_logs(env: &Env) -> u32 {
         let logs: Map<String, Vec<AuditLogEntry>> = env
             .storage()
             .persistent()
             .get(&AUDIT_LOGS)
             .unwrap_or(Map::new(env));
-        
+
         let mut count = 0u32;
         for (_user, user_logs) in logs.iter() {
             count = count.saturating_add(user_logs.len() as u32);
         }
         count
     }
-    
+
     fn count_consents(env: &Env) -> u32 {
         let consents: Map<String, ConsentRecord> = env
             .storage()
@@ -711,27 +722,28 @@ impl HealthcareComplianceContract {
             .unwrap_or(Map::new(env));
         consents.len() as u32
     }
-    
+
     fn count_active_consents(env: &Env) -> u32 {
         let consents: Map<String, ConsentRecord> = env
             .storage()
             .persistent()
             .get(&CONSENTS)
             .unwrap_or(Map::new(env));
-        
+
         let mut count = 0u32;
         let current_time = env.ledger().timestamp();
-        
+
         for (_id, consent) in consents.iter() {
             if consent.status == ConsentStatus::Active
                 && consent.granted_at <= current_time
-                && (consent.expires_at == 0 || consent.expires_at > current_time) {
+                && (consent.expires_at == 0 || consent.expires_at > current_time)
+            {
                 count = count.saturating_add(1);
             }
         }
         count
     }
-    
+
     fn count_breaches(env: &Env) -> u32 {
         let breaches: Map<String, BreachReport> = env
             .storage()
@@ -740,30 +752,32 @@ impl HealthcareComplianceContract {
             .unwrap_or(Map::new(env));
         breaches.len() as u32
     }
-    
+
     fn count_resolved_breaches(env: &Env) -> u32 {
         let breaches: Map<String, BreachReport> = env
             .storage()
             .persistent()
             .get(&BREACH_REPORTS)
             .unwrap_or(Map::new(env));
-        
+
         let mut count = 0u32;
         for (_id, breach) in breaches.iter() {
-            if breach.resolution_status == String::from_str(env, "resolved") || breach.resolution_status == String::from_str(env, "closed") {
+            if breach.resolution_status == String::from_str(env, "resolved")
+                || breach.resolution_status == String::from_str(env, "closed")
+            {
                 count = count.saturating_add(1);
             }
         }
         count
     }
-    
+
     fn count_pending_violations(env: &Env) -> u32 {
         let violations: Map<String, ViolationReport> = env
             .storage()
             .persistent()
             .get(&VIOLATION_REPORTS)
             .unwrap_or(Map::new(env));
-        
+
         let mut count = 0u32;
         for (_id, violation) in violations.iter() {
             if !violation.resolved {
