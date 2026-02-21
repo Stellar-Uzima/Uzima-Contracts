@@ -34,6 +34,7 @@ fn test_complex_upgrade_flow() {
         &new_wasm_hash,
         &2,
         &symbol_short!("V2"),
+        &false,
     );
 
     // 4. Approval Phase
