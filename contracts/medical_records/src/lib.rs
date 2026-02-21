@@ -17,7 +17,8 @@ mod validation;
 pub use errors::Error;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, xdr::ToXdr, Address, Bytes, BytesN, Env, Map, String, Vec,
+    contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
+    Map, String, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
@@ -2487,21 +2488,29 @@ impl MedicalRecordsContract {
             .set(&DataKey::ContractVersion, &new_version);
     }
 
-    #[allow(clippy::panic)]
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>, new_version: u32) {
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+        new_version: u32,
+    ) -> Result<(), Error> {
         caller.require_auth();
 
         if !Self::is_admin(&env, &caller) {
-            panic!("Not authorized to upgrade contract");
+            return Err(Error::NotAuthorized);
         }
 
         upgradeability::execute_upgrade::<Self>(
             &env,
             new_wasm_hash,
             new_version,
-            soroban_sdk::symbol_short!("Upgrade"),
+            symbol_short!("Upgrade"),
         )
-        .expect("Upgrade failed");
+        .map_err(|e| match e {
+            upgradeability::UpgradeError::ContractPaused => Error::ContractPaused,
+            _ => Error::InvalidInput,
+        })?;
+        Ok(())
     }
 
     fn migrate_data(_env: &Env, from_version: u32) {
