@@ -16,12 +16,12 @@ fn test_migration_admin_check() {
 
     // Verify security guard: Non-Admin should fail
     let user = Address::generate(&env);
-    let result = client.try_upgrade(&user, &dummy_hash);
+    let result = client.try_upgrade(&user, &dummy_hash, &2u32);
     assert!(result.is_err());
 }
 
 #[test]
-#[should_panic(expected = "Not authorized")]
+#[should_panic(expected = "Error(Contract, #2)")]
 fn test_migration_admin_check_panic() {
     let env = Env::default();
     env.mock_all_auths();
@@ -34,5 +34,5 @@ fn test_migration_admin_check_panic() {
     let dummy_hash = BytesN::<32>::from_array(&env, &[0u8; 32]);
     let user = Address::generate(&env);
 
-    client.upgrade(&user, &dummy_hash);
+    client.upgrade(&user, &dummy_hash, &2u32);
 }

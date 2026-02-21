@@ -15,6 +15,7 @@ pub enum UpgradeError {
     IncompatibleVersion = 104,
     ContractPaused = 105,
     HistoryNotFound = 106,
+    IntegrityCheckFailed = 107,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,6 +25,7 @@ pub struct UpgradeHistory {
     pub version: u32,
     pub upgraded_at: u64,
     pub description: Symbol,
+    pub state_hash: BytesN<32>,
 }
 
 pub mod storage {
@@ -85,7 +87,7 @@ pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
     Ok(admin)
 }
 
-pub fn execute_upgrade(
+pub fn execute_upgrade<T: migration::Migratable>(
     env: &Env,
     new_wasm_hash: BytesN<32>,
     new_version: u32,
@@ -98,6 +100,15 @@ pub fn execute_upgrade(
         return Err(UpgradeError::IncompatibleVersion);
     }
 
+    // Optional pre-migration integrity check
+    T::verify_integrity(env).map_err(|_| UpgradeError::IntegrityCheckFailed)?;
+
+    // Perform migration
+    T::migrate(env, current_version)?;
+
+    // Post-migration integrity check
+    let state_hash = T::verify_integrity(env).map_err(|_| UpgradeError::IntegrityCheckFailed)?;
+
     storage::add_history(
         env,
         UpgradeHistory {
@@ -105,6 +116,7 @@ pub fn execute_upgrade(
             version: new_version,
             upgraded_at: env.ledger().timestamp(),
             description,
+            state_hash,
         },
     );
 

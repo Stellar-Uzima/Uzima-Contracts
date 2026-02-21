@@ -17,8 +17,8 @@ mod validation;
 pub use errors::Error;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
+    Map, String, Vec,
 };
 use soroban_sdk::xdr::ToXdr;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
@@ -2877,27 +2877,34 @@ impl MedicalRecordsContract {
             .set(&DataKey::ContractVersion, &new_version);
     }
 
-    #[allow(clippy::panic)]
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+        new_version: u32,
+    ) -> Result<(), Error> {
         caller.require_auth();
 
         if !Self::is_admin(&env, &caller) {
-            panic!("Not authorized to upgrade contract");
+            return Err(Error::NotAuthorized);
         }
 
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
-        Self::migrate_data(&env);
+        upgradeability::execute_upgrade::<Self>(
+            &env,
+            new_wasm_hash,
+            new_version,
+            symbol_short!("Upgrade"),
+        )
+        .map_err(|e| match e {
+            upgradeability::UpgradeError::ContractPaused => Error::ContractPaused,
+            _ => Error::InvalidInput,
+        })?;
+        Ok(())
     }
 
-    fn migrate_data(env: &Env) {
-        const CURRENT_CONTRACT_VERSION: u32 = 1;
-
-        let current_version = Self::get_contract_version(env);
-        if current_version < CURRENT_CONTRACT_VERSION {
-            if current_version < 1 {
-                // Future migration hooks (V0 -> V1), etc.
-            }
-            Self::set_contract_version(env, CURRENT_CONTRACT_VERSION);
+    fn migrate_data(_env: &Env, from_version: u32) {
+        if from_version < 2 {
+            // Future migration space
         }
     }
 
@@ -3476,5 +3483,33 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::CryptoAudit(next), &entry);
+    }
+}
+
+impl upgradeability::migration::Migratable for MedicalRecordsContract {
+    fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
+        Self::migrate_data(env, from_version);
+        Ok(())
+    }
+
+    fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
+        // Simple integrity check: hash of the record count and next ID
+        let next_id = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+        let count = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::RecordCount)
+            .unwrap_or(0);
+
+        let mut data = soroban_sdk::Vec::new(env);
+        data.push_back(next_id);
+        data.push_back(count);
+
+        let hash_bytes = env.crypto().sha256(&data.to_xdr(env));
+        Ok(BytesN::from_array(env, &hash_bytes.to_array()))
     }
 }
