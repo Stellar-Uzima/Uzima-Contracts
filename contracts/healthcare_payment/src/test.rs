@@ -8,7 +8,7 @@ struct MockPaymentRouter;
 impl MockPaymentRouter {
     pub fn compute_split(_env: Env, amount: i128) -> (i128, i128) {
         let fee = amount / 10;
-        (amount - fee, fee)
+        (amount.saturating_sub(fee), fee)
     }
 }
 

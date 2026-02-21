@@ -174,12 +174,12 @@ impl HealthcarePayment {
             return Err(Error::InvalidAmount);
         }
 
-        let mut claim_id: u64 = env
+        let claim_id: u64 = env
             .storage()
             .instance()
             .get(&DataKey::ClaimCount)
-            .unwrap_or(0);
-        claim_id += 1;
+            .unwrap_or(0u64)
+            .saturating_add(1);
 
         let current_time = env.ledger().timestamp();
 
@@ -367,7 +367,7 @@ impl HealthcarePayment {
             &env.current_contract_address(),
             &config.escrow_contract,
             &claim.amount,
-            &(env.ledger().sequence() + 1000),
+            &env.ledger().sequence().saturating_add(1000),
         );
 
         let escrow_args = Vec::from_array(
@@ -410,12 +410,12 @@ impl HealthcarePayment {
     ) -> Result<u64, Error> {
         provider.require_auth();
 
-        let mut preauth_id: u64 = env
+        let preauth_id: u64 = env
             .storage()
             .instance()
             .get(&DataKey::PreAuthCount)
-            .unwrap_or(0);
-        preauth_id += 1;
+            .unwrap_or(0u64)
+            .saturating_add(1);
 
         let preauth = PreAuth {
             id: preauth_id,
@@ -424,7 +424,7 @@ impl HealthcarePayment {
             service_id,
             estimated_cost,
             status: PreAuthStatus::Pending,
-            expiry: env.ledger().timestamp() + 604800,
+            expiry: env.ledger().timestamp().saturating_add(604800),
         };
 
         env.storage()
@@ -502,12 +502,12 @@ impl HealthcarePayment {
     ) -> Result<u64, Error> {
         patient.require_auth();
 
-        let mut plan_id: u64 = env
+        let plan_id: u64 = env
             .storage()
             .instance()
             .get(&DataKey::PaymentPlanCount)
-            .unwrap_or(0);
-        plan_id += 1;
+            .unwrap_or(0u64)
+            .saturating_add(1);
 
         let plan = PaymentPlan {
             id: plan_id,
@@ -517,7 +517,7 @@ impl HealthcarePayment {
             remaining_amount: total_amount,
             installment_amount,
             frequency,
-            next_due: env.ledger().timestamp() + frequency,
+            next_due: env.ledger().timestamp().saturating_add(frequency),
             status: PaymentPlanStatus::Active,
         };
 
@@ -562,8 +562,8 @@ impl HealthcarePayment {
             &amount_to_pay,
         );
 
-        plan.remaining_amount -= amount_to_pay;
-        plan.next_due += plan.frequency;
+        plan.remaining_amount = plan.remaining_amount.saturating_sub(amount_to_pay);
+        plan.next_due = plan.next_due.saturating_add(plan.frequency);
 
         if plan.remaining_amount == 0 {
             plan.status = PaymentPlanStatus::Completed;
