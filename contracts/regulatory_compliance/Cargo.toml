@@ -1,0 +1,20 @@
+[package]
+name = "regulatory_compliance"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+soroban-sdk.workspace = true
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

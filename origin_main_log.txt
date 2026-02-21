@@ -1,0 +1,213 @@
+900907b Merge pull request #134 from Xhristin3/AdvancedMulti-PartyComputation
+1161a0c fixed ci
+9509fa8 fixed ci
+9361528 advancr multiparty computation
+bc454bf Merge pull request #107 from Edoscoba/feature/issue-77-crypto-security-enhancements
+ffc800f fix(ci): resolve clippy and shellcheck failures
+8824715 Merge pull request #111 from jobbykings/deploy
+4792d90 style: Apply cargo fmt to fix CI formatting checks
+6d9d224 Merge remote-tracking branch 'origin/main' into feature/issue-77-crypto-security-enhancements
+8f26559 fixed CI
+048e1db Merge pull request #110 from JerryIdoko/feature/data-migration-system-v2
+46d97c5 Merge remote-tracking branch 'origin/main' into feature/issue-77-crypto-security-enhancements
+f7b80ee style: Apply cargo fmt to fix CI formatting checks
+fa5020c fix: Allow panic in upgrade function to satisfy clippy
+28036b4 deploy script
+05797b9 fix: Final logic verification and cleanup
+36da9f7 fix: Unify has_role signature and resolve merge conflicts
+ab53291 Merge branch 'feature/data-migration-system-v2' of https://github.com/JerryIdoko/Uzima-Contracts into feature/data-migration-system-v2
+a990631 fix: Resolve type mismatch in manage_user (bool vs Result)
+bff86cb Merge branch 'main' into feature/data-migration-system-v2
+f9314cf fix: Handle Result return type in upgrade authorization check
+07402cf Merge pull request #108 from sublime247/feature/upgradeability-system
+b81aaae fix: Final CI alignment (formatting and clippy)
+d0e167a test/ci
+0b8126c chore: global formatting fix and clippy cleanup
+fcbeffd ci issues
+91cebc5 fix: Remove duplicated cfg(test) attribute to satisfy clippy
+66ae10e fix: Resolve CI errors (formatting and unused imports)
+18bb0c4 Merge branch 'main' into feature/upgradeability-system
+0b66c4a Merge pull request #109 from Folex1275/main
+a742604 fix: Apply cargo fmt
+7af95d5 feat: Implement data migration system (#69) - Added versioning, upgrade function, tests, and docs
+f491a95 ci errors fix
+e472ae3 refactor: implement granular error handling and validation
+727b414 upgradeability-system
+78d61e6 Merge origin/main into feature/issue-77-crypto-security-enhancements
+208223f feat: advanced cryptographic security enhancements (#77)
+85f79c2 Merge pull request #105 from walterthesmart/fix/medical-records-warnings
+c376bec fix: disable Dependency Review job (requires Dependency Graph in repo settings)
+abad0ab fix: make performance benchmarks optional (no tests exist yet)
+325cb93 fix: update all deprecated v3 actions to v4 in test.yml
+8ab273e fix: replace paid Gitleaks action with manual install, add continue-on-error for dependency review
+3a4bc20 fix: replace deprecated rustsec/audit-check-action with manual cargo audit
+d288695 feat: Add initial implementations for various core smart contracts and a GitHub security workflow.
+6dad40a fix: add double quotes around variables to prevent word splitting (SC2086)
+c1b8082 fix: resolve all ShellCheck warnings in shell scripts
+ee00c97 fix: convert .shellcheckrc to Unix line endings (LF)
+c59bfbe fix: resolve ShellCheck linting issues in CI workflow
+e86b14c fix: add libudev-dev and libhidapi-dev for hidapi crate
+e1c587f fix: add libdbus-1-dev system dependency for CI builds
+e703d1a feat: Introduce `sut_token` contract, GitHub release workflow, and various test and clippy output files.
+1174d67 feat: Introduce `sut_token` contract module and include various test and linting output files.
+c6c3f21 feat: Add SUT token contract and include various test and clippy log outputs.
+8e38f8e Fix CI build, Contract Logic, and Formatting
+72ccaa9 Fix CI build warnings and Contract Logic bugs
+d221389 fix: remove incorrect rust.yml workflow and fix corrupted release.yml
+ed13ef9 chore: clean up CI workflow file formatting
+38fd236 fix: resolve compilation errors across all Soroban contracts
+49720a4 Merge pull request #99 from Lynndabel/analytics
+ea65a0c Merge pull request #98 from vestor-dev/testing-utils
+cd7d7d7 Enhance analytics_dashboard.ts with customizable sections and perf tweaks
+4b15c7e cross institutional analysis
+67b1e26 cross institutional analysis
+82d0ce0 added analytics getter for  medical records
+7856a2d analytics
+6f8072d Create comprehensive testing framework and utilities
+1b59980 Merge pull request #97 from walterthesmart/feat/validation-framework
+7cbf6d5 Merge branch 'main' into feat/validation-framework
+38aab2d Merge pull request #94 from AlAfiz/feat/integration-tests
+86c1807 Implement comprehensive input validation framework
+d5c524d Merge branch 'main' into feat/integration-tests
+49f50da Merge pull request #88 from raizo07/error-handling
+aead4b8 Merge branch 'main' into error-handling
+c323cd4 Merge branch 'main' into feat/integration-tests
+0cf8f45 Merge pull request #96 from gelluisaac/feat
+0ed050b Implement event system for medical records contract
+ed50aee feat(medical_records): structured event system, tests
+9322b0a Merge branch 'main' into feat/integration-tests
+a7e35f4 Merge pull request #93 from JerryIdoko/feat/monitoring-system
+5dcfa1d Merge branch 'main' into feat/monitoring-system
+68464b9 Merge branch 'main' into error-handling
+3bbd4df Merge pull request #91 from Tebrihk/input-validation
+7b71c33 Merge pull request #87 from hakymulla/batch_operations
+9ba1974 feat: complete comprehensive integration test suite, fix underlying contract bugs, and achieve 91.71% coverage
+46696ca feat: implement monitoring system (Issue #70)
+67b3fce feat: implement monitoring system (Issue #70)
+f57b762 added input validation for all public functions
+17ae1f4 Merge remote-tracking branch 'origin/main' into batch_operations
+3a2ae11 Merge pull request #90 from OthmanImam/feat/comprehensive
+10725d6 Implemnted comprehensive healthcare integration system
+54d3fbd Merge remote-tracking branch 'origin/main' into error-handling
+dfad2d6 Merge pull request #86 from salazarsebas/feat/cross-chain-medical-records-interoperability-contract
+cbb48e1 fix
+684a117 Merge branch 'main' into batch_operations
+43b4016 Merge upstream/main: resolve conflicts in identity_registry and medical_records
+d5c457c Merge pull request #89 from Bosun-Josh121/feat/DAO-for-governance
+836abb2 Merge pull request #85 from gabito1451/main
+189a0db Merge pull request #84 from Jagadeeshftw/ci-cd
+6f9267d DAO for governance docs
+de47a54 DAO for governance
+7f7c3e6 feat: Add comprehensive error handling and recovery
+0a935c5 cargo fmt check
+372309f Implement batch operations for medical records
+bf903c5 feat: cross chain medical records interoperability contract
+d4dad78 Implement AI-powered medical record analysis and insights
+4c9ad4e refactor: remove environment variable for secret key in testnet deployment workflow to align with enhanced security practices
+f12f2b5 refactor: remove direct environment variable for secret key in mainnet deployment workflow to enhance security practices
+6a7f955 fix: update mainnet deployment workflow to securely handle secret key by using a temporary file for identity management
+93472e2 fix: update testnet deployment workflow to securely handle secret key by writing to a temporary file
+e036975 fix: update commit SHA retrieval in deployment script to ensure accurate version tracking
+e461d82 feat: update mainnet deployment workflow to require secret key for identity management and improve error handling
+7738323 feat: enhance testnet deployment workflow to support identity management with secret key and fallback generation
+4799648 chore: add .gitkeep to deployments directory for tracking deployment files
+4faf59b feat: add GitHub Actions workflow for deploying contracts to Mainnet with safety checks, testing, and deployment summary
+6865ced chore: add .gitkeep to ensure workflows directory is tracked by git
+183e2f8 docs: expand README to include comprehensive CI/CD pipeline details, deployment scripts, and best practices
+6c09c72 chore: update .gitignore to include deployment-related files and ignore sensitive data
+1fdb701 chore: update rollback_deployment.sh permissions to executable
+d23d47d feat: add deployment status script to report on contract deployments
+176fe93 chore: update monitor_deployments.sh permissions to executable
+fd634ad chore: update deploy_with_rollback.sh permissions to executable
+18318fe fix: update deploy_environment.sh permissions to executable
+e322642 feat: add rollback deployment script for restoring contract versions
+22e0096 feat: add monitoring script for deployed contracts with alerting functionality
+4bf6af4 feat: add enhanced deployment script with rollback support
+80ce557 feat: add deployment script for contract environments
+2b154d6 feat: add GitHub Actions workflow for security scanning
+f7c3eab feat: add GitHub Actions workflow for deploying contracts to Testnet
+a09689b feat: add CI workflow for testing and building Rust contracts
+83d3872 Merge pull request #83 from big14way/feat/did-integration
+2773ae0 feat: implement W3C DID integration for decentralized identity
+c649c96 Merge pull request #56 from Stellar-Uzima/feat/update-readme-for-drips-wave
+b3ee869 cleanup
+f7f37d8 feat: update README for Drips Wave repo standards
+7f92370 Merge pull request #55 from dannyy2000/feature/add-data-ref-to-medical-record
+fb8beba Merge pull request #48 from jobbykings/add-data-ref
+2fb8176 chore: remove dummy refresh file
+4cddd61 chore: trigger PR refresh
+da84ab5 chore: add setup.sh script to pin soroban-cli version
+3b2774b chore: update setup, toolchain, and add release workflow with Soroban CLI pin
+a4ed468 chore: add setup script, pin Rust toolchain, release workflow, and tests for medical_records contract
+a3055bb Pulled from main
+5e73e21 Add validation for data_ref and tests for boundary cases
+9c0daf8 feat: Add data_ref field to MedicalRecord with validation
+f334d0a Merge pull request #53 from ISTIFANUS-N/Oracle-Adapter
+3f3b593 Oracle Adapter for Price & Data Feeds
+a600c95 Merge pull request #52 from SaikiranSurapalli17/meta-transaction-forwarder
+e102df9 Merge branch 'main' into meta-transaction-forwarder
+d5135fa Merge pull request #51 from Martins-O/feat/execute-real-token-transfers-in-treasury-controller
+8dcceff feat: Implement ERC-2771 Meta-Transaction Forwarder Support
+5098f4e ✅ Fix test dependency conflicts and enable treasury controller tests
+2d7246b 🔧 Fix GitHub workflows by resolving test dependency conflicts
+72eaf23 💰 Execute Real Token Transfers in TreasuryController
+0799b49 Merge pull request #50 from Samuel1505/feat/harden-deploy-script
+e2b3b60 fixes workflow error
+072d87e Feat/Add Consent-Based Access Control (via medical_consent_nft)
+19d4678 Merge pull request #47 from ahmadogo/feat/initGuard
+b856427 Merge pull request #45 from Godbrand0/main
+a59faf1 Merge pull request #49 from Samuel1505/feat/harden-deploy-script
+2a0d402 Merge pull request #44 from hakymulla/history_retrieval
+84baad7 feat/harden deployment script
+738d119 add Error and fix tests
+804c0a9 added Initialization Guard to Identity Registry
+afde3c3 updated
+12b7c8f Fixed register_identity_hash()
+8204508 emit event
+a82f522 Patient History Retrieval API
+471a10a Merge pull request #42 from Martins-O/complete-snapshot-feature-in-suttoken
+6dda8ec Merge pull request #41 from jayteemoney/feature/monotonic-record-counter
+28847c5 feat: implement monotonic counter for record IDs
+fb882d7 Complete snapshot feature implementation for SutToken
+b603c6b Merge pull request #29 from Cedarich/feature/governor-timelock-governance-flow
+17d5381 Merge branch 'main' into feature/governor-timelock-governance-flow
+f8e7eec Merge pull request #30 from Jayy4rl/feature/multisig-treasury-controller-20
+2dccd91 Merge pull request #28 from Cedarich/fix/escrow-router-macros-testutils-symbols
+d772a7d feat: implement Multi-Sig Treasury Controller (#20)
+f8b4ab0 Merge branch 'main' into fix/escrow-router-macros-testutils-symbols
+f401dec Merge branch 'main' into feature/governor-timelock-governance-flow
+32c315d feat(governance): add Governor + Timelock with token-weighted voting, quorum, lifecycle, and queued execution
+26d163e fix(escrow,payment_router): stabilize builds by gating tests, shortening event topics, and fixing Address key usage
+981d204 Merge pull request #26 from codebestia/feat/nft-medical-consent
+4c52650 feat: add readme for medical consent nft
+8854ac2 Merge pull request #27 from Wilfred007/wilfred
+d80e14b Merge pull request #25 from truthixify/fix-16
+80473fa leaner ci
+71473d8 lean ci
+0b4681a revert rust-toolchain changes
+c3ec307 fixing ci
+07620ba erc20 compliant utility token
+1cdaea0 test: add tests for medical consent nft
+d17f582 feat: implement medical consent nft
+d3c2066 chore: setup project
+e28c426 fixed token sale test for CI to pass
+17d8d6f fixed identity registration test
+149bfb0 added the readme
+f685e7b removed the readme added
+f0d8090 added identity registry and verification contract
+78617a0 Merge pull request #24 from truthixify/fix-14
+4f6a760 added token sale
+7b3d72a Merge pull request #23 from Cedarich/feat/pause-unpause-recovery-medical-records
+05cb814 feat/pause-unpause-recovery-medical-records
+58c44b1 Merge pull request #12 from shamoo53/Traditional-Healing-Metadata-Support
+8c7dcfd Merge pull request #11 from KAMALDEEN333/Chain-Identity
+0f5c747 fixed test error
+c1863eb Integration of  Traditional Healing Metadata Support
+bbae6ea implemented on chain identity verification
+34dbecd Merge pull request #10 from shamoo53/Smart-Contract-for-Record-Access-Control
+ff4c18a implementation of Smart Contract for Record Access Control
+2102b4e Merge pull request #9 from Stellar-Uzima/Initialize-Soroban-Smart-Contract
+57626f1 Initialize Soroban Smart Contract Project with Rust & Setup CI Pipeline
+a82fc42 Update README.md
+7a2ac51 Update README.md
+3ec704b Create README.md
