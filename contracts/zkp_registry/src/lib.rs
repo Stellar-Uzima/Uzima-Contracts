@@ -5,8 +5,8 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec, Map, u256, crypto::Hash,
+    contract, contracterror, contractimpl, contracttype, crypto::Hash, symbol_short, u256, Address,
+    Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
 
 // =============================================================================
@@ -300,8 +300,10 @@ impl ZKPRegistry {
             .persistent()
             .set(&DataKey::ZKPCircuitParams(circuit_id), &params);
 
-        env.events()
-            .publish((symbol_short!("zkp"), symbol_short!("circuit_reg")), circuit_id);
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("circuit_reg")),
+            circuit_id,
+        );
 
         Ok(())
     }
@@ -334,7 +336,11 @@ impl ZKPRegistry {
         }
 
         // Verify circuit exists
-        if !env.storage().persistent().has(&DataKey::ZKPCircuitParams(circuit_id.clone())) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+        {
             return Err(Error::CircuitNotFound);
         }
 
@@ -564,7 +570,11 @@ impl ZKPRegistry {
         }
 
         // Verify base proof exists
-        if !env.storage().persistent().has(&DataKey::ZKProof(base_proof_id)) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZKProof(base_proof_id))
+        {
             return Err(Error::ProofNotFound);
         }
 
@@ -601,7 +611,10 @@ impl ZKPRegistry {
     }
 
     /// Get ZKP verification result
-    pub fn get_verification_result(env: Env, proof_id: BytesN<32>) -> Result<ZKPVerificationResult, Error> {
+    pub fn get_verification_result(
+        env: Env,
+        proof_id: BytesN<32>,
+    ) -> Result<ZKPVerificationResult, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -678,7 +691,7 @@ impl ZKPRegistry {
     fn verify_zkp_internal(_env: &Env, proof: &ZKProof) -> Result<bool, Error> {
         // In production, this would perform actual cryptographic verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.proof_data.is_empty() {
             return Ok(false);
@@ -711,7 +724,7 @@ impl ZKPRegistry {
     fn verify_range_proof_internal(_env: &Env, proof: &RangeProof) -> Result<bool, Error> {
         // In production, this would perform actual cryptographic range proof verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.proof_data.is_empty() {
             return Ok(false);
@@ -730,7 +743,7 @@ impl ZKPRegistry {
     fn verify_recursive_proof_internal(_env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
         // In production, this would perform actual recursive proof verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.recursive_proof.proof_data.is_empty() {
             return Ok(false);
