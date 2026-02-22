@@ -1,4 +1,4 @@
-// Medical Consent NFT - Patient consent management with proper validation
+// Medical Consent NFT - Advanced Patient consent management with dynamic features
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
@@ -6,6 +6,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
+    Map,
 };
 
 // Storage keys
@@ -22,6 +23,17 @@ pub enum DataKey {
     OwnerTokens(Address),
     ConsentHistory(u64),
     PatientConsents(Address), // Track tokens issued for a patient (for revoke access)
+    // Advanced features storage keys
+    GranularPermissions(u64),           // Granular permissions per token
+    AccessControls(u64),                 // Time-based and condition-based access controls
+    ConsentDelegations(u64),             // Delegation mappings
+    ConsentInheritance(u64),             // Parent-child consent relationships
+    EmergencyOverrides(u64),              // Emergency override records
+    MarketplaceListings(u64),            // Research marketplace listings
+    VersionHistory(u64),                  // Full version history for dynamic updates
+    AnalyticsData,                        // Aggregated analytics data
+    EmergencyAuthorities,                 // Authorized emergency override addresses
+    MarketplaceEnabled,                   // Marketplace feature flag
 }
 
 #[contracterror]
@@ -32,9 +44,125 @@ pub enum ContractError {
     ConsentRevoked = 3,
     AlreadyInitialized = 4,
     NotTokenOwner = 5,
+    InvalidPermission = 6,
+    AccessDenied = 7,
+    InvalidDelegation = 8,
+    EmergencyOverrideFailed = 9,
+    MarketplaceNotEnabled = 10,
+    InvalidCondition = 11,
+    InheritanceCycle = 12,
 }
 
-// Consent metadata structure - Added patient field
+// Data type enum for granular permissions
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum DataType {
+    Demographics,
+    MedicalHistory,
+    LabResults,
+    Imaging,
+    Medications,
+    Procedures,
+    Allergies,
+    Research,
+    Financial,
+}
+
+// Permission level enum
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PermissionLevel {
+    None,      // No access
+    Read,      // Read-only access
+    Write,     // Read and write access
+    Full,      // Full access including deletion
+}
+
+// Granular permissions structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct GranularPermissions {
+    pub permissions: Map<DataType, PermissionLevel>, // Data type -> permission level mapping
+}
+
+// Access condition types
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AccessCondition {
+    TimeWindow { start: u64, end: u64 },                    // Time-based access window
+    DayOfWeek { days: Vec<u32> },                          // Specific days of week (0-6)
+    TimeOfDay { start_hour: u32, end_hour: u32 },          // Time of day restrictions
+    LocationBased { allowed_locations: Vec<String> },       // Location-based access
+    PurposeBased { allowed_purposes: Vec<String> },         // Purpose-based restrictions
+    EmergencyOnly,                                          // Emergency access only
+}
+
+// Access control structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AccessControl {
+    pub conditions: Vec<AccessCondition>, // Multiple conditions (AND logic)
+    pub max_access_count: u32,             // Maximum number of accesses (0 = unlimited)
+    pub current_access_count: u32,         // Current access count
+    pub last_access_timestamp: u64,        // Last access time
+}
+
+// Delegation structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Delegation {
+    pub delegate: Address,        // Who is delegated to
+    pub permissions: GranularPermissions, // What permissions are delegated
+    pub expiry_timestamp: u64,    // When delegation expires
+    pub created_timestamp: u64,  // When delegation was created
+}
+
+// Consent inheritance structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Inheritance {
+    pub parent_token_id: u64,     // Parent consent token ID
+    pub inherited_permissions: GranularPermissions, // Inherited permissions
+}
+
+// Emergency override record
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EmergencyOverride {
+    pub override_id: u64,         // Unique override ID
+    pub authorized_by: Address,    // Who authorized the override
+    pub reason: String,            // Reason for override
+    pub timestamp: u64,            // When override occurred
+    pub duration: u64,             // How long override is valid (0 = single use)
+    pub used: bool,                // Whether override has been used
+}
+
+// Marketplace listing structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MarketplaceListing {
+    pub token_id: u64,
+    pub price: i128,               // Price in tokens (using i128 for Soroban)
+    pub data_types: Vec<DataType>, // Which data types are included
+    pub research_purpose: String,  // Purpose of research
+    pub duration: u64,             // How long access is granted
+    pub listed_by: Address,        // Who listed it
+    pub listed_timestamp: u64,     // When it was listed
+    pub active: bool,              // Whether listing is active
+}
+
+// Version history entry
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VersionHistoryEntry {
+    pub version: u32,
+    pub metadata_uri: String,
+    pub updated_by: Address,
+    pub timestamp: u64,
+    pub change_summary: String,     // Summary of changes
+}
+
+// Consent metadata structure - Enhanced with advanced features
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConsentMetadata {
@@ -44,17 +172,32 @@ pub struct ConsentMetadata {
     pub expiry_timestamp: u64, // When consent expires (0 = no expiry)
     pub issuer: Address,       // Who issued the consent
     pub patient: Address,      // The patient this consent is for
-    pub version: u32,          // Metadata version for updates
+    pub version: u32,          // Current metadata version for updates
+    pub dynamic_updates_enabled: bool, // Whether dynamic updates are allowed
 }
 
-// Consent history entry for audit trail
+// Consent history entry for audit trail - Enhanced
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConsentHistoryEntry {
-    pub action: String, // "issued", "updated", "revoked"
+    pub action: String, // "issued", "updated", "revoked", "delegated", "inherited", "emergency_override", "marketplace_listed", etc.
     pub timestamp: u64,
     pub actor: Address,
     pub metadata_uri: String,
+    pub details: String, // Additional details about the action
+}
+
+// Analytics data structure
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnalyticsData {
+    pub total_consents: u64,
+    pub active_consents: u64,
+    pub revoked_consents: u64,
+    pub total_delegations: u64,
+    pub total_emergency_overrides: u64,
+    pub marketplace_listings: u64,
+    pub total_access_count: u64,
 }
 
 #[contract]
