@@ -218,6 +218,26 @@ impl PatientConsentToken {
         // Initialize empty issuers list
         let issuers: Vec<Address> = Vec::new(&env);
         env.storage().instance().set(&DataKey::Issuers, &issuers);
+
+        // Initialize analytics
+        let analytics = AnalyticsData {
+            total_consents: 0,
+            active_consents: 0,
+            revoked_consents: 0,
+            total_delegations: 0,
+            total_emergency_overrides: 0,
+            marketplace_listings: 0,
+            total_access_count: 0,
+        };
+        env.storage().instance().set(&DataKey::AnalyticsData, &analytics);
+
+        // Initialize emergency authorities
+        let authorities: Vec<Address> = Vec::new(&env);
+        env.storage().instance().set(&DataKey::EmergencyAuthorities, &authorities);
+
+        // Marketplace disabled by default
+        env.storage().instance().set(&DataKey::MarketplaceEnabled, &false);
+
         Ok(())
     }
 
@@ -318,6 +338,7 @@ impl PatientConsentToken {
             issuer: issuer.clone(),
             patient: patient.clone(),
             version: 1,
+            dynamic_updates_enabled: false, // Default to false, can be enabled later
         };
 
         // Store token data
@@ -365,6 +386,26 @@ impl PatientConsentToken {
         env.storage()
             .instance()
             .set(&DataKey::ConsentHistory(token_id), &history);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.total_consents += 1;
+        analytics.active_consents += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
 
         // Emit event
         env.events().publish(
@@ -475,6 +516,26 @@ impl PatientConsentToken {
         env.storage()
             .instance()
             .set(&DataKey::TokenRevoked(token_id), &true);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.active_consents = analytics.active_consents.saturating_sub(1);
+        analytics.revoked_consents += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
 
         // Add to history
         let history_entry = ConsentHistoryEntry {
