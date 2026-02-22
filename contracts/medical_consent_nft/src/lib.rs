@@ -907,10 +907,11 @@ impl PatientConsentToken {
 
         // Check conditions
         let current_time = env.ledger().timestamp();
-        for condition in access_control.conditions.iter() {
+        for i in 0..access_control.conditions.len() {
+            let condition = access_control.conditions.get(i).unwrap();
             match condition {
                 AccessCondition::TimeWindow { start, end } => {
-                    if current_time < *start || current_time > *end {
+                    if current_time < start || current_time > end {
                         return Ok(false);
                     }
                 }
@@ -918,8 +919,8 @@ impl PatientConsentToken {
                     // Simple day check (assuming timestamp % 7 gives day of week)
                     let day = (current_time / 86400) % 7;
                     let mut found = false;
-                    for d in days.iter() {
-                        if *d == day as u32 {
+                    for j in 0..days.len() {
+                        if days.get(j).unwrap() == day as u32 {
                             found = true;
                             break;
                         }
@@ -930,7 +931,7 @@ impl PatientConsentToken {
                 }
                 AccessCondition::TimeOfDay { start_hour, end_hour } => {
                     let hour = (current_time % 86400) / 3600;
-                    if hour < *start_hour || hour > *end_hour {
+                    if hour < start_hour || hour > end_hour {
                         return Ok(false);
                     }
                 }
@@ -1143,7 +1144,15 @@ impl PatientConsentToken {
                 .get(&DataKey::ConsentInheritance(current));
             match inheritance {
                 Some(inh) => {
-                    if visited.contains(&inh.parent_token_id) {
+                    // Check if already visited
+                    let mut found = false;
+                    for i in 0..visited.len() {
+                        if visited.get(i).unwrap() == inh.parent_token_id {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if found {
                         return Err(ContractError::InheritanceCycle);
                     }
                     if inh.parent_token_id == child_token_id {
