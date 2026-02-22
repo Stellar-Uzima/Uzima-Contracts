@@ -5,8 +5,8 @@
 #![allow(clippy::expect_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
-    Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    Vec,
 };
 
 // Storage keys
@@ -24,16 +24,16 @@ pub enum DataKey {
     ConsentHistory(u64),
     PatientConsents(Address), // Track tokens issued for a patient (for revoke access)
     // Advanced features storage keys
-    GranularPermissions(u64),           // Granular permissions per token
-    AccessControls(u64),                 // Time-based and condition-based access controls
-    ConsentDelegations(u64),             // Delegation mappings
-    ConsentInheritance(u64),             // Parent-child consent relationships
-    EmergencyOverrides(u64),              // Emergency override records
-    MarketplaceListings(u64),            // Research marketplace listings
-    VersionHistory(u64),                  // Full version history for dynamic updates
-    AnalyticsData,                        // Aggregated analytics data
-    EmergencyAuthorities,                 // Authorized emergency override addresses
-    MarketplaceEnabled,                   // Marketplace feature flag
+    GranularPermissions(u64), // Granular permissions per token
+    AccessControls(u64),      // Time-based and condition-based access controls
+    ConsentDelegations(u64),  // Delegation mappings
+    ConsentInheritance(u64),  // Parent-child consent relationships
+    EmergencyOverrides(u64),  // Emergency override records
+    MarketplaceListings(u64), // Research marketplace listings
+    VersionHistory(u64),      // Full version history for dynamic updates
+    AnalyticsData,            // Aggregated analytics data
+    EmergencyAuthorities,     // Authorized emergency override addresses
+    MarketplaceEnabled,       // Marketplace feature flag
 }
 
 #[contracterror]
@@ -72,10 +72,10 @@ pub enum DataType {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PermissionLevel {
-    None,      // No access
-    Read,      // Read-only access
-    Write,     // Read and write access
-    Full,      // Full access including deletion
+    None,  // No access
+    Read,  // Read-only access
+    Write, // Read and write access
+    Full,  // Full access including deletion
 }
 
 // Granular permissions structure
@@ -85,16 +85,16 @@ pub struct GranularPermissions {
     pub permissions: Map<DataType, PermissionLevel>, // Data type -> permission level mapping
 }
 
-// Access condition types
+// Access condition types - using tuple variants for Soroban compatibility
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessCondition {
-    TimeWindow { start: u64, end: u64 },                    // Time-based access window
-    DayOfWeek { days: Vec<u32> },                          // Specific days of week (0-6)
-    TimeOfDay { start_hour: u32, end_hour: u32 },          // Time of day restrictions
-    LocationBased { allowed_locations: Vec<String> },       // Location-based access
-    PurposeBased { allowed_purposes: Vec<String> },         // Purpose-based restrictions
-    EmergencyOnly,                                          // Emergency access only
+    TimeWindow(u64, u64),                    // (start, end) - Time-based access window
+    DayOfWeek(Vec<u32>),                     // Specific days of week (0-6)
+    TimeOfDay(u32, u32),                     // (start_hour, end_hour) - Time of day restrictions
+    LocationBased(Vec<String>),              // Location-based access
+    PurposeBased(Vec<String>),               // Purpose-based restrictions
+    EmergencyOnly,                           // Emergency access only
 }
 
 // Access control structure
@@ -102,26 +102,26 @@ pub enum AccessCondition {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessControl {
     pub conditions: Vec<AccessCondition>, // Multiple conditions (AND logic)
-    pub max_access_count: u32,             // Maximum number of accesses (0 = unlimited)
-    pub current_access_count: u32,         // Current access count
-    pub last_access_timestamp: u64,        // Last access time
+    pub max_access_count: u32,            // Maximum number of accesses (0 = unlimited)
+    pub current_access_count: u32,        // Current access count
+    pub last_access_timestamp: u64,       // Last access time
 }
 
 // Delegation structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Delegation {
-    pub delegate: Address,        // Who is delegated to
+    pub delegate: Address,                // Who is delegated to
     pub permissions: GranularPermissions, // What permissions are delegated
-    pub expiry_timestamp: u64,    // When delegation expires
-    pub created_timestamp: u64,  // When delegation was created
+    pub expiry_timestamp: u64,            // When delegation expires
+    pub created_timestamp: u64,           // When delegation was created
 }
 
 // Consent inheritance structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Inheritance {
-    pub parent_token_id: u64,     // Parent consent token ID
+    pub parent_token_id: u64,                       // Parent consent token ID
     pub inherited_permissions: GranularPermissions, // Inherited permissions
 }
 
@@ -129,12 +129,12 @@ pub struct Inheritance {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EmergencyOverride {
-    pub override_id: u64,         // Unique override ID
-    pub authorized_by: Address,    // Who authorized the override
-    pub reason: String,            // Reason for override
-    pub timestamp: u64,            // When override occurred
-    pub duration: u64,             // How long override is valid (0 = single use)
-    pub used: bool,                // Whether override has been used
+    pub override_id: u64,       // Unique override ID
+    pub authorized_by: Address, // Who authorized the override
+    pub reason: String,         // Reason for override
+    pub timestamp: u64,         // When override occurred
+    pub duration: u64,          // How long override is valid (0 = single use)
+    pub used: bool,             // Whether override has been used
 }
 
 // Marketplace listing structure
@@ -159,20 +159,20 @@ pub struct VersionHistoryEntry {
     pub metadata_uri: String,
     pub updated_by: Address,
     pub timestamp: u64,
-    pub change_summary: String,     // Summary of changes
+    pub change_summary: String, // Summary of changes
 }
 
 // Consent metadata structure - Enhanced with advanced features
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ConsentMetadata {
-    pub metadata_uri: String,  // IPFS hash or secure storage pointer
-    pub consent_type: String,  // Type of consent (treatment, research, etc.)
-    pub issued_timestamp: u64, // When consent was issued
-    pub expiry_timestamp: u64, // When consent expires (0 = no expiry)
-    pub issuer: Address,       // Who issued the consent
-    pub patient: Address,      // The patient this consent is for
-    pub version: u32,          // Current metadata version for updates
+    pub metadata_uri: String,          // IPFS hash or secure storage pointer
+    pub consent_type: String,          // Type of consent (treatment, research, etc.)
+    pub issued_timestamp: u64,         // When consent was issued
+    pub expiry_timestamp: u64,         // When consent expires (0 = no expiry)
+    pub issuer: Address,               // Who issued the consent
+    pub patient: Address,              // The patient this consent is for
+    pub version: u32,                  // Current metadata version for updates
     pub dynamic_updates_enabled: bool, // Whether dynamic updates are allowed
 }
 
@@ -229,14 +229,20 @@ impl PatientConsentToken {
             marketplace_listings: 0,
             total_access_count: 0,
         };
-        env.storage().instance().set(&DataKey::AnalyticsData, &analytics);
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
 
         // Initialize emergency authorities
         let authorities: Vec<Address> = Vec::new(&env);
-        env.storage().instance().set(&DataKey::EmergencyAuthorities, &authorities);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyAuthorities, &authorities);
 
         // Marketplace disabled by default
-        env.storage().instance().set(&DataKey::MarketplaceEnabled, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::MarketplaceEnabled, &false);
 
         Ok(())
     }
@@ -380,6 +386,7 @@ impl PatientConsentToken {
             timestamp: env.ledger().timestamp(),
             actor: issuer.clone(),
             metadata_uri: metadata_uri.clone(),
+            details: String::from_str(&env, "Consent issued"),
         };
         let mut history = Vec::new(&env);
         history.push_back(history_entry);
@@ -462,6 +469,7 @@ impl PatientConsentToken {
             timestamp: env.ledger().timestamp(),
             actor: owner.clone(),
             metadata_uri: new_metadata_uri.clone(),
+            details: String::from_str(&env, "Consent metadata updated"),
         };
 
         let mut history: Vec<ConsentHistoryEntry> = env
@@ -543,6 +551,7 @@ impl PatientConsentToken {
             timestamp: env.ledger().timestamp(),
             actor: patient.clone(),
             metadata_uri: metadata.metadata_uri.clone(),
+            details: String::from_str(&env, "Consent revoked by patient"),
         };
 
         let mut history: Vec<ConsentHistoryEntry> = env
@@ -724,6 +733,7 @@ impl PatientConsentToken {
     /// Set granular permissions for a consent token
     pub fn set_granular_permissions(
         env: Env,
+        caller: Address,
         token_id: u64,
         permissions: GranularPermissions,
     ) -> Result<(), ContractError> {
@@ -734,7 +744,6 @@ impl PatientConsentToken {
             .ok_or(ContractError::TokenNotFound)?;
 
         // Only patient or issuer can set permissions
-        let caller = env.invoker();
         if caller != metadata.patient && caller != metadata.issuer {
             return Err(ContractError::NotAuthorized);
         }
@@ -765,8 +774,11 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (symbol_short!("consent"), symbol_short!("permissions_updated")),
-            (token_id, caller),
+            (
+                symbol_short!("consent"),
+                symbol_short!("perm_upd"),
+            ),
+            (token_id, caller.clone()),
         );
 
         Ok(())
@@ -910,12 +922,12 @@ impl PatientConsentToken {
         for i in 0..access_control.conditions.len() {
             let condition = access_control.conditions.get(i).unwrap();
             match condition {
-                AccessCondition::TimeWindow { start, end } => {
+                AccessCondition::TimeWindow(start, end) => {
                     if current_time < start || current_time > end {
                         return Ok(false);
                     }
                 }
-                AccessCondition::DayOfWeek { days } => {
+                AccessCondition::DayOfWeek(days) => {
                     // Simple day check (assuming timestamp % 7 gives day of week)
                     let day = (current_time / 86400) % 7;
                     let mut found = false;
@@ -929,9 +941,9 @@ impl PatientConsentToken {
                         return Ok(false);
                     }
                 }
-                AccessCondition::TimeOfDay { start_hour, end_hour } => {
+                AccessCondition::TimeOfDay(start_hour, end_hour) => {
                     let hour = (current_time % 86400) / 3600;
-                    if hour < start_hour || hour > end_hour {
+                    if hour < (start_hour as u64) || hour > (end_hour as u64) {
                         return Ok(false);
                     }
                 }
@@ -1230,11 +1242,11 @@ impl PatientConsentToken {
     /// Emergency override access
     pub fn emergency_override(
         env: Env,
+        caller: Address,
         token_id: u64,
         reason: String,
         duration: u64,
     ) -> Result<u64, ContractError> {
-        let caller = env.invoker();
         caller.require_auth();
 
         let authorities: Vec<Address> = env
@@ -1326,7 +1338,10 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (symbol_short!("consent"), symbol_short!("emergency_override")),
+            (
+                symbol_short!("consent"),
+                symbol_short!("emerg_ovr"),
+            ),
             (token_id, caller, reason),
         );
 
@@ -1431,7 +1446,10 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (symbol_short!("consent"), symbol_short!("marketplace_listed")),
+            (
+                symbol_short!("consent"),
+                symbol_short!("mkt_list"),
+            ),
             (token_id, price, research_purpose),
         );
 
@@ -1495,7 +1513,10 @@ impl PatientConsentToken {
         )?;
 
         env.events().publish(
-            (symbol_short!("consent"), symbol_short!("marketplace_purchased")),
+            (
+                symbol_short!("consent"),
+                symbol_short!("mkt_purch"),
+            ),
             (token_id, listing.listed_by, buyer),
         );
 
@@ -1505,6 +1526,7 @@ impl PatientConsentToken {
     /// Enhanced dynamic consent update with version history
     pub fn update_consent_dynamic(
         env: Env,
+        caller: Address,
         token_id: u64,
         new_metadata_uri: String,
         change_summary: String,
@@ -1519,7 +1541,6 @@ impl PatientConsentToken {
             return Err(ContractError::NotAuthorized);
         }
 
-        let caller = env.invoker();
         if caller != metadata.patient && caller != metadata.issuer {
             return Err(ContractError::NotAuthorized);
         }
@@ -1574,7 +1595,7 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (symbol_short!("consent"), symbol_short!("updated_dynamic")),
+            (symbol_short!("consent"), symbol_short!("upd_dyn")),
             (token_id, new_metadata.version, change_summary),
         );
 

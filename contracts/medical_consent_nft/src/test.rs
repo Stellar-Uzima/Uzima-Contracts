@@ -144,7 +144,7 @@ mod test {
             permissions: permissions_map,
         };
 
-        client.set_granular_permissions(&token_id, &permissions);
+        client.set_granular_permissions(&patient, &token_id, &permissions);
 
         let retrieved_permissions = client.get_granular_permissions(&token_id).unwrap();
         assert_eq!(
@@ -176,10 +176,10 @@ mod test {
         // Set access controls with time window
         let current_time = env.ledger().timestamp();
         let mut conditions = Vec::new(&env);
-        conditions.push_back(AccessCondition::TimeWindow {
-            start: current_time,
-            end: current_time + 86400, // 1 day
-        });
+        conditions.push_back(AccessCondition::TimeWindow(
+            current_time,
+            current_time + 86400, // 1 day
+        ));
 
         let access_control = AccessControl {
             conditions,
@@ -248,7 +248,9 @@ mod test {
         let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
 
         let reason = String::from_str(&env, "Life-threatening emergency");
-        let override_id = client.emergency_override(&token_id, &reason, &0).unwrap();
+        let override_id = client
+            .emergency_override(&emergency_auth, &token_id, &reason, &0)
+            .unwrap();
 
         assert!(override_id >= 0);
     }
@@ -275,7 +277,7 @@ mod test {
 
         let new_uri = String::from_str(&env, "ipfs://QmZzz...");
         let change_summary = String::from_str(&env, "Updated treatment plan");
-        client.update_consent_dynamic(&token_id, &new_uri, &change_summary);
+        client.update_consent_dynamic(&patient, &token_id, &new_uri, &change_summary);
 
         let version_history = client.get_version_history(&token_id);
         assert_eq!(version_history.len(), 1);
