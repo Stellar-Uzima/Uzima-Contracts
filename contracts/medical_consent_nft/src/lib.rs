@@ -657,6 +657,909 @@ impl PatientConsentToken {
 
         env.ledger().timestamp() < metadata.expiry_timestamp
     }
+
+    // ========== ADVANCED FEATURES ==========
+
+    /// Set granular permissions for a consent token
+    pub fn set_granular_permissions(
+        env: Env,
+        token_id: u64,
+        permissions: GranularPermissions,
+    ) -> Result<(), ContractError> {
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        // Only patient or issuer can set permissions
+        let caller = env.invoker();
+        if caller != metadata.patient && caller != metadata.issuer {
+            return Err(ContractError::NotAuthorized);
+        }
+
+        caller.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::GranularPermissions(token_id), &permissions);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "permissions_updated"),
+            timestamp: env.ledger().timestamp(),
+            actor: caller,
+            metadata_uri: metadata.metadata_uri.clone(),
+            details: String::from_str(&env, "Granular permissions updated"),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("permissions_updated")),
+            (token_id, caller),
+        );
+
+        Ok(())
+    }
+
+    /// Get granular permissions for a consent token
+    pub fn get_granular_permissions(
+        env: Env,
+        token_id: u64,
+    ) -> Result<GranularPermissions, ContractError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::GranularPermissions(token_id))
+            .ok_or(ContractError::TokenNotFound)
+    }
+
+    /// Check if requester has permission for specific data type
+    pub fn has_permission(
+        env: Env,
+        token_id: u64,
+        requester: Address,
+        data_type: DataType,
+        required_level: PermissionLevel,
+    ) -> bool {
+        // Check if token is valid
+        if !Self::is_valid(env.clone(), token_id) {
+            return false;
+        }
+
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)
+            .unwrap();
+
+        // Owner always has full access
+        let owner: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenOwner(token_id))
+            .unwrap();
+        if requester == owner || requester == metadata.patient {
+            return true;
+        }
+
+        // Check granular permissions
+        let permissions: GranularPermissions = env
+            .storage()
+            .instance()
+            .get(&DataKey::GranularPermissions(token_id))
+            .unwrap_or(GranularPermissions {
+                permissions: Map::new(&env),
+            });
+
+        let permission_level = permissions
+            .permissions
+            .get(data_type)
+            .unwrap_or(PermissionLevel::None);
+
+        // Check if permission level meets requirement
+        match (permission_level, required_level) {
+            (PermissionLevel::Full, _) => true,
+            (PermissionLevel::Write, PermissionLevel::Read) => true,
+            (PermissionLevel::Write, PermissionLevel::Write) => true,
+            (PermissionLevel::Read, PermissionLevel::Read) => true,
+            _ => false,
+        }
+    }
+
+    /// Set access controls for a consent token
+    pub fn set_access_controls(
+        env: Env,
+        token_id: u64,
+        access_control: AccessControl,
+    ) -> Result<(), ContractError> {
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        metadata.patient.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AccessControls(token_id), &access_control);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "access_controls_updated"),
+            timestamp: env.ledger().timestamp(),
+            actor: metadata.patient.clone(),
+            metadata_uri: metadata.metadata_uri.clone(),
+            details: String::from_str(&env, "Access controls updated"),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        Ok(())
+    }
+
+    /// Check if access is allowed based on access controls
+    pub fn check_access_allowed(
+        env: Env,
+        token_id: u64,
+        requester: Address,
+    ) -> Result<bool, ContractError> {
+        if !Self::is_valid(env.clone(), token_id) {
+            return Ok(false);
+        }
+
+        let access_control: AccessControl = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccessControls(token_id))
+            .unwrap_or(AccessControl {
+                conditions: Vec::new(&env),
+                max_access_count: 0,
+                current_access_count: 0,
+                last_access_timestamp: 0,
+            });
+
+        // Check access count limit
+        if access_control.max_access_count > 0
+            && access_control.current_access_count >= access_control.max_access_count
+        {
+            return Ok(false);
+        }
+
+        // Check conditions
+        let current_time = env.ledger().timestamp();
+        for condition in access_control.conditions.iter() {
+            match condition {
+                AccessCondition::TimeWindow { start, end } => {
+                    if current_time < *start || current_time > *end {
+                        return Ok(false);
+                    }
+                }
+                AccessCondition::DayOfWeek { days } => {
+                    // Simple day check (assuming timestamp % 7 gives day of week)
+                    let day = (current_time / 86400) % 7;
+                    let mut found = false;
+                    for d in days.iter() {
+                        if *d == day as u32 {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        return Ok(false);
+                    }
+                }
+                AccessCondition::TimeOfDay { start_hour, end_hour } => {
+                    let hour = (current_time % 86400) / 3600;
+                    if hour < *start_hour || hour > *end_hour {
+                        return Ok(false);
+                    }
+                }
+                AccessCondition::EmergencyOnly => {
+                    // Only emergency overrides can access
+                    return Ok(false);
+                }
+                _ => {
+                    // Other conditions would need additional context
+                }
+            }
+        }
+
+        Ok(true)
+    }
+
+    /// Record access attempt
+    pub fn record_access(env: Env, token_id: u64, requester: Address) -> Result<(), ContractError> {
+        let mut access_control: AccessControl = env
+            .storage()
+            .instance()
+            .get(&DataKey::AccessControls(token_id))
+            .unwrap_or(AccessControl {
+                conditions: Vec::new(&env),
+                max_access_count: 0,
+                current_access_count: 0,
+                last_access_timestamp: 0,
+            });
+
+        access_control.current_access_count += 1;
+        access_control.last_access_timestamp = env.ledger().timestamp();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AccessControls(token_id), &access_control);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.total_access_count += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
+
+        Ok(())
+    }
+
+    /// Delegate consent to another address
+    pub fn delegate_consent(
+        env: Env,
+        token_id: u64,
+        delegate: Address,
+        permissions: GranularPermissions,
+        expiry_timestamp: u64,
+    ) -> Result<(), ContractError> {
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        metadata.patient.require_auth();
+
+        let delegation = Delegation {
+            delegate: delegate.clone(),
+            permissions: permissions.clone(),
+            expiry_timestamp,
+            created_timestamp: env.ledger().timestamp(),
+        };
+
+        let mut delegations: Vec<Delegation> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentDelegations(token_id))
+            .unwrap_or(Vec::new(&env));
+        delegations.push_back(delegation);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentDelegations(token_id), &delegations);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.total_delegations += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "delegated"),
+            timestamp: env.ledger().timestamp(),
+            actor: metadata.patient.clone(),
+            metadata_uri: metadata.metadata_uri.clone(),
+            details: String::from_str(&env, "Consent delegated"),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("delegated")),
+            (token_id, metadata.patient, delegate),
+        );
+
+        Ok(())
+    }
+
+    /// Revoke delegation
+    pub fn revoke_delegation(
+        env: Env,
+        token_id: u64,
+        delegate: Address,
+    ) -> Result<(), ContractError> {
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        metadata.patient.require_auth();
+
+        let delegations: Vec<Delegation> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentDelegations(token_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut new_delegations = Vec::new(&env);
+        for i in 0..delegations.len() {
+            let d = delegations.get(i).unwrap();
+            if d.delegate != delegate {
+                new_delegations.push_back(d);
+            }
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentDelegations(token_id), &new_delegations);
+
+        Ok(())
+    }
+
+    /// Get active delegations for a token
+    pub fn get_delegations(env: Env, token_id: u64) -> Vec<Delegation> {
+        let delegations: Vec<Delegation> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentDelegations(token_id))
+            .unwrap_or(Vec::new(&env));
+
+        let current_time = env.ledger().timestamp();
+        let mut active_delegations = Vec::new(&env);
+
+        for i in 0..delegations.len() {
+            let d = delegations.get(i).unwrap();
+            if d.expiry_timestamp == 0 || current_time < d.expiry_timestamp {
+                active_delegations.push_back(d);
+            }
+        }
+
+        active_delegations
+    }
+
+    /// Set consent inheritance (child consent inherits from parent)
+    pub fn set_inheritance(
+        env: Env,
+        child_token_id: u64,
+        parent_token_id: u64,
+        inherited_permissions: GranularPermissions,
+    ) -> Result<(), ContractError> {
+        // Check for cycles
+        let mut current = parent_token_id;
+        let mut visited = Vec::new(&env);
+        visited.push_back(current);
+
+        loop {
+            let inheritance: Option<Inheritance> = env
+                .storage()
+                .instance()
+                .get(&DataKey::ConsentInheritance(current));
+            match inheritance {
+                Some(inh) => {
+                    if visited.contains(&inh.parent_token_id) {
+                        return Err(ContractError::InheritanceCycle);
+                    }
+                    if inh.parent_token_id == child_token_id {
+                        return Err(ContractError::InheritanceCycle);
+                    }
+                    current = inh.parent_token_id;
+                    visited.push_back(current);
+                }
+                None => break,
+            }
+        }
+
+        let child_metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(child_token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        child_metadata.patient.require_auth();
+
+        let inheritance = Inheritance {
+            parent_token_id,
+            inherited_permissions,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentInheritance(child_token_id), &inheritance);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "inheritance_set"),
+            timestamp: env.ledger().timestamp(),
+            actor: child_metadata.patient.clone(),
+            metadata_uri: child_metadata.metadata_uri.clone(),
+            details: String::from_str(&env, "Inheritance set"),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(child_token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(child_token_id), &history);
+
+        Ok(())
+    }
+
+    /// Add emergency authority
+    pub fn add_emergency_authority(env: Env, authority: Address) -> Result<(), ContractError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+
+        let mut authorities: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyAuthorities)
+            .unwrap_or(Vec::new(&env));
+
+        authorities.push_back(authority);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyAuthorities, &authorities);
+
+        Ok(())
+    }
+
+    /// Emergency override access
+    pub fn emergency_override(
+        env: Env,
+        token_id: u64,
+        reason: String,
+        duration: u64,
+    ) -> Result<u64, ContractError> {
+        let caller = env.invoker();
+        caller.require_auth();
+
+        let authorities: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyAuthorities)
+            .unwrap_or(Vec::new(&env));
+
+        let mut is_authorized = false;
+        for i in 0..authorities.len() {
+            if authorities.get(i).unwrap() == caller {
+                is_authorized = true;
+                break;
+            }
+        }
+
+        if !is_authorized {
+            return Err(ContractError::NotAuthorized);
+        }
+
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        // Generate override ID
+        let override_id = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenCounter)
+            .unwrap_or(0);
+
+        let override_record = EmergencyOverride {
+            override_id,
+            authorized_by: caller.clone(),
+            reason: reason.clone(),
+            timestamp: env.ledger().timestamp(),
+            duration,
+            used: false,
+        };
+
+        let mut overrides: Vec<EmergencyOverride> = env
+            .storage()
+            .instance()
+            .get(&DataKey::EmergencyOverrides(token_id))
+            .unwrap_or(Vec::new(&env));
+        overrides.push_back(override_record);
+        env.storage()
+            .instance()
+            .set(&DataKey::EmergencyOverrides(token_id), &overrides);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.total_emergency_overrides += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "emergency_override"),
+            timestamp: env.ledger().timestamp(),
+            actor: caller.clone(),
+            metadata_uri: metadata.metadata_uri.clone(),
+            details: reason.clone(),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("emergency_override")),
+            (token_id, caller, reason),
+        );
+
+        Ok(override_id)
+    }
+
+    /// Enable/disable marketplace
+    pub fn set_marketplace_enabled(env: Env, enabled: bool) -> Result<(), ContractError> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        admin.require_auth();
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MarketplaceEnabled, &enabled);
+
+        Ok(())
+    }
+
+    /// List consent on marketplace for research
+    pub fn list_on_marketplace(
+        env: Env,
+        token_id: u64,
+        price: i128,
+        data_types: Vec<DataType>,
+        research_purpose: String,
+        duration: u64,
+    ) -> Result<(), ContractError> {
+        let marketplace_enabled: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::MarketplaceEnabled)
+            .unwrap_or(false);
+
+        if !marketplace_enabled {
+            return Err(ContractError::MarketplaceNotEnabled);
+        }
+
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        // Only patient can list their consent
+        metadata.patient.require_auth();
+
+        let listing = MarketplaceListing {
+            token_id,
+            price,
+            data_types: data_types.clone(),
+            research_purpose: research_purpose.clone(),
+            duration,
+            listed_by: metadata.patient.clone(),
+            listed_timestamp: env.ledger().timestamp(),
+            active: true,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::MarketplaceListings(token_id), &listing);
+
+        // Update analytics
+        let mut analytics: AnalyticsData = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            });
+        analytics.marketplace_listings += 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::AnalyticsData, &analytics);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "marketplace_listed"),
+            timestamp: env.ledger().timestamp(),
+            actor: metadata.patient.clone(),
+            metadata_uri: metadata.metadata_uri.clone(),
+            details: research_purpose.clone(),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("marketplace_listed")),
+            (token_id, price, research_purpose),
+        );
+
+        Ok(())
+    }
+
+    /// Get marketplace listing
+    pub fn get_marketplace_listing(
+        env: Env,
+        token_id: u64,
+    ) -> Result<MarketplaceListing, ContractError> {
+        env.storage()
+            .instance()
+            .get(&DataKey::MarketplaceListings(token_id))
+            .ok_or(ContractError::TokenNotFound)
+    }
+
+    /// Purchase marketplace listing (simplified - would need payment integration)
+    pub fn purchase_marketplace_listing(
+        env: Env,
+        token_id: u64,
+        buyer: Address,
+    ) -> Result<(), ContractError> {
+        buyer.require_auth();
+
+        let mut listing: MarketplaceListing = env
+            .storage()
+            .instance()
+            .get(&DataKey::MarketplaceListings(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        if !listing.active {
+            return Err(ContractError::TokenNotFound);
+        }
+
+        // In a real implementation, this would handle payment
+        // For now, we just transfer access permissions
+
+        listing.active = false;
+        env.storage()
+            .instance()
+            .set(&DataKey::MarketplaceListings(token_id), &listing);
+
+        // Create delegation for buyer
+        let permissions = GranularPermissions {
+            permissions: {
+                let mut perms = Map::new(&env);
+                for i in 0..listing.data_types.len() {
+                    perms.set(listing.data_types.get(i).unwrap(), PermissionLevel::Read);
+                }
+                perms
+            },
+        };
+
+        Self::delegate_consent(
+            env.clone(),
+            token_id,
+            buyer.clone(),
+            permissions,
+            env.ledger().timestamp() + listing.duration,
+        )?;
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("marketplace_purchased")),
+            (token_id, listing.listed_by, buyer),
+        );
+
+        Ok(())
+    }
+
+    /// Enhanced dynamic consent update with version history
+    pub fn update_consent_dynamic(
+        env: Env,
+        token_id: u64,
+        new_metadata_uri: String,
+        change_summary: String,
+    ) -> Result<(), ContractError> {
+        let metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        if !metadata.dynamic_updates_enabled {
+            return Err(ContractError::NotAuthorized);
+        }
+
+        let caller = env.invoker();
+        if caller != metadata.patient && caller != metadata.issuer {
+            return Err(ContractError::NotAuthorized);
+        }
+        caller.require_auth();
+
+        // Save current version to history
+        let version_entry = VersionHistoryEntry {
+            version: metadata.version,
+            metadata_uri: metadata.metadata_uri.clone(),
+            updated_by: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            change_summary: change_summary.clone(),
+        };
+
+        let mut version_history: Vec<VersionHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::VersionHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        version_history.push_back(version_entry);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::VersionHistory(token_id), &version_history);
+
+        // Update metadata
+        let mut new_metadata = metadata.clone();
+        new_metadata.metadata_uri = new_metadata_uri.clone();
+        new_metadata.version += 1;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenMetadata(token_id), &new_metadata);
+
+        // Add to history
+        let history_entry = ConsentHistoryEntry {
+            action: String::from_str(&env, "updated_dynamic"),
+            timestamp: env.ledger().timestamp(),
+            actor: caller.clone(),
+            metadata_uri: new_metadata_uri.clone(),
+            details: change_summary.clone(),
+        };
+
+        let mut history: Vec<ConsentHistoryEntry> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConsentHistory(token_id))
+            .unwrap_or(Vec::new(&env));
+        history.push_back(history_entry);
+        env.storage()
+            .instance()
+            .set(&DataKey::ConsentHistory(token_id), &history);
+
+        env.events().publish(
+            (symbol_short!("consent"), symbol_short!("updated_dynamic")),
+            (token_id, new_metadata.version, change_summary),
+        );
+
+        Ok(())
+    }
+
+    /// Get version history
+    pub fn get_version_history(env: Env, token_id: u64) -> Vec<VersionHistoryEntry> {
+        env.storage()
+            .instance()
+            .get(&DataKey::VersionHistory(token_id))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    /// Enable dynamic updates for a consent
+    pub fn enable_dynamic_updates(env: Env, token_id: u64) -> Result<(), ContractError> {
+        let mut metadata: ConsentMetadata = env
+            .storage()
+            .instance()
+            .get(&DataKey::TokenMetadata(token_id))
+            .ok_or(ContractError::TokenNotFound)?;
+
+        metadata.patient.require_auth();
+
+        metadata.dynamic_updates_enabled = true;
+        env.storage()
+            .instance()
+            .set(&DataKey::TokenMetadata(token_id), &metadata);
+
+        Ok(())
+    }
+
+    /// Get analytics data
+    pub fn get_analytics(env: Env) -> AnalyticsData {
+        env.storage()
+            .instance()
+            .get(&DataKey::AnalyticsData)
+            .unwrap_or(AnalyticsData {
+                total_consents: 0,
+                active_consents: 0,
+                revoked_consents: 0,
+                total_delegations: 0,
+                total_emergency_overrides: 0,
+                marketplace_listings: 0,
+                total_access_count: 0,
+            })
+    }
+
+    /// Generate consent report for a patient
+    pub fn generate_consent_report(env: Env, patient: Address) -> Vec<u64> {
+        env.storage()
+            .instance()
+            .get(&DataKey::PatientConsents(patient))
+            .unwrap_or(Vec::new(&env))
+    }
 }
 
 // Tests moved to test.rs module to avoid direct contract function calls
