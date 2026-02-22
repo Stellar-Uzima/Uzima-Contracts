@@ -89,12 +89,12 @@ pub struct GranularPermissions {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AccessCondition {
-    TimeWindow(u64, u64),                    // (start, end) - Time-based access window
-    DayOfWeek(Vec<u32>),                     // Specific days of week (0-6)
-    TimeOfDay(u32, u32),                     // (start_hour, end_hour) - Time of day restrictions
-    LocationBased(Vec<String>),              // Location-based access
-    PurposeBased(Vec<String>),               // Purpose-based restrictions
-    EmergencyOnly,                           // Emergency access only
+    TimeWindow(u64, u64),       // (start, end) - Time-based access window
+    DayOfWeek(Vec<u32>),        // Specific days of week (0-6)
+    TimeOfDay(u32, u32),        // (start_hour, end_hour) - Time of day restrictions
+    LocationBased(Vec<String>), // Location-based access
+    PurposeBased(Vec<String>),  // Purpose-based restrictions
+    EmergencyOnly,              // Emergency access only
 }
 
 // Access control structure
@@ -758,7 +758,7 @@ impl PatientConsentToken {
         let history_entry = ConsentHistoryEntry {
             action: String::from_str(&env, "permissions_updated"),
             timestamp: env.ledger().timestamp(),
-            actor: caller,
+            actor: caller.clone(),
             metadata_uri: metadata.metadata_uri.clone(),
             details: String::from_str(&env, "Granular permissions updated"),
         };
@@ -774,10 +774,7 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (
-                symbol_short!("consent"),
-                symbol_short!("perm_upd"),
-            ),
+            (symbol_short!("consent"), symbol_short!("perm_upd")),
             (token_id, caller.clone()),
         );
 
@@ -840,13 +837,13 @@ impl PatientConsentToken {
             .unwrap_or(PermissionLevel::None);
 
         // Check if permission level meets requirement
-        match (permission_level, required_level) {
-            (PermissionLevel::Full, _) => true,
-            (PermissionLevel::Write, PermissionLevel::Read) => true,
-            (PermissionLevel::Write, PermissionLevel::Write) => true,
-            (PermissionLevel::Read, PermissionLevel::Read) => true,
-            _ => false,
-        }
+        matches!(
+            (permission_level, required_level),
+            (PermissionLevel::Full, _)
+                | (PermissionLevel::Write, PermissionLevel::Read)
+                | (PermissionLevel::Write, PermissionLevel::Write)
+                | (PermissionLevel::Read, PermissionLevel::Read)
+        )
     }
 
     /// Set access controls for a consent token
@@ -893,7 +890,7 @@ impl PatientConsentToken {
     pub fn check_access_allowed(
         env: Env,
         token_id: u64,
-        requester: Address,
+        _requester: Address,
     ) -> Result<bool, ContractError> {
         if !Self::is_valid(env.clone(), token_id) {
             return Ok(false);
@@ -961,7 +958,11 @@ impl PatientConsentToken {
     }
 
     /// Record access attempt
-    pub fn record_access(env: Env, token_id: u64, requester: Address) -> Result<(), ContractError> {
+    pub fn record_access(
+        env: Env,
+        token_id: u64,
+        _requester: Address,
+    ) -> Result<(), ContractError> {
         let mut access_control: AccessControl = env
             .storage()
             .instance()
@@ -1338,10 +1339,7 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (
-                symbol_short!("consent"),
-                symbol_short!("emerg_ovr"),
-            ),
+            (symbol_short!("consent"), symbol_short!("emerg_ovr")),
             (token_id, caller, reason),
         );
 
@@ -1446,10 +1444,7 @@ impl PatientConsentToken {
             .set(&DataKey::ConsentHistory(token_id), &history);
 
         env.events().publish(
-            (
-                symbol_short!("consent"),
-                symbol_short!("mkt_list"),
-            ),
+            (symbol_short!("consent"), symbol_short!("mkt_list")),
             (token_id, price, research_purpose),
         );
 
@@ -1513,10 +1508,7 @@ impl PatientConsentToken {
         )?;
 
         env.events().publish(
-            (
-                symbol_short!("consent"),
-                symbol_short!("mkt_purch"),
-            ),
+            (symbol_short!("consent"), symbol_short!("mkt_purch")),
             (token_id, listing.listed_by, buyer),
         );
 
