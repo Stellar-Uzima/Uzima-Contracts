@@ -236,6 +236,7 @@ const CONSENTS: Symbol = symbol_short!("CONSENTS");
 const AUDIT_LOGS: Symbol = symbol_short!("AUDITS");
 const BREACH_REPORTS: Symbol = symbol_short!("BREACHES");
 const VIOLATION_REPORTS: Symbol = symbol_short!("VIOLATE");
+#[allow(dead_code)]
 const RETENTION_POLICIES: Symbol = symbol_short!("RETENTION");
 const COMPLIANCE_SCORE: Symbol = symbol_short!("SCORE");
 const PAUSED: Symbol = symbol_short!("PAUSED");
@@ -495,8 +496,8 @@ impl HealthcareComplianceContract {
             ip_address: String::from_str(&env, "127.0.0.1"), // Would be provided by client
             user_agent: String::from_str(&env, "Uzima-Client/1.0"), // Would be provided by client
             compliance_framework: framework,
-            hipaa_category: hipaa_category as u32,
-            gdpr_category: gdpr_category as u32,
+            hipaa_category,
+            gdpr_category,
         };
 
         let mut logs: Map<Address, Vec<AuditLogEntry>> = env
@@ -617,7 +618,7 @@ impl HealthcareComplianceContract {
             failed_audits: 0,
             total_consents,
             active_consents: Self::count_active_consents(&env),
-            revoked_consents: total_consents - Self::count_active_consents(&env),
+            revoked_consents: total_consents.saturating_sub(Self::count_active_consents(&env)),
             total_breaches,
             resolved_breaches: Self::count_resolved_breaches(&env),
             pending_violations,
@@ -670,24 +671,7 @@ impl HealthcareComplianceContract {
 
     fn generate_id(env: &Env) -> String {
         // Simple ID generation - in production use cryptographic random
-        let timestamp = env.ledger().timestamp();
-        let mut id_str = String::from_str(env, "id_");
-        // Convert timestamp to string manually
-        let timestamp_chars = [
-            ((timestamp / 1000000000) % 10) as u8 + b'0',
-            ((timestamp / 100000000) % 10) as u8 + b'0',
-            ((timestamp / 10000000) % 10) as u8 + b'0',
-            ((timestamp / 1000000) % 10) as u8 + b'0',
-            ((timestamp / 100000) % 10) as u8 + b'0',
-            ((timestamp / 10000) % 10) as u8 + b'0',
-            ((timestamp / 1000) % 10) as u8 + b'0',
-            ((timestamp / 100) % 10) as u8 + b'0',
-            ((timestamp / 10) % 10) as u8 + b'0',
-            (timestamp % 10) as u8 + b'0',
-        ];
-
-        // For now, return a simple ID - would use proper ID generation in production
-        id_str
+        String::from_str(env, "id_")
     }
 
     fn update_compliance_score(env: &Env, positive: bool) -> Result<(), Error> {

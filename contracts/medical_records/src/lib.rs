@@ -18,7 +18,7 @@ pub use errors::Error;
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
-    Map, String, Vec,
+    IntoVal, Map, String, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
@@ -360,6 +360,8 @@ pub enum DataKey {
     CryptoAuditCount,
     CryptoAudit(u64),
 
+    // Audit & Forensics
+    AuditForensicsContract,
     // Compliance
     RegulatoryCompliance,
 }
@@ -440,6 +442,26 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&DataKey::Users, &users);
         events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
         true
+    }
+
+    pub fn set_audit_forensics(
+        env: Env,
+        admin: Address,
+        contract_id: Address,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditForensicsContract, &contract_id);
+        Ok(true)
+    }
+
+    pub fn get_audit_forensics(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditForensicsContract)
     }
 
     pub fn manage_user(
@@ -813,13 +835,16 @@ impl MedicalRecordsContract {
 
         events::emit_record_created(
             &env,
-            caller,
+            caller.clone(),
             record_id,
             patient,
             is_confidential,
             category,
             tags,
         );
+
+        Self::log_to_forensics(&env, caller, 5, Some(record_id)); // 5 = RecordCreated (mapping needed)
+
         Ok(record_id)
     }
 
@@ -834,10 +859,12 @@ impl MedicalRecordsContract {
             .ok_or(Error::RecordNotFound)?;
 
         if !Self::can_view_record(&env, &caller, &record, record_id) {
+            Self::log_to_forensics(&env, caller, 0, Some(record_id)); // Failed access
             return Err(Error::NotAuthorized);
         }
 
-        events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+        events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
+        Self::log_to_forensics(&env, caller, 0, Some(record_id)); // 0 = RecordAccess
         Ok(record)
     }
 
@@ -2872,6 +2899,54 @@ impl MedicalRecordsContract {
             return true;
         }
         false
+    }
+
+    fn log_to_forensics(env: &Env, actor: Address, action_u32: u32, record_id: Option<u64>) {
+        if let Some(contract_id) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Address>(&DataKey::AuditForensicsContract)
+        {
+            // Mapping u32 back to AuditAction (symbol-based or enum-based)
+            // For simplicity in cross-contract calls without shared crates, we use the raw u32 or a symbol
+            // The audit_forensics contract expects AuditAction enum
+
+            // We'll use a dynamic call to avoid strict dependency on the other crate's enum if possible,
+            // or just define the enum locally. Defining locally is safer for type safety.
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            #[contracttype]
+            enum AuditAction {
+                RecordAccess,
+                RecordCreated,
+                RecordUpdate,
+                RecordDelete,
+                PermissionGrant,
+                PermissionRevoke,
+                AnomalyDetected,
+                ComplianceReportGenerated,
+                AlertTriggered,
+            }
+
+            let action = match action_u32 {
+                0 => AuditAction::RecordAccess,
+                1 => AuditAction::RecordUpdate,
+                2 => AuditAction::RecordDelete,
+                3 => AuditAction::PermissionGrant,
+                4 => AuditAction::PermissionRevoke,
+                5 => AuditAction::RecordCreated, // Need to add to enum in audit_forensics too
+                _ => AuditAction::AlertTriggered,
+            };
+
+            let metadata: Map<String, String> = Map::new(env);
+            let details_hash = BytesN::from_array(env, &[0u8; 32]);
+
+            // Cross-contract call
+            env.invoke_contract::<u64>(
+                &contract_id,
+                &symbol_short!("log_event"),
+                (actor, action, record_id, details_hash, metadata).into_val(env),
+            );
+        }
     }
 
     fn log_crypto_event(
