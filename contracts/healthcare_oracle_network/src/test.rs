@@ -1,5 +1,6 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+#![allow(clippy::panic)]
 
 use crate::{
     DisputeStatus, Error, FeedKind, FeedPayload, HealthcareOracleNetwork,

@@ -1,4 +1,8 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::len_zero)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
