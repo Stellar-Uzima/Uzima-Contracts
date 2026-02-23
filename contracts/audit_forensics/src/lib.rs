@@ -1,3 +1,5 @@
+#![no_std]
+
 #[cfg(test)]
 mod test;
 
@@ -235,8 +237,9 @@ impl AuditForensicsContract {
             {
                 if entry.timestamp < before_timestamp {
                     // Update hash (simplified running hash: hash(last_hash + current_details_hash))
-                    let mut combined = last_hash.to_array().to_vec();
-                    combined.extend_from_slice(&entry.details_hash.to_array());
+                    let mut combined = [0u8; 64];
+                    combined[..32].copy_from_slice(&last_hash.to_array());
+                    combined[32..].copy_from_slice(&entry.details_hash.to_array());
 
                     let bytes = soroban_sdk::Bytes::from_slice(&env, &combined);
                     last_hash = env.crypto().sha256(&bytes).into();
