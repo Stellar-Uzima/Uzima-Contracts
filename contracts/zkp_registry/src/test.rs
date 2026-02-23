@@ -12,10 +12,8 @@ fn test_zkp_registry_initialization() {
 
     client.initialize(&admin);
 
-    // Test that a missing circuit returns an error
-    assert!(client
-        .try_get_circuit_params(&String::from_str(&env, "test_circuit"))
-        .is_err());
+    let result = client.try_get_circuit_params(&String::from_str(&env, "test_circuit"));
+    assert!(matches!(result, Err(Ok(Error::CircuitNotFound))));
 }
 
 #[test]
@@ -51,8 +49,8 @@ fn test_circuit_registration() {
     assert_eq!(params.num_private_inputs, 10);
     assert_eq!(params.num_constraints, 1000);
     assert_eq!(params.security_param, 128);
-    assert!(params.vk_hash == vk_hash);
-    assert!(params.pk_hash == pk_hash);
+    assert_eq!(params.vk_hash, vk_hash);
+    assert_eq!(params.pk_hash, pk_hash);
     assert!(params.trusted_setup);
 }
 
@@ -156,7 +154,7 @@ fn test_medical_record_authenticity_proof() {
     let proof = client.get_medical_record_proof(&patient, &record_id);
     assert!(proof.patient_id == patient);
     assert_eq!(proof.record_id, record_id);
-    assert!(proof.metadata_hash == metadata_hash);
+    assert_eq!(proof.metadata_hash, metadata_hash);
     assert!(proof.is_verified);
 }
 
@@ -385,12 +383,14 @@ fn test_zkp_hash_function_performance() {
     );
 
     let submitter = Address::generate(&env);
+
     let hash_functions = [
         ZKPHashFunction::Poseidon,
         ZKPHashFunction::MiMC,
         ZKPHashFunction::SHA256,
         ZKPHashFunction::Rescue,
     ];
+
     let expected_gas: [u64; 4] = [50000, 45000, 80000, 55000];
 
     for (i, hash_function) in hash_functions.iter().enumerate() {
