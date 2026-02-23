@@ -1,8 +1,9 @@
 #[cfg(test)]
-mod test {
-    use crate::{AuditForensicsContract, AuditForensicsContractClient, AuditAction};
+mod tests {
+    #![allow(clippy::unwrap_used)]
+    use crate::{AuditAction, AuditForensicsContract, AuditForensicsContractClient};
     use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{Env, Address, Map, String, BytesN};
+    use soroban_sdk::{Address, BytesN, Env, Map, String};
 
     #[test]
     fn test_audit_flow() {
@@ -17,10 +18,19 @@ mod test {
         let record_id = 101u64;
         let details_hash = BytesN::from_array(&env, &[1u8; 32]);
         let mut metadata = Map::new(&env);
-        metadata.set(String::from_str(&env, "client_ip"), String::from_str(&env, "192.168.1.1"));
+        metadata.set(
+            String::from_str(&env, "client_ip"),
+            String::from_str(&env, "192.168.1.1"),
+        );
 
         // Log an event
-        client.mock_all_auths().log_event(&doctor, &AuditAction::RecordCreated, &Some(record_id), &details_hash, &metadata);
+        client.mock_all_auths().log_event(
+            &doctor,
+            &AuditAction::RecordCreated,
+            &Some(record_id),
+            &details_hash,
+            &metadata,
+        );
 
         // Analyze timeline
         let timeline = client.analyze_timeline(&record_id);
@@ -45,10 +55,28 @@ mod test {
 
         let doctor = Address::generate(&env);
         env.mock_all_auths();
-        
-        client.log_event(&doctor, &AuditAction::RecordAccess, &Some(1), &BytesN::from_array(&env, &[0u8; 32]), &Map::new(&env));
-        client.log_event(&doctor, &AuditAction::RecordAccess, &Some(2), &BytesN::from_array(&env, &[0u8; 32]), &Map::new(&env));
-        client.log_event(&doctor, &AuditAction::RecordUpdate, &Some(1), &BytesN::from_array(&env, &[0u8; 32]), &Map::new(&env));
+
+        client.log_event(
+            &doctor,
+            &AuditAction::RecordAccess,
+            &Some(1),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &Map::new(&env),
+        );
+        client.log_event(
+            &doctor,
+            &AuditAction::RecordAccess,
+            &Some(2),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &Map::new(&env),
+        );
+        client.log_event(
+            &doctor,
+            &AuditAction::RecordUpdate,
+            &Some(1),
+            &BytesN::from_array(&env, &[0u8; 32]),
+            &Map::new(&env),
+        );
 
         let report = client.generate_compliance_report(&0, &env.ledger().timestamp());
         assert_eq!(report.get(AuditAction::RecordAccess).unwrap(), 2);

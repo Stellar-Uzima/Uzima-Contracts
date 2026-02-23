@@ -6,7 +6,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec, Map, u256, crypto::Hash,
+    String, Symbol, Vec,
 };
 
 // =============================================================================
@@ -298,10 +298,12 @@ impl ZKPRegistry {
 
         env.storage()
             .persistent()
-            .set(&DataKey::ZKPCircuitParams(circuit_id), &params);
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
 
-        env.events()
-            .publish((symbol_short!("zkp"), symbol_short!("circuit_reg")), circuit_id);
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("circ_reg")),
+            circuit_id,
+        );
 
         Ok(())
     }
@@ -334,7 +336,11 @@ impl ZKPRegistry {
         }
 
         // Verify circuit exists
-        if !env.storage().persistent().has(&DataKey::ZKPCircuitParams(circuit_id.clone())) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+        {
             return Err(Error::CircuitNotFound);
         }
 
@@ -356,11 +362,11 @@ impl ZKPRegistry {
         // Store proof
         env.storage()
             .persistent()
-            .set(&DataKey::ZKProof(proof_id), &proof);
+            .set(&DataKey::ZKProof(proof_id.clone()), &proof);
 
         // Create verification result
         let result = ZKPVerificationResult {
-            proof_id,
+            proof_id: proof_id.clone(),
             is_valid,
             gas_used: verification_gas,
             verified_at: env.ledger().timestamp(),
@@ -370,14 +376,14 @@ impl ZKPRegistry {
 
         env.storage()
             .persistent()
-            .set(&DataKey::VerificationResult(proof_id), &result);
+            .set(&DataKey::VerificationResult(proof_id.clone()), &result);
 
         // Track gas usage
         Self::track_gas_usage(&env, &submitter, verification_gas);
 
         // Emit events
         env.events().publish(
-            (symbol_short!("zkp"), symbol_short!("proof_submitted")),
+            (symbol_short!("zkp"), symbol_short!("proof_sub")),
             (submitter, proof_id, is_valid),
         );
 
@@ -419,12 +425,13 @@ impl ZKPRegistry {
             verified_at: env.ledger().timestamp(),
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::MedicalRecordProof(patient, record_id), &proof);
+        env.storage().persistent().set(
+            &DataKey::MedicalRecordProof(patient.clone(), record_id),
+            &proof,
+        );
 
         env.events().publish(
-            (symbol_short!("zkp"), symbol_short!("medical_proof")),
+            (symbol_short!("zkp"), symbol_short!("med_proof")),
             (patient, record_id),
         );
 
@@ -477,13 +484,13 @@ impl ZKPRegistry {
 
         env.storage()
             .persistent()
-            .set(&DataKey::RangeProof(proof_id), &range_proof);
+            .set(&DataKey::RangeProof(proof_id.clone()), &range_proof);
 
         // Track gas usage
         Self::track_gas_usage(&env, &prover, verification_gas);
 
         env.events().publish(
-            (symbol_short!("zkp"), symbol_short!("range_proof")),
+            (symbol_short!("zkp"), symbol_short!("rng_proof")),
             (prover, proof_id, min_value, max_value),
         );
 
@@ -527,12 +534,13 @@ impl ZKPRegistry {
             verified_at: current_time,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::CredentialProof(holder, credential_type), &proof);
+        env.storage().persistent().set(
+            &DataKey::CredentialProof(holder.clone(), credential_type.clone()),
+            &proof,
+        );
 
         env.events().publish(
-            (symbol_short!("zkp"), symbol_short!("credential_proof")),
+            (symbol_short!("zkp"), symbol_short!("cred_prf")),
             (holder, credential_type),
         );
 
@@ -564,7 +572,11 @@ impl ZKPRegistry {
         }
 
         // Verify base proof exists
-        if !env.storage().persistent().has(&DataKey::ZKProof(base_proof_id)) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZKProof(base_proof_id.clone()))
+        {
             return Err(Error::ProofNotFound);
         }
 
@@ -584,16 +596,19 @@ impl ZKPRegistry {
             return Err(Error::VerificationFailed);
         }
 
-        let proof_id: BytesN<32> = env.crypto().sha256(&recursive_proof.proof_data).into();
+        let proof_id: BytesN<32> = env
+            .crypto()
+            .sha256(&recursive_proof.recursive_proof.proof_data)
+            .into();
         env.storage()
             .persistent()
-            .set(&DataKey::RecursiveProof(proof_id), &recursive_proof);
+            .set(&DataKey::RecursiveProof(proof_id.clone()), &recursive_proof);
 
         // Track gas usage
         Self::track_gas_usage(&env, &composer, total_gas);
 
         env.events().publish(
-            (symbol_short!("zkp"), symbol_short!("recursive_proof")),
+            (symbol_short!("zkp"), symbol_short!("rec_proof")),
             (composer, proof_id, composition_depth),
         );
 
@@ -601,7 +616,10 @@ impl ZKPRegistry {
     }
 
     /// Get ZKP verification result
-    pub fn get_verification_result(env: Env, proof_id: BytesN<32>) -> Result<ZKPVerificationResult, Error> {
+    pub fn get_verification_result(
+        env: Env,
+        proof_id: BytesN<32>,
+    ) -> Result<ZKPVerificationResult, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -678,7 +696,7 @@ impl ZKPRegistry {
     fn verify_zkp_internal(_env: &Env, proof: &ZKProof) -> Result<bool, Error> {
         // In production, this would perform actual cryptographic verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.proof_data.is_empty() {
             return Ok(false);
@@ -711,7 +729,7 @@ impl ZKPRegistry {
     fn verify_range_proof_internal(_env: &Env, proof: &RangeProof) -> Result<bool, Error> {
         // In production, this would perform actual cryptographic range proof verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.proof_data.is_empty() {
             return Ok(false);
@@ -730,7 +748,7 @@ impl ZKPRegistry {
     fn verify_recursive_proof_internal(_env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
         // In production, this would perform actual recursive proof verification
         // For demonstration, we do basic validation
-        
+
         // Check proof data is not empty
         if proof.recursive_proof.proof_data.is_empty() {
             return Ok(false);

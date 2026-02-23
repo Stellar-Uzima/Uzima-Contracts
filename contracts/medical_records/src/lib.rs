@@ -360,10 +360,10 @@ pub enum DataKey {
     CryptoAuditCount,
     CryptoAudit(u64),
 
-    // Compliance
-    RegulatoryCompliance,
     // Audit & Forensics
     AuditForensicsContract,
+    // Compliance
+    RegulatoryCompliance,
 }
 
 // ==================== Errors ====================
@@ -444,16 +444,24 @@ impl MedicalRecordsContract {
         true
     }
 
-    pub fn set_audit_forensics(env: Env, admin: Address, contract_id: Address) -> Result<bool, Error> {
+    pub fn set_audit_forensics(
+        env: Env,
+        admin: Address,
+        contract_id: Address,
+    ) -> Result<bool, Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &admin)?;
-        env.storage().persistent().set(&DataKey::AuditForensicsContract, &contract_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditForensicsContract, &contract_id);
         Ok(true)
     }
 
     pub fn get_audit_forensics(env: Env) -> Option<Address> {
-        env.storage().persistent().get(&DataKey::AuditForensicsContract)
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditForensicsContract)
     }
 
     pub fn manage_user(
@@ -2894,17 +2902,22 @@ impl MedicalRecordsContract {
     }
 
     fn log_to_forensics(env: &Env, actor: Address, action_u32: u32, record_id: Option<u64>) {
-        if let Some(contract_id) = env.storage().persistent().get::<DataKey, Address>(&DataKey::AuditForensicsContract) {
+        if let Some(contract_id) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Address>(&DataKey::AuditForensicsContract)
+        {
             // Mapping u32 back to AuditAction (symbol-based or enum-based)
             // For simplicity in cross-contract calls without shared crates, we use the raw u32 or a symbol
             // The audit_forensics contract expects AuditAction enum
-            
+
             // We'll use a dynamic call to avoid strict dependency on the other crate's enum if possible,
             // or just define the enum locally. Defining locally is safer for type safety.
             #[derive(Clone, Copy, PartialEq, Eq)]
             #[contracttype]
             enum AuditAction {
                 RecordAccess,
+                RecordCreated,
                 RecordUpdate,
                 RecordDelete,
                 PermissionGrant,
@@ -2926,7 +2939,7 @@ impl MedicalRecordsContract {
 
             let metadata: Map<String, String> = Map::new(env);
             let details_hash = BytesN::from_array(env, &[0u8; 32]);
-            
+
             // Cross-contract call
             env.invoke_contract::<u64>(
                 &contract_id,
