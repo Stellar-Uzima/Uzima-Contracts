@@ -18,9 +18,8 @@ pub use errors::Error;
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
-    IntoVal, Map, String, Vec,
+    IntoVal, Map, String, Symbol, Vec,
 };
-use soroban_sdk::xdr::ToXdr;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
@@ -177,7 +176,8 @@ pub struct ZkAuditRecord {
     pub pseudonym: BytesN<32>,
     pub timestamp: u64,
     pub proof_verified: bool,
-    pub nullifier: Option<BytesN<32>>,
+    pub nullifier_present: bool,
+    pub nullifier: BytesN<32>,
 }
 
 // ==================== Medical Record ====================
@@ -474,8 +474,12 @@ const MAX_ZK_GRANT_TTL_SECS: u64 = 3_600;
 
 #[soroban_sdk::contractclient(name = "ZkVerifierClient")]
 pub trait ZkVerifierContract {
-    fn verify_proof(env: Env, vk_version: u32, public_inputs_hash: BytesN<32>, proof: Bytes)
-    -> bool;
+    fn verify_proof(
+        env: Env,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+    ) -> bool;
 }
 
 #[soroban_sdk::contractclient(name = "CredentialRegistryClient")]
@@ -531,9 +535,7 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RequirePqEnvelopes, &false);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ZkEnforced, &false);
+        env.storage().persistent().set(&DataKey::ZkEnforced, &false);
         env.storage()
             .persistent()
             .set(&DataKey::ZkGrantTtl, &DEFAULT_ZK_GRANT_TTL_SECS);
@@ -1163,7 +1165,9 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::ZkEnforced, &enforced);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkEnforced, &enforced);
         Ok(true)
     }
 
@@ -1229,12 +1233,7 @@ impl MedicalRecordsContract {
             Self::emit_zk_audit(
                 &env,
                 record_id,
-                &Self::compute_requester_pseudonym(
-                    &env,
-                    &caller,
-                    &public_inputs.issuer,
-                    record_id,
-                ),
+                &Self::compute_requester_pseudonym(&env, &caller, &public_inputs.issuer, record_id),
                 false,
                 Some(public_inputs.nullifier.clone()),
             );
@@ -1257,7 +1256,9 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidCredential);
         }
 
-        if meta.timestamp < public_inputs.min_timestamp || meta.timestamp > public_inputs.max_timestamp {
+        if meta.timestamp < public_inputs.min_timestamp
+            || meta.timestamp > public_inputs.max_timestamp
+        {
             Self::emit_zk_audit(
                 &env,
                 record_id,
@@ -1318,8 +1319,11 @@ impl MedicalRecordsContract {
             );
             return Err(Error::InvalidCredential);
         }
-        if Self::is_credential_root_revoked(&env, &public_inputs.issuer, &public_inputs.credential_root)
-        {
+        if Self::is_credential_root_revoked(
+            &env,
+            &public_inputs.issuer,
+            &public_inputs.credential_root,
+        ) {
             Self::emit_zk_audit(
                 &env,
                 record_id,
@@ -1363,9 +1367,10 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidCredential);
         }
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()), &true);
+        env.storage().persistent().set(
+            &DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()),
+            &true,
+        );
 
         let grant = ZkAccessGrant {
             record_id,
@@ -3272,10 +3277,13 @@ impl MedicalRecordsContract {
 
     fn hash_zk_public_inputs(env: &Env, public_inputs: &ZkPublicInputs) -> BytesN<32> {
         let mut payload = Bytes::new(env);
-        payload.append(&Bytes::from_slice(env, &public_inputs.record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.record_id.to_be_bytes(),
+        ));
         Self::append_bytes32(env, &mut payload, &public_inputs.record_commitment);
         Self::append_bytes32(env, &mut payload, &public_inputs.credential_root);
-        payload.append(&public_inputs.issuer.to_xdr(env));
+        payload.append(&public_inputs.issuer.clone().to_xdr(env));
         Self::append_bytes32(env, &mut payload, &public_inputs.requester_commitment);
         Self::append_bytes32(env, &mut payload, &public_inputs.provider_commitment);
         Self::append_bytes32(env, &mut payload, &public_inputs.claim_commitment);
@@ -3289,7 +3297,10 @@ impl MedicalRecordsContract {
         ));
         Self::append_bytes32(env, &mut payload, &public_inputs.nullifier);
         Self::append_bytes32(env, &mut payload, &public_inputs.pseudonym);
-        payload.append(&Bytes::from_slice(env, &public_inputs.vk_version.to_be_bytes()));
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.vk_version.to_be_bytes(),
+        ));
         env.crypto().sha256(&payload).into()
     }
 
@@ -3319,12 +3330,17 @@ impl MedicalRecordsContract {
         verified: bool,
         nullifier: Option<BytesN<32>>,
     ) {
+        let (nullifier_present, nullifier_value) = match nullifier {
+            Some(value) => (true, value),
+            None => (false, BytesN::from_array(env, &[0u8; 32])),
+        };
         let event = ZkAuditRecord {
             record_id,
             pseudonym: pseudonym.clone(),
             timestamp: env.ledger().timestamp(),
             proof_verified: verified,
-            nullifier,
+            nullifier_present,
+            nullifier: nullifier_value,
         };
         env.events()
             .publish((Symbol::new(env, "EVENT"), symbol_short!("ZK_AUD")), event);
@@ -3336,37 +3352,40 @@ impl MedicalRecordsContract {
 
     fn compute_plain_record_commitment(env: &Env, record: &MedicalRecord) -> BytesN<32> {
         let mut payload = Bytes::new(env);
-        payload.append(&record.patient_id.to_xdr(env));
-        payload.append(&record.doctor_id.to_xdr(env));
+        payload.append(&record.patient_id.clone().to_xdr(env));
+        payload.append(&record.doctor_id.clone().to_xdr(env));
         payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
-        payload.append(&record.diagnosis.to_xdr(env));
-        payload.append(&record.treatment.to_xdr(env));
+        payload.append(&record.diagnosis.clone().to_xdr(env));
+        payload.append(&record.treatment.clone().to_xdr(env));
         payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
         payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
         for tag in record.tags.iter() {
             payload.append(&tag.to_xdr(env));
         }
-        payload.append(&record.category.to_xdr(env));
-        payload.append(&record.treatment_type.to_xdr(env));
-        payload.append(&record.data_ref.to_xdr(env));
+        payload.append(&record.category.clone().to_xdr(env));
+        payload.append(&record.treatment_type.clone().to_xdr(env));
+        payload.append(&record.data_ref.clone().to_xdr(env));
         env.crypto().sha256(&payload).into()
     }
 
     fn compute_encrypted_record_commitment(env: &Env, record: &EncryptedRecord) -> BytesN<32> {
         let mut payload = Bytes::new(env);
-        payload.append(&record.patient_id.to_xdr(env));
-        payload.append(&record.doctor_id.to_xdr(env));
+        payload.append(&record.patient_id.clone().to_xdr(env));
+        payload.append(&record.doctor_id.clone().to_xdr(env));
         payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
         payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
         payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
         for tag in record.tags.iter() {
             payload.append(&tag.to_xdr(env));
         }
-        payload.append(&record.category.to_xdr(env));
-        payload.append(&record.treatment_type.to_xdr(env));
-        payload.append(&record.ciphertext_ref.to_xdr(env));
+        payload.append(&record.category.clone().to_xdr(env));
+        payload.append(&record.treatment_type.clone().to_xdr(env));
+        payload.append(&record.ciphertext_ref.clone().to_xdr(env));
         Self::append_bytes32(env, &mut payload, &record.ciphertext_hash);
-        payload.append(&Bytes::from_slice(env, &record.envelopes.len().to_be_bytes()));
+        payload.append(&Bytes::from_slice(
+            env,
+            &record.envelopes.len().to_be_bytes(),
+        ));
         env.crypto().sha256(&payload).into()
     }
 

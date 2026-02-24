@@ -17,10 +17,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -48,10 +47,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
           components: rustfmt
       
       - name: Check formatting
@@ -62,10 +60,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
           components: clippy
       
       - name: Cache cargo registry
@@ -89,10 +86,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
@@ -115,10 +111,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Run integration tests
         run: cargo test --test '*' --no-fail-fast
@@ -129,10 +124,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -146,10 +140,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Build
         run: cargo build --release --verbose
@@ -160,10 +153,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Run doc tests
         run: cargo test --doc --verbose
@@ -175,10 +167,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
       
       - name: Run performance tests
         run: |
@@ -217,3 +208,4 @@ jobs:
             exit 1
           fi
           echo "✅ All checks passed!"
+

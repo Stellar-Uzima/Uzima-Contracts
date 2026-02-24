@@ -49,10 +49,8 @@ impl CredentialRegistryContract {
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
 
-        env.events().publish(
-            (symbol_short!("CREDREG"), symbol_short!("INIT")),
-            admin,
-        );
+        env.events()
+            .publish((symbol_short!("CREDREG"), symbol_short!("INIT")), admin);
         Ok(())
     }
 
@@ -152,13 +150,13 @@ impl CredentialRegistryContract {
             .get(&DataKey::ActiveVersion(issuer.clone()))
             .unwrap_or(0);
         if active_version == version {
-            env.storage().persistent().remove(&DataKey::ActiveRoot(issuer));
+            env.storage()
+                .persistent()
+                .remove(&DataKey::ActiveRoot(issuer));
         }
 
-        env.events().publish(
-            (symbol_short!("CREDREG"), symbol_short!("REVOKE")),
-            version,
-        );
+        env.events()
+            .publish((symbol_short!("CREDREG"), symbol_short!("REVOKE")), version);
         Ok(true)
     }
 
@@ -175,10 +173,8 @@ impl CredentialRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::RevocationRoot(issuer.clone()), &revocation_root);
-        env.events().publish(
-            (symbol_short!("CREDREG"), symbol_short!("REVROOT")),
-            issuer,
-        );
+        env.events()
+            .publish((symbol_short!("CREDREG"), symbol_short!("REVROOT")), issuer);
         Ok(true)
     }
 
@@ -294,32 +290,17 @@ mod tests {
 
         let admin = Address::generate(&env);
         let issuer = Address::generate(&env);
-        CredentialRegistryContract::initialize(env.clone(), admin.clone()).unwrap();
+        let contract_id = env.register_contract(None, CredentialRegistryContract);
+        let client = CredentialRegistryContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
 
         let root_1 = BytesN::from_array(&env, &[11u8; 32]);
         let meta_1 = BytesN::from_array(&env, &[12u8; 32]);
-        let v1 = CredentialRegistryContract::set_credential_root(
-            env.clone(),
-            admin.clone(),
-            issuer.clone(),
-            root_1.clone(),
-            meta_1,
-        )
-        .unwrap();
+        let v1 = client.set_credential_root(&admin, &issuer, &root_1, &meta_1);
         assert_eq!(v1, 1);
-        assert_eq!(
-            CredentialRegistryContract::get_active_root(env.clone(), issuer.clone()),
-            Some(root_1.clone())
-        );
+        assert_eq!(client.get_active_root(&issuer), Some(root_1.clone()));
 
-        assert!(
-            CredentialRegistryContract::revoke_root(env.clone(), admin, issuer.clone(), 1).unwrap()
-        );
-        assert!(CredentialRegistryContract::is_root_revoked(
-            env,
-            issuer,
-            root_1
-        ));
+        assert!(client.revoke_root(&admin, &issuer, &1));
+        assert!(client.is_root_revoked(&issuer, &root_1));
     }
 }
-

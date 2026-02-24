@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
-    Env, Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -77,8 +76,12 @@ impl ZkVerifierContract {
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::CurrentVersion, &0u32);
-        env.storage().instance().set(&DataKey::DefaultTtl, &default_ttl);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentVersion, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::DefaultTtl, &default_ttl);
 
         env.events()
             .publish((symbol_short!("ZKVER"), symbol_short!("INIT")), admin);
@@ -137,7 +140,9 @@ impl ZkVerifierContract {
         env.storage()
             .persistent()
             .set(&DataKey::VerifyingKey(next), &key);
-        env.storage().instance().set(&DataKey::CurrentVersion, &next);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentVersion, &next);
 
         env.events().publish(
             (symbol_short!("ZKVER"), symbol_short!("VKREG")),
@@ -372,58 +377,33 @@ mod tests {
         env.mock_all_auths();
         env.ledger().with_mut(|li| {
             li.timestamp = 1_000;
-            li.sequence = 11;
+            li.sequence_number = 11;
         });
 
         let admin = Address::generate(&env);
         let attestor = Address::generate(&env);
-        ZkVerifierContract::initialize(env.clone(), admin.clone(), 600).unwrap();
+        let contract_id = env.register_contract(None, ZkVerifierContract);
+        let client = ZkVerifierContractClient::new(&env, &contract_id);
+        client.initialize(&admin, &600);
 
         let vk_hash = BytesN::from_array(&env, &[1u8; 32]);
         let circuit_id = BytesN::from_array(&env, &[2u8; 32]);
         let metadata_hash = BytesN::from_array(&env, &[3u8; 32]);
-        let version = ZkVerifierContract::register_verifying_key(
-            env.clone(),
-            admin,
-            vk_hash,
-            circuit_id,
-            attestor.clone(),
-            metadata_hash,
-        )
-        .unwrap();
+        let version =
+            client.register_verifying_key(&admin, &vk_hash, &circuit_id, &attestor, &metadata_hash);
         assert_eq!(version, 1);
 
         let public_inputs_hash = BytesN::from_array(&env, &[4u8; 32]);
         let proof = Bytes::from_slice(&env, b"proof-v1");
         let proof_hash: BytesN<32> = env.crypto().sha256(&proof).into();
 
-        ZkVerifierContract::submit_attestation(
-            env.clone(),
-            attestor,
-            1,
-            public_inputs_hash.clone(),
-            proof_hash,
-            true,
-            300,
-        )
-        .unwrap();
+        client.submit_attestation(&attestor, &1, &public_inputs_hash, &proof_hash, &true, &300);
 
-        assert!(ZkVerifierContract::verify_proof(
-            env.clone(),
-            1,
-            public_inputs_hash,
-            proof
-        ));
+        assert!(client.verify_proof(&1, &public_inputs_hash, &proof));
 
         env.ledger().set_timestamp(2_000);
         let public_inputs_hash_2 = BytesN::from_array(&env, &[5u8; 32]);
         let proof_2 = Bytes::from_slice(&env, b"proof-v2");
-        assert!(!ZkVerifierContract::verify_proof(
-            env,
-            1,
-            public_inputs_hash_2,
-            proof_2
-        ));
+        assert!(!client.verify_proof(&1, &public_inputs_hash_2, &proof_2));
     }
 }
-

@@ -5,6 +5,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 pub struct UzimaTest<'a> {
     pub client: MedicalRecordsContractClient<'a>, // Client needs lifetime
     pub admin1: Address,
+    #[allow(dead_code)]
     pub admin2: Address,
     pub doctor: Address,
     pub patient: Address,

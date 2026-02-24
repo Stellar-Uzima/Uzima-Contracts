@@ -22,7 +22,12 @@ fn hash_address(env: &Env, address: &Address) -> BytesN<32> {
     env.crypto().sha256(&address.to_xdr(env)).into()
 }
 
-fn compute_pseudonym(env: &Env, requester: &Address, issuer: &Address, record_id: u64) -> BytesN<32> {
+fn compute_pseudonym(
+    env: &Env,
+    requester: &Address,
+    issuer: &Address,
+    record_id: u64,
+) -> BytesN<32> {
     let mut payload = Bytes::new(env);
     payload.append(&requester.to_xdr(env));
     payload.append(&issuer.to_xdr(env));
@@ -33,10 +38,13 @@ fn compute_pseudonym(env: &Env, requester: &Address, issuer: &Address, record_id
 
 fn hash_public_inputs(env: &Env, public_inputs: &ZkPublicInputs) -> BytesN<32> {
     let mut payload = Bytes::new(env);
-    payload.append(&Bytes::from_slice(env, &public_inputs.record_id.to_be_bytes()));
+    payload.append(&Bytes::from_slice(
+        env,
+        &public_inputs.record_id.to_be_bytes(),
+    ));
     append_bytes32(env, &mut payload, &public_inputs.record_commitment);
     append_bytes32(env, &mut payload, &public_inputs.credential_root);
-    payload.append(&public_inputs.issuer.to_xdr(env));
+    payload.append(&public_inputs.issuer.clone().to_xdr(env));
     append_bytes32(env, &mut payload, &public_inputs.requester_commitment);
     append_bytes32(env, &mut payload, &public_inputs.provider_commitment);
     append_bytes32(env, &mut payload, &public_inputs.claim_commitment);
@@ -50,18 +58,21 @@ fn hash_public_inputs(env: &Env, public_inputs: &ZkPublicInputs) -> BytesN<32> {
     ));
     append_bytes32(env, &mut payload, &public_inputs.nullifier);
     append_bytes32(env, &mut payload, &public_inputs.pseudonym);
-    payload.append(&Bytes::from_slice(env, &public_inputs.vk_version.to_be_bytes()));
+    payload.append(&Bytes::from_slice(
+        env,
+        &public_inputs.vk_version.to_be_bytes(),
+    ));
     env.crypto().sha256(&payload).into()
 }
 
-fn setup_zk_gate(
-    env: &Env,
+fn setup_zk_gate<'a>(
+    env: &'a Env,
     admin: &Address,
 ) -> (
     Address,
     Address,
-    CredentialRegistryContractClient<'_>,
-    ZkVerifierContractClient<'_>,
+    CredentialRegistryContractClient<'a>,
+    ZkVerifierContractClient<'a>,
     Address,
     Address,
     u32,
@@ -119,6 +130,7 @@ fn add_base_record(env: &Env, t: &common::UzimaTest<'_>) -> u64 {
     )
 }
 
+#[allow(clippy::too_many_arguments)]
 fn build_public_inputs(
     env: &Env,
     t: &common::UzimaTest<'_>,
@@ -180,7 +192,7 @@ fn test_zk_success_path_and_access_gate() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -228,7 +240,7 @@ fn test_zk_failure_wrong_record_commitment() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -276,7 +288,7 @@ fn test_zk_failure_wrong_credential_root() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -325,7 +337,7 @@ fn test_zk_failure_replay_nullifier_reused() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -407,7 +419,7 @@ fn test_zk_failure_malformed_proof() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -461,7 +473,7 @@ fn test_acl_and_zk_gate_interplay() {
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -479,7 +491,7 @@ fn test_acl_and_zk_gate_interplay() {
 
     // ACL passes for patient, but no ZK grant yet -> blocked.
     let no_grant = t.client.try_get_record(&t.patient, &record_id);
-    assert_eq!(no_grant, Err(Ok(Error::InvalidCredential)));
+    assert!(matches!(no_grant, Err(Ok(Error::InvalidCredential))));
 
     // Unauthorized user can even submit proof, but ACL still blocks final read.
     let intruder = Address::generate(&env);
@@ -510,7 +522,7 @@ fn test_acl_and_zk_gate_interplay() {
         &intruder_proof,
     ));
     let intruder_read = t.client.try_get_record(&intruder, &record_id);
-    assert_eq!(intruder_read, Err(Ok(Error::NotAuthorized)));
+    assert!(matches!(intruder_read, Err(Ok(Error::NotAuthorized))));
 
     // Patient with valid proof succeeds.
     let public_inputs_patient = build_public_inputs(
@@ -549,14 +561,14 @@ fn test_audit_event_privacy_and_performance() {
     env.mock_all_auths();
     env.ledger().with_mut(|li| {
         li.timestamp = 1_700_000_000;
-        li.sequence = 99;
+        li.sequence_number = 99;
     });
 
     let t = setup_uzima(&env);
     let (
         credential_registry_id,
         zk_verifier_id,
-        credential_registry,
+        _credential_registry,
         zk_verifier,
         issuer,
         attestor,
@@ -604,7 +616,7 @@ fn test_audit_event_privacy_and_performance() {
         }
         let topic = event.1.get(1).unwrap();
         if Symbol::try_from_val(&env, &topic) == Ok(symbol_short!("ZK_AUD")) {
-            let data = event.2.clone();
+            let data = event.2;
             let _parsed: ZkAuditRecord = ZkAuditRecord::try_from_val(&env, &data).unwrap();
             saw_zk_audit = true;
         }
