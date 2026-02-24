@@ -1009,7 +1009,7 @@ mod test_metadata {
         let meta = client.get_record_metadata(&record_id);
         assert_eq!(meta.version, 2);
         assert_eq!(meta.tags.len(), 2);
-        assert!(meta.tags.contains(&String::from_str(&env, "hypertension")));
+        assert!(meta.tags.contains(String::from_str(&env, "hypertension")));
         assert_eq!(meta.history.len(), 1);
         assert_eq!(meta.history.get(0).unwrap().version, 1);
         assert_eq!(
@@ -1065,25 +1065,17 @@ mod test_metadata {
         );
 
         // Search by "cardiology" — should return both records
-        let results = client.search_records_by_tag(
-            &patient,
-            &String::from_str(&env, "cardiology"),
-            &0,
-            &10,
-        );
+        let results =
+            client.search_records_by_tag(&patient, &String::from_str(&env, "cardiology"), &0, &10);
         assert_eq!(results.len(), 2);
-        assert!(results.contains(&record_id1));
-        assert!(results.contains(&record_id2));
+        assert!(results.contains(record_id1));
+        assert!(results.contains(record_id2));
 
         // Search by "diabetes" — should return only record2
-        let diabetes_results = client.search_records_by_tag(
-            &patient,
-            &String::from_str(&env, "diabetes"),
-            &0,
-            &10,
-        );
+        let diabetes_results =
+            client.search_records_by_tag(&patient, &String::from_str(&env, "diabetes"), &0, &10);
         assert_eq!(diabetes_results.len(), 1);
-        assert!(diabetes_results.contains(&record_id2));
+        assert!(diabetes_results.contains(record_id2));
     }
 
     #[test]
@@ -1093,12 +1085,8 @@ mod test_metadata {
         let (client, _admin, doctor, patient, record_id) = setup(&env);
 
         // Initially indexed under "cardiology"
-        let before = client.search_records_by_tag(
-            &patient,
-            &String::from_str(&env, "cardiology"),
-            &0,
-            &10,
-        );
+        let before =
+            client.search_records_by_tag(&patient, &String::from_str(&env, "cardiology"), &0, &10);
         assert_eq!(before.len(), 1);
 
         // Update metadata — remove "cardiology", add "neurology"
@@ -1110,23 +1098,15 @@ mod test_metadata {
         );
 
         // "cardiology" index should now be empty
-        let cardiology_after = client.search_records_by_tag(
-            &patient,
-            &String::from_str(&env, "cardiology"),
-            &0,
-            &10,
-        );
+        let cardiology_after =
+            client.search_records_by_tag(&patient, &String::from_str(&env, "cardiology"), &0, &10);
         assert_eq!(cardiology_after.len(), 0);
 
         // "neurology" index should contain record_id
-        let neurology_after = client.search_records_by_tag(
-            &patient,
-            &String::from_str(&env, "neurology"),
-            &0,
-            &10,
-        );
+        let neurology_after =
+            client.search_records_by_tag(&patient, &String::from_str(&env, "neurology"), &0, &10);
         assert_eq!(neurology_after.len(), 1);
-        assert!(neurology_after.contains(&record_id));
+        assert!(neurology_after.contains(record_id));
     }
 
     #[test]
@@ -1161,7 +1141,7 @@ mod test_metadata {
         // First history entry had version 1 with "cardiology"
         let first = exported.history.get(0).unwrap();
         assert_eq!(first.version, 1);
-        assert!(first.tags.contains(&String::from_str(&env, "cardiology")));
+        assert!(first.tags.contains(String::from_str(&env, "cardiology")));
     }
 
     #[test]
@@ -1184,7 +1164,7 @@ mod test_metadata {
 
         let meta = client.get_record_metadata(&record_id);
         assert_eq!(meta.version, 2);
-        assert!(meta.tags.contains(&String::from_str(&env, "imported")));
+        assert!(meta.tags.contains(String::from_str(&env, "imported")));
         assert_eq!(
             meta.custom_fields
                 .get(String::from_str(&env, "source"))
@@ -1193,12 +1173,8 @@ mod test_metadata {
         );
 
         // Non-admin should fail
-        let result = client.try_import_record_metadata(
-            &patient,
-            &record_id,
-            &vec![&env],
-            &map![&env],
-        );
+        let result =
+            client.try_import_record_metadata(&patient, &record_id, &vec![&env], &map![&env]);
         assert!(result.is_err());
     }
 
@@ -1220,10 +1196,26 @@ mod test_metadata {
             // Make each key unique by appending index as char
             let _ = key; // will be overwritten below
             let key_str = match i {
-                0 => "k00", 1 => "k01", 2 => "k02", 3 => "k03", 4 => "k04",
-                5 => "k05", 6 => "k06", 7 => "k07", 8 => "k08", 9 => "k09",
-                10 => "k10", 11 => "k11", 12 => "k12", 13 => "k13", 14 => "k14",
-                15 => "k15", 16 => "k16", 17 => "k17", 18 => "k18", 19 => "k19",
+                0 => "k00",
+                1 => "k01",
+                2 => "k02",
+                3 => "k03",
+                4 => "k04",
+                5 => "k05",
+                6 => "k06",
+                7 => "k07",
+                8 => "k08",
+                9 => "k09",
+                10 => "k10",
+                11 => "k11",
+                12 => "k12",
+                13 => "k13",
+                14 => "k14",
+                15 => "k15",
+                16 => "k16",
+                17 => "k17",
+                18 => "k18",
+                19 => "k19",
                 _ => "k20",
             };
             fields.set(
@@ -1232,12 +1224,7 @@ mod test_metadata {
             );
         }
 
-        let result = client.try_update_record_metadata(
-            &doctor,
-            &record_id,
-            &vec![&env],
-            &fields,
-        );
+        let result = client.try_update_record_metadata(&doctor, &record_id, &vec![&env], &fields);
         assert!(result.is_err());
     }
 }
