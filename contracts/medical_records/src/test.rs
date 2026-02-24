@@ -896,7 +896,7 @@ fn test_rate_limit_different_roles() {
     // Admin can manage 2 users
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &other_doctor, &Role::Doctor);
-    
+
     // 3rd time fails for admin
     let res = client.try_manage_user(&admin, &Address::generate(&env), &Role::Patient);
     assert_eq!(res, Err(Ok(Error::RateLimitExceeded)));
@@ -909,7 +909,7 @@ fn test_rate_limit_admin_bypass() {
     let (client, admin) = create_contract(&env);
     let trusted_service = Address::generate(&env);
     let patient = Address::generate(&env);
-    
+
     // Give trusted service Doctor permissions
     client.manage_user(&admin, &trusted_service, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
@@ -930,7 +930,7 @@ fn test_rate_limit_admin_bypass() {
     client.set_rate_limit_bypass(&admin, &trusted_service, &true);
 
     // Because of bypass, trusted_service can make > 1 calls
-    for i in 0..3 {
+    for _i in 0..3 {
         client.add_record(
             &trusted_service,
             &patient,

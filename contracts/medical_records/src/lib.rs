@@ -366,9 +366,9 @@ pub enum DataKey {
     RegulatoryCompliance,
 
     // Rate limiting
-    RateLimitCfg(u32),          // operation_id -> RateLimitConfig
-    RateLimit(Address, u32),    // (caller, operation_id) -> RateLimitEntry
-    RateLimitBypass(Address),   // bool - admin-granted bypass flag
+    RateLimitCfg(u32),        // operation_id -> RateLimitConfig
+    RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
+    RateLimitBypass(Address), // bool - admin-granted bypass flag
 }
 
 // ==================== Errors ====================
@@ -428,8 +428,8 @@ const OP_MANAGE_USER: u32 = 2;
 // Default rate limits
 const DEFAULT_DOCTOR_MAX_CALLS: u32 = 50;
 const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
-const DEFAULT_ADMIN_MAX_CALLS: u32 = 0;   // 0 = unlimited
-const DEFAULT_WINDOW_SECS: u64 = 3_600;   // 1 hour
+const DEFAULT_ADMIN_MAX_CALLS: u32 = 0; // 0 = unlimited
+const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 
 // ==================== Contract ====================
 
@@ -3075,14 +3075,14 @@ impl MedicalRecordsContract {
         let now = env.ledger().timestamp();
         let key = DataKey::RateLimit(caller.clone(), op);
 
-        let mut entry: RateLimitEntry = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(RateLimitEntry {
-                count: 0,
-                window_start: now,
-            });
+        let mut entry: RateLimitEntry =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(RateLimitEntry {
+                    count: 0,
+                    window_start: now,
+                });
 
         // Reset counter if the window has elapsed
         if now >= entry.window_start + cfg.window_secs {
