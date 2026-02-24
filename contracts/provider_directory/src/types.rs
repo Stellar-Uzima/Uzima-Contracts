@@ -1,6 +1,5 @@
-#![no_std]
 
-use soroban_sdk::{contracttype, Address, String, Vec, Symbol};
+use soroban_sdk::{contracterror, contracttype, Address, String, Symbol, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -32,7 +31,7 @@ pub struct ProviderProfile {
 }
 
 #[contracttype]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Availability {
     pub day_of_week: u32, // 1-7 for Mon-Sun
     pub start_hour: u32,
