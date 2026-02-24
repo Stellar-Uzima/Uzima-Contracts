@@ -6,7 +6,8 @@
 #![allow(dead_code)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    IntoVal, Map, String, Symbol,
 };
 
 #[derive(Clone)]
@@ -48,6 +49,7 @@ pub enum DataKey {
     AnomalyCountByPatient(Address),
     Stats,
     Whitelist(Address),
+    AuditForensicsContract,
 }
 
 const ANOMALY_COUNTER: Symbol = symbol_short!("ANOM_CT");
@@ -174,6 +176,19 @@ impl AnomalyDetectionContract {
         Ok(true)
     }
 
+    pub fn set_audit_forensics(
+        env: Env,
+        admin: Address,
+        forensics: Address,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::ensure_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::AuditForensicsContract, &forensics);
+        Ok(true)
+    }
+
     pub fn detect_anomaly(
         env: Env,
         caller: Address,
@@ -250,6 +265,46 @@ impl AnomalyDetectionContract {
         stats.last_detection_at = timestamp;
 
         env.storage().instance().set(&DataKey::Stats, &stats);
+
+        // Log to Forensics System
+        if let Some(forensics_id) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::AuditForensicsContract)
+        {
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            #[soroban_sdk::contracttype]
+            enum AuditAction {
+                RecordAccess,
+                RecordUpdate,
+                RecordDelete,
+                PermissionGrant,
+                PermissionRevoke,
+                RecordCreated,
+                AnomalyDetected,
+                ComplianceReportGenerated,
+                AlertTriggered,
+            }
+
+            let mut meta = Map::new(&env);
+            meta.set(
+                String::from_str(&env, "score"),
+                String::from_str(&env, "score_placeholder"),
+            );
+
+            env.invoke_contract::<u64>(
+                &forensics_id,
+                &symbol_short!("log_event"),
+                (
+                    caller,
+                    AuditAction::AnomalyDetected,
+                    Some(record_id),
+                    BytesN::<32>::from_array(&env, &[0u8; 32]),
+                    meta,
+                )
+                    .into_val(&env),
+            );
+        }
 
         // Emit event
         env.events().publish(
