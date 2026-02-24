@@ -12,7 +12,7 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-use soroban_sdk::{Address, Env, String, Vec};
+use soroban_sdk::{Address, Env, Map, String, Vec};
 
 use crate::errors::Error;
 use crate::{MedicalRecord, UserProfile};
@@ -77,6 +77,13 @@ pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
+
+/// Maximum number of custom metadata fields per record
+pub const MAX_CUSTOM_FIELDS_COUNT: u32 = 20;
+/// Maximum length for a custom field key
+pub const MAX_CUSTOM_FIELD_KEY_LENGTH: u32 = 50;
+/// Maximum length for a custom field value
+pub const MAX_CUSTOM_FIELD_VALUE_LENGTH: u32 = 200;
 
 /// Minimum number of participants for federated learning
 pub const MIN_FEDERATED_PARTICIPANTS: u32 = 2;
@@ -663,6 +670,42 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
 
         // Validate importance score
         validate_score_bps(importance_bps)?;
+    }
+
+    Ok(())
+}
+
+/// Validates custom metadata key-value fields
+///
+/// # Arguments
+/// * `env` - The environment
+/// * `fields` - The custom fields map to validate
+///
+/// # Returns
+/// `Ok(())` if all fields are valid, otherwise returns an appropriate error
+pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result<(), Error> {
+    let _ = env;
+    // Reuses BatchTooLarge (too many items), InvalidTagLength (key too long),
+    // and InvalidDataRefLength (value too long) — Soroban SDK v21 caps contracterror at 50 variants.
+    if fields.len() > MAX_CUSTOM_FIELDS_COUNT {
+        return Err(Error::BatchTooLarge);
+    }
+
+    for (key, value) in fields.iter() {
+        validate_string_length(
+            &key,
+            1,
+            MAX_CUSTOM_FIELD_KEY_LENGTH,
+            Error::InvalidTagLength,
+            Error::InvalidTagLength,
+        )?;
+        validate_string_length(
+            &value,
+            1,
+            MAX_CUSTOM_FIELD_VALUE_LENGTH,
+            Error::InvalidDataRefLength,
+            Error::InvalidDataRefLength,
+        )?;
     }
 
     Ok(())
