@@ -2,7 +2,7 @@
 #![allow(clippy::expect_used)]
 use super::*;
 use crate::errors::Error;
-use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
@@ -731,4 +731,216 @@ fn test_get_record_count_getter() {
     );
 
     assert_eq!(client.get_record_count(), 2u64);
+}
+
+// ============================================================================
+// Rate Limiting Tests
+// ============================================================================
+
+#[test]
+fn test_rate_limit_add_record_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Set config: max 2 calls per window for doctor
+    client.set_rate_limit_config(
+        &admin,
+        &1u32, // OP_ADD_RECORD
+        &RateLimitConfig {
+            doctor_max_calls: 2,
+            patient_max_calls: 0,
+            admin_max_calls: 0,
+            window_secs: 3600,
+        },
+    );
+
+    // Call 1 - success
+    client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D1"),
+        &String::from_str(&env, "T1"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+
+    // Call 2 - success
+    client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D2"),
+        &String::from_str(&env, "T2"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXy"),
+    );
+
+    // Call 3 - fails
+    let res = client.try_add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D3"),
+        &String::from_str(&env, "T3"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXz"),
+    );
+    assert_eq!(res, Err(Ok(Error::RateLimitExceeded)));
+}
+
+#[test]
+fn test_rate_limit_resets_after_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Config: 1 call per window of 100 seconds
+    client.set_rate_limit_config(
+        &admin,
+        &1u32,
+        &RateLimitConfig {
+            doctor_max_calls: 1,
+            patient_max_calls: 1,
+            admin_max_calls: 1,
+            window_secs: 100,
+        },
+    );
+
+    // At time 1000
+    env.ledger().set_timestamp(1000);
+
+    // Call 1
+    client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D1"),
+        &String::from_str(&env, "T1"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+
+    // Call 2 immediately fails
+    let res = client.try_add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D2"),
+        &String::from_str(&env, "T2"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+    assert_eq!(res, Err(Ok(Error::RateLimitExceeded)));
+
+    // Advance time past window (1101 > 1000 + 100)
+    env.ledger().set_timestamp(1101);
+
+    // Call 3 succeeds
+    client.add_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "D3"),
+        &String::from_str(&env, "T3"),
+        &false,
+        &soroban_sdk::vec![&env],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Med"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+    );
+}
+
+#[test]
+fn test_rate_limit_different_roles() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let other_doctor = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+
+    // OP_MANAGE_USER = 2
+    client.set_rate_limit_config(
+        &admin,
+        &2u32,
+        &RateLimitConfig {
+            doctor_max_calls: 1,
+            patient_max_calls: 0,
+            admin_max_calls: 2,
+            window_secs: 3600,
+        },
+    );
+
+    // Admin can manage 2 users
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &other_doctor, &Role::Doctor);
+
+    // 3rd time fails for admin
+    let res = client.try_manage_user(&admin, &Address::generate(&env), &Role::Patient);
+    assert_eq!(res, Err(Ok(Error::RateLimitExceeded)));
+}
+
+#[test]
+fn test_rate_limit_admin_bypass() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let trusted_service = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    // Give trusted service Doctor permissions
+    client.manage_user(&admin, &trusted_service, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Config: 1 call limit
+    client.set_rate_limit_config(
+        &admin,
+        &1u32, // OP_ADD_RECORD
+        &RateLimitConfig {
+            doctor_max_calls: 1,
+            patient_max_calls: 1,
+            admin_max_calls: 1,
+            window_secs: 3600,
+        },
+    );
+
+    // Grant bypass
+    client.set_rate_limit_bypass(&admin, &trusted_service, &true);
+
+    // Because of bypass, trusted_service can make > 1 calls
+    for _i in 0..3 {
+        client.add_record(
+            &trusted_service,
+            &patient,
+            &String::from_str(&env, "D"),
+            &String::from_str(&env, "T"),
+            &false,
+            &soroban_sdk::vec![&env],
+            &String::from_str(&env, "Modern"),
+            &String::from_str(&env, "Med"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        );
+    }
 }

@@ -9,10 +9,10 @@ pub enum Error {
     ProposalAlreadyExecuted = 6,
     TimelockNotElasped = 7,
     NotEnoughApproval = 8,
-    Overflow = 47,
     NotInitialized = 48,
     CryptoRegistryNotSet = 49,
     EncryptionRequired = 50,
+    RateLimitExceeded = 51,
 
     // --- Access & Auth Errors (10-19) ---
     NotAuthorized = 2,
