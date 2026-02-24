@@ -944,3 +944,300 @@ fn test_rate_limit_admin_bypass() {
         );
     }
 }
+
+// ==================== Metadata Enhancement Tests ====================
+
+#[cfg(test)]
+mod test_metadata {
+    use super::*;
+    use soroban_sdk::{map, vec, Address, Env, Map, String};
+
+    fn setup(
+        env: &Env,
+    ) -> (
+        MedicalRecordsContractClient<'_>,
+        Address,
+        Address,
+        Address,
+        u64,
+    ) {
+        let contract_id = Address::generate(env);
+        env.register_contract(&contract_id, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(env, &contract_id);
+        let admin = Address::generate(env);
+        let doctor = Address::generate(env);
+        let patient = Address::generate(env);
+        client.initialize(&admin);
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        let data_ref = String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
+        let record_id = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(env, "Diagnosis A"),
+            &String::from_str(env, "Treatment A"),
+            &false,
+            &vec![env, String::from_str(env, "cardiology")],
+            &String::from_str(env, "Modern"),
+            &String::from_str(env, "Medication"),
+            &data_ref,
+        );
+        (client, admin, doctor, patient, record_id)
+    }
+
+    #[test]
+    fn test_update_record_metadata_by_doctor() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, doctor, patient, record_id) = setup(&env);
+
+        let new_tags = vec![
+            &env,
+            String::from_str(&env, "cardiology"),
+            String::from_str(&env, "hypertension"),
+        ];
+        let new_fields: Map<String, String> = map![
+            &env,
+            (
+                String::from_str(&env, "severity"),
+                String::from_str(&env, "moderate")
+            ),
+        ];
+
+        client.update_record_metadata(&doctor, &record_id, &new_tags, &new_fields);
+
+        let meta = client.get_record_metadata(&record_id);
+        assert_eq!(meta.version, 2);
+        assert_eq!(meta.tags.len(), 2);
+        assert!(meta.tags.contains(&String::from_str(&env, "hypertension")));
+        assert_eq!(meta.history.len(), 1);
+        assert_eq!(meta.history.get(0).unwrap().version, 1);
+        assert_eq!(
+            meta.custom_fields
+                .get(String::from_str(&env, "severity"))
+                .unwrap(),
+            String::from_str(&env, "moderate")
+        );
+
+        // Patient can still read the record
+        let _ = client.get_record(&patient, &record_id);
+    }
+
+    #[test]
+    fn test_update_metadata_unauthorized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, _doctor, patient, record_id) = setup(&env);
+
+        // Patient trying to update metadata should fail
+        let result = client.try_update_record_metadata(
+            &patient,
+            &record_id,
+            &vec![&env, String::from_str(&env, "tag")],
+            &map![&env],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_search_records_by_tag() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, doctor, patient, record_id1) = setup(&env);
+
+        // Create a second record with a different tag
+        let patient2 = Address::generate(&env);
+        client.manage_user(&admin, &patient2, &Role::Patient);
+        let record_id2 = client.add_record(
+            &doctor,
+            &patient2,
+            &String::from_str(&env, "Diagnosis B"),
+            &String::from_str(&env, "Treatment B"),
+            &false,
+            &vec![
+                &env,
+                String::from_str(&env, "cardiology"),
+                String::from_str(&env, "diabetes"),
+            ],
+            &String::from_str(&env, "Modern"),
+            &String::from_str(&env, "Medication"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXy"),
+        );
+
+        // Search by "cardiology" — should return both records
+        let results = client.search_records_by_tag(
+            &patient,
+            &String::from_str(&env, "cardiology"),
+            &0,
+            &10,
+        );
+        assert_eq!(results.len(), 2);
+        assert!(results.contains(&record_id1));
+        assert!(results.contains(&record_id2));
+
+        // Search by "diabetes" — should return only record2
+        let diabetes_results = client.search_records_by_tag(
+            &patient,
+            &String::from_str(&env, "diabetes"),
+            &0,
+            &10,
+        );
+        assert_eq!(diabetes_results.len(), 1);
+        assert!(diabetes_results.contains(&record_id2));
+    }
+
+    #[test]
+    fn test_search_tag_index_updates_on_metadata_update() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, doctor, patient, record_id) = setup(&env);
+
+        // Initially indexed under "cardiology"
+        let before = client.search_records_by_tag(
+            &patient,
+            &String::from_str(&env, "cardiology"),
+            &0,
+            &10,
+        );
+        assert_eq!(before.len(), 1);
+
+        // Update metadata — remove "cardiology", add "neurology"
+        client.update_record_metadata(
+            &doctor,
+            &record_id,
+            &vec![&env, String::from_str(&env, "neurology")],
+            &map![&env],
+        );
+
+        // "cardiology" index should now be empty
+        let cardiology_after = client.search_records_by_tag(
+            &patient,
+            &String::from_str(&env, "cardiology"),
+            &0,
+            &10,
+        );
+        assert_eq!(cardiology_after.len(), 0);
+
+        // "neurology" index should contain record_id
+        let neurology_after = client.search_records_by_tag(
+            &patient,
+            &String::from_str(&env, "neurology"),
+            &0,
+            &10,
+        );
+        assert_eq!(neurology_after.len(), 1);
+        assert!(neurology_after.contains(&record_id));
+    }
+
+    #[test]
+    fn test_export_record_metadata_includes_history() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, doctor, patient, record_id) = setup(&env);
+
+        // Update twice to build history
+        client.update_record_metadata(
+            &doctor,
+            &record_id,
+            &vec![&env, String::from_str(&env, "oncology")],
+            &map![&env],
+        );
+        client.update_record_metadata(
+            &doctor,
+            &record_id,
+            &vec![&env, String::from_str(&env, "palliative")],
+            &map![
+                &env,
+                (
+                    String::from_str(&env, "stage"),
+                    String::from_str(&env, "IV")
+                )
+            ],
+        );
+
+        let exported = client.export_record_metadata(&patient, &record_id);
+        assert_eq!(exported.version, 3);
+        assert_eq!(exported.history.len(), 2);
+        // First history entry had version 1 with "cardiology"
+        let first = exported.history.get(0).unwrap();
+        assert_eq!(first.version, 1);
+        assert!(first.tags.contains(&String::from_str(&env, "cardiology")));
+    }
+
+    #[test]
+    fn test_import_record_metadata_admin_only() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, admin, _doctor, patient, record_id) = setup(&env);
+
+        let import_tags = vec![&env, String::from_str(&env, "imported")];
+        let import_fields: Map<String, String> = map![
+            &env,
+            (
+                String::from_str(&env, "source"),
+                String::from_str(&env, "legacy_system")
+            ),
+        ];
+
+        // Admin can import
+        client.import_record_metadata(&admin, &record_id, &import_tags, &import_fields);
+
+        let meta = client.get_record_metadata(&record_id);
+        assert_eq!(meta.version, 2);
+        assert!(meta.tags.contains(&String::from_str(&env, "imported")));
+        assert_eq!(
+            meta.custom_fields
+                .get(String::from_str(&env, "source"))
+                .unwrap(),
+            String::from_str(&env, "legacy_system")
+        );
+
+        // Non-admin should fail
+        let result = client.try_import_record_metadata(
+            &patient,
+            &record_id,
+            &vec![&env],
+            &map![&env],
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_too_many_custom_fields_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin, doctor, _patient, record_id) = setup(&env);
+
+        // Build 21 custom fields (exceeds limit of 20) — expect BatchTooLarge
+        let mut fields: Map<String, String> = Map::new(&env);
+        for i in 0u32..21u32 {
+            // Use simple string keys to avoid format! allocations in no_std context
+            let key = if i < 10 {
+                soroban_sdk::String::from_str(&env, "key0")
+            } else {
+                soroban_sdk::String::from_str(&env, "key1")
+            };
+            // Make each key unique by appending index as char
+            let _ = key; // will be overwritten below
+            let key_str = match i {
+                0 => "k00", 1 => "k01", 2 => "k02", 3 => "k03", 4 => "k04",
+                5 => "k05", 6 => "k06", 7 => "k07", 8 => "k08", 9 => "k09",
+                10 => "k10", 11 => "k11", 12 => "k12", 13 => "k13", 14 => "k14",
+                15 => "k15", 16 => "k16", 17 => "k17", 18 => "k18", 19 => "k19",
+                _ => "k20",
+            };
+            fields.set(
+                soroban_sdk::String::from_str(&env, key_str),
+                soroban_sdk::String::from_str(&env, "value"),
+            );
+        }
+
+        let result = client.try_update_record_metadata(
+            &doctor,
+            &record_id,
+            &vec![&env],
+            &fields,
+        );
+        assert!(result.is_err());
+    }
+}

@@ -56,6 +56,19 @@ pub struct RecordMetadata {
     pub category: String,
     pub is_confidential: bool,
     pub record_hash: BytesN<32>,
+    pub tags: Vec<String>,
+    pub custom_fields: Map<String, String>,
+    pub version: u32,
+    pub history: Vec<RecordMetadataHistoryEntry>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordMetadataHistoryEntry {
+    pub version: u32,
+    pub timestamp: u64,
+    pub tags: Vec<String>,
+    pub custom_fields: Map<String, String>,
 }
 
 // ==================== Users / DID ====================
@@ -319,6 +332,7 @@ pub enum DataKey {
     Record(u64),
     RecordMeta(u64),
     PatientRecords(Address),
+    TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
 
     // Logs
     AccessLogCount,
@@ -1021,6 +1035,213 @@ impl MedicalRecordsContract {
     }
 
     // ---------------------------------------------------------------------
+    // Metadata Enhancement & Tagging
+    // ---------------------------------------------------------------------
+
+    /// Updates tags and custom metadata fields for an existing record.
+    /// Only the record's doctor or an admin may call this.
+    /// Each update creates a versioned history entry.
+    pub fn update_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        tags: Vec<String>,
+        custom_fields: Map<String, String>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        // Load the record to verify caller is the doctor or admin
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.doctor_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Validate new metadata
+        validation::validate_tags(&tags)?;
+        validation::validate_custom_fields(&env, &custom_fields)?;
+
+        // Load existing metadata
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Save current state as a history entry
+        let history_entry = RecordMetadataHistoryEntry {
+            version: meta.version,
+            timestamp: env.ledger().timestamp(),
+            tags: meta.tags.clone(),
+            custom_fields: meta.custom_fields.clone(),
+        };
+        meta.history.push_back(history_entry);
+
+        // Update tag index: remove record from old tags not in new set, add to new tags
+        Self::update_tag_index(&env, record_id, &meta.tags, &tags);
+
+        // Apply new values
+        meta.tags = tags.clone();
+        meta.custom_fields = custom_fields.clone();
+        meta.version = meta.version.saturating_add(1);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_metadata_updated(
+            &env,
+            caller,
+            record_id,
+            record.patient_id,
+            meta.version,
+            tags.len(),
+            custom_fields.len(),
+        );
+
+        Ok(())
+    }
+
+    /// Returns record IDs that are indexed under a given tag, paginated.
+    /// Any authenticated user may search.
+    pub fn search_records_by_tag(
+        env: Env,
+        caller: Address,
+        tag: String,
+        page: u32,
+        page_size: u32,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        validation::validate_pagination(page, page_size)?;
+
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TagIndex(tag))
+            .unwrap_or(Vec::new(&env));
+
+        let start = page.saturating_mul(page_size);
+        if start >= ids.len() {
+            return Ok(Vec::new(&env));
+        }
+        let mut end = start.saturating_add(page_size);
+        if end > ids.len() {
+            end = ids.len();
+        }
+
+        let mut out: Vec<u64> = Vec::new(&env);
+        let mut i = start;
+        while i < end {
+            if let Some(id) = ids.get(i) {
+                out.push_back(id);
+            }
+            i = i.saturating_add(1);
+        }
+
+        Ok(out)
+    }
+
+    /// Exports full metadata (including history) for a record.
+    /// Accessible by the patient, the record's doctor, or an admin.
+    pub fn export_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<RecordMetadata, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id
+            && caller != record.doctor_id
+            && !Self::is_admin(&env, &caller)
+            && !Self::has_emergency_access_internal(&env, &caller, &record.patient_id, record_id)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    /// Admin-only: imports (overwrites) tags and custom fields for a record.
+    /// Useful for data migration. Creates a history entry before overwriting.
+    pub fn import_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        tags: Vec<String>,
+        custom_fields: Map<String, String>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        // Record must exist
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        validation::validate_tags(&tags)?;
+        validation::validate_custom_fields(&env, &custom_fields)?;
+
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Save history entry
+        let history_entry = RecordMetadataHistoryEntry {
+            version: meta.version,
+            timestamp: env.ledger().timestamp(),
+            tags: meta.tags.clone(),
+            custom_fields: meta.custom_fields.clone(),
+        };
+        meta.history.push_back(history_entry);
+
+        // Update tag index
+        Self::update_tag_index(&env, record_id, &meta.tags, &tags);
+
+        meta.tags = tags.clone();
+        meta.custom_fields = custom_fields.clone();
+        meta.version = meta.version.saturating_add(1);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_metadata_updated(
+            &env,
+            caller,
+            record_id,
+            record.patient_id,
+            meta.version,
+            tags.len(),
+            custom_fields.len(),
+        );
+
+        Ok(())
+    }
+
+    // ---------------------------------------------------------------------
     // Crypto config
     // ---------------------------------------------------------------------
 
@@ -1577,10 +1798,27 @@ impl MedicalRecordsContract {
             category,
             is_confidential,
             record_hash,
+            tags: record.tags.clone(),
+            custom_fields: Map::new(&env),
+            version: 1,
+            history: Vec::new(&env),
         };
         env.storage()
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
+
+        // Index each tag for searchability
+        for tag in record.tags.iter() {
+            let mut ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TagIndex(tag.clone()))
+                .unwrap_or(Vec::new(&env));
+            ids.push_back(record_id);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TagIndex(tag.clone()), &ids);
+        }
 
         Self::increment_record_count(&env);
 
@@ -2714,10 +2952,69 @@ impl MedicalRecordsContract {
             category: category.clone(),
             is_confidential,
             record_hash,
+            tags: record.tags.clone(),
+            custom_fields: Map::new(env),
+            version: 1,
+            history: Vec::new(env),
         };
         env.storage()
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
+
+        // Index each tag for searchability
+        for tag in record.tags.iter() {
+            let mut ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TagIndex(tag.clone()))
+                .unwrap_or(Vec::new(env));
+            ids.push_back(record_id);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TagIndex(tag.clone()), &ids);
+        }
+    }
+
+    /// Updates the tag inverted-index when a record's tags change.
+    /// Removes record_id from indexes of old tags no longer present,
+    /// and adds record_id to indexes of new tags not previously present.
+    fn update_tag_index(env: &Env, record_id: u64, old_tags: &Vec<String>, new_tags: &Vec<String>) {
+        // Remove from old tags that are not in the new set
+        for old_tag in old_tags.iter() {
+            if !new_tags.contains(&old_tag) {
+                let mut ids: Vec<u64> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::TagIndex(old_tag.clone()))
+                    .unwrap_or(Vec::new(env));
+                // Rebuild the vec without this record_id
+                let mut updated: Vec<u64> = Vec::new(env);
+                for id in ids.iter() {
+                    if id != record_id {
+                        updated.push_back(id);
+                    }
+                }
+                ids = updated;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TagIndex(old_tag.clone()), &ids);
+            }
+        }
+
+        // Add to new tags that are not in the old set
+        for new_tag in new_tags.iter() {
+            if !old_tags.contains(&new_tag) {
+                let mut ids: Vec<u64> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::TagIndex(new_tag.clone()))
+                    .unwrap_or(Vec::new(env));
+                ids.push_back(record_id);
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TagIndex(new_tag.clone()), &ids);
+            }
+        }
     }
 
     fn append_patient_record(env: &Env, patient: &Address, record_id: u64) {
