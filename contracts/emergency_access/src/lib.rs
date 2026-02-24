@@ -5,10 +5,12 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
-    Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    Vec,
 };
 
+use soroban_sdk::vec;
+use soroban_sdk::IntoVal;
 // ==================== Emergency Access Types ====================
 
 /// Emergency Access Request Status
@@ -39,18 +41,18 @@ pub enum MFAFactor {
 #[contracttype]
 pub struct EmergencyRequest {
     pub request_id: u64,
-    pub requester: Address,           // Healthcare provider requesting access
-    pub patient: Address,             // Patient whose records are needed
-    pub emergency_type: String,       // Type of emergency (cardiac, trauma, etc.)
-    pub justification: String,        // Clinical justification
-    pub record_scope: Vec<u64>,       // Specific record IDs (empty = all records)
-    pub requested_duration: u64,      // Requested access duration in seconds
-    pub mfa_factors: Vec<MFAFactor>,  // MFA factors provided
+    pub requester: Address,          // Healthcare provider requesting access
+    pub patient: Address,            // Patient whose records are needed
+    pub emergency_type: String,      // Type of emergency (cardiac, trauma, etc.)
+    pub justification: String,       // Clinical justification
+    pub record_scope: Vec<u64>,      // Specific record IDs (empty = all records)
+    pub requested_duration: u64,     // Requested access duration in seconds
+    pub mfa_factors: Vec<MFAFactor>, // MFA factors provided
     pub status: EmergencyRequestStatus,
     pub created_at: u64,
     pub expires_at: u64,
-    pub approved_by: Vec<Address>,    // Approvers
-    pub required_approvals: u32,      // Number of approvals needed
+    pub approved_by: Vec<Address>, // Approvers
+    pub required_approvals: u32,   // Number of approvals needed
 }
 
 /// Emergency Access Grant
@@ -74,11 +76,11 @@ pub struct EmergencyGrant {
 #[contracttype]
 pub struct EmergencyAuthority {
     pub address: Address,
-    pub role: String,              // "doctor", "nurse", "admin", "emergency_coordinator"
-    pub specialty: String,         // Medical specialty
+    pub role: String,      // "doctor", "nurse", "admin", "emergency_coordinator"
+    pub specialty: String, // Medical specialty
     pub license_number: String,
     pub is_active: bool,
-    pub approval_weight: u32,      // Weight for approval quorum
+    pub approval_weight: u32, // Weight for approval quorum
 }
 
 /// Compliance Report for Emergency Access
@@ -108,13 +110,13 @@ pub enum DataKey {
     GrantCounter,
     IncidentCounter,
     EmergencyAuthorities,
-    PendingRequests(Address),      // patient -> requests
-    ActiveGrants(Address),         // patient -> grants
-    RequestDetails(u64),           // request_id -> details
-    GrantDetails(u64),             // grant_id -> details
-    AuthorityDetails(Address),     // address -> authority info
-    ComplianceReports(u64),        // incident_id -> report
-    ExpiredGrants,                 // For cleanup
+    PendingRequests(Address),  // patient -> requests
+    ActiveGrants(Address),     // patient -> grants
+    RequestDetails(u64),       // request_id -> details
+    GrantDetails(u64),         // grant_id -> details
+    AuthorityDetails(Address), // address -> authority info
+    ComplianceReports(u64),    // incident_id -> report
+    ExpiredGrants,             // For cleanup
 }
 
 // ==================== Contract Configuration ====================
@@ -128,9 +130,9 @@ pub struct EmergencyConfig {
     pub governor_contract: Address,
     pub dispute_contract: Address,
     pub compliance_contract: Address,
-    pub max_request_duration: u64,     // Maximum allowed duration
-    pub min_approvals_required: u32,   // Minimum approvals needed
-    pub emergency_cooldown: u64,       // Cooldown between requests for same patient
+    pub max_request_duration: u64,   // Maximum allowed duration
+    pub min_approvals_required: u32, // Minimum approvals needed
+    pub emergency_cooldown: u64,     // Cooldown between requests for same patient
     pub auto_expiration_enabled: bool,
     pub mfa_required: bool,
     pub audit_enabled: bool,
@@ -187,7 +189,7 @@ impl EmergencyAccess {
         }
 
         let config = EmergencyConfig {
-            admin,
+            admin: admin.clone(),
             medical_records_contract,
             identity_registry_contract,
             governor_contract,
@@ -202,17 +204,27 @@ impl EmergencyAccess {
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::RequestCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::RequestCounter, &0u64);
         env.storage().instance().set(&DataKey::GrantCounter, &0u64);
-        env.storage().instance().set(&DataKey::IncidentCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::IncidentCounter, &0u64);
 
         // Initialize empty collections
-        env.storage().persistent().set(&DataKey::EmergencyAuthorities, &Map::<Address, EmergencyAuthority>::new(&env));
-        env.storage().persistent().set(&DataKey::ExpiredGrants, &Vec::<u64>::new(&env));
+        env.storage().persistent().set(
+            &DataKey::EmergencyAuthorities,
+            &Map::<Address, EmergencyAuthority>::new(&env),
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExpiredGrants, &Vec::<u64>::new(&env));
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("init")),
-            (admin, env.ledger().timestamp()),
+            // (admin, env.ledger().timestamp()),
+            (admin.clone(), env.ledger().timestamp()),
         );
 
         Ok(())
@@ -249,7 +261,9 @@ impl EmergencyAccess {
             .get(&DataKey::EmergencyAuthorities)
             .unwrap_or(Map::new(&env));
         authorities.set(authority_address.clone(), authority);
-        env.storage().persistent().set(&DataKey::EmergencyAuthorities, &authorities);
+        env.storage()
+            .persistent()
+            .set(&DataKey::EmergencyAuthorities, &authorities);
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("auth_reg")),
@@ -305,7 +319,9 @@ impl EmergencyAccess {
         };
 
         // Store request details
-        env.storage().persistent().set(&DataKey::RequestDetails(request_id), &request);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestDetails(request_id), &request);
 
         // Add to pending requests for patient
         let mut pending = env
@@ -314,7 +330,9 @@ impl EmergencyAccess {
             .get(&DataKey::PendingRequests(patient.clone()))
             .unwrap_or(Vec::new(&env));
         pending.push_back(request_id);
-        env.storage().persistent().set(&DataKey::PendingRequests(patient.clone()), &pending);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PendingRequests(patient.clone()), &pending);
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("req_sub")),
@@ -359,7 +377,9 @@ impl EmergencyAccess {
             Self::create_emergency_grant(&env, &request)?;
         }
 
-        env.storage().persistent().set(&DataKey::RequestDetails(request_id), &request);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestDetails(request_id), &request);
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("req_appr")),
@@ -400,11 +420,7 @@ impl EmergencyAccess {
     }
 
     /// Revoke emergency access grant
-    pub fn revoke_emergency_access(
-        env: Env,
-        caller: Address,
-        grant_id: u64,
-    ) -> Result<(), Error> {
+    pub fn revoke_emergency_access(env: Env, caller: Address, grant_id: u64) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
@@ -427,7 +443,9 @@ impl EmergencyAccess {
         }
 
         grant.is_active = false;
-        env.storage().persistent().set(&DataKey::GrantDetails(grant_id), &grant);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GrantDetails(grant_id), &grant);
 
         // Update active grants
         Self::update_active_grants(&env, &grant.patient, &grant.grantee);
@@ -457,7 +475,7 @@ impl EmergencyAccess {
             .ok_or(Error::GrantNotFound)?;
 
         // Call dispute resolution contract
-        let config = Self::get_config(&env)?;
+        let _config = Self::get_config(&env)?;
         // Note: This would integrate with the dispute_resolution contract
         // For now, we'll mark as disputed
         let mut request: EmergencyRequest = env
@@ -467,10 +485,12 @@ impl EmergencyAccess {
             .ok_or(Error::RequestNotFound)?;
 
         request.status = EmergencyRequestStatus::Disputed;
-        env.storage().persistent().set(&DataKey::RequestDetails(grant.request_id), &request);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestDetails(grant.request_id), &request);
 
         env.events().publish(
-            (symbol_short!("emerg"), symbol_short!("grant_disp")),
+            (symbol_short!("emerg"), symbol_short!("grant_dp")),
             (grant_id, caller, reason, env.ledger().timestamp()),
         );
 
@@ -514,10 +534,16 @@ impl EmergencyAccess {
             access_end: grant.expires_at,
             records_accessed: grant.record_scope,
             compliance_violations: Vec::new(&env), // Would be populated based on audit
-            audit_trail: vec![&env, "Emergency access granted".into_val(&env), "Access logged".into_val(&env)],
+            audit_trail: vec![
+                &env,
+                "Emergency access granted".into_val(&env),
+                "Access logged".into_val(&env),
+            ],
         };
 
-        env.storage().persistent().set(&DataKey::ComplianceReports(incident_id), &report);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ComplianceReports(incident_id), &report);
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("comp_rpt")),
@@ -540,13 +566,23 @@ impl EmergencyAccess {
 
         // Get all patients with active grants (this is simplified - in practice would need indexing)
         // For now, we'll iterate through known grants
-        let grant_count: u64 = env.storage().instance().get(&DataKey::GrantCounter).unwrap_or(0);
+        let grant_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::GrantCounter)
+            .unwrap_or(0);
 
         for grant_id in 1..=grant_count {
-            if let Some(mut grant) = env.storage().persistent().get::<_, EmergencyGrant>(&DataKey::GrantDetails(grant_id)) {
+            if let Some(mut grant) = env
+                .storage()
+                .persistent()
+                .get::<_, EmergencyGrant>(&DataKey::GrantDetails(grant_id))
+            {
                 if grant.is_active && grant.expires_at <= now {
                     grant.is_active = false;
-                    env.storage().persistent().set(&DataKey::GrantDetails(grant_id), &grant);
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::GrantDetails(grant_id), &grant);
                     Self::update_active_grants(&env, &grant.patient, &grant.grantee);
                     cleaned += 1;
                 }
@@ -584,7 +620,9 @@ impl EmergencyAccess {
             .get(&DataKey::EmergencyAuthorities)
             .unwrap_or(Map::new(env));
 
-        let authority = authorities.get(address.clone()).ok_or(Error::NotEmergencyAuthority)?;
+        let authority = authorities
+            .get(address.clone())
+            .ok_or(Error::NotEmergencyAuthority)?;
         if !authority.is_active {
             return Err(Error::AuthorityNotActive);
         }
@@ -623,8 +661,14 @@ impl EmergencyAccess {
         let now = env.ledger().timestamp();
         for i in 0..pending.len() {
             let request_id = pending.get(i).unwrap();
-            if let Some(request) = env.storage().persistent().get::<_, EmergencyRequest>(&DataKey::RequestDetails(request_id)) {
-                if request.requester == *requester && (now - request.created_at) < config.emergency_cooldown {
+            if let Some(request) = env
+                .storage()
+                .persistent()
+                .get::<_, EmergencyRequest>(&DataKey::RequestDetails(request_id))
+            {
+                if request.requester == *requester
+                    && (now - request.created_at) < config.emergency_cooldown
+                {
                     return true;
                 }
             }
@@ -649,13 +693,18 @@ impl EmergencyAccess {
             patient: request.patient.clone(),
             record_scope: request.record_scope.clone(),
             granted_at: env.ledger().timestamp(),
-            expires_at: env.ledger().timestamp().saturating_add(request.requested_duration),
+            expires_at: env
+                .ledger()
+                .timestamp()
+                .saturating_add(request.requested_duration),
             is_active: true,
             access_count: 0,
             last_access: 0,
         };
 
-        env.storage().persistent().set(&DataKey::GrantDetails(grant_id), &grant);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GrantDetails(grant_id), &grant);
 
         // Add to active grants
         let mut active_grants: Map<Address, Vec<EmergencyGrant>> = env
@@ -664,10 +713,15 @@ impl EmergencyAccess {
             .get(&DataKey::ActiveGrants(request.patient.clone()))
             .unwrap_or(Map::new(env));
 
-        let mut patient_grants = active_grants.get(request.requester.clone()).unwrap_or(Vec::new(env));
+        let mut patient_grants = active_grants
+            .get(request.requester.clone())
+            .unwrap_or(Vec::new(env));
         patient_grants.push_back(grant);
         active_grants.set(request.requester.clone(), patient_grants);
-        env.storage().persistent().set(&DataKey::ActiveGrants(request.patient.clone()), &active_grants);
+        env.storage().persistent().set(
+            &DataKey::ActiveGrants(request.patient.clone()),
+            &active_grants,
+        );
 
         env.events().publish(
             (symbol_short!("emerg"), symbol_short!("grant_cr")),
@@ -684,7 +738,7 @@ impl EmergencyAccess {
             .get(&DataKey::ActiveGrants(patient.clone()))
             .unwrap_or(Map::new(env));
 
-        if let Some(mut patient_grants) = active_grants.get(grantee.clone()) {
+        if let Some(patient_grants) = active_grants.get(grantee.clone()) {
             // Remove inactive grants
             let mut filtered = Vec::new(env);
             for i in 0..patient_grants.len() {
@@ -695,7 +749,9 @@ impl EmergencyAccess {
             }
             let mut updated_active = active_grants.clone();
             updated_active.set(grantee.clone(), filtered);
-            env.storage().persistent().set(&DataKey::ActiveGrants(patient.clone()), &updated_active);
+            env.storage()
+                .persistent()
+                .set(&DataKey::ActiveGrants(patient.clone()), &updated_active);
         }
     }
 }

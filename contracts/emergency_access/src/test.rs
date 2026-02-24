@@ -1,7 +1,12 @@
-#![cfg(test)]
+// #![cfg(test)]
 
 use super::*;
-use soroban_sdk::testutils::{Address as _, Env as _};
+// use soroban_sdk::env::Env;
+// use soroban_sdk::testutils::Address as _;
+// use soroban_sdk::Env;
+// use soroban_sdk::{vec, Address, Env, IntoVal};
+
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{vec, Address, Env, IntoVal};
 
 #[test]
@@ -48,7 +53,8 @@ fn test_register_emergency_authority() {
         3600,
         2,
         300,
-    ).unwrap();
+    )
+    .unwrap();
 
     let result = EmergencyAccess::register_emergency_authority(
         env.clone(),
@@ -82,7 +88,8 @@ fn test_request_emergency_access() {
         3600,
         2,
         300,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Register authority
     EmergencyAccess::register_emergency_authority(
@@ -93,7 +100,8 @@ fn test_request_emergency_access() {
         "emergency_medicine".into_val(&env),
         "MD12345".into_val(&env),
         1,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Request access
     let mfa_factors = vec![&env, MFAFactor::Password, MFAFactor::Biometric];
@@ -135,7 +143,8 @@ fn test_approve_emergency_request() {
         3600,
         2,
         300,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Register authorities
     EmergencyAccess::register_emergency_authority(
@@ -146,7 +155,8 @@ fn test_approve_emergency_request() {
         "emergency_medicine".into_val(&env),
         "MD12345".into_val(&env),
         1,
-    ).unwrap();
+    )
+    .unwrap();
 
     EmergencyAccess::register_emergency_authority(
         env.clone(),
@@ -156,7 +166,8 @@ fn test_approve_emergency_request() {
         "emergency".into_val(&env),
         "RN67890".into_val(&env),
         1,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Request access
     let mfa_factors = vec![&env, MFAFactor::Password, MFAFactor::Biometric];
@@ -171,31 +182,22 @@ fn test_approve_emergency_request() {
         record_scope,
         1800,
         mfa_factors,
-    ).unwrap();
+    )
+    .unwrap();
 
     // First approval
-    let result1 = EmergencyAccess::approve_emergency_request(
-        env.clone(),
-        authority1,
-        request_id,
-    );
+    // let result1 = EmergencyAccess::approve_emergency_request(env.clone(), authority1, request_id);
+    let result1 =
+        EmergencyAccess::approve_emergency_request(env.clone(), authority1.clone(), request_id);
     assert!(result1.is_ok());
 
     // Second approval should create grant
-    let result2 = EmergencyAccess::approve_emergency_request(
-        env.clone(),
-        authority2,
-        request_id,
-    );
+    let result2 = EmergencyAccess::approve_emergency_request(env.clone(), authority2, request_id);
     assert!(result2.is_ok());
 
     // Check if access is granted
-    let has_access = EmergencyAccess::has_emergency_access(
-        env,
-        authority1,
-        patient,
-        1u64,
-    );
+    // let has_access = EmergencyAccess::has_emergency_access(env, authority1, patient, 1u64);
+    let has_access = EmergencyAccess::has_emergency_access(env, authority1.clone(), patient, 1u64);
     assert!(has_access);
 }
 
@@ -218,7 +220,8 @@ fn test_revoke_emergency_access() {
         3600,
         1, // 1 approval required
         300,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Register authority
     EmergencyAccess::register_emergency_authority(
@@ -229,7 +232,8 @@ fn test_revoke_emergency_access() {
         "emergency_medicine".into_val(&env),
         "MD12345".into_val(&env),
         1,
-    ).unwrap();
+    )
+    .unwrap();
 
     // Request and approve access
     let mfa_factors = vec![&env, MFAFactor::Password, MFAFactor::Biometric];
@@ -244,13 +248,10 @@ fn test_revoke_emergency_access() {
         record_scope,
         1800,
         mfa_factors,
-    ).unwrap();
+    )
+    .unwrap();
 
-    EmergencyAccess::approve_emergency_request(
-        env.clone(),
-        authority.clone(),
-        request_id,
-    ).unwrap();
+    EmergencyAccess::approve_emergency_request(env.clone(), authority.clone(), request_id).unwrap();
 
     // Check access granted
     let has_access_before = EmergencyAccess::has_emergency_access(
@@ -263,19 +264,10 @@ fn test_revoke_emergency_access() {
 
     // Get grant ID (simplified - in real scenario would track this)
     // For test, assume grant_id = 1
-    let result = EmergencyAccess::revoke_emergency_access(
-        env.clone(),
-        authority.clone(),
-        1u64,
-    );
+    let result = EmergencyAccess::revoke_emergency_access(env.clone(), authority.clone(), 1u64);
     assert!(result.is_ok());
 
     // Check access revoked
-    let has_access_after = EmergencyAccess::has_emergency_access(
-        env,
-        authority,
-        patient,
-        1u64,
-    );
+    let has_access_after = EmergencyAccess::has_emergency_access(env, authority, patient, 1u64);
     assert!(!has_access_after);
 }
