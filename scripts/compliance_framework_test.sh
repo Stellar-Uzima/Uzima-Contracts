@@ -43,21 +43,22 @@ run_cargo_tests() {
     echo -e "\n${BLUE}Running tests for $contract_name${NC}"
     echo "----------------------------------------"
     
-    cd "$CONTRACTS_DIR/$contract_name"
-    
+    cd "$CONTRACTS_DIR/$contract_name" || return 1
+
     if [ -n "$test_filter" ]; then
-        cargo test --release "$test_filter" -- --nocapture
+        if cargo test --release "$test_filter" -- --nocapture; then
+            print_status "PASS" "$contract_name tests completed successfully"
+            return 0
+        fi
     else
-        cargo test --release -- --nocapture
+        if cargo test --release -- --nocapture; then
+            print_status "PASS" "$contract_name tests completed successfully"
+            return 0
+        fi
     fi
-    
-    if [ $? -eq 0 ]; then
-        print_status "PASS" "$contract_name tests completed successfully"
-        return 0
-    else
-        print_status "FAIL" "$contract_name tests failed"
-        return 1
-    fi
+
+    print_status "FAIL" "$contract_name tests failed"
+    return 1
 }
 
 # Function to build contract
@@ -66,11 +67,9 @@ build_contract() {
     echo -e "\n${BLUE}Building $contract_name contract${NC}"
     echo "----------------------------------------"
     
-    cd "$CONTRACTS_DIR/$contract_name"
-    
-    cargo build --target wasm32-unknown-unknown --release
-    
-    if [ $? -eq 0 ]; then
+    cd "$CONTRACTS_DIR/$contract_name" || return 1
+
+    if cargo build --target wasm32-unknown-unknown --release; then
         print_status "PASS" "$contract_name built successfully"
         return 0
     else
