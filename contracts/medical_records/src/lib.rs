@@ -3085,7 +3085,7 @@ impl MedicalRecordsContract {
                 });
 
         // Reset counter if the window has elapsed
-        if now >= entry.window_start + cfg.window_secs {
+        if now >= entry.window_start.saturating_add(cfg.window_secs) {
             entry = RateLimitEntry {
                 count: 0,
                 window_start: now,
@@ -3096,7 +3096,7 @@ impl MedicalRecordsContract {
             return Err(Error::RateLimitExceeded);
         }
 
-        entry.count += 1;
+        entry.count = entry.count.saturating_add(1);
         env.storage().persistent().set(&key, &entry);
         Ok(())
     }
