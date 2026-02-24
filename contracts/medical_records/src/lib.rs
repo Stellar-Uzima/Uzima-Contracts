@@ -364,6 +364,11 @@ pub enum DataKey {
     AuditForensicsContract,
     // Compliance
     RegulatoryCompliance,
+
+    // Rate limiting
+    RateLimitCfg(u32),          // operation_id -> RateLimitConfig
+    RateLimit(Address, u32),    // (caller, operation_id) -> RateLimitEntry
+    RateLimitBypass(Address),   // bool - admin-granted bypass flag
 }
 
 // ==================== Errors ====================
@@ -385,12 +390,46 @@ pub struct BatchResult {
     pub failures: Vec<FailureInfo>,
 }
 
+// ==================== Rate Limiting Types ====================
+
+/// Configures operation-specific rate limits per role.
+#[derive(Clone)]
+#[contracttype]
+pub struct RateLimitConfig {
+    /// Max calls per window for a Doctor (0 = unlimited).
+    pub doctor_max_calls: u32,
+    /// Max calls per window for a Patient / None role (0 = unlimited).
+    pub patient_max_calls: u32,
+    /// Max calls per window for Admin (0 = unlimited).
+    pub admin_max_calls: u32,
+    /// Rolling window duration in seconds.
+    pub window_secs: u64,
+}
+
+/// Per-user, per-operation call counter stored in persistent storage.
+#[derive(Clone)]
+#[contracttype]
+pub struct RateLimitEntry {
+    pub count: u32,
+    pub window_start: u64,
+}
+
 // ==================== Constants ====================
 
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
 const CHAIN_LIST_LEN: usize = 6;
+
+// Rate-limiting operation IDs
+const OP_ADD_RECORD: u32 = 1;
+const OP_MANAGE_USER: u32 = 2;
+
+// Default rate limits
+const DEFAULT_DOCTOR_MAX_CALLS: u32 = 50;
+const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
+const DEFAULT_ADMIN_MAX_CALLS: u32 = 0;   // 0 = unlimited
+const DEFAULT_WINDOW_SECS: u64 = 3_600;   // 1 hour
 
 // ==================== Contract ====================
 
@@ -474,6 +513,7 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
+        Self::check_and_update_rate_limit(&env, &caller, OP_MANAGE_USER)?;
 
         let mut users = Self::read_users(&env);
         let existing = users.get(user.clone());
@@ -730,6 +770,7 @@ impl MedicalRecordsContract {
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
             return Err(Error::NotAuthorized);
         }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
         // Validate inputs
         if Self::is_patient_forgotten(&env, &patient) {
@@ -2979,6 +3020,117 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::CryptoAudit(next), &entry);
+    }
+
+    // =========================================================================
+    // Rate Limiting
+    // =========================================================================
+
+    /// Internal guard – called at the start of rate-limited operations.
+    /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
+    /// all allowed calls in the current window.
+    fn check_and_update_rate_limit(env: &Env, caller: &Address, op: u32) -> Result<(), Error> {
+        // Admin-granted bypass flag
+        let bypass: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RateLimitBypass(caller.clone()))
+            .unwrap_or(false);
+        if bypass {
+            return Ok(());
+        }
+
+        // Load config or fall back to defaults
+        let cfg: RateLimitConfig = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RateLimitCfg(op))
+            .unwrap_or(RateLimitConfig {
+                doctor_max_calls: DEFAULT_DOCTOR_MAX_CALLS,
+                patient_max_calls: DEFAULT_PATIENT_MAX_CALLS,
+                admin_max_calls: DEFAULT_ADMIN_MAX_CALLS,
+                window_secs: DEFAULT_WINDOW_SECS,
+            });
+
+        // Determine the limit for this caller's role
+        let users = Self::read_users(env);
+        let max_calls = match users.get(caller.clone()) {
+            Some(profile) if profile.active => match profile.role {
+                Role::Admin => {
+                    if cfg.admin_max_calls == 0 {
+                        return Ok(()); // Admins unlimited by default
+                    }
+                    cfg.admin_max_calls
+                }
+                Role::Doctor => cfg.doctor_max_calls,
+                Role::Patient | Role::None => cfg.patient_max_calls,
+            },
+            _ => cfg.patient_max_calls,
+        };
+
+        if max_calls == 0 {
+            return Ok(()); // 0 means unlimited for this role
+        }
+
+        let now = env.ledger().timestamp();
+        let key = DataKey::RateLimit(caller.clone(), op);
+
+        let mut entry: RateLimitEntry = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(RateLimitEntry {
+                count: 0,
+                window_start: now,
+            });
+
+        // Reset counter if the window has elapsed
+        if now >= entry.window_start + cfg.window_secs {
+            entry = RateLimitEntry {
+                count: 0,
+                window_start: now,
+            };
+        }
+
+        if entry.count >= max_calls {
+            return Err(Error::RateLimitExceeded);
+        }
+
+        entry.count += 1;
+        env.storage().persistent().set(&key, &entry);
+        Ok(())
+    }
+
+    /// Configure the rate limit for a specific operation (admin only).
+    pub fn set_rate_limit_config(
+        env: Env,
+        admin: Address,
+        op: u32,
+        config: RateLimitConfig,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RateLimitCfg(op), &config);
+        Ok(true)
+    }
+
+    /// Grant or revoke rate-limit bypass for an account (admin only).
+    pub fn set_rate_limit_bypass(
+        env: Env,
+        admin: Address,
+        account: Address,
+        bypass: bool,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RateLimitBypass(account), &bypass);
+        Ok(true)
     }
 }
 
