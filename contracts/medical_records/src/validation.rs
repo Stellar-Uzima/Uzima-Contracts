@@ -730,27 +730,27 @@ pub fn assess_field_completeness(record: &MedicalRecord) -> FieldCompleteness {
     let total_fields = 7u32; // diagnosis, treatment, category, treatment_type, data_ref, tags, doctor_did
     let mut completed = 0u32;
 
-    let has_diagnosis = record.diagnosis.len() > 0;
+    let has_diagnosis = !record.diagnosis.is_empty();
     if has_diagnosis {
         completed += 1;
     }
 
-    let has_treatment = record.treatment.len() > 0;
+    let has_treatment = !record.treatment.is_empty();
     if has_treatment {
         completed += 1;
     }
 
-    let has_category = record.category.len() > 0;
+    let has_category = !record.category.is_empty();
     if has_category {
         completed += 1;
     }
 
-    let has_treatment_type = record.treatment_type.len() > 0;
+    let has_treatment_type = !record.treatment_type.is_empty();
     if has_treatment_type {
         completed += 1;
     }
 
-    let has_data_ref = record.data_ref.len() > 0;
+    let has_data_ref = !record.data_ref.is_empty();
     if has_data_ref {
         completed += 1;
     }
@@ -1121,7 +1121,7 @@ pub fn validate_record_by_type(
 pub fn normalize_medical_string(env: &Env, input: &String) -> String {
     // In Soroban no_std, String doesn't expose slice/trim operations directly.
     // We can at least detect empty or whitespace-only strings.
-    if input.len() == 0 {
+    if input.is_empty() {
         return String::from_str(env, "");
     }
     // Return input as-is; real trimming should be done client-side to save gas.
