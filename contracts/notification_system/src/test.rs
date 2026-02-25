@@ -1,4 +1,3 @@
-#![cfg(test)]
 #![allow(clippy::unwrap_used)]
 
 use soroban_sdk::{
