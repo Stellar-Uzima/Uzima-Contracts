@@ -12,6 +12,7 @@ mod test_permissions;
 
 mod errors;
 mod events;
+mod quality_assurance;
 mod validation;
 
 pub use errors::Error;
@@ -1239,6 +1240,334 @@ impl MedicalRecordsContract {
         );
 
         Ok(())
+    }
+
+    // ---------------------------------------------------------------------
+    // Data Quality Assurance & Validation
+    // ---------------------------------------------------------------------
+
+    /// Assesses the quality of a medical record
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be authenticated)
+    /// * `record_id` - The record ID to assess
+    ///
+    /// # Returns
+    /// Quality score breakdown with completeness, format, FHIR compliance, and consistency scores
+    pub fn assess_record_quality(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<(u32, u32, u32, u32, u32), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Only allow patient, doctor, or admin to assess quality
+        if caller != record.patient_id
+            && caller != record.doctor_id
+            && !Self::is_admin(&env, &caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let score = quality_assurance::assess_quality(&env, &record);
+
+        Ok((
+            score.overall_score,
+            score.completeness_score,
+            score.format_score,
+            score.fhir_compliance_score,
+            score.consistency_score,
+        ))
+    }
+
+    /// Validates a record and returns detailed validation issues
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be authenticated)
+    /// * `record_id` - The record ID to validate
+    ///
+    /// # Returns
+    /// Tuple of (is_valid, overall_quality_score, issue_count)
+    pub fn validate_record_quality(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<(bool, u32, u32), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Only allow patient, doctor, or admin to validate
+        if caller != record.patient_id
+            && caller != record.doctor_id
+            && !Self::is_admin(&env, &caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let report = quality_assurance::validate_comprehensive(&env, &record);
+
+        Ok((
+            report.is_valid,
+            report.quality_score.overall_score,
+            report.issues.len(),
+        ))
+    }
+
+    /// Checks completeness of a medical record and returns missing fields
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be authenticated)
+    /// * `record_id` - The record ID to check
+    ///
+    /// # Returns
+    /// Vector of field names that are missing or incomplete
+    pub fn check_record_completeness(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<Vec<String>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Only allow patient, doctor, or admin
+        if caller != record.patient_id
+            && caller != record.doctor_id
+            && !Self::is_admin(&env, &caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let gaps = quality_assurance::check_completeness(&env, &record);
+        Ok(gaps)
+    }
+
+    /// Validates record data before creation (pre-validation)
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be authenticated)
+    /// * `diagnosis` - Diagnosis text
+    /// * `treatment` - Treatment text
+    /// * `category` - Category
+    /// * `treatment_type` - Treatment type
+    /// * `data_ref` - Data reference
+    /// * `tags` - Tags
+    ///
+    /// # Returns
+    /// Tuple of (is_valid, quality_score) - returns error if validation fails critically
+    pub fn validate_record_data(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        tags: Vec<String>,
+    ) -> Result<(bool, u32), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Create a temporary record for validation
+        let temp_record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: caller,
+            timestamp: env.ledger().timestamp(),
+            diagnosis,
+            treatment,
+            is_confidential: false,
+            tags,
+            category,
+            treatment_type,
+            data_ref,
+            doctor_did: None,
+        };
+
+        let report = quality_assurance::validate_comprehensive(&env, &temp_record);
+
+        Ok((report.is_valid, report.quality_score.overall_score))
+    }
+
+    /// Cleanses and normalizes record data
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be authenticated, doctor or admin)
+    /// * `diagnosis` - Diagnosis text to cleanse
+    /// * `treatment` - Treatment text to cleanse
+    /// * `category` - Category to normalize
+    /// * `treatment_type` - Treatment type to cleanse
+    /// * `data_ref` - Data reference to normalize
+    /// * `tags` - Tags to cleanse
+    ///
+    /// # Returns
+    /// Tuple of (was_modified, cleansed_diagnosis, cleansed_treatment, cleansed_category,
+    ///          cleansed_treatment_type, cleansed_data_ref, cleansed_tags)
+    pub fn cleanse_record_data(
+        env: Env,
+        caller: Address,
+        diagnosis: String,
+        treatment: String,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        tags: Vec<String>,
+    ) -> Result<(bool, String, String, String, String, String, Vec<String>), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Only doctors and admins can cleanse data
+        if !Self::is_active_doctor(&env, &caller) && !Self::is_admin(&env, &caller) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let result = quality_assurance::cleanse_data(
+            &env,
+            diagnosis,
+            treatment,
+            category,
+            treatment_type,
+            data_ref,
+            tags,
+        );
+
+        Ok((
+            result.was_modified,
+            result.diagnosis,
+            result.treatment,
+            result.category,
+            result.treatment_type,
+            result.data_ref,
+            result.tags,
+        ))
+    }
+
+    /// Batch validates multiple records and returns quality scores
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be admin)
+    /// * `record_ids` - Vector of record IDs to validate
+    ///
+    /// # Returns
+    /// Vector of tuples (record_id, is_valid, quality_score)
+    pub fn batch_validate_records(
+        env: Env,
+        caller: Address,
+        record_ids: Vec<u64>,
+    ) -> Result<Vec<(u64, bool, u32)>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        if record_ids.len() > 100 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        let mut results = Vec::new(&env);
+
+        for record_id in record_ids.iter() {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            {
+                let report = quality_assurance::validate_comprehensive(&env, &record);
+                results.push_back((
+                    record_id,
+                    report.is_valid,
+                    report.quality_score.overall_score,
+                ));
+            } else {
+                // Record not found, mark as invalid with 0 score
+                results.push_back((record_id, false, 0));
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Gets quality statistics for all records of a patient
+    ///
+    /// # Arguments
+    /// * `env` - The environment
+    /// * `caller` - The caller address (must be patient or admin)
+    /// * `patient` - Patient address
+    ///
+    /// # Returns
+    /// Tuple of (total_records, average_quality_score, records_below_threshold)
+    pub fn get_patient_quality_stats(
+        env: Env,
+        caller: Address,
+        patient: Address,
+    ) -> Result<(u32, u32, u32), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Only patient themselves or admin can view stats
+        if caller != patient && !Self::is_admin(&env, &caller) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecords(patient))
+            .unwrap_or(Vec::new(&env));
+
+        let total_records = record_ids.len();
+        if total_records == 0 {
+            return Ok((0, 0, 0));
+        }
+
+        let mut total_score = 0u32;
+        let mut below_threshold = 0u32;
+
+        for record_id in record_ids.iter() {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            {
+                let score = quality_assurance::assess_quality(&env, &record);
+                total_score = total_score.saturating_add(score.overall_score);
+
+                if score.overall_score < quality_assurance::MIN_ACCEPTABLE_QUALITY {
+                    below_threshold = below_threshold.saturating_add(1);
+                }
+            }
+        }
+
+        let average_score = if total_records > 0 {
+            total_score / total_records
+        } else {
+            0
+        };
+
+        Ok((total_records, average_score, below_threshold))
     }
 
     // ---------------------------------------------------------------------
