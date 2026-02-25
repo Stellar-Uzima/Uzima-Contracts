@@ -36,25 +36,25 @@ pub enum DataKey {
     UserPrefs(Address), // NotificationPreferences
 
     // Notification records — persistent
-    NotifCount,             // u64 — monotonic ID counter
-    Notif(u64),             // Notification
-    UserNotifIds(Address),  // Vec<u64> — ordered by insertion (oldest first)
+    NotifCount,               // u64 — monotonic ID counter
+    Notif(u64),               // Notification
+    UserNotifIds(Address),    // Vec<u64> — ordered by insertion (oldest first)
     UserUnreadCount(Address), // u32
 
     // Alert rules — persistent
-    AlertRuleCount,       // u64 — monotonic ID counter
-    AlertRule(u64),       // AlertRule
-    ActiveAlertRuleIds,   // Vec<u64> — IDs of all non-deleted rules
+    AlertRuleCount,     // u64 — monotonic ID counter
+    AlertRule(u64),     // AlertRule
+    ActiveAlertRuleIds, // Vec<u64> — IDs of all non-deleted rules
 
     // Localised templates — persistent
     // Key: (notif_type_repr, locale) → NotificationTemplate
     Template(u32, String),
 
     // Analytics counters — persistent
-    TotalSent,         // u64
-    TotalRead,         // u64
-    TotalPending,      // u64
-    ByTypeSent(u32),   // u64 — keyed by NotificationType repr
+    TotalSent,           // u64
+    TotalRead,           // u64
+    TotalPending,        // u64
+    ByTypeSent(u32),     // u64 — keyed by NotificationType repr
     ByPrioritySent(u32), // u64 — keyed by AlertPriority repr
 }
 
@@ -123,11 +123,7 @@ impl NotificationContract {
     // ------------------------------------------------------------------
 
     /// Authorise `sender` to create notifications on behalf of integrated contracts.
-    pub fn add_authorized_sender(
-        env: Env,
-        caller: Address,
-        sender: Address,
-    ) -> Result<(), Error> {
+    pub fn add_authorized_sender(env: Env, caller: Address, sender: Address) -> Result<(), Error> {
         Self::require_initialized(&env)?;
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
@@ -213,12 +209,7 @@ impl NotificationContract {
             .persistent()
             .set(&DataKey::UserPrefs(user.clone()), &stored);
 
-        events::emit_preferences_updated(
-            &env,
-            user,
-            stored.enabled,
-            stored.min_priority as u32,
-        );
+        events::emit_preferences_updated(&env, user, stored.enabled, stored.min_priority as u32);
         Ok(())
     }
 
@@ -228,10 +219,7 @@ impl NotificationContract {
         user: Address,
     ) -> Result<Option<NotificationPreferences>, Error> {
         Self::require_initialized(&env)?;
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::UserPrefs(user)))
+        Ok(env.storage().persistent().get(&DataKey::UserPrefs(user)))
     }
 
     // ------------------------------------------------------------------
@@ -429,9 +417,7 @@ impl NotificationContract {
             if filter.notif_type != u32::MAX && (notif.notif_type as u32) != filter.notif_type {
                 continue;
             }
-            if filter.min_priority != u32::MAX
-                && (notif.priority as u32) < filter.min_priority
-            {
+            if filter.min_priority != u32::MAX && (notif.priority as u32) < filter.min_priority {
                 continue;
             }
             if let Some(start) = filter.start_time {
@@ -451,12 +437,12 @@ impl NotificationContract {
                 skipped += 1;
                 continue;
             }
-            if (matched.len() as u32) < limit {
+            if matched.len() < limit {
                 matched.push_back(notif);
             }
         }
 
-        let has_more = total_matched > filter.offset.saturating_add(matched.len() as u32);
+        let has_more = total_matched > filter.offset.saturating_add(matched.len());
         Ok(NotificationPage {
             notifications: matched,
             total: total_matched,
@@ -557,11 +543,7 @@ impl NotificationContract {
 
     /// Archive a notification so it no longer appears in default queries.
     /// Caller must be the recipient or admin.
-    pub fn archive_notification(
-        env: Env,
-        caller: Address,
-        notif_id: u64,
-    ) -> Result<(), Error> {
+    pub fn archive_notification(env: Env, caller: Address, notif_id: u64) -> Result<(), Error> {
         Self::require_initialized(&env)?;
         caller.require_auth();
 
@@ -767,7 +749,8 @@ impl NotificationContract {
 
         for recipient in rule.recipients.iter() {
             let notif_id = Self::next_notif_id(&env);
-            let status = Self::resolve_status(&env, &recipient, NotificationType::Custom, rule.priority);
+            let status =
+                Self::resolve_status(&env, &recipient, NotificationType::Custom, rule.priority);
             let notif = Notification {
                 id: notif_id,
                 recipient: recipient.clone(),
@@ -962,10 +945,7 @@ impl NotificationContract {
     }
 
     fn read_admin(env: &Env) -> Address {
-        env.storage()
-            .instance()
-            .get(&DataKey::Admin)
-            .unwrap()
+        env.storage().instance().get(&DataKey::Admin).unwrap()
     }
 
     fn read_authorized_senders(env: &Env) -> Vec<Address> {
@@ -1043,9 +1023,10 @@ impl NotificationContract {
             NotificationStatus::Pending | NotificationStatus::Delivered
         ) {
             let current = Self::read_unread_count(env, &recipient);
-            env.storage()
-                .persistent()
-                .set(&DataKey::UserUnreadCount(recipient), &current.saturating_add(1));
+            env.storage().persistent().set(
+                &DataKey::UserUnreadCount(recipient),
+                &current.saturating_add(1),
+            );
         }
     }
 
@@ -1065,9 +1046,10 @@ impl NotificationContract {
 
     fn decrement_unread(env: &Env, user: &Address) {
         let current = Self::read_unread_count(env, user);
-        env.storage()
-            .persistent()
-            .set(&DataKey::UserUnreadCount(user.clone()), &current.saturating_sub(1));
+        env.storage().persistent().set(
+            &DataKey::UserUnreadCount(user.clone()),
+            &current.saturating_sub(1),
+        );
     }
 
     fn load_notification(env: &Env, notif_id: u64) -> Result<Notification, Error> {
@@ -1240,14 +1222,14 @@ impl NotificationContract {
         let key = DataKey::SenderRate(sender.clone());
         let now = env.ledger().timestamp();
 
-        let entry: types::SenderRateLimit = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(types::SenderRateLimit {
-                count: 0,
-                window_start: now,
-            });
+        let entry: types::SenderRateLimit =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(types::SenderRateLimit {
+                    count: 0,
+                    window_start: now,
+                });
 
         let (count, window_start) = if now.saturating_sub(entry.window_start) >= RATE_WINDOW_SECS {
             // Window expired — reset counter.

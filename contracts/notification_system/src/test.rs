@@ -197,12 +197,24 @@ fn test_create_notification_returns_sequential_ids() {
     env.mock_all_auths();
 
     let id1 = client.create_notification(
-        &admin, &r, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T1"), &s(&env, "B1"), &None, &None,
+        &admin,
+        &r,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T1"),
+        &s(&env, "B1"),
+        &None,
+        &None,
     );
     let id2 = client.create_notification(
-        &admin, &r, &NotificationType::RecordUpdated, &AlertPriority::Low,
-        &s(&env, "T2"), &s(&env, "B2"), &None, &None,
+        &admin,
+        &r,
+        &NotificationType::RecordUpdated,
+        &AlertPriority::Low,
+        &s(&env, "T2"),
+        &s(&env, "B2"),
+        &None,
+        &None,
     );
     assert_eq!(id1, 1);
     assert_eq!(id2, 2);
@@ -217,8 +229,14 @@ fn test_create_notification_increments_unread_count() {
 
     assert_eq!(client.get_unread_count(&r), 0);
     client.create_notification(
-        &admin, &r, &NotificationType::RecordCreated, &AlertPriority::Medium,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &r,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Medium,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     assert_eq!(client.get_unread_count(&r), 1);
 }
@@ -232,8 +250,14 @@ fn test_create_notification_emits_event() {
 
     let before = env.events().all().len();
     client.create_notification(
-        &admin, &r, &NotificationType::AccessGranted, &AlertPriority::High,
-        &s(&env, "Access"), &s(&env, "Granted."), &Some(1u64), &None,
+        &admin,
+        &r,
+        &NotificationType::AccessGranted,
+        &AlertPriority::High,
+        &s(&env, "Access"),
+        &s(&env, "Granted."),
+        &Some(1u64),
+        &None,
     );
     assert!(env.events().all().len() > before);
 }
@@ -248,8 +272,14 @@ fn test_unauthorized_sender_cannot_create() {
 
     assert!(matches!(
         client.try_create_notification(
-            &rogue, &r, &NotificationType::SystemAlert, &AlertPriority::Low,
-            &s(&env, "Hack"), &s(&env, "Bad"), &None, &None,
+            &rogue,
+            &r,
+            &NotificationType::SystemAlert,
+            &AlertPriority::Low,
+            &s(&env, "Hack"),
+            &s(&env, "Bad"),
+            &None,
+            &None,
         ),
         Err(Ok(Error::SenderNotAuthorized))
     ));
@@ -267,8 +297,14 @@ fn test_title_too_long_is_rejected() {
         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab");
     assert!(matches!(
         client.try_create_notification(
-            &admin, &r, &NotificationType::RecordCreated, &AlertPriority::Low,
-            &long, &s(&env, "Body"), &None, &None,
+            &admin,
+            &r,
+            &NotificationType::RecordCreated,
+            &AlertPriority::Low,
+            &long,
+            &s(&env, "Body"),
+            &None,
+            &None,
         ),
         Err(Ok(Error::TitleTooLong))
     ));
@@ -291,8 +327,14 @@ fn test_bulk_creates_one_per_recipient() {
     recipients.push_back(r3.clone());
 
     let ids = client.create_bulk_notifications(
-        &admin, &recipients, &NotificationType::SystemAlert, &AlertPriority::High,
-        &s(&env, "Alert"), &s(&env, "Maintenance"), &None, &None,
+        &admin,
+        &recipients,
+        &NotificationType::SystemAlert,
+        &AlertPriority::High,
+        &s(&env, "Alert"),
+        &s(&env, "Maintenance"),
+        &None,
+        &None,
     );
     assert_eq!(ids.len(), 3);
     assert_eq!(client.get_unread_count(&r1), 1);
@@ -307,8 +349,14 @@ fn test_bulk_empty_recipients_fails() {
     env.mock_all_auths();
     assert!(matches!(
         client.try_create_bulk_notifications(
-            &admin, &Vec::new(&env), &NotificationType::SystemAlert, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &admin,
+            &Vec::new(&env),
+            &NotificationType::SystemAlert,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         ),
         Err(Ok(Error::RecipientsEmpty))
     ));
@@ -324,8 +372,14 @@ fn test_get_notification_by_recipient() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &r, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "Title"), &s(&env, "Body"), &None, &None,
+        &admin,
+        &r,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "Title"),
+        &s(&env, "Body"),
+        &None,
+        &None,
     );
     let notif = client.get_notification(&r, &id);
     assert_eq!(notif.id, id);
@@ -341,8 +395,14 @@ fn test_get_notification_by_non_recipient_fails() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &r, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &r,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     assert!(matches!(
         client.try_get_notification(&stranger, &id),
@@ -360,8 +420,14 @@ fn test_get_notifications_paginated_newest_first() {
     let mut last_id = 0u64;
     for _ in 0..5u32 {
         last_id = client.create_notification(
-            &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &admin,
+            &user,
+            &NotificationType::RecordCreated,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         );
     }
 
@@ -381,18 +447,37 @@ fn test_get_notifications_filter_by_status() {
     env.mock_all_auths();
 
     let id1 = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T1"), &s(&env, "B1"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T1"),
+        &s(&env, "B1"),
+        &None,
+        &None,
     );
     client.create_notification(
-        &admin, &user, &NotificationType::RecordUpdated, &AlertPriority::Low,
-        &s(&env, "T2"), &s(&env, "B2"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordUpdated,
+        &AlertPriority::Low,
+        &s(&env, "T2"),
+        &s(&env, "B2"),
+        &None,
+        &None,
     );
     client.mark_read(&user, &id1);
 
-    let page = client.get_notifications(&user, &user, &status_filter(NotificationStatus::Pending, 50));
+    let page = client.get_notifications(
+        &user,
+        &user,
+        &status_filter(NotificationStatus::Pending, 50),
+    );
     assert_eq!(page.notifications.len(), 1);
-    assert_eq!(page.notifications.get(0).unwrap().status, NotificationStatus::Pending);
+    assert_eq!(
+        page.notifications.get(0).unwrap().status,
+        NotificationStatus::Pending
+    );
 }
 
 #[test]
@@ -404,8 +489,14 @@ fn test_get_notifications_second_page() {
 
     for _ in 0..5u32 {
         client.create_notification(
-            &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &admin,
+            &user,
+            &NotificationType::RecordCreated,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         );
     }
     let page = client.get_notifications(&user, &user, &all_filter(3, 3));
@@ -423,8 +514,14 @@ fn test_mark_read_transitions_status_and_unread_count() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::AccessGranted, &AlertPriority::Medium,
-        &s(&env, "Access"), &s(&env, "Granted"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::AccessGranted,
+        &AlertPriority::Medium,
+        &s(&env, "Access"),
+        &s(&env, "Granted"),
+        &None,
+        &None,
     );
     assert_eq!(client.get_unread_count(&user), 1);
     client.mark_read(&user, &id);
@@ -443,8 +540,14 @@ fn test_mark_read_twice_fails() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     client.mark_read(&user, &id);
     assert!(matches!(
@@ -462,8 +565,14 @@ fn test_mark_all_read_clears_all_unread() {
 
     for _ in 0..4u32 {
         client.create_notification(
-            &admin, &user, &NotificationType::SystemAlert, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &admin,
+            &user,
+            &NotificationType::SystemAlert,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         );
     }
     assert_eq!(client.get_unread_count(&user), 4);
@@ -479,11 +588,20 @@ fn test_archive_notification() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordDeleted, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordDeleted,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     client.archive_notification(&user, &id);
-    assert_eq!(client.get_notification(&user, &id).status, NotificationStatus::Archived);
+    assert_eq!(
+        client.get_notification(&user, &id).status,
+        NotificationStatus::Archived
+    );
     assert_eq!(client.get_unread_count(&user), 0);
 }
 
@@ -495,8 +613,14 @@ fn test_archive_twice_fails() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordDeleted, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordDeleted,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     client.archive_notification(&user, &id);
     assert!(matches!(
@@ -514,8 +638,14 @@ fn test_non_recipient_cannot_archive() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     assert!(matches!(
         client.try_archive_notification(&stranger, &id),
@@ -535,10 +665,19 @@ fn test_low_priority_filtered_below_threshold() {
     client.set_preferences(&user, &make_prefs(&env, true, AlertPriority::High));
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "Low"), &s(&env, "Archived"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "Low"),
+        &s(&env, "Archived"),
+        &None,
+        &None,
     );
-    assert_eq!(client.get_notification(&user, &id).status, NotificationStatus::Archived);
+    assert_eq!(
+        client.get_notification(&user, &id).status,
+        NotificationStatus::Archived
+    );
     assert_eq!(client.get_unread_count(&user), 0);
 }
 
@@ -552,10 +691,19 @@ fn test_critical_bypasses_disabled_preferences() {
     client.set_preferences(&user, &make_prefs(&env, false, AlertPriority::Critical));
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::EmergencyAccessGranted, &AlertPriority::Critical,
-        &s(&env, "Emergency"), &s(&env, "Emergency access"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::EmergencyAccessGranted,
+        &AlertPriority::Critical,
+        &s(&env, "Emergency"),
+        &s(&env, "Emergency access"),
+        &None,
+        &None,
     );
-    assert_eq!(client.get_notification(&user, &id).status, NotificationStatus::Pending);
+    assert_eq!(
+        client.get_notification(&user, &id).status,
+        NotificationStatus::Pending
+    );
     assert_eq!(client.get_unread_count(&user), 1);
 }
 
@@ -569,25 +717,45 @@ fn test_type_filter_allows_opted_types_only() {
     let mut enabled_types = Vec::new(&env);
     enabled_types.push_back(NotificationType::AccessGranted as u32);
     let prefs = NotificationPreferences {
-        enabled: true, min_priority: AlertPriority::Low,
+        enabled: true,
+        min_priority: AlertPriority::Low,
         channel: NotificationChannel::OnChain,
-        enabled_types, updated_at: 0,
+        enabled_types,
+        updated_at: 0,
     };
     client.set_preferences(&user, &prefs);
 
     // RecordCreated not in allow-list → archived.
     let id1 = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Medium,
-        &s(&env, "Rec"), &s(&env, "Not opted-in"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Medium,
+        &s(&env, "Rec"),
+        &s(&env, "Not opted-in"),
+        &None,
+        &None,
     );
-    assert_eq!(client.get_notification(&user, &id1).status, NotificationStatus::Archived);
+    assert_eq!(
+        client.get_notification(&user, &id1).status,
+        NotificationStatus::Archived
+    );
 
     // AccessGranted is in allow-list → pending.
     let id2 = client.create_notification(
-        &admin, &user, &NotificationType::AccessGranted, &AlertPriority::Medium,
-        &s(&env, "Access"), &s(&env, "Opted-in"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::AccessGranted,
+        &AlertPriority::Medium,
+        &s(&env, "Access"),
+        &s(&env, "Opted-in"),
+        &None,
+        &None,
     );
-    assert_eq!(client.get_notification(&user, &id2).status, NotificationStatus::Pending);
+    assert_eq!(
+        client.get_notification(&user, &id2).status,
+        NotificationStatus::Pending
+    );
 }
 
 // ==================== Alert Rules ====================
@@ -599,9 +767,11 @@ fn test_create_and_list_alert_rules() {
     env.mock_all_auths();
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "Record Watch"),
+        &admin,
+        &s(&env, "Record Watch"),
         &(NotificationType::RecordCreated as u32),
-        &AlertPriority::High, &Vec::new(&env),
+        &AlertPriority::High,
+        &Vec::new(&env),
     );
     assert_eq!(rule_id, 1);
     assert_eq!(client.get_alert_rules(&admin).len(), 1);
@@ -614,10 +784,19 @@ fn test_update_alert_rule_changes_state() {
     env.mock_all_auths();
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "Rule"), &(NotificationType::AnomalyDetected as u32),
-        &AlertPriority::Medium, &Vec::new(&env),
+        &admin,
+        &s(&env, "Rule"),
+        &(NotificationType::AnomalyDetected as u32),
+        &AlertPriority::Medium,
+        &Vec::new(&env),
     );
-    client.update_alert_rule(&admin, &rule_id, &false, &AlertPriority::High, &Vec::new(&env));
+    client.update_alert_rule(
+        &admin,
+        &rule_id,
+        &false,
+        &AlertPriority::High,
+        &Vec::new(&env),
+    );
 
     let updated = client.get_alert_rules(&admin).get(0).unwrap();
     assert!(!updated.is_active);
@@ -631,8 +810,11 @@ fn test_delete_alert_rule_removes_it() {
     env.mock_all_auths();
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "Temp"), &(NotificationType::SystemAlert as u32),
-        &AlertPriority::Low, &Vec::new(&env),
+        &admin,
+        &s(&env, "Temp"),
+        &(NotificationType::SystemAlert as u32),
+        &AlertPriority::Low,
+        &Vec::new(&env),
     );
     client.delete_alert_rule(&admin, &rule_id);
     assert_eq!(client.get_alert_rules(&admin).len(), 0);
@@ -662,9 +844,11 @@ fn test_trigger_alert_creates_notifications_for_all_recipients() {
     recipients.push_back(r2.clone());
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "Emergency Rule"),
+        &admin,
+        &s(&env, "Emergency Rule"),
         &(NotificationType::EmergencyAccessGranted as u32),
-        &AlertPriority::Critical, &recipients,
+        &AlertPriority::Critical,
+        &recipients,
     );
     let ids = client.trigger_alert(&admin, &rule_id, &Some(42u64), &None);
     assert_eq!(ids.len(), 2);
@@ -683,12 +867,24 @@ fn test_trigger_inactive_rule_creates_no_notifications() {
     recipients.push_back(r.clone());
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "Inactive"), &(NotificationType::SystemAlert as u32),
-        &AlertPriority::Low, &recipients,
+        &admin,
+        &s(&env, "Inactive"),
+        &(NotificationType::SystemAlert as u32),
+        &AlertPriority::Low,
+        &recipients,
     );
-    client.update_alert_rule(&admin, &rule_id, &false, &AlertPriority::Low, &Vec::new(&env));
+    client.update_alert_rule(
+        &admin,
+        &rule_id,
+        &false,
+        &AlertPriority::Low,
+        &Vec::new(&env),
+    );
 
-    assert_eq!(client.trigger_alert(&admin, &rule_id, &None, &None).len(), 0);
+    assert_eq!(
+        client.trigger_alert(&admin, &rule_id, &None, &None).len(),
+        0
+    );
     assert_eq!(client.get_unread_count(&r), 0);
 }
 
@@ -699,10 +895,16 @@ fn test_trigger_rule_with_no_recipients_returns_empty() {
     env.mock_all_auths();
 
     let rule_id = client.create_alert_rule(
-        &admin, &s(&env, "No Recip"), &(NotificationType::SystemAlert as u32),
-        &AlertPriority::Low, &Vec::new(&env),
+        &admin,
+        &s(&env, "No Recip"),
+        &(NotificationType::SystemAlert as u32),
+        &AlertPriority::Low,
+        &Vec::new(&env),
     );
-    assert_eq!(client.trigger_alert(&admin, &rule_id, &None, &None).len(), 0);
+    assert_eq!(
+        client.trigger_alert(&admin, &rule_id, &None, &None).len(),
+        0
+    );
 }
 
 // ==================== Templates ====================
@@ -713,12 +915,17 @@ fn test_set_and_get_template() {
     let (client, admin) = setup(&env);
     env.mock_all_auths();
 
-    client.set_template(&admin, &NotificationTemplate {
-        notif_type: NotificationType::RecordCreated as u32,
-        locale: s(&env, "en"), title: s(&env, "New Record"),
-        message: s(&env, "A record was created."),
-        default_priority: AlertPriority::Medium, updated_at: 0,
-    });
+    client.set_template(
+        &admin,
+        &NotificationTemplate {
+            notif_type: NotificationType::RecordCreated as u32,
+            locale: s(&env, "en"),
+            title: s(&env, "New Record"),
+            message: s(&env, "A record was created."),
+            default_priority: AlertPriority::Medium,
+            updated_at: 0,
+        },
+    );
     let fetched = client.get_template(&(NotificationType::RecordCreated as u32), &s(&env, "en"));
     assert_eq!(fetched.title, s(&env, "New Record"));
 }
@@ -741,19 +948,37 @@ fn test_multiple_locale_templates_are_independent() {
     env.mock_all_auths();
 
     let ntype = NotificationType::AccessGranted as u32;
-    client.set_template(&admin, &NotificationTemplate {
-        notif_type: ntype, locale: s(&env, "en"),
-        title: s(&env, "Access Granted"), message: s(&env, "You have access."),
-        default_priority: AlertPriority::High, updated_at: 0,
-    });
-    client.set_template(&admin, &NotificationTemplate {
-        notif_type: ntype, locale: s(&env, "fr"),
-        title: s(&env, "Acces accorde"), message: s(&env, "Vous avez acces."),
-        default_priority: AlertPriority::High, updated_at: 0,
-    });
+    client.set_template(
+        &admin,
+        &NotificationTemplate {
+            notif_type: ntype,
+            locale: s(&env, "en"),
+            title: s(&env, "Access Granted"),
+            message: s(&env, "You have access."),
+            default_priority: AlertPriority::High,
+            updated_at: 0,
+        },
+    );
+    client.set_template(
+        &admin,
+        &NotificationTemplate {
+            notif_type: ntype,
+            locale: s(&env, "fr"),
+            title: s(&env, "Acces accorde"),
+            message: s(&env, "Vous avez acces."),
+            default_priority: AlertPriority::High,
+            updated_at: 0,
+        },
+    );
 
-    assert_eq!(client.get_template(&ntype, &s(&env, "en")).title, s(&env, "Access Granted"));
-    assert_eq!(client.get_template(&ntype, &s(&env, "fr")).title, s(&env, "Acces accorde"));
+    assert_eq!(
+        client.get_template(&ntype, &s(&env, "en")).title,
+        s(&env, "Access Granted")
+    );
+    assert_eq!(
+        client.get_template(&ntype, &s(&env, "fr")).title,
+        s(&env, "Acces accorde")
+    );
 }
 
 // ==================== Analytics ====================
@@ -766,12 +991,24 @@ fn test_analytics_counts_total_sent_and_pending() {
     env.mock_all_auths();
 
     client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Medium,
-        &s(&env, "T1"), &s(&env, "B1"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Medium,
+        &s(&env, "T1"),
+        &s(&env, "B1"),
+        &None,
+        &None,
     );
     client.create_notification(
-        &admin, &user, &NotificationType::RecordUpdated, &AlertPriority::High,
-        &s(&env, "T2"), &s(&env, "B2"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordUpdated,
+        &AlertPriority::High,
+        &s(&env, "T2"),
+        &s(&env, "B2"),
+        &None,
+        &None,
     );
     let a = client.get_analytics(&admin);
     assert_eq!(a.total_sent, 2);
@@ -786,12 +1023,24 @@ fn test_analytics_updates_read_and_pending_on_mark_read() {
     env.mock_all_auths();
 
     let id = client.create_notification(
-        &admin, &user, &NotificationType::RecordCreated, &AlertPriority::Medium,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Medium,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     client.create_notification(
-        &admin, &user, &NotificationType::RecordUpdated, &AlertPriority::High,
-        &s(&env, "T2"), &s(&env, "B2"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::RecordUpdated,
+        &AlertPriority::High,
+        &s(&env, "T2"),
+        &s(&env, "B2"),
+        &None,
+        &None,
     );
     client.mark_read(&user, &id);
 
@@ -811,11 +1060,24 @@ fn test_analytics_by_type_tracks_counts() {
     let ntype = NotificationType::AccessDenied;
     for _ in 0..3u32 {
         client.create_notification(
-            &admin, &user, &ntype, &AlertPriority::High,
-            &s(&env, "Denied"), &s(&env, "Denied"), &None, &None,
+            &admin,
+            &user,
+            &ntype,
+            &AlertPriority::High,
+            &s(&env, "Denied"),
+            &s(&env, "Denied"),
+            &None,
+            &None,
         );
     }
-    assert_eq!(client.get_analytics(&admin).by_type.get(ntype as u32).unwrap_or(0), 3u64);
+    assert_eq!(
+        client
+            .get_analytics(&admin)
+            .by_type
+            .get(ntype as u32)
+            .unwrap_or(0),
+        3u64
+    );
 }
 
 #[test]
@@ -826,11 +1088,22 @@ fn test_analytics_by_priority_tracks_counts() {
     env.mock_all_auths();
 
     client.create_notification(
-        &admin, &user, &NotificationType::EmergencyAccessGranted, &AlertPriority::Critical,
-        &s(&env, "Emergency"), &s(&env, "Emergency"), &None, &None,
+        &admin,
+        &user,
+        &NotificationType::EmergencyAccessGranted,
+        &AlertPriority::Critical,
+        &s(&env, "Emergency"),
+        &s(&env, "Emergency"),
+        &None,
+        &None,
     );
     let a = client.get_analytics(&admin);
-    assert_eq!(a.by_priority.get(AlertPriority::Critical as u32).unwrap_or(0), 1u64);
+    assert_eq!(
+        a.by_priority
+            .get(AlertPriority::Critical as u32)
+            .unwrap_or(0),
+        1u64
+    );
 }
 
 #[test]
@@ -857,14 +1130,26 @@ fn test_rate_limit_blocks_after_100_calls() {
     client.add_authorized_sender(&admin, &sender);
     for _ in 0..100u32 {
         client.create_notification(
-            &sender, &user, &NotificationType::SystemAlert, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &sender,
+            &user,
+            &NotificationType::SystemAlert,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         );
     }
     assert!(matches!(
         client.try_create_notification(
-            &sender, &user, &NotificationType::SystemAlert, &AlertPriority::Low,
-            &s(&env, "T"), &s(&env, "B"), &None, &None,
+            &sender,
+            &user,
+            &NotificationType::SystemAlert,
+            &AlertPriority::Low,
+            &s(&env, "T"),
+            &s(&env, "B"),
+            &None,
+            &None,
         ),
         Err(Ok(Error::RateLimitExceeded))
     ));
@@ -882,8 +1167,14 @@ fn test_authorized_external_sender_can_create() {
 
     client.add_authorized_sender(&admin, &sender);
     let id = client.create_notification(
-        &sender, &recipient, &NotificationType::RecordCreated, &AlertPriority::Medium,
-        &s(&env, "Record Created"), &s(&env, "Your record was created."), &Some(1u64), &None,
+        &sender,
+        &recipient,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Medium,
+        &s(&env, "Record Created"),
+        &s(&env, "Your record was created."),
+        &Some(1u64),
+        &None,
     );
     assert_eq!(client.get_notification(&recipient, &id).sender, sender);
 }
@@ -901,18 +1192,34 @@ fn test_all_major_operations_emit_events() {
     client.add_authorized_sender(&admin, &sender);
     client.set_preferences(&user, &make_prefs(&env, true, AlertPriority::Low));
     let id = client.create_notification(
-        &sender, &user, &NotificationType::RecordCreated, &AlertPriority::Low,
-        &s(&env, "T"), &s(&env, "B"), &None, &None,
+        &sender,
+        &user,
+        &NotificationType::RecordCreated,
+        &AlertPriority::Low,
+        &s(&env, "T"),
+        &s(&env, "B"),
+        &None,
+        &None,
     );
     client.mark_read(&user, &id);
     client.create_alert_rule(
-        &admin, &s(&env, "Rule"), &0u32, &AlertPriority::High, &Vec::new(&env),
+        &admin,
+        &s(&env, "Rule"),
+        &0u32,
+        &AlertPriority::High,
+        &Vec::new(&env),
     );
-    client.set_template(&admin, &NotificationTemplate {
-        notif_type: 0, locale: s(&env, "en"),
-        title: s(&env, "T"), message: s(&env, "M"),
-        default_priority: AlertPriority::Low, updated_at: 0,
-    });
+    client.set_template(
+        &admin,
+        &NotificationTemplate {
+            notif_type: 0,
+            locale: s(&env, "en"),
+            title: s(&env, "T"),
+            message: s(&env, "M"),
+            default_priority: AlertPriority::Low,
+            updated_at: 0,
+        },
+    );
 
     let new_events = env.events().all().len() - count_before;
     // SNDR_ADD, PREF_UPD, NOTIF_NEW, NOTIF_RD, ALRT_NEW, TMPL_SET = 6 minimum
