@@ -576,8 +576,8 @@ impl MedicalRecordsContract {
             timestamp: env.ledger().timestamp(),
             level,
             operation: String::from_str(env, operation),
-            actor: actor.map(|a| a.clone()),
-            target_id: target_id.map(|a| a.clone()),
+            actor: actor.cloned(),
+            target_id: target_id.cloned(),
             record_id,
             message: String::from_str(env, message),
         };
@@ -593,7 +593,15 @@ impl MedicalRecordsContract {
         record_id: Option<u64>,
         message: &str,
     ) {
-        Self::emit_structured_log(env, LogLevel::Info, operation, actor, target_id, record_id, message);
+        Self::emit_structured_log(
+            env,
+            LogLevel::Info,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
     }
 
     fn log_warning(
@@ -1272,20 +1280,21 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
-        let record: MedicalRecord = match env.storage().persistent().get(&DataKey::Record(record_id)) {
-            Some(record) => record,
-            None => {
-                Self::log_warning(
-                    &env,
-                    "get_record",
-                    Some(&caller),
-                    None,
-                    Some(record_id),
-                    "Record access requested for a non-existent record",
-                );
-                return Err(Error::RecordNotFound);
-            }
-        };
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(record) => record,
+                None => {
+                    Self::log_warning(
+                        &env,
+                        "get_record",
+                        Some(&caller),
+                        None,
+                        Some(record_id),
+                        "Record access requested for a non-existent record",
+                    );
+                    return Err(Error::RecordNotFound);
+                }
+            };
 
         if !Self::can_view_record(&env, &caller, &record, record_id) {
             Self::log_to_forensics(&env, caller.clone(), 0, Some(record_id)); // Failed access

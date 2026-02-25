@@ -1,8 +1,6 @@
 #![allow(clippy::unwrap_used)]
 
-use medical_records::{
-    MedicalRecordsContract, MedicalRecordsContractClient, Role, StructuredLog,
-};
+use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role, StructuredLog};
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, Address, Env, String, Symbol, TryFromVal, Vec};
 
@@ -22,11 +20,7 @@ fn setup(env: &Env) -> (MedicalRecordsContractClient<'_>, Address, Address, Addr
     (client, admin, doctor, patient)
 }
 
-fn find_structured_log(
-    env: &Env,
-    level_topic: Symbol,
-    operation: &str,
-) -> Option<StructuredLog> {
+fn find_structured_log(env: &Env, level_topic: Symbol, operation: &str) -> Option<StructuredLog> {
     let operation_value = String::from_str(env, operation);
     let events = env.events().all();
 
