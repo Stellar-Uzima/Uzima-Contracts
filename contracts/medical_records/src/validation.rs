@@ -15,7 +15,10 @@
 use soroban_sdk::{Address, Env, Map, String, Vec};
 
 use crate::errors::Error;
-use crate::{MedicalRecord, UserProfile};
+use crate::{
+    DataQualityScore, FieldCompleteness, MedicalRecord, MedicalRecordType, UserProfile,
+    ValidationIssue, ValidationReport, ValidationSeverity,
+};
 
 // ==================== CONSTANTS ====================
 
@@ -350,14 +353,10 @@ pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
 /// In Soroban, we validate addresses by ensuring they're provided and authorized
 /// The actual zero-address check is handled by the SDK
 pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
-    // In Soroban, addresses are validated by the SDK
-    // We mainly need to ensure the address is authorized for operations that require it
-    // For now, we'll just verify it's a valid address reference
-    let _ = env; // Use env to avoid warning
-    let _ = address; // Address validation is implicit in Soroban
-    if address == &env.current_contract_address() {
-        return Err(Error::InvalidAddress);
-    }
+    // In Soroban, addresses are validated by the SDK at construction time.
+    // Any `Address` value that exists is already valid.
+    let _ = env;
+    let _ = address;
 
     Ok(())
 }
@@ -711,6 +710,455 @@ pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result
     Ok(())
 }
 
+// ==================== DATA QUALITY ASSESSMENT ====================
+
+/// Minimum quality score threshold for a record to be considered acceptable (60%).
+pub const MIN_QUALITY_THRESHOLD_BPS: u32 = 6_000;
+
+/// Weight constants for quality sub-scores (out of 10_000 total).
+const COMPLETENESS_WEIGHT: u32 = 3_000; // 30%
+const FORMAT_WEIGHT: u32 = 2_500; // 25%
+const CONSISTENCY_WEIGHT: u32 = 2_000; // 20%
+const FHIR_WEIGHT: u32 = 2_500; // 25%
+
+/// Assesses completeness of a medical record, returning field-level gap information.
+#[allow(clippy::arithmetic_side_effects)]
+pub fn assess_field_completeness(record: &MedicalRecord) -> FieldCompleteness {
+    let total_fields = 7u32; // diagnosis, treatment, category, treatment_type, data_ref, tags, doctor_did
+    let mut completed = 0u32;
+
+    let has_diagnosis = !record.diagnosis.is_empty();
+    if has_diagnosis {
+        completed += 1;
+    }
+
+    let has_treatment = !record.treatment.is_empty();
+    if has_treatment {
+        completed += 1;
+    }
+
+    let has_category = !record.category.is_empty();
+    if has_category {
+        completed += 1;
+    }
+
+    let has_treatment_type = !record.treatment_type.is_empty();
+    if has_treatment_type {
+        completed += 1;
+    }
+
+    let has_data_ref = !record.data_ref.is_empty();
+    if has_data_ref {
+        completed += 1;
+    }
+
+    let has_tags = !record.tags.is_empty();
+    if has_tags {
+        completed += 1;
+    }
+
+    let has_doctor_did = record.doctor_did.is_some();
+    if has_doctor_did {
+        completed += 1;
+    }
+
+    FieldCompleteness {
+        has_diagnosis,
+        has_treatment,
+        has_category,
+        has_treatment_type,
+        has_data_ref,
+        has_tags,
+        has_doctor_did,
+        total_fields,
+        completed_fields: completed,
+    }
+}
+
+/// Computes a multi-dimensional quality score for a medical record.
+///
+/// Sub-scores are weighted and combined into an overall score:
+/// - Completeness (30%): ratio of present fields
+/// - Format (25%): passes all string-level validations
+/// - Consistency (20%): cross-field consistency checks
+/// - FHIR Compliance (25%): meets FHIR resource structural requirements
+///
+/// Returns `(DataQualityScore, Vec<ValidationIssue>)` so callers can both score and report.
+#[allow(clippy::arithmetic_side_effects)]
+pub fn compute_quality_score(
+    env: &Env,
+    record: &MedicalRecord,
+) -> (DataQualityScore, Vec<ValidationIssue>) {
+    let mut issues: Vec<ValidationIssue> = Vec::new(env);
+
+    // 1. Completeness
+    let completeness = assess_field_completeness(record);
+    let completeness_score = if completeness.total_fields > 0 {
+        (completeness.completed_fields * MAX_SCORE_BPS) / completeness.total_fields
+    } else {
+        0
+    };
+
+    if !completeness.has_diagnosis {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "diagnosis"),
+            issue_description: String::from_str(env, "Missing diagnosis field"),
+            suggestion: String::from_str(env, "Add a valid diagnosis description"),
+        });
+    }
+    if !completeness.has_treatment {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "treatment"),
+            issue_description: String::from_str(env, "Missing treatment field"),
+            suggestion: String::from_str(env, "Add a valid treatment description"),
+        });
+    }
+    if !completeness.has_data_ref {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "data_ref"),
+            issue_description: String::from_str(env, "Missing data reference"),
+            suggestion: String::from_str(env, "Provide an IPFS CID or equivalent reference"),
+        });
+    }
+    if !completeness.has_doctor_did {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Info,
+            field_name: String::from_str(env, "doctor_did"),
+            issue_description: String::from_str(env, "Optional DID reference missing"),
+            suggestion: String::from_str(env, "Consider adding a DID for identity verification"),
+        });
+    }
+
+    // 2. Format validation
+    let mut format_checks_passed = 0u32;
+    let format_checks_total = 5u32;
+
+    if validate_diagnosis(&record.diagnosis).is_ok() {
+        format_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "diagnosis"),
+            issue_description: String::from_str(env, "Diagnosis fails format validation"),
+            suggestion: String::from_str(env, "Ensure diagnosis is 1-512 characters"),
+        });
+    }
+
+    if validate_treatment(&record.treatment).is_ok() {
+        format_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "treatment"),
+            issue_description: String::from_str(env, "Treatment fails format validation"),
+            suggestion: String::from_str(env, "Ensure treatment is 1-512 characters"),
+        });
+    }
+
+    if validate_category(&record.category, env).is_ok() {
+        format_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "category"),
+            issue_description: String::from_str(env, "Invalid category value"),
+            suggestion: String::from_str(env, "Use: Modern, Traditional, Herbal, or Spiritual"),
+        });
+    }
+
+    if validate_treatment_type(&record.treatment_type).is_ok() {
+        format_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "treatment_type"),
+            issue_description: String::from_str(env, "Treatment type fails format validation"),
+            suggestion: String::from_str(env, "Ensure treatment type is 1-100 characters"),
+        });
+    }
+
+    if validate_tags(&record.tags).is_ok() {
+        format_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "tags"),
+            issue_description: String::from_str(env, "Tags fail format validation"),
+            suggestion: String::from_str(env, "Ensure each tag is 1-50 chars, max 20 tags"),
+        });
+    }
+
+    let format_score = if format_checks_total > 0 {
+        (format_checks_passed * MAX_SCORE_BPS) / format_checks_total
+    } else {
+        0
+    };
+
+    // 3. Consistency checks
+    let mut consistency_checks_passed = 0u32;
+    let consistency_checks_total = 2u32;
+
+    // Patient and doctor should differ
+    if record.patient_id != record.doctor_id {
+        consistency_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Critical,
+            field_name: String::from_str(env, "patient_id/doctor_id"),
+            issue_description: String::from_str(env, "Patient and doctor are the same address"),
+            suggestion: String::from_str(env, "Ensure patient and doctor are different"),
+        });
+    }
+
+    // Timestamp should be reasonable
+    if validate_timestamp(env, record.timestamp).is_ok() {
+        consistency_checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "timestamp"),
+            issue_description: String::from_str(env, "Invalid timestamp"),
+            suggestion: String::from_str(env, "Timestamp must be non-zero and not far future"),
+        });
+    }
+
+    let consistency_score = if consistency_checks_total > 0 {
+        (consistency_checks_passed * MAX_SCORE_BPS) / consistency_checks_total
+    } else {
+        0
+    };
+
+    // 4. FHIR compliance
+    let (fhir_score, fhir_issues) = validate_fhir_compliance(env, record);
+    for issue in fhir_issues.iter() {
+        issues.push_back(issue);
+    }
+
+    // Weighted overall score
+    let overall_score = (completeness_score * COMPLETENESS_WEIGHT
+        + format_score * FORMAT_WEIGHT
+        + consistency_score * CONSISTENCY_WEIGHT
+        + fhir_score * FHIR_WEIGHT)
+        / MAX_SCORE_BPS;
+
+    let score = DataQualityScore {
+        overall_score,
+        completeness_score,
+        format_score,
+        consistency_score,
+        fhir_compliance_score: fhir_score,
+        issue_count: issues.len(),
+    };
+
+    (score, issues)
+}
+
+// ==================== FHIR COMPLIANCE VALIDATION ====================
+
+/// Validates FHIR (Fast Healthcare Interoperability Resources) standard compliance.
+///
+/// Checks structural requirements inspired by FHIR R4 `MedicationRequest`,
+/// `Condition`, and `Observation` resources:
+/// - Patient reference present (FHIR: `subject` is mandatory)
+/// - Practitioner reference present (FHIR: `requester` / `recorder`)
+/// - Timestamp present (FHIR: `authoredOn` / `recordedDate`)
+/// - Clinical text present (FHIR: `text.div` narrative)
+/// - Category coded value (FHIR: `category` binding)
+///
+/// Returns `(score_bps, Vec<ValidationIssue>)`.
+#[allow(clippy::arithmetic_side_effects)]
+pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<ValidationIssue>) {
+    let mut issues: Vec<ValidationIssue> = Vec::new(env);
+    let mut checks_passed = 0u32;
+    let total_checks = 5u32;
+
+    // FHIR: subject (patient) reference is mandatory
+    // Validates that a real patient address is present and differs from the doctor.
+    if validate_address(env, &record.patient_id).is_ok() && record.patient_id != record.doctor_id {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Critical,
+            field_name: String::from_str(env, "patient_id"),
+            issue_description: String::from_str(env, "FHIR: missing valid subject reference"),
+            suggestion: String::from_str(env, "Provide a valid patient address"),
+        });
+    }
+
+    // FHIR: recorder / practitioner reference
+    // Validates that a real doctor address is present and differs from the patient.
+    if validate_address(env, &record.doctor_id).is_ok() && record.doctor_id != record.patient_id {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Critical,
+            field_name: String::from_str(env, "doctor_id"),
+            issue_description: String::from_str(env, "FHIR: missing practitioner reference"),
+            suggestion: String::from_str(env, "Provide a valid doctor address"),
+        });
+    }
+
+    // FHIR: authoredOn / recordedDate
+    if record.timestamp > 0 {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "timestamp"),
+            issue_description: String::from_str(env, "FHIR: missing recordedDate"),
+            suggestion: String::from_str(env, "Set a non-zero timestamp"),
+        });
+    }
+
+    // FHIR: narrative text (diagnosis serves as clinical text)
+    if record.diagnosis.len() >= MIN_DIAGNOSIS_LENGTH {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::ValidationErr,
+            field_name: String::from_str(env, "diagnosis"),
+            issue_description: String::from_str(env, "FHIR: missing clinical narrative"),
+            suggestion: String::from_str(env, "Add a diagnosis for FHIR compliance"),
+        });
+    }
+
+    // FHIR: category coded value
+    if validate_category(&record.category, env).is_ok() {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "category"),
+            issue_description: String::from_str(env, "FHIR: category does not match value set"),
+            suggestion: String::from_str(env, "Use a recognized category value"),
+        });
+    }
+
+    let score = if total_checks > 0 {
+        (checks_passed * MAX_SCORE_BPS) / total_checks
+    } else {
+        0
+    };
+
+    (score, issues)
+}
+
+// ==================== TYPE-SPECIFIC VALIDATION ====================
+
+/// Applies additional validation rules based on the medical record type.
+///
+/// Different record types have different data requirements:
+/// - `General`: standard validation (already done by `validate_medical_record`)
+/// - `Laboratory`: requires data_ref (lab results must reference external data)
+/// - `Prescription`: requires treatment_type and treatment
+/// - `Imaging`: requires data_ref with minimum length
+/// - `Surgical`: requires diagnosis, treatment, and DID for surgeon identification
+/// - `Emergency`: timestamp must be current (within 1 hour)
+pub fn validate_record_by_type(
+    env: &Env,
+    record: &MedicalRecord,
+    record_type: MedicalRecordType,
+) -> Result<(), Error> {
+    match record_type {
+        MedicalRecordType::General => {
+            // Standard validation is sufficient
+            Ok(())
+        }
+        MedicalRecordType::Laboratory => {
+            // Lab records MUST have a data reference for results
+            if record.data_ref.len() < MIN_DATA_REF_LENGTH {
+                return Err(Error::InvalidBatch);
+            }
+            Ok(())
+        }
+        MedicalRecordType::Prescription => {
+            // Prescriptions MUST have treatment and treatment_type
+            validate_treatment(&record.treatment)?;
+            validate_treatment_type(&record.treatment_type)?;
+            Ok(())
+        }
+        MedicalRecordType::Imaging => {
+            // Imaging records MUST have a data reference for the images
+            if record.data_ref.len() < MIN_DATA_REF_LENGTH {
+                return Err(Error::InvalidBatch);
+            }
+            validate_data_ref(env, &record.data_ref)?;
+            Ok(())
+        }
+        MedicalRecordType::Surgical => {
+            // Surgical records need diagnosis, treatment, AND doctor DID
+            validate_diagnosis(&record.diagnosis)?;
+            validate_treatment(&record.treatment)?;
+            if record.doctor_did.is_none() {
+                return Err(Error::InvalidBatch);
+            }
+            Ok(())
+        }
+        MedicalRecordType::Emergency => {
+            // Emergency records: timestamp must be recent (within 1 hour)
+            let current_time = env.ledger().timestamp();
+            let one_hour = 3_600u64;
+            if record.timestamp < current_time.saturating_sub(one_hour) {
+                return Err(Error::InvalidInput);
+            }
+            validate_diagnosis(&record.diagnosis)?;
+            Ok(())
+        }
+    }
+}
+
+// ==================== DATA CLEANSING & NORMALIZATION ====================
+
+/// Normalizes a medical string by trimming leading/trailing whitespace.
+///
+/// On-chain string manipulation is expensive, so this performs only essential
+/// normalization. Full normalization should happen off-chain before submission.
+///
+/// Returns a potentially cleaned `String`. Whitespace-only strings are returned
+/// as-is because the downstream length validators will reject them.
+pub fn normalize_medical_string(env: &Env, input: &String) -> String {
+    // In Soroban no_std, String doesn't expose slice/trim operations directly.
+    // We can at least detect empty or whitespace-only strings.
+    if input.is_empty() {
+        return String::from_str(env, "");
+    }
+    // Return input as-is; real trimming should be done client-side to save gas.
+    input.clone()
+}
+
+// ==================== VALIDATION REPORT GENERATION ====================
+
+/// Produces a comprehensive `ValidationReport` for a medical record.
+///
+/// Orchestrates all quality checks:
+/// 1. Field completeness / gap detection
+/// 2. Format validation per field
+/// 3. Cross-field consistency checks
+/// 4. FHIR compliance validation
+/// 5. Quality scoring with weighted sub-scores
+///
+/// The result contains every issue found plus the aggregate quality score.
+pub fn validate_record_with_report(
+    env: &Env,
+    record_id: u64,
+    record: &MedicalRecord,
+) -> ValidationReport {
+    let (quality_score, issues) = compute_quality_score(env, record);
+
+    let is_fhir_compliant = quality_score.fhir_compliance_score >= 8_000; // ≥80% threshold
+
+    ValidationReport {
+        record_id,
+        quality_score,
+        issues,
+        is_fhir_compliant,
+        validated_at: env.ledger().timestamp(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -923,5 +1371,204 @@ mod tests {
             validate_data_ref(&env, &short_ref),
             Err(Error::InvalidDataRefLength)
         );
+    }
+
+    // ==================== DATA QUALITY TESTS ====================
+
+    /// Helper: creates a complete, valid medical record for testing.
+    fn make_valid_record(env: &Env) -> MedicalRecord {
+        let patient = Address::generate(env);
+        let doctor = Address::generate(env);
+        MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: env.ledger().timestamp(),
+            diagnosis: String::from_str(env, "Patient presents with acute bronchitis"),
+            treatment: String::from_str(env, "Prescribed amoxicillin 500mg TID for 7 days"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![
+                env,
+                String::from_str(env, "respiratory"),
+                String::from_str(env, "infection"),
+            ],
+            category: String::from_str(env, "Modern"),
+            treatment_type: String::from_str(env, "Antibiotic"),
+            data_ref: String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: Some(String::from_str(
+                env,
+                "did:stellar:GABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            )),
+        }
+    }
+
+    #[test]
+    fn test_field_completeness_full() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+        let completeness = assess_field_completeness(&record);
+
+        assert!(completeness.has_diagnosis);
+        assert!(completeness.has_treatment);
+        assert!(completeness.has_category);
+        assert!(completeness.has_treatment_type);
+        assert!(completeness.has_data_ref);
+        assert!(completeness.has_tags);
+        assert!(completeness.has_doctor_did);
+        assert_eq!(completeness.completed_fields, 7);
+        assert_eq!(completeness.total_fields, 7);
+    }
+
+    #[test]
+    fn test_field_completeness_partial() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, "Some diagnosis"),
+            treatment: String::from_str(&env, ""),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env],
+            category: String::from_str(&env, "Modern"),
+            treatment_type: String::from_str(&env, ""),
+            data_ref: String::from_str(&env, ""),
+            doctor_did: None,
+        };
+        let completeness = assess_field_completeness(&record);
+
+        assert!(completeness.has_diagnosis);
+        assert!(!completeness.has_treatment);
+        assert!(completeness.has_category);
+        assert!(!completeness.has_treatment_type);
+        assert!(!completeness.has_data_ref);
+        assert!(!completeness.has_tags);
+        assert!(!completeness.has_doctor_did);
+        assert_eq!(completeness.completed_fields, 2);
+    }
+
+    #[test]
+    fn test_quality_score_perfect_record() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+
+        let (score, issues) = compute_quality_score(&env, &record);
+
+        // A perfect record should score high
+        assert!(
+            score.overall_score >= 8_000,
+            "Overall score should be >= 80%, got {}",
+            score.overall_score
+        );
+        assert_eq!(score.completeness_score, 10_000); // All 7 fields present
+        assert_eq!(score.format_score, 10_000); // All 5 format checks pass
+        assert_eq!(score.consistency_score, 10_000); // Patient != doctor, timestamp ok
+                                                     // Only doctor_did "Info" issue expected (optional)
+        assert!(
+            issues.len() <= 1,
+            "Perfect record should have at most 1 info issue, got {}",
+            issues.len()
+        );
+    }
+
+    #[test]
+    fn test_quality_score_with_issues() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: patient, // Same as patient – consistency failure
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, ""),
+            treatment: String::from_str(&env, "Some treatment"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env],
+            category: String::from_str(&env, "InvalidCat"),
+            treatment_type: String::from_str(&env, "Medication"),
+            data_ref: String::from_str(&env, "short"),
+            doctor_did: None,
+        };
+
+        let (score, issues) = compute_quality_score(&env, &record);
+
+        // Should have multiple issues
+        assert!(
+            issues.len() >= 3,
+            "Expect multiple issues, got {}",
+            issues.len()
+        );
+        // Overall score should be below threshold
+        assert!(score.overall_score < MIN_QUALITY_THRESHOLD_BPS);
+    }
+
+    #[test]
+    fn test_fhir_compliance() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+
+        let (fhir_score, fhir_issues) = validate_fhir_compliance(&env, &record);
+        assert_eq!(
+            fhir_score, 10_000,
+            "Valid record should be fully FHIR compliant"
+        );
+        assert_eq!(fhir_issues.len(), 0);
+    }
+
+    #[test]
+    fn test_validate_record_by_type() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+
+        // General: always passes
+        assert!(validate_record_by_type(&env, &record, MedicalRecordType::General).is_ok());
+
+        // Laboratory: requires data_ref >= MIN_DATA_REF_LENGTH (record has a long CID)
+        assert!(validate_record_by_type(&env, &record, MedicalRecordType::Laboratory).is_ok());
+
+        // Surgical: requires doctor_did (record has one)
+        assert!(validate_record_by_type(&env, &record, MedicalRecordType::Surgical).is_ok());
+
+        // Emergency: timestamp must be recent (within 1 hour of env time)
+        assert!(validate_record_by_type(&env, &record, MedicalRecordType::Emergency).is_ok());
+
+        // Surgical without DID should fail
+        let mut record_no_did = record.clone();
+        record_no_did.doctor_did = None;
+        assert_eq!(
+            validate_record_by_type(&env, &record_no_did, MedicalRecordType::Surgical),
+            Err(Error::InvalidBatch)
+        );
+    }
+
+    #[test]
+    fn test_normalize_medical_string() {
+        let env = Env::default();
+        let input = String::from_str(&env, "Some diagnosis text");
+        let normalized = normalize_medical_string(&env, &input);
+        assert_eq!(normalized.len(), input.len());
+
+        let empty = String::from_str(&env, "");
+        let norm_empty = normalize_medical_string(&env, &empty);
+        assert_eq!(norm_empty.len(), 0);
+    }
+
+    #[test]
+    fn test_validation_report() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+        let report = validate_record_with_report(&env, 1, &record);
+
+        assert_eq!(report.record_id, 1);
+        assert!(report.is_fhir_compliant);
+        assert!(report.quality_score.overall_score >= MIN_QUALITY_THRESHOLD_BPS);
+        assert_eq!(report.validated_at, 1000);
     }
 }

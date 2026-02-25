@@ -38,6 +38,7 @@ pub enum EventType {
     PermissionGranted,
     PermissionRevoked,
     MetadataUpdated,
+    DataQualityValidated,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -51,6 +52,7 @@ pub enum OperationCategory {
     AIIntegration,
     CrossChain,
     System,
+    DataQuality,
 }
 
 #[derive(Clone)]
@@ -776,6 +778,41 @@ pub fn emit_metadata_updated(
     };
     env.events()
         .publish(("EVENT", symbol_short!("META_UPD")), event);
+}
+
+pub fn emit_data_quality_validated(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    overall_score: u32,
+    is_fhir_compliant: bool,
+    issue_count: u32,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::DataQualityValidated,
+            category: OperationCategory::DataQuality,
+            timestamp: env.ledger().timestamp(),
+            user_id: caller,
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::SystemEvent(SystemEventData {
+            status: if is_fhir_compliant {
+                String::from_str(env, "fhir_compliant")
+            } else {
+                String::from_str(env, "non_compliant")
+            },
+            metric_name: Some(String::from_str(env, "quality_score")),
+            metric_value: Some(overall_score as u64),
+        }),
+    };
+    env.events().publish(
+        ("EVENT", symbol_short!("DQ_VALID")),
+        (event, record_id, issue_count),
+    );
 }
 
 #[derive(Clone)]
