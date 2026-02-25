@@ -722,6 +722,7 @@ const CONSISTENCY_WEIGHT: u32 = 2_000; // 20%
 const FHIR_WEIGHT: u32 = 2_500; // 25%
 
 /// Assesses completeness of a medical record, returning field-level gap information.
+#[allow(clippy::arithmetic_side_effects)]
 pub fn assess_field_completeness(record: &MedicalRecord) -> FieldCompleteness {
     let total_fields = 7u32; // diagnosis, treatment, category, treatment_type, data_ref, tags, doctor_did
     let mut completed = 0u32;
@@ -783,6 +784,7 @@ pub fn assess_field_completeness(record: &MedicalRecord) -> FieldCompleteness {
 /// - FHIR Compliance (25%): meets FHIR resource structural requirements
 ///
 /// Returns `(DataQualityScore, Vec<ValidationIssue>)` so callers can both score and report.
+#[allow(clippy::arithmetic_side_effects)]
 pub fn compute_quality_score(
     env: &Env,
     record: &MedicalRecord,
@@ -967,6 +969,7 @@ pub fn compute_quality_score(
 /// - Category coded value (FHIR: `category` binding)
 ///
 /// Returns `(score_bps, Vec<ValidationIssue>)`.
+#[allow(clippy::arithmetic_side_effects)]
 pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<ValidationIssue>) {
     let mut issues: Vec<ValidationIssue> = Vec::new(env);
     let mut checks_passed = 0u32;
