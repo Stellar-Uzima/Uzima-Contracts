@@ -20,6 +20,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -50,7 +51,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          components: rustfmt
+          components: rustfmt, rust-src
       
       - name: Check formatting
         run: cargo fmt -- --check
@@ -63,7 +64,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          components: clippy
+          components: clippy, rust-src
       
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -89,6 +90,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
@@ -114,6 +116,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Run integration tests
         run: cargo test --test '*' --no-fail-fast
@@ -127,6 +130,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Install cargo-audit
         run: cargo install cargo-audit
@@ -143,6 +147,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Build
         run: cargo build --release --verbose
@@ -156,6 +161,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Run doc tests
         run: cargo test --doc --verbose
@@ -170,6 +176,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+          components: rust-src
       
       - name: Run performance tests
         run: |
