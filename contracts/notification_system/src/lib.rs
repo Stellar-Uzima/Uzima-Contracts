@@ -395,7 +395,7 @@ impl NotificationContract {
             if idx == 0 {
                 break;
             }
-            idx -= 1;
+            idx = idx.saturating_sub(1);
 
             let notif_id = match ids.get(idx) {
                 Some(id) => id,
@@ -431,10 +431,10 @@ impl NotificationContract {
                 }
             }
 
-            total_matched += 1;
+            total_matched = total_matched.saturating_add(1);
 
             if skipped < filter.offset {
-                skipped += 1;
+                skipped = skipped.saturating_add(1);
                 continue;
             }
             if matched.len() < limit {
@@ -524,7 +524,7 @@ impl NotificationContract {
                     env.storage()
                         .persistent()
                         .set(&DataKey::Notif(notif_id), &notif);
-                    newly_read += 1;
+                    newly_read = newly_read.saturating_add(1);
                 }
             }
         }
@@ -945,7 +945,10 @@ impl NotificationContract {
     }
 
     fn read_admin(env: &Env) -> Address {
-        env.storage().instance().get(&DataKey::Admin).unwrap()
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("contract not initialized")
     }
 
     fn read_authorized_senders(env: &Env) -> Vec<Address> {
