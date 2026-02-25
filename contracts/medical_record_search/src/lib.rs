@@ -457,7 +457,9 @@ impl MedicalRecordSearchContract {
 
     fn candidate_ids(env: &Env, query: &SearchQuery) -> Vec<u64> {
         if !query.required_tokens.is_empty() {
-            let first = query.required_tokens.get(0).unwrap();
+            let Some(first) = query.required_tokens.get(0) else {
+                return Vec::new(env);
+            };
             let mut ids: Vec<u64> = env
                 .storage()
                 .persistent()
@@ -465,7 +467,9 @@ impl MedicalRecordSearchContract {
                 .unwrap_or(Vec::new(env));
 
             for i in 1..query.required_tokens.len() {
-                let token = query.required_tokens.get(i).unwrap();
+                let Some(token) = query.required_tokens.get(i) else {
+                    continue;
+                };
                 let posting: Vec<u64> = env
                     .storage()
                     .persistent()
@@ -581,7 +585,10 @@ impl MedicalRecordSearchContract {
                     matched = matched.saturating_add(1);
                 }
             }
-            matched.saturating_mul(10_000) / query.required_tokens.len()
+            matched
+                .saturating_mul(10_000)
+                .checked_div(query.required_tokens.len())
+                .unwrap_or(0)
         };
 
         let optional_score = if query.optional_tokens.is_empty() {
@@ -593,7 +600,10 @@ impl MedicalRecordSearchContract {
                     matched = matched.saturating_add(1);
                 }
             }
-            matched.saturating_mul(10_000) / query.optional_tokens.len()
+            matched
+                .saturating_mul(10_000)
+                .checked_div(query.optional_tokens.len())
+                .unwrap_or(0)
         };
 
         let age_seconds = env.ledger().timestamp().saturating_sub(entry.created_at);
@@ -603,11 +613,12 @@ impl MedicalRecordSearchContract {
 
         let quality_score = entry.quality_score_bps.min(10_000);
 
-        let weighted = required_score.saturating_mul(ranking.required_weight_bps)
-            + optional_score.saturating_mul(ranking.optional_weight_bps)
-            + recency_score.saturating_mul(ranking.recency_weight_bps)
-            + quality_score.saturating_mul(ranking.quality_weight_bps);
-        weighted / total_weight
+        let weighted = required_score
+            .saturating_mul(ranking.required_weight_bps)
+            .saturating_add(optional_score.saturating_mul(ranking.optional_weight_bps))
+            .saturating_add(recency_score.saturating_mul(ranking.recency_weight_bps))
+            .saturating_add(quality_score.saturating_mul(ranking.quality_weight_bps));
+        weighted.checked_div(total_weight).unwrap_or(0)
     }
 
     fn insert_ranked(env: &Env, ranked: &mut Vec<SearchResult>, candidate: SearchResult) {
@@ -636,10 +647,11 @@ impl MedicalRecordSearchContract {
         let mut out = Vec::new(env);
         let end = start.saturating_add(page_size);
         for i in start..end {
-            if i >= results.len() {
+            if let Some(result) = results.get(i) {
+                out.push_back(result);
+            } else {
                 break;
             }
-            out.push_back(results.get(i).unwrap());
         }
         out
     }
@@ -688,15 +700,14 @@ impl MedicalRecordSearchContract {
         order = trimmed;
 
         if order.len() > policy.max_entries {
-            let over = order.len().saturating_sub(policy.max_entries);
+            let mut to_remove = order.len().saturating_sub(policy.max_entries);
             let mut keep = Vec::new(env);
-            for i in 0..order.len() {
-                if i < over {
-                    env.storage()
-                        .persistent()
-                        .remove(&DataKey::Cache(order.get(i).unwrap()));
+            for key in order.iter() {
+                if to_remove > 0 {
+                    env.storage().persistent().remove(&DataKey::Cache(key));
+                    to_remove = to_remove.saturating_sub(1);
                 } else {
-                    keep.push_back(order.get(i).unwrap());
+                    keep.push_back(key);
                 }
             }
             order = keep;
