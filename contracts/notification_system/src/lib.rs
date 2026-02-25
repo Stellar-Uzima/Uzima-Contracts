@@ -115,7 +115,7 @@ impl NotificationContract {
     /// Returns the current admin address.
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         Self::require_initialized(&env)?;
-        Ok(Self::read_admin(&env))
+        Self::read_admin(&env)
     }
 
     // ------------------------------------------------------------------
@@ -944,11 +944,11 @@ impl NotificationContract {
         Self::read_authorized_senders(env).contains(addr.clone())
     }
 
-    fn read_admin(env: &Env) -> Address {
+    fn read_admin(env: &Env) -> Result<Address, Error> {
         env.storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("contract not initialized")
+            .ok_or(Error::NotInitialized)
     }
 
     fn read_authorized_senders(env: &Env) -> Vec<Address> {
