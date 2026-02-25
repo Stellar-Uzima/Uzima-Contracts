@@ -249,7 +249,7 @@ impl MedicalRecordSearchContract {
         caller.require_auth();
         Self::require_role(&env, &caller, ROLE_INDEXER)?;
         Self::require_not_paused(&env)?;
-        if input.token_hashes.len() == 0 {
+        if input.token_hashes.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -305,7 +305,7 @@ impl MedicalRecordSearchContract {
     ) -> Result<(u32, u32), Error> {
         caller.require_auth();
         Self::require_role(&env, &caller, ROLE_INDEXER)?;
-        if inputs.len() == 0 {
+        if inputs.is_empty() {
             return Err(Error::InvalidInput);
         }
         if inputs.len() > 100 {
@@ -456,7 +456,7 @@ impl MedicalRecordSearchContract {
     }
 
     fn candidate_ids(env: &Env, query: &SearchQuery) -> Vec<u64> {
-        if query.required_tokens.len() > 0 {
+        if !query.required_tokens.is_empty() {
             let first = query.required_tokens.get(0).unwrap();
             let mut ids: Vec<u64> = env
                 .storage()
@@ -480,7 +480,7 @@ impl MedicalRecordSearchContract {
                 ids = intersect;
             }
             ids
-        } else if query.category_filters.len() > 0 {
+        } else if !query.category_filters.is_empty() {
             let mut union = Vec::new(env);
             for cat in query.category_filters.iter() {
                 let posting: Vec<u64> = env
@@ -523,7 +523,7 @@ impl MedicalRecordSearchContract {
                 return false;
             }
         }
-        if query.category_filters.len() > 0
+        if !query.category_filters.is_empty()
             && !query
                 .category_filters
                 .iter()
@@ -531,7 +531,7 @@ impl MedicalRecordSearchContract {
         {
             return false;
         }
-        if query.network_filters.len() > 0
+        if !query.network_filters.is_empty()
             && !query.network_filters.iter().any(|x| x == entry.network)
         {
             return false;
@@ -572,7 +572,7 @@ impl MedicalRecordSearchContract {
             return 0;
         }
 
-        let required_score = if query.required_tokens.len() == 0 {
+        let required_score = if query.required_tokens.is_empty() {
             10_000
         } else {
             let mut matched = 0u32;
@@ -584,7 +584,7 @@ impl MedicalRecordSearchContract {
             matched.saturating_mul(10_000) / query.required_tokens.len()
         };
 
-        let optional_score = if query.optional_tokens.len() == 0 {
+        let optional_score = if query.optional_tokens.is_empty() {
             0
         } else {
             let mut matched = 0u32;
@@ -649,7 +649,7 @@ impl MedicalRecordSearchContract {
         query_hash: BytesN<32>,
         results: Vec<SearchResult>,
     ) -> Result<(), Error> {
-        if results.len() == 0 {
+        if results.is_empty() {
             return Ok(());
         }
 

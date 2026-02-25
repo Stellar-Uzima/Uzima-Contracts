@@ -692,7 +692,7 @@ impl MedicalRecordBackupContract {
 
         let passed = validation_hash == artifact.checksum
             && artifact.status != BackupStatus::Archived
-            && artifact.target_ids.len() > 0;
+            && !artifact.target_ids.is_empty();
 
         let test_id = Self::next_recovery_test_id(&env);
         let test = RecoveryTest {

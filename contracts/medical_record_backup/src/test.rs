@@ -116,7 +116,7 @@ fn integrity_mismatch_creates_alert() {
     assert!(!ok);
 
     let alerts = client.list_alerts(&true);
-    assert!(alerts.len() >= 1);
+    assert!(!alerts.is_empty());
 }
 
 #[test]
