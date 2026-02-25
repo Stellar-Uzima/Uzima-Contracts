@@ -45,7 +45,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          components: clippy
+          components: clippy, rust-src
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry
@@ -112,6 +112,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          components: rust-src
           targets: wasm32-unknown-unknown
 
       - name: Install Soroban CLI
@@ -150,6 +151,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          components: rust-src
           targets: wasm32-unknown-unknown
 
       - name: Install Soroban CLI
