@@ -428,6 +428,84 @@ pub struct RateLimitEntry {
     pub window_start: u64,
 }
 
+// ==================== Data Quality & Validation Types ====================
+
+/// Medical record types for type-specific validation rules.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum MedicalRecordType {
+    General,
+    Laboratory,
+    Prescription,
+    Imaging,
+    Surgical,
+    Emergency,
+}
+
+/// Per-field quality score for a medical record (each field scored 0–10_000 BPS).
+#[derive(Clone)]
+#[contracttype]
+pub struct DataQualityScore {
+    /// Overall quality score (0–10_000 basis points, i.e. 10_000 = 100%).
+    pub overall_score: u32,
+    /// Completeness sub-score: how many required fields are present.
+    pub completeness_score: u32,
+    /// Format sub-score: how many fields pass format validation.
+    pub format_score: u32,
+    /// Consistency sub-score: cross-field consistency checks.
+    pub consistency_score: u32,
+    /// FHIR compliance sub-score.
+    pub fhir_compliance_score: u32,
+    /// Number of issues found during validation.
+    pub issue_count: u32,
+}
+
+/// Severity level for a single validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum ValidationSeverity {
+    Info,
+    Warning,
+    Error,
+    Critical,
+}
+
+/// A single validation issue detected during quality assessment.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationIssue {
+    pub severity: ValidationSeverity,
+    pub field_name: String,
+    pub issue_description: String,
+    pub suggestion: String,
+}
+
+/// Complete validation report returned by the quality assessment system.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationReport {
+    pub record_id: u64,
+    pub quality_score: DataQualityScore,
+    pub issues: Vec<ValidationIssue>,
+    pub is_fhir_compliant: bool,
+    pub validated_at: u64,
+}
+
+/// Tracks field-level completeness for gap detection.
+#[derive(Clone)]
+#[contracttype]
+pub struct FieldCompleteness {
+    pub has_diagnosis: bool,
+    pub has_treatment: bool,
+    pub has_category: bool,
+    pub has_treatment_type: bool,
+    pub has_data_ref: bool,
+    pub has_tags: bool,
+    pub has_doctor_did: bool,
+    pub total_fields: u32,
+    pub completed_fields: u32,
+}
+
 // ==================== Constants ====================
 
 const APPROVAL_THRESHOLD: u32 = 2;
@@ -3427,6 +3505,94 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RateLimitBypass(account), &bypass);
+        Ok(true)
+    }
+
+    // =========================================================================
+    // Data Quality & Validation
+    // =========================================================================
+
+    /// Validates a stored medical record and returns a comprehensive quality report.
+    ///
+    /// Performs completeness checks, format validation, consistency verification,
+    /// and FHIR compliance assessment. Emits a `DataQualityValidated` event.
+    pub fn validate_record_quality(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<ValidationReport, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+
+        events::emit_data_quality_validated(
+            &env,
+            caller,
+            record_id,
+            report.quality_score.overall_score,
+            report.is_fhir_compliant,
+            report.quality_score.issue_count,
+        );
+
+        Ok(report)
+    }
+
+    /// Returns field-level completeness / gap detection for a stored record.
+    pub fn get_field_completeness(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<FieldCompleteness, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        Ok(validation::assess_field_completeness(&record))
+    }
+
+    /// Validates a stored record against type-specific rules.
+    pub fn validate_record_type(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        record_type: MedicalRecordType,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        validation::validate_record_by_type(&env, &record, record_type)?;
         Ok(true)
     }
 }

@@ -77,6 +77,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),
         Error::InvalidCategory => symbol_short!("FIX_CAT"),
+        Error::InvalidBatch => symbol_short!("CHK_DATA"),
         _ => symbol_short!("CONTACT"),
     }
 }
