@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       contract:
-        description: 'Contract to deploy (leave empty for all)'
+        description: "Contract to deploy (leave empty for all)"
         required: false
         type: string
       confirm:
@@ -186,14 +186,14 @@ jobs:
           mkdir -p deployments
           deployment_log="deployments/mainnet_$(date +%Y%m%d_%H%M%S).json"
           echo "[]" > "$deployment_log"
-          
+
           # Determine which contracts to deploy
           if [ -n "${{ inputs.contract }}" ]; then
             contracts="${{ inputs.contract }}"
           else
             contracts=$(ls -d contracts/*/ | xargs -n1 basename)
           fi
-          
+
           for contract_name in $contracts; do
             wasm_file="dist/${contract_name}.wasm"
             if [ ! -f "$wasm_file" ]; then
@@ -232,7 +232,7 @@ jobs:
                  "deployer": "deployer-mainnet"
                }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
           done
-          
+
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
           cat "$deployment_log"
 
@@ -260,4 +260,3 @@ jobs:
           echo "- Verify all contracts are functioning correctly" >> $GITHUB_STEP_SUMMARY
           echo "- Monitor contract health: \`./scripts/monitor_deployments.sh mainnet\`" >> $GITHUB_STEP_SUMMARY
           echo "- Keep deployment logs for audit purposes" >> $GITHUB_STEP_SUMMARY
-
