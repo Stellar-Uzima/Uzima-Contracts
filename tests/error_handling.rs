@@ -3,6 +3,8 @@ use medical_records::{
 };
 use soroban_sdk::{Address, Env, String, Vec};
 
+#[allow(clippy::unwrap_used)]
+
 fn setup_contract(env: &Env) -> (MedicalRecordsContractClient, Address, Address, Address) {
     env.mock_all_auths();
     let contract_id = env.register_contract(None, MedicalRecordsContract);
