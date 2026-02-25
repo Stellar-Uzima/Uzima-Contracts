@@ -82,7 +82,7 @@ impl VestingContract {
 
         // Update released amount
         let Some(mut schedule) = get_vesting_schedule(&env, &beneficiary) else {
-            return; // No vesting schedule
+            return 0; // No vesting schedule
         };
         schedule.released_amount += releasable;
         set_vesting_schedule(&env, &beneficiary, &schedule);
