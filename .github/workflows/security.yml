@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 env:
-  RUST_VERSION: "1.92.0"
+  RUST_VERSION: "stable"
 
 jobs:
   # Cargo audit for known vulnerabilities
@@ -97,6 +97,7 @@ jobs:
           tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
           chmod +x gitleaks
           sudo mv gitleaks /usr/local/bin/
+        continue-on-error: true
 
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose --redact

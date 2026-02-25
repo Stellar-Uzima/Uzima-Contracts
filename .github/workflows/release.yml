@@ -6,8 +6,8 @@ on:
       - "v*.*.*"
 
 env:
-  RUST_VERSION: "1.92.0"
-  SOROBAN_VERSION: "23.1.4"
+  RUST_VERSION: "stable"
+  SOROBAN_VERSION: "21.0.0"
 
 jobs:
   release:
