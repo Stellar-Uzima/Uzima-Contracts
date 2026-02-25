@@ -20,6 +20,7 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Vec,
 };
+use soroban_sdk::xdr::ToXdr;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
@@ -150,6 +151,46 @@ pub struct EmergencyAccess {
     pub expires_at: u64,
     pub record_scope: Vec<u64>,
     pub is_active: bool,
+}
+
+// ==================== ZK / Credential Types ====================
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkPublicInputs {
+    pub record_id: u64,
+    pub record_commitment: BytesN<32>,
+    pub credential_root: BytesN<32>,
+    pub issuer: Address,
+    pub requester_commitment: BytesN<32>,
+    pub provider_commitment: BytesN<32>,
+    pub claim_commitment: BytesN<32>,
+    pub min_timestamp: u64,
+    pub max_timestamp: u64,
+    pub nullifier: BytesN<32>,
+    pub pseudonym: BytesN<32>,
+    pub vk_version: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkAccessGrant {
+    pub record_id: u64,
+    pub requester: Address,
+    pub expires_at: u64,
+    pub nullifier: BytesN<32>,
+    pub pseudonym: BytesN<32>,
+    pub vk_version: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkAuditRecord {
+    pub record_id: u64,
+    pub pseudonym: BytesN<32>,
+    pub timestamp: u64,
+    pub proof_verified: bool,
+    pub nullifier: Option<BytesN<32>>,
 }
 
 // ==================== Medical Record ====================
@@ -331,6 +372,7 @@ pub enum DataKey {
     RecordCount,
     Record(u64),
     RecordMeta(u64),
+    RecordCommitment(u64),
     PatientRecords(Address),
     TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
 
@@ -379,6 +421,13 @@ pub enum DataKey {
     // Compliance
     RegulatoryCompliance,
 
+    // ZK
+    ZkVerifierContract,
+    CredentialRegistryContract,
+    ZkEnforced,
+    ZkGrantTtl,
+    ZkUsedNullifier(BytesN<32>),
+    ZkAccessGrant(Address, u64),
     // Rate limiting
     RateLimitCfg(u32),        // operation_id -> RateLimitConfig
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
@@ -434,6 +483,20 @@ const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
 const CHAIN_LIST_LEN: usize = 6;
+const DEFAULT_ZK_GRANT_TTL_SECS: u64 = 120;
+const MAX_ZK_GRANT_TTL_SECS: u64 = 3_600;
+
+#[soroban_sdk::contractclient(name = "ZkVerifierClient")]
+pub trait ZkVerifierContract {
+    fn verify_proof(env: Env, vk_version: u32, public_inputs_hash: BytesN<32>, proof: Bytes)
+    -> bool;
+}
+
+#[soroban_sdk::contractclient(name = "CredentialRegistryClient")]
+pub trait CredentialRegistryContract {
+    fn get_active_root(env: Env, issuer: Address) -> Option<BytesN<32>>;
+    fn is_root_revoked(env: Env, issuer: Address, root: BytesN<32>) -> bool;
+}
 
 // Rate-limiting operation IDs
 const OP_ADD_RECORD: u32 = 1;
@@ -482,6 +545,12 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RequirePqEnvelopes, &false);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkEnforced, &false);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkGrantTtl, &DEFAULT_ZK_GRANT_TTL_SECS);
 
         let mut users: Map<Address, UserProfile> = Map::new(&env);
         users.set(
@@ -917,6 +986,16 @@ impl MedicalRecordsContract {
             Self::log_to_forensics(&env, caller, 0, Some(record_id)); // Failed access
             return Err(Error::NotAuthorized);
         }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
+        }
 
         events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
         Self::log_to_forensics(&env, caller, 0, Some(record_id)); // 0 = RecordAccess
@@ -940,7 +1019,13 @@ impl MedicalRecordsContract {
                 None => return Ok(None),
             };
 
-        let granted = Self::can_view_record(&env, &caller, &record, record_id);
+        let acl_granted = Self::can_view_record(&env, &caller, &record, record_id);
+        let zk_granted = if acl_granted {
+            Self::is_valid_zk_access_grant(&env, &caller, record_id)
+        } else {
+            false
+        };
+        let granted = acl_granted && zk_granted;
         Self::log_access(
             &env,
             &record.patient_id,
@@ -950,8 +1035,18 @@ impl MedicalRecordsContract {
             granted,
         );
 
-        if !granted {
+        if !acl_granted {
             return Err(Error::NotAuthorized);
+        }
+        if !zk_granted {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
         }
 
         events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
@@ -1032,6 +1127,275 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0)
+    }
+
+    pub fn set_zk_verifier_contract(
+        env: Env,
+        caller: Address,
+        verifier: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkVerifierContract, &verifier);
+        Ok(true)
+    }
+
+    pub fn get_zk_verifier_contract(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::ZkVerifierContract)
+    }
+
+    pub fn set_credential_registry_contract(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CredentialRegistryContract, &registry);
+        Ok(true)
+    }
+
+    pub fn get_credential_registry_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)
+    }
+
+    pub fn set_zk_enforced(env: Env, caller: Address, enforced: bool) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage().persistent().set(&DataKey::ZkEnforced, &enforced);
+        Ok(true)
+    }
+
+    pub fn is_zk_enforced(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkEnforced)
+            .unwrap_or(false)
+    }
+
+    pub fn set_zk_grant_ttl(env: Env, caller: Address, ttl_secs: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        if ttl_secs == 0 || ttl_secs > MAX_ZK_GRANT_TTL_SECS {
+            return Err(Error::InvalidInput);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkGrantTtl, &ttl_secs);
+        Ok(true)
+    }
+
+    pub fn get_zk_grant_ttl(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkGrantTtl)
+            .unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS)
+    }
+
+    pub fn get_record_commitment(env: Env, record_id: u64) -> Option<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordCommitment(record_id))
+    }
+
+    pub fn has_valid_zk_access_grant(env: Env, requester: Address, record_id: u64) -> bool {
+        Self::is_valid_zk_access_grant(&env, &requester, record_id)
+    }
+
+    pub fn submit_zk_access_proof(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        purpose: String,
+        public_inputs: ZkPublicInputs,
+        proof: Bytes,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        validation::validate_purpose(&purpose)?;
+
+        let meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if public_inputs.record_id != record_id {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(
+                    &env,
+                    &caller,
+                    &public_inputs.issuer,
+                    record_id,
+                ),
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_commitment: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCommitment(record_id))
+            .unwrap_or(meta.record_hash.clone());
+        if expected_commitment != public_inputs.record_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        if meta.timestamp < public_inputs.min_timestamp || meta.timestamp > public_inputs.max_timestamp {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_requester_commitment = Self::hash_address(&env, &caller);
+        if expected_requester_commitment != public_inputs.requester_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let provider = Self::resolve_record_provider(&env, record_id)?;
+        let expected_provider_commitment = Self::hash_address(&env, &provider);
+        if expected_provider_commitment != public_inputs.provider_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_pseudonym =
+            Self::compute_requester_pseudonym(&env, &caller, &public_inputs.issuer, record_id);
+        if expected_pseudonym != public_inputs.pseudonym {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let root = Self::resolve_active_credential_root(&env, &public_inputs.issuer)
+            .ok_or(Error::InvalidCredential)?;
+        if root != public_inputs.credential_root {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+        if Self::is_credential_root_revoked(&env, &public_inputs.issuer, &public_inputs.credential_root)
+        {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::CredentialRevoked);
+        }
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()))
+        {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::CredentialRevoked);
+        }
+
+        let public_inputs_hash = Self::hash_zk_public_inputs(&env, &public_inputs);
+        let verified = Self::verify_zk_proof_internal(
+            &env,
+            public_inputs.vk_version,
+            public_inputs_hash,
+            proof,
+        );
+        Self::emit_zk_audit(
+            &env,
+            record_id,
+            &public_inputs.pseudonym,
+            verified,
+            Some(public_inputs.nullifier.clone()),
+        );
+        if !verified {
+            return Err(Error::InvalidCredential);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()), &true);
+
+        let grant = ZkAccessGrant {
+            record_id,
+            requester: caller.clone(),
+            expires_at: env
+                .ledger()
+                .timestamp()
+                .saturating_add(Self::zk_grant_ttl_internal(&env)),
+            nullifier: public_inputs.nullifier,
+            pseudonym: public_inputs.pseudonym,
+            vk_version: public_inputs.vk_version,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkAccessGrant(caller, record_id), &grant);
+        Ok(true)
     }
 
     // ---------------------------------------------------------------------
@@ -1806,6 +2170,10 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
+        let commitment = Self::compute_encrypted_record_commitment(&env, &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCommitment(record_id), &commitment);
 
         // Index each tag for searchability
         for tag in record.tags.iter() {
@@ -1854,6 +2222,16 @@ impl MedicalRecordsContract {
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
             return Err(Error::NotAuthorized);
         }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
+        }
 
         Ok(Some(EncryptedRecordHeader {
             record_id,
@@ -1889,6 +2267,16 @@ impl MedicalRecordsContract {
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
             return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
         }
 
         for e in record.envelopes.iter() {
@@ -2961,6 +3349,10 @@ impl MedicalRecordsContract {
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
 
+        let commitment = Self::compute_plain_record_commitment(env, record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCommitment(record_id), &commitment);
         // Index each tag for searchability
         for tag in record.tags.iter() {
             let mut ids: Vec<u64> = env
@@ -3087,6 +3479,191 @@ impl MedicalRecordsContract {
                 ],
             );
         }
+    }
+
+    fn is_zk_enforced_internal(env: &Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkEnforced)
+            .unwrap_or(false)
+    }
+
+    fn zk_grant_ttl_internal(env: &Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkGrantTtl)
+            .unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS)
+    }
+
+    fn is_valid_zk_access_grant(env: &Env, requester: &Address, record_id: u64) -> bool {
+        if !Self::is_zk_enforced_internal(env) {
+            return true;
+        }
+
+        let key = DataKey::ZkAccessGrant(requester.clone(), record_id);
+        let grant: ZkAccessGrant = match env.storage().persistent().get(&key) {
+            Some(v) => v,
+            None => return false,
+        };
+        if grant.expires_at <= env.ledger().timestamp() {
+            env.storage().persistent().remove(&key);
+            return false;
+        }
+        true
+    }
+
+    fn verify_zk_proof_internal(
+        env: &Env,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+    ) -> bool {
+        let verifier: Address = match env.storage().persistent().get(&DataKey::ZkVerifierContract) {
+            Some(v) => v,
+            None => return false,
+        };
+        let verifier_client = ZkVerifierClient::new(env, &verifier);
+        verifier_client.verify_proof(&vk_version, &public_inputs_hash, &proof)
+    }
+
+    fn resolve_active_credential_root(env: &Env, issuer: &Address) -> Option<BytesN<32>> {
+        let registry: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)?;
+        let registry_client = CredentialRegistryClient::new(env, &registry);
+        registry_client.get_active_root(issuer)
+    }
+
+    fn is_credential_root_revoked(env: &Env, issuer: &Address, root: &BytesN<32>) -> bool {
+        let registry: Address = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)
+        {
+            Some(v) => v,
+            None => return false,
+        };
+        let registry_client = CredentialRegistryClient::new(env, &registry);
+        registry_client.is_root_revoked(issuer, root)
+    }
+
+    fn resolve_record_provider(env: &Env, record_id: u64) -> Result<Address, Error> {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+        {
+            return Ok(record.doctor_id);
+        }
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, EncryptedRecord>(&DataKey::EncryptedRecord(record_id))
+        {
+            return Ok(record.doctor_id);
+        }
+        Err(Error::RecordNotFound)
+    }
+
+    fn hash_zk_public_inputs(env: &Env, public_inputs: &ZkPublicInputs) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&Bytes::from_slice(env, &public_inputs.record_id.to_be_bytes()));
+        Self::append_bytes32(env, &mut payload, &public_inputs.record_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.credential_root);
+        payload.append(&public_inputs.issuer.to_xdr(env));
+        Self::append_bytes32(env, &mut payload, &public_inputs.requester_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.provider_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.claim_commitment);
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.min_timestamp.to_be_bytes(),
+        ));
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.max_timestamp.to_be_bytes(),
+        ));
+        Self::append_bytes32(env, &mut payload, &public_inputs.nullifier);
+        Self::append_bytes32(env, &mut payload, &public_inputs.pseudonym);
+        payload.append(&Bytes::from_slice(env, &public_inputs.vk_version.to_be_bytes()));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn hash_address(env: &Env, address: &Address) -> BytesN<32> {
+        let raw = address.to_xdr(env);
+        env.crypto().sha256(&raw).into()
+    }
+
+    fn compute_requester_pseudonym(
+        env: &Env,
+        requester: &Address,
+        issuer: &Address,
+        record_id: u64,
+    ) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&requester.to_xdr(env));
+        payload.append(&issuer.to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(env, b"UZIMA_ZK_PSEUDONYM_V1"));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn emit_zk_audit(
+        env: &Env,
+        record_id: u64,
+        pseudonym: &BytesN<32>,
+        verified: bool,
+        nullifier: Option<BytesN<32>>,
+    ) {
+        let event = ZkAuditRecord {
+            record_id,
+            pseudonym: pseudonym.clone(),
+            timestamp: env.ledger().timestamp(),
+            proof_verified: verified,
+            nullifier,
+        };
+        env.events()
+            .publish((Symbol::new(env, "EVENT"), symbol_short!("ZK_AUD")), event);
+    }
+
+    fn append_bytes32(env: &Env, payload: &mut Bytes, value: &BytesN<32>) {
+        payload.append(&Bytes::from_slice(env, &value.to_array()));
+    }
+
+    fn compute_plain_record_commitment(env: &Env, record: &MedicalRecord) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&record.patient_id.to_xdr(env));
+        payload.append(&record.doctor_id.to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
+        payload.append(&record.diagnosis.to_xdr(env));
+        payload.append(&record.treatment.to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
+        payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
+        for tag in record.tags.iter() {
+            payload.append(&tag.to_xdr(env));
+        }
+        payload.append(&record.category.to_xdr(env));
+        payload.append(&record.treatment_type.to_xdr(env));
+        payload.append(&record.data_ref.to_xdr(env));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn compute_encrypted_record_commitment(env: &Env, record: &EncryptedRecord) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&record.patient_id.to_xdr(env));
+        payload.append(&record.doctor_id.to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
+        payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
+        payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
+        for tag in record.tags.iter() {
+            payload.append(&tag.to_xdr(env));
+        }
+        payload.append(&record.category.to_xdr(env));
+        payload.append(&record.treatment_type.to_xdr(env));
+        payload.append(&record.ciphertext_ref.to_xdr(env));
+        Self::append_bytes32(env, &mut payload, &record.ciphertext_hash);
+        payload.append(&Bytes::from_slice(env, &record.envelopes.len().to_be_bytes()));
+        env.crypto().sha256(&payload).into()
     }
 
     fn can_view_record(
