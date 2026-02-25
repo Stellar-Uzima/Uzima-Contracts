@@ -466,7 +466,7 @@ pub struct DataQualityScore {
 pub enum ValidationSeverity {
     Info,
     Warning,
-    Error,
+    ValidationErr,
     Critical,
 }
 

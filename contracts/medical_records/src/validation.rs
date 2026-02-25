@@ -803,7 +803,7 @@ pub fn compute_quality_score(
 
     if !completeness.has_diagnosis {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "diagnosis"),
             issue_description: String::from_str(env, "Missing diagnosis field"),
             suggestion: String::from_str(env, "Add a valid diagnosis description"),
@@ -811,7 +811,7 @@ pub fn compute_quality_score(
     }
     if !completeness.has_treatment {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "treatment"),
             issue_description: String::from_str(env, "Missing treatment field"),
             suggestion: String::from_str(env, "Add a valid treatment description"),
@@ -842,7 +842,7 @@ pub fn compute_quality_score(
         format_checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "diagnosis"),
             issue_description: String::from_str(env, "Diagnosis fails format validation"),
             suggestion: String::from_str(env, "Ensure diagnosis is 1-512 characters"),
@@ -853,7 +853,7 @@ pub fn compute_quality_score(
         format_checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "treatment"),
             issue_description: String::from_str(env, "Treatment fails format validation"),
             suggestion: String::from_str(env, "Ensure treatment is 1-512 characters"),
@@ -864,7 +864,7 @@ pub fn compute_quality_score(
         format_checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "category"),
             issue_description: String::from_str(env, "Invalid category value"),
             suggestion: String::from_str(env, "Use: Modern, Traditional, Herbal, or Spiritual"),
@@ -920,7 +920,7 @@ pub fn compute_quality_score(
         consistency_checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "timestamp"),
             issue_description: String::from_str(env, "Invalid timestamp"),
             suggestion: String::from_str(env, "Timestamp must be non-zero and not far future"),
@@ -1005,7 +1005,7 @@ pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<
         checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "timestamp"),
             issue_description: String::from_str(env, "FHIR: missing recordedDate"),
             suggestion: String::from_str(env, "Set a non-zero timestamp"),
@@ -1017,7 +1017,7 @@ pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<
         checks_passed += 1;
     } else {
         issues.push_back(ValidationIssue {
-            severity: ValidationSeverity::Error,
+            severity: ValidationSeverity::ValidationErr,
             field_name: String::from_str(env, "diagnosis"),
             issue_description: String::from_str(env, "FHIR: missing clinical narrative"),
             suggestion: String::from_str(env, "Add a diagnosis for FHIR compliance"),
