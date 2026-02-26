@@ -88,7 +88,7 @@ pub struct EventMetadata {
     pub category: OperationCategory,
     pub timestamp: u64,
     pub user_id: Address,
-    pub session_id: Option<BytesN<32>>,
+    pub session_id: Option<String>,
     pub ipfs_ref: Option<String>,
     pub gas_used: Option<u64>,
     pub block_height: u64,
@@ -115,6 +115,52 @@ Events are published using Soroban SDK's event system with structured topics:
 ```rust
 env.events().publish(("EVENT", symbol_short!("RECORD_CREATED")), event);
 ```
+
+## Structured Logging (Soroban Events)
+
+The medical records contract now includes a structured logging layer that emits dedicated log events for major operations.
+
+### Log levels
+
+- `Info` -> topic `("LOG", symbol_short!("LOG_INFO"))`
+- `Warning` -> topic `("LOG", symbol_short!("LOG_WARN"))`
+- `Error` -> topic `("LOG", symbol_short!("LOG_ERROR"))`
+
+### Log payload schema
+
+```rust
+pub struct StructuredLog {
+    pub timestamp: u64,
+    pub level: LogLevel,
+    pub operation: String,
+    pub actor: Option<Address>,
+    pub target_id: Option<Address>,
+    pub record_id: Option<u64>,
+    pub message: String,
+}
+```
+
+### Coverage
+
+Structured logs are emitted for:
+
+- User management operations: `initialize`, `manage_user`, `deactivate_user`, permission grant/revoke
+- Record operations: `add_record`, `add_record_with_did`, `get_record`, `get_record_with_did`, metadata update/import
+- Administrative actions: pause/unpause, audit forensics configuration, rate-limit configuration, emergency/recovery flows
+
+### Metadata included in every log
+
+- `timestamp` from ledger time
+- `actor` (caller when available)
+- `operation` type string
+- optional `target_id` and `record_id`
+- human-readable `message`
+
+### Testing
+
+Logging behavior is verified in:
+
+- `contracts/medical_records/tests/logging_tests.rs`
 
 ## Event Filtering and Querying
 
