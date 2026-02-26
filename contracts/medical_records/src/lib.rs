@@ -477,6 +477,84 @@ pub struct RateLimitEntry {
     pub window_start: u64,
 }
 
+// ==================== Data Quality & Validation Types ====================
+
+/// Medical record types for type-specific validation rules.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum MedicalRecordType {
+    General,
+    Laboratory,
+    Prescription,
+    Imaging,
+    Surgical,
+    Emergency,
+}
+
+/// Per-field quality score for a medical record (each field scored 0–10_000 BPS).
+#[derive(Clone)]
+#[contracttype]
+pub struct DataQualityScore {
+    /// Overall quality score (0–10_000 basis points, i.e. 10_000 = 100%).
+    pub overall_score: u32,
+    /// Completeness sub-score: how many required fields are present.
+    pub completeness_score: u32,
+    /// Format sub-score: how many fields pass format validation.
+    pub format_score: u32,
+    /// Consistency sub-score: cross-field consistency checks.
+    pub consistency_score: u32,
+    /// FHIR compliance sub-score.
+    pub fhir_compliance_score: u32,
+    /// Number of issues found during validation.
+    pub issue_count: u32,
+}
+
+/// Severity level for a single validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum ValidationSeverity {
+    Info,
+    Warning,
+    ValidationErr,
+    Critical,
+}
+
+/// A single validation issue detected during quality assessment.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationIssue {
+    pub severity: ValidationSeverity,
+    pub field_name: String,
+    pub issue_description: String,
+    pub suggestion: String,
+}
+
+/// Complete validation report returned by the quality assessment system.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationReport {
+    pub record_id: u64,
+    pub quality_score: DataQualityScore,
+    pub issues: Vec<ValidationIssue>,
+    pub is_fhir_compliant: bool,
+    pub validated_at: u64,
+}
+
+/// Tracks field-level completeness for gap detection.
+#[derive(Clone)]
+#[contracttype]
+pub struct FieldCompleteness {
+    pub has_diagnosis: bool,
+    pub has_treatment: bool,
+    pub has_category: bool,
+    pub has_treatment_type: bool,
+    pub has_data_ref: bool,
+    pub has_tags: bool,
+    pub has_doctor_did: bool,
+    pub total_fields: u32,
+    pub completed_fields: u32,
+}
+
 // ==================== Constants ====================
 
 const APPROVAL_THRESHOLD: u32 = 2;
@@ -512,6 +590,28 @@ const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
 const DEFAULT_ADMIN_MAX_CALLS: u32 = 0; // 0 = unlimited
 const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 
+// ==================== Structured Logging Types ====================
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum LogLevel {
+    Info,
+    Warning,
+    ErrorLevel,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct StructuredLog {
+    pub timestamp: u64,
+    pub level: LogLevel,
+    pub operation: String,
+    pub actor: Option<Address>,
+    pub target_id: Option<Address>,
+    pub record_id: Option<u64>,
+    pub message: String,
+}
+
 // ==================== Contract ====================
 
 #[contract]
@@ -524,10 +624,103 @@ impl MedicalRecordsContract {
     // Initialization / Admin
     // ---------------------------------------------------------------------
 
+    fn emit_structured_log(
+        env: &Env,
+        level: LogLevel,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        let topic = match level {
+            LogLevel::Info => symbol_short!("LOG_INFO"),
+            LogLevel::Warning => symbol_short!("LOG_WARN"),
+            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+        };
+
+        let entry = StructuredLog {
+            timestamp: env.ledger().timestamp(),
+            level,
+            operation: String::from_str(env, operation),
+            actor: actor.cloned(),
+            target_id: target_id.cloned(),
+            record_id,
+            message: String::from_str(env, message),
+        };
+
+        env.events().publish(("LOG", topic), entry);
+    }
+
+    fn log_info(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::Info,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
+    fn log_warning(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::Warning,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
+    fn log_error(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::ErrorLevel,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
 
         if env.storage().instance().has(&UPGRADE_ADMIN) {
+            Self::log_warning(
+                &env,
+                "initialize",
+                Some(&admin),
+                None,
+                None,
+                "Initialization skipped because contract is already initialized",
+            );
             return false;
         }
 
@@ -564,7 +757,15 @@ impl MedicalRecordsContract {
             },
         );
         env.storage().persistent().set(&DataKey::Users, &users);
-        events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
+        events::emit_user_created(&env, admin.clone(), admin.clone(), "Admin", None);
+        Self::log_info(
+            &env,
+            "initialize",
+            Some(&admin),
+            Some(&admin),
+            None,
+            "Contract initialized and admin user provisioned",
+        );
         true
     }
 
@@ -579,6 +780,14 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::AuditForensicsContract, &contract_id);
+        Self::log_info(
+            &env,
+            "set_audit_forensics",
+            Some(&admin),
+            Some(&contract_id),
+            None,
+            "Audit forensics contract reference updated",
+        );
         Ok(true)
     }
 
@@ -625,7 +834,21 @@ impl MedicalRecordsContract {
                     did_reference: profile.did_reference,
                 },
             );
-            events::emit_user_role_updated(&env, caller, user, role_str, Some(prev_str));
+            events::emit_user_role_updated(
+                &env,
+                caller.clone(),
+                user.clone(),
+                role_str,
+                Some(prev_str),
+            );
+            Self::log_info(
+                &env,
+                "manage_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User role updated",
+            );
         } else {
             users.set(
                 user.clone(),
@@ -635,7 +858,15 @@ impl MedicalRecordsContract {
                     did_reference: None,
                 },
             );
-            events::emit_user_created(&env, caller, user, role_str, None);
+            events::emit_user_created(&env, caller.clone(), user.clone(), role_str, None);
+            Self::log_info(
+                &env,
+                "manage_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User created",
+            );
         }
 
         env.storage().persistent().set(&DataKey::Users, &users);
@@ -653,9 +884,25 @@ impl MedicalRecordsContract {
             profile.active = false;
             users.set(user.clone(), profile);
             env.storage().persistent().set(&DataKey::Users, &users);
-            events::emit_user_deactivated(&env, caller, user);
+            events::emit_user_deactivated(&env, caller.clone(), user.clone());
+            Self::log_info(
+                &env,
+                "deactivate_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User deactivated",
+            );
             Ok(true)
         } else {
+            Self::log_warning(
+                &env,
+                "deactivate_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "Requested user deactivation but user was not found",
+            );
             Ok(false)
         }
     }
@@ -674,7 +921,15 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         env.storage().persistent().set(&DataKey::Paused, &true);
-        events::emit_contract_paused(&env, caller);
+        events::emit_contract_paused(&env, caller.clone());
+        Self::log_info(
+            &env,
+            "pause",
+            Some(&caller),
+            None,
+            None,
+            "Contract paused by admin action",
+        );
         Ok(true)
     }
 
@@ -684,7 +939,15 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         env.storage().persistent().set(&DataKey::Paused, &false);
-        events::emit_contract_unpaused(&env, caller);
+        events::emit_contract_unpaused(&env, caller.clone());
+        Self::log_info(
+            &env,
+            "unpause",
+            Some(&caller),
+            None,
+            None,
+            "Contract unpaused by admin action",
+        );
         Ok(true)
     }
 
@@ -741,6 +1004,14 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &granter)
             && !Self::check_permission(&env, &granter, Permission::DelegatePermission)
         {
+            Self::log_error(
+                &env,
+                "grant_permission",
+                Some(&granter),
+                Some(&grantee),
+                None,
+                "Permission grant denied: caller lacks delegation rights",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -779,11 +1050,19 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&key, &new_grants);
         events::emit_permission_granted(
             &env,
-            granter,
-            grantee,
+            granter.clone(),
+            grantee.clone(),
             permission as u32,
             expiration,
             is_delegatable,
+        );
+        Self::log_info(
+            &env,
+            "grant_permission",
+            Some(&granter),
+            Some(&grantee),
+            None,
+            "Permission grant persisted",
         );
         Ok(true)
     }
@@ -801,6 +1080,14 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &revoker)
             && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
         {
+            Self::log_error(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoke denied: caller lacks delegation rights",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -823,7 +1110,29 @@ impl MedicalRecordsContract {
 
         if removed {
             env.storage().persistent().set(&key, &new_grants);
-            events::emit_permission_revoked(&env, revoker, grantee, permission as u32);
+            events::emit_permission_revoked(
+                &env,
+                revoker.clone(),
+                grantee.clone(),
+                permission as u32,
+            );
+            Self::log_info(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoked",
+            );
+        } else {
+            Self::log_warning(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoke requested but matching grant was not found",
+            );
         }
 
         Ok(removed)
@@ -848,17 +1157,41 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation blocked because encrypted record flow is enforced",
+            );
             return Err(Error::EncryptionRequired);
         }
 
         // Authorization MUST happen before content validation (tests depend on this).
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied: caller lacks CreateRecord permission",
+            );
             return Err(Error::NotAuthorized);
         }
         Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
         // Validate inputs
         if Self::is_patient_forgotten(&env, &patient) {
+            Self::log_warning(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied because patient is marked as forgotten",
+            );
             return Err(Error::NotAuthorized);
         }
         validation::validate_diagnosis(&diagnosis)?;
@@ -890,12 +1223,20 @@ impl MedicalRecordsContract {
 
         events::emit_record_created(
             &env,
-            caller,
+            caller.clone(),
             record_id,
-            patient,
+            patient.clone(),
             is_confidential,
-            category,
-            tags,
+            category.clone(),
+            tags.clone(),
+        );
+        Self::log_info(
+            &env,
+            "add_record",
+            Some(&caller),
+            Some(&patient),
+            Some(record_id),
+            "Medical record created",
         );
         Ok(record_id)
     }
@@ -917,14 +1258,38 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID blocked because encrypted record flow is enforced",
+            );
             return Err(Error::EncryptionRequired);
         }
 
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID denied: caller lacks CreateRecord permission",
+            );
             return Err(Error::NotAuthorized);
         }
 
         if Self::is_patient_forgotten(&env, &patient) {
+            Self::log_warning(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID denied because patient is marked as forgotten",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -970,6 +1335,14 @@ impl MedicalRecordsContract {
         );
 
         Self::log_to_forensics(&env, caller, 5, Some(record_id)); // 5 = RecordCreated (mapping needed)
+        Self::log_info(
+            &env,
+            "add_record_with_did",
+            Some(&record.doctor_id),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Medical record with DID context created",
+        );
 
         Ok(record_id)
     }
@@ -978,14 +1351,32 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
-        let record: MedicalRecord = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Record(record_id))
-            .ok_or(Error::RecordNotFound)?;
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(record) => record,
+                None => {
+                    Self::log_warning(
+                        &env,
+                        "get_record",
+                        Some(&caller),
+                        None,
+                        Some(record_id),
+                        "Record access requested for a non-existent record",
+                    );
+                    return Err(Error::RecordNotFound);
+                }
+            };
 
         if !Self::can_view_record(&env, &caller, &record, record_id) {
-            Self::log_to_forensics(&env, caller, 0, Some(record_id)); // Failed access
+            Self::log_to_forensics(&env, caller.clone(), 0, Some(record_id)); // Failed access
+            Self::log_error(
+                &env,
+                "get_record",
+                Some(&caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Record access denied",
+            );
             return Err(Error::NotAuthorized);
         }
         if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
@@ -1000,7 +1391,15 @@ impl MedicalRecordsContract {
         }
 
         events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
-        Self::log_to_forensics(&env, caller, 0, Some(record_id)); // 0 = RecordAccess
+        Self::log_to_forensics(&env, caller.clone(), 0, Some(record_id)); // 0 = RecordAccess
+        Self::log_info(
+            &env,
+            "get_record",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record accessed",
+        );
         Ok(record)
     }
 
@@ -1051,7 +1450,15 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidCredential);
         }
 
-        events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+        events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
+        Self::log_info(
+            &env,
+            "get_record_with_did",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record accessed with DID context",
+        );
         Ok(Some(record))
     }
 
@@ -1426,9 +1833,27 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&DataKey::Record(record_id))
-            .ok_or(Error::RecordNotFound)?;
+            .ok_or_else(|| {
+                Self::log_warning(
+                    &env,
+                    "update_record_metadata",
+                    Some(&caller),
+                    None,
+                    Some(record_id),
+                    "Metadata update requested for a non-existent record",
+                );
+                Error::RecordNotFound
+            })?;
 
         if caller != record.doctor_id && !Self::is_admin(&env, &caller) {
+            Self::log_error(
+                &env,
+                "update_record_metadata",
+                Some(&caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Metadata update denied: caller is neither doctor nor admin",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -1466,12 +1891,20 @@ impl MedicalRecordsContract {
 
         events::emit_metadata_updated(
             &env,
-            caller,
+            caller.clone(),
             record_id,
-            record.patient_id,
+            record.patient_id.clone(),
             meta.version,
             tags.len(),
             custom_fields.len(),
+        );
+        Self::log_info(
+            &env,
+            "update_record_metadata",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record metadata updated",
         );
 
         Ok(())
@@ -1599,12 +2032,20 @@ impl MedicalRecordsContract {
 
         events::emit_metadata_updated(
             &env,
-            caller,
+            caller.clone(),
             record_id,
-            record.patient_id,
+            record.patient_id.clone(),
             meta.version,
             tags.len(),
             custom_fields.len(),
+        );
+        Self::log_info(
+            &env,
+            "import_record_metadata",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record metadata imported by admin",
         );
 
         Ok(())
@@ -2722,10 +3163,18 @@ impl MedicalRecordsContract {
         events::emit_emergency_access_granted(
             &env,
             caller.clone(),
-            grantee,
-            caller,
+            grantee.clone(),
+            caller.clone(),
             record_scope,
             expires_at,
+        );
+        Self::log_info(
+            &env,
+            "grant_emergency_access",
+            Some(&caller),
+            Some(&grantee),
+            None,
+            "Emergency access granted",
         );
         Ok(true)
     }
@@ -2754,14 +3203,33 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::PatientEmergencyGrants(caller.clone()))
             .unwrap_or(Map::new(&env));
-        let mut entry = grants
-            .get(grantee.clone())
-            .ok_or(Error::EmergencyAccessNotFound)?;
+        let mut entry = match grants.get(grantee.clone()) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "revoke_emergency_access",
+                    Some(&caller),
+                    Some(&grantee),
+                    None,
+                    "Emergency access revoke requested but grant was not found",
+                );
+                return Err(Error::EmergencyAccessNotFound);
+            }
+        };
         entry.is_active = false;
-        grants.set(grantee, entry);
+        grants.set(grantee.clone(), entry);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientEmergencyGrants(caller), &grants);
+            .set(&DataKey::PatientEmergencyGrants(caller.clone()), &grants);
+        Self::log_info(
+            &env,
+            "revoke_emergency_access",
+            Some(&caller),
+            Some(&grantee),
+            None,
+            "Emergency access revoked",
+        );
         Ok(true)
     }
 
@@ -2907,7 +3375,22 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposal(proposal_id), &proposal);
-        events::emit_recovery_proposed(&env, caller, proposal_id, token_contract, to, amount);
+        events::emit_recovery_proposed(
+            &env,
+            caller.clone(),
+            proposal_id,
+            token_contract.clone(),
+            to.clone(),
+            amount,
+        );
+        Self::log_info(
+            &env,
+            "propose_recovery",
+            Some(&caller),
+            Some(&to),
+            Some(proposal_id),
+            "Recovery proposal created",
+        );
         Ok(proposal_id)
     }
 
@@ -2918,19 +3401,53 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = match env.storage().persistent().get(&key) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "approve_recovery",
+                    Some(&caller),
+                    None,
+                    Some(proposal_id),
+                    "Recovery approval requested for a non-existent proposal",
+                );
+                return Err(Error::RecordNotFound);
+            }
+        };
         if proposal.executed {
+            Self::log_error(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Recovery approval denied because proposal is already executed",
+            );
             return Err(Error::ProposalAlreadyExecuted);
         }
 
         if !proposal.approvals.contains(&caller) {
             proposal.approvals.push_back(caller.clone());
             env.storage().persistent().set(&key, &proposal);
-            events::emit_recovery_approved(&env, caller, proposal_id);
+            events::emit_recovery_approved(&env, caller.clone(), proposal_id);
+            Self::log_info(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Recovery proposal approved",
+            );
+        } else {
+            Self::log_warning(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Duplicate recovery approval ignored",
+            );
         }
 
         Ok(true)
@@ -2943,21 +3460,54 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = match env.storage().persistent().get(&key) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "execute_recovery",
+                    Some(&caller),
+                    None,
+                    Some(proposal_id),
+                    "Recovery execution requested for a non-existent proposal",
+                );
+                return Err(Error::RecordNotFound);
+            }
+        };
         if proposal.executed {
+            Self::log_error(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because proposal is already executed",
+            );
             return Err(Error::ProposalAlreadyExecuted);
         }
 
         let now = env.ledger().timestamp();
         if now < proposal.created_at.saturating_add(TIMELOCK_SECS) {
+            Self::log_warning(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because timelock has not elapsed",
+            );
             return Err(Error::TimelockNotElasped);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
+            Self::log_warning(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because approvals are below threshold",
+            );
             return Err(Error::NotEnoughApproval);
         }
 
@@ -2965,11 +3515,19 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&key, &proposal);
         events::emit_recovery_executed(
             &env,
-            caller,
+            caller.clone(),
             proposal_id,
-            proposal.token_contract,
-            proposal.to,
+            proposal.token_contract.clone(),
+            proposal.to.clone(),
             proposal.amount,
+        );
+        Self::log_info(
+            &env,
+            "execute_recovery",
+            Some(&caller),
+            Some(&proposal.to),
+            Some(proposal_id),
+            "Recovery proposal executed",
         );
         Ok(true)
     }
@@ -4007,6 +4565,14 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RateLimitCfg(op), &config);
+        Self::log_info(
+            &env,
+            "set_rate_limit_config",
+            Some(&admin),
+            None,
+            None,
+            "Rate limit configuration updated",
+        );
         Ok(true)
     }
 
@@ -4022,7 +4588,103 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &admin)?;
         env.storage()
             .persistent()
-            .set(&DataKey::RateLimitBypass(account), &bypass);
+            .set(&DataKey::RateLimitBypass(account.clone()), &bypass);
+        Self::log_info(
+            &env,
+            "set_rate_limit_bypass",
+            Some(&admin),
+            Some(&account),
+            None,
+            "Rate limit bypass flag updated",
+        );
+        Ok(true)
+    }
+
+    // =========================================================================
+    // Data Quality & Validation
+    // =========================================================================
+
+    /// Validates a stored medical record and returns a comprehensive quality report.
+    ///
+    /// Performs completeness checks, format validation, consistency verification,
+    /// and FHIR compliance assessment. Emits a `DataQualityValidated` event.
+    pub fn validate_record_quality(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<ValidationReport, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+
+        events::emit_data_quality_validated(
+            &env,
+            caller,
+            record_id,
+            report.quality_score.overall_score,
+            report.is_fhir_compliant,
+            report.quality_score.issue_count,
+        );
+
+        Ok(report)
+    }
+
+    /// Returns field-level completeness / gap detection for a stored record.
+    pub fn get_field_completeness(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<FieldCompleteness, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        Ok(validation::assess_field_completeness(&record))
+    }
+
+    /// Validates a stored record against type-specific rules.
+    pub fn validate_record_type(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        record_type: MedicalRecordType,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        validation::validate_record_by_type(&env, &record, record_type)?;
         Ok(true)
     }
 }
