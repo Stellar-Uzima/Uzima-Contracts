@@ -157,14 +157,14 @@ pub struct SwapProposal {
     pub initiator: Address,
     pub counterpart_chain: ChainId,
     pub counterpart_address: String,
-    pub offered_grant_id: u64,     // Grant being offered by initiator
+    pub offered_grant_id: u64, // Grant being offered by initiator
     pub requested_permission: PermissionLevel, // Permission requested in return
-    pub requested_scope: AccessScope,          // Scope of access requested in return
-    pub hash_lock: BytesN<32>,     // Hash of secret for HTLC pattern
-    pub timelock: u64,             // Unix timestamp expiry
+    pub requested_scope: AccessScope, // Scope of access requested in return
+    pub hash_lock: BytesN<32>, // Hash of secret for HTLC pattern
+    pub timelock: u64,         // Unix timestamp expiry
     pub created_at: u64,
     pub status: SwapStatus,
-    pub accepted_grant_id: u64,   // Set when counterpart accepts with a grant
+    pub accepted_grant_id: u64, // Set when counterpart accepts with a grant
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -793,9 +793,7 @@ impl CrossChainAccessContract {
             .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
-        let counterpart_grant = grants
-            .get(offered_grant_id)
-            .ok_or(Error::GrantNotFound)?;
+        let counterpart_grant = grants.get(offered_grant_id).ok_or(Error::GrantNotFound)?;
 
         if counterpart_grant.grantor != acceptor {
             return Err(Error::NotAuthorized);
@@ -855,10 +853,8 @@ impl CrossChainAccessContract {
         swap.status = SwapStatus::Completed;
         env.storage().persistent().set(&swap_key, &swap);
 
-        env.events().publish(
-            (Symbol::new(&env, "SwapCompleted"),),
-            (swap_id, caller),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "SwapCompleted"),), (swap_id, caller));
 
         Ok(true)
     }
@@ -985,9 +981,7 @@ impl CrossChainAccessContract {
     }
 
     pub fn get_swap(env: Env, swap_id: u64) -> Option<SwapProposal> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Swap(swap_id))
+        env.storage().persistent().get(&DataKey::Swap(swap_id))
     }
 
     pub fn is_paused(env: Env) -> bool {
@@ -1146,9 +1140,14 @@ impl CrossChainAccessContract {
             return true;
         }
 
-        if let Some(delegation) = env.storage().persistent().get::<DataKey, Delegation>(
-            &DataKey::Delegation(request.patient.clone(), caller.clone()),
-        ) {
+        if let Some(delegation) =
+            env.storage()
+                .persistent()
+                .get::<DataKey, Delegation>(&DataKey::Delegation(
+                    request.patient.clone(),
+                    caller.clone(),
+                ))
+        {
             let now = env.ledger().timestamp();
             return delegation.is_active && delegation.can_grant && now <= delegation.expires_at;
         }

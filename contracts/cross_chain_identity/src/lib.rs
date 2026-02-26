@@ -596,9 +596,7 @@ impl CrossChainIdentityContract {
     }
 
     pub fn verify_identity(env: Env, stellar_address: Address, external_chain: ChainId) -> bool {
-        if let Some(identity) =
-            Self::get_identity(env.clone(), stellar_address, external_chain)
-        {
+        if let Some(identity) = Self::get_identity(env.clone(), stellar_address, external_chain) {
             let now = env.ledger().timestamp();
             identity.verification_status == VerificationStatus::Verified
                 && now <= identity.expires_at
@@ -614,9 +612,7 @@ impl CrossChainIdentityContract {
     }
 
     pub fn get_sync(env: Env, sync_id: u64) -> Option<IdentitySync> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Sync(sync_id))
+        env.storage().persistent().get(&DataKey::Sync(sync_id))
     }
 
     pub fn get_validator(env: Env, validator_address: Address) -> Option<IdentityValidator> {
@@ -625,11 +621,7 @@ impl CrossChainIdentityContract {
             .get(&DataKey::Validator(validator_address))
     }
 
-    pub fn get_attestation(
-        env: Env,
-        request_id: u64,
-        validator: Address,
-    ) -> Option<Attestation> {
+    pub fn get_attestation(env: Env, request_id: u64, validator: Address) -> Option<Attestation> {
         env.storage()
             .persistent()
             .get(&DataKey::Attestation(request_id, validator))

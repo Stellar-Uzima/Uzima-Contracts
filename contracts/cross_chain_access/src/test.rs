@@ -1,8 +1,8 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
 use super::*;
+use crate::SwapStatus;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
-use crate::{SwapStatus};
 
 fn create_contract(
     env: &Env,
@@ -1052,22 +1052,10 @@ fn test_emergency_configs_independent_per_patient() {
     env.mock_all_auths();
 
     // patient1: emergency enabled
-    client.configure_emergency(
-        &patient1,
-        &true,
-        &3600,
-        &2,
-        &Vec::new(&env),
-    );
+    client.configure_emergency(&patient1, &true, &3600, &2, &Vec::new(&env));
 
     // patient2: emergency disabled
-    client.configure_emergency(
-        &patient2,
-        &false,
-        &0,
-        &0,
-        &Vec::new(&env),
-    );
+    client.configure_emergency(&patient2, &false, &0, &0, &Vec::new(&env));
 
     let config1 = client.get_emergency_config(&patient1).unwrap();
     let config2 = client.get_emergency_config(&patient2).unwrap();

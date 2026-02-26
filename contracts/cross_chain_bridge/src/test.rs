@@ -55,11 +55,7 @@ fn generate_public_key(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[3u8; 32])
 }
 
-fn setup_validator(
-    env: &Env,
-    client: &CrossChainBridgeContractClient,
-    admin: &Address,
-) -> Address {
+fn setup_validator(env: &Env, client: &CrossChainBridgeContractClient, admin: &Address) -> Address {
     let validator = Address::generate(env);
     let public_key = generate_public_key(env);
     env.mock_all_auths();
@@ -379,8 +375,14 @@ fn test_record_refs_unique_per_chain() {
     assert_eq!(eth_ref.sync_status, SyncStatus::Synced);
     assert_eq!(poly_ref.sync_status, SyncStatus::PendingSync); // unaffected
     assert_eq!(eth_ref2.sync_status, SyncStatus::PendingSync); // unaffected
-    assert_eq!(eth_ref.external_record_id, String::from_str(&env, "eth_record_001"));
-    assert_eq!(poly_ref.external_record_id, String::from_str(&env, "poly_record_001"));
+    assert_eq!(
+        eth_ref.external_record_id,
+        String::from_str(&env, "eth_record_001")
+    );
+    assert_eq!(
+        poly_ref.external_record_id,
+        String::from_str(&env, "poly_record_001")
+    );
 }
 
 #[test]
@@ -572,8 +574,14 @@ fn test_submit_oracle_report() {
     let data = String::from_str(&env, "{\"block\": 12345678}");
     let signature = generate_signature(&env);
 
-    let report_id =
-        client.submit_oracle_report(&oracle, &ChainId::Ethereum, &data_hash, &data, &100000, &signature);
+    let report_id = client.submit_oracle_report(
+        &oracle,
+        &ChainId::Ethereum,
+        &data_hash,
+        &data,
+        &100000,
+        &signature,
+    );
 
     assert_eq!(report_id, 1);
     assert_eq!(client.get_oracle_count(), 1);
@@ -622,12 +630,8 @@ fn test_aggregate_oracle_data() {
     }
 
     let consensus_hash = BytesN::from_array(&env, &[0xccu8; 32]);
-    let result = client.aggregate_oracle_data(
-        &validator,
-        &ChainId::Ethereum,
-        &report_ids,
-        &consensus_hash,
-    );
+    let result =
+        client.aggregate_oracle_data(&validator, &ChainId::Ethereum, &report_ids, &consensus_hash);
     assert!(result);
 
     let aggregated = client.get_aggregated_oracle(&ChainId::Ethereum).unwrap();
@@ -764,8 +768,10 @@ fn test_validate_stellar_address() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     // Valid Stellar StrKey: 56 chars (G + 55 base32 chars)
-    let valid =
-        String::from_str(&env, "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA");
+    let valid = String::from_str(
+        &env,
+        "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWNA",
+    );
     assert!(client.validate_chain_address(&ChainId::Stellar, &valid));
 }
 

@@ -383,9 +383,7 @@ impl CrossChainBridgeContract {
         env.storage()
             .persistent()
             .set(&DataKey::RollbackCount, &0u64);
-        env.storage()
-            .persistent()
-            .set(&DataKey::EventCount, &0u64);
+        env.storage().persistent().set(&DataKey::EventCount, &0u64);
 
         env.events()
             .publish((Symbol::new(&env, "BridgeInitialized"),), (admin.clone(),));
@@ -433,11 +431,7 @@ impl CrossChainBridgeContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Validator(validator_address.clone());
-        if let Some(mut validator) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, Validator>(&key)
-        {
+        if let Some(mut validator) = env.storage().persistent().get::<DataKey, Validator>(&key) {
             validator.is_active = false;
             env.storage().persistent().set(&key, &validator);
 
@@ -567,9 +561,10 @@ impl CrossChainBridgeContract {
             .persistent()
             .get(&DataKey::MessageCount)
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::MessageCount, &(count.checked_add(1).ok_or(Error::Overflow)?));
+        env.storage().persistent().set(
+            &DataKey::MessageCount,
+            &(count.checked_add(1).ok_or(Error::Overflow)?),
+        );
 
         env.events().publish(
             (Symbol::new(&env, "MessageSubmitted"),),
@@ -857,9 +852,10 @@ impl CrossChainBridgeContract {
         };
 
         // BUG FIX: unique key per (record_id, chain) — was always "rec_ref"
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecordRef(local_record_id, external_chain.clone()), &record_ref);
+        env.storage().persistent().set(
+            &DataKey::RecordRef(local_record_id, external_chain.clone()),
+            &record_ref,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "RecordRefRegistered"),),
@@ -944,11 +940,7 @@ impl CrossChainBridgeContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::OracleNode(oracle_address.clone());
-        if let Some(mut oracle) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, OracleNode>(&key)
-        {
+        if let Some(mut oracle) = env.storage().persistent().get::<DataKey, OracleNode>(&key) {
             oracle.is_active = false;
             env.storage().persistent().set(&key, &oracle);
 
@@ -1016,9 +1008,7 @@ impl CrossChainBridgeContract {
 
         // Update oracle stats
         oracle_node.total_reports = oracle_node.total_reports.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&oracle_key, &oracle_node);
+        env.storage().persistent().set(&oracle_key, &oracle_node);
 
         env.events().publish(
             (Symbol::new(&env, "OracleReportSubmitted"),),
@@ -1274,10 +1264,8 @@ impl CrossChainBridgeContract {
         event.sync_status = status.clone();
         env.storage().persistent().set(&evt_key, &event);
 
-        env.events().publish(
-            (Symbol::new(&env, "EventProcessed"),),
-            (event_id, status),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "EventProcessed"),), (event_id, status));
 
         Ok(true)
     }
@@ -1338,11 +1326,7 @@ impl CrossChainBridgeContract {
     }
 
     /// Execute a rollback — marks the associated operation as failed/rolled back
-    pub fn execute_rollback(
-        env: Env,
-        caller: Address,
-        op_id: BytesN<32>,
-    ) -> Result<bool, Error> {
+    pub fn execute_rollback(env: Env, caller: Address, op_id: BytesN<32>) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
@@ -1353,8 +1337,7 @@ impl CrossChainBridgeContract {
             .get::<DataKey, RollbackRecord>(&rb_key)
             .ok_or(Error::RollbackNotFound)?;
 
-        if rollback.status == RollbackStatus::Completed
-            || rollback.status == RollbackStatus::Failed
+        if rollback.status == RollbackStatus::Completed || rollback.status == RollbackStatus::Failed
         {
             return Err(Error::RollbackAlreadyProcessed);
         }
@@ -1397,20 +1380,14 @@ impl CrossChainBridgeContract {
         rollback.completed_at = env.ledger().timestamp();
         env.storage().persistent().set(&rb_key, &rollback);
 
-        env.events().publish(
-            (Symbol::new(&env, "RollbackCompleted"),),
-            (op_id, caller),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "RollbackCompleted"),), (op_id, caller));
 
         Ok(true)
     }
 
     /// Cancel a pending rollback
-    pub fn cancel_rollback(
-        env: Env,
-        caller: Address,
-        op_id: BytesN<32>,
-    ) -> Result<bool, Error> {
+    pub fn cancel_rollback(env: Env, caller: Address, op_id: BytesN<32>) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
@@ -1444,9 +1421,7 @@ impl CrossChainBridgeContract {
     }
 
     pub fn get_atomic_tx(env: Env, tx_id: BytesN<32>) -> Option<AtomicTransaction> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::AtomicTx(tx_id))
+        env.storage().persistent().get(&DataKey::AtomicTx(tx_id))
     }
 
     pub fn get_record_ref(
@@ -1477,31 +1452,22 @@ impl CrossChainBridgeContract {
             .get(&DataKey::OracleReport(report_id))
     }
 
-    pub fn get_aggregated_oracle(
-        env: Env,
-        chain: ChainId,
-    ) -> Option<AggregatedOracleData> {
+    pub fn get_aggregated_oracle(env: Env, chain: ChainId) -> Option<AggregatedOracleData> {
         env.storage()
             .persistent()
             .get(&DataKey::AggregatedOracle(chain))
     }
 
     pub fn get_proof(env: Env, proof_id: BytesN<32>) -> Option<CrossChainProof> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Proof(proof_id))
+        env.storage().persistent().get(&DataKey::Proof(proof_id))
     }
 
     pub fn get_rollback(env: Env, op_id: BytesN<32>) -> Option<RollbackRecord> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Rollback(op_id))
+        env.storage().persistent().get(&DataKey::Rollback(op_id))
     }
 
     pub fn get_sync_event(env: Env, event_id: u64) -> Option<CrossChainEvent> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Event(event_id))
+        env.storage().persistent().get(&DataKey::Event(event_id))
     }
 
     pub fn get_supported_chains(env: Env) -> Vec<ChainId> {
@@ -1637,11 +1603,7 @@ impl CrossChainBridgeContract {
 
     fn increment_validator_confirmations(env: &Env, validator: &Address) {
         let key = DataKey::Validator(validator.clone());
-        if let Some(mut v) = env
-            .storage()
-            .persistent()
-            .get::<DataKey, Validator>(&key)
-        {
+        if let Some(mut v) = env.storage().persistent().get::<DataKey, Validator>(&key) {
             v.confirmed_messages = v.confirmed_messages.saturating_add(1);
             env.storage().persistent().set(&key, &v);
         }

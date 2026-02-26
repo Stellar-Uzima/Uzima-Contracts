@@ -525,8 +525,14 @@ fn test_identities_unique_per_chain() {
 
     let eth_id_after = client.get_identity(&user, &ChainId::Ethereum).unwrap();
     let poly_id_after = client.get_identity(&user, &ChainId::Polygon).unwrap();
-    assert_eq!(eth_id_after.verification_status, VerificationStatus::Revoked);
-    assert_eq!(poly_id_after.verification_status, VerificationStatus::Verified);
+    assert_eq!(
+        eth_id_after.verification_status,
+        VerificationStatus::Revoked
+    );
+    assert_eq!(
+        poly_id_after.verification_status,
+        VerificationStatus::Verified
+    );
 }
 
 /// Regression test: attestations for different requests must be independent
@@ -552,10 +558,18 @@ fn test_attestations_unique_per_request() {
     client.add_validator(&admin, &validator2, &name2, &public_key);
 
     // Create two separate verification requests
-    let req_id1 =
-        client.request_verification(&user1, &ChainId::Ethereum, &String::from_str(&env, "0x111"), &proof);
-    let req_id2 =
-        client.request_verification(&user2, &ChainId::Ethereum, &String::from_str(&env, "0x222"), &proof);
+    let req_id1 = client.request_verification(
+        &user1,
+        &ChainId::Ethereum,
+        &String::from_str(&env, "0x111"),
+        &proof,
+    );
+    let req_id2 = client.request_verification(
+        &user2,
+        &ChainId::Ethereum,
+        &String::from_str(&env, "0x222"),
+        &proof,
+    );
 
     // Attest only request 1 with both validators
     client.attest_verification(&validator1, &req_id1, &true, &sig);
