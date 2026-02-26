@@ -112,7 +112,12 @@ fn ckks_secure_stats_and_ml_inference_flow() {
 
     let score_ct = BytesN::from_array(&env, &[23u8; 32]);
     client.encrypted_linear_inference(&analyst, &score_ct, &features_ct, &weights, &1000);
-    let score = client.get_ciphertext(&score_ct).unwrap();
+    let score = client.get_ciphertext(&score_ct);
+    assert!(score.is_some(), "expected ciphertext for score_ct");
+    let score = match score {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(score.slots.len(), 1);
     assert_eq!(score.slots.get(0), Some(56_052));
 }
@@ -161,17 +166,35 @@ fn bgv_exact_computation_and_noise_bootstrap() {
     client.fhe_add(&submitter, &sum_ct, &a_ct, &b_ct);
     client.fhe_multiply(&submitter, &prod_ct, &a_ct, &b_ct);
 
-    let sum = client.get_ciphertext(&sum_ct).unwrap();
+    let sum = client.get_ciphertext(&sum_ct);
+    assert!(sum.is_some(), "expected ciphertext for sum_ct");
+    let sum = match sum {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(sum.slots.get(0), Some(3));
     assert_eq!(sum.slots.get(3), Some(7));
 
-    let prod = client.get_ciphertext(&prod_ct).unwrap();
+    let prod = client.get_ciphertext(&prod_ct);
+    assert!(prod.is_some(), "expected ciphertext for prod_ct");
+    let prod = match prod {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(prod.slots.get(0), Some(2));
     assert_eq!(prod.slots.get(2), Some(21));
     assert!(prod.noise_budget < 64);
 
     client.bootstrap_ciphertext(&admin, &prod_ct);
-    let refreshed = client.get_ciphertext(&prod_ct).unwrap();
+    let refreshed = client.get_ciphertext(&prod_ct);
+    assert!(
+        refreshed.is_some(),
+        "expected refreshed ciphertext for prod_ct"
+    );
+    let refreshed = match refreshed {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(refreshed.noise_budget, 64);
     assert!(refreshed.last_bootstrapped_at > 0);
 }
@@ -204,7 +227,15 @@ fn key_management_rotation_and_cost_optimization() {
         &String::from_str(&env, "kms://hosp-b/galois-v1"),
         &BytesN::from_array(&env, &[44u8; 32]),
     );
-    let k1 = client.get_active_key_bundle(&ctx).unwrap();
+    let k1 = client.get_active_key_bundle(&ctx);
+    assert!(
+        k1.is_some(),
+        "expected active key bundle after first registration"
+    );
+    let k1 = match k1 {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(k1.version, 1);
 
     client.register_key_bundle(
@@ -217,7 +248,12 @@ fn key_management_rotation_and_cost_optimization() {
         &String::from_str(&env, "kms://hosp-b/galois-v2"),
         &BytesN::from_array(&env, &[46u8; 32]),
     );
-    let k2 = client.get_active_key_bundle(&ctx).unwrap();
+    let k2 = client.get_active_key_bundle(&ctx);
+    assert!(k2.is_some(), "expected active key bundle after rotation");
+    let k2 = match k2 {
+        Some(value) => value,
+        None => return,
+    };
     assert_eq!(k2.version, 2);
     assert_eq!(
         k2.public_key_ref,
