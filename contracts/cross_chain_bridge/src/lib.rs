@@ -199,6 +199,7 @@ pub struct RollbackRecord {
 }
 
 #[derive(Clone, PartialEq, Eq)]
+#[allow(clippy::enum_variant_names)]
 #[contracttype]
 pub enum RollbackOpType {
     MessageRollback,
