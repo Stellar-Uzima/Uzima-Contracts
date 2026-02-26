@@ -476,6 +476,161 @@ fn test_operations_blocked_when_paused() {
     assert_eq!(result, Err(Ok(Error::ContractPaused)));
 }
 
+// ==================== Storage Key Uniqueness Regression Tests ====================
+
+/// Regression test: one user can have identities on multiple chains independently
+#[test]
+fn test_identities_unique_per_chain() {
+    let env = Env::default();
+    let (client, admin, bridge) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge);
+
+    let validator1 = Address::generate(&env);
+    let validator2 = Address::generate(&env);
+    let name1 = String::from_str(&env, "Validator1");
+    let name2 = String::from_str(&env, "Validator2");
+    let public_key = generate_public_key(&env);
+
+    let user = Address::generate(&env);
+    let eth_address = String::from_str(&env, "0x1234567890abcdef1234567890abcdef12345678");
+    let poly_address = String::from_str(&env, "0xabcdef1234567890abcdef1234567890abcdef12");
+    let proof = generate_proof(&env);
+
+    env.mock_all_auths();
+    client.add_validator(&admin, &validator1, &name1, &public_key);
+    client.add_validator(&admin, &validator2, &name2, &public_key);
+    let signature = generate_proof(&env);
+
+    // Verify on Ethereum
+    let req_id1 = client.request_verification(&user, &ChainId::Ethereum, &eth_address, &proof);
+    client.attest_verification(&validator1, &req_id1, &true, &signature);
+    client.attest_verification(&validator2, &req_id1, &true, &signature);
+
+    // Verify on Polygon
+    let req_id2 = client.request_verification(&user, &ChainId::Polygon, &poly_address, &proof);
+    client.attest_verification(&validator1, &req_id2, &true, &signature);
+    client.attest_verification(&validator2, &req_id2, &true, &signature);
+
+    // Both identities should exist and be independent
+    let eth_id = client.get_identity(&user, &ChainId::Ethereum).unwrap();
+    let poly_id = client.get_identity(&user, &ChainId::Polygon).unwrap();
+
+    assert_eq!(eth_id.verification_status, VerificationStatus::Verified);
+    assert_eq!(poly_id.verification_status, VerificationStatus::Verified);
+    assert_eq!(eth_id.external_address, eth_address);
+    assert_eq!(poly_id.external_address, poly_address);
+
+    // Revoking Ethereum should not affect Polygon
+    client.revoke_identity(&user, &user, &ChainId::Ethereum);
+
+    let eth_id_after = client.get_identity(&user, &ChainId::Ethereum).unwrap();
+    let poly_id_after = client.get_identity(&user, &ChainId::Polygon).unwrap();
+    assert_eq!(
+        eth_id_after.verification_status,
+        VerificationStatus::Revoked
+    );
+    assert_eq!(
+        poly_id_after.verification_status,
+        VerificationStatus::Verified
+    );
+}
+
+/// Regression test: attestations for different requests must be independent
+#[test]
+fn test_attestations_unique_per_request() {
+    let env = Env::default();
+    let (client, admin, bridge) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge);
+
+    let validator1 = Address::generate(&env);
+    let validator2 = Address::generate(&env);
+    let name1 = String::from_str(&env, "Validator1");
+    let name2 = String::from_str(&env, "Validator2");
+    let public_key = generate_public_key(&env);
+
+    let user1 = Address::generate(&env);
+    let user2 = Address::generate(&env);
+    let proof = generate_proof(&env);
+    let sig = generate_proof(&env);
+
+    env.mock_all_auths();
+    client.add_validator(&admin, &validator1, &name1, &public_key);
+    client.add_validator(&admin, &validator2, &name2, &public_key);
+
+    // Create two separate verification requests
+    let req_id1 = client.request_verification(
+        &user1,
+        &ChainId::Ethereum,
+        &String::from_str(&env, "0x111"),
+        &proof,
+    );
+    let req_id2 = client.request_verification(
+        &user2,
+        &ChainId::Ethereum,
+        &String::from_str(&env, "0x222"),
+        &proof,
+    );
+
+    // Attest only request 1 with both validators
+    client.attest_verification(&validator1, &req_id1, &true, &sig);
+    client.attest_verification(&validator2, &req_id1, &true, &sig);
+
+    // Request 1 should be approved, request 2 still pending
+    let r1 = client.get_request(&req_id1).unwrap();
+    let r2 = client.get_request(&req_id2).unwrap();
+    assert_eq!(r1.status, RequestStatus::Approved);
+    assert_eq!(r2.status, RequestStatus::Pending);
+
+    // Attestation lookup works per (request_id, validator)
+    let att = client.get_attestation(&req_id1, &validator1).unwrap();
+    assert!(att.is_valid);
+    assert_eq!(att.validator, validator1);
+
+    // No attestation should exist for request 2 from validator1
+    assert!(client.get_attestation(&req_id2, &validator1).is_none());
+}
+
+/// Regression test: sync operations are tracked separately from verification requests
+#[test]
+fn test_sync_count_independent_from_request_count() {
+    let env = Env::default();
+    let (client, admin, bridge) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &bridge);
+
+    let validator1 = Address::generate(&env);
+    let validator2 = Address::generate(&env);
+    let name1 = String::from_str(&env, "V1");
+    let name2 = String::from_str(&env, "V2");
+    let public_key = generate_public_key(&env);
+
+    let user = Address::generate(&env);
+    let proof = generate_proof(&env);
+    let sig = generate_proof(&env);
+
+    env.mock_all_auths();
+    client.add_validator(&admin, &validator1, &name1, &public_key);
+    client.add_validator(&admin, &validator2, &name2, &public_key);
+
+    // Create verification request (request_count=1)
+    let req_id = client.request_verification(
+        &user,
+        &ChainId::Ethereum,
+        &String::from_str(&env, "0x1234567890abcdef1234567890abcdef12345678"),
+        &proof,
+    );
+    client.attest_verification(&validator1, &req_id, &true, &sig);
+    client.attest_verification(&validator2, &req_id, &true, &sig);
+
+    // Initiate sync (sync_count=1)
+    let sync_id = client.initiate_sync(&user, &ChainId::Ethereum, &ChainId::Polygon);
+
+    // Verify sync ID starts from 1 (independent counter)
+    assert_eq!(sync_id, 1);
+
+    let sync = client.get_sync(&sync_id).unwrap();
+    assert_eq!(sync.sync_status, SyncStatus::Initiated);
+}
+
 // ==================== Authorization Tests ====================
 
 #[test]

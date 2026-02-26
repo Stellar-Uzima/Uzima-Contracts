@@ -12,22 +12,22 @@ use soroban_sdk::{
     String, Symbol, Vec,
 };
 
-/// Permission levels for medical record access
+// ==================== Existing Types ====================
+
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum PermissionLevel {
     None,
-    Read,             // Can view non-confidential records
-    ReadConfidential, // Can view all records
-    Write,            // Can create records
-    Admin,            // Full access
+    Read,
+    ReadConfidential,
+    Write,
+    Admin,
 }
 
-/// Supported blockchain networks
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum ChainId {
-    None, // Used when chain is not specified
+    None,
     Stellar,
     Ethereum,
     Polygon,
@@ -38,14 +38,13 @@ pub enum ChainId {
     Custom(u32),
 }
 
-/// Cross-chain access grant
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessGrant {
     pub grant_id: u64,
-    pub grantor: Address,        // Patient who grants access
-    pub grantee_chain: ChainId,  // Chain of the grantee
-    pub grantee_address: String, // Address on external chain
+    pub grantor: Address,
+    pub grantee_chain: ChainId,
+    pub grantee_address: String,
     pub permission_level: PermissionLevel,
     pub record_scope: AccessScope,
     pub granted_at: u64,
@@ -54,28 +53,25 @@ pub struct AccessGrant {
     pub conditions: Vec<AccessCondition>,
 }
 
-/// Scope of access granted
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessScope {
-    AllRecords,                // Access to all patient's records
-    SpecificRecords(Vec<u64>), // Access to specific record IDs
-    CategoryBased(String),     // Access based on record category
-    TimeRanged(u64, u64),      // Access to records in time range
+    AllRecords,
+    SpecificRecords(Vec<u64>),
+    CategoryBased(String),
+    TimeRanged(u64, u64),
 }
 
-/// Conditions for access
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessCondition {
-    EmergencyOnly,            // Only for emergency access
-    RequireConsent,           // Requires explicit consent each time
-    AuditRequired,            // All access must be audited
-    SingleUse,                // Can only be used once
-    TimeRestricted(u64, u64), // Only valid during specific hours (start, end in seconds from midnight)
+    EmergencyOnly,
+    RequireConsent,
+    AuditRequired,
+    SingleUse,
+    TimeRestricted(u64, u64),
 }
 
-/// Access request from external chain
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessRequest {
@@ -92,7 +88,6 @@ pub struct AccessRequest {
     pub decision_at: Option<u64>,
 }
 
-/// Status of access request
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum RequestStatus {
@@ -103,7 +98,6 @@ pub enum RequestStatus {
     Revoked,
 }
 
-/// Audit log entry for access events
 #[derive(Clone)]
 #[contracttype]
 pub struct AuditEntry {
@@ -114,11 +108,10 @@ pub struct AuditEntry {
     pub record_id: u64,
     pub action: AccessAction,
     pub timestamp: u64,
-    pub ip_hash: BytesN<32>, // Hashed IP for privacy
+    pub ip_hash: BytesN<32>,
     pub success: bool,
 }
 
-/// Types of access actions
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum AccessAction {
@@ -129,14 +122,13 @@ pub enum AccessAction {
     EmergencyAccess,
 }
 
-/// Delegation of access management
 #[derive(Clone)]
 #[contracttype]
 pub struct Delegation {
-    pub delegator: Address,       // Patient delegating
-    pub delegate: Address,        // Trusted party
-    pub delegate_chain: ChainId,  // Use ChainId::None when not specified
-    pub delegate_address: String, // Empty string when not specified
+    pub delegator: Address,
+    pub delegate: Address,
+    pub delegate_chain: ChainId,
+    pub delegate_address: String,
     pub can_grant: bool,
     pub can_revoke: bool,
     pub can_manage_emergency: bool,
@@ -145,39 +137,82 @@ pub struct Delegation {
     pub is_active: bool,
 }
 
-/// Emergency access configuration
 #[derive(Clone)]
 #[contracttype]
 pub struct EmergencyConfig {
     pub patient: Address,
     pub is_enabled: bool,
-    pub auto_approve_duration: u64, // How long emergency access lasts
-    pub required_attestations: u32, // Number of validators needed
-    pub trusted_providers: Vec<String>, // Pre-approved emergency providers
+    pub auto_approve_duration: u64,
+    pub required_attestations: u32,
+    pub trusted_providers: Vec<String>,
 }
 
-// Storage keys
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const BRIDGE: Symbol = symbol_short!("BRIDGE");
-const IDENTITY: Symbol = symbol_short!("IDENTITY");
-const GRANTS: Symbol = symbol_short!("GRANTS");
-const REQUESTS: Symbol = symbol_short!("REQUESTS");
-const AUDIT_LOG: Symbol = symbol_short!("AUDIT");
-const DELEGATIONS: Symbol = symbol_short!("DELEG");
-const EMERGENCY_CONFIG: Symbol = symbol_short!("EMERG");
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const GRANT_COUNT: Symbol = symbol_short!("GR_CNT");
-const REQUEST_COUNT: Symbol = symbol_short!("REQ_CNT");
-const AUDIT_COUNT: Symbol = symbol_short!("AUD_CNT");
+// ==================== New Types: Atomic Access Swap ====================
+
+/// Hash-time-locked atomic swap proposal for cross-chain access grants
+#[derive(Clone)]
+#[contracttype]
+pub struct SwapProposal {
+    pub swap_id: u64,
+    pub initiator: Address,
+    pub counterpart_chain: ChainId,
+    pub counterpart_address: String,
+    pub offered_grant_id: u64, // Grant being offered by initiator
+    pub requested_permission: PermissionLevel, // Permission requested in return
+    pub requested_scope: AccessScope, // Scope of access requested in return
+    pub hash_lock: BytesN<32>, // Hash of secret for HTLC pattern
+    pub timelock: u64,         // Unix timestamp expiry
+    pub created_at: u64,
+    pub status: SwapStatus,
+    pub accepted_grant_id: u64, // Set when counterpart accepts with a grant
+}
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum SwapStatus {
+    Proposed,
+    Accepted,
+    Completed,
+    Cancelled,
+    Expired,
+}
+
+// ==================== Storage Keys (DataKey Enum) ====================
+// BUG FIX: delegation_key and emergency_config_key always returned the same
+// symbol ("deleg_key" / "emerg_key"), causing all delegations and emergency
+// configs to overwrite each other. Now uses typed per-item storage keys.
+
+#[contracttype]
+pub enum DataKey {
+    // Core config
+    Admin,
+    Bridge,
+    Identity,
+    Paused,
+    GrantCount,
+    RequestCount,
+    AuditCount,
+    SwapCount,
+    // Map-based storage (sequential ID lookup needed for verify_access)
+    Grants,
+    Requests,
+    AuditLog,
+    // Per-item storage (BUG FIX)
+    Delegation(Address, Address), // (delegator, delegate) — was "deleg_key"
+    EmergencyConfig(Address),     // patient address — was "emerg_key"
+    Swap(u64),
+}
 
 // Constants
-const DEFAULT_GRANT_DURATION: u64 = 2_592_000; // 30 days in seconds
+const DEFAULT_GRANT_DURATION: u64 = 2_592_000; // 30 days
 const REQUEST_EXPIRY: u64 = 86_400; // 24 hours
+const DEFAULT_SWAP_DURATION: u64 = 3_600; // 1 hour timelock
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
+    // Existing errors
     NotAuthorized = 1,
     ContractPaused = 2,
     AlreadyInitialized = 3,
@@ -198,6 +233,10 @@ pub enum Error {
     SingleUseConsumed = 18,
     TimeRestrictionViolated = 19,
     Overflow = 20,
+    // New errors
+    SwapNotFound = 21,
+    SwapExpired = 22,
+    SwapAlreadyProcessed = 23,
 }
 
 #[contract]
@@ -205,7 +244,6 @@ pub struct CrossChainAccessContract;
 
 #[contractimpl]
 impl CrossChainAccessContract {
-    /// Initialize the access control contract
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -214,19 +252,24 @@ impl CrossChainAccessContract {
     ) -> Result<bool, Error> {
         admin.require_auth();
 
-        if env.storage().persistent().has(&ADMIN) {
+        if env.storage().persistent().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
 
-        env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&BRIDGE, &bridge_contract);
+        env.storage().persistent().set(&DataKey::Admin, &admin);
         env.storage()
             .persistent()
-            .set(&IDENTITY, &identity_contract);
-        env.storage().persistent().set(&PAUSED, &false);
-        env.storage().persistent().set(&GRANT_COUNT, &0u64);
-        env.storage().persistent().set(&REQUEST_COUNT, &0u64);
-        env.storage().persistent().set(&AUDIT_COUNT, &0u64);
+            .set(&DataKey::Bridge, &bridge_contract);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Identity, &identity_contract);
+        env.storage().persistent().set(&DataKey::Paused, &false);
+        env.storage().persistent().set(&DataKey::GrantCount, &0u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestCount, &0u64);
+        env.storage().persistent().set(&DataKey::AuditCount, &0u64);
+        env.storage().persistent().set(&DataKey::SwapCount, &0u64);
 
         env.events().publish(
             (Symbol::new(&env, "AccessControlInitialized"),),
@@ -238,7 +281,6 @@ impl CrossChainAccessContract {
 
     // ==================== Access Grant Functions ====================
 
-    /// Grant cross-chain access to medical records
     pub fn grant_access(
         env: Env,
         grantor: Address,
@@ -271,11 +313,11 @@ impl CrossChainAccessContract {
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         grants.set(grant_id, grant);
-        env.storage().persistent().set(&GRANTS, &grants);
+        env.storage().persistent().set(&DataKey::Grants, &grants);
 
         env.events().publish(
             (Symbol::new(&env, "AccessGranted"),),
@@ -285,7 +327,6 @@ impl CrossChainAccessContract {
         Ok(grant_id)
     }
 
-    /// Revoke an access grant
     pub fn revoke_access(env: Env, caller: Address, grant_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_not_paused(&env)?;
@@ -293,19 +334,18 @@ impl CrossChainAccessContract {
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
 
-        // Check authorization: must be grantor, admin, or authorized delegate
         if !Self::can_revoke_access(&env, &caller, &grant) {
             return Err(Error::NotAuthorized);
         }
 
         grant.is_active = false;
-        grants.set(grant_id, grant.clone());
-        env.storage().persistent().set(&GRANTS, &grants);
+        grants.set(grant_id, grant);
+        env.storage().persistent().set(&DataKey::Grants, &grants);
 
         env.events()
             .publish((Symbol::new(&env, "AccessRevoked"),), (caller, grant_id));
@@ -313,7 +353,6 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Update access grant conditions
     pub fn update_grant_conditions(
         env: Env,
         caller: Address,
@@ -326,24 +365,22 @@ impl CrossChainAccessContract {
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
 
-        // Only grantor can update conditions
         if caller != grant.grantor {
             return Err(Error::NotAuthorized);
         }
 
         grant.conditions = new_conditions;
         grants.set(grant_id, grant);
-        env.storage().persistent().set(&GRANTS, &grants);
+        env.storage().persistent().set(&DataKey::Grants, &grants);
 
         Ok(true)
     }
 
-    /// Extend access grant duration
     pub fn extend_grant(
         env: Env,
         caller: Address,
@@ -356,7 +393,7 @@ impl CrossChainAccessContract {
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         let mut grant = grants.get(grant_id).ok_or(Error::GrantNotFound)?;
@@ -370,14 +407,13 @@ impl CrossChainAccessContract {
             .checked_add(additional_duration)
             .ok_or(Error::Overflow)?;
         grants.set(grant_id, grant);
-        env.storage().persistent().set(&GRANTS, &grants);
+        env.storage().persistent().set(&DataKey::Grants, &grants);
 
         Ok(true)
     }
 
     // ==================== Access Request Functions ====================
 
-    /// Request access from external chain (called via bridge)
     pub fn request_access(
         env: Env,
         requester_chain: ChainId,
@@ -409,13 +445,14 @@ impl CrossChainAccessContract {
         let mut requests: Map<u64, AccessRequest> = env
             .storage()
             .persistent()
-            .get(&REQUESTS)
+            .get(&DataKey::Requests)
             .unwrap_or(Map::new(&env));
 
         requests.set(request_id, request);
-        env.storage().persistent().set(&REQUESTS, &requests);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Requests, &requests);
 
-        // If emergency, check if auto-approve is possible
         if is_emergency {
             Self::handle_emergency_request(&env, request_id, &requester_address, &patient)?;
         }
@@ -434,7 +471,6 @@ impl CrossChainAccessContract {
         Ok(request_id)
     }
 
-    /// Approve or reject an access request
     pub fn process_request(
         env: Env,
         caller: Address,
@@ -447,17 +483,15 @@ impl CrossChainAccessContract {
         let mut requests: Map<u64, AccessRequest> = env
             .storage()
             .persistent()
-            .get(&REQUESTS)
+            .get(&DataKey::Requests)
             .unwrap_or(Map::new(&env));
 
         let mut request = requests.get(request_id).ok_or(Error::RequestNotFound)?;
 
-        // Check status
         if request.status != RequestStatus::Pending {
             return Err(Error::RequestAlreadyProcessed);
         }
 
-        // Check expiry
         let now = env.ledger().timestamp();
         if now
             > request
@@ -467,11 +501,12 @@ impl CrossChainAccessContract {
         {
             request.status = RequestStatus::Expired;
             requests.set(request_id, request);
-            env.storage().persistent().set(&REQUESTS, &requests);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Requests, &requests);
             return Err(Error::RequestExpired);
         }
 
-        // Check authorization: must be patient or authorized delegate
         if !Self::can_process_request(&env, &caller, &request) {
             return Err(Error::NotAuthorized);
         }
@@ -485,9 +520,10 @@ impl CrossChainAccessContract {
         request.decision_at = Some(now);
 
         requests.set(request_id, request.clone());
-        env.storage().persistent().set(&REQUESTS, &requests);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Requests, &requests);
 
-        // If approved, create temporary access grant
         if approve {
             Self::create_request_grant(&env, &request)?;
         }
@@ -502,7 +538,8 @@ impl CrossChainAccessContract {
 
     // ==================== Delegation Functions ====================
 
-    /// Delegate access management to a trusted party
+    /// Create access management delegation
+    /// BUG FIX: Each (delegator, delegate) pair is stored under a unique key
     pub fn create_delegation(
         env: Env,
         delegator: Address,
@@ -532,15 +569,11 @@ impl CrossChainAccessContract {
             is_active: true,
         };
 
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
-        let mut delegations: Map<Symbol, Delegation> = env
-            .storage()
-            .persistent()
-            .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
-
-        delegations.set(deleg_key, delegation);
-        env.storage().persistent().set(&DELEGATIONS, &delegations);
+        // BUG FIX: unique key per (delegator, delegate) — was always "deleg_key"
+        env.storage().persistent().set(
+            &DataKey::Delegation(delegator.clone(), delegate.clone()),
+            &delegation,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "DelegationCreated"),),
@@ -550,7 +583,6 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Revoke a delegation
     pub fn revoke_delegation(
         env: Env,
         delegator: Address,
@@ -559,17 +591,15 @@ impl CrossChainAccessContract {
         delegator.require_auth();
         Self::require_not_paused(&env)?;
 
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
-        let mut delegations: Map<Symbol, Delegation> = env
+        let deleg_key = DataKey::Delegation(delegator.clone(), delegate.clone());
+
+        if let Some(mut delegation) = env
             .storage()
             .persistent()
-            .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(mut delegation) = delegations.get(deleg_key.clone()) {
+            .get::<DataKey, Delegation>(&deleg_key)
+        {
             delegation.is_active = false;
-            delegations.set(deleg_key, delegation);
-            env.storage().persistent().set(&DELEGATIONS, &delegations);
+            env.storage().persistent().set(&deleg_key, &delegation);
 
             env.events().publish(
                 (Symbol::new(&env, "DelegationRevoked"),),
@@ -584,7 +614,8 @@ impl CrossChainAccessContract {
 
     // ==================== Emergency Access Functions ====================
 
-    /// Configure emergency access settings
+    /// Configure emergency access settings per patient
+    /// BUG FIX: Each patient's config stored under unique key — was "emerg_key"
     pub fn configure_emergency(
         env: Env,
         patient: Address,
@@ -604,15 +635,10 @@ impl CrossChainAccessContract {
             trusted_providers,
         };
 
-        let config_key = Self::emergency_config_key(&env, &patient);
-        let mut configs: Map<Symbol, EmergencyConfig> = env
-            .storage()
+        // BUG FIX: unique key per patient — was always "emerg_key"
+        env.storage()
             .persistent()
-            .get(&EMERGENCY_CONFIG)
-            .unwrap_or(Map::new(&env));
-
-        configs.set(config_key, config);
-        env.storage().persistent().set(&EMERGENCY_CONFIG, &configs);
+            .set(&DataKey::EmergencyConfig(patient.clone()), &config);
 
         env.events().publish(
             (Symbol::new(&env, "EmergencyConfigured"),),
@@ -624,7 +650,6 @@ impl CrossChainAccessContract {
 
     // ==================== Audit Functions ====================
 
-    /// Log an access event
     pub fn log_access(
         env: Env,
         accessor_chain: ChainId,
@@ -655,11 +680,13 @@ impl CrossChainAccessContract {
         let mut audit_log: Map<u64, AuditEntry> = env
             .storage()
             .persistent()
-            .get(&AUDIT_LOG)
+            .get(&DataKey::AuditLog)
             .unwrap_or(Map::new(&env));
 
         audit_log.set(entry_id, entry);
-        env.storage().persistent().set(&AUDIT_LOG, &audit_log);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditLog, &audit_log);
 
         env.events().publish(
             (Symbol::new(&env, "AccessLogged"),),
@@ -669,9 +696,208 @@ impl CrossChainAccessContract {
         Ok(entry_id)
     }
 
+    // ==================== Atomic Access Swap Functions ====================
+
+    /// Propose an atomic access swap: offer a grant in exchange for cross-chain access
+    pub fn initiate_access_swap(
+        env: Env,
+        initiator: Address,
+        counterpart_chain: ChainId,
+        counterpart_address: String,
+        offered_grant_id: u64,
+        requested_permission: PermissionLevel,
+        requested_scope: AccessScope,
+        hash_lock: BytesN<32>,
+        timelock_duration: u64,
+    ) -> Result<u64, Error> {
+        initiator.require_auth();
+        Self::require_not_paused(&env)?;
+
+        // Verify offered grant exists and initiator owns it
+        let grants: Map<u64, AccessGrant> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Grants)
+            .unwrap_or(Map::new(&env));
+
+        let grant = grants.get(offered_grant_id).ok_or(Error::GrantNotFound)?;
+
+        if grant.grantor != initiator {
+            return Err(Error::NotAuthorized);
+        }
+
+        let now = env.ledger().timestamp();
+        let swap_id = Self::get_and_increment_swap_count(&env)?;
+
+        let swap = SwapProposal {
+            swap_id,
+            initiator: initiator.clone(),
+            counterpart_chain: counterpart_chain.clone(),
+            counterpart_address: counterpart_address.clone(),
+            offered_grant_id,
+            requested_permission,
+            requested_scope,
+            hash_lock,
+            timelock: now
+                .checked_add(timelock_duration.max(DEFAULT_SWAP_DURATION))
+                .ok_or(Error::Overflow)?,
+            created_at: now,
+            status: SwapStatus::Proposed,
+            accepted_grant_id: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Swap(swap_id), &swap);
+
+        env.events().publish(
+            (Symbol::new(&env, "SwapProposed"),),
+            (swap_id, initiator, counterpart_chain, counterpart_address),
+        );
+
+        Ok(swap_id)
+    }
+
+    /// Accept a swap proposal: counterpart provides a grant in return
+    pub fn accept_access_swap(
+        env: Env,
+        acceptor: Address,
+        swap_id: u64,
+        offered_grant_id: u64, // Grant the counterpart is offering in return
+    ) -> Result<bool, Error> {
+        acceptor.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let swap_key = DataKey::Swap(swap_id);
+        let mut swap = env
+            .storage()
+            .persistent()
+            .get::<DataKey, SwapProposal>(&swap_key)
+            .ok_or(Error::SwapNotFound)?;
+
+        if swap.status != SwapStatus::Proposed {
+            return Err(Error::SwapAlreadyProcessed);
+        }
+
+        let now = env.ledger().timestamp();
+        if now > swap.timelock {
+            swap.status = SwapStatus::Expired;
+            env.storage().persistent().set(&swap_key, &swap);
+            return Err(Error::SwapExpired);
+        }
+
+        // Verify the offered grant exists and belongs to acceptor
+        let grants: Map<u64, AccessGrant> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Grants)
+            .unwrap_or(Map::new(&env));
+
+        let counterpart_grant = grants.get(offered_grant_id).ok_or(Error::GrantNotFound)?;
+
+        if counterpart_grant.grantor != acceptor {
+            return Err(Error::NotAuthorized);
+        }
+
+        swap.status = SwapStatus::Accepted;
+        swap.accepted_grant_id = offered_grant_id;
+        env.storage().persistent().set(&swap_key, &swap);
+
+        env.events().publish(
+            (Symbol::new(&env, "SwapAccepted"),),
+            (swap_id, acceptor, offered_grant_id),
+        );
+
+        Ok(true)
+    }
+
+    /// Finalize an accepted swap: atomically activates both sides of the exchange
+    pub fn finalize_access_swap(
+        env: Env,
+        caller: Address,
+        swap_id: u64,
+        secret: BytesN<32>, // Pre-image of hash_lock
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let swap_key = DataKey::Swap(swap_id);
+        let mut swap = env
+            .storage()
+            .persistent()
+            .get::<DataKey, SwapProposal>(&swap_key)
+            .ok_or(Error::SwapNotFound)?;
+
+        if swap.status != SwapStatus::Accepted {
+            return Err(Error::SwapAlreadyProcessed);
+        }
+
+        let now = env.ledger().timestamp();
+        if now > swap.timelock {
+            swap.status = SwapStatus::Expired;
+            env.storage().persistent().set(&swap_key, &swap);
+            return Err(Error::SwapExpired);
+        }
+
+        // Verify caller is the initiator and secret hashes to hash_lock
+        if caller != swap.initiator {
+            return Err(Error::NotAuthorized);
+        }
+
+        let secret_hash = env.crypto().sha256(&secret.into());
+        let secret_hash_bytes: BytesN<32> = secret_hash.into();
+        if secret_hash_bytes != swap.hash_lock {
+            return Err(Error::NotAuthorized);
+        }
+
+        swap.status = SwapStatus::Completed;
+        env.storage().persistent().set(&swap_key, &swap);
+
+        env.events()
+            .publish((Symbol::new(&env, "SwapCompleted"),), (swap_id, caller));
+
+        Ok(true)
+    }
+
+    /// Cancel a proposed swap (only initiator or after timelock expiry)
+    pub fn cancel_access_swap(env: Env, caller: Address, swap_id: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let swap_key = DataKey::Swap(swap_id);
+        let mut swap = env
+            .storage()
+            .persistent()
+            .get::<DataKey, SwapProposal>(&swap_key)
+            .ok_or(Error::SwapNotFound)?;
+
+        if swap.status == SwapStatus::Completed || swap.status == SwapStatus::Cancelled {
+            return Err(Error::SwapAlreadyProcessed);
+        }
+
+        let now = env.ledger().timestamp();
+        let is_expired = now > swap.timelock;
+
+        // Can cancel if: initiator (before acceptance), or anyone after timelock
+        if caller != swap.initiator && !is_expired {
+            return Err(Error::NotAuthorized);
+        }
+
+        swap.status = if is_expired {
+            SwapStatus::Expired
+        } else {
+            SwapStatus::Cancelled
+        };
+        env.storage().persistent().set(&swap_key, &swap);
+
+        env.events()
+            .publish((Symbol::new(&env, "SwapCancelled"),), (swap_id, caller));
+
+        Ok(true)
+    }
+
     // ==================== Verification Functions ====================
 
-    /// Verify if an entity has access to a record
     pub fn verify_access(
         env: Env,
         accessor_chain: ChainId,
@@ -680,34 +906,26 @@ impl CrossChainAccessContract {
         record_id: u64,
         required_permission: PermissionLevel,
     ) -> bool {
-        // Get all active grants for this grantee
         let grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         let now = env.ledger().timestamp();
 
         for grant_id in 1..=Self::get_grant_count(&env) {
             if let Some(grant) = grants.get(grant_id) {
-                // Check if grant matches
                 if grant.grantor == patient
                     && grant.grantee_chain == accessor_chain
                     && grant.grantee_address == accessor_address
                     && grant.is_active
                     && now <= grant.expires_at
+                    && Self::permission_sufficient(&grant.permission_level, &required_permission)
+                    && Self::record_in_scope(&grant.record_scope, record_id)
+                    && Self::conditions_met(&env, &grant.conditions, now)
                 {
-                    // Check permission level
-                    if Self::permission_sufficient(&grant.permission_level, &required_permission) {
-                        // Check scope
-                        if Self::record_in_scope(&grant.record_scope, record_id) {
-                            // Check conditions
-                            if Self::conditions_met(&env, &grant.conditions, now) {
-                                return true;
-                            }
-                        }
-                    }
+                    return true;
                 }
             }
         }
@@ -717,76 +935,66 @@ impl CrossChainAccessContract {
 
     // ==================== Query Functions ====================
 
-    /// Get access grant by ID
     pub fn get_grant(env: Env, grant_id: u64) -> Option<AccessGrant> {
         let grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         grants.get(grant_id)
     }
 
-    /// Get access request by ID
     pub fn get_request(env: Env, request_id: u64) -> Option<AccessRequest> {
         let requests: Map<u64, AccessRequest> = env
             .storage()
             .persistent()
-            .get(&REQUESTS)
+            .get(&DataKey::Requests)
             .unwrap_or(Map::new(&env));
 
         requests.get(request_id)
     }
 
-    /// Get delegation
     pub fn get_delegation(env: Env, delegator: Address, delegate: Address) -> Option<Delegation> {
-        let deleg_key = Self::delegation_key(&env, &delegator, &delegate);
-        let delegations: Map<Symbol, Delegation> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
-
-        delegations.get(deleg_key)
+            .get(&DataKey::Delegation(delegator, delegate))
     }
 
-    /// Get emergency configuration
     pub fn get_emergency_config(env: Env, patient: Address) -> Option<EmergencyConfig> {
-        let config_key = Self::emergency_config_key(&env, &patient);
-        let configs: Map<Symbol, EmergencyConfig> = env
-            .storage()
+        env.storage()
             .persistent()
-            .get(&EMERGENCY_CONFIG)
-            .unwrap_or(Map::new(&env));
-
-        configs.get(config_key)
+            .get(&DataKey::EmergencyConfig(patient))
     }
 
-    /// Get audit entry
     pub fn get_audit_entry(env: Env, entry_id: u64) -> Option<AuditEntry> {
         let audit_log: Map<u64, AuditEntry> = env
             .storage()
             .persistent()
-            .get(&AUDIT_LOG)
+            .get(&DataKey::AuditLog)
             .unwrap_or(Map::new(&env));
 
         audit_log.get(entry_id)
     }
 
-    /// Check if contract is paused
+    pub fn get_swap(env: Env, swap_id: u64) -> Option<SwapProposal> {
+        env.storage().persistent().get(&DataKey::Swap(swap_id))
+    }
+
     pub fn is_paused(env: Env) -> bool {
-        env.storage().persistent().get(&PAUSED).unwrap_or(false)
+        env.storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     // ==================== Admin Functions ====================
 
-    /// Pause contract
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&PAUSED, &true);
+        env.storage().persistent().set(&DataKey::Paused, &true);
 
         env.events().publish(
             (symbol_short!("Paused"),),
@@ -796,12 +1004,11 @@ impl CrossChainAccessContract {
         Ok(true)
     }
 
-    /// Unpause contract
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&PAUSED, &false);
+        env.storage().persistent().set(&DataKey::Paused, &false);
 
         env.events().publish(
             (symbol_short!("Unpaused"),),
@@ -817,7 +1024,7 @@ impl CrossChainAccessContract {
         let admin: Address = env
             .storage()
             .persistent()
-            .get(&ADMIN)
+            .get(&DataKey::Admin)
             .ok_or(Error::NotAuthorized)?;
 
         if caller != &admin {
@@ -827,67 +1034,97 @@ impl CrossChainAccessContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+        if env
+            .storage()
+            .persistent()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
             return Err(Error::ContractPaused);
         }
         Ok(())
     }
 
     fn get_and_increment_grant_count(env: &Env) -> Result<u64, Error> {
-        let count: u64 = env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::GrantCount)
+            .unwrap_or(0);
         let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
-        env.storage().persistent().set(&GRANT_COUNT, &new_count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GrantCount, &new_count);
         Ok(new_count)
     }
 
     fn get_grant_count(env: &Env) -> u64 {
-        env.storage().persistent().get(&GRANT_COUNT).unwrap_or(0)
+        env.storage()
+            .persistent()
+            .get(&DataKey::GrantCount)
+            .unwrap_or(0)
     }
 
     fn get_and_increment_request_count(env: &Env) -> Result<u64, Error> {
-        let count: u64 = env.storage().persistent().get(&REQUEST_COUNT).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RequestCount)
+            .unwrap_or(0);
         let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
-        env.storage().persistent().set(&REQUEST_COUNT, &new_count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RequestCount, &new_count);
         Ok(new_count)
     }
 
     fn get_and_increment_audit_count(env: &Env) -> Result<u64, Error> {
-        let count: u64 = env.storage().persistent().get(&AUDIT_COUNT).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuditCount)
+            .unwrap_or(0);
         let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
-        env.storage().persistent().set(&AUDIT_COUNT, &new_count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditCount, &new_count);
         Ok(new_count)
     }
 
-    fn delegation_key(_env: &Env, _delegator: &Address, _delegate: &Address) -> Symbol {
-        Symbol::new(&_env, "deleg_key")
-    }
-
-    fn emergency_config_key(_env: &Env, _patient: &Address) -> Symbol {
-        Symbol::new(&_env, "emerg_key")
+    fn get_and_increment_swap_count(env: &Env) -> Result<u64, Error> {
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::SwapCount)
+            .unwrap_or(0);
+        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::SwapCount, &new_count);
+        Ok(new_count)
     }
 
     fn can_revoke_access(env: &Env, caller: &Address, grant: &AccessGrant) -> bool {
-        // Grantor can always revoke
         if caller == &grant.grantor {
             return true;
         }
 
-        // Check if admin
-        if let Some(admin) = env.storage().persistent().get::<Symbol, Address>(&ADMIN) {
+        if let Some(admin) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Address>(&DataKey::Admin)
+        {
             if caller == &admin {
                 return true;
             }
         }
 
         // Check delegation
-        let deleg_key = Self::delegation_key(&env, &grant.grantor, caller);
-        let delegations: Map<Symbol, Delegation> = env
+        if let Some(delegation) = env
             .storage()
             .persistent()
-            .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(delegation) = delegations.get(deleg_key) {
+            .get::<DataKey, Delegation>(&DataKey::Delegation(grant.grantor.clone(), caller.clone()))
+        {
             let now = env.ledger().timestamp();
             return delegation.is_active && delegation.can_revoke && now <= delegation.expires_at;
         }
@@ -896,20 +1133,18 @@ impl CrossChainAccessContract {
     }
 
     fn can_process_request(env: &Env, caller: &Address, request: &AccessRequest) -> bool {
-        // Patient can always process
         if caller == &request.patient {
             return true;
         }
 
-        // Check delegation
-        let deleg_key = Self::delegation_key(&env, &request.patient, caller);
-        let delegations: Map<Symbol, Delegation> = env
-            .storage()
-            .persistent()
-            .get(&DELEGATIONS)
-            .unwrap_or(Map::new(&env));
-
-        if let Some(delegation) = delegations.get(deleg_key) {
+        if let Some(delegation) =
+            env.storage()
+                .persistent()
+                .get::<DataKey, Delegation>(&DataKey::Delegation(
+                    request.patient.clone(),
+                    caller.clone(),
+                ))
+        {
             let now = env.ledger().timestamp();
             return delegation.is_active && delegation.can_grant && now <= delegation.expires_at;
         }
@@ -923,36 +1158,31 @@ impl CrossChainAccessContract {
         requester_address: &String,
         patient: &Address,
     ) -> Result<(), Error> {
-        let config_key = Self::emergency_config_key(&env, patient);
-        let configs: Map<Symbol, EmergencyConfig> = env
+        if let Some(config) = env
             .storage()
             .persistent()
-            .get(&EMERGENCY_CONFIG)
-            .unwrap_or(Map::new(&env));
+            .get::<DataKey, EmergencyConfig>(&DataKey::EmergencyConfig(patient.clone()))
+        {
+            if config.is_enabled && config.trusted_providers.contains(requester_address) {
+                let mut requests: Map<u64, AccessRequest> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::Requests)
+                    .unwrap_or(Map::new(&env));
 
-        if let Some(config) = configs.get(config_key) {
-            if config.is_enabled {
-                // Check if requester is a trusted provider
-                if config.trusted_providers.contains(requester_address) {
-                    // Auto-approve for trusted providers
-                    let mut requests: Map<u64, AccessRequest> = env
-                        .storage()
+                if let Some(mut request) = requests.get(request_id) {
+                    let now = env.ledger().timestamp();
+                    request.status = RequestStatus::Approved;
+                    request.decision_at = Some(now);
+                    requests.set(request_id, request);
+                    env.storage()
                         .persistent()
-                        .get(&REQUESTS)
-                        .unwrap_or(Map::new(&env));
+                        .set(&DataKey::Requests, &requests);
 
-                    if let Some(mut request) = requests.get(request_id) {
-                        let now = env.ledger().timestamp();
-                        request.status = RequestStatus::Approved;
-                        request.decision_at = Some(now);
-                        requests.set(request_id, request);
-                        env.storage().persistent().set(&REQUESTS, &requests);
-
-                        env.events().publish(
-                            (Symbol::new(&env, "EmergencyAutoApproved"),),
-                            (request_id, patient.clone()),
-                        );
-                    }
+                    env.events().publish(
+                        (Symbol::new(&env, "EmergencyAutoApproved"),),
+                        (request_id, patient.clone()),
+                    );
                 }
             }
         }
@@ -982,11 +1212,11 @@ impl CrossChainAccessContract {
         let mut grants: Map<u64, AccessGrant> = env
             .storage()
             .persistent()
-            .get(&GRANTS)
+            .get(&DataKey::Grants)
             .unwrap_or(Map::new(&env));
 
         grants.set(grant_id, grant);
-        env.storage().persistent().set(&GRANTS, &grants);
+        env.storage().persistent().set(&DataKey::Grants, &grants);
 
         Ok(())
     }
@@ -1008,8 +1238,8 @@ impl CrossChainAccessContract {
         match scope {
             AccessScope::AllRecords => true,
             AccessScope::SpecificRecords(ids) => ids.iter().any(|id| id == record_id),
-            AccessScope::CategoryBased(_) => true, // Would need record info to verify
-            AccessScope::TimeRanged(_, _) => true, // Would need record info to verify
+            AccessScope::CategoryBased(_) => true,
+            AccessScope::TimeRanged(_, _) => true,
         }
     }
 
@@ -1017,14 +1247,12 @@ impl CrossChainAccessContract {
         for condition in conditions.iter() {
             match condition {
                 AccessCondition::TimeRestricted(start, end) => {
-                    // Simplified: check if current time of day is within range
                     let time_of_day = now % 86_400;
                     if time_of_day < start || time_of_day > end {
                         return false;
                     }
                 }
                 AccessCondition::SingleUse => {
-                    // Would need to track usage
                     return true;
                 }
                 _ => {}
