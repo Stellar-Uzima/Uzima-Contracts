@@ -1004,7 +1004,7 @@ impl AnomalyDetectorContract {
         weights: &Vec<u32>,
         feature_names: &Vec<String>,
     ) -> (u32, Vec<FeatureContribution>) {
-        let n = features.len().min(weights.len()) as u32;
+        let n = features.len().min(weights.len());
         let mut weighted_sum: u64 = 0;
         let mut total_weight: u64 = 0;
         let mut contributions = Vec::new(env);

@@ -9,7 +9,7 @@ use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
 
 // ==================== Helpers ====================
 
-fn setup(env: &Env) -> (AnomalyDetectorContractClient, Address) {
+fn setup(env: &Env) -> (AnomalyDetectorContractClient<'_>, Address) {
     let id = env.register_contract(None, AnomalyDetectorContract);
     let client = AnomalyDetectorContractClient::new(env, &id);
     let admin = Address::generate(env);
