@@ -45,7 +45,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          components: clippy, rust-src
+          components: clippy
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry
@@ -112,7 +112,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          components: rust-src
           targets: wasm32-unknown-unknown
 
       - name: Install Soroban CLI
@@ -151,7 +150,6 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          components: rust-src
           targets: wasm32-unknown-unknown
 
       - name: Install Soroban CLI
@@ -200,7 +198,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run ShellCheck on scripts directory
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: "./scripts"
           severity: warning
@@ -209,7 +207,7 @@ jobs:
           SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
 
       - name: Run ShellCheck on root scripts
-        uses: ludeeus/action-shellcheck@master
+        uses: ludeeus/action-shellcheck@2.0.0
         with:
           scandir: "."
           check_together: "yes"
