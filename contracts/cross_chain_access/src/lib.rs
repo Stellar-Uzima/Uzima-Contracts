@@ -921,14 +921,11 @@ impl CrossChainAccessContract {
                     && grant.grantee_address == accessor_address
                     && grant.is_active
                     && now <= grant.expires_at
+                    && Self::permission_sufficient(&grant.permission_level, &required_permission)
+                    && Self::record_in_scope(&grant.record_scope, record_id)
+                    && Self::conditions_met(&env, &grant.conditions, now)
                 {
-                    if Self::permission_sufficient(&grant.permission_level, &required_permission) {
-                        if Self::record_in_scope(&grant.record_scope, record_id) {
-                            if Self::conditions_met(&env, &grant.conditions, now) {
-                                return true;
-                            }
-                        }
-                    }
+                    return true;
                 }
             }
         }
@@ -1166,28 +1163,26 @@ impl CrossChainAccessContract {
             .persistent()
             .get::<DataKey, EmergencyConfig>(&DataKey::EmergencyConfig(patient.clone()))
         {
-            if config.is_enabled {
-                if config.trusted_providers.contains(requester_address) {
-                    let mut requests: Map<u64, AccessRequest> = env
-                        .storage()
+            if config.is_enabled && config.trusted_providers.contains(requester_address) {
+                let mut requests: Map<u64, AccessRequest> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::Requests)
+                    .unwrap_or(Map::new(&env));
+
+                if let Some(mut request) = requests.get(request_id) {
+                    let now = env.ledger().timestamp();
+                    request.status = RequestStatus::Approved;
+                    request.decision_at = Some(now);
+                    requests.set(request_id, request);
+                    env.storage()
                         .persistent()
-                        .get(&DataKey::Requests)
-                        .unwrap_or(Map::new(&env));
+                        .set(&DataKey::Requests, &requests);
 
-                    if let Some(mut request) = requests.get(request_id) {
-                        let now = env.ledger().timestamp();
-                        request.status = RequestStatus::Approved;
-                        request.decision_at = Some(now);
-                        requests.set(request_id, request);
-                        env.storage()
-                            .persistent()
-                            .set(&DataKey::Requests, &requests);
-
-                        env.events().publish(
-                            (Symbol::new(&env, "EmergencyAutoApproved"),),
-                            (request_id, patient.clone()),
-                        );
-                    }
+                    env.events().publish(
+                        (Symbol::new(&env, "EmergencyAutoApproved"),),
+                        (request_id, patient.clone()),
+                    );
                 }
             }
         }
