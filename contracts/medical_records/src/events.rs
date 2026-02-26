@@ -37,6 +37,8 @@ pub enum EventType {
     MetricUpdate,
     PermissionGranted,
     PermissionRevoked,
+    MetadataUpdated,
+    DataQualityValidated,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -50,6 +52,7 @@ pub enum OperationCategory {
     AIIntegration,
     CrossChain,
     System,
+    DataQuality,
 }
 
 #[derive(Clone)]
@@ -156,6 +159,16 @@ pub struct PermissionEventData {
 }
 
 #[derive(Clone)]
+#[contracttype]
+pub struct MetadataEventData {
+    pub record_id: u64,
+    pub patient_id: Address,
+    pub version: u32,
+    pub tag_count: u32,
+    pub custom_field_count: u32,
+}
+
+#[derive(Clone)]
 #[allow(clippy::enum_variant_names)]
 #[contracttype]
 pub enum EventData {
@@ -168,6 +181,7 @@ pub enum EventData {
     CrossChainEvent(CrossChainEventData),
     SystemEvent(SystemEventData),
     PermissionEvent(PermissionEventData),
+    MetadataEvent(MetadataEventData),
 }
 
 #[derive(Clone)]
@@ -732,6 +746,73 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
     };
     env.events()
         .publish(("EVENT", symbol_short!("PERM_REV")), event);
+}
+
+pub fn emit_metadata_updated(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    patient_id: Address,
+    version: u32,
+    tag_count: u32,
+    custom_field_count: u32,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::MetadataUpdated,
+            category: OperationCategory::RecordOperations,
+            timestamp: env.ledger().timestamp(),
+            user_id: caller,
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::MetadataEvent(MetadataEventData {
+            record_id,
+            patient_id,
+            version,
+            tag_count,
+            custom_field_count,
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("META_UPD")), event);
+}
+
+pub fn emit_data_quality_validated(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    overall_score: u32,
+    is_fhir_compliant: bool,
+    issue_count: u32,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::DataQualityValidated,
+            category: OperationCategory::DataQuality,
+            timestamp: env.ledger().timestamp(),
+            user_id: caller,
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::SystemEvent(SystemEventData {
+            status: if is_fhir_compliant {
+                String::from_str(env, "fhir_compliant")
+            } else {
+                String::from_str(env, "non_compliant")
+            },
+            metric_name: Some(String::from_str(env, "quality_score")),
+            metric_value: Some(overall_score as u64),
+        }),
+    };
+    env.events().publish(
+        ("EVENT", symbol_short!("DQ_VALID")),
+        (event, record_id, issue_count),
+    );
 }
 
 #[derive(Clone)]
