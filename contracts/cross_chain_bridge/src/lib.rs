@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
+#![allow(clippy::enum_variant_names)]
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -199,7 +200,6 @@ pub struct RollbackRecord {
 }
 
 #[derive(Clone, PartialEq, Eq)]
-#[allow(clippy::enum_variant_names)]
 #[contracttype]
 pub enum RollbackOpType {
     MessageRollback,
