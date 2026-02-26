@@ -59,18 +59,18 @@ pub enum HealthcarePatternType {
 pub struct FeatureContribution {
     pub feature_index: u32,
     pub feature_name: String,
-    pub feature_value: u32,  // 0-10000 bps (normalized input)
-    pub weight: u32,         // 0-10000 bps (model weight)
-    pub contribution: u32,   // feature_value * weight / 10000
+    pub feature_value: u32, // 0-10000 bps (normalized input)
+    pub weight: u32,        // 0-10000 bps (model weight)
+    pub contribution: u32,  // feature_value * weight / 10000
 }
 
 /// Result of running anomaly inference
 #[derive(Clone)]
 #[contracttype]
 pub struct DetectionResult {
-    pub anomaly_score: u32,     // 0-10000 bps
+    pub anomaly_score: u32, // 0-10000 bps
     pub is_anomalous: bool,
-    pub confidence: u32,        // 0-10000 bps
+    pub confidence: u32, // 0-10000 bps
     pub alert_level: AlertLevel,
     pub pattern_type: HealthcarePatternType,
     pub top_features: Vec<FeatureContribution>,
@@ -85,7 +85,7 @@ pub struct AnomalyModel {
     pub model_id: BytesN<32>,
     pub name: String,
     pub feature_count: u32,
-    pub threshold_bps: u32,      // score above this → anomalous
+    pub threshold_bps: u32, // score above this → anomalous
     pub version: u32,
     pub total_inferences: u64,
     pub confirmed_anomalies: u64,
@@ -141,7 +141,7 @@ pub struct FederatedUpdate {
 #[contracttype]
 pub struct PatientRiskProfile {
     pub patient: Address,
-    pub rolling_risk_score: u32,  // 0-10000 bps EMA
+    pub rolling_risk_score: u32, // 0-10000 bps EMA
     pub total_alerts: u64,
     pub active_alerts: u64,
     pub false_positive_count: u64,
@@ -215,15 +215,12 @@ impl AnomalyDetectorContract {
         env.storage()
             .instance()
             .set(&DataKey::Validator(validator.clone()), &true);
-        env.events().publish((symbol_short!("ValAdded"),), validator);
+        env.events()
+            .publish((symbol_short!("ValAdded"),), validator);
         Ok(true)
     }
 
-    pub fn remove_validator(
-        env: Env,
-        caller: Address,
-        validator: Address,
-    ) -> Result<bool, Error> {
+    pub fn remove_validator(env: Env, caller: Address, validator: Address) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         env.storage()
@@ -472,9 +469,7 @@ impl AnomalyDetectorContract {
         };
 
         // Feature 3: pharmacy dispersion (4+ pharmacies → 10000)
-        let pharmacy_score = unique_pharmacies
-            .saturating_mul(2_500)
-            .min(10_000);
+        let pharmacy_score = unique_pharmacies.saturating_mul(2_500).min(10_000);
 
         // Weighted average: high_risk 40%, pharmacy_dispersion 45%, rate 15%
         // Dispersion gets highest weight as multi-pharmacy shopping is hardest to explain legitimately
@@ -685,11 +680,7 @@ impl AnomalyDetectorContract {
     }
 
     /// Acknowledge an active alert (marks as reviewed, does not close).
-    pub fn acknowledge_alert(
-        env: Env,
-        caller: Address,
-        alert_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn acknowledge_alert(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_authorized(&env, &caller)?;
 
@@ -750,11 +741,7 @@ impl AnomalyDetectorContract {
     }
 
     /// Mark an alert as false positive, automatically feeding adaptive learning.
-    pub fn mark_false_positive(
-        env: Env,
-        caller: Address,
-        alert_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn mark_false_positive(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_authorized(&env, &caller)?;
 
@@ -1005,9 +992,7 @@ impl AnomalyDetectorContract {
             .get(&DataKey::FeedbackCount)
             .unwrap_or(0);
         let next = count.saturating_add(1);
-        env.storage()
-            .instance()
-            .set(&DataKey::FeedbackCount, &next);
+        env.storage().instance().set(&DataKey::FeedbackCount, &next);
         next
     }
 
@@ -1104,8 +1089,7 @@ impl AnomalyDetectorContract {
             });
 
         // EMA: new = 0.3 * new_score + 0.7 * old
-        profile.rolling_risk_score =
-            (3 * new_score + 7 * profile.rolling_risk_score) / 10;
+        profile.rolling_risk_score = (3 * new_score + 7 * profile.rolling_risk_score) / 10;
         profile.total_alerts = profile.total_alerts.saturating_add(1);
         profile.last_alert_at = env.ledger().timestamp();
 

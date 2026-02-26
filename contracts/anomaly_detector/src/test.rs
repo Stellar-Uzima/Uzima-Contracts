@@ -31,7 +31,14 @@ fn register_default_model(
 ) {
     let weights = soroban_sdk::vec![env, 5_000u32, 5_000u32, 5_000u32];
     env.mock_all_auths();
-    client.register_model(admin, model_id, &String::from_str(env, "test_model"), &3, &weights, &5_000);
+    client.register_model(
+        admin,
+        model_id,
+        &String::from_str(env, "test_model"),
+        &3,
+        &weights,
+        &5_000,
+    );
 }
 
 // ==================== Initialization ====================
@@ -374,7 +381,10 @@ fn test_prescription_anomaly_high_risk_ratio() {
     );
 
     assert!(result.is_anomalous);
-    assert_eq!(result.pattern_type, HealthcarePatternType::PrescriptionAnomaly);
+    assert_eq!(
+        result.pattern_type,
+        HealthcarePatternType::PrescriptionAnomaly
+    );
     assert!(result.anomaly_score > 5_000);
     assert_eq!(result.top_features.len(), 3);
 }
@@ -398,7 +408,10 @@ fn test_prescription_anomaly_normal() {
     );
 
     assert!(!result.is_anomalous);
-    assert_eq!(result.pattern_type, HealthcarePatternType::PrescriptionAnomaly);
+    assert_eq!(
+        result.pattern_type,
+        HealthcarePatternType::PrescriptionAnomaly
+    );
 }
 
 #[test]
@@ -420,7 +433,10 @@ fn test_prescription_anomaly_many_pharmacies() {
     );
 
     assert!(result.is_anomalous);
-    assert_eq!(result.pattern_type, HealthcarePatternType::PrescriptionAnomaly);
+    assert_eq!(
+        result.pattern_type,
+        HealthcarePatternType::PrescriptionAnomaly
+    );
 }
 
 // ==================== Healthcare Patterns: Access ====================
@@ -444,7 +460,10 @@ fn test_access_anomaly_after_hours() {
     );
 
     assert!(result.is_anomalous);
-    assert_eq!(result.pattern_type, HealthcarePatternType::UnusualTimeAccess);
+    assert_eq!(
+        result.pattern_type,
+        HealthcarePatternType::UnusualTimeAccess
+    );
 }
 
 #[test]
@@ -480,14 +499,17 @@ fn test_access_anomaly_rapid_sequential() {
     let result = client.detect_access_anomaly(
         &admin,
         &patient,
-        &6,   // access_count > 5
-        &30,  // time_window_secs < 60
+        &6,  // access_count > 5
+        &30, // time_window_secs < 60
         &false,
         &2,
         &String::from_str(&env, "{}"),
     );
 
-    assert_eq!(result.pattern_type, HealthcarePatternType::RapidSequentialAccess);
+    assert_eq!(
+        result.pattern_type,
+        HealthcarePatternType::RapidSequentialAccess
+    );
 }
 
 #[test]
@@ -925,9 +947,7 @@ fn test_submit_federated_update() {
     env.mock_all_auths();
     client.submit_federated_update(&participant, &1, &update_hash, &100);
 
-    let stored = client
-        .get_federated_update(&1, &participant)
-        .unwrap();
+    let stored = client.get_federated_update(&1, &participant).unwrap();
     assert_eq!(stored.round_id, 1);
     assert_eq!(stored.participant, participant);
     assert_eq!(stored.num_samples, 100);
@@ -964,9 +984,18 @@ fn test_multiple_participants_same_round() {
     client.submit_federated_update(&p2, &5, &h2, &300);
     client.submit_federated_update(&p3, &5, &h3, &150);
 
-    assert_eq!(client.get_federated_update(&5, &p1).unwrap().num_samples, 200);
-    assert_eq!(client.get_federated_update(&5, &p2).unwrap().num_samples, 300);
-    assert_eq!(client.get_federated_update(&5, &p3).unwrap().num_samples, 150);
+    assert_eq!(
+        client.get_federated_update(&5, &p1).unwrap().num_samples,
+        200
+    );
+    assert_eq!(
+        client.get_federated_update(&5, &p2).unwrap().num_samples,
+        300
+    );
+    assert_eq!(
+        client.get_federated_update(&5, &p3).unwrap().num_samples,
+        150
+    );
 }
 
 // ==================== Patient Risk Profile ====================
@@ -1108,7 +1137,7 @@ fn test_prescription_anomaly_feature_contributions() {
         &admin,
         &patient,
         &10,
-        &5,  // 50% high-risk
+        &5, // 50% high-risk
         &3,
         &24,
         &String::from_str(&env, "{}"),

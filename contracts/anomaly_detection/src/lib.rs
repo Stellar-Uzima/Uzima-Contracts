@@ -358,11 +358,7 @@ impl AnomalyDetectionContract {
     }
 
     /// Promote an anomaly record to an active alert for investigation tracking.
-    pub fn create_alert(
-        env: Env,
-        caller: Address,
-        anomaly_id: u64,
-    ) -> Result<u64, Error> {
+    pub fn create_alert(env: Env, caller: Address, anomaly_id: u64) -> Result<u64, Error> {
         caller.require_auth();
         let _config = Self::ensure_admin(&env, &caller)?;
 
@@ -398,11 +394,7 @@ impl AnomalyDetectionContract {
     }
 
     /// Acknowledge an alert (marks it as under review).
-    pub fn acknowledge_alert(
-        env: Env,
-        caller: Address,
-        alert_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn acknowledge_alert(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         let _config = Self::ensure_admin(&env, &caller)?;
 
@@ -422,8 +414,7 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events()
-            .publish((symbol_short!("AlertAck"),), alert_id);
+        env.events().publish((symbol_short!("AlertAck"),), alert_id);
         Ok(true)
     }
 
@@ -454,17 +445,12 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events()
-            .publish((symbol_short!("AlertRes"),), alert_id);
+        env.events().publish((symbol_short!("AlertRes"),), alert_id);
         Ok(true)
     }
 
     /// Mark alert as false positive. Feeds adaptive threshold learning.
-    pub fn mark_false_positive(
-        env: Env,
-        caller: Address,
-        alert_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn mark_false_positive(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
         caller.require_auth();
         let mut config = Self::ensure_admin(&env, &caller)?;
 
@@ -488,8 +474,10 @@ impl AnomalyDetectionContract {
         config.threshold_bps = (config.threshold_bps + 50).min(10_000);
         env.storage().instance().set(&DataKey::Config, &config);
 
-        env.events()
-            .publish((symbol_short!("FalsePos"),), (alert_id, config.threshold_bps));
+        env.events().publish(
+            (symbol_short!("FalsePos"),),
+            (alert_id, config.threshold_bps),
+        );
         Ok(true)
     }
 
@@ -667,7 +655,9 @@ mod test {
         let detector = Address::generate(&env);
         let patient = Address::generate(&env);
 
-        client.mock_all_auths().initialize(&admin, &detector, &7000u32);
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
 
         // Detect an anomaly first
         let anomaly_id = client.mock_all_auths().detect_anomaly(
@@ -691,7 +681,10 @@ mod test {
 
         // Acknowledge
         client.mock_all_auths().acknowledge_alert(&admin, &alert_id);
-        assert_eq!(client.get_alert(&alert_id).unwrap().status, AlertStatus::Acknowledged);
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::Acknowledged
+        );
 
         // Resolve
         client.mock_all_auths().resolve_alert(
@@ -699,7 +692,10 @@ mod test {
             &alert_id,
             &String::from_str(&env, "Confirmed breach, contained"),
         );
-        assert_eq!(client.get_alert(&alert_id).unwrap().status, AlertStatus::Resolved);
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::Resolved
+        );
     }
 
     #[test]
@@ -712,7 +708,9 @@ mod test {
         let detector = Address::generate(&env);
         let patient = Address::generate(&env);
 
-        client.mock_all_auths().initialize(&admin, &detector, &7000u32);
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
 
         let anomaly_id = client.mock_all_auths().detect_anomaly(
             &detector,
@@ -727,12 +725,17 @@ mod test {
         let alert_id = client.mock_all_auths().create_alert(&admin, &anomaly_id);
         let initial_threshold = client.get_config().unwrap().threshold_bps;
 
-        client.mock_all_auths().mark_false_positive(&admin, &alert_id);
+        client
+            .mock_all_auths()
+            .mark_false_positive(&admin, &alert_id);
 
         let updated_threshold = client.get_config().unwrap().threshold_bps;
         assert!(updated_threshold > initial_threshold);
         assert_eq!(updated_threshold, initial_threshold + 50);
-        assert_eq!(client.get_alert(&alert_id).unwrap().status, AlertStatus::FalsePositive);
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::FalsePositive
+        );
     }
 
     #[test]
@@ -745,7 +748,9 @@ mod test {
         let detector = Address::generate(&env);
         let patient = Address::generate(&env);
 
-        client.mock_all_auths().initialize(&admin, &detector, &7000u32);
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
 
         let anomaly_id = client.mock_all_auths().detect_anomaly(
             &detector,
@@ -760,12 +765,16 @@ mod test {
         let t0 = client.get_config().unwrap().threshold_bps;
 
         // Confirmed → lower threshold
-        client.mock_all_auths().submit_feedback(&admin, &anomaly_id, &true);
+        client
+            .mock_all_auths()
+            .submit_feedback(&admin, &anomaly_id, &true);
         let t1 = client.get_config().unwrap().threshold_bps;
         assert_eq!(t1, t0 - 50);
 
         // False positive → raise threshold
-        client.mock_all_auths().submit_feedback(&admin, &anomaly_id, &false);
+        client
+            .mock_all_auths()
+            .submit_feedback(&admin, &anomaly_id, &false);
         let t2 = client.get_config().unwrap().threshold_bps;
         assert_eq!(t2, t0); // back to original
     }
@@ -780,7 +789,9 @@ mod test {
         let detector = Address::generate(&env);
         let patient = Address::generate(&env);
 
-        client.mock_all_auths().initialize(&admin, &detector, &7000u32);
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
 
         let anomaly_id = client.mock_all_auths().detect_anomaly(
             &detector,
