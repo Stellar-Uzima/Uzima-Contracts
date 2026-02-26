@@ -10,6 +10,32 @@ use soroban_sdk::{
     IntoVal, Map, String, Symbol,
 };
 
+// ==================== Alert Lifecycle Types ====================
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum AlertStatus {
+    Active,
+    Acknowledged,
+    Resolved,
+    FalsePositive,
+}
+
+/// Alert wraps an AnomalyRecord with review lifecycle state
+#[derive(Clone)]
+#[contracttype]
+pub struct AnomalyAlert {
+    pub alert_id: u64,
+    pub anomaly_id: u64,
+    pub patient: Address,
+    pub score_bps: u32,
+    pub severity: u32,
+    pub status: AlertStatus,
+    pub created_at: u64,
+    pub updated_at: u64,
+    pub resolution_notes: String,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct AnomalyDetectionConfig {
@@ -45,10 +71,13 @@ pub struct DetectionStats {
 #[contracttype]
 pub enum DataKey {
     Config,
-    AnomalyRecord(u64), // Record ID -> AnomalyRecord
+    AnomalyRecord(u64),
     AnomalyCountByPatient(Address),
     Stats,
     Whitelist(Address),
+    Alert(u64),
+    AlertCount,
+    FeedbackCount,
     AuditForensicsContract,
 }
 
@@ -65,6 +94,8 @@ pub enum Error {
     InvalidSeverity = 5,
     RecordNotFound = 6,
     NotWhitelisted = 7,
+    AlertNotFound = 8,
+    AlertAlreadyResolved = 9,
 }
 
 #[contract]
@@ -367,6 +398,188 @@ impl AnomalyDetectionContract {
             .get(&DataKey::Whitelist(detector_addr))
             .unwrap_or(false)
     }
+
+    // ==================== Alert Lifecycle ====================
+
+    fn next_alert_id(env: &Env) -> u64 {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AlertCount)
+            .unwrap_or(0);
+        let next = count.saturating_add(1);
+        env.storage().instance().set(&DataKey::AlertCount, &next);
+        next
+    }
+
+    /// Promote an anomaly record to an active alert for investigation tracking.
+    pub fn create_alert(env: Env, caller: Address, anomaly_id: u64) -> Result<u64, Error> {
+        caller.require_auth();
+        let _config = Self::ensure_admin(&env, &caller)?;
+
+        let record: AnomalyRecord = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnomalyRecord(anomaly_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let alert_id = Self::next_alert_id(&env);
+        let now = env.ledger().timestamp();
+
+        let alert = AnomalyAlert {
+            alert_id,
+            anomaly_id,
+            patient: record.patient,
+            score_bps: record.score_bps,
+            severity: record.severity,
+            status: AlertStatus::Active,
+            created_at: now,
+            updated_at: now,
+            resolution_notes: String::from_str(&env, ""),
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Alert(alert_id), &alert);
+
+        env.events()
+            .publish((symbol_short!("AlertCrt"),), (alert_id, anomaly_id));
+
+        Ok(alert_id)
+    }
+
+    /// Acknowledge an alert (marks it as under review).
+    pub fn acknowledge_alert(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        let _config = Self::ensure_admin(&env, &caller)?;
+
+        let mut alert: AnomalyAlert = env
+            .storage()
+            .instance()
+            .get(&DataKey::Alert(alert_id))
+            .ok_or(Error::AlertNotFound)?;
+
+        if alert.status != AlertStatus::Active {
+            return Err(Error::AlertAlreadyResolved);
+        }
+
+        alert.status = AlertStatus::Acknowledged;
+        alert.updated_at = env.ledger().timestamp();
+        env.storage()
+            .instance()
+            .set(&DataKey::Alert(alert_id), &alert);
+
+        env.events().publish((symbol_short!("AlertAck"),), alert_id);
+        Ok(true)
+    }
+
+    /// Resolve an alert after investigation.
+    pub fn resolve_alert(
+        env: Env,
+        caller: Address,
+        alert_id: u64,
+        notes: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        let _config = Self::ensure_admin(&env, &caller)?;
+
+        let mut alert: AnomalyAlert = env
+            .storage()
+            .instance()
+            .get(&DataKey::Alert(alert_id))
+            .ok_or(Error::AlertNotFound)?;
+
+        if alert.status == AlertStatus::Resolved || alert.status == AlertStatus::FalsePositive {
+            return Err(Error::AlertAlreadyResolved);
+        }
+
+        alert.status = AlertStatus::Resolved;
+        alert.updated_at = env.ledger().timestamp();
+        alert.resolution_notes = notes;
+        env.storage()
+            .instance()
+            .set(&DataKey::Alert(alert_id), &alert);
+
+        env.events().publish((symbol_short!("AlertRes"),), alert_id);
+        Ok(true)
+    }
+
+    /// Mark alert as false positive. Feeds adaptive threshold learning.
+    pub fn mark_false_positive(env: Env, caller: Address, alert_id: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        let mut config = Self::ensure_admin(&env, &caller)?;
+
+        let mut alert: AnomalyAlert = env
+            .storage()
+            .instance()
+            .get(&DataKey::Alert(alert_id))
+            .ok_or(Error::AlertNotFound)?;
+
+        if alert.status == AlertStatus::Resolved || alert.status == AlertStatus::FalsePositive {
+            return Err(Error::AlertAlreadyResolved);
+        }
+
+        alert.status = AlertStatus::FalsePositive;
+        alert.updated_at = env.ledger().timestamp();
+        env.storage()
+            .instance()
+            .set(&DataKey::Alert(alert_id), &alert);
+
+        // Adaptive learning: false positive → raise threshold by 50 bps
+        config.threshold_bps = (config.threshold_bps + 50).min(10_000);
+        env.storage().instance().set(&DataKey::Config, &config);
+
+        env.events().publish(
+            (symbol_short!("FalsePos"),),
+            (alert_id, config.threshold_bps),
+        );
+        Ok(true)
+    }
+
+    /// Submit feedback on a detection. Adaptive threshold learning:
+    /// - `confirmed = true`  → lower threshold by 50 bps (catch more)
+    /// - `confirmed = false` → raise threshold by 50 bps (reduce noise)
+    pub fn submit_feedback(
+        env: Env,
+        caller: Address,
+        anomaly_id: u64,
+        confirmed: bool,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        let mut config = Self::ensure_admin(&env, &caller)?;
+
+        // Verify the anomaly record exists
+        let _record: AnomalyRecord = env
+            .storage()
+            .instance()
+            .get(&DataKey::AnomalyRecord(anomaly_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        const LEARNING_RATE: u32 = 50;
+        if confirmed {
+            config.threshold_bps = config.threshold_bps.saturating_sub(LEARNING_RATE);
+        } else {
+            config.threshold_bps = (config.threshold_bps + LEARNING_RATE).min(10_000);
+        }
+        env.storage().instance().set(&DataKey::Config, &config);
+
+        env.events().publish(
+            (symbol_short!("Feedback"),),
+            (anomaly_id, confirmed, config.threshold_bps),
+        );
+        Ok(true)
+    }
+
+    pub fn get_alert(env: Env, alert_id: u64) -> Option<AnomalyAlert> {
+        env.storage().instance().get(&DataKey::Alert(alert_id))
+    }
+
+    pub fn get_alert_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AlertCount)
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(all(test, feature = "testutils"))]
@@ -483,5 +696,180 @@ mod test {
 
         // Check that detector is now whitelisted
         assert!(client.is_whitelisted_detector(&detector));
+    }
+
+    // ==================== New: Alert Lifecycle Tests ====================
+
+    #[test]
+    fn test_alert_lifecycle() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
+
+        // Detect an anomaly first
+        let anomaly_id = client.mock_all_auths().detect_anomaly(
+            &detector,
+            &1u64,
+            &patient,
+            &8000u32,
+            &4u32,
+            &String::from_str(&env, r#"{"type":"bulk_access"}"#),
+            &String::from_str(&env, "ipfs://explanation"),
+        );
+
+        // Create alert from the anomaly record
+        let alert_id = client.mock_all_auths().create_alert(&admin, &anomaly_id);
+        assert_eq!(alert_id, 1u64);
+        assert_eq!(client.get_alert_count(), 1u64);
+
+        let alert = client.get_alert(&alert_id).unwrap();
+        assert_eq!(alert.status, AlertStatus::Active);
+        assert_eq!(alert.score_bps, 8000u32);
+
+        // Acknowledge
+        client.mock_all_auths().acknowledge_alert(&admin, &alert_id);
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::Acknowledged
+        );
+
+        // Resolve
+        client.mock_all_auths().resolve_alert(
+            &admin,
+            &alert_id,
+            &String::from_str(&env, "Confirmed breach, contained"),
+        );
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::Resolved
+        );
+    }
+
+    #[test]
+    fn test_alert_false_positive_raises_threshold() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
+
+        let anomaly_id = client.mock_all_auths().detect_anomaly(
+            &detector,
+            &1u64,
+            &patient,
+            &7500u32,
+            &3u32,
+            &String::from_str(&env, "{}"),
+            &String::from_str(&env, "ipfs://expl"),
+        );
+
+        let alert_id = client.mock_all_auths().create_alert(&admin, &anomaly_id);
+        let initial_threshold = client.get_config().unwrap().threshold_bps;
+
+        client
+            .mock_all_auths()
+            .mark_false_positive(&admin, &alert_id);
+
+        let updated_threshold = client.get_config().unwrap().threshold_bps;
+        assert!(updated_threshold > initial_threshold);
+        assert_eq!(updated_threshold, initial_threshold + 50);
+        assert_eq!(
+            client.get_alert(&alert_id).unwrap().status,
+            AlertStatus::FalsePositive
+        );
+    }
+
+    #[test]
+    fn test_adaptive_threshold_feedback() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
+
+        let anomaly_id = client.mock_all_auths().detect_anomaly(
+            &detector,
+            &1u64,
+            &patient,
+            &8000u32,
+            &4u32,
+            &String::from_str(&env, "{}"),
+            &String::from_str(&env, "ipfs://expl"),
+        );
+
+        let t0 = client.get_config().unwrap().threshold_bps;
+
+        // Confirmed → lower threshold
+        client
+            .mock_all_auths()
+            .submit_feedback(&admin, &anomaly_id, &true);
+        let t1 = client.get_config().unwrap().threshold_bps;
+        assert_eq!(t1, t0 - 50);
+
+        // False positive → raise threshold
+        client
+            .mock_all_auths()
+            .submit_feedback(&admin, &anomaly_id, &false);
+        let t2 = client.get_config().unwrap().threshold_bps;
+        assert_eq!(t2, t0); // back to original
+    }
+
+    #[test]
+    fn test_double_resolve_fails() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client
+            .mock_all_auths()
+            .initialize(&admin, &detector, &7000u32);
+
+        let anomaly_id = client.mock_all_auths().detect_anomaly(
+            &detector,
+            &1u64,
+            &patient,
+            &8000u32,
+            &4u32,
+            &String::from_str(&env, "{}"),
+            &String::from_str(&env, "ipfs://expl"),
+        );
+
+        let alert_id = client.mock_all_auths().create_alert(&admin, &anomaly_id);
+        client.mock_all_auths().resolve_alert(
+            &admin,
+            &alert_id,
+            &String::from_str(&env, "resolved"),
+        );
+
+        let result = client.mock_all_auths().try_resolve_alert(
+            &admin,
+            &alert_id,
+            &String::from_str(&env, "again"),
+        );
+        assert_eq!(result, Err(Ok(Error::AlertAlreadyResolved)));
     }
 }
