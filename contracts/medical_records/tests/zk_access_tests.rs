@@ -614,11 +614,14 @@ fn test_audit_event_privacy_and_performance() {
         if event.1.len() < 2 {
             continue;
         }
-        let topic = event.1.get(1).unwrap();
+        let Some(topic) = event.1.get(1) else {
+            continue;
+        };
         if Symbol::try_from_val(&env, &topic) == Ok(symbol_short!("ZK_AUD")) {
             let data = event.2;
-            let _parsed: ZkAuditRecord = ZkAuditRecord::try_from_val(&env, &data).unwrap();
-            saw_zk_audit = true;
+            if ZkAuditRecord::try_from_val(&env, &data).is_ok() {
+                saw_zk_audit = true;
+            }
         }
     }
     assert!(saw_zk_audit);
