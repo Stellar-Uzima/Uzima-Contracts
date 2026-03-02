@@ -6,15 +6,15 @@ on:
       - "v*.*.*"
 
 env:
-  RUST_VERSION: "stable"
-  SOROBAN_VERSION: "21.0.0"
+  RUST_VERSION: "1.92.0"
+  SOROBAN_VERSION: "23.1.4"
 
 jobs:
   release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

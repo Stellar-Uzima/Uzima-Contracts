@@ -2,24 +2,24 @@ name: Deploy to Testnet
 
 on:
   push:
-    branches: [develop]
+    branches: [ develop ]
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
     inputs:
       contract:
-        description: "Contract to deploy (leave empty for all)"
+        description: 'Contract to deploy (leave empty for all)'
         required: false
         type: string
       skip_tests:
-        description: "Skip tests before deployment"
+        description: 'Skip tests before deployment'
         required: false
         type: boolean
         default: false
 
 env:
-  RUST_VERSION: "stable"
-  SOROBAN_VERSION: "21.0.0"
+  RUST_VERSION: "1.92.0"
+  SOROBAN_VERSION: "23.1.4"
   NETWORK: "testnet"
 
 jobs:
@@ -175,14 +175,14 @@ jobs:
           mkdir -p deployments
           deployment_log="deployments/testnet_$(date +%Y%m%d_%H%M%S).json"
           echo "[]" > "$deployment_log"
-
+          
           # Determine which contracts to deploy
           if [ -n "${{ inputs.contract }}" ]; then
             contracts="${{ inputs.contract }}"
           else
             contracts=$(ls -d contracts/*/ | xargs -n1 basename)
           fi
-
+          
           for contract_name in $contracts; do
             wasm_file="dist/${contract_name}.wasm"
             if [ ! -f "$wasm_file" ]; then
@@ -221,7 +221,7 @@ jobs:
                  "deployer": "deployer-testnet"
                }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
           done
-
+          
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
           cat "$deployment_log"
 

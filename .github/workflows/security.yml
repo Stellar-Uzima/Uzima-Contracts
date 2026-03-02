@@ -2,16 +2,16 @@ name: Security Scanning
 
 on:
   push:
-    branches: [main, develop]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main, develop]
+    branches: [ main, develop ]
   schedule:
     # Run security scan daily at 2 AM UTC
-    - cron: "0 2 * * *"
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 env:
-  RUST_VERSION: "stable"
+  RUST_VERSION: "1.92.0"
 
 jobs:
   # Cargo audit for known vulnerabilities
@@ -89,7 +89,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history for secret scanning
+          fetch-depth: 0  # Full history for secret scanning
 
       - name: Install Gitleaks
         run: |
@@ -97,7 +97,6 @@ jobs:
           tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
           chmod +x gitleaks
           sudo mv gitleaks /usr/local/bin/
-        continue-on-error: true
 
       - name: Run Gitleaks
         run: gitleaks detect --source . --verbose --redact
@@ -130,7 +129,7 @@ jobs:
           echo "- Dependency Audit: ${{ needs.audit.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Clippy Security: ${{ needs.clippy-security.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Secret Scanning: ${{ needs.secret-scanning.result }}" >> $GITHUB_STEP_SUMMARY
-
+          
           if [ "${{ needs.audit.result }}" != "success" ] || \
              [ "${{ needs.clippy-security.result }}" != "success" ] || \
              [ "${{ needs.secret-scanning.result }}" != "success" ]; then
