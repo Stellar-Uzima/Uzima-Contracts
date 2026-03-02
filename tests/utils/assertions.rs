@@ -1,6 +1,9 @@
 /// Custom assertions for contract testing
 use soroban_sdk::Address;
 
+#[allow(clippy::unwrap_used)]
+#[allow(clippy::panic)]
+
 /// Assert two addresses are equal
 #[macro_export]
 macro_rules! assert_address_eq {

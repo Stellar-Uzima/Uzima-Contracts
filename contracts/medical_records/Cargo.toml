@@ -19,6 +19,8 @@ federated_learning = { path = "../federated_learning" }
 anomaly_detection = { path = "../anomaly_detection" }
 predictive_analytics = { path = "../predictive_analytics" }
 explainable_ai = { path = "../explainable_ai" }
+zk_verifier = { path = "../zk_verifier" }
+credential_registry = { path = "../credential_registry" }
 
 [features]
 default = []

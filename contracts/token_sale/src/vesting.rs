@@ -81,7 +81,9 @@ impl VestingContract {
         assert!(releasable > 0, "No tokens to release");
 
         // Update released amount
-        let mut schedule = get_vesting_schedule(&env, &beneficiary).expect("No vesting schedule");
+        let Some(mut schedule) = get_vesting_schedule(&env, &beneficiary) else {
+            return 0; // No vesting schedule
+        };
         schedule.released_amount += releasable;
         set_vesting_schedule(&env, &beneficiary, &schedule);
 
@@ -196,7 +198,9 @@ impl VestingContract {
         let owner = get_owner(&env);
         owner.require_auth();
 
-        let mut schedule = get_vesting_schedule(&env, &beneficiary).expect("No vesting schedule");
+        let Some(mut schedule) = get_vesting_schedule(&env, &beneficiary) else {
+            return; // No vesting schedule
+        };
 
         // Ensure we don't reduce already vested amounts
         let current_time = get_ledger_timestamp(&env);

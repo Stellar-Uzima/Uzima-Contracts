@@ -2,6 +2,8 @@
 use soroban_sdk::{Address, Env, String as SorobanString, Vec};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+#[allow(clippy::unwrap_used)]
+
 /// Medical record data generator
 pub struct MedicalRecordGenerator {
     counter: usize,

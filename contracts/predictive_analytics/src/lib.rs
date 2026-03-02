@@ -80,6 +80,7 @@ pub enum Error {
     RecordNotFound = 6,
     LowConfidence = 7,
     InvalidHorizon = 8,
+    EmptyInput = 9,
 }
 
 #[contract]
@@ -97,11 +98,11 @@ impl PredictiveAnalyticsContract {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            panic!("Already initialized");
+            return false; // Already initialized
         }
 
         if min_confidence_bps > 10_000 {
-            panic!("min_confidence_bps must be <= 10000");
+            return false; // Invalid confidence value
         }
 
         let config = PredictionConfig {
@@ -223,7 +224,7 @@ impl PredictiveAnalyticsContract {
         }
 
         if explanation_ref.is_empty() {
-            panic!("explanation_ref cannot be empty");
+            return Err(Error::EmptyInput);
         }
 
         let timestamp = env.ledger().timestamp();

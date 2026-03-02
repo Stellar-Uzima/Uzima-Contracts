@@ -283,9 +283,10 @@ impl PatientConsentToken {
 
         let mut new_issuers = Vec::new(&env);
         for i in 0..issuers.len() {
-            let current = issuers.get(i).unwrap();
-            if current != issuer {
-                new_issuers.push_back(current);
+            if let Some(current) = issuers.get(i) {
+                if current != issuer {
+                    new_issuers.push_back(current);
+                }
             }
         }
 
@@ -303,8 +304,10 @@ impl PatientConsentToken {
             .unwrap_or(Vec::new(&env));
 
         for i in 0..issuers.len() {
-            if issuers.get(i).unwrap() == address {
-                return true;
+            if let Some(issuer) = issuers.get(i) {
+                if issuer == address {
+                    return true;
+                }
             }
         }
         false
@@ -617,9 +620,10 @@ impl PatientConsentToken {
 
         let mut new_from_tokens = Vec::new(&env);
         for i in 0..from_tokens.len() {
-            let tid = from_tokens.get(i).unwrap();
-            if tid != token_id {
-                new_from_tokens.push_back(tid);
+            if let Some(tid) = from_tokens.get(i) {
+                if tid != token_id {
+                    new_from_tokens.push_back(tid);
+                }
             }
         }
         env.storage().instance().set(&from_key, &new_from_tokens);

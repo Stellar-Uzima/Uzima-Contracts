@@ -29,7 +29,7 @@ impl TokenSaleContract {
         hard_cap: u128,
     ) {
         if env.storage().instance().has(&DataKey::Config) {
-            panic!("Already initialized");
+            return; // Already initialized - early return instead of panic
         }
 
         owner.require_auth();
@@ -148,7 +148,9 @@ impl TokenSaleContract {
         assert!(is_supported_token(&env, &token), "Token not supported");
 
         let current_time = get_ledger_timestamp(&env);
-        let mut phase = get_sale_phase(&env, phase_id).expect("Phase not found");
+        let Some(mut phase) = get_sale_phase(&env, phase_id) else {
+            return; // Phase not found
+        };
 
         // Validate phase
         assert!(phase.is_active, "Phase not active");
@@ -243,7 +245,9 @@ impl TokenSaleContract {
             "Refunds enabled, cannot claim tokens"
         );
 
-        let mut contribution = get_contribution(&env, &claimer).expect("No contribution found");
+        let Some(mut contribution) = get_contribution(&env, &claimer) else {
+            return; // No contribution found
+        };
         assert!(!contribution.claimed, "Tokens already claimed");
         assert!(contribution.tokens_allocated > 0, "No tokens to claim");
 
@@ -272,7 +276,9 @@ impl TokenSaleContract {
         let config = get_config(&env);
         assert!(config.refunds_enabled, "Refunds not enabled");
 
-        let mut contribution = get_contribution(&env, &claimer).expect("No contribution found");
+        let Some(mut contribution) = get_contribution(&env, &claimer) else {
+            return; // No contribution found
+        };
         assert!(!contribution.claimed, "Already claimed");
         assert!(contribution.amount > 0, "No contribution to refund");
 

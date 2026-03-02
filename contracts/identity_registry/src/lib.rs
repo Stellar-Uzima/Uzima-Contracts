@@ -339,7 +339,7 @@ impl IdentityRegistryContract {
         owner.require_auth();
 
         if env.storage().instance().has(&DataKey::Owner) {
-            panic!("Contract already initialized");
+            return; // Contract already initialized
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
