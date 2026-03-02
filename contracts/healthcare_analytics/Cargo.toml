@@ -1,0 +1,10 @@
+[package]
+name = "healthcare_analytics"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = { version = "0.40.0", default-features = false }
