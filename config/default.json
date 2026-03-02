@@ -12,6 +12,9 @@
     "dispute_resolution": {
       "enabled": true
     },
+    "emergency_access": {
+      "enabled": true
+    },
     "emr_integration": {
       "enabled": true
     },
