@@ -2,9 +2,9 @@ name: Comprehensive Test Suite
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,30 +16,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo index
         uses: actions/cache@v4
         with:
           path: ~/.cargo/git
           key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Run tests
         run: cargo test --verbose
 
@@ -53,7 +53,7 @@ jobs:
           toolchain: stable
           override: true
           components: rustfmt
-      
+
       - name: Check formatting
         run: cargo fmt -- --check
 
@@ -67,19 +67,19 @@ jobs:
           toolchain: stable
           override: true
           components: clippy
-      
+
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
           path: ~/.cargo/registry
           key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Cache cargo build
         uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-cargo-clippy-target-${{ hashFiles('**/Cargo.lock') }}
-      
+
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -88,20 +88,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Install tarpaulin
         run: cargo install cargo-tarpaulin
-      
+
       - name: Generate coverage
         run: |
           cargo tarpaulin --out Xml --output-dir coverage \
                           --timeout 600 --exclude-files tests/*
-      
+
       - name: Upload to codecov
         uses: codecov/codecov-action@v4
         with:
@@ -114,12 +114,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Run integration tests
         run: cargo test --test '*' --no-fail-fast
 
@@ -128,15 +128,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Install cargo-audit
         run: cargo install cargo-audit
-      
+
       - name: Run security audit
         run: cargo audit
 
@@ -145,12 +145,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Build
         run: cargo build --release --verbose
 
@@ -159,27 +159,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Run doc tests
         run: cargo test --doc --verbose
 
   performance:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
-    continue-on-error: true  # Optional - no performance tests yet
+    continue-on-error: true # Optional - no performance tests yet
     steps:
       - uses: actions/checkout@v4
-      
+
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
-      
+
       - name: Run performance tests
         run: |
           # Check if any performance tests exist before running
@@ -188,7 +188,7 @@ jobs:
           else
             echo "No performance tests found, skipping..."
           fi
-      
+
       - name: Store benchmark results
         uses: actions/upload-artifact@v4
         if: success()
