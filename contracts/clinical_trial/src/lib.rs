@@ -116,7 +116,7 @@ impl ClinicalTrial {
             .set(&DataKey::Protocol(id), &proto);
         env.storage()
             .instance()
-            .set(&DataKey::ProtocolNextId, &(next + 1));
+            .set(&DataKey::ProtocolNextId, &next.saturating_add(1));
         env.events()
             .publish((Symbol::new(&env, "ProtocolCreated"),), (id, proposer));
         id
@@ -143,7 +143,7 @@ impl ClinicalTrial {
         env.storage().persistent().set(&DataKey::Site(id), &s);
         env.storage()
             .instance()
-            .set(&DataKey::SiteNextId, &(next + 1));
+            .set(&DataKey::SiteNextId, &next.saturating_add(1));
         env.events()
             .publish((Symbol::new(&env, "SiteRegistered"),), (id, registrar));
         id
@@ -179,7 +179,7 @@ impl ClinicalTrial {
             .instance()
             .get(&DataKey::ConsentCount)
             .unwrap_or(0u64);
-        let id = count + 1;
+        let id = count.saturating_add(1);
         let c = Consent {
             patient: patient.clone(),
             protocol_id,
@@ -226,7 +226,7 @@ impl ClinicalTrial {
             .set(&DataKey::AdverseEvent(id), &ev);
         env.storage()
             .instance()
-            .set(&DataKey::AdverseEventNextId, &(next + 1));
+            .set(&DataKey::AdverseEventNextId, &next.saturating_add(1));
         env.events().publish(
             (Symbol::new(&env, "AdverseEvent"),),
             (id, patient, protocol_id, site_id, severity),
@@ -252,7 +252,7 @@ impl ClinicalTrial {
                     return true;
                 }
             }
-            i += 1;
+            i = i.saturating_add(1);
         }
         false
     }
