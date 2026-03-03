@@ -1228,3 +1228,52 @@ mod test_metadata {
         assert!(result.is_err());
     }
 }
+#[test]
+fn test_quantum_performance_benchmark() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+    
+    let registry = Address::generate(&env);
+    client.set_crypto_registry(&admin, &registry);
+
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "performance-test"));
+    let ciphertext_ref = String::from_str(&env, "ipfs://performance-test-cid");
+    let ciphertext_hash = BytesN::from_array(&env, &[1u8; 32]);
+
+    // Benchmark classical record
+    let start_budget = env.budget().cpu_instruction_cost();
+    let mut classical_envs = Vec::new(&env);
+    classical_envs.push_back(KeyEnvelope {
+        recipient: patient.clone(),
+        key_version: 1,
+        algorithm: EnvelopeAlgorithm::X25519,
+        wrapped_key: Bytes::from_slice(&env, &[1u8; 32]),
+        pq_wrapped_key: None,
+    });
+    client.add_encrypted_record(&doctor, &patient, &true, &tags, &String::from_str(&env, "Modern"), &String::from_str(&env, "Medication"), &ciphertext_ref, &ciphertext_hash, &classical_envs);
+    let classical_cost = env.budget().cpu_instruction_cost() - start_budget;
+
+    // Benchmark hybrid PQC record (Kyber-768)
+    let start_budget_pq = env.budget().cpu_instruction_cost();
+    let mut pq_envs = Vec::new(&env);
+    pq_envs.push_back(KeyEnvelope {
+        recipient: patient.clone(),
+        key_version: 1,
+        algorithm: EnvelopeAlgorithm::HybridX25519Kyber768,
+        wrapped_key: Bytes::from_slice(&env, &[1u8; 32]),
+        pq_wrapped_key: Some(Bytes::from_slice(&env, &[0u8; 1184])),
+    });
+    client.add_encrypted_record(&doctor, &patient, &true, &tags, &String::from_str(&env, "Modern"), &String::from_str(&env, "Medication"), &ciphertext_ref, &ciphertext_hash, &pq_envs);
+    let pq_cost = env.budget().cpu_instruction_cost() - start_budget_pq;
+
+    // Output stats for "pro" visibility
+    // In real Soroban tests, we might use logger or just assert reasonable bounds.
+    assert!(pq_cost > classical_cost); // Logic check: larger data = more instructions
+}
