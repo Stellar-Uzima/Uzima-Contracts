@@ -464,7 +464,10 @@ impl MedicalImagingContract {
         let quality = if denominator == 0 {
             0
         } else {
-            edges.saturating_mul(10_000).saturating_div(denominator)
+            edges
+                .checked_mul(10_000)
+                .and_then(|value| value.checked_div(denominator))
+                .unwrap_or(0)
         };
 
         let result = ProcessingResult {
@@ -513,7 +516,10 @@ impl MedicalImagingContract {
             }
         }
 
-        let quality = in_segment.saturating_mul(10_000).saturating_div(bins.len());
+        let quality = in_segment
+            .checked_mul(10_000)
+            .and_then(|value| value.checked_div(bins.len()))
+            .unwrap_or(0);
 
         let result = ProcessingResult {
             image_id,
@@ -971,7 +977,14 @@ impl MedicalImagingContract {
             return Err(Error::InvalidInput);
         }
 
-        Ok((image.compressed_size_bytes.saturating_mul(10_000) / image.original_size_bytes) as u32)
+        let ratio = image
+            .compressed_size_bytes
+            .checked_mul(10_000)
+            .and_then(|value| value.checked_div(image.original_size_bytes))
+            .ok_or(Error::InvalidInput)?;
+
+        let ratio_u32 = u32::try_from(ratio).map_err(|_| Error::InvalidInput)?;
+        Ok(ratio_u32)
     }
 
     pub fn get_processing_result(
