@@ -456,7 +456,7 @@ impl MedicalImagingContract {
             prev = current;
         }
 
-        let denominator = bins.len().saturating_sub(1) as u32;
+        let denominator = bins.len().saturating_sub(1);
         let quality = if denominator == 0 {
             0
         } else {
@@ -511,7 +511,7 @@ impl MedicalImagingContract {
 
         let quality = in_segment
             .saturating_mul(10_000)
-            .saturating_div(bins.len() as u32);
+            .saturating_div(bins.len());
 
         let result = ProcessingResult {
             image_id,
