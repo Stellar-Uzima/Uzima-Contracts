@@ -7,13 +7,20 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+federated_learning = { path = "../federated_learning" }
+anomaly_detection = { path = "../anomaly_detection" }
+predictive_analytics = { path = "../predictive_analytics" }
+explainable_ai = { path = "../explainable_ai" }
+zk_verifier = { path = "../zk_verifier" }
+credential_registry = { path = "../credential_registry" }
 
 [features]
 default = []

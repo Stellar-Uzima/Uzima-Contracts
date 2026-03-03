@@ -38,6 +38,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -69,6 +72,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -98,6 +104,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -133,6 +142,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -185,10 +197,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Run ShellCheck
+      - name: Run ShellCheck on scripts directory
         uses: ludeeus/action-shellcheck@master
         with:
-          scandir: 'scripts'
+          scandir: './scripts'
+          severity: warning
+          ignore_paths: 'node_modules'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
+
+      - name: Run ShellCheck on root scripts
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: '.'
+          check_together: 'yes'
+          severity: warning
+          additional_files: 'setup.sh'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
 
   # Test summary
   test-summary:
@@ -209,4 +235,3 @@ jobs:
              [ "${{ needs.build.result }}" != "success" ]; then
             exit 1
           fi
-

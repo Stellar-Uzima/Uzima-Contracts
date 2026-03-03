@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Project Configuration",
+  "description": "Schema for the project's configuration files.",
+  "type": "object",
+  "properties": {
+    "extends": {
+      "type": "string"
+    },
+    "contracts": {
+      "type": "object",
+      "patternProperties": {
+        "^[a-zA-Z0-9_]+$": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "voting_period": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "name": {
+              "type": "string"
+            },
+            "symbol": {
+              "type": "string"
+            }
+          },
+          "required": ["enabled"]
+        }
+      }
+    }
+  }
+}

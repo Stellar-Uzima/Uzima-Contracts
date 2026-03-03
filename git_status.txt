@@ -1,0 +1,165 @@
+On branch main
+Your branch and 'origin/main' have diverged,
+and have 1 and 58 different commits each, respectively.
+  (use "git pull" if you want to integrate the remote branch with yours)
+
+You have unmerged paths.
+  (fix conflicts and run "git commit")
+  (use "git merge --abort" to abort the merge)
+
+Changes to be committed:
+	new file:   .gitattributes
+	deleted:    .github/release.yml
+	modified:   .github/workflows/ci.yml
+	new file:   .github/workflows/release.yml
+	deleted:    .github/workflows/rust.yml
+	modified:   .github/workflows/security.yml
+	modified:   .github/workflows/test.yml
+	modified:   .gitignore
+	new file:   .shellcheckrc
+	new file:   config/README.md
+	new file:   config/default.json
+	new file:   config/development.json
+	new file:   config/production.json
+	new file:   config/schema.json
+	new file:   config/staging.json
+	modified:   contracts/ai_analytics/src/lib.rs
+	modified:   contracts/anomaly_detection/Cargo.toml
+	modified:   contracts/anomaly_detection/src/lib.rs
+	modified:   contracts/anomaly_detector/src/lib.rs
+	modified:   contracts/cross_chain_access/src/lib.rs
+	modified:   contracts/cross_chain_access/src/test.rs
+	modified:   contracts/cross_chain_bridge/src/lib.rs
+	modified:   contracts/cross_chain_bridge/src/test.rs
+	modified:   contracts/cross_chain_identity/src/lib.rs
+	modified:   contracts/cross_chain_identity/src/test.rs
+	new file:   contracts/crypto_registry/Cargo.toml
+	new file:   contracts/crypto_registry/src/lib.rs
+	new file:   contracts/crypto_registry/src/test.rs
+	modified:   contracts/dispute_resolution/src/lib.rs
+	modified:   contracts/emr_integration/Cargo.toml
+	modified:   contracts/emr_integration/src/lib.rs
+	new file:   contracts/emr_integration/src/test.rs
+	modified:   contracts/escrow/src/lib.rs
+	modified:   contracts/explainable_ai/Cargo.toml
+	modified:   contracts/explainable_ai/src/lib.rs
+	modified:   contracts/federated_learning/Cargo.toml
+	modified:   contracts/federated_learning/src/lib.rs
+	modified:   contracts/fhir_integration/Cargo.toml
+	modified:   contracts/fhir_integration/src/lib.rs
+	new file:   contracts/fhir_integration/src/test.rs
+	modified:   contracts/governor/src/lib.rs
+	deleted:    contracts/governor/test_snapshots/test/lifecycle_succeeds.1.json
+	modified:   contracts/healthcare_data_conversion/Cargo.toml
+	modified:   contracts/healthcare_data_conversion/src/lib.rs
+	new file:   contracts/healthcare_data_conversion/src/test.rs
+	new file:   contracts/homomorphic_registry/Cargo.toml
+	new file:   contracts/homomorphic_registry/src/lib.rs
+	new file:   contracts/homomorphic_registry/src/test.rs
+	modified:   contracts/identity_registry/src/lib.rs
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_add_and_remove_verifier.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_attest_and_verify.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_attest_unauthorized.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_cannot_remove_owner_as_verifier.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_identity_record_persistence.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_initialize_and_owner_is_verifier.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_multiple_attestations.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_register_identity_hash.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_revoke_attestation.1.json
+	deleted:    contracts/identity_registry/test_snapshots/tests/test_revoke_attestation_unauthorized.1.json
+	modified:   contracts/medical_consent_nft/src/lib.rs
+	modified:   contracts/medical_records/Cargo.toml
+	new file:   contracts/medical_records/src/errors.rs
+	new file:   contracts/medical_records/src/test_migration.rs
+	modified:   contracts/medical_records/src/validation.rs
+	modified:   contracts/medical_records/tests/common/mod.rs
+	new file:   contracts/medical_records/tests/crypto_security_tests.rs
+	modified:   contracts/meta_tx_forwarder/src/lib.rs
+	modified:   contracts/meta_tx_forwarder/src/test.rs
+	new file:   contracts/mpc_manager/Cargo.toml
+	new file:   contracts/mpc_manager/src/lib.rs
+	new file:   contracts/mpc_manager/src/test.rs
+	modified:   contracts/payment_router/src/lib.rs
+	modified:   contracts/predictive_analytics/Cargo.toml
+	modified:   contracts/predictive_analytics/src/lib.rs
+	modified:   contracts/reputation/src/lib.rs
+	modified:   contracts/sut_token/src/lib.rs
+	modified:   contracts/sut_token/src/test.rs
+	deleted:    contracts/sut_token/test_snapshots/test/test_approve_and_transfer_from.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_burn.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_burn_insufficient_balance.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_edge_case_approve_zero.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_edge_case_burn_all_balance.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_initialize.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_initialize_twice_fails.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_invalid_amounts.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_mint.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_mint_exceeds_cap.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_minter_role_management.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_snapshot_functionality.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_transfer.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_transfer_from_insufficient_allowance.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_transfer_insufficient_balance.1.json
+	deleted:    contracts/sut_token/test_snapshots/test/test_zero_amount_transfers.1.json
+	modified:   contracts/timelock/src/lib.rs
+	modified:   contracts/token_sale/src/contract.rs
+	modified:   contracts/token_sale/src/storage.rs
+	modified:   contracts/token_sale/src/test.rs
+	modified:   contracts/token_sale/src/vesting.rs
+	deleted:    contracts/token_sale/test_snapshots/test/test_add_sale_phase.1.json
+	deleted:    contracts/token_sale/test_snapshots/test/test_contribution_and_claim.1.json
+	deleted:    contracts/token_sale/test_snapshots/test/test_refund_mechanism.1.json
+	deleted:    contracts/token_sale/test_snapshots/test/test_token_sale_initialization.1.json
+	deleted:    contracts/token_sale/test_snapshots/test/test_vesting_contract.1.json
+	modified:   contracts/treasury_controller/src/lib.rs
+	modified:   contracts/treasury_controller/src/test.rs
+	deleted:    contracts/treasury_controller/test_snapshots/test/tests/test_basic_functionality.1.json
+	new file:   contracts/upgrade_manager/Cargo.toml
+	new file:   contracts/upgrade_manager/src/lib.rs
+	new file:   contracts/upgrade_manager/src/test.rs
+	new file:   contracts/upgradeability/Cargo.toml
+	new file:   contracts/upgradeability/src/lib.rs
+	new file:   contracts/upgradeability/src/migration.rs
+	new file:   docs/CRYPTOGRAPHIC_SECURITY_MODEL.md
+	modified:   docs/DID_INTEGRATION.md
+	new file:   docs/THREAT_MODEL.md
+	new file:   docs/migration.md
+	new file:   docs/upgradeability.md
+	modified:   package-lock.json
+	modified:   package.json
+	modified:   scripts/ai_pipeline.sh
+	modified:   scripts/coverage_report.sh
+	new file:   scripts/crypto/decrypt_record.js
+	new file:   scripts/crypto/encrypt_record.js
+	new file:   scripts/crypto/generate_key_bundle.js
+	new file:   scripts/crypto/rewrap_envelope.js
+	new file:   scripts/crypto_audit.sh
+	modified:   scripts/deploy.sh
+	new file:   scripts/deploy_all.sh
+	modified:   scripts/deploy_cross_chain.sh
+	modified:   scripts/deploy_did_registry.sh
+	modified:   scripts/deploy_environment.sh
+	modified:   scripts/deploy_healthcare_integration.sh
+	modified:   scripts/deployment_status.sh
+	modified:   scripts/did_management.sh
+	modified:   scripts/healthcare_integration_test.sh
+	modified:   scripts/monitor_deployments.sh
+	modified:   scripts/rollback_deployment.sh
+	modified:   scripts/run_tests.sh
+	new file:   scripts/upgrade_contract.sh
+	new file:   scripts/validate_config.mjs
+	modified:   tests/did_integration_test.rs
+	new file:   tests/upgradeability_tests.rs
+
+Unmerged paths:
+  (use "git add <file>..." to mark resolution)
+	both modified:   contracts/medical_records/src/events.rs
+	both modified:   contracts/medical_records/src/lib.rs
+	both modified:   contracts/medical_records/src/test.rs
+	both added:      contracts/medical_records/src/test_permissions.rs
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	git_remote.txt
+	git_status.txt
+

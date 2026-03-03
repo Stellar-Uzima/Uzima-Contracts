@@ -1,0 +1,42 @@
+    Checking upgradeability v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\upgradeability)
+    Checking timelock v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\timelock)
+    Checking predictive_analytics v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\predictive_analytics)
+    Checking anomaly_detection v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\anomaly_detection)
+    Checking federated_learning v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\federated_learning)
+    Checking explainable_ai v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\explainable_ai)
+    Checking reputation v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\reputation)
+    Checking emr_integration v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\emr_integration)
+    Checking meta_tx_forwarder v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\meta_tx_forwarder)
+    Checking mpc_manager v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\mpc_manager)
+    Checking identity_registry v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\identity_registry)
+    Checking medical_records v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\medical_records)
+    Checking upgrade-manager v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\upgrade_manager)
+    Checking dispute_resolution v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\dispute_resolution)
+    Checking governor v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\governor)
+    Checking escrow v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\escrow)
+    Checking healthcare_data_conversion v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\healthcare_data_conversion)
+    Checking cross_chain_access v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\cross_chain_access)
+    Checking payment_router v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\payment_router)
+    Checking homomorphic_registry v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\homomorphic_registry)
+    Checking anomaly_detector v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\anomaly_detector)
+    Checking medical_consent_nft v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\medical_consent_nft)
+    Checking sut_token v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\sut_token)
+    Checking crypto_registry v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\crypto_registry)
+    Checking cross_chain_identity v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\cross_chain_identity)
+    Checking regulatory_compliance v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\regulatory_compliance)
+    Checking token_sale v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\token_sale)
+warning: unused import: `symbol_short`
+ --> contracts\regulatory_compliance\src\lib.rs:3:57
+  |
+3 | use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String, Vec};
+  |                                                         ^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+    Checking cross_chain_bridge v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\cross_chain_bridge)
+    Checking ai_analytics v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\ai_analytics)
+    Checking fhir_integration v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\fhir_integration)
+warning: `regulatory_compliance` (lib test) generated 1 warning (run `cargo clippy --fix --lib -p regulatory_compliance --tests` to apply 1 suggestion)
+    Checking treasury_controller v0.1.0 (C:\Users\nwaug\Desktop\Blockchain\DripsWave\Uzima-Contracts\contracts\treasury_controller)
+warning: `regulatory_compliance` (lib) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 49.75s

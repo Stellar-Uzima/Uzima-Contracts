@@ -1,0 +1,4 @@
+fork	https://github.com/walterthesmart/Uzima-Contracts.git (fetch)
+fork	https://github.com/walterthesmart/Uzima-Contracts.git (push)
+origin	https://github.com/Stellar-Uzima/Uzima-Contracts.git (fetch)
+origin	https://github.com/Stellar-Uzima/Uzima-Contracts.git (push)

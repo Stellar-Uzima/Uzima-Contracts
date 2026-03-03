@@ -46,7 +46,8 @@ DEPLOYMENT_FILE="$DEPLOYMENTS_DIR/${NETWORK}_${CONTRACT_NAME}.json"
 # Function to list available backups
 list_backups() {
     print_step "Available backups for $CONTRACT_NAME on $NETWORK:"
-    local backups=($(ls -t "$DEPLOYMENTS_DIR/${NETWORK}_${CONTRACT_NAME}_backup_"*.json 2>/dev/null))
+    # shellcheck disable=SC2012  # Using ls for sorting by time, which find cannot easily do
+    mapfile -t backups < <(ls -t "$DEPLOYMENTS_DIR/${NETWORK}_${CONTRACT_NAME}_backup_"*.json 2>/dev/null)
     
     if [ ${#backups[@]} -eq 0 ]; then
         print_warning "No backups found"
@@ -66,7 +67,8 @@ list_backups() {
 
 # Function to select backup interactively
 select_backup() {
-    local backups=($(ls -t "$DEPLOYMENTS_DIR/${NETWORK}_${CONTRACT_NAME}_backup_"*.json 2>/dev/null))
+    # shellcheck disable=SC2012  # Using ls for sorting by time, which find cannot easily do
+    mapfile -t backups < <(ls -t "$DEPLOYMENTS_DIR/${NETWORK}_${CONTRACT_NAME}_backup_"*.json 2>/dev/null)
     
     if [ ${#backups[@]} -eq 0 ]; then
         print_error "No backups available"

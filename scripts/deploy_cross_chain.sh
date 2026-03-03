@@ -261,7 +261,7 @@ cat > "$DEPLOYMENTS_DIR/${NETWORK}_cross_chain_config.json" << EOF
         "bridge_initialized": true,
         "identity_initialized": true,
         "access_initialized": true,
-        "medical_records_configured": ${MEDICAL_ID:+true}${MEDICAL_ID:-false}
+        "medical_records_configured": $([ -n "$MEDICAL_ID" ] && echo "true" || echo "false")
     }
 }
 EOF
