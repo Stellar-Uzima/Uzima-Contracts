@@ -392,7 +392,7 @@ pub enum DataKey {
     RateLimitCfg(u32),        // operation_id -> RateLimitConfig
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
-    QuantumThreatLevel,      // 0-100 (percentage)
+    QuantumThreatLevel,       // 0-100 (percentage)
 }
 
 // ==================== Errors ====================
@@ -2149,11 +2149,15 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidInput);
         }
 
-        env.storage().persistent().set(&DataKey::QuantumThreatLevel, &level);
+        env.storage()
+            .persistent()
+            .set(&DataKey::QuantumThreatLevel, &level);
 
         if level >= 50 {
             // High threat level: automatically require PQ envelopes for new records.
-            env.storage().persistent().set(&DataKey::RequirePqEnvelopes, &true);
+            env.storage()
+                .persistent()
+                .set(&DataKey::RequirePqEnvelopes, &true);
         }
 
         let mut payload = Bytes::new(&env);

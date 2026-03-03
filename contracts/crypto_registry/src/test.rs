@@ -80,19 +80,19 @@ fn post_quantum_key_registration() {
     client.initialize(&admin);
 
     let alice = soroban_sdk::Address::generate(&env);
-    
+
     // Kyber-768 public key
     let kyber_key = PublicKey {
         algorithm: KeyAlgorithm::Kyber768,
         key: Bytes::from_slice(&env, &[0u8; 1184]),
     };
-    
+
     // Dilithium-3 signing key
     let dilithium_key = PublicKey {
         algorithm: KeyAlgorithm::Dilithium3,
         key: Bytes::from_slice(&env, &[0u8; 1952]),
     };
-    
+
     let enc_key = PublicKey {
         algorithm: KeyAlgorithm::X25519,
         key: Bytes::from_slice(&env, &[1u8; 32]),
@@ -117,13 +117,13 @@ fn invalid_pq_key_length() {
     client.initialize(&admin);
 
     let alice = soroban_sdk::Address::generate(&env);
-    
+
     // Wrong length for Kyber-768
     let kyber_key = PublicKey {
         algorithm: KeyAlgorithm::Kyber768,
         key: Bytes::from_slice(&env, &[0u8; 1000]),
     };
-    
+
     let enc_key = PublicKey {
         algorithm: KeyAlgorithm::X25519,
         key: Bytes::from_slice(&env, &[1u8; 32]),

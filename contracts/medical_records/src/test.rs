@@ -1238,7 +1238,7 @@ fn test_quantum_performance_benchmark() {
 
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
-    
+
     let registry = Address::generate(&env);
     client.set_crypto_registry(&admin, &registry);
 
@@ -1257,7 +1257,17 @@ fn test_quantum_performance_benchmark() {
         wrapped_key: Bytes::from_slice(&env, &[1u8; 32]),
         pq_wrapped_key: None,
     });
-    client.add_encrypted_record(&doctor, &patient, &true, &tags, &String::from_str(&env, "Modern"), &String::from_str(&env, "Medication"), &ciphertext_ref, &ciphertext_hash, &classical_envs);
+    client.add_encrypted_record(
+        &doctor,
+        &patient,
+        &true,
+        &tags,
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &ciphertext_ref,
+        &ciphertext_hash,
+        &classical_envs,
+    );
     let classical_cost = env.budget().cpu_instruction_cost() - start_budget;
 
     // Benchmark hybrid PQC record (Kyber-768)
@@ -1270,7 +1280,17 @@ fn test_quantum_performance_benchmark() {
         wrapped_key: Bytes::from_slice(&env, &[1u8; 32]),
         pq_wrapped_key: Some(Bytes::from_slice(&env, &[0u8; 1184])),
     });
-    client.add_encrypted_record(&doctor, &patient, &true, &tags, &String::from_str(&env, "Modern"), &String::from_str(&env, "Medication"), &ciphertext_ref, &ciphertext_hash, &pq_envs);
+    client.add_encrypted_record(
+        &doctor,
+        &patient,
+        &true,
+        &tags,
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &ciphertext_ref,
+        &ciphertext_hash,
+        &pq_envs,
+    );
     let pq_cost = env.budget().cpu_instruction_cost() - start_budget_pq;
 
     // Output stats for "pro" visibility

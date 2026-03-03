@@ -345,13 +345,21 @@ fn test_quantum_threat_level_and_migration() {
         pq_wrapped_key: Some(Bytes::from_slice(&env, &[8; 1568])),
     };
 
-    t.client.upgrade_record_to_quantum_safe(&t.patient, &record_id, &pq_envelope);
+    t.client
+        .upgrade_record_to_quantum_safe(&t.patient, &record_id, &pq_envelope);
 
-    let fetched = t.client.get_encrypted_record_envelope(&t.patient, &record_id).unwrap();
+    let fetched = t
+        .client
+        .get_encrypted_record_envelope(&t.patient, &record_id)
+        .unwrap();
     assert!(fetched.pq_wrapped_key.is_some());
     assert_eq!(fetched.algorithm, EnvelopeAlgorithm::HybridX25519Kyber1024);
 
     let logs = t.client.get_crypto_audit_logs(&t.admin1, &0u32, &50u32);
-    assert!(logs.iter().any(|e| e.action == CryptoAuditAction::QuantumThreatDetected));
-    assert!(logs.iter().any(|e| e.action == CryptoAuditAction::QuantumMigrationCompleted));
+    assert!(logs
+        .iter()
+        .any(|e| e.action == CryptoAuditAction::QuantumThreatDetected));
+    assert!(logs
+        .iter()
+        .any(|e| e.action == CryptoAuditAction::QuantumMigrationCompleted));
 }
