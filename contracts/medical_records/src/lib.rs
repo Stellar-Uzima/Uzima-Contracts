@@ -313,6 +313,83 @@ pub struct EncryptedRecordHeader {
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
+pub enum GenomicFormat {
+    Fasta,
+    Vcf,
+    Bam,
+    Custom(u32),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CompressionAlgorithm {
+    None,
+    Gzip,
+    Zstd,
+    Lz4,
+    Custom(u32),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GenomicDatasetHeader {
+    pub dataset_id: u64,
+    pub patient_id: Address,
+    pub doctor_id: Address,
+    pub created_at: u64,
+    pub format: GenomicFormat,
+    pub compression: CompressionAlgorithm,
+    pub data_ref: String,
+    pub data_hash: BytesN<32>,
+    pub size_bytes: u64,
+    pub envelopes: Vec<KeyEnvelope>,
+    pub consent_token_id: Option<u64>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GeneAssociationEntry {
+    pub gene: String,
+    pub variant: String,
+    pub disease_code: String,
+    pub score_bps: u32,
+    pub method: String,
+    pub timestamp: u64,
+    pub dataset_id: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DrugResponseRule {
+    pub gene: String,
+    pub variant: String,
+    pub rxnorm_code: String,
+    pub recommendation: String,
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AncestryProfile {
+    pub patient: Address,
+    pub created_at: u64,
+    pub components: Map<String, u32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GenomicBreachEvent {
+    pub id: u64,
+    pub actor: Address,
+    pub patient: Address,
+    pub dataset_id: u64,
+    pub timestamp: u64,
+    pub severity_bps: u32,
+    pub description: String,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
 pub enum CryptoAuditAction {
     CryptoRegistrySet,
     HomomorphicRegistrySet,
@@ -432,6 +509,16 @@ pub enum DataKey {
     RateLimitCfg(u32),        // operation_id -> RateLimitConfig
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
+    // Genomics
+    NextGenomicId,
+    GenomicDataset(u64),
+    PatientGenomic(Address),
+    GeneAssociationsByGene(String),
+    GeneAssociationsByDisease(String),
+    DrugResponseKey(String),
+    Ancestry(Address),
+    GenomicBreachCount,
+    GenomicBreach(u64),
 }
 
 // ==================== Errors ====================
@@ -650,6 +737,293 @@ impl MedicalRecordsContract {
         };
 
         env.events().publish(("LOG", topic), entry);
+    }
+
+    pub fn add_genomic_dataset(
+        env: Env,
+        doctor: Address,
+        patient: Address,
+        format_code: u32,
+        compression_code: u32,
+        data_ref: String,
+        data_hash: BytesN<32>,
+        size_bytes: u64,
+        envelopes: Vec<KeyEnvelope>,
+        consent_token_id: Option<u64>,
+        is_confidential: bool,
+        tags: Vec<String>,
+    ) -> Result<u64, Error> {
+        doctor.require_auth();
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+        if paused {
+            return Err(Error::ContractPaused);
+        }
+        if doctor == patient {
+            return Err(Error::SameAddress);
+        }
+        let format = match format_code {
+            0 => GenomicFormat::Fasta,
+            1 => GenomicFormat::Vcf,
+            2 => GenomicFormat::Bam,
+            _ => GenomicFormat::Custom(format_code),
+        };
+        let compression = match compression_code {
+            0 => CompressionAlgorithm::None,
+            1 => CompressionAlgorithm::Gzip,
+            2 => CompressionAlgorithm::Zstd,
+            3 => CompressionAlgorithm::Lz4,
+            _ => CompressionAlgorithm::Custom(compression_code),
+        };
+        let encryption_required: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::EncryptionRequired)
+            .unwrap_or(false);
+        if encryption_required && envelopes.len() == 0 {
+            return Err(Error::EncryptionRequired);
+        }
+        let mut next_id: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::NextGenomicId)
+            .unwrap_or(1);
+        let header = GenomicDatasetHeader {
+            dataset_id: next_id,
+            patient_id: patient.clone(),
+            doctor_id: doctor.clone(),
+            created_at: env.ledger().timestamp(),
+            format,
+            compression,
+            data_ref: data_ref.clone(),
+            data_hash,
+            size_bytes,
+            envelopes,
+            consent_token_id,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::GenomicDataset(next_id), &header);
+        let mut list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientGenomic(patient.clone()))
+            .unwrap_or(Vec::new(&env));
+        list.push_back(next_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientGenomic(patient.clone()), &list);
+        env.storage()
+            .persistent()
+            .set(&DataKey::NextGenomicId, &(next_id + 1));
+        Self::log_info(
+            &env,
+            "ADD_GENOMIC",
+            Some(&doctor),
+            Some(&patient),
+            Some(next_id),
+            "ok",
+        );
+        Ok(next_id)
+    }
+
+    pub fn get_genomic_dataset(env: Env, dataset_id: u64) -> Result<GenomicDatasetHeader, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::GenomicDataset(dataset_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    pub fn list_patient_genomic(env: Env, patient: Address) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientGenomic(patient))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn add_gene_disease_association(
+        env: Env,
+        actor: Address,
+        gene: String,
+        variant: String,
+        disease_code: String,
+        score_bps: u32,
+        method: String,
+        dataset_id: u64,
+    ) -> Result<(), Error> {
+        actor.require_auth();
+        if score_bps > 10_000 {
+            return Err(Error::InvalidScore);
+        }
+        let entry = GeneAssociationEntry {
+            gene: gene.clone(),
+            variant,
+            disease_code: disease_code.clone(),
+            score_bps,
+            method,
+            timestamp: env.ledger().timestamp(),
+            dataset_id,
+        };
+        let mut by_gene: Vec<GeneAssociationEntry> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::GeneAssociationsByGene(gene.clone()))
+            .unwrap_or(Vec::new(&env));
+        by_gene.push_back(entry.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::GeneAssociationsByGene(gene), &by_gene);
+        let mut by_dis: Vec<GeneAssociationEntry> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::GeneAssociationsByDisease(disease_code.clone()))
+            .unwrap_or(Vec::new(&env));
+        by_dis.push_back(entry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GeneAssociationsByDisease(disease_code), &by_dis);
+        Ok(())
+    }
+
+    pub fn get_gene_associations_by_gene(
+        env: Env,
+        gene: String,
+    ) -> Vec<GeneAssociationEntry> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::GeneAssociationsByGene(gene))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_gene_associations_by_disease(
+        env: Env,
+        disease_code: String,
+    ) -> Vec<GeneAssociationEntry> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::GeneAssociationsByDisease(disease_code))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn set_drug_response_rule(env: Env, admin: Address, rule: DrugResponseRule) -> Result<(), Error> {
+        admin.require_auth();
+        let mut key = String::new(&env);
+        key.push_str(rule.gene.clone());
+        key.push_str(String::from_str(&env, ":").into());
+        key.push_str(rule.variant.clone());
+        key.push_str(String::from_str(&env, ":").into());
+        key.push_str(rule.rxnorm_code.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::DrugResponseKey(key.into()), &rule);
+        Ok(())
+    }
+
+    pub fn get_drug_response(
+        env: Env,
+        gene: String,
+        variant: String,
+        rxnorm_code: String,
+    ) -> Option<DrugResponseRule> {
+        let mut key = String::new(&env);
+        key.push_str(gene);
+        key.push_str(String::from_str(&env, ":").into());
+        key.push_str(variant);
+        key.push_str(String::from_str(&env, ":").into());
+        key.push_str(rxnorm_code);
+        env.storage()
+            .persistent()
+            .get(&DataKey::DrugResponseKey(key))
+    }
+
+    pub fn set_ancestry_profile(
+        env: Env,
+        patient: Address,
+        components: Map<String, u32>,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        let profile = AncestryProfile {
+            patient: patient.clone(),
+            created_at: env.ledger().timestamp(),
+            components,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::Ancestry(patient), &profile);
+        Ok(())
+    }
+
+    pub fn get_ancestry_profile(env: Env, patient: Address) -> Option<AncestryProfile> {
+        env.storage().persistent().get(&DataKey::Ancestry(patient))
+    }
+
+    pub fn grant_privacy_preserving_genomic_access(
+        env: Env,
+        issuer: Address,
+        requester: Address,
+        dataset_id: u64,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+        ttl_secs: Option<u64>,
+    ) -> Result<(), Error> {
+        issuer.require_auth();
+        let vk = vk_version;
+        let client = ZkVerifierClient::new(&env, env.storage().instance().get(&DataKey::ZkVerifierContract).ok_or(Error::NotInitialized)?);
+        let ok = client.verify_proof(env.clone(), vk, public_inputs_hash.clone(), proof);
+        if !ok {
+            return Err(Error::InvalidCredential);
+        }
+        let ttl = ttl_secs.unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS).min(MAX_ZK_GRANT_TTL_SECS);
+        let grant = ZkAccessGrant {
+            record_id: dataset_id,
+            requester: requester.clone(),
+            expires_at: env.ledger().timestamp().saturating_add(ttl),
+            nullifier: public_inputs_hash.clone(),
+            pseudonym: public_inputs_hash,
+            vk_version: vk,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkAccessGrant(requester, dataset_id), &grant);
+        Ok(())
+    }
+
+    pub fn report_genomic_breach(
+        env: Env,
+        actor: Address,
+        patient: Address,
+        dataset_id: u64,
+        severity_bps: u32,
+        description: String,
+    ) -> Result<u64, Error> {
+        actor.require_auth();
+        let mut count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::GenomicBreachCount)
+            .unwrap_or(0);
+        count = count.saturating_add(1);
+        let event = GenomicBreachEvent {
+            id: count,
+            actor,
+            patient: patient.clone(),
+            dataset_id,
+            timestamp: env.ledger().timestamp(),
+            severity_bps,
+            description,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::GenomicBreachCount, &count);
+        env.storage()
+            .persistent()
+            .set(&DataKey::GenomicBreach(count), &event);
+        env.events().publish(("GENOMIC", symbol_short!("BREACH")), event.clone());
+        Ok(count)
     }
 
     fn log_info(

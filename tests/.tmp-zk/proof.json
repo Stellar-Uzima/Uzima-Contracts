@@ -1,6 +1,6 @@
 {
   "schema": "uzima.zk.proof.v1",
-  "generated_at": "2026-02-21T15:23:58.955Z",
+  "generated_at": "2026-03-03T14:13:01.189Z",
   "purpose": "medical_record_access",
   "public_inputs": {
     "record_id": 5,
@@ -16,13 +16,13 @@
     "pseudonym": "0xb67fa8bdc799b9508dd4328d29d78ef7bc0b5fb836bf8ceb479ea4442520f8af",
     "vk_version": 2
   },
-  "proof_hex": "0xf6ca76f368f968f0d8badff068730d8d0db2c7e1967da0e05caccee3502d002b",
+  "proof_hex": "0x7e0a8ea4c49e4d59748b678927b2937e4b9a0ecfb43880d4bcccfef2a22c9f0a",
   "public_inputs_hash": "0x308475a628dd3ed6a4737528de7ad6033aa9e7fffdec686b005aeb02f781411d",
-  "proof_hash": "0xf69cb9f7422be57882ecf3e27fc9cdcd8ef93ab7586b55ed8e56c041357d6f42",
+  "proof_hash": "0x6ff1796244119dfae47d472d53cd7e922f78f8c5ad0c69c3dd9b39dc1f9ffab7",
   "attestation": {
     "vk_version": 2,
     "public_inputs_hash": "0x308475a628dd3ed6a4737528de7ad6033aa9e7fffdec686b005aeb02f781411d",
-    "proof_hash": "0xf69cb9f7422be57882ecf3e27fc9cdcd8ef93ab7586b55ed8e56c041357d6f42",
+    "proof_hash": "0x6ff1796244119dfae47d472d53cd7e922f78f8c5ad0c69c3dd9b39dc1f9ffab7",
     "verified": true,
     "ttl": 300
   }

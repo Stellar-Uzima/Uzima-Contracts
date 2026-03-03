@@ -65,6 +65,7 @@ pub enum DataType {
     Procedures,
     Allergies,
     Research,
+    Genomics,
     Financial,
 }
 
