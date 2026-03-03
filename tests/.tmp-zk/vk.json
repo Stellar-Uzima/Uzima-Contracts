@@ -1,0 +1,11 @@
+{
+  "schema": "uzima.zk.vk.v1",
+  "generated_at": "2026-02-21T15:23:56.531Z",
+  "circuit": "uzima_access_v1",
+  "vk_bytes_hex": "0x8b7195f2f17e755916badaf5c4e149c8240bfaf1e50ddd825644fd073f5ca38577eff4a616baf1766e4349cb38a23ec94b1fe5424cde206c2d67510488c8253a1510f7a29c2145ad4ece2250ad0af117a01a30cb9e61303bbd472fe94cc9f0057defff48d7fb0a99aa3056d6f5a1c791710af1e7dcc97dc551eeedc74b3d6a8e",
+  "vk_hash": "0x228bbefd3b06782dfd67758bde57243c19ef2e4852147d722672bc7425987aa2",
+  "circuit_id": "0x538066196103a015086dc4739821ffebe2c6af4401c28f8b2bbbc9a8efca9dc1",
+  "metadata_hash": "0x00b6f8568ca1345a0c2c6a2f4f5d258dd85c3a7d0980ed614e014fdd7c2849db",
+  "attestor": "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+  "vk_version": 1
+}
