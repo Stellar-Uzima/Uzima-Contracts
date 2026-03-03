@@ -281,7 +281,9 @@ impl MedicalImagingContract {
         env.storage().instance().set(&NEXT_ANN, &1u64);
         env.storage().instance().set(&NEXT_DGN, &1u64);
         env.storage().instance().set(&NEXT_DSE, &1u64);
-        env.storage().instance().set(&SAFE_DSE, &safety_threshold_mgy);
+        env.storage()
+            .instance()
+            .set(&SAFE_DSE, &safety_threshold_mgy);
         env.storage()
             .persistent()
             .set(&DataKey::ImageIds, &Vec::<u64>::new(&env));
@@ -319,7 +321,9 @@ impl MedicalImagingContract {
         if safety_threshold_mgy == 0 {
             return Err(Error::InvalidInput);
         }
-        env.storage().instance().set(&SAFE_DSE, &safety_threshold_mgy);
+        env.storage()
+            .instance()
+            .set(&SAFE_DSE, &safety_threshold_mgy);
         Ok(true)
     }
 
@@ -509,9 +513,7 @@ impl MedicalImagingContract {
             }
         }
 
-        let quality = in_segment
-            .saturating_mul(10_000)
-            .saturating_div(bins.len());
+        let quality = in_segment.saturating_mul(10_000).saturating_div(bins.len());
 
         let result = ProcessingResult {
             image_id,
@@ -557,9 +559,10 @@ impl MedicalImagingContract {
             created_at: env.ledger().timestamp(),
         };
 
-        env.storage().persistent().set(&DataKey::Model(model_id), &model);
-        env.events()
-            .publish((symbol_short!("IMG_MDL"),), caller);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Model(model_id), &model);
+        env.events().publish((symbol_short!("IMG_MDL"),), caller);
         Ok(true)
     }
 
@@ -686,11 +689,7 @@ impl MedicalImagingContract {
         Ok(true)
     }
 
-    pub fn verify_share_access(
-        env: Env,
-        image_id: u64,
-        viewer: Address,
-    ) -> Result<bool, Error> {
+    pub fn verify_share_access(env: Env, image_id: u64, viewer: Address) -> Result<bool, Error> {
         let grant: ImageShareGrant = env
             .storage()
             .persistent()
@@ -852,7 +851,9 @@ impl MedicalImagingContract {
             linked_at: env.ledger().timestamp(),
         };
 
-        env.storage().persistent().set(&DataKey::Link(image_id), &link);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Link(image_id), &link);
         env.events()
             .publish((symbol_short!("IMG_LINK"),), (image_id, medical_record_id));
         Ok(true)
@@ -933,7 +934,9 @@ impl MedicalImagingContract {
     }
 
     pub fn get_image_by_sop(env: Env, sop_uid_hash: BytesN<32>) -> Option<u64> {
-        env.storage().persistent().get(&DataKey::SopLookup(sop_uid_hash))
+        env.storage()
+            .persistent()
+            .get(&DataKey::SopLookup(sop_uid_hash))
     }
 
     pub fn list_images_by_patient(env: Env, patient: Address) -> Vec<u64> {
@@ -997,11 +1000,7 @@ impl MedicalImagingContract {
             .get(&DataKey::Diagnosis(diagnosis_id))
     }
 
-    pub fn get_share_grant(
-        env: Env,
-        image_id: u64,
-        grantee: Address,
-    ) -> Option<ImageShareGrant> {
+    pub fn get_share_grant(env: Env, image_id: u64, grantee: Address) -> Option<ImageShareGrant> {
         env.storage()
             .persistent()
             .get(&DataKey::Share(image_id, grantee))
@@ -1094,7 +1093,11 @@ impl MedicalImagingContract {
     }
 
     fn append_u64(env: &Env, key: DataKey, value: u64) {
-        let mut values: Vec<u64> = env.storage().persistent().get(&key).unwrap_or(Vec::new(env));
+        let mut values: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(env));
         if !values.iter().any(|item| item == value) {
             values.push_back(value);
             env.storage().persistent().set(&key, &values);
