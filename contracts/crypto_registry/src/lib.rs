@@ -17,7 +17,7 @@ use soroban_sdk::{
 /// Notes:
 /// - This contract stores public keys and metadata only. Cryptographic operations
 ///   are performed off-chain (E2E encryption, PQC, HE, MPC).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum KeyAlgorithm {
     // Classical
@@ -25,10 +25,32 @@ pub enum KeyAlgorithm {
     Ed25519,
     Secp256k1,
 
-    // Post-quantum preparations (stored for hybrid / future upgrade)
+    // Post-quantum preparations (Lattice-based)
     Kyber768,
+    Kyber1024,
+    Dilithium2,
     Dilithium3,
+    Dilithium5,
     Falcon512,
+    Falcon1024,
+
+    // Hash-based signatures
+    XMSS,
+    SphincsPlus,
+
+    // Code-based cryptography
+    McEliece348864,
+    McEliece460896,
+    McEliece6688128,
+    McEliece6960119,
+    McEliece8192128,
+
+    // Multivariate cryptography
+    Rainbow,
+    GeMSS,
+
+    // Quantum-safe KDF
+    HkdfSha3,
 
     // For forward-compatibility
     Custom(u32),
@@ -280,7 +302,8 @@ impl CryptoRegistry {
         if len == 0 {
             return Err(Error::InvalidKey);
         }
-        if len > 2048 {
+        // McEliece public keys are large, increase limit.
+        if len > 1048576 {
             return Err(Error::InvalidKeyLength);
         }
 
@@ -294,6 +317,31 @@ impl CryptoRegistry {
             KeyAlgorithm::Secp256k1 => {
                 // Compressed: 33, uncompressed: 65. Allow either.
                 if len != 33 && len != 65 {
+                    return Err(Error::InvalidKeyLength);
+                }
+            }
+            KeyAlgorithm::Kyber768 => {
+                if len != 1184 {
+                    return Err(Error::InvalidKeyLength);
+                }
+            }
+            KeyAlgorithm::Kyber1024 => {
+                if len != 1568 {
+                    return Err(Error::InvalidKeyLength);
+                }
+            }
+            KeyAlgorithm::Dilithium2 => {
+                if len != 1312 {
+                    return Err(Error::InvalidKeyLength);
+                }
+            }
+            KeyAlgorithm::Dilithium3 => {
+                if len != 1952 {
+                    return Err(Error::InvalidKeyLength);
+                }
+            }
+            KeyAlgorithm::Dilithium5 => {
+                if len != 2592 {
                     return Err(Error::InvalidKeyLength);
                 }
             }
@@ -331,9 +379,31 @@ impl CryptoRegistry {
             KeyAlgorithm::X25519 => (1u32, None),
             KeyAlgorithm::Ed25519 => (2u32, None),
             KeyAlgorithm::Secp256k1 => (3u32, None),
+
             KeyAlgorithm::Kyber768 => (101u32, None),
-            KeyAlgorithm::Dilithium3 => (102u32, None),
-            KeyAlgorithm::Falcon512 => (103u32, None),
+            KeyAlgorithm::Kyber1024 => (102u32, None),
+
+            KeyAlgorithm::Dilithium2 => (111u32, None),
+            KeyAlgorithm::Dilithium3 => (112u32, None),
+            KeyAlgorithm::Dilithium5 => (113u32, None),
+
+            KeyAlgorithm::Falcon512 => (121u32, None),
+            KeyAlgorithm::Falcon1024 => (122u32, None),
+
+            KeyAlgorithm::XMSS => (201u32, None),
+            KeyAlgorithm::SphincsPlus => (202u32, None),
+
+            KeyAlgorithm::McEliece348864 => (301u32, None),
+            KeyAlgorithm::McEliece460896 => (302u32, None),
+            KeyAlgorithm::McEliece6688128 => (303u32, None),
+            KeyAlgorithm::McEliece6960119 => (304u32, None),
+            KeyAlgorithm::McEliece8192128 => (305u32, None),
+
+            KeyAlgorithm::Rainbow => (401u32, None),
+            KeyAlgorithm::GeMSS => (402u32, None),
+
+            KeyAlgorithm::HkdfSha3 => (501u32, None),
+
             KeyAlgorithm::Custom(v) => (10_000u32, Some(*v)),
         };
 

@@ -118,6 +118,7 @@ pub struct UserProfile {
     pub role: Role,
     pub active: bool,
     pub did_reference: Option<String>,
+    pub qkd_capable: bool,
 }
 
 #[derive(Clone)]
@@ -256,13 +257,18 @@ pub struct RecoveryProposal {
 
 // ==================== Cryptographic (E2E / PQ) Types ====================
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum EnvelopeAlgorithm {
     X25519,
     Kyber768,
+    Kyber1024,
     /// Hybrid classical + PQ (wrapped keys stored in both fields).
     HybridX25519Kyber768,
+    HybridX25519Kyber1024,
+    /// Advanced hybrid with code-based crypto.
+    HybridKyberMcEliece,
+    McEliece,
     Custom(u32),
 }
 
@@ -401,6 +407,9 @@ pub enum CryptoAuditAction {
     CryptoConfigProposed,
     CryptoConfigApproved,
     CryptoConfigExecuted,
+    QuantumThreatDetected,
+    QuantumMigrationStarted,
+    QuantumMigrationCompleted,
 }
 
 #[derive(Clone)]
@@ -509,6 +518,7 @@ pub enum DataKey {
     RateLimitCfg(u32),        // operation_id -> RateLimitConfig
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
+<<<<<<< HEAD
     // Genomics
     NextGenomicId,
     GenomicDataset(u64),
@@ -519,6 +529,9 @@ pub enum DataKey {
     Ancestry(Address),
     GenomicBreachCount,
     GenomicBreach(u64),
+=======
+    QuantumThreatLevel,       // 0-100 (percentage)
+>>>>>>> 49afb30d16a6849d4677a9311e7da5acfb66d6c7
 }
 
 #[derive(Clone)]
@@ -1137,6 +1150,7 @@ impl MedicalRecordsContract {
                 role: Role::Admin,
                 active: true,
                 did_reference: None,
+                qkd_capable: false,
             },
         );
         env.storage().persistent().set(&DataKey::Users, &users);
@@ -1215,6 +1229,7 @@ impl MedicalRecordsContract {
                     role,
                     active: true,
                     did_reference: profile.did_reference,
+                    qkd_capable: profile.qkd_capable,
                 },
             );
             events::emit_user_role_updated(
@@ -1239,6 +1254,7 @@ impl MedicalRecordsContract {
                     role,
                     active: true,
                     did_reference: None,
+                    qkd_capable: false,
                 },
             );
             events::emit_user_created(&env, caller.clone(), user.clone(), role_str, None);
@@ -1254,6 +1270,31 @@ impl MedicalRecordsContract {
 
         env.storage().persistent().set(&DataKey::Users, &users);
         Ok(true)
+    }
+
+    pub fn set_user_qkd_status(
+        env: Env,
+        admin: Address,
+        user: Address,
+        capable: bool,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut users = Self::read_users(&env);
+        let mut profile = users.get(user.clone()).ok_or(Error::NotAuthorized)?;
+        profile.qkd_capable = capable;
+        users.set(user.clone(), profile);
+        env.storage().persistent().set(&DataKey::Users, &users);
+        Ok(())
+    }
+
+    pub fn is_user_qkd_capable(env: Env, user: Address) -> bool {
+        Self::read_users(&env)
+            .get(user)
+            .map(|p| p.qkd_capable)
+            .unwrap_or(false)
     }
 
     pub fn deactivate_user(env: Env, caller: Address, user: Address) -> Result<bool, Error> {
@@ -2840,6 +2881,112 @@ impl MedicalRecordsContract {
             .storage()
             .persistent()
             .get(&DataKey::CryptoConfigProposal(proposal_id)))
+    }
+
+    // ---------------------------------------------------------------------
+    // Quantum Threat Detection & Response
+    // ---------------------------------------------------------------------
+
+    pub fn set_quantum_threat_level(env: Env, admin: Address, level: u32) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        if level > 100 {
+            return Err(Error::InvalidInput);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::QuantumThreatLevel, &level);
+
+        if level >= 50 {
+            // High threat level: automatically require PQ envelopes for new records.
+            env.storage()
+                .persistent()
+                .set(&DataKey::RequirePqEnvelopes, &true);
+        }
+
+        let mut payload = Bytes::new(&env);
+        payload.append(&Bytes::from_slice(&env, &level.to_be_bytes()));
+        let details_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+
+        Self::log_crypto_event(
+            &env,
+            &admin,
+            CryptoAuditAction::QuantumThreatDetected,
+            None,
+            details_hash,
+            None,
+        );
+
+        Ok(())
+    }
+
+    pub fn get_quantum_threat_level(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::QuantumThreatLevel)
+            .unwrap_or(0)
+    }
+
+    /// Migrates a record to include a new quantum-safe envelope.
+    /// Accessible by the patient or an authorized doctor.
+    pub fn upgrade_record_to_quantum_safe(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        new_envelope: KeyEnvelope,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        let mut record: EncryptedRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id && caller != record.doctor_id {
+            return Err(Error::NotAuthorized);
+        }
+
+        if new_envelope.pq_wrapped_key.is_none() {
+            return Err(Error::InvalidInput);
+        }
+
+        // Check if recipient already has an envelope, update it or add new.
+        let mut found = false;
+        let mut new_envelopes = Vec::new(&env);
+        for envlp in record.envelopes.iter() {
+            if envlp.recipient == new_envelope.recipient {
+                new_envelopes.push_back(new_envelope.clone());
+                found = true;
+            } else {
+                new_envelopes.push_back(envlp);
+            }
+        }
+
+        if !found {
+            new_envelopes.push_back(new_envelope);
+        }
+
+        record.envelopes = new_envelopes;
+        env.storage()
+            .persistent()
+            .set(&DataKey::EncryptedRecord(record_id), &record);
+
+        Self::log_crypto_event(
+            &env,
+            &caller,
+            CryptoAuditAction::QuantumMigrationCompleted,
+            Some(record_id),
+            record.ciphertext_hash,
+            None,
+        );
+
+        Ok(())
     }
 
     fn hash_crypto_config_proposal(
