@@ -515,10 +515,26 @@ pub enum DataKey {
     PatientGenomic(Address),
     GeneAssociationsByGene(String),
     GeneAssociationsByDisease(String),
-    DrugResponseKey(String),
+    DrugResponseKey(String, String, String),
     Ancestry(Address),
     GenomicBreachCount,
     GenomicBreach(u64),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AddGenomicDatasetConfig {
+    pub doctor: Address,
+    pub patient: Address,
+    pub format_code: u32,
+    pub compression_code: u32,
+    pub data_ref: String,
+    pub data_hash: BytesN<32>,
+    pub size_bytes: u64,
+    pub envelopes: Vec<KeyEnvelope>,
+    pub consent_token_id: Option<u64>,
+    pub is_confidential: bool,
+    pub tags: Vec<String>,
 }
 
 // ==================== Errors ====================
@@ -741,19 +757,9 @@ impl MedicalRecordsContract {
 
     pub fn add_genomic_dataset(
         env: Env,
-        doctor: Address,
-        patient: Address,
-        format_code: u32,
-        compression_code: u32,
-        data_ref: String,
-        data_hash: BytesN<32>,
-        size_bytes: u64,
-        envelopes: Vec<KeyEnvelope>,
-        consent_token_id: Option<u64>,
-        is_confidential: bool,
-        tags: Vec<String>,
+        config: AddGenomicDatasetConfig,
     ) -> Result<u64, Error> {
-        doctor.require_auth();
+        config.doctor.require_auth();
         let paused: bool = env
             .storage()
             .instance()
@@ -762,47 +768,47 @@ impl MedicalRecordsContract {
         if paused {
             return Err(Error::ContractPaused);
         }
-        if doctor == patient {
+        if config.doctor == config.patient {
             return Err(Error::SameAddress);
         }
-        let format = match format_code {
+        let format = match config.format_code {
             0 => GenomicFormat::Fasta,
             1 => GenomicFormat::Vcf,
             2 => GenomicFormat::Bam,
-            _ => GenomicFormat::Custom(format_code),
+            _ => GenomicFormat::Custom(config.format_code),
         };
-        let compression = match compression_code {
+        let compression = match config.compression_code {
             0 => CompressionAlgorithm::None,
             1 => CompressionAlgorithm::Gzip,
             2 => CompressionAlgorithm::Zstd,
             3 => CompressionAlgorithm::Lz4,
-            _ => CompressionAlgorithm::Custom(compression_code),
+            _ => CompressionAlgorithm::Custom(config.compression_code),
         };
         let encryption_required: bool = env
             .storage()
             .instance()
             .get(&DataKey::EncryptionRequired)
             .unwrap_or(false);
-        if encryption_required && envelopes.len() == 0 {
+        if encryption_required && config.envelopes.is_empty() {
             return Err(Error::EncryptionRequired);
         }
-        let mut next_id: u64 = env
+        let next_id: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::NextGenomicId)
             .unwrap_or(1);
         let header = GenomicDatasetHeader {
             dataset_id: next_id,
-            patient_id: patient.clone(),
-            doctor_id: doctor.clone(),
+            patient_id: config.patient.clone(),
+            doctor_id: config.doctor.clone(),
             created_at: env.ledger().timestamp(),
             format,
             compression,
-            data_ref: data_ref.clone(),
-            data_hash,
-            size_bytes,
-            envelopes,
-            consent_token_id,
+            data_ref: config.data_ref.clone(),
+            data_hash: config.data_hash,
+            size_bytes: config.size_bytes,
+            envelopes: config.envelopes,
+            consent_token_id: config.consent_token_id,
         };
         env.storage()
             .persistent()
@@ -810,20 +816,20 @@ impl MedicalRecordsContract {
         let mut list: Vec<u64> = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientGenomic(patient.clone()))
+            .get(&DataKey::PatientGenomic(config.patient.clone()))
             .unwrap_or(Vec::new(&env));
         list.push_back(next_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientGenomic(patient.clone()), &list);
+            .set(&DataKey::PatientGenomic(config.patient.clone()), &list);
         env.storage()
             .persistent()
             .set(&DataKey::NextGenomicId, &(next_id + 1));
         Self::log_info(
             &env,
             "ADD_GENOMIC",
-            Some(&doctor),
-            Some(&patient),
+            Some(&config.doctor),
+            Some(&config.patient),
             Some(next_id),
             "ok",
         );
@@ -908,17 +914,20 @@ impl MedicalRecordsContract {
             .unwrap_or(Vec::new(&env))
     }
 
-    pub fn set_drug_response_rule(env: Env, admin: Address, rule: DrugResponseRule) -> Result<(), Error> {
+    pub fn set_drug_response_rule(
+        env: Env,
+        admin: Address,
+        rule: DrugResponseRule,
+    ) -> Result<(), Error> {
         admin.require_auth();
-        let mut key = String::new(&env);
-        key.push_str(rule.gene.clone());
-        key.push_str(String::from_str(&env, ":").into());
-        key.push_str(rule.variant.clone());
-        key.push_str(String::from_str(&env, ":").into());
-        key.push_str(rule.rxnorm_code.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::DrugResponseKey(key.into()), &rule);
+        env.storage().persistent().set(
+            &DataKey::DrugResponseKey(
+                rule.gene.clone(),
+                rule.variant.clone(),
+                rule.rxnorm_code.clone(),
+            ),
+            &rule,
+        );
         Ok(())
     }
 
@@ -928,15 +937,9 @@ impl MedicalRecordsContract {
         variant: String,
         rxnorm_code: String,
     ) -> Option<DrugResponseRule> {
-        let mut key = String::new(&env);
-        key.push_str(gene);
-        key.push_str(String::from_str(&env, ":").into());
-        key.push_str(variant);
-        key.push_str(String::from_str(&env, ":").into());
-        key.push_str(rxnorm_code);
         env.storage()
             .persistent()
-            .get(&DataKey::DrugResponseKey(key))
+            .get(&DataKey::DrugResponseKey(gene, variant, rxnorm_code))
     }
 
     pub fn set_ancestry_profile(
@@ -972,8 +975,13 @@ impl MedicalRecordsContract {
     ) -> Result<(), Error> {
         issuer.require_auth();
         let vk = vk_version;
-        let client = ZkVerifierClient::new(&env, env.storage().instance().get(&DataKey::ZkVerifierContract).ok_or(Error::NotInitialized)?);
-        let ok = client.verify_proof(env.clone(), vk, public_inputs_hash.clone(), proof);
+        let addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::ZkVerifierContract)
+            .ok_or(Error::NotInitialized)?;
+        let client = ZkVerifierClient::new(&env, &addr);
+        let ok = client.verify_proof(&vk, &public_inputs_hash, &proof);
         if !ok {
             return Err(Error::InvalidCredential);
         }
@@ -1022,7 +1030,8 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::GenomicBreach(count), &event);
-        env.events().publish(("GENOMIC", symbol_short!("BREACH")), event.clone());
+        env.events()
+            .publish(("GENOMIC", symbol_short!("BREACH")), event.clone());
         Ok(count)
     }
 

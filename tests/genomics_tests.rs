@@ -2,6 +2,7 @@ use soroban_sdk::{Address, Bytes, BytesN, Env, Map, String, Vec};
 use medical_records::{
     MedicalRecordsContract, MedicalRecordsContractClient, Role, KeyEnvelope, EnvelopeAlgorithm,
     GenomicDatasetHeader, GeneAssociationEntry, DrugResponseRule, AncestryProfile,
+    AddGenomicDatasetConfig,
 };
 use zk_verifier::{ZkVerifierContract, ZkVerifierContractClient};
 
@@ -36,30 +37,34 @@ pub mod genomics_tests {
         let envelopes = vec![&env, envelope];
 
         let dataset_id_fasta = medical.add_genomic_dataset(
-            &doctor,
-            &patient,
-            &0u32,
-            &1u32,
-            &String::from_str(&env, "ipfs://fasta"),
-            &BytesN::from_array(&env, &[1u8; 32]),
-            &1234u64,
-            &envelopes,
-            &None,
-            &true,
-            &Vec::new(&env),
+            &AddGenomicDatasetConfig {
+                doctor: doctor.clone(),
+                patient: patient.clone(),
+                format_code: 0u32,
+                compression_code: 1u32,
+                data_ref: String::from_str(&env, "ipfs://fasta"),
+                data_hash: BytesN::from_array(&env, &[1u8; 32]),
+                size_bytes: 1234u64,
+                envelopes: envelopes.clone(),
+                consent_token_id: None,
+                is_confidential: true,
+                tags: Vec::new(&env),
+            }
         ).unwrap();
         let dataset_id_vcf = medical.add_genomic_dataset(
-            &doctor,
-            &patient,
-            &1u32,
-            &2u32,
-            &String::from_str(&env, "ipfs://vcf"),
-            &BytesN::from_array(&env, &[2u8; 32]),
-            &2345u64,
-            &envelopes,
-            &None,
-            &true,
-            &Vec::new(&env),
+            &AddGenomicDatasetConfig {
+                doctor: doctor.clone(),
+                patient: patient.clone(),
+                format_code: 1u32,
+                compression_code: 2u32,
+                data_ref: String::from_str(&env, "ipfs://vcf"),
+                data_hash: BytesN::from_array(&env, &[2u8; 32]),
+                size_bytes: 2345u64,
+                envelopes: envelopes.clone(),
+                consent_token_id: None,
+                is_confidential: true,
+                tags: Vec::new(&env),
+            }
         ).unwrap();
         let header_fasta: GenomicDatasetHeader = medical.get_genomic_dataset(&dataset_id_fasta).unwrap();
         assert_eq!(header_fasta.dataset_id, dataset_id_fasta);
@@ -142,17 +147,19 @@ pub mod genomics_tests {
         };
         let envelopes = vec![&env, envelope];
         let dataset_id = medical.add_genomic_dataset(
-            &doctor,
-            &patient,
-            &1u32,
-            &1u32,
-            &String::from_str(&env, "ipfs://vcf"),
-            &BytesN::from_array(&env, &[9u8; 32]),
-            &3456u64,
-            &envelopes,
-            &None,
-            &true,
-            &Vec::new(&env),
+            &AddGenomicDatasetConfig {
+                doctor: doctor.clone(),
+                patient: patient.clone(),
+                format_code: 1u32,
+                compression_code: 1u32,
+                data_ref: String::from_str(&env, "ipfs://vcf"),
+                data_hash: BytesN::from_array(&env, &[9u8; 32]),
+                size_bytes: 3456u64,
+                envelopes: envelopes.clone(),
+                consent_token_id: None,
+                is_confidential: true,
+                tags: Vec::new(&env),
+            }
         ).unwrap();
 
         let public_inputs_hash = BytesN::from_array(&env, &[7u8; 32]);
