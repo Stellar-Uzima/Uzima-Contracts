@@ -16,52 +16,52 @@ use soroban_sdk::{
 #[contracttype]
 pub enum CountryCode {
     US,
-    CA, // Canada
-    MX, // Mexico
-    GB, // United Kingdom
-    DE, // Germany
-    FR, // France
-    IT, // Italy
-    ES, // Spain
-    NL, // Netherlands
-    BE, // Belgium
-    CH, // Switzerland
-    AT, // Austria
-    SE, // Sweden
-    NO, // Norway
-    DK, // Denmark
-    FI, // Finland
-    PL, // Poland
-    CZ, // Czech Republic
-    HU, // Hungary
-    GR, // Greece
-    PT, // Portugal
-    IE, // Ireland
-    LU, // Luxembourg
-    AU, // Australia
-    NZ, // New Zealand
-    JP, // Japan
-    SG, // Singapore
-    IN, // India
-    BR, // Brazil
-    AR, // Argentina
-    CL, // Chile
-    CO, // Colombia
-    PE, // Peru
-    ZA, // South Africa
-    EG, // Egypt
-    IL, // Israel
-    AE, // United Arab Emirates
-    SA, // Saudi Arabia
-    TH, // Thailand
-    MY, // Malaysia
-    PH, // Philippines
-    VN, // Vietnam
-    ID, // Indonesia
-    KR, // South Korea
-    CN, // China
-    HK, // Hong Kong
-    TW, // Taiwan
+    CA,          // Canada
+    MX,          // Mexico
+    GB,          // United Kingdom
+    DE,          // Germany
+    FR,          // France
+    IT,          // Italy
+    ES,          // Spain
+    NL,          // Netherlands
+    BE,          // Belgium
+    CH,          // Switzerland
+    AT,          // Austria
+    SE,          // Sweden
+    NO,          // Norway
+    DK,          // Denmark
+    FI,          // Finland
+    PL,          // Poland
+    CZ,          // Czech Republic
+    HU,          // Hungary
+    GR,          // Greece
+    PT,          // Portugal
+    IE,          // Ireland
+    LU,          // Luxembourg
+    AU,          // Australia
+    NZ,          // New Zealand
+    JP,          // Japan
+    SG,          // Singapore
+    IN,          // India
+    BR,          // Brazil
+    AR,          // Argentina
+    CL,          // Chile
+    CO,          // Colombia
+    PE,          // Peru
+    ZA,          // South Africa
+    EG,          // Egypt
+    IL,          // Israel
+    AE,          // United Arab Emirates
+    SA,          // Saudi Arabia
+    TH,          // Thailand
+    MY,          // Malaysia
+    PH,          // Philippines
+    VN,          // Vietnam
+    ID,          // Indonesia
+    KR,          // South Korea
+    CN,          // China
+    HK,          // Hong Kong
+    TW,          // Taiwan
     Custom(u16), // For other countries using numeric code
 }
 
@@ -106,17 +106,17 @@ pub enum DataTransferMechanism {
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum RegulatoryFramework {
-    HIPAA,           // US Health Insurance Portability and Accountability Act
-    GDPR,            // EU General Data Protection Regulation
-    PIPEDA,          // Canada Personal Information Protection and Electronic Documents Act
-    APPI,            // Japan Act on the Protection of Personal Information
-    PDPA,            // Singapore Personal Data Protection Act
-    DPA,            // UK Data Protection Act
-    LGPD,           // Brazil Lei Geral de Proteção de Dados
-    POPIA,          // South Africa Protection of Personal Information Act
-    HIPAA_GDPR,     // Combined compliance
-    GDPR_PIPEDA,    // EU-Canada compliance
-    Custom,         // Custom framework
+    HIPAA,       // US Health Insurance Portability and Accountability Act
+    GDPR,        // EU General Data Protection Regulation
+    PIPEDA,      // Canada Personal Information Protection and Electronic Documents Act
+    APPI,        // Japan Act on the Protection of Personal Information
+    PDPA,        // Singapore Personal Data Protection Act
+    DPA,         // UK Data Protection Act
+    LGPD,        // Brazil Lei Geral de Proteção de Dados
+    POPIA,       // South Africa Protection of Personal Information Act
+    HIPAA_GDPR,  // Combined compliance
+    GDPR_PIPEDA, // EU-Canada compliance
+    Custom,      // Custom framework
 }
 
 /// Cross-Border License
@@ -180,7 +180,7 @@ pub struct ComplianceViolation {
     pub violation_id: u64,
     pub compliance_record_id: u64,
     pub violation_type: String, // "data_breach", "unlicensed_practice", "consent_missing", etc.
-    pub severity: String, // "low", "medium", "high", "critical"
+    pub severity: String,       // "low", "medium", "high", "critical"
     pub description: String,
     pub regulatory_citation: String,
     pub fine_amount: Option<u64>,
@@ -252,7 +252,7 @@ pub struct LanguageProficiencyCertificate {
     pub provider: Address,
     pub language: String,
     pub proficiency_level: String, // "A1", "A2", "B1", "B2", "C1", "C2"
-    pub test_type: String, // "medical", "general", "professional"
+    pub test_type: String,         // "medical", "general", "professional"
     pub test_date: u64,
     pub expiry_date: u64,
     pub testing_organization: String,
@@ -356,16 +356,24 @@ impl CrossBorderComplianceContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
         env.storage().persistent().set(&PAUSED, &false);
         env.storage().persistent().set(&LICENSE_COUNTER, &0u64);
         env.storage().persistent().set(&COMPLIANCE_COUNTER, &0u64);
-        env.storage().persistent().set(&TRANSFER_AGREEMENT_COUNTER, &0u64);
-        env.storage().persistent().set(&LANGUAGE_CERT_COUNTER, &0u64);
-        env.storage().persistent().set(&TAX_OBLIGATION_COUNTER, &0u64);
+        env.storage()
+            .persistent()
+            .set(&TRANSFER_AGREEMENT_COUNTER, &0u64);
+        env.storage()
+            .persistent()
+            .set(&LANGUAGE_CERT_COUNTER, &0u64);
+        env.storage()
+            .persistent()
+            .set(&TAX_OBLIGATION_COUNTER, &0u64);
 
         // Initialize country regulations
         Self::initialize_country_regulations(&env)?;
@@ -406,9 +414,10 @@ impl CrossBorderComplianceContract {
             .unwrap_or(Map::new(&env));
 
         for license in licenses.values() {
-            if license.provider == provider 
-                && license.license_type == license_type 
-                && license.issuing_country == issuing_country {
+            if license.provider == provider
+                && license.license_type == license_type
+                && license.issuing_country == issuing_country
+            {
                 return Err(Error::LicenseAlreadyExists);
             }
         }
@@ -482,11 +491,13 @@ impl CrossBorderComplianceContract {
             .get(&CROSS_BORDER_LICENSES)
             .ok_or(Error::LicenseNotFound)?;
 
-        let mut license = licenses
-            .get(license_id)
-            .ok_or(Error::LicenseNotFound)?;
+        let mut license = licenses.get(license_id).ok_or(Error::LicenseNotFound)?;
 
-        license.verification_status = if approved { "verified".to_string() } else { "rejected".to_string() };
+        license.verification_status = if approved {
+            "verified".to_string()
+        } else {
+            "rejected".to_string()
+        };
         if !approved {
             license.is_active = false;
         }
@@ -525,7 +536,12 @@ impl CrossBorderComplianceContract {
         }
 
         // Verify provider has valid license for cross-border practice
-        if !Self::has_valid_cross_border_license(&env, provider.clone(), provider_country, patient_country)? {
+        if !Self::has_valid_cross_border_license(
+            &env,
+            provider.clone(),
+            provider_country,
+            patient_country,
+        )? {
             return Err(Error::LicenseNotFound);
         }
 
@@ -535,7 +551,8 @@ impl CrossBorderComplianceContract {
         }
 
         // Determine applicable regulatory framework
-        let regulatory_framework = Self::determine_regulatory_framework(&env, provider_country, patient_country)?;
+        let regulatory_framework =
+            Self::determine_regulatory_framework(&env, provider_country, patient_country)?;
 
         // Check compliance requirements
         let compliance_status = Self::check_compliance_requirements(
@@ -569,7 +586,11 @@ impl CrossBorderComplianceContract {
             audit_frequency: "quarterly".to_string(),
             last_audit_date: timestamp,
             next_audit_date: timestamp + 7776000, // 90 days from now
-            compliance_score: Self::calculate_compliance_score(&env, provider.clone(), patient_country)?,
+            compliance_score: Self::calculate_compliance_score(
+                &env,
+                provider.clone(),
+                patient_country,
+            )?,
             violations: Vec::new(&env),
             created_at: timestamp,
             updated_at: timestamp,
@@ -730,7 +751,7 @@ impl CrossBorderComplianceContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -752,7 +773,7 @@ impl CrossBorderComplianceContract {
             .persistent()
             .get(&CURRENCY_RATES)
             .unwrap_or(Map::new(&env));
-        
+
         let key = format!("{}_{}", from_currency, to_currency);
         rates.set(key, exchange_rate);
         env.storage().persistent().set(&CURRENCY_RATES, &rates);
@@ -832,11 +853,16 @@ impl CrossBorderComplianceContract {
             .get(&COMPLIANCE_RECORDS)
             .ok_or(Error::ComplianceRecordNotFound)?;
 
-        compliance_records.get(record_id).ok_or(Error::ComplianceRecordNotFound)
+        compliance_records
+            .get(record_id)
+            .ok_or(Error::ComplianceRecordNotFound)
     }
 
     /// Get provider's cross-border licenses
-    pub fn get_provider_licenses(env: Env, provider: Address) -> Result<Vec<CrossBorderLicense>, Error> {
+    pub fn get_provider_licenses(
+        env: Env,
+        provider: Address,
+    ) -> Result<Vec<CrossBorderLicense>, Error> {
         let licenses: Map<u64, CrossBorderLicense> = env
             .storage()
             .persistent()
@@ -854,7 +880,10 @@ impl CrossBorderComplianceContract {
     }
 
     /// Get country regulation
-    pub fn get_country_regulation(env: Env, country: CountryCode) -> Result<CountryRegulation, Error> {
+    pub fn get_country_regulation(
+        env: Env,
+        country: CountryCode,
+    ) -> Result<CountryRegulation, Error> {
         let regulations: Map<CountryCode, CountryRegulation> = env
             .storage()
             .persistent()
@@ -865,7 +894,11 @@ impl CrossBorderComplianceContract {
     }
 
     /// Get currency exchange rate
-    pub fn get_exchange_rate(env: Env, from_currency: String, to_currency: String) -> Result<CurrencyExchangeRate, Error> {
+    pub fn get_exchange_rate(
+        env: Env,
+        from_currency: String,
+        to_currency: String,
+    ) -> Result<CurrencyExchangeRate, Error> {
         let rates: Map<String, CurrencyExchangeRate> = env
             .storage()
             .persistent()
@@ -885,7 +918,12 @@ impl CrossBorderComplianceContract {
         consultation_type: String,
     ) -> Result<bool, Error> {
         // Check if provider has valid license
-        if !Self::has_valid_cross_border_license(&env, provider.clone(), provider_country, patient_country)? {
+        if !Self::has_valid_cross_border_license(
+            &env,
+            provider.clone(),
+            provider_country,
+            patient_country,
+        )? {
             return Ok(false);
         }
 
@@ -903,7 +941,10 @@ impl CrossBorderComplianceContract {
         }
 
         // Check consultation type restrictions
-        if patient_regulation.restricted_treatments.contains(&consultation_type) {
+        if patient_regulation
+            .restricted_treatments
+            .contains(&consultation_type)
+        {
             return Ok(false);
         }
 
@@ -950,14 +991,17 @@ impl CrossBorderComplianceContract {
         let timestamp = env.ledger().timestamp();
 
         for license in licenses.values() {
-            if license.provider == provider 
+            if license.provider == provider
                 && license.issuing_country == provider_country
                 && license.is_active
                 && license.verification_status == "verified"
-                && license.expiration_date > timestamp {
-                
+                && license.expiration_date > timestamp
+            {
                 // Check if license covers the patient country
-                if license.scope_of_practice.contains(&format!("{:?}", patient_country)) {
+                if license
+                    .scope_of_practice
+                    .contains(&format!("{:?}", patient_country))
+                {
                     return Ok(true);
                 }
             }
@@ -998,7 +1042,7 @@ impl CrossBorderComplianceContract {
     ) -> Result<ComplianceStatus, Error> {
         // Simplified compliance check
         // In production, this would be much more comprehensive
-        
+
         // Check if both countries allow cross-border telemedicine
         let provider_regulation = Self::get_country_regulation(&env, provider_country)?;
         let patient_regulation = Self::get_country_regulation(&env, patient_country)?;
@@ -1016,17 +1060,29 @@ impl CrossBorderComplianceContract {
         Ok(ComplianceStatus::Compliant)
     }
 
-    fn calculate_compliance_score(env: &Env, provider: Address, patient_country: CountryCode) -> Result<u8, Error> {
+    fn calculate_compliance_score(
+        env: &Env,
+        provider: Address,
+        patient_country: CountryCode,
+    ) -> Result<u8, Error> {
         // Simplified compliance score calculation
         let mut score = 80u8; // Base score
 
         // Add points for valid licenses
-        if Self::has_valid_cross_border_license(&env, provider.clone(), CountryCode::US, patient_country).unwrap_or(false) {
+        if Self::has_valid_cross_border_license(
+            &env,
+            provider.clone(),
+            CountryCode::US,
+            patient_country,
+        )
+        .unwrap_or(false)
+        {
             score += 10;
         }
 
         // Add points for language proficiency
-        if Self::has_required_language_proficiency(&env, provider, patient_country).unwrap_or(false) {
+        if Self::has_required_language_proficiency(&env, provider, patient_country).unwrap_or(false)
+        {
             score += 10;
         }
 
@@ -1048,8 +1104,7 @@ impl CrossBorderComplianceContract {
         let patient_regulation = Self::get_country_regulation(&env, patient_country)?;
 
         // Simplified logic - in production would be more complex
-        Ok(provider_country != patient_country 
-            || patient_regulation.data_localization_required)
+        Ok(provider_country != patient_country || patient_regulation.data_localization_required)
     }
 
     fn create_data_transfer_agreement(
@@ -1070,10 +1125,18 @@ impl CrossBorderComplianceContract {
             exporter_country,
             importer_country,
             transfer_mechanism,
-            data_types: vec![env, "medical_records".to_string(), "consultation_data".to_string()],
+            data_types: vec![
+                env,
+                "medical_records".to_string(),
+                "consultation_data".to_string(),
+            ],
             purpose: "telemedicine_consultation".to_string(),
             retention_period_days: 2555, // 7 years
-            security_measures: vec![env, "end_to_end_encryption".to_string(), "access_logging".to_string()],
+            security_measures: vec![
+                env,
+                "end_to_end_encryption".to_string(),
+                "access_logging".to_string(),
+            ],
             breach_notification_timeline: 72, // 72 hours
             subprocessor_restrictions: Vec::new(env),
             audit_rights: true,
@@ -1099,10 +1162,14 @@ impl CrossBorderComplianceContract {
         Ok(())
     }
 
-    fn has_required_language_proficiency(env: &Env, provider: Address, patient_country: CountryCode) -> Result<bool, Error> {
+    fn has_required_language_proficiency(
+        env: &Env,
+        provider: Address,
+        patient_country: CountryCode,
+    ) -> Result<bool, Error> {
         // Get required languages for patient country
         let regulation = Self::get_country_regulation(&env, patient_country)?;
-        
+
         if regulation.language_requirements.is_empty() {
             return Ok(true); // No specific language requirements
         }
@@ -1118,17 +1185,18 @@ impl CrossBorderComplianceContract {
 
         for required_lang in regulation.language_requirements.iter() {
             let mut has_proficiency = false;
-            
+
             for certificate in certificates.values() {
-                if certificate.provider == provider 
+                if certificate.provider == provider
                     && certificate.language == *required_lang
                     && certificate.verified
-                    && certificate.expiry_date > timestamp {
-                    
+                    && certificate.expiry_date > timestamp
+                {
                     // Check proficiency level (B2 or higher typically required)
-                    if certificate.proficiency_level == "B2" 
-                        || certificate.proficiency_level == "C1" 
-                        || certificate.proficiency_level == "C2" {
+                    if certificate.proficiency_level == "B2"
+                        || certificate.proficiency_level == "C1"
+                        || certificate.proficiency_level == "C2"
+                    {
                         has_proficiency = true;
                         break;
                     }
@@ -1149,10 +1217,10 @@ impl CrossBorderComplianceContract {
             (CountryCode::US, "income") => Ok(0.30), // 30% federal + state average
             (CountryCode::US, "service") => Ok(0.10), // 10% service tax
             (CountryCode::GB, "income") => Ok(0.20), // 20% basic rate
-            (CountryCode::GB, "vat") => Ok(0.20), // 20% VAT
+            (CountryCode::GB, "vat") => Ok(0.20),    // 20% VAT
             (CountryCode::CA, "income") => Ok(0.25), // 25% average
             (CountryCode::CA, "service") => Ok(0.05), // 5% GST
-            _ => Ok(0.20), // Default 20%
+            _ => Ok(0.20),                           // Default 20%
         }
     }
 
@@ -1161,79 +1229,112 @@ impl CrossBorderComplianceContract {
         let timestamp = env.ledger().timestamp();
 
         // US Regulations
-        regulations.set(CountryCode::US, CountryRegulation {
-            country: CountryCode::US,
-            regulatory_framework: RegulatoryFramework::HIPAA,
-            telemedicine_allowed: true,
-            cross_border_allowed: true,
-            license_requirements: vec![env, LicenseType::MedicalLicense, LicenseType::TelemedicineLicense],
-            consent_requirements: vec![env, "informed_consent".to_string(), "hipaa_authorization".to_string()],
-            data_residency_required: false,
-            data_localization_required: false,
-            encryption_standards: vec![env, "AES-256".to_string()],
-            audit_requirements: vec![env, "access_logs".to_string(), "security_logs".to_string()],
-            reporting_requirements: vec![env, "breach_notification".to_string()],
-            restricted_treatments: Vec::new(env),
-            controlled_substance_rules: "dea_registration_required".to_string(),
-            emergency_exceptions: vec![env, "life_threatening".to_string()],
-            language_requirements: Vec::new(env),
-            cultural_competency_required: false,
-            local_supervision_required: false,
-            prescription_rules: "state_license_required".to_string(),
-            insurance_requirements: vec![env, "malpractice_insurance".to_string()],
-            tax_obligations: vec![env, "income_tax".to_string(), "self_employment_tax".to_string()],
-            last_updated: timestamp,
-        });
+        regulations.set(
+            CountryCode::US,
+            CountryRegulation {
+                country: CountryCode::US,
+                regulatory_framework: RegulatoryFramework::HIPAA,
+                telemedicine_allowed: true,
+                cross_border_allowed: true,
+                license_requirements: vec![
+                    env,
+                    LicenseType::MedicalLicense,
+                    LicenseType::TelemedicineLicense,
+                ],
+                consent_requirements: vec![
+                    env,
+                    "informed_consent".to_string(),
+                    "hipaa_authorization".to_string(),
+                ],
+                data_residency_required: false,
+                data_localization_required: false,
+                encryption_standards: vec![env, "AES-256".to_string()],
+                audit_requirements: vec![
+                    env,
+                    "access_logs".to_string(),
+                    "security_logs".to_string(),
+                ],
+                reporting_requirements: vec![env, "breach_notification".to_string()],
+                restricted_treatments: Vec::new(env),
+                controlled_substance_rules: "dea_registration_required".to_string(),
+                emergency_exceptions: vec![env, "life_threatening".to_string()],
+                language_requirements: Vec::new(env),
+                cultural_competency_required: false,
+                local_supervision_required: false,
+                prescription_rules: "state_license_required".to_string(),
+                insurance_requirements: vec![env, "malpractice_insurance".to_string()],
+                tax_obligations: vec![
+                    env,
+                    "income_tax".to_string(),
+                    "self_employment_tax".to_string(),
+                ],
+                last_updated: timestamp,
+            },
+        );
 
         // UK Regulations
-        regulations.set(CountryCode::GB, CountryRegulation {
-            country: CountryCode::GB,
-            regulatory_framework: RegulatoryFramework::DPA,
-            telemedicine_allowed: true,
-            cross_border_allowed: true,
-            license_requirements: vec![env, LicenseType::MedicalLicense, LicenseType::TelemedicineLicense],
-            consent_requirements: vec![env, "explicit_consent".to_string(), "data_processing_consent".to_string()],
-            data_residency_required: false,
-            data_localization_required: false,
-            encryption_standards: vec![env, "AES-256".to_string()],
-            audit_requirements: vec![env, "data_protection_impact_assessment".to_string()],
-            reporting_requirements: vec![env, "breach_notification_72h".to_string()],
-            restricted_treatments: Vec::new(env),
-            controlled_substance_rules: "home_office_registration".to_string(),
-            emergency_exceptions: vec![env, "emergency_treatment".to_string()],
-            language_requirements: vec![env, "English".to_string()],
-            cultural_competency_required: true,
-            local_supervision_required: false,
-            prescription_rules: "gmc_registration_required".to_string(),
-            insurance_requirements: vec![env, "professional_indemnity".to_string()],
-            tax_obligations: vec![env, "income_tax".to_string(), "vat".to_string()],
-            last_updated: timestamp,
-        });
+        regulations.set(
+            CountryCode::GB,
+            CountryRegulation {
+                country: CountryCode::GB,
+                regulatory_framework: RegulatoryFramework::DPA,
+                telemedicine_allowed: true,
+                cross_border_allowed: true,
+                license_requirements: vec![
+                    env,
+                    LicenseType::MedicalLicense,
+                    LicenseType::TelemedicineLicense,
+                ],
+                consent_requirements: vec![
+                    env,
+                    "explicit_consent".to_string(),
+                    "data_processing_consent".to_string(),
+                ],
+                data_residency_required: false,
+                data_localization_required: false,
+                encryption_standards: vec![env, "AES-256".to_string()],
+                audit_requirements: vec![env, "data_protection_impact_assessment".to_string()],
+                reporting_requirements: vec![env, "breach_notification_72h".to_string()],
+                restricted_treatments: Vec::new(env),
+                controlled_substance_rules: "home_office_registration".to_string(),
+                emergency_exceptions: vec![env, "emergency_treatment".to_string()],
+                language_requirements: vec![env, "English".to_string()],
+                cultural_competency_required: true,
+                local_supervision_required: false,
+                prescription_rules: "gmc_registration_required".to_string(),
+                insurance_requirements: vec![env, "professional_indemnity".to_string()],
+                tax_obligations: vec![env, "income_tax".to_string(), "vat".to_string()],
+                last_updated: timestamp,
+            },
+        );
 
         // Canada Regulations
-        regulations.set(CountryCode::CA, CountryRegulation {
-            country: CountryCode::CA,
-            regulatory_framework: RegulatoryFramework::PIPEDA,
-            telemedicine_allowed: true,
-            cross_border_allowed: true,
-            license_requirements: vec![env, LicenseType::MedicalLicense],
-            consent_requirements: vec![env, "meaningful_consent".to_string()],
-            data_residency_required: false,
-            data_localization_required: false,
-            encryption_standards: vec![env, "AES-256".to_string()],
-            audit_requirements: vec![env, "privacy_impact_assessment".to_string()],
-            reporting_requirements: vec![env, "breach_notification".to_string()],
-            restricted_treatments: Vec::new(env),
-            controlled_substance_rules: "controlled_drugs_regulation".to_string(),
-            emergency_exceptions: vec![env, "emergency_care".to_string()],
-            language_requirements: vec![env, "English".to_string(), "French".to_string()],
-            cultural_competency_required: true,
-            local_supervision_required: false,
-            prescription_rules: "provincial_license_required".to_string(),
-            insurance_requirements: vec![env, "malpractice_insurance".to_string()],
-            tax_obligations: vec![env, "income_tax".to_string(), "gst".to_string()],
-            last_updated: timestamp,
-        });
+        regulations.set(
+            CountryCode::CA,
+            CountryRegulation {
+                country: CountryCode::CA,
+                regulatory_framework: RegulatoryFramework::PIPEDA,
+                telemedicine_allowed: true,
+                cross_border_allowed: true,
+                license_requirements: vec![env, LicenseType::MedicalLicense],
+                consent_requirements: vec![env, "meaningful_consent".to_string()],
+                data_residency_required: false,
+                data_localization_required: false,
+                encryption_standards: vec![env, "AES-256".to_string()],
+                audit_requirements: vec![env, "privacy_impact_assessment".to_string()],
+                reporting_requirements: vec![env, "breach_notification".to_string()],
+                restricted_treatments: Vec::new(env),
+                controlled_substance_rules: "controlled_drugs_regulation".to_string(),
+                emergency_exceptions: vec![env, "emergency_care".to_string()],
+                language_requirements: vec![env, "English".to_string(), "French".to_string()],
+                cultural_competency_required: true,
+                local_supervision_required: false,
+                prescription_rules: "provincial_license_required".to_string(),
+                insurance_requirements: vec![env, "malpractice_insurance".to_string()],
+                tax_obligations: vec![env, "income_tax".to_string(), "gst".to_string()],
+                last_updated: timestamp,
+            },
+        );
 
         env.storage()
             .persistent()
@@ -1271,7 +1372,9 @@ impl CrossBorderComplianceContract {
             .get(&TRANSFER_AGREEMENT_COUNTER)
             .unwrap_or(0);
         let next = count + 1;
-        env.storage().persistent().set(&TRANSFER_AGREEMENT_COUNTER, &next);
+        env.storage()
+            .persistent()
+            .set(&TRANSFER_AGREEMENT_COUNTER, &next);
         next
     }
 
@@ -1282,7 +1385,9 @@ impl CrossBorderComplianceContract {
             .get(&LANGUAGE_CERT_COUNTER)
             .unwrap_or(0);
         let next = count + 1;
-        env.storage().persistent().set(&LANGUAGE_CERT_COUNTER, &next);
+        env.storage()
+            .persistent()
+            .set(&LANGUAGE_CERT_COUNTER, &next);
         next
     }
 
@@ -1293,7 +1398,9 @@ impl CrossBorderComplianceContract {
             .get(&TAX_OBLIGATION_COUNTER)
             .unwrap_or(0);
         let next = count + 1;
-        env.storage().persistent().set(&TAX_OBLIGATION_COUNTER, &next);
+        env.storage()
+            .persistent()
+            .set(&TAX_OBLIGATION_COUNTER, &next);
         next
     }
 
@@ -1304,7 +1411,7 @@ impl CrossBorderComplianceContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1320,7 +1427,7 @@ impl CrossBorderComplianceContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1331,10 +1438,10 @@ impl CrossBorderComplianceContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

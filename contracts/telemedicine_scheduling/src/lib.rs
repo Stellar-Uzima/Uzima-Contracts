@@ -5,9 +5,18 @@ mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, vec, Address, Env, Map, String, Symbol,
+    Vec,
 };
+
+// Helper function for string formatting
+fn format_as_str(env: &Env, template: &str, arg: u64) -> String {
+    let mut result = String::from_str(env, template);
+    let arg_str = &String::from_str(env, &arg.to_string());
+    // Simple string concatenation for basic formatting
+    result.push_str(env, arg_str);
+    result
+}
 
 // ==================== Telemedicine Scheduling Types ====================
 
@@ -87,8 +96,8 @@ pub struct TimeSlot {
     pub available: bool,
     pub appointment_type: AppointmentType,
     pub modality: ConsultationModality,
-    pub max_patients: u8,
-    pub current_patients: u8,
+    pub max_consecutive: u32,
+    pub current_patients: u32,
     pub location: String, // Virtual room ID or physical location
     pub special_requirements: Vec<String>,
     pub created_at: u64,
@@ -116,7 +125,7 @@ pub struct Appointment {
     pub insurance_verified: bool,
     pub pre_visit_instructions: Vec<String>,
     pub post_visit_instructions: Vec<String>,
-    pub reschedule_count: u8,
+    pub reschedule_count: u32,
     pub cancellation_reason: Option<String>,
     pub no_show_reason: Option<String>,
     pub created_at: u64,
@@ -135,10 +144,11 @@ pub struct RecurringSeries {
     pub recurrence_pattern: RecurrencePattern,
     pub start_date: u64,
     pub end_date: u64,
+    pub min_gap: u32,
     pub preferred_times: Vec<String>, // e.g., ["09:00", "14:00"]
-    pub preferred_days: Vec<String>, // e.g., ["Monday", "Wednesday", "Friday"]
-    pub total_sessions: u16,
-    pub completed_sessions: u16,
+    pub preferred_days: Vec<String>,  // e.g., ["Monday", "Wednesday", "Friday"]
+    pub total_sessions: u32,
+    pub completed_sessions: u32,
     pub status: String, // "active", "paused", "completed", "cancelled"
     pub notes: String,
     pub created_at: u64,
@@ -155,11 +165,11 @@ pub struct WaitingListEntry {
     pub priority: PriorityLevel,
     pub preferred_date_range: (u64, u64), // (start_date, end_date)
     pub preferred_times: Vec<String>,
-    pub flexibility: String, // "strict", "moderate", "flexible"
+    pub flexibility: u32, // "strict", "moderate", "flexible"
     pub reason: String,
     pub added_at: u64,
     pub expires_at: u64,
-    pub notified_count: u8,
+    pub notified_count: u32,
 }
 
 /// Provider Availability
@@ -169,12 +179,12 @@ pub struct ProviderAvailability {
     pub availability_id: u64,
     pub provider: Address,
     pub day_of_week: String, // "Monday", "Tuesday", etc.
-    pub start_time: String, // "09:00"
-    pub end_time: String,   // "17:00"
+    pub start_time: String,  // "09:00"
+    pub end_time: String,    // "17:00"
     pub available_modalities: Vec<ConsultationModality>,
     pub available_appointment_types: Vec<AppointmentType>,
-    pub max_patients_per_slot: u8,
-    pub buffer_time_minutes: u8,
+    pub max_patients_per_slot: u32,
+    pub buffer_time_minutes: u32,
     pub is_active: bool,
     pub special_notes: String,
     pub created_at: u64,
@@ -239,19 +249,19 @@ pub struct TelemedicineRoom {
 // Storage Keys
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const TIME_SLOTS: Symbol = symbol_short!("SLOTS");
-const APPOINTMENTS: Symbol = symbol_short!("APPOINTMENTS");
+const APPOINTMENTS: Symbol = symbol_short!("APPOINT");
 const RECURRING_SERIES: Symbol = symbol_short!("SERIES");
 const WAITING_LIST: Symbol = symbol_short!("WAITING");
-const PROVIDER_AVAILABILITY: Symbol = symbol_short!("AVAILABILITY");
+const PROVIDER_AVAILABILITY: Symbol = symbol_short!("AVAIL");
 const SCHEDULE_CONFLICTS: Symbol = symbol_short!("CONFLICTS");
 const APPOINTMENT_REMINDERS: Symbol = symbol_short!("REMINDERS");
 const TELEMEDICINE_ROOMS: Symbol = symbol_short!("ROOMS");
 const SLOT_COUNTER: Symbol = symbol_short!("SLOT_CNT");
 const APPOINTMENT_COUNTER: Symbol = symbol_short!("APPT_CNT");
-const SERIES_COUNTER: Symbol = symbol_short!("SERIES_CNT");
+const SERIES_COUNTER: Symbol = symbol_short!("SERIES");
 const WAITING_COUNTER: Symbol = symbol_short!("WAIT_CNT");
-const CONFLICT_COUNTER: Symbol = symbol_short!("CONFLICT_CNT");
-const REMINDER_COUNTER: Symbol = symbol_short!("REMINDER_CNT");
+const CONFLICT_COUNTER: Symbol = symbol_short!("CONFLICT");
+const REMINDER_COUNTER: Symbol = symbol_short!("REMINDER");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
 const MEDICAL_RECORDS_CONTRACT: Symbol = symbol_short!("MEDICAL");
@@ -307,7 +317,9 @@ impl TelemedicineSchedulingContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -331,7 +343,7 @@ impl TelemedicineSchedulingContract {
         slot_duration_minutes: u32,
         appointment_types: Vec<AppointmentType>,
         modalities: Vec<ConsultationModality>,
-        max_patients_per_slot: u8,
+        max_patients_per_slot: u32,
         special_requirements: Vec<String>,
     ) -> Result<Vec<u64>, Error> {
         provider.require_auth();
@@ -374,11 +386,17 @@ impl TelemedicineSchedulingContract {
                     end_time: current_time + slot_duration_seconds,
                     duration_minutes: slot_duration_minutes,
                     available: true,
-                    appointment_type: appointment_types.get(0).unwrap_or(&AppointmentType::InitialConsultation).clone(),
-                    modality: modalities.get(0).unwrap_or(&ConsultationModality::Video).clone(),
+                    appointment_type: appointment_types
+                        .get(0)
+                        .unwrap_or(&AppointmentType::InitialConsultation)
+                        .clone(),
+                    modality: modalities
+                        .get(0)
+                        .unwrap_or(&ConsultationModality::Video)
+                        .clone(),
                     max_patients: max_patients_per_slot,
                     current_patients: 0,
-                    location: format!("room_{}", slot_id),
+                    location: &String::from_str(&env, &format_as_str(&env, "room_{}", slot_id)),
                     special_requirements: special_requirements.clone(),
                     created_at: env.ledger().timestamp(),
                 };
@@ -437,9 +455,7 @@ impl TelemedicineSchedulingContract {
             .get(&TIME_SLOTS)
             .ok_or(Error::SlotNotFound)?;
 
-        let mut slot = slots
-            .get(slot_id)
-            .ok_or(Error::SlotNotFound)?;
+        let mut slot = slots.get(slot_id).ok_or(Error::SlotNotFound)?;
 
         if !slot.available || slot.current_patients >= slot.max_patients {
             return Err(Error::SlotAlreadyBooked);
@@ -485,9 +501,7 @@ impl TelemedicineSchedulingContract {
             .get(&APPOINTMENTS)
             .unwrap_or(Map::new(&env));
         appointments.set(appointment_id, appointment);
-        env.storage()
-            .persistent()
-            .set(&APPOINTMENTS, &appointments);
+        env.storage().persistent().set(&APPOINTMENTS, &appointments);
 
         // Update slot
         slot.current_patients += 1;
@@ -498,14 +512,25 @@ impl TelemedicineSchedulingContract {
         env.storage().persistent().set(&TIME_SLOTS, &slots);
 
         // Create telemedicine room
-        Self::create_telemedicine_room(&env, appointment_id, patient.clone(), slot.provider.clone(), modality)?;
+        Self::create_telemedicine_room(
+            &env,
+            appointment_id,
+            patient.clone(),
+            slot.provider.clone(),
+            modality,
+        )?;
 
         // Schedule reminders
-        Self::schedule_appointment_reminders(&env, appointment_id, patient.clone(), slot.start_time)?;
+        Self::schedule_appointment_reminders(
+            &env,
+            appointment_id,
+            patient.clone(),
+            slot.start_time,
+        )?;
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Appointment"), symbol_short!("Booked")),
+            (symbol_short!("Appt"), symbol_short!("Booked")),
             (appointment_id, patient, slot.provider),
         );
 
@@ -513,7 +538,11 @@ impl TelemedicineSchedulingContract {
     }
 
     /// Confirm appointment
-    pub fn confirm_appointment(env: Env, appointment_id: u64, patient: Address) -> Result<bool, Error> {
+    pub fn confirm_appointment(
+        env: Env,
+        appointment_id: u64,
+        patient: Address,
+    ) -> Result<bool, Error> {
         patient.require_auth();
 
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
@@ -542,13 +571,11 @@ impl TelemedicineSchedulingContract {
         appointment.updated_at = env.ledger().timestamp();
 
         appointments.set(appointment_id, appointment);
-        env.storage()
-            .persistent()
-            .set(&APPOINTMENTS, &appointments);
+        env.storage().persistent().set(&APPOINTMENTS, &appointments);
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Appointment"), symbol_short!("Confirmed")),
+            (symbol_short!("Appt"), symbol_short!("Confirmed")),
             (appointment_id, patient),
         );
 
@@ -584,7 +611,9 @@ impl TelemedicineSchedulingContract {
             return Err(Error::NotAuthorized);
         }
 
-        if appointment.status != AppointmentStatus::Scheduled && appointment.status != AppointmentStatus::Confirmed {
+        if appointment.status != AppointmentStatus::Scheduled
+            && appointment.status != AppointmentStatus::Confirmed
+        {
             return Err(Error::CannotReschedule);
         }
 
@@ -599,9 +628,7 @@ impl TelemedicineSchedulingContract {
             .get(&TIME_SLOTS)
             .ok_or(Error::SlotNotFound)?;
 
-        let mut new_slot = slots
-            .get(new_slot_id)
-            .ok_or(Error::SlotNotFound)?;
+        let mut new_slot = slots.get(new_slot_id).ok_or(Error::SlotNotFound)?;
 
         if !new_slot.available || new_slot.current_patients >= new_slot.max_patients {
             return Err(Error::SlotAlreadyBooked);
@@ -639,19 +666,22 @@ impl TelemedicineSchedulingContract {
         appointment.updated_at = env.ledger().timestamp();
 
         appointments.set(appointment_id, appointment);
-        env.storage()
-            .persistent()
-            .set(&APPOINTMENTS, &appointments);
+        env.storage().persistent().set(&APPOINTMENTS, &appointments);
 
         // Update telemedicine room
-        Self::update_telemedicine_room(&env, appointment_id, new_slot.start_time, new_slot.end_time)?;
+        Self::update_telemedicine_room(
+            &env,
+            appointment_id,
+            new_slot.start_time,
+            new_slot.end_time,
+        )?;
 
         // Reschedule reminders
         Self::reschedule_appointment_reminders(&env, appointment_id, new_slot.start_time)?;
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Appointment"), symbol_short!("Rescheduled")),
+            (symbol_short!("Appt"), symbol_short!("Rescheduled")),
             (appointment_id, requester, new_slot_id),
         );
 
@@ -686,7 +716,9 @@ impl TelemedicineSchedulingContract {
             return Err(Error::NotAuthorized);
         }
 
-        if appointment.status == AppointmentStatus::Completed || appointment.status == AppointmentStatus::Cancelled {
+        if appointment.status == AppointmentStatus::Completed
+            || appointment.status == AppointmentStatus::Cancelled
+        {
             return Err(Error::CannotCancel);
         }
 
@@ -696,9 +728,7 @@ impl TelemedicineSchedulingContract {
         appointment.updated_at = env.ledger().timestamp();
 
         appointments.set(appointment_id, appointment);
-        env.storage()
-            .persistent()
-            .set(&APPOINTMENTS, &appointments);
+        env.storage().persistent().set(&APPOINTMENTS, &appointments);
 
         // Release time slot
         let mut slots: Map<u64, TimeSlot> = env
@@ -707,9 +737,7 @@ impl TelemedicineSchedulingContract {
             .get(&TIME_SLOTS)
             .ok_or(Error::SlotNotFound)?;
 
-        let mut slot = slots
-            .get(appointment.slot_id)
-            .ok_or(Error::SlotNotFound)?;
+        let mut slot = slots.get(appointment.slot_id).ok_or(Error::SlotNotFound)?;
 
         slot.current_patients -= 1;
         slot.available = true;
@@ -727,7 +755,7 @@ impl TelemedicineSchedulingContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Appointment"), symbol_short!("Cancelled")),
+            (symbol_short!("Appt"), symbol_short!("Cancelled")),
             (appointment_id, requester),
         );
 
@@ -776,13 +804,11 @@ impl TelemedicineSchedulingContract {
             .get(&WAITING_LIST)
             .unwrap_or(Vec::new(&env));
         waiting_list.push_back(waiting_entry);
-        env.storage()
-            .persistent()
-            .set(&WAITING_LIST, &waiting_list);
+        env.storage().persistent().set(&WAITING_LIST, &waiting_list);
 
         // Emit event
         env.events().publish(
-            (symbol_short!("WaitingList"), symbol_short!("Added")),
+            (symbol_short!("WaitList"), symbol_short!("Added")),
             (entry_id, patient),
         );
 
@@ -867,7 +893,9 @@ impl TelemedicineSchedulingContract {
             .get(&APPOINTMENTS)
             .ok_or(Error::AppointmentNotFound)?;
 
-        appointments.get(appointment_id).ok_or(Error::AppointmentNotFound)
+        appointments
+            .get(appointment_id)
+            .ok_or(Error::AppointmentNotFound)
     }
 
     /// Get time slot details
@@ -894,7 +922,12 @@ impl TelemedicineSchedulingContract {
     }
 
     /// Get provider's upcoming appointments
-    pub fn get_provider_appointments(env: Env, provider: Address, start_date: u64, end_date: u64) -> Result<Vec<Appointment>, Error> {
+    pub fn get_provider_appointments(
+        env: Env,
+        provider: Address,
+        start_date: u64,
+        end_date: u64,
+    ) -> Result<Vec<Appointment>, Error> {
         let appointments: Map<u64, Appointment> = env
             .storage()
             .persistent()
@@ -903,9 +936,10 @@ impl TelemedicineSchedulingContract {
 
         let mut provider_appointments = Vec::new(&env);
         for appointment in appointments.values() {
-            if appointment.provider == provider 
-                && appointment.scheduled_time >= start_date 
-                && appointment.scheduled_time <= end_date {
+            if appointment.provider == provider
+                && appointment.scheduled_time >= start_date
+                && appointment.scheduled_time <= end_date
+            {
                 provider_appointments.push_back(appointment);
             }
         }
@@ -914,7 +948,12 @@ impl TelemedicineSchedulingContract {
     }
 
     /// Get patient's upcoming appointments
-    pub fn get_patient_appointments(env: Env, patient: Address, start_date: u64, end_date: u64) -> Result<Vec<Appointment>, Error> {
+    pub fn get_patient_appointments(
+        env: Env,
+        patient: Address,
+        start_date: u64,
+        end_date: u64,
+    ) -> Result<Vec<Appointment>, Error> {
         let appointments: Map<u64, Appointment> = env
             .storage()
             .persistent()
@@ -923,9 +962,10 @@ impl TelemedicineSchedulingContract {
 
         let mut patient_appointments = Vec::new(&env);
         for appointment in appointments.values() {
-            if appointment.patient == patient 
-                && appointment.scheduled_time >= start_date 
-                && appointment.scheduled_time <= end_date {
+            if appointment.patient == patient
+                && appointment.scheduled_time >= start_date
+                && appointment.scheduled_time <= end_date
+            {
                 patient_appointments.push_back(appointment);
             }
         }
@@ -964,7 +1004,12 @@ impl TelemedicineSchedulingContract {
         Ok(true)
     }
 
-    fn has_patient_conflict(env: &Env, patient: Address, start_time: u64, end_time: u64) -> Result<bool, Error> {
+    fn has_patient_conflict(
+        env: &Env,
+        patient: Address,
+        start_time: u64,
+        end_time: u64,
+    ) -> Result<bool, Error> {
         let appointments: Map<u64, Appointment> = env
             .storage()
             .persistent()
@@ -974,11 +1019,14 @@ impl TelemedicineSchedulingContract {
         for appointment in appointments.values() {
             if appointment.patient == patient {
                 // Check for time overlap
-                if (start_time < appointment.scheduled_time + (appointment.duration_minutes as u64 * 60))
-                    && (end_time > appointment.scheduled_time) {
+                if (start_time
+                    < appointment.scheduled_time + (appointment.duration_minutes as u64 * 60))
+                    && (end_time > appointment.scheduled_time)
+                {
                     // Check if appointment is still active
-                    if appointment.status != AppointmentStatus::Cancelled 
-                        && appointment.status != AppointmentStatus::Completed {
+                    if appointment.status != AppointmentStatus::Cancelled
+                        && appointment.status != AppointmentStatus::Completed
+                    {
                         return Ok(true);
                     }
                 }
@@ -995,8 +1043,12 @@ impl TelemedicineSchedulingContract {
         provider: Address,
         modality: ConsultationModality,
     ) -> Result<(), Error> {
-        let room_id = format!("room_{}", appointment_id);
+        let mut room_id = String::from_str(&env, "room_");
+        room_id.push_str(&env, &String::from_str(&env, &appointment_id.to_string()));
         let timestamp = env.ledger().timestamp();
+
+        let mut link = String::from_str(&env, "https://meet.uzima.health/");
+        link.push_str(&env, &room_id);
 
         let room = TelemedicineRoom {
             room_id: room_id.clone(),
@@ -1004,17 +1056,17 @@ impl TelemedicineSchedulingContract {
             provider,
             patient,
             room_type: modality,
-            meeting_link: format!("https://meet.uzima.health/{}", room_id),
+            meeting_link: link,
             access_code: Self::generate_access_code(env),
             host_key: Self::generate_host_key(env),
             start_time: timestamp,
             end_time: timestamp + 3600, // Default 1 hour
-            max_participants: 3, // Patient, provider, optional interpreter
+            max_participants: 3,        // Patient, provider, optional interpreter
             recording_enabled: true,
             chat_enabled: true,
             screen_share_enabled: true,
             waiting_room_enabled: true,
-            status: "created".to_string(),
+            status: String::from_str(&env, "created"),
             created_at: timestamp,
         };
 
@@ -1024,14 +1076,17 @@ impl TelemedicineSchedulingContract {
             .get(&TELEMEDICINE_ROOMS)
             .unwrap_or(Map::new(env));
         rooms.set(room_id, room);
-        env.storage()
-            .persistent()
-            .set(&TELEMEDICINE_ROOMS, &rooms);
+        env.storage().persistent().set(&TELEMEDICINE_ROOMS, &rooms);
 
         Ok(())
     }
 
-    fn update_telemedicine_room(env: &Env, appointment_id: u64, start_time: u64, end_time: u64) -> Result<(), Error> {
+    fn update_telemedicine_room(
+        env: &Env,
+        appointment_id: u64,
+        start_time: u64,
+        end_time: u64,
+    ) -> Result<(), Error> {
         let room_id = format!("room_{}", appointment_id);
         let mut rooms: Map<String, TelemedicineRoom> = env
             .storage()
@@ -1039,16 +1094,12 @@ impl TelemedicineSchedulingContract {
             .get(&TELEMEDICINE_ROOMS)
             .ok_or(Error::RoomNotFound)?;
 
-        let mut room = rooms
-            .get(room_id.clone())
-            .ok_or(Error::RoomNotFound)?;
+        let mut room = rooms.get(room_id.clone()).ok_or(Error::RoomNotFound)?;
 
         room.start_time = start_time;
         room.end_time = end_time;
         rooms.set(room_id, room);
-        env.storage()
-            .persistent()
-            .set(&TELEMEDICINE_ROOMS, &rooms);
+        env.storage().persistent().set(&TELEMEDICINE_ROOMS, &rooms);
 
         Ok(())
     }
@@ -1061,20 +1112,21 @@ impl TelemedicineSchedulingContract {
             .get(&TELEMEDICINE_ROOMS)
             .ok_or(Error::RoomNotFound)?;
 
-        let mut room = rooms
-            .get(room_id.clone())
-            .ok_or(Error::RoomNotFound)?;
+        let mut room = rooms.get(room_id.clone()).ok_or(Error::RoomNotFound)?;
 
         room.status = "cancelled".to_string();
         rooms.set(room_id, room);
-        env.storage()
-            .persistent()
-            .set(&TELEMEDICINE_ROOMS, &rooms);
+        env.storage().persistent().set(&TELEMEDICINE_ROOMS, &rooms);
 
         Ok(())
     }
 
-    fn schedule_appointment_reminders(env: &Env, appointment_id: u64, patient: Address, appointment_time: u64) -> Result<(), Error> {
+    fn schedule_appointment_reminders(
+        env: &Env,
+        appointment_id: u64,
+        patient: Address,
+        appointment_time: u64,
+    ) -> Result<(), Error> {
         // Schedule reminders at 24 hours, 2 hours, and 15 minutes before
         let reminder_times = vec![
             env,
@@ -1087,6 +1139,10 @@ impl TelemedicineSchedulingContract {
             if *reminder_time > env.ledger().timestamp() {
                 let reminder_id = Self::get_and_increment_reminder_counter(env);
 
+                let mut message =
+                    String::from_str(&env, "Reminder: You have an appointment scheduled at ");
+                message.push_str(&env, &appointment_time);
+
                 let reminder = AppointmentReminder {
                     reminder_id,
                     appointment_id,
@@ -1095,7 +1151,7 @@ impl TelemedicineSchedulingContract {
                     scheduled_time: *reminder_time,
                     sent_time: None,
                     status: "scheduled".to_string(),
-                    message_content: format!("Reminder: You have an appointment scheduled at {}", appointment_time),
+                    message_content: message,
                     delivery_attempts: 0,
                     response_received: false,
                 };
@@ -1115,7 +1171,11 @@ impl TelemedicineSchedulingContract {
         Ok(())
     }
 
-    fn reschedule_appointment_reminders(env: &Env, appointment_id: u64, new_appointment_time: u64) -> Result<(), Error> {
+    fn reschedule_appointment_reminders(
+        env: &Env,
+        appointment_id: u64,
+        new_appointment_time: u64,
+    ) -> Result<(), Error> {
         // Cancel existing reminders and create new ones
         Self::cancel_appointment_reminders(env, appointment_id)?;
 
@@ -1131,7 +1191,12 @@ impl TelemedicineSchedulingContract {
             .ok_or(Error::AppointmentNotFound)?;
 
         // Schedule new reminders
-        Self::schedule_appointment_reminders(env, appointment_id, appointment.patient, new_appointment_time)?;
+        Self::schedule_appointment_reminders(
+            env,
+            appointment_id,
+            appointment.patient,
+            new_appointment_time,
+        )?;
 
         Ok(())
     }
@@ -1173,22 +1238,20 @@ impl TelemedicineSchedulingContract {
             .get(&TIME_SLOTS)
             .ok_or(Error::SlotNotFound)?;
 
-        let slot = slots
-            .get(slot_id)
-            .ok_or(Error::SlotNotFound)?;
+        let slot = slots.get(slot_id).ok_or(Error::SlotNotFound)?;
 
         // Find matching waiting list entries
         for entry in waiting_list.iter() {
-            if entry.appointment_type == slot.appointment_type 
+            if entry.appointment_type == slot.appointment_type
                 && entry.modality == slot.modality
-                && entry.expires_at > env.ledger().timestamp() {
-                
+                && entry.expires_at > env.ledger().timestamp()
+            {
                 // Check if slot time matches preferences
                 if Self::matches_waiting_list_preferences(&entry, slot.start_time) {
                     // Notify patient (in real implementation, this would send notification)
                     // For now, we'll just emit an event
                     env.events().publish(
-                        (symbol_short!("WaitingList"), symbol_short!("SlotOffered")),
+                        (symbol_short!("WaitList"), symbol_short!("Offered")),
                         (entry.entry_id, slot_id),
                     );
                     break;
@@ -1224,9 +1287,7 @@ impl TelemedicineSchedulingContract {
             .get(&RECURRING_SERIES)
             .ok_or(Error::SeriesNotFound)?;
 
-        let series = series_list
-            .get(series_id)
-            .ok_or(Error::SeriesNotFound)?;
+        let series = series_list.get(series_id).ok_or(Error::SeriesNotFound)?;
 
         // Generate appointments based on recurrence pattern
         let mut current_date = series.start_date;
@@ -1257,7 +1318,7 @@ impl TelemedicineSchedulingContract {
     fn get_day_of_week(timestamp: u64) -> String {
         let days_since_epoch = timestamp / 86400;
         let day_index = (days_since_epoch + 4) % 7; // January 1, 1970 was a Thursday
-        
+
         match day_index {
             0 => "Thursday".to_string(),
             1 => "Friday".to_string(),
@@ -1284,11 +1345,7 @@ impl TelemedicineSchedulingContract {
     }
 
     fn get_and_increment_slot_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&SLOT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&SLOT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&SLOT_COUNTER, &next);
         next
@@ -1306,11 +1363,7 @@ impl TelemedicineSchedulingContract {
     }
 
     fn get_and_increment_series_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&SERIES_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&SERIES_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&SERIES_COUNTER, &next);
         next
@@ -1345,7 +1398,7 @@ impl TelemedicineSchedulingContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1361,7 +1414,7 @@ impl TelemedicineSchedulingContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1372,10 +1425,10 @@ impl TelemedicineSchedulingContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

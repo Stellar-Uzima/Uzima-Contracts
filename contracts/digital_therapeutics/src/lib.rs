@@ -76,7 +76,7 @@ pub struct DigitalTherapeutic {
     pub ce_mark: bool,
     pub clinical_evidence_level: EvidenceLevel,
     pub target_conditions: Vec<String>, // ICD-10 codes
-    pub age_range: (u8, u8), // (min_age, max_age)
+    pub age_range: (u8, u8),            // (min_age, max_age)
     pub languages: Vec<String>,
     pub platforms: Vec<String>, // "iOS", "Android", "Web", "Desktop"
     pub integration_apis: Vec<String>,
@@ -140,13 +140,13 @@ pub struct TherapySession {
     pub completion_rate: u8, // 0-100
     pub exercises_completed: Vec<String>,
     pub metrics_collected: Vec<TherapyMetric>,
-    pub patient_feedback: u8, // 1-5 rating
+    pub patient_feedback: u8,  // 1-5 rating
     pub difficulty_rating: u8, // 1-5 rating
     pub notes: String,
     pub adverse_events: Vec<String>,
     pub technical_issues: Vec<String>,
-    pub data_quality_score: u8, // 0-100
-    pub engagement_score: u8, // 0-100
+    pub data_quality_score: u8,         // 0-100
+    pub engagement_score: u8,           // 0-100
     pub therapeutic_alliance_score: u8, // 0-100
 }
 
@@ -211,7 +211,7 @@ pub struct BehavioralOutcome {
     pub frequency_current: u32,
     pub duration_minutes: u32,
     pub consistency_score: u8, // 0-100
-    pub quality_rating: u8, // 1-5
+    pub quality_rating: u8,    // 1-5
     pub context_factors: Vec<String>,
 }
 
@@ -219,12 +219,12 @@ pub struct BehavioralOutcome {
 #[derive(Clone)]
 #[contracttype]
 pub struct EngagementMetrics {
-    pub login_frequency: u32, // times per week
-    pub session_duration_avg: u32, // minutes
+    pub login_frequency: u32,            // times per week
+    pub session_duration_avg: u32,       // minutes
     pub feature_usage: Map<String, u32>, // feature -> usage count
     pub peak_usage_times: Vec<String>,
     pub dropout_risk_score: u8, // 0-100
-    pub motivation_score: u8, // 0-100
+    pub motivation_score: u8,   // 0-100
     pub satisfaction_score: u8, // 0-100
 }
 
@@ -250,13 +250,13 @@ pub struct AdverseEventReport {
     pub patient: Address,
     pub provider: Address,
     pub event_type: String, // "symptom_exacerbation", "technical_issue", "psychological_distress"
-    pub severity: String, // "mild", "moderate", "severe", "life_threatening"
+    pub severity: String,   // "mild", "moderate", "severe", "life_threatening"
     pub description: String,
     pub onset_time: u64,
     pub resolution_time: Option<u64>,
     pub intervention_required: bool,
     pub intervention_type: String,
-    pub outcome: String, // "resolved", "ongoing", "unknown"
+    pub outcome: String,     // "resolved", "ongoing", "unknown"
     pub reported_by: String, // "patient", "provider", "automated", "caregiver"
     pub reported_at: u64,
     pub follow_up_required: bool,
@@ -285,8 +285,8 @@ pub struct TherapeuticContent {
     pub clinical_validation: bool,
     pub usage_count: u32,
     pub effectiveness_score: u8, // 0-100
-    pub user_ratings: Vec<u8>, // Individual ratings
-    pub average_rating: u8, // 0-5
+    pub user_ratings: Vec<u8>,   // Individual ratings
+    pub average_rating: u8,      // 0-5
 }
 
 /// Integration Endpoint
@@ -298,7 +298,7 @@ pub struct IntegrationEndpoint {
     pub endpoint_type: String, // "api", "webhook", "fhir", "hl7"
     pub endpoint_url: String,
     pub authentication_method: String, // "oauth2", "api_key", "certificate"
-    pub data_format: String, // "json", "xml", "fhir", "hl7"
+    pub data_format: String,           // "json", "xml", "fhir", "hl7"
     pub supported_operations: Vec<String>, // "read", "write", "update", "delete"
     pub rate_limits: Map<String, u32>, // operation -> requests_per_hour
     pub data_mapping: Map<String, String>, // therapeutic_field -> standard_field
@@ -379,7 +379,9 @@ impl DigitalTherapeuticsContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -388,7 +390,9 @@ impl DigitalTherapeuticsContract {
         env.storage().persistent().set(&PRESCRIPTION_COUNTER, &0u64);
         env.storage().persistent().set(&SESSION_COUNTER, &0u64);
         env.storage().persistent().set(&REPORT_COUNTER, &0u64);
-        env.storage().persistent().set(&ADVERSE_EVENT_COUNTER, &0u64);
+        env.storage()
+            .persistent()
+            .set(&ADVERSE_EVENT_COUNTER, &0u64);
         env.storage().persistent().set(&CONTENT_COUNTER, &0u64);
         env.storage().persistent().set(&ENDPOINT_COUNTER, &0u64);
 
@@ -544,9 +548,10 @@ impl DigitalTherapeuticsContract {
             .unwrap_or(Map::new(&env));
 
         for prescription in prescriptions.values() {
-            if prescription.patient == patient 
-                && prescription.therapeutic_id == therapeutic_id 
-                && prescription.status == TherapeuticStatus::Active {
+            if prescription.patient == patient
+                && prescription.therapeutic_id == therapeutic_id
+                && prescription.status == TherapeuticStatus::Active
+            {
                 return Err(Error::PrescriptionAlreadyExists);
             }
         }
@@ -667,7 +672,10 @@ impl DigitalTherapeuticsContract {
             technical_issues,
             data_quality_score: Self::calculate_data_quality_score(&metrics_collected),
             engagement_score: Self::calculate_engagement_score(completion_rate, duration_minutes),
-            therapeutic_alliance_score: Self::calculate_therapeutic_alliance_score(patient_feedback, difficulty_rating),
+            therapeutic_alliance_score: Self::calculate_therapeutic_alliance_score(
+                patient_feedback,
+                difficulty_rating,
+            ),
         };
 
         let mut sessions: Map<u64, TherapySession> = env
@@ -684,7 +692,12 @@ impl DigitalTherapeuticsContract {
         // Check for adverse events
         if !adverse_events.is_empty() {
             for event in adverse_events.iter() {
-                Self::create_adverse_event_report(&env, prescription_id, patient.clone(), event.clone())?;
+                Self::create_adverse_event_report(
+                    &env,
+                    prescription_id,
+                    patient.clone(),
+                    event.clone(),
+                )?;
             }
         }
 
@@ -741,9 +754,10 @@ impl DigitalTherapeuticsContract {
         let mut completed_sessions = 0u32;
 
         for session in sessions.values() {
-            if session.prescription_id == prescription_id 
-                && session.start_time >= report_period_start 
-                && session.start_time <= report_period_end {
+            if session.prescription_id == prescription_id
+                && session.start_time >= report_period_start
+                && session.start_time <= report_period_end
+            {
                 period_sessions.push_back(session.clone());
                 total_sessions += 1;
                 if session.completion_rate >= 80 {
@@ -790,9 +804,7 @@ impl DigitalTherapeuticsContract {
             .get(&PROGRESS_REPORTS)
             .unwrap_or(Map::new(&env));
         reports.set(report_id, progress_report);
-        env.storage()
-            .persistent()
-            .set(&PROGRESS_REPORTS, &reports);
+        env.storage().persistent().set(&PROGRESS_REPORTS, &reports);
 
         // Emit event
         env.events().publish(
@@ -1040,18 +1052,25 @@ impl DigitalTherapeuticsContract {
             .get(&DIGITAL_THERAPEUTICS)
             .ok_or(Error::TherapeuticNotFound)?;
 
-        therapeutics.get(therapeutic_id).ok_or(Error::TherapeuticNotFound)
+        therapeutics
+            .get(therapeutic_id)
+            .ok_or(Error::TherapeuticNotFound)
     }
 
     /// Get patient prescription
-    pub fn get_patient_prescription(env: Env, prescription_id: u64) -> Result<PatientPrescription, Error> {
+    pub fn get_patient_prescription(
+        env: Env,
+        prescription_id: u64,
+    ) -> Result<PatientPrescription, Error> {
         let prescriptions: Map<u64, PatientPrescription> = env
             .storage()
             .persistent()
             .get(&PATIENT_PRESCRIPTIONS)
             .ok_or(Error::PrescriptionNotFound)?;
 
-        prescriptions.get(prescription_id).ok_or(Error::PrescriptionNotFound)
+        prescriptions
+            .get(prescription_id)
+            .ok_or(Error::PrescriptionNotFound)
     }
 
     /// Get therapy session
@@ -1088,7 +1107,10 @@ impl DigitalTherapeuticsContract {
     }
 
     /// Get patient's active prescriptions
-    pub fn get_patient_prescriptions(env: Env, patient: Address) -> Result<Vec<PatientPrescription>, Error> {
+    pub fn get_patient_prescriptions(
+        env: Env,
+        patient: Address,
+    ) -> Result<Vec<PatientPrescription>, Error> {
         let prescriptions: Map<u64, PatientPrescription> = env
             .storage()
             .persistent()
@@ -1135,7 +1157,13 @@ impl DigitalTherapeuticsContract {
 
     fn calculate_engagement_score(completion_rate: u8, duration_minutes: u32) -> u8 {
         // Simple engagement score based on completion and duration
-        let duration_score = if duration_minutes >= 30 { 100 } else if duration_minutes >= 15 { 75 } else { 50 };
+        let duration_score = if duration_minutes >= 30 {
+            100
+        } else if duration_minutes >= 15 {
+            75
+        } else {
+            50
+        };
         ((completion_rate as u32 + duration_score) / 2) as u8
     }
 
@@ -1143,17 +1171,21 @@ impl DigitalTherapeuticsContract {
         // Alliance score based on feedback and appropriate difficulty
         let difficulty_score = match difficulty_rating {
             1 | 2 => 60, // Too easy
-            3 => 100,   // Just right
-            4 => 80,    // Slightly hard
-            5 => 40,    // Too hard
+            3 => 100,    // Just right
+            4 => 80,     // Slightly hard
+            5 => 40,     // Too hard
             _ => 0,
         };
-        
+
         let feedback_score = (patient_feedback as u32) * 20; // Convert 1-5 to 20-100
         ((feedback_score + difficulty_score as u32) / 2) as u8
     }
 
-    fn update_prescription_adherence(env: &Env, prescription_id: u64, patient: Address) -> Result<(), Error> {
+    fn update_prescription_adherence(
+        env: &Env,
+        prescription_id: u64,
+        patient: Address,
+    ) -> Result<(), Error> {
         let mut prescriptions: Map<u64, PatientPrescription> = env
             .storage()
             .persistent()
@@ -1183,7 +1215,10 @@ impl DigitalTherapeuticsContract {
         let adherence_score = if recent_sessions.is_empty() {
             0
         } else {
-            let total_completion: u32 = recent_sessions.iter().map(|s| s.completion_rate as u32).sum();
+            let total_completion: u32 = recent_sessions
+                .iter()
+                .map(|s| s.completion_rate as u32)
+                .sum();
             (total_completion / recent_sessions.len() as u32) as u8
         };
 
@@ -1238,9 +1273,12 @@ impl DigitalTherapeuticsContract {
         Ok(())
     }
 
-    fn calculate_clinical_outcomes(env: &Env, sessions: &Vec<TherapySession>) -> Result<Vec<ClinicalOutcome>, Error> {
+    fn calculate_clinical_outcomes(
+        env: &Env,
+        sessions: &Vec<TherapySession>,
+    ) -> Result<Vec<ClinicalOutcome>, Error> {
         let mut outcomes = Vec::new(env);
-        
+
         // Simplified clinical outcome calculation
         // In production, would analyze specific metrics from sessions
         for session in sessions.iter() {
@@ -1264,34 +1302,48 @@ impl DigitalTherapeuticsContract {
         Ok(outcomes)
     }
 
-    fn calculate_behavioral_outcomes(env: &Env, sessions: &Vec<TherapySession>) -> Result<Vec<BehavioralOutcome>, Error> {
+    fn calculate_behavioral_outcomes(
+        env: &Env,
+        sessions: &Vec<TherapySession>,
+    ) -> Result<Vec<BehavioralOutcome>, Error> {
         let mut outcomes = Vec::new(env);
-        
+
         // Simplified behavioral outcome calculation
         let frequency_current = sessions.len() as u32;
         let frequency_baseline = 3; // Target 3 sessions per week
-        
+
         let outcome = BehavioralOutcome {
             behavior_name: "therapy_sessions".to_string(),
             frequency_baseline,
             frequency_current,
             duration_minutes: 30, // Average session duration
-            consistency_score: if frequency_current >= frequency_baseline { 80 } else { 60 },
+            consistency_score: if frequency_current >= frequency_baseline {
+                80
+            } else {
+                60
+            },
             quality_rating: 4, // Average quality
             context_factors: Vec::new(env),
         };
-        
+
         outcomes.push_back(outcome);
         Ok(outcomes)
     }
 
-    fn calculate_engagement_metrics(env: &Env, sessions: &Vec<TherapySession>) -> Result<EngagementMetrics, Error> {
+    fn calculate_engagement_metrics(
+        env: &Env,
+        sessions: &Vec<TherapySession>,
+    ) -> Result<EngagementMetrics, Error> {
         let mut feature_usage = Map::new(env);
-        
+
         // Calculate engagement metrics from sessions
         let total_duration: u32 = sessions.iter().map(|s| s.duration_minutes).sum();
-        let avg_duration = if sessions.is_empty() { 0 } else { total_duration / sessions.len() as u32 };
-        
+        let avg_duration = if sessions.is_empty() {
+            0
+        } else {
+            total_duration / sessions.len() as u32
+        };
+
         let engagement = EngagementMetrics {
             login_frequency: sessions.len() as u32,
             session_duration_avg: avg_duration,
@@ -1301,21 +1353,24 @@ impl DigitalTherapeuticsContract {
             motivation_score: 75,   // Good motivation
             satisfaction_score: 4,  // Good satisfaction
         };
-        
+
         Ok(engagement)
     }
 
-    fn calculate_safety_summary(env: &Env, sessions: &Vec<TherapySession>) -> Result<SafetySummary, Error> {
+    fn calculate_safety_summary(
+        env: &Env,
+        sessions: &Vec<TherapySession>,
+    ) -> Result<SafetySummary, Error> {
         let mut adverse_events_count = 0u32;
         let mut severities = Vec::new(env);
-        
+
         for session in sessions.iter() {
             adverse_events_count += session.adverse_events.len() as u32;
             for event in session.adverse_events.iter() {
                 severities.push_back("mild".to_string());
             }
         }
-        
+
         let safety = SafetySummary {
             adverse_events_count,
             adverse_events_severity: severities,
@@ -1325,7 +1380,7 @@ impl DigitalTherapeuticsContract {
             safety_monitoring_alerts: adverse_events_count,
             patient_safety_rating: if adverse_events_count == 0 { 5 } else { 3 },
         };
-        
+
         Ok(safety)
     }
 
@@ -1344,27 +1399,27 @@ impl DigitalTherapeuticsContract {
 
     fn generate_recommendations(report: &ProgressReport) -> Vec<String> {
         let mut recommendations = Vec::new();
-        
+
         if report.adherence_rate < 70 {
             recommendations.push_back("Increase patient engagement and motivation".to_string());
         }
-        
+
         if report.safety_summary.adverse_events_count > 0 {
             recommendations.push_back("Review and adjust therapeutic intensity".to_string());
         }
-        
+
         recommendations
     }
 
     fn generate_next_steps(report: &ProgressReport) -> Vec<String> {
         let mut next_steps = Vec::new();
-        
+
         if report.adherence_rate >= 80 {
             next_steps.push_back("Continue current treatment plan".to_string());
         } else {
             next_steps.push_back("Schedule follow-up consultation".to_string());
         }
-        
+
         next_steps.push_back("Generate monthly progress report".to_string());
         next_steps
     }
@@ -1403,11 +1458,7 @@ impl DigitalTherapeuticsContract {
     }
 
     fn get_and_increment_report_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&REPORT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&REPORT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&REPORT_COUNTER, &next);
         next
@@ -1420,7 +1471,9 @@ impl DigitalTherapeuticsContract {
             .get(&ADVERSE_EVENT_COUNTER)
             .unwrap_or(0);
         let next = count + 1;
-        env.storage().persistent().set(&ADVERSE_EVENT_COUNTER, &next);
+        env.storage()
+            .persistent()
+            .set(&ADVERSE_EVENT_COUNTER, &next);
         next
     }
 
@@ -1453,7 +1506,7 @@ impl DigitalTherapeuticsContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1469,7 +1522,7 @@ impl DigitalTherapeuticsContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1480,10 +1533,10 @@ impl DigitalTherapeuticsContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

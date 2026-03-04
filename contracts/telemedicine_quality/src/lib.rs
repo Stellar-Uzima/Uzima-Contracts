@@ -112,7 +112,7 @@ pub struct ActionItem {
     pub status: String, // "pending", "in_progress", "completed", "overdue"
     pub completion_date: Option<u64>,
     pub evidence: Vec<String>, // IPFS hashes of supporting documents
-    pub impact_score: u8, // 0-100
+    pub impact_score: u8,      // 0-100
 }
 
 /// Quality Benchmark
@@ -145,10 +145,10 @@ pub struct QualityTrend {
     pub department: Option<String>,
     pub time_series: Vec<TrendDataPoint>,
     pub trend_direction: String, // "improving", "declining", "stable", "volatile"
-    pub trend_strength: f32, // -1.0 to 1.0
+    pub trend_strength: f32,     // -1.0 to 1.0
     pub statistical_significance: bool,
     pub seasonality_detected: bool,
-    pub anomalies: Vec<u64>, // timestamps of anomalous data points
+    pub anomalies: Vec<u64>,       // timestamps of anomalous data points
     pub forecast_values: Vec<f32>, // Next N period forecasts
     pub confidence_intervals: Vec<(f32, f32)>,
     pub last_analyzed: u64,
@@ -287,8 +287,8 @@ pub struct RiskAssessment {
 pub struct RiskItem {
     pub risk_name: String,
     pub probability: u8, // 0-100
-    pub impact: u8, // 0-100
-    pub risk_score: u8, // 0-100
+    pub impact: u8,      // 0-100
+    pub risk_score: u8,  // 0-100
     pub current_controls: Vec<String>,
     pub additional_controls_needed: Vec<String>,
     pub monitoring_frequency: String,
@@ -300,7 +300,7 @@ pub struct RiskItem {
 pub struct QualityAlert {
     pub alert_id: u64,
     pub alert_type: String, // "threshold_breach", "trend_decline", "compliance_issue", "safety_concern"
-    pub severity: String, // "low", "medium", "high", "critical"
+    pub severity: String,   // "low", "medium", "high", "critical"
     pub metric_name: String,
     pub current_value: f32,
     pub threshold_value: f32,
@@ -382,7 +382,9 @@ impl TelemedicineQualityContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -424,7 +426,7 @@ impl TelemedicineQualityContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -519,20 +521,24 @@ impl TelemedicineQualityContract {
                 if let Some(value) = metric_values.get(metric.name.clone()) {
                     let score = Self::calculate_metric_score(*value, metric.target_value);
                     metric_scores.set(metric.name.clone(), score);
-                    
+
                     // Update category score
-                    let current_category_score = category_scores
-                        .get(metric.category)
-                        .unwrap_or(0u8);
-                    let new_category_score = ((current_category_score as u32 + score as u32) / 2) as u8;
+                    let current_category_score =
+                        category_scores.get(metric.category).unwrap_or(0u8);
+                    let new_category_score =
+                        ((current_category_score as u32 + score as u32) / 2) as u8;
                     category_scores.set(metric.category, new_category_score);
-                    
+
                     // Calculate weighted contribution
                     total_weighted_score += score as f32 * metric.weight;
                     total_weight += metric.weight;
 
                     // Check for threshold breaches
-                    if Self::is_threshold_breach(*value, metric.target_value, metric.regulatory_requirement) {
+                    if Self::is_threshold_breach(
+                        *value,
+                        metric.target_value,
+                        metric.regulatory_requirement,
+                    ) {
                         Self::create_quality_alert(
                             &env,
                             "threshold_breach".to_string(),
@@ -556,11 +562,8 @@ impl TelemedicineQualityContract {
         let quality_level = Self::determine_quality_level(overall_score);
 
         // Generate strengths, weaknesses, and recommendations
-        let (strengths, weaknesses, recommendations) = Self::analyze_assessment_results(
-            &env,
-            &metric_scores,
-            &category_scores,
-        )?;
+        let (strengths, weaknesses, recommendations) =
+            Self::analyze_assessment_results(&env, &metric_scores, &category_scores)?;
 
         let assessment = QualityAssessment {
             assessment_id,
@@ -645,9 +648,7 @@ impl TelemedicineQualityContract {
             .get(&ACTION_ITEMS)
             .unwrap_or(Map::new(&env));
         action_items.set(action_id, action_item);
-        env.storage()
-            .persistent()
-            .set(&ACTION_ITEMS, &action_items);
+        env.storage().persistent().set(&ACTION_ITEMS, &action_items);
 
         // Emit event
         env.events().publish(
@@ -680,7 +681,7 @@ impl TelemedicineQualityContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -796,14 +797,19 @@ impl TelemedicineQualityContract {
     }
 
     /// Get quality assessment
-    pub fn get_quality_assessment(env: Env, assessment_id: u64) -> Result<QualityAssessment, Error> {
+    pub fn get_quality_assessment(
+        env: Env,
+        assessment_id: u64,
+    ) -> Result<QualityAssessment, Error> {
         let assessments: Map<u64, QualityAssessment> = env
             .storage()
             .persistent()
             .get(&QUALITY_ASSESSMENTS)
             .ok_or(Error::AssessmentNotFound)?;
 
-        assessments.get(assessment_id).ok_or(Error::AssessmentNotFound)
+        assessments
+            .get(assessment_id)
+            .ok_or(Error::AssessmentNotFound)
     }
 
     /// Get quality report
@@ -818,7 +824,12 @@ impl TelemedicineQualityContract {
     }
 
     /// Get provider's quality metrics
-    pub fn get_provider_quality_metrics(env: Env, provider: Address, period_start: u64, period_end: u64) -> Result<Vec<QualityMetricResult>, Error> {
+    pub fn get_provider_quality_metrics(
+        env: Env,
+        provider: Address,
+        period_start: u64,
+        period_end: u64,
+    ) -> Result<Vec<QualityMetricResult>, Error> {
         let assessments: Map<u64, QualityAssessment> = env
             .storage()
             .persistent()
@@ -828,10 +839,10 @@ impl TelemedicineQualityContract {
         let mut results = Vec::new(&env);
 
         for assessment in assessments.values() {
-            if assessment.provider == provider 
-                && assessment.assessment_period_start >= period_start 
-                && assessment.assessment_period_end <= period_end {
-                
+            if assessment.provider == provider
+                && assessment.assessment_period_start >= period_start
+                && assessment.assessment_period_end <= period_end
+            {
                 for (metric_name, score) in assessment.metric_scores.iter() {
                     let result = QualityMetricResult {
                         metric_name: metric_name.clone(),
@@ -853,7 +864,11 @@ impl TelemedicineQualityContract {
     }
 
     /// Get quality alerts
-    pub fn get_quality_alerts(env: Env, provider: Option<Address>, severity: Option<String>) -> Result<Vec<QualityAlert>, Error> {
+    pub fn get_quality_alerts(
+        env: Env,
+        provider: Option<Address>,
+        severity: Option<String>,
+    ) -> Result<Vec<QualityAlert>, Error> {
         let alerts: Map<u64, QualityAlert> = env
             .storage()
             .persistent()
@@ -864,8 +879,9 @@ impl TelemedicineQualityContract {
 
         for alert in alerts.values() {
             let provider_match = provider.is_none() || alert.provider == provider;
-            let severity_match = severity.is_none() || alert.severity == severity.unwrap_or(String::from_str(&env, ""));
-            
+            let severity_match = severity.is_none()
+                || alert.severity == severity.unwrap_or(String::from_str(&env, ""));
+
             if provider_match && severity_match {
                 filtered_alerts.push_back(alert);
             }
@@ -875,7 +891,11 @@ impl TelemedicineQualityContract {
     }
 
     /// Acknowledge quality alert
-    pub fn acknowledge_alert(env: Env, alert_id: u64, acknowledged_by: Address) -> Result<bool, Error> {
+    pub fn acknowledge_alert(
+        env: Env,
+        alert_id: u64,
+        acknowledged_by: Address,
+    ) -> Result<bool, Error> {
         acknowledged_by.require_auth();
 
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
@@ -888,9 +908,7 @@ impl TelemedicineQualityContract {
             .get(&QUALITY_ALERTS)
             .ok_or(Error::AlertNotFound)?;
 
-        let mut alert = alerts
-            .get(alert_id)
-            .ok_or(Error::AlertNotFound)?;
+        let mut alert = alerts.get(alert_id).ok_or(Error::AlertNotFound)?;
 
         alert.acknowledged = true;
         alert.acknowledged_by = Some(acknowledged_by);
@@ -912,7 +930,7 @@ impl TelemedicineQualityContract {
 
     fn initialize_quality_metrics(env: &Env) -> Result<(), Error> {
         let timestamp = env.ledger().timestamp();
-        
+
         // Clinical metrics
         Self::create_standard_metric(
             env,
@@ -1130,30 +1148,30 @@ impl TelemedicineQualityContract {
 
     fn identify_risk_factors(category_scores: &Map<QualityCategory, u8>) -> Vec<String> {
         let mut risk_factors = Vec::new();
-        
+
         if let Some(safety_score) = category_scores.get(QualityCategory::Safety) {
             if *safety_score < 80 {
                 risk_factors.push("Safety performance below threshold".to_string());
             }
         }
-        
+
         if let Some(compliance_score) = category_scores.get(QualityCategory::Compliance) {
             if *compliance_score < 85 {
                 risk_factors.push("Compliance issues detected".to_string());
             }
         }
-        
+
         risk_factors
     }
 
     fn calculate_next_assessment_date(assessment_type: AssessmentType, base_date: u64) -> u64 {
         match assessment_type {
-            AssessmentType::RealTime => base_date + 3600,      // 1 hour
+            AssessmentType::RealTime => base_date + 3600, // 1 hour
             AssessmentType::PostConsultation => base_date + 86400, // 1 day
-            AssessmentType::Weekly => base_date + 604800,       // 1 week
-            AssessmentType::Monthly => base_date + 2592000,     // 30 days
-            AssessmentType::Quarterly => base_date + 7776000,    // 90 days
-            AssessmentType::Annual => base_date + 31536000,     // 365 days
+            AssessmentType::Weekly => base_date + 604800, // 1 week
+            AssessmentType::Monthly => base_date + 2592000, // 30 days
+            AssessmentType::Quarterly => base_date + 7776000, // 90 days
+            AssessmentType::Annual => base_date + 31536000, // 365 days
             AssessmentType::IncidentBased => base_date + 86400, // 1 day
         }
     }
@@ -1199,8 +1217,15 @@ impl TelemedicineQualityContract {
             threshold_value,
             provider,
             consultation_id,
-            description: format!("Threshold breach for {}: {} < {}", metric_name, current_value, threshold_value),
-            recommended_actions: vec![env, "Immediate review required".to_string(), "Implement corrective actions".to_string()],
+            description: format!(
+                "Threshold breach for {}: {} < {}",
+                metric_name, current_value, threshold_value
+            ),
+            recommended_actions: vec![
+                env,
+                "Immediate review required".to_string(),
+                "Implement corrective actions".to_string(),
+            ],
             escalation_required: severity == "critical",
             notification_sent: false,
             acknowledged: false,
@@ -1238,7 +1263,7 @@ impl TelemedicineQualityContract {
         // Simplified implementation - in production would be more sophisticated
         for (metric_name, score) in metric_scores.iter() {
             let trend_id = Self::get_and_increment_trend_counter(env);
-            
+
             let data_point = TrendDataPoint {
                 timestamp,
                 value: *score as f32,
@@ -1246,7 +1271,7 @@ impl TelemedicineQualityContract {
                 confidence_level: 0.95,
                 outliers_removed: 0,
             };
-            
+
             let trend = QualityTrend {
                 trend_id,
                 metric_name: metric_name.clone(),
@@ -1262,7 +1287,7 @@ impl TelemedicineQualityContract {
                 confidence_intervals: Vec::new(env),
                 last_analyzed: timestamp,
             };
-            
+
             let mut trends: Map<u64, QualityTrend> = env
                 .storage()
                 .persistent()
@@ -1271,11 +1296,15 @@ impl TelemedicineQualityContract {
             trends.set(trend_id, trend);
             env.storage().persistent().set(&QUALITY_TRENDS, &trends);
         }
-        
+
         Ok(())
     }
 
-    fn generate_quality_summary(env: &Env, period_start: u64, period_end: u64) -> Result<QualitySummary, Error> {
+    fn generate_quality_summary(
+        env: &Env,
+        period_start: u64,
+        period_end: u64,
+    ) -> Result<QualitySummary, Error> {
         // Simplified summary generation
         let summary = QualitySummary {
             overall_score: 85,
@@ -1290,14 +1319,18 @@ impl TelemedicineQualityContract {
             critical_issues: vec![env, "Documentation gaps".to_string()],
             improvement_opportunities: vec![env, "Reduce wait times".to_string()],
         };
-        
+
         Ok(summary)
     }
 
-    fn generate_detailed_metrics(env: &Env, period_start: u64, period_end: u64) -> Result<Vec<QualityMetricResult>, Error> {
+    fn generate_detailed_metrics(
+        env: &Env,
+        period_start: u64,
+        period_end: u64,
+    ) -> Result<Vec<QualityMetricResult>, Error> {
         // Simplified detailed metrics generation
         let mut metrics = Vec::new(env);
-        
+
         let metric = QualityMetricResult {
             metric_name: "Patient Satisfaction".to_string(),
             category: QualityCategory::PatientExperience,
@@ -1309,14 +1342,17 @@ impl TelemedicineQualityContract {
             variance_explanation: "Within normal variation".to_string(),
             impact_assessment: "Medium impact on overall quality".to_string(),
         };
-        
+
         metrics.push_back(metric);
         Ok(metrics)
     }
 
-    fn generate_comparative_analysis(env: &Env, detailed_metrics: &Vec<QualityMetricResult>) -> Result<Vec<ComparativeMetric>, Error> {
+    fn generate_comparative_analysis(
+        env: &Env,
+        detailed_metrics: &Vec<QualityMetricResult>,
+    ) -> Result<Vec<ComparativeMetric>, Error> {
         let mut comparisons = Vec::new(env);
-        
+
         for metric in detailed_metrics.iter() {
             let comparison = ComparativeMetric {
                 metric_name: metric.metric_name.clone(),
@@ -1330,19 +1366,23 @@ impl TelemedicineQualityContract {
             };
             comparisons.push_back(comparison);
         }
-        
+
         Ok(comparisons)
     }
 
-    fn generate_strategic_recommendations(env: &Env, summary: &QualitySummary) -> Result<Vec<StrategicRecommendation>, Error> {
+    fn generate_strategic_recommendations(
+        env: &Env,
+        summary: &QualitySummary,
+    ) -> Result<Vec<StrategicRecommendation>, Error> {
         let mut recommendations = Vec::new(env);
-        
+
         let recommendation = StrategicRecommendation {
             recommendation_id: 1,
             category: QualityCategory::PatientExperience,
             priority: "medium".to_string(),
             title: "Improve Patient Communication".to_string(),
-            description: "Enhance communication protocols to increase patient satisfaction".to_string(),
+            description: "Enhance communication protocols to increase patient satisfaction"
+                .to_string(),
             expected_impact: "10% increase in satisfaction scores".to_string(),
             implementation_timeline: "3 months".to_string(),
             resource_requirements: vec![env, "Training program".to_string()],
@@ -1352,12 +1392,16 @@ impl TelemedicineQualityContract {
             currency: Some("USD".to_string()),
             responsible_party: Address::from_array(env, &[0u8; 32]),
         };
-        
+
         recommendations.push_back(recommendation);
         Ok(recommendations)
     }
 
-    fn generate_compliance_summary(env: &Env, period_start: u64, period_end: u64) -> Result<ComplianceSummary, Error> {
+    fn generate_compliance_summary(
+        env: &Env,
+        period_start: u64,
+        period_end: u64,
+    ) -> Result<ComplianceSummary, Error> {
         let summary = ComplianceSummary {
             overall_compliance_rate: 95,
             regulatory_requirements_met: 19,
@@ -1370,11 +1414,14 @@ impl TelemedicineQualityContract {
             corrective_actions: vec![env, "Enhanced documentation training".to_string()],
             next_audit_date: env.ledger().timestamp() + 7776000, // 90 days from now
         };
-        
+
         Ok(summary)
     }
 
-    fn generate_risk_assessment(env: &Env, summary: &QualitySummary) -> Result<RiskAssessment, Error> {
+    fn generate_risk_assessment(
+        env: &Env,
+        summary: &QualitySummary,
+    ) -> Result<RiskAssessment, Error> {
         let assessment = RiskAssessment {
             overall_risk_level: "low".to_string(),
             clinical_risks: vec![env],
@@ -1385,16 +1432,12 @@ impl TelemedicineQualityContract {
             monitoring_requirements: vec![env, "Monthly review".to_string()],
             escalation_triggers: vec![env, "Score below 70".to_string()],
         };
-        
+
         Ok(assessment)
     }
 
     fn get_and_increment_metric_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&METRIC_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&METRIC_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&METRIC_COUNTER, &next);
         next
@@ -1412,11 +1455,7 @@ impl TelemedicineQualityContract {
     }
 
     fn get_and_increment_action_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&ACTION_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&ACTION_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&ACTION_COUNTER, &next);
         next
@@ -1434,33 +1473,21 @@ impl TelemedicineQualityContract {
     }
 
     fn get_and_increment_trend_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&TREND_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&TREND_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&TREND_COUNTER, &next);
         next
     }
 
     fn get_and_increment_report_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&REPORT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&REPORT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&REPORT_COUNTER, &next);
         next
     }
 
     fn get_and_increment_alert_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&ALERT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&ALERT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&ALERT_COUNTER, &next);
         next
@@ -1473,7 +1500,7 @@ impl TelemedicineQualityContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1489,7 +1516,7 @@ impl TelemedicineQualityContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1500,10 +1527,10 @@ impl TelemedicineQualityContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

@@ -94,7 +94,7 @@ pub struct VitalSignsMeasurement {
     pub units: String,
     pub quality: DataQuality,
     pub location: String, // GPS coordinates or location description
-    pub context: String, // "resting", "post_exercise", "medication_taken", etc.
+    pub context: String,  // "resting", "post_exercise", "medication_taken", etc.
     pub notes: String,
     pub device_battery_level: u8,
     pub data_hash: BytesN<32>,
@@ -108,11 +108,11 @@ pub struct GlucoseMeasurement {
     pub device_id: String,
     pub patient: Address,
     pub timestamp: u64,
-    pub glucose_level: f32, // mg/dL
+    pub glucose_level: f32,          // mg/dL
     pub measurement_context: String, // "fasting", "pre_meal", "post_meal", "bedtime"
-    pub meal_relation: String, // "before", "after", "none"
-    pub carbs_consumed: u32, // grams
-    pub insulin_taken: f32, // units
+    pub meal_relation: String,       // "before", "after", "none"
+    pub carbs_consumed: u32,         // grams
+    pub insulin_taken: f32,          // units
     pub exercise_minutes: u32,
     pub stress_level: u8, // 1-10 scale
     pub illness: bool,
@@ -131,8 +131,8 @@ pub struct BloodPressureMeasurement {
     pub systolic: u16,
     pub diastolic: u16,
     pub heart_rate: u16,
-    pub arm_position: String, // "left_upper", "right_upper", etc.
-    pub body_position: String, // "sitting", "standing", "lying"
+    pub arm_position: String,        // "left_upper", "right_upper", etc.
+    pub body_position: String,       // "sitting", "standing", "lying"
     pub measurement_context: String, // "resting", "post_exercise", etc.
     pub medication_taken: bool,
     pub quality: DataQuality,
@@ -151,9 +151,9 @@ pub struct HRVMeasurement {
     pub sdnn: f32,  // Standard Deviation of NN intervals
     pub pnn50: f32, // Percentage of successive NN intervals that differ by more than 50ms
     pub resting_heart_rate: u16,
-    pub stress_score: u8, // 1-100 scale
+    pub stress_score: u8,   // 1-100 scale
     pub recovery_score: u8, // 1-100 scale
-    pub sleep_quality: u8, // 1-100 scale
+    pub sleep_quality: u8,  // 1-100 scale
     pub quality: DataQuality,
     pub data_hash: BytesN<32>,
 }
@@ -233,7 +233,7 @@ pub struct MonitoringProtocol {
     pub provider: Address,
     pub device_types: Vec<DeviceType>,
     pub measurement_frequency: String, // "hourly", "daily", "weekly", "as_needed"
-    pub specific_times: Vec<String>, // Times of day for measurements
+    pub specific_times: Vec<String>,   // Times of day for measurements
     pub duration_days: u32,
     pub start_date: u64,
     pub end_date: u64,
@@ -346,7 +346,9 @@ impl RemoteMonitoringContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -855,12 +857,14 @@ impl RemoteMonitoringContract {
         }
 
         // Validate date range
-        if start_date >= end_date || (end_date - start_date) > 31536000 { // Max 1 year
+        if start_date >= end_date || (end_date - start_date) > 31536000 {
+            // Max 1 year
             return Err(Error::InvalidDateRange);
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), requester.clone())? {
+        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), requester.clone())?
+        {
             return Err(Error::ConsentRequired);
         }
 
@@ -920,9 +924,7 @@ impl RemoteMonitoringContract {
             .get(&ALERTS)
             .ok_or(Error::AlertNotFound)?;
 
-        let mut alert = alerts
-            .get(alert_id)
-            .ok_or(Error::AlertNotFound)?;
+        let mut alert = alerts.get(alert_id).ok_or(Error::AlertNotFound)?;
 
         // Verify provider is authorized
         if alert.provider != provider {
@@ -965,33 +967,48 @@ impl RemoteMonitoringContract {
             .get(&VITAL_MEASUREMENTS)
             .ok_or(Error::DeviceNotFound)?;
 
-        measurements.get(measurement_id).ok_or(Error::DeviceNotFound)
+        measurements
+            .get(measurement_id)
+            .ok_or(Error::DeviceNotFound)
     }
 
     /// Get glucose measurement
-    pub fn get_glucose_measurement(env: Env, measurement_id: u64) -> Result<GlucoseMeasurement, Error> {
+    pub fn get_glucose_measurement(
+        env: Env,
+        measurement_id: u64,
+    ) -> Result<GlucoseMeasurement, Error> {
         let measurements: Map<u64, GlucoseMeasurement> = env
             .storage()
             .persistent()
             .get(&GLUCOSE_MEASUREMENTS)
             .ok_or(Error::DeviceNotFound)?;
 
-        measurements.get(measurement_id).ok_or(Error::DeviceNotFound)
+        measurements
+            .get(measurement_id)
+            .ok_or(Error::DeviceNotFound)
     }
 
     /// Get blood pressure measurement
-    pub fn get_blood_pressure(env: Env, measurement_id: u64) -> Result<BloodPressureMeasurement, Error> {
+    pub fn get_blood_pressure(
+        env: Env,
+        measurement_id: u64,
+    ) -> Result<BloodPressureMeasurement, Error> {
         let measurements: Map<u64, BloodPressureMeasurement> = env
             .storage()
             .persistent()
             .get(&BP_MEASUREMENTS)
             .ok_or(Error::DeviceNotFound)?;
 
-        measurements.get(measurement_id).ok_or(Error::DeviceNotFound)
+        measurements
+            .get(measurement_id)
+            .ok_or(Error::DeviceNotFound)
     }
 
     /// Get monitoring protocol
-    pub fn get_monitoring_protocol(env: Env, protocol_id: u64) -> Result<MonitoringProtocol, Error> {
+    pub fn get_monitoring_protocol(
+        env: Env,
+        protocol_id: u64,
+    ) -> Result<MonitoringProtocol, Error> {
         let protocols: Map<u64, MonitoringProtocol> = env
             .storage()
             .persistent()
@@ -1078,7 +1095,9 @@ impl RemoteMonitoringContract {
         for protocol in protocols.values() {
             if protocol.patient == device.patient && protocol.status == MonitoringStatus::Active {
                 for threshold in protocol.alert_thresholds.iter() {
-                    if threshold.measurement_type == measurement.measurement_type && threshold.enabled {
+                    if threshold.measurement_type == measurement.measurement_type
+                        && threshold.enabled
+                    {
                         // Check if measurement values breach thresholds
                         for value in measurement.values.iter() {
                             if let Some(min_val) = threshold.min_value {
@@ -1268,7 +1287,12 @@ impl RemoteMonitoringContract {
         // Emit alert event
         env.events().publish(
             (symbol_short!("Alert"), symbol_short!("BloodPressure")),
-            (alert_id, device.patient, measurement.systolic, measurement.diastolic),
+            (
+                alert_id,
+                device.patient,
+                measurement.systolic,
+                measurement.diastolic,
+            ),
         );
 
         Ok(())
@@ -1288,10 +1312,7 @@ impl RemoteMonitoringContract {
             device_id: device.device_id.clone(),
             alert_type: "missed_medication".to_string(),
             severity: AlertSeverity::Medium,
-            message: format!(
-                "Missed medication: {}",
-                adherence.medication_name
-            ),
+            message: format!("Missed medication: {}", adherence.medication_name),
             measurement_id: None,
             threshold_value: None,
             actual_value: None,
@@ -1334,11 +1355,7 @@ impl RemoteMonitoringContract {
     }
 
     fn get_and_increment_alert_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&ALERT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&ALERT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&ALERT_COUNTER, &next);
         next
@@ -1356,11 +1373,7 @@ impl RemoteMonitoringContract {
     }
 
     fn get_and_increment_export_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&EXPORT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&EXPORT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&EXPORT_COUNTER, &next);
         next
@@ -1373,7 +1386,7 @@ impl RemoteMonitoringContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1389,7 +1402,7 @@ impl RemoteMonitoringContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1400,10 +1413,10 @@ impl RemoteMonitoringContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

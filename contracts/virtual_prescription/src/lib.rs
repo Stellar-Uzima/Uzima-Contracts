@@ -97,7 +97,7 @@ pub struct VirtualPrescription {
     pub medication_name: String,
     pub generic_name: Option<String>,
     pub medication_type: MedicationType,
-    pub strength: String, // e.g., "500mg", "10mg/mL"
+    pub strength: String,    // e.g., "500mg", "10mg/mL"
     pub dosage_form: String, // e.g., "tablet", "solution"
     pub quantity: u32,
     pub refills_allowed: u8,
@@ -116,9 +116,9 @@ pub struct VirtualPrescription {
     pub allergies_check: bool,
     pub pregnancy_category: String, // A, B, C, D, X
     pub controlled_substance: bool,
-    pub schedule_number: Option<u8>, // For controlled substances
-    pub dea_number: String, // Prescriber's DEA number
-    pub state_license: String, // Prescriber's state license
+    pub schedule_number: Option<u8>,  // For controlled substances
+    pub dea_number: String,           // Prescriber's DEA number
+    pub state_license: String,        // Prescriber's state license
     pub diagnosis_codes: Vec<String>, // ICD-10 codes
     pub prior_auth_required: bool,
     pub prior_auth_status: String,
@@ -229,7 +229,7 @@ pub struct PharmacyNetwork {
     pub specialty_pharmacy: bool,
     pub digital_prescribing_enabled: bool,
     pub status: String, // "active", "inactive", "suspended"
-    pub rating: u8, // 1-5 stars
+    pub rating: u8,     // 1-5 stars
     pub joined_network: u64,
 }
 
@@ -327,7 +327,9 @@ impl VirtualPrescriptionContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -377,7 +379,8 @@ impl VirtualPrescriptionContract {
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), prescriber.clone())? {
+        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), prescriber.clone())?
+        {
             return Err(Error::ConsentRequired);
         }
 
@@ -392,11 +395,13 @@ impl VirtualPrescriptionContract {
         }
 
         // Validate quantity and refills
-        if quantity == 0 || quantity > 365 { // Max 1 year supply
+        if quantity == 0 || quantity > 365 {
+            // Max 1 year supply
             return Err(Error::InvalidQuantity);
         }
 
-        if refills_allowed > 11 { // Federal limit
+        if refills_allowed > 11 {
+            // Federal limit
             return Err(Error::InvalidRefills);
         }
 
@@ -442,7 +447,11 @@ impl VirtualPrescriptionContract {
             state_license,
             diagnosis_codes,
             prior_auth_required,
-            prior_auth_status: if prior_auth_required { "required".to_string() } else { "not_required".to_string() },
+            prior_auth_status: if prior_auth_required {
+                "required".to_string()
+            } else {
+                "not_required".to_string()
+            },
             consent_token_id,
             digital_signature,
             signature_timestamp: timestamp,
@@ -642,9 +651,10 @@ impl VirtualPrescriptionContract {
             .unwrap_or(Vec::new(&env));
 
         for request in existing_requests.iter() {
-            if request.prescription_id == prescription_id 
-                && request.status == RefillStatus::Requested 
-                && request.patient == patient {
+            if request.prescription_id == prescription_id
+                && request.status == RefillStatus::Requested
+                && request.patient == patient
+            {
                 return Err(Error::DuplicateRefillRequest);
             }
         }
@@ -731,7 +741,7 @@ impl VirtualPrescriptionContract {
         if approved {
             request.status = RefillStatus::Filled;
             request.filled_at = Some(timestamp);
-            
+
             // Update prescription refills
             let mut prescriptions: Map<u64, VirtualPrescription> = env
                 .storage()
@@ -857,7 +867,7 @@ impl VirtualPrescriptionContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -871,7 +881,7 @@ impl VirtualPrescriptionContract {
             .persistent()
             .get(&PHARMACY_NETWORK)
             .unwrap_or(Map::new(&env));
-        
+
         pharmacies.set(pharmacy.pharmacy_id, pharmacy);
         env.storage()
             .persistent()
@@ -888,7 +898,9 @@ impl VirtualPrescriptionContract {
             .get(&PRESCRIPTIONS)
             .ok_or(Error::PrescriptionNotFound)?;
 
-        prescriptions.get(prescription_id).ok_or(Error::PrescriptionNotFound)
+        prescriptions
+            .get(prescription_id)
+            .ok_or(Error::PrescriptionNotFound)
     }
 
     /// Get refill request
@@ -916,11 +928,17 @@ impl VirtualPrescriptionContract {
             .get(&PHARMACY_NETWORK)
             .ok_or(Error::PharmacyNotInNetwork)?;
 
-        pharmacies.get(pharmacy_id).ok_or(Error::PharmacyNotInNetwork)
+        pharmacies
+            .get(pharmacy_id)
+            .ok_or(Error::PharmacyNotInNetwork)
     }
 
     /// Get patient's adherence records
-    pub fn get_patient_adherence(env: Env, patient: Address, prescription_id: u64) -> Result<Vec<MedicationAdherence>, Error> {
+    pub fn get_patient_adherence(
+        env: Env,
+        patient: Address,
+        prescription_id: u64,
+    ) -> Result<Vec<MedicationAdherence>, Error> {
         let adherence_records: Vec<MedicationAdherence> = env
             .storage()
             .persistent()
@@ -958,10 +976,10 @@ impl VirtualPrescriptionContract {
 
     fn validate_dea_number(dea_number: &String) -> bool {
         // Basic DEA number validation (2 letters + 6 digits + 1 check digit)
-        dea_number.len() == 9 && 
-        dea_number.chars().take(2).all(|c| c.is_alphabetic()) &&
-        dea_number.chars().skip(2).take(6).all(|c| c.is_numeric()) &&
-        dea_number.chars().last().map_or(false, |c| c.is_numeric())
+        dea_number.len() == 9
+            && dea_number.chars().take(2).all(|c| c.is_alphabetic())
+            && dea_number.chars().skip(2).take(6).all(|c| c.is_numeric())
+            && dea_number.chars().last().map_or(false, |c| c.is_numeric())
     }
 
     fn validate_state_license(state_license: &String) -> bool {
@@ -991,7 +1009,11 @@ impl VirtualPrescriptionContract {
         true
     }
 
-    fn perform_allergy_check(env: &Env, prescription_id: u64, patient: Address) -> Result<(), Error> {
+    fn perform_allergy_check(
+        env: &Env,
+        prescription_id: u64,
+        patient: Address,
+    ) -> Result<(), Error> {
         let check_id = Self::get_and_increment_allergy_counter(env);
 
         let allergy_check = AllergyCheckResult {
@@ -1018,7 +1040,11 @@ impl VirtualPrescriptionContract {
         Ok(())
     }
 
-    fn perform_drug_interaction_check(env: &Env, prescription_id: u64, patient: Address) -> Result<(), Error> {
+    fn perform_drug_interaction_check(
+        env: &Env,
+        prescription_id: u64,
+        patient: Address,
+    ) -> Result<(), Error> {
         let interaction_id = Self::get_and_increment_interaction_counter(env);
 
         let interaction = DrugInteraction {
@@ -1058,11 +1084,7 @@ impl VirtualPrescriptionContract {
     }
 
     fn get_and_increment_refill_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&REFILL_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&REFILL_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&REFILL_COUNTER, &next);
         next
@@ -1102,11 +1124,7 @@ impl VirtualPrescriptionContract {
     }
 
     fn get_and_increment_auth_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&AUTH_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&AUTH_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&AUTH_COUNTER, &next);
         next
@@ -1119,7 +1137,7 @@ impl VirtualPrescriptionContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1135,7 +1153,7 @@ impl VirtualPrescriptionContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1146,10 +1164,10 @@ impl VirtualPrescriptionContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

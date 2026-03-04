@@ -68,7 +68,7 @@ pub struct ConsultationSession {
     pub end_time: u64,
     pub duration_minutes: u32,
     pub status: ConsultationStatus,
-    pub emergency_level: u8, // 0-5 scale
+    pub emergency_level: u32, // 0-5 scale
     pub notes: String,
     pub metadata_uri: String,
 }
@@ -101,7 +101,7 @@ pub struct AudioRecording {
     pub file_size_bytes: u64,
     pub duration_seconds: u32,
     pub sample_rate: u32,
-    pub channels: u8,
+    pub channels: u32,
     pub encryption_standard: EncryptionStandard,
     pub encryption_key_hash: BytesN<32>,
     pub recorded_at: u64,
@@ -120,7 +120,7 @@ pub struct ScreenShareRecording {
     pub file_size_bytes: u64,
     pub duration_seconds: u32,
     pub resolution: String,
-    pub frame_rate: u8,
+    pub frame_rate: u32,
     pub encryption_standard: EncryptionStandard,
     pub encryption_key_hash: BytesN<32>,
     pub recorded_at: u64,
@@ -140,10 +140,10 @@ pub struct ConsultationSummary {
     pub prescriptions: Vec<String>, // Prescription IDs
     pub follow_up_required: bool,
     pub follow_up_timeframe: String,
-    pub urgency_level: u8,
+    pub urgency_level: u32,
     pub provider_notes: String,
-    pub patient_satisfaction: u8, // 1-5 scale
-    pub technical_quality_score: u8, // 1-5 scale
+    pub patient_satisfaction: u32,    // 1-5 scale
+    pub technical_quality_score: u32, // 1-5 scale
     pub created_at: u64,
 }
 
@@ -241,7 +241,9 @@ impl TelemedicineConsultationContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -333,9 +335,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let mut session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let mut session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         // Validate provider and status
         if session.provider != provider {
@@ -376,9 +376,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let mut session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let mut session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         // Validate provider and status
         if session.provider != provider {
@@ -430,9 +428,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         session.provider.require_auth();
 
@@ -446,7 +442,12 @@ impl TelemedicineConsultationContract {
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, session.patient.clone(), session.provider.clone())? {
+        if !Self::verify_consent_token(
+            &env,
+            consent_token_id,
+            session.patient.clone(),
+            session.provider.clone(),
+        )? {
             return Err(Error::ConsentRequired);
         }
 
@@ -473,15 +474,17 @@ impl TelemedicineConsultationContract {
             .get(&VIDEO_RECORDINGS)
             .unwrap_or(Map::new(&env));
         recordings.set(recording_id, recording);
-        env.storage().persistent().set(&VIDEO_RECORDINGS, &recordings);
+        env.storage()
+            .persistent()
+            .set(&VIDEO_RECORDINGS, &recordings);
 
         // Log access
         Self::log_recording_access(
             &env,
             recording_id,
-            "video".to_string(),
+            String::from_str(&env, "video"),
             session.provider.clone(),
-            "store".to_string(),
+            String::from_str(&env, "store"),
         )?;
 
         // Emit event
@@ -512,9 +515,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         session.provider.require_auth();
 
@@ -528,7 +529,12 @@ impl TelemedicineConsultationContract {
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, session.patient.clone(), session.provider.clone())? {
+        if !Self::verify_consent_token(
+            &env,
+            consent_token_id,
+            session.patient.clone(),
+            session.provider.clone(),
+        )? {
             return Err(Error::ConsentRequired);
         }
 
@@ -556,15 +562,17 @@ impl TelemedicineConsultationContract {
             .get(&AUDIO_RECORDINGS)
             .unwrap_or(Map::new(&env));
         recordings.set(recording_id, recording);
-        env.storage().persistent().set(&AUDIO_RECORDINGS, &recordings);
+        env.storage()
+            .persistent()
+            .set(&AUDIO_RECORDINGS, &recordings);
 
         // Log access
         Self::log_recording_access(
             &env,
             recording_id,
-            "audio".to_string(),
+            String::from_str(&env, "audio"),
             session.provider.clone(),
-            "store".to_string(),
+            String::from_str(&env, "store"),
         )?;
 
         // Emit event
@@ -595,9 +603,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         session.provider.require_auth();
 
@@ -611,7 +617,12 @@ impl TelemedicineConsultationContract {
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, session.patient.clone(), session.provider.clone())? {
+        if !Self::verify_consent_token(
+            &env,
+            consent_token_id,
+            session.patient.clone(),
+            session.provider.clone(),
+        )? {
             return Err(Error::ConsentRequired);
         }
 
@@ -647,9 +658,9 @@ impl TelemedicineConsultationContract {
         Self::log_recording_access(
             &env,
             recording_id,
-            "screen".to_string(),
+            String::from_str(&env, "screen"),
             session.provider.clone(),
-            "store".to_string(),
+            String::from_str(&env, "store"),
         )?;
 
         // Emit event
@@ -689,9 +700,7 @@ impl TelemedicineConsultationContract {
             .get(&SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         // Validate provider and session status
         if session.provider != provider {
@@ -760,18 +769,32 @@ impl TelemedicineConsultationContract {
         }
 
         // Validate recording exists and requester has permission
-        if !Self::validate_recording_access(&env, recording_id, recording_type.clone(), requester.clone())? {
+        if !Self::validate_recording_access(
+            &env,
+            recording_id,
+            recording_type.clone(),
+            requester.clone(),
+        )? {
             return Err(Error::AccessDenied);
         }
 
         // Log the access
-        Self::log_recording_access(&env, recording_id, recording_type, requester.clone(), access_purpose)?;
+        Self::log_recording_access(
+            &env,
+            recording_id,
+            recording_type,
+            requester.clone(),
+            access_purpose,
+        )?;
 
         Ok(true)
     }
 
     /// Get consultation session details
-    pub fn get_consultation_session(env: Env, session_id: u64) -> Result<ConsultationSession, Error> {
+    pub fn get_consultation_session(
+        env: Env,
+        session_id: u64,
+    ) -> Result<ConsultationSession, Error> {
         let sessions: Map<u64, ConsultationSession> = env
             .storage()
             .persistent()
@@ -804,7 +827,10 @@ impl TelemedicineConsultationContract {
     }
 
     /// Get screen recording details
-    pub fn get_screen_recording(env: Env, recording_id: u64) -> Result<ScreenShareRecording, Error> {
+    pub fn get_screen_recording(
+        env: Env,
+        recording_id: u64,
+    ) -> Result<ScreenShareRecording, Error> {
         let recordings: Map<u64, ScreenShareRecording> = env
             .storage()
             .persistent()
@@ -815,7 +841,10 @@ impl TelemedicineConsultationContract {
     }
 
     /// Get consultation summary
-    pub fn get_consultation_summary(env: Env, session_id: u64) -> Result<ConsultationSummary, Error> {
+    pub fn get_consultation_summary(
+        env: Env,
+        session_id: u64,
+    ) -> Result<ConsultationSummary, Error> {
         let summaries: Map<u64, ConsultationSummary> = env
             .storage()
             .persistent()
@@ -826,7 +855,10 @@ impl TelemedicineConsultationContract {
     }
 
     /// Get access logs for a recording
-    pub fn get_recording_access_logs(env: Env, recording_id: u64) -> Result<Vec<RecordingAccessLog>, Error> {
+    pub fn get_recording_access_logs(
+        env: Env,
+        recording_id: u64,
+    ) -> Result<Vec<RecordingAccessLog>, Error> {
         let logs: Vec<RecordingAccessLog> = env
             .storage()
             .persistent()
@@ -887,8 +919,8 @@ impl TelemedicineConsultationContract {
 
         // Default retention periods
         match recording_type {
-            "video" => Ok(365), // 1 year
-            "audio" => Ok(730), // 2 years
+            "video" => Ok(365),  // 1 year
+            "audio" => Ok(730),  // 2 years
             "screen" => Ok(180), // 6 months
             _ => Err(Error::InvalidRecordingType),
         }
@@ -940,14 +972,14 @@ impl TelemedicineConsultationContract {
                     .persistent()
                     .get(&VIDEO_RECORDINGS)
                     .ok_or(Error::RecordingNotFound)?;
-                
+
                 if let Some(recording) = recordings.get(recording_id) {
                     let sessions: Map<u64, ConsultationSession> = env
                         .storage()
                         .persistent()
                         .get(&SESSIONS)
                         .ok_or(Error::SessionNotFound)?;
-                    
+
                     if let Some(session) = sessions.get(recording.session_id) {
                         return Ok(session.patient == requester || session.provider == requester);
                     }
@@ -959,14 +991,14 @@ impl TelemedicineConsultationContract {
                     .persistent()
                     .get(&AUDIO_RECORDINGS)
                     .ok_or(Error::RecordingNotFound)?;
-                
+
                 if let Some(recording) = recordings.get(recording_id) {
                     let sessions: Map<u64, ConsultationSession> = env
                         .storage()
                         .persistent()
                         .get(&SESSIONS)
                         .ok_or(Error::SessionNotFound)?;
-                    
+
                     if let Some(session) = sessions.get(recording.session_id) {
                         return Ok(session.patient == requester || session.provider == requester);
                     }
@@ -978,14 +1010,14 @@ impl TelemedicineConsultationContract {
                     .persistent()
                     .get(&SCREEN_RECORDINGS)
                     .ok_or(Error::RecordingNotFound)?;
-                
+
                 if let Some(recording) = recordings.get(recording_id) {
                     let sessions: Map<u64, ConsultationSession> = env
                         .storage()
                         .persistent()
                         .get(&SESSIONS)
                         .ok_or(Error::SessionNotFound)?;
-                    
+
                     if let Some(session) = sessions.get(recording.session_id) {
                         return Ok(session.patient == requester || session.provider == requester);
                     }
@@ -1017,21 +1049,21 @@ impl TelemedicineConsultationContract {
                 policy_id: (i as u64) + 1,
                 consultation_type: consultation_type.clone(),
                 video_retention_days: match consultation_type {
-                    ConsultationType::Emergency => 1825, // 5 years
+                    ConsultationType::Emergency => 1825,    // 5 years
                     ConsultationType::MentalHealth => 2555, // 7 years
-                    ConsultationType::ChronicCare => 1825, // 5 years
-                    _ => 365, // 1 year
+                    ConsultationType::ChronicCare => 1825,  // 5 years
+                    _ => 365,                               // 1 year
                 },
                 audio_retention_days: match consultation_type {
-                    ConsultationType::Emergency => 3650, // 10 years
+                    ConsultationType::Emergency => 3650,    // 10 years
                     ConsultationType::MentalHealth => 3650, // 10 years
-                    ConsultationType::ChronicCare => 2555, // 7 years
-                    _ => 730, // 2 years
+                    ConsultationType::ChronicCare => 2555,  // 7 years
+                    _ => 730,                               // 2 years
                 },
                 screen_retention_days: match consultation_type {
-                    ConsultationType::Emergency => 1095, // 3 years
+                    ConsultationType::Emergency => 1095,    // 3 years
                     ConsultationType::MentalHealth => 1825, // 5 years
-                    _ => 180, // 6 months
+                    _ => 180,                               // 6 months
                 },
                 auto_archive_days: 90,
                 auto_delete_days: match consultation_type {
@@ -1094,7 +1126,7 @@ impl TelemedicineConsultationContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1110,7 +1142,7 @@ impl TelemedicineConsultationContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1121,10 +1153,10 @@ impl TelemedicineConsultationContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }

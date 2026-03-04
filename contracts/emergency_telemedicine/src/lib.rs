@@ -56,11 +56,11 @@ pub enum ResponseStatus {
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum TriageCategory {
-    Immediate,    // Red - Life-threatening
-    Urgent,      // Yellow - Serious
-    Delayed,     // Green - Non-urgent
-    Minor,       // Blue - Minor
-    Deceased,    // Black - Deceased
+    Immediate, // Red - Life-threatening
+    Urgent,    // Yellow - Serious
+    Delayed,   // Green - Non-urgent
+    Minor,     // Blue - Minor
+    Deceased,  // Black - Deceased
 }
 
 /// Emergency Protocol
@@ -139,7 +139,7 @@ pub struct VitalSigns {
     pub oxygen_saturation: Option<u8>,
     pub temperature: Option<f32>,
     pub blood_glucose: Option<f32>,
-    pub pain_score: Option<u8>, // 0-10 scale
+    pub pain_score: Option<u8>,              // 0-10 scale
     pub consciousness_level: Option<String>, // "Alert", "Verbal", "Pain", "Unresponsive"
     pub pupil_reaction: Option<String>,
     pub skin_color: Option<String>,
@@ -208,8 +208,8 @@ pub struct CommunicationEntry {
     pub recipient: Address,
     pub message_type: String, // "voice", "text", "video", "data"
     pub content: String,
-    pub priority: String, // "routine", "urgent", "critical"
-    pub delivery_status: String, // "sent", "delivered", "read", "acknowledged"
+    pub priority: String,         // "routine", "urgent", "critical"
+    pub delivery_status: String,  // "sent", "delivered", "read", "acknowledged"
     pub attachments: Vec<String>, // IPFS hashes
 }
 
@@ -241,7 +241,7 @@ pub struct EmergencyAlert {
     pub alert_id: u64,
     pub session_id: u64,
     pub alert_type: String, // "vital_signs_deterioration", "no_response", "equipment_failure", "communication_lost"
-    pub severity: String, // "low", "medium", "high", "critical"
+    pub severity: String,   // "low", "medium", "high", "critical"
     pub message: String,
     pub triggered_by: Address,
     pub triggered_at: u64,
@@ -281,14 +281,14 @@ pub struct EmergencyStatistics {
     pub by_type: Map<EmergencyType, u32>,
     pub by_level: Map<EmergencyLevel, u32>,
     pub by_triage: Map<TriageCategory, u32>,
-    pub average_response_time: f32, // minutes
-    pub average_on_scene_time: f32, // minutes
-    pub average_transport_time: f32, // minutes
-    pub outcomes: Map<String, u32>, // outcome -> count
-    pub complications: Map<String, u32>, // complication -> count
-    pub quality_scores: Map<String, f32>, // metric_category -> average_score
+    pub average_response_time: f32,             // minutes
+    pub average_on_scene_time: f32,             // minutes
+    pub average_transport_time: f32,            // minutes
+    pub outcomes: Map<String, u32>,             // outcome -> count
+    pub complications: Map<String, u32>,        // complication -> count
+    pub quality_scores: Map<String, f32>,       // metric_category -> average_score
     pub resource_utilization: Map<String, f32>, // resource_type -> utilization_rate
-    pub satisfaction_scores: Map<String, f32>, // stakeholder -> satisfaction_score
+    pub satisfaction_scores: Map<String, f32>,  // stakeholder -> satisfaction_score
     pub cost_analysis: CostAnalysis,
 }
 
@@ -373,7 +373,9 @@ impl EmergencyTelemedicineContract {
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage().persistent().set(&CONSENT_CONTRACT, &consent_contract);
+        env.storage()
+            .persistent()
+            .set(&CONSENT_CONTRACT, &consent_contract);
         env.storage()
             .persistent()
             .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
@@ -421,7 +423,7 @@ impl EmergencyTelemedicineContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -503,7 +505,8 @@ impl EmergencyTelemedicineContract {
         }
 
         // Verify consent
-        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), initiator.clone())? {
+        if !Self::verify_consent_token(&env, consent_token_id, patient.clone(), initiator.clone())?
+        {
             return Err(Error::ConsentRequired);
         }
 
@@ -515,9 +518,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_PROTOCOLS)
             .ok_or(Error::ProtocolNotFound)?;
 
-        let protocol = protocols
-            .get(protocol_id)
-            .ok_or(Error::ProtocolNotFound)?;
+        let protocol = protocols.get(protocol_id).ok_or(Error::ProtocolNotFound)?;
 
         // Perform triage
         let triage_category = Self::perform_triage(&env, emergency_level, &vital_signs, &symptoms)?;
@@ -603,9 +604,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let mut session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let mut session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         // Validate status transition
         if !Self::is_valid_status_transition(session.response_status, new_status) {
@@ -650,7 +649,12 @@ impl EmergencyTelemedicineContract {
                 .ok_or(Error::ProtocolNotFound)?;
 
             if response_time > protocol.response_time_target as u64 {
-                Self::create_response_time_alert(&env, session_id, response_time, protocol.response_time_target)?;
+                Self::create_response_time_alert(
+                    &env,
+                    session_id,
+                    response_time,
+                    protocol.response_time_target,
+                )?;
             }
         }
 
@@ -691,7 +695,7 @@ impl EmergencyTelemedicineContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -761,9 +765,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_RESOURCES)
             .ok_or(Error::ResourceNotFound)?;
 
-        let mut resource = resources
-            .get(resource_id)
-            .ok_or(Error::ResourceNotFound)?;
+        let mut resource = resources.get(resource_id).ok_or(Error::ResourceNotFound)?;
 
         if resource.status != "available" || resource.current_load >= resource.capacity {
             return Err(Error::ResourceUnavailable);
@@ -812,9 +814,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let mut session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let mut session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         session.vital_signs = vital_signs.clone();
 
@@ -859,9 +859,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_SESSIONS)
             .ok_or(Error::SessionNotFound)?;
 
-        let mut session = sessions
-            .get(session_id)
-            .ok_or(Error::SessionNotFound)?;
+        let mut session = sessions.get(session_id).ok_or(Error::SessionNotFound)?;
 
         session.response_status = ResponseStatus::Resolved;
         session.resolved_at = Some(env.ledger().timestamp());
@@ -921,21 +919,15 @@ impl EmergencyTelemedicineContract {
                 total_emergencies += 1;
 
                 // Count by type
-                let type_count = by_type
-                    .get(session.emergency_type)
-                    .unwrap_or(0u32);
+                let type_count = by_type.get(session.emergency_type).unwrap_or(0u32);
                 by_type.set(session.emergency_type, type_count + 1);
 
                 // Count by level
-                let level_count = by_level
-                    .get(session.emergency_level)
-                    .unwrap_or(0u32);
+                let level_count = by_level.get(session.emergency_level).unwrap_or(0u32);
                 by_level.set(session.emergency_level, level_count + 1);
 
                 // Count by triage
-                let triage_count = by_triage
-                    .get(session.triage_category)
-                    .unwrap_or(0u32);
+                let triage_count = by_triage.get(session.triage_category).unwrap_or(0u32);
                 by_triage.set(session.triage_category, triage_count + 1);
 
                 // Response times
@@ -946,9 +938,7 @@ impl EmergencyTelemedicineContract {
 
                 // Outcomes
                 if !session.outcome.is_empty() {
-                    let outcome_count = outcomes
-                        .get(session.outcome.clone())
-                        .unwrap_or(0u32);
+                    let outcome_count = outcomes.get(session.outcome.clone()).unwrap_or(0u32);
                     outcomes.set(session.outcome, outcome_count + 1);
                 }
             }
@@ -969,13 +959,13 @@ impl EmergencyTelemedicineContract {
             by_level,
             by_triage,
             average_response_time,
-            average_on_scene_time: 0.0, // Would calculate from team data
+            average_on_scene_time: 0.0,  // Would calculate from team data
             average_transport_time: 0.0, // Would calculate from team data
             outcomes,
-            complications: Map::new(&env), // Would calculate
-            quality_scores: Map::new(&env), // Would calculate
+            complications: Map::new(&env),        // Would calculate
+            quality_scores: Map::new(&env),       // Would calculate
             resource_utilization: Map::new(&env), // Would calculate
-            satisfaction_scores: Map::new(&env), // Would calculate
+            satisfaction_scores: Map::new(&env),  // Would calculate
             cost_analysis: CostAnalysis {
                 total_cost: 0,
                 currency: "USD".to_string(),
@@ -1045,7 +1035,11 @@ impl EmergencyTelemedicineContract {
     }
 
     /// Get available resources
-    pub fn get_available_resources(env: Env, resource_type: String, location: String) -> Result<Vec<EmergencyResource>, Error> {
+    pub fn get_available_resources(
+        env: Env,
+        resource_type: String,
+        location: String,
+    ) -> Result<Vec<EmergencyResource>, Error> {
         let resources: Map<u64, EmergencyResource> = env
             .storage()
             .persistent()
@@ -1057,7 +1051,8 @@ impl EmergencyTelemedicineContract {
         for resource in resources.values() {
             if resource.resource_type == resource_type
                 && resource.status == "available"
-                && (location.is_empty() || resource.service_area.contains(&location)) {
+                && (location.is_empty() || resource.service_area.contains(&location))
+            {
                 available.push_back(resource);
             }
         }
@@ -1206,7 +1201,12 @@ impl EmergencyTelemedicineContract {
         }
     }
 
-    fn initiate_emergency_response(env: &Env, session_id: u64, patient: Address, protocol: &EmergencyProtocol) -> Result<(), Error> {
+    fn initiate_emergency_response(
+        env: &Env,
+        session_id: u64,
+        patient: Address,
+        protocol: &EmergencyProtocol,
+    ) -> Result<(), Error> {
         // Find and dispatch appropriate resources
         let resources: Map<u64, EmergencyResource> = env
             .storage()
@@ -1230,7 +1230,13 @@ impl EmergencyTelemedicineContract {
         }
 
         if let Some(resource) = best_resource {
-            Self::dispatch_resource(env, session_id, resource.resource_id, patient, "urgent".to_string())?;
+            Self::dispatch_resource(
+                env,
+                session_id,
+                resource.resource_id,
+                patient,
+                "urgent".to_string(),
+            )?;
         }
 
         // Request specialist if required
@@ -1241,7 +1247,11 @@ impl EmergencyTelemedicineContract {
         Ok(())
     }
 
-    fn create_quality_metrics(env: &Env, session_id: u64, protocol: &EmergencyProtocol) -> Result<(), Error> {
+    fn create_quality_metrics(
+        env: &Env,
+        session_id: u64,
+        protocol: &EmergencyProtocol,
+    ) -> Result<(), Error> {
         for metric_name in protocol.quality_metrics.iter() {
             let metric_id = Self::get_and_increment_metric_counter(env);
 
@@ -1265,15 +1275,18 @@ impl EmergencyTelemedicineContract {
                 .get(&QUALITY_METRICS)
                 .unwrap_or(Map::new(env));
             metrics.set(metric_id, quality_metric);
-            env.storage()
-                .persistent()
-                .set(&QUALITY_METRICS, &metrics);
+            env.storage().persistent().set(&QUALITY_METRICS, &metrics);
         }
 
         Ok(())
     }
 
-    fn create_response_team(env: &Env, session_id: u64, resource_id: u64, dispatcher: Address) -> Result<(), Error> {
+    fn create_response_team(
+        env: &Env,
+        session_id: u64,
+        resource_id: u64,
+        dispatcher: Address,
+    ) -> Result<(), Error> {
         let team_id = Self::get_and_increment_team_counter(env);
         let timestamp = env.ledger().timestamp();
 
@@ -1301,14 +1314,16 @@ impl EmergencyTelemedicineContract {
             .get(&RESPONSE_TEAMS)
             .unwrap_or(Map::new(env));
         teams.set(team_id, team);
-        env.storage()
-            .persistent()
-            .set(&RESPONSE_TEAMS, &teams);
+        env.storage().persistent().set(&RESPONSE_TEAMS, &teams);
 
         Ok(())
     }
 
-    fn request_specialist(env: &Env, session_id: u64, specialist_type: Option<String>) -> Result<(), Error> {
+    fn request_specialist(
+        env: &Env,
+        session_id: u64,
+        specialist_type: Option<String>,
+    ) -> Result<(), Error> {
         // This would find and connect appropriate specialist
         // For now, just emit an event
         env.events().publish(
@@ -1332,7 +1347,12 @@ impl EmergencyTelemedicineContract {
         }
     }
 
-    fn create_response_time_alert(env: &Env, session_id: u64, actual_time: u64, target_time: u32) -> Result<(), Error> {
+    fn create_response_time_alert(
+        env: &Env,
+        session_id: u64,
+        actual_time: u64,
+        target_time: u32,
+    ) -> Result<(), Error> {
         let alert_id = Self::get_and_increment_alert_counter(env);
         let timestamp = env.ledger().timestamp();
 
@@ -1340,8 +1360,16 @@ impl EmergencyTelemedicineContract {
             alert_id,
             session_id,
             alert_type: "response_time_exceeded".to_string(),
-            severity: if actual_time > target_time as u64 * 2 { "critical" } else { "high" }.to_string(),
-            message: format!("Response time {} minutes exceeded target of {} minutes", actual_time, target_time),
+            severity: if actual_time > target_time as u64 * 2 {
+                "critical"
+            } else {
+                "high"
+            }
+            .to_string(),
+            message: format!(
+                "Response time {} minutes exceeded target of {} minutes",
+                actual_time, target_time
+            ),
             triggered_by: Address::from_array(env, &[0u8; 32]), // System triggered
             triggered_at: timestamp,
             acknowledged_by: None,
@@ -1359,9 +1387,7 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_ALERTS)
             .unwrap_or(Map::new(env));
         alerts.set(alert_id, alert);
-        env.storage()
-            .persistent()
-            .set(&EMERGENCY_ALERTS, &alerts);
+        env.storage().persistent().set(&EMERGENCY_ALERTS, &alerts);
 
         Ok(())
     }
@@ -1389,7 +1415,11 @@ impl EmergencyTelemedicineContract {
         false
     }
 
-    fn create_vital_signs_alert(env: &Env, session_id: u64, vital_signs: &VitalSigns) -> Result<(), Error> {
+    fn create_vital_signs_alert(
+        env: &Env,
+        session_id: u64,
+        vital_signs: &VitalSigns,
+    ) -> Result<(), Error> {
         let alert_id = Self::get_and_increment_alert_counter(env);
         let timestamp = env.ledger().timestamp();
 
@@ -1416,14 +1446,16 @@ impl EmergencyTelemedicineContract {
             .get(&EMERGENCY_ALERTS)
             .unwrap_or(Map::new(env));
         alerts.set(alert_id, alert);
-        env.storage()
-            .persistent()
-            .set(&EMERGENCY_ALERTS, &alerts);
+        env.storage().persistent().set(&EMERGENCY_ALERTS, &alerts);
 
         Ok(())
     }
 
-    fn update_final_quality_metrics(env: &Env, session_id: u64, quality_score: u8) -> Result<(), Error> {
+    fn update_final_quality_metrics(
+        env: &Env,
+        session_id: u64,
+        quality_score: u8,
+    ) -> Result<(), Error> {
         let metrics: Map<u64, EmergencyQualityMetric> = env
             .storage()
             .persistent()
@@ -1435,7 +1467,7 @@ impl EmergencyTelemedicineContract {
                 metric.actual_value = quality_score as f32;
                 metric.achievement_rate = quality_score;
                 metric.recorded_at = env.ledger().timestamp();
-                
+
                 let mut updated_metrics = metrics.clone();
                 updated_metrics.set(*metric_id, metric);
                 env.storage()
@@ -1502,11 +1534,7 @@ impl EmergencyTelemedicineContract {
     }
 
     fn get_and_increment_team_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&TEAM_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&TEAM_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&TEAM_COUNTER, &next);
         next
@@ -1524,22 +1552,14 @@ impl EmergencyTelemedicineContract {
     }
 
     fn get_and_increment_alert_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&ALERT_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&ALERT_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&ALERT_COUNTER, &next);
         next
     }
 
     fn get_and_increment_metric_counter(env: &Env) -> u64 {
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&METRIC_COUNTER)
-            .unwrap_or(0);
+        let count: u64 = env.storage().persistent().get(&METRIC_COUNTER).unwrap_or(0);
         let next = count + 1;
         env.storage().persistent().set(&METRIC_COUNTER, &next);
         next
@@ -1552,7 +1572,7 @@ impl EmergencyTelemedicineContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1568,7 +1588,7 @@ impl EmergencyTelemedicineContract {
             .persistent()
             .get(&ADMIN)
             .ok_or(Error::NotAuthorized)?;
-        
+
         if admin != contract_admin {
             return Err(Error::NotAuthorized);
         }
@@ -1579,10 +1599,10 @@ impl EmergencyTelemedicineContract {
 
     /// Health check for monitoring
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
-        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) { 
-            symbol_short!("PAUSED") 
-        } else { 
-            symbol_short!("OK") 
+        let status = if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
         };
         (status, 1, env.ledger().timestamp())
     }
