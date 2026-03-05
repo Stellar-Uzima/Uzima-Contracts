@@ -518,7 +518,6 @@ pub enum DataKey {
     RateLimitCfg(u32),        // operation_id -> RateLimitConfig
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
-<<<<<<< HEAD
     // Genomics
     NextGenomicId,
     GenomicDataset(u64),
@@ -529,9 +528,7 @@ pub enum DataKey {
     Ancestry(Address),
     GenomicBreachCount,
     GenomicBreach(u64),
-=======
-    QuantumThreatLevel,       // 0-100 (percentage)
->>>>>>> 49afb30d16a6849d4677a9311e7da5acfb66d6c7
+    QuantumThreatLevel, // 0-100 (percentage)
 }
 
 #[derive(Clone)]
@@ -768,10 +765,7 @@ impl MedicalRecordsContract {
         env.events().publish(("LOG", topic), entry);
     }
 
-    pub fn add_genomic_dataset(
-        env: Env,
-        config: AddGenomicDatasetConfig,
-    ) -> Result<u64, Error> {
+    pub fn add_genomic_dataset(env: Env, config: AddGenomicDatasetConfig) -> Result<u64, Error> {
         config.doctor.require_auth();
         let paused: bool = env
             .storage()
@@ -907,10 +901,7 @@ impl MedicalRecordsContract {
         Ok(())
     }
 
-    pub fn get_gene_associations_by_gene(
-        env: Env,
-        gene: String,
-    ) -> Vec<GeneAssociationEntry> {
+    pub fn get_gene_associations_by_gene(env: Env, gene: String) -> Vec<GeneAssociationEntry> {
         env.storage()
             .persistent()
             .get(&DataKey::GeneAssociationsByGene(gene))
@@ -998,7 +989,9 @@ impl MedicalRecordsContract {
         if !ok {
             return Err(Error::InvalidCredential);
         }
-        let ttl = ttl_secs.unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS).min(MAX_ZK_GRANT_TTL_SECS);
+        let ttl = ttl_secs
+            .unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS)
+            .min(MAX_ZK_GRANT_TTL_SECS);
         let grant = ZkAccessGrant {
             record_id: dataset_id,
             requester: requester.clone(),
