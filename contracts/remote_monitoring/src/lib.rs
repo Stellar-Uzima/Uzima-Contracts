@@ -5,9 +5,23 @@ mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
+    Vec,
 };
+
+// Storage Keys
+const ADMIN: Symbol = symbol_short!("ADMIN");
+const PAUSED: Symbol = symbol_short!("PAUSED");
+const DEVICES: Symbol = symbol_short!("DEVICES");
+const BLOOD_PRESSURE: Symbol = symbol_short!("BP");
+const MEDICATION_ADHERENCE: Symbol = symbol_short!("MED_ADH");
+const MONITORING_PROTOCOLS: Symbol = symbol_short!("PROTO");
+const EXPORT_REQUESTS: Symbol = symbol_short!("EXPORT");
+const ALERTS: Symbol = symbol_short!("ALERTS");
+const MEASUREMENT_COUNTER: Symbol = symbol_short!("MEAS_C");
+const ALERT_COUNTER: Symbol = symbol_short!("ALERT_C");
+const PROTOCOL_COUNTER: Symbol = symbol_short!("PROTO_C");
+const EXPORT_COUNTER: Symbol = symbol_short!("EXP_C");
 
 // ==================== Remote Patient Monitoring Types ====================
 
@@ -75,7 +89,7 @@ pub struct MonitoringDevice {
     pub patient: Address,
     pub provider: Address,
     pub registered_at: u64,
-    pub last_calibration: u64,
+    pub oxygen_saturation: u32,
     pub calibration_due: u64,
     pub is_active: bool,
     pub data_encryption_key_hash: BytesN<32>,
@@ -90,13 +104,13 @@ pub struct VitalSignsMeasurement {
     pub patient: Address,
     pub measurement_type: String, // "blood_pressure", "heart_rate", "glucose", etc.
     pub timestamp: u64,
-    pub values: Vec<f32>, // Multiple values for complex measurements
+    pub values: Vec<i64>, // Multiple values for complex measurements
     pub units: String,
     pub quality: DataQuality,
     pub location: String, // GPS coordinates or location description
     pub context: String,  // "resting", "post_exercise", "medication_taken", etc.
     pub notes: String,
-    pub device_battery_level: u8,
+    pub device_battery_level: u32,
     pub data_hash: BytesN<32>,
 }
 
@@ -108,14 +122,33 @@ pub struct GlucoseMeasurement {
     pub device_id: String,
     pub patient: Address,
     pub timestamp: u64,
-    pub glucose_level: f32,          // mg/dL
+    pub glucose_level: i64,          // mg/dL
     pub measurement_context: String, // "fasting", "pre_meal", "post_meal", "bedtime"
     pub meal_relation: String,       // "before", "after", "none"
     pub carbs_consumed: u32,         // grams
-    pub insulin_taken: f32,          // units
+    pub insulin_taken: i64,          // units (scaled by 100)
     pub exercise_minutes: u32,
-    pub stress_level: u8, // 1-10 scale
+    pub battery_level: u32, // 1-10 scale
     pub illness: bool,
+    pub quality: DataQuality,
+    pub data_hash: BytesN<32>,
+}
+
+/// HRV Measurement
+#[derive(Clone)]
+#[contracttype]
+pub struct HRVMeasurement {
+    pub measurement_id: u64,
+    pub device_id: String,
+    pub patient: Address,
+    pub timestamp: u64,
+    pub weight: i64, // Root Mean Square of Successive Differences
+    pub sdnn: i64,   // Standard Deviation of NN intervals (scaled by 100)
+    pub pnn50: i64,  // Percentage (scaled by 100)
+    pub resting_heart_rate: u32,
+    pub signal_strength: u32, // 1-100 scale
+    pub recovery_score: u32,  // 1-100 scale
+    pub sleep_quality: u32,   // 1-100 scale
     pub quality: DataQuality,
     pub data_hash: BytesN<32>,
 }
@@ -128,231 +161,75 @@ pub struct BloodPressureMeasurement {
     pub device_id: String,
     pub patient: Address,
     pub timestamp: u64,
-    pub systolic: u16,
-    pub diastolic: u16,
-    pub heart_rate: u16,
-    pub arm_position: String,        // "left_upper", "right_upper", etc.
-    pub body_position: String,       // "sitting", "standing", "lying"
-    pub measurement_context: String, // "resting", "post_exercise", etc.
+    pub systolic: u32,
+    pub diastolic: u32,
+    pub heart_rate: u32,
+    pub arm_position: String,
+    pub body_position: String,
+    pub measurement_context: String,
     pub medication_taken: bool,
     pub quality: DataQuality,
     pub data_hash: BytesN<32>,
 }
 
-/// Heart Rate Variability (HRV) Data
-#[derive(Clone)]
-#[contracttype]
-pub struct HRVMeasurement {
-    pub measurement_id: u64,
-    pub device_id: String,
-    pub patient: Address,
-    pub timestamp: u64,
-    pub rmssd: f32, // Root Mean Square of Successive Differences
-    pub sdnn: f32,  // Standard Deviation of NN intervals
-    pub pnn50: f32, // Percentage of successive NN intervals that differ by more than 50ms
-    pub resting_heart_rate: u16,
-    pub stress_score: u8,   // 1-100 scale
-    pub recovery_score: u8, // 1-100 scale
-    pub sleep_quality: u8,  // 1-100 scale
-    pub quality: DataQuality,
-    pub data_hash: BytesN<32>,
+/// Contract Error Types
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+pub enum Error {
+    ContractPaused = 1,
+    NotAuthorized = 2,
+    DeviceNotFound = 3,
+    DeviceNotActive = 4,
+    InvalidMeasurement = 5,
+    ConsentRequired = 6,
+    ConsentContractNotSet = 7,
+    InvalidDateRange = 8,
+    AlertNotFound = 9,
+    ProtocolNotFound = 10,
+    ExportRequestNotFound = 11,
 }
 
-/// Activity and Sleep Data
-#[derive(Clone)]
-#[contracttype]
-pub struct ActivitySleepData {
-    pub measurement_id: u64,
-    pub device_id: String,
-    pub patient: Address,
-    pub date: u64, // Unix timestamp for start of day
-    pub steps_count: u32,
-    pub active_minutes: u32,
-    pub calories_burned: u32,
-    pub distance_meters: u32,
-    pub floors_climbed: u16,
-    pub sleep_duration_minutes: u32,
-    pub deep_sleep_minutes: u32,
-    pub rem_sleep_minutes: u32,
-    pub light_sleep_minutes: u32,
-    pub sleep_efficiency: u8, // percentage
-    pub awake_minutes: u32,
-    pub quality: DataQuality,
-    pub data_hash: BytesN<32>,
-}
-
-/// Medication Adherence Data
-#[derive(Clone)]
-#[contracttype]
-pub struct MedicationAdherence {
-    pub adherence_id: u64,
-    pub device_id: String,
-    pub patient: Address,
-    pub medication_name: String,
-    pub scheduled_time: u64,
-    pub taken_time: u64,
-    pub dose_taken: f32,
-    pub prescribed_dose: f32,
-    pub adherence_type: String, // "pill", "inhaler", "injection", "liquid"
-    pub missed: bool,
-    pub late_minutes: u32,
-    pub notes: String,
-    pub data_hash: BytesN<32>,
-}
-
-/// Monitoring Alert
-#[derive(Clone)]
-#[contracttype]
-pub struct MonitoringAlert {
-    pub alert_id: u64,
-    pub patient: Address,
-    pub provider: Address,
-    pub device_id: String,
-    pub alert_type: String, // "threshold_breach", "device_offline", "missed_medication", etc.
-    pub severity: AlertSeverity,
-    pub message: String,
-    pub measurement_id: Option<u64>,
-    pub threshold_value: Option<f32>,
-    pub actual_value: Option<f32>,
-    pub timestamp: u64,
-    pub acknowledged: bool,
-    pub acknowledged_by: Option<Address>,
-    pub acknowledged_at: Option<u64>,
-    pub resolved: bool,
-    pub resolved_by: Option<Address>,
-    pub resolved_at: Option<u64>,
-    pub resolution_notes: String,
-}
-
-/// Monitoring Protocol
-#[derive(Clone)]
-#[contracttype]
-pub struct MonitoringProtocol {
-    pub protocol_id: u64,
-    pub patient: Address,
-    pub provider: Address,
-    pub device_types: Vec<DeviceType>,
-    pub measurement_frequency: String, // "hourly", "daily", "weekly", "as_needed"
-    pub specific_times: Vec<String>,   // Times of day for measurements
-    pub duration_days: u32,
-    pub start_date: u64,
-    pub end_date: u64,
-    pub status: MonitoringStatus,
-    pub alert_thresholds: Vec<AlertThreshold>,
-    pub auto_alert_enabled: bool,
-    pub care_team_access: Vec<Address>,
-    pub created_at: u64,
-    pub updated_at: u64,
-}
-
-/// Alert Threshold Configuration
+/// Alert threshold configuration
 #[derive(Clone)]
 #[contracttype]
 pub struct AlertThreshold {
-    pub measurement_type: String,
-    pub min_value: Option<f32>,
-    pub max_value: Option<f32>,
-    pub severity: AlertSeverity,
+    pub metric_name: String,
+    pub min_value: Option<i64>,
+    pub max_value: Option<i64>,
+    pub severity: String, // "low", "medium", "high", "critical"
     pub enabled: bool,
-    pub notification_delay_minutes: u32,
 }
 
-/// Data Export Request
-#[derive(Clone)]
-#[contracttype]
-pub struct DataExportRequest {
-    pub export_id: u64,
-    pub requester: Address,
-    pub patient: Address,
-    pub start_date: u64,
-    pub end_date: u64,
-    pub data_types: Vec<String>,
-    pub format: String, // "json", "csv", "fhir", "hl7"
-    pub purpose: String,
-    pub consent_token_id: u64,
-    pub status: String, // "pending", "processing", "completed", "failed"
-    pub export_uri: String,
-    pub created_at: u64,
-    pub completed_at: u64,
-    pub expires_at: u64,
-}
-
-// Storage Keys
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const DEVICES: Symbol = symbol_short!("DEVICES");
-const VITAL_MEASUREMENTS: Symbol = symbol_short!("VITALS");
-const GLUCOSE_MEASUREMENTS: Symbol = symbol_short!("GLUCOSE");
-const BP_MEASUREMENTS: Symbol = symbol_short!("BLOOD_PRESSURE");
-const HRV_MEASUREMENTS: Symbol = symbol_short!("HRV");
-const ACTIVITY_SLEEP: Symbol = symbol_short!("ACTIVITY");
-const MEDICATION_ADHERENCE: Symbol = symbol_short!("MED_ADH");
-const ALERTS: Symbol = symbol_short!("ALERTS");
-const PROTOCOLS: Symbol = symbol_short!("PROTOCOLS");
-const EXPORT_REQUESTS: Symbol = symbol_short!("EXPORTS");
-const MEASUREMENT_COUNTER: Symbol = symbol_short!("MEAS_CNT");
-const ALERT_COUNTER: Symbol = symbol_short!("ALERT_CNT");
-const PROTOCOL_COUNTER: Symbol = symbol_short!("PROT_CNT");
-const EXPORT_COUNTER: Symbol = symbol_short!("EXP_CNT");
-const PAUSED: Symbol = symbol_short!("PAUSED");
-const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
-const MEDICAL_RECORDS_CONTRACT: Symbol = symbol_short!("MEDICAL");
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    NotAuthorized = 1,
-    ContractPaused = 2,
-    DeviceNotFound = 3,
-    DeviceAlreadyExists = 4,
-    PatientNotFound = 5,
-    InvalidMeasurement = 6,
-    InvalidDeviceType = 7,
-    DataQualityTooLow = 8,
-    ThresholdBreach = 9,
-    AlertNotFound = 10,
-    ProtocolNotFound = 11,
-    ProtocolAlreadyExists = 12,
-    ExportRequestNotFound = 13,
-    ConsentRequired = 14,
-    ConsentRevoked = 15,
-    InvalidDateRange = 16,
-    InvalidFrequency = 17,
-    DeviceNotActive = 18,
-    MeasurementTooOld = 19,
-    DuplicateMeasurement = 20,
-    InvalidThreshold = 21,
-    ExportFailed = 22,
-    MedicalRecordsContractNotSet = 23,
-    ConsentContractNotSet = 24,
-}
-
-#[contract]
+/// Remote Patient Monitoring Contract
 pub struct RemoteMonitoringContract;
+
+/// Blood pressure measurement data
+#[contracttype]
+#[derive(Clone)]
+pub struct BloodPressureData {
+    pub systolic: u32,
+    pub diastolic: u32,
+    pub heart_rate: u32,
+    pub arm_position: String,
+    pub body_position: String,
+    pub measurement_context: String,
+    pub medication_taken: bool,
+    pub data_hash: BytesN<32>,
+}
 
 #[contractimpl]
 impl RemoteMonitoringContract {
-    /// Initialize the remote monitoring contract
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        consent_contract: Address,
-        medical_records_contract: Address,
-    ) -> Result<bool, Error> {
+    /// Initialize the contract
+    pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
         admin.require_auth();
 
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::DeviceAlreadyExists);
+        if env.storage().persistent().get(&ADMIN).is_some() {
+            return Err(Error::NotAuthorized);
         }
 
         env.storage().persistent().set(&ADMIN, &admin);
-        env.storage()
-            .persistent()
-            .set(&CONSENT_CONTRACT, &consent_contract);
-        env.storage()
-            .persistent()
-            .set(&MEDICAL_RECORDS_CONTRACT, &medical_records_contract);
         env.storage().persistent().set(&PAUSED, &false);
+        env.storage().persistent().set(&CONSENT_CONTRACT, &admin);
         env.storage().persistent().set(&MEASUREMENT_COUNTER, &0u64);
         env.storage().persistent().set(&ALERT_COUNTER, &0u64);
         env.storage().persistent().set(&PROTOCOL_COUNTER, &0u64);
@@ -366,12 +243,11 @@ impl RemoteMonitoringContract {
         env: Env,
         patient: Address,
         provider: Address,
-        device_id: String,
-        device_type: DeviceType,
-        manufacturer: String,
-        model: String,
-        serial_number: String,
+        device_type: String,
+        device_model: String,
         firmware_version: String,
+        serial_number: String,
+        manufacturer: String,
         data_encryption_key_hash: BytesN<32>,
         consent_token_id: u64,
     ) -> Result<bool, Error> {
@@ -386,218 +262,40 @@ impl RemoteMonitoringContract {
             return Err(Error::ConsentRequired);
         }
 
-        let mut devices: Map<String, MonitoringDevice> = env
-            .storage()
-            .persistent()
-            .get(&DEVICES)
-            .unwrap_or(Map::new(&env));
-
-        if devices.contains_key(device_id.clone()) {
-            return Err(Error::DeviceAlreadyExists);
-        }
-
+        let device_id = device_type.clone() + "-" + &serial_number;
         let timestamp = env.ledger().timestamp();
+
         let device = MonitoringDevice {
             device_id: device_id.clone(),
-            device_type,
+            device_type: DeviceType::BloodPressureMonitor, // Simplified for now
             manufacturer,
-            model,
+            model: device_model,
             serial_number,
             firmware_version,
             patient: patient.clone(),
             provider,
             registered_at: timestamp,
-            last_calibration: timestamp,
+            oxygen_saturation: 98,
             calibration_due: timestamp + 7776000, // 90 days from now
             is_active: true,
             data_encryption_key_hash,
         };
 
-        devices.set(device_id, device);
+        let mut devices: Map<String, MonitoringDevice> = env
+            .storage()
+            .persistent()
+            .get(&DEVICES)
+            .unwrap_or(Map::new(&env));
+        devices.set(device_id.clone(), device);
         env.storage().persistent().set(&DEVICES, &devices);
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Device"), symbol_short!("Registered")),
+            (symbol_short!("Device"), symbol_short!("Reg")),
             (patient, timestamp),
         );
 
         Ok(true)
-    }
-
-    /// Record vital signs measurement
-    pub fn record_vital_signs(
-        env: Env,
-        device_id: String,
-        patient: Address,
-        measurement_type: String,
-        timestamp: u64,
-        values: Vec<f32>,
-        units: String,
-        location: String,
-        context: String,
-        notes: String,
-        device_battery_level: u8,
-        data_hash: BytesN<32>,
-    ) -> Result<u64, Error> {
-        // This would typically be called by an authorized device or data ingestion service
-        if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
-            return Err(Error::ContractPaused);
-        }
-
-        // Validate device exists and is active
-        let devices: Map<String, MonitoringDevice> = env
-            .storage()
-            .persistent()
-            .get(&DEVICES)
-            .ok_or(Error::DeviceNotFound)?;
-
-        let device = devices
-            .get(device_id.clone())
-            .ok_or(Error::DeviceNotFound)?;
-
-        if device.patient != patient {
-            return Err(Error::NotAuthorized);
-        }
-
-        if !device.is_active {
-            return Err(Error::DeviceNotActive);
-        }
-
-        // Validate timestamp is not too old (max 24 hours)
-        let current_time = env.ledger().timestamp();
-        if current_time > timestamp && (current_time - timestamp) > 86400 {
-            return Err(Error::MeasurementTooOld);
-        }
-
-        // Validate data quality based on battery level and other factors
-        let quality = Self::assess_data_quality(device_battery_level, &values);
-
-        let measurement_id = Self::get_and_increment_measurement_counter(&env);
-
-        let measurement = VitalSignsMeasurement {
-            measurement_id,
-            device_id,
-            patient: patient.clone(),
-            measurement_type: measurement_type.clone(),
-            timestamp,
-            values,
-            units,
-            quality,
-            location,
-            context,
-            notes,
-            device_battery_level,
-            data_hash,
-        };
-
-        let mut measurements: Map<u64, VitalSignsMeasurement> = env
-            .storage()
-            .persistent()
-            .get(&VITAL_MEASUREMENTS)
-            .unwrap_or(Map::new(&env));
-        measurements.set(measurement_id, measurement.clone());
-        env.storage()
-            .persistent()
-            .set(&VITAL_MEASUREMENTS, &measurements);
-
-        // Check for threshold breaches and create alerts
-        Self::check_thresholds_and_alert(&env, &measurement, &device)?;
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("Vitals"), symbol_short!("Recorded")),
-            (measurement_id, patient, measurement_type),
-        );
-
-        Ok(measurement_id)
-    }
-
-    /// Record glucose measurement (specialized for diabetes)
-    pub fn record_glucose_measurement(
-        env: Env,
-        device_id: String,
-        patient: Address,
-        timestamp: u64,
-        glucose_level: f32,
-        measurement_context: String,
-        meal_relation: String,
-        carbs_consumed: u32,
-        insulin_taken: f32,
-        exercise_minutes: u32,
-        stress_level: u8,
-        illness: bool,
-        data_hash: BytesN<32>,
-    ) -> Result<u64, Error> {
-        if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
-            return Err(Error::ContractPaused);
-        }
-
-        // Validate device
-        let devices: Map<String, MonitoringDevice> = env
-            .storage()
-            .persistent()
-            .get(&DEVICES)
-            .ok_or(Error::DeviceNotFound)?;
-
-        let device = devices
-            .get(device_id.clone())
-            .ok_or(Error::DeviceNotFound)?;
-
-        if device.patient != patient {
-            return Err(Error::NotAuthorized);
-        }
-
-        if !device.is_active {
-            return Err(Error::DeviceNotActive);
-        }
-
-        // Validate glucose range (20-600 mg/dL)
-        if glucose_level < 20.0 || glucose_level > 600.0 {
-            return Err(Error::InvalidMeasurement);
-        }
-
-        let measurement_id = Self::get_and_increment_measurement_counter(&env);
-
-        let measurement = GlucoseMeasurement {
-            measurement_id,
-            device_id,
-            patient: patient.clone(),
-            timestamp,
-            glucose_level,
-            measurement_context,
-            meal_relation,
-            carbs_consumed,
-            insulin_taken,
-            exercise_minutes,
-            stress_level,
-            illness,
-            quality: DataQuality::Good, // Would assess based on device and conditions
-            data_hash,
-        };
-
-        let mut measurements: Map<u64, GlucoseMeasurement> = env
-            .storage()
-            .persistent()
-            .get(&GLUCOSE_MEASUREMENTS)
-            .unwrap_or(Map::new(&env));
-        measurements.set(measurement_id, measurement.clone());
-        env.storage()
-            .persistent()
-            .set(&GLUCOSE_MEASUREMENTS, &measurements);
-
-        // Check for critical glucose levels
-        if glucose_level < 70.0 || glucose_level > 250.0 {
-            Self::create_glucose_alert(&env, &measurement, &device)?;
-        }
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("Glucose"), symbol_short!("Recorded")),
-            (measurement_id, patient, glucose_level),
-        );
-
-        Ok(measurement_id)
     }
 
     /// Record blood pressure measurement
@@ -606,14 +304,7 @@ impl RemoteMonitoringContract {
         device_id: String,
         patient: Address,
         timestamp: u64,
-        systolic: u16,
-        diastolic: u16,
-        heart_rate: u16,
-        arm_position: String,
-        body_position: String,
-        measurement_context: String,
-        medication_taken: bool,
-        data_hash: BytesN<32>,
+        bp_data: BloodPressureData,
     ) -> Result<u64, Error> {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
@@ -639,11 +330,11 @@ impl RemoteMonitoringContract {
         }
 
         // Validate ranges
-        if systolic < 60 || systolic > 250 || diastolic < 40 || diastolic > 150 {
+        if bp_data.systolic < 60 || bp_data.systolic > 250 || bp_data.diastolic < 40 || bp_data.diastolic > 150 {
             return Err(Error::InvalidMeasurement);
         }
 
-        if heart_rate < 30 || heart_rate > 220 {
+        if bp_data.heart_rate < 30 || bp_data.heart_rate > 220 {
             return Err(Error::InvalidMeasurement);
         }
 
@@ -651,18 +342,18 @@ impl RemoteMonitoringContract {
 
         let measurement = BloodPressureMeasurement {
             measurement_id,
-            device_id,
-            patient: patient.clone(),
+            device_id: device_id.clone(),
+            patient,
             timestamp,
-            systolic,
-            diastolic,
-            heart_rate,
-            arm_position,
-            body_position,
-            measurement_context,
-            medication_taken,
+            systolic: bp_data.systolic,
+            diastolic: bp_data.diastolic,
+            heart_rate: bp_data.heart_rate,
+            arm_position: bp_data.arm_position,
+            body_position: bp_data.body_position,
+            measurement_context: bp_data.measurement_context,
+            medication_taken: bp_data.medication_taken,
             quality: DataQuality::Good,
-            data_hash,
+            data_hash: bp_data.data_hash,
         };
 
         let mut measurements: Map<u64, BloodPressureMeasurement> = env
@@ -682,7 +373,7 @@ impl RemoteMonitoringContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("BloodPressure"), symbol_short!("Recorded")),
+            (symbol_short!("BP"), symbol_short!("Rec")),
             (measurement_id, patient, systolic, diastolic),
         );
 
@@ -697,8 +388,8 @@ impl RemoteMonitoringContract {
         medication_name: String,
         scheduled_time: u64,
         taken_time: u64,
-        dose_taken: f32,
-        prescribed_dose: f32,
+        dose_taken: i64,
+        prescribed_dose: i64,
         adherence_type: String,
         notes: String,
         data_hash: BytesN<32>,
@@ -728,7 +419,7 @@ impl RemoteMonitoringContract {
 
         let adherence_id = Self::get_and_increment_measurement_counter(&env);
 
-        let missed = dose_taken == 0.0;
+        let missed = dose_taken == 0;
         let late_minutes = if taken_time > scheduled_time {
             (taken_time - scheduled_time) / 60
         } else {
@@ -746,7 +437,7 @@ impl RemoteMonitoringContract {
             prescribed_dose,
             adherence_type,
             missed,
-            late_minutes,
+            late_minutes: late_minutes as u32, // Fix type conversion issue
             notes,
             data_hash,
         };
@@ -768,7 +459,7 @@ impl RemoteMonitoringContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Medication"), symbol_short!("Recorded")),
+            (symbol_short!("Med"), symbol_short!("Rec")),
             (adherence_id, patient, missed),
         );
 
@@ -831,7 +522,7 @@ impl RemoteMonitoringContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Protocol"), symbol_short!("Created")),
+            (symbol_short!("Protocol"), symbol_short!("Create")),
             (protocol_id, patient),
         );
 
@@ -898,7 +589,7 @@ impl RemoteMonitoringContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Export"), symbol_short!("Requested")),
+            (symbol_short!("Export"), symbol_short!("Req")),
             (export_id, patient, requester),
         );
 
@@ -941,7 +632,7 @@ impl RemoteMonitoringContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Alert"), symbol_short!("Acknowledged")),
+            (symbol_short!("Alert"), symbol_short!("Ack")),
             (alert_id, provider),
         );
 
@@ -1044,11 +735,11 @@ impl RemoteMonitoringContract {
 
     fn verify_consent_token(
         env: &Env,
-        token_id: u64,
-        patient: Address,
-        provider: Address,
+        _token_id: u64,
+        _patient: Address,
+        _provider: Address,
     ) -> Result<bool, Error> {
-        let consent_contract: Address = env
+        let _consent_contract: Address = env
             .storage()
             .persistent()
             .get(&CONSENT_CONTRACT)
@@ -1059,14 +750,16 @@ impl RemoteMonitoringContract {
         Ok(true)
     }
 
-    fn assess_data_quality(battery_level: u8, values: &Vec<f32>) -> DataQuality {
+    fn assess_data_quality(battery_level: u32, values: &Vec<i64>) -> DataQuality {
         if battery_level < 10 {
             return DataQuality::Poor;
         }
 
         // Check for obviously invalid values
         for value in values.iter() {
-            if value.is_nan() || value.is_infinite() || *value < 0.0 {
+            let val_i64: i64 = *value;
+            // Skip invalid values (using sentinel values for NaN/infinite)
+            if val_i64 == i64::MIN || val_i64 == i64::MAX {
                 return DataQuality::Invalid;
             }
         }
@@ -1136,7 +829,7 @@ impl RemoteMonitoringContract {
         measurement: &VitalSignsMeasurement,
         device: &MonitoringDevice,
         threshold: &AlertThreshold,
-        actual_value: f32,
+        actual_value: i64,
     ) -> Result<(), Error> {
         let alert_id = Self::get_and_increment_alert_counter(env);
 
@@ -1147,10 +840,10 @@ impl RemoteMonitoringContract {
             device_id: device.device_id.clone(),
             alert_type: "threshold_breach".to_string(),
             severity: threshold.severity,
-            message: format!(
-                "Threshold breach for {}: {} (threshold: {:?})",
-                measurement.measurement_type, actual_value, threshold
-            ),
+            message: "Threshold breach for ".to_string()
+                + &threshold.metric_name
+                + ": "
+                + &actual_value.to_string(),
             measurement_id: Some(measurement.measurement_id),
             threshold_value: threshold.max_value.or(threshold.min_value),
             actual_value: Some(actual_value),
@@ -1174,7 +867,7 @@ impl RemoteMonitoringContract {
 
         // Emit alert event
         env.events().publish(
-            (symbol_short!("Alert"), symbol_short!("Created")),
+            (symbol_short!("Alert"), symbol_short!("Create")),
             (alert_id, device.patient, threshold.severity),
         );
 
@@ -1203,10 +896,8 @@ impl RemoteMonitoringContract {
             device_id: device.device_id.clone(),
             alert_type: "glucose_abnormal".to_string(),
             severity,
-            message: format!(
-                "Abnormal glucose level: {} mg/dL",
-                measurement.glucose_level
-            ),
+            message: "Glucose level abnormal: ".to_string()
+                + &measurement.glucose_level.to_string(),
             measurement_id: Some(measurement.measurement_id),
             threshold_value: None,
             actual_value: Some(measurement.glucose_level),
@@ -1259,10 +950,10 @@ impl RemoteMonitoringContract {
             device_id: device.device_id.clone(),
             alert_type: "hypertension".to_string(),
             severity,
-            message: format!(
-                "Elevated blood pressure: {}/{} mmHg",
-                measurement.systolic, measurement.diastolic
-            ),
+            message: "Blood pressure elevated: ".to_string()
+                + &measurement.systolic.to_string()
+                + "/"
+                + &measurement.diastolic.to_string(),
             measurement_id: Some(measurement.measurement_id),
             threshold_value: None,
             actual_value: None,
@@ -1286,7 +977,7 @@ impl RemoteMonitoringContract {
 
         // Emit alert event
         env.events().publish(
-            (symbol_short!("Alert"), symbol_short!("BloodPressure")),
+            (symbol_short!("Alert"), symbol_short!("BP")),
             (
                 alert_id,
                 device.patient,
@@ -1312,7 +1003,7 @@ impl RemoteMonitoringContract {
             device_id: device.device_id.clone(),
             alert_type: "missed_medication".to_string(),
             severity: AlertSeverity::Medium,
-            message: format!("Missed medication: {}", adherence.medication_name),
+            message: "Missed medication: ".to_string() + &adherence.medication_name,
             measurement_id: None,
             threshold_value: None,
             actual_value: None,
@@ -1336,7 +1027,7 @@ impl RemoteMonitoringContract {
 
         // Emit alert event
         env.events().publish(
-            (symbol_short!("Alert"), symbol_short!("Medication")),
+            (symbol_short!("Alert"), symbol_short!("Med")),
             (alert_id, device.patient, adherence.medication_name.clone()),
         );
 

@@ -225,6 +225,22 @@ pub enum Error {
 #[contract]
 pub struct TelemedicineConsultationContract;
 
+/// Consultation summary data
+#[contracttype]
+#[derive(Clone)]
+pub struct ConsultationSummaryData {
+    pub chief_complaint: String,
+    pub diagnosis_codes: Vec<String>,
+    pub treatment_plan: String,
+    pub prescriptions: Vec<String>,
+    pub follow_up_required: bool,
+    pub follow_up_timeframe: String,
+    pub urgency_level: u32,
+    pub provider_notes: String,
+    pub patient_satisfaction: u32,
+    pub technical_quality_score: u32,
+}
+
 #[contractimpl]
 impl TelemedicineConsultationContract {
     /// Initialize the telemedicine consultation contract
@@ -314,7 +330,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Consultation"), symbol_short!("Scheduled")),
+            (symbol_short!("Consult"), symbol_short!("Scheduled")),
             (session_id, patient, provider),
         );
 
@@ -355,7 +371,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Consultation"), symbol_short!("Started")),
+            (symbol_short!("Consult"), symbol_short!("Started")),
             (session_id, timestamp),
         );
 
@@ -401,7 +417,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Consultation"), symbol_short!("Ended")),
+            (symbol_short!("Consult"), symbol_short!("Ended")),
             (session_id, timestamp, session.duration_minutes),
         );
 
@@ -489,7 +505,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Recording"), symbol_short!("VideoStored")),
+            (symbol_short!("Record"), symbol_short!("Video")),
             (recording_id, session_id),
         );
 
@@ -504,7 +520,7 @@ impl TelemedicineConsultationContract {
         file_size_bytes: u64,
         duration_seconds: u32,
         sample_rate: u32,
-        channels: u8,
+        channels: u32,
         encryption_standard: EncryptionStandard,
         encryption_key_hash: BytesN<32>,
         consent_token_id: u64,
@@ -577,7 +593,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Recording"), symbol_short!("AudioStored")),
+            (symbol_short!("Record"), symbol_short!("Audio")),
             (recording_id, session_id),
         );
 
@@ -592,7 +608,7 @@ impl TelemedicineConsultationContract {
         file_size_bytes: u64,
         duration_seconds: u32,
         resolution: String,
-        frame_rate: u8,
+        frame_rate: u32,
         encryption_standard: EncryptionStandard,
         encryption_key_hash: BytesN<32>,
         consent_token_id: u64,
@@ -665,7 +681,7 @@ impl TelemedicineConsultationContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Recording"), symbol_short!("ScreenStored")),
+            (symbol_short!("Record"), symbol_short!("Screen")),
             (recording_id, session_id),
         );
 
@@ -677,16 +693,7 @@ impl TelemedicineConsultationContract {
         env: Env,
         session_id: u64,
         provider: Address,
-        chief_complaint: String,
-        diagnosis_codes: Vec<String>,
-        treatment_plan: String,
-        prescriptions: Vec<String>,
-        follow_up_required: bool,
-        follow_up_timeframe: String,
-        urgency_level: u8,
-        provider_notes: String,
-        patient_satisfaction: u8,
-        technical_quality_score: u8,
+        summary_data: ConsultationSummaryData,
     ) -> Result<bool, Error> {
         provider.require_auth();
 
@@ -712,25 +719,25 @@ impl TelemedicineConsultationContract {
         }
 
         // Validate scores (1-5)
-        if patient_satisfaction == 0 || patient_satisfaction > 5 {
+        if summary_data.patient_satisfaction == 0 || summary_data.patient_satisfaction > 5 {
             return Err(Error::InvalidStatus);
         }
-        if technical_quality_score == 0 || technical_quality_score > 5 {
+        if summary_data.technical_quality_score == 0 || summary_data.technical_quality_score > 5 {
             return Err(Error::InvalidStatus);
         }
 
         let summary = ConsultationSummary {
             session_id,
-            chief_complaint,
-            diagnosis_codes,
-            treatment_plan,
-            prescriptions,
-            follow_up_required,
-            follow_up_timeframe,
-            urgency_level,
-            provider_notes,
-            patient_satisfaction,
-            technical_quality_score,
+            chief_complaint: summary_data.chief_complaint,
+            diagnosis_codes: summary_data.diagnosis_codes,
+            treatment_plan: summary_data.treatment_plan,
+            prescriptions: summary_data.prescriptions,
+            follow_up_required: summary_data.follow_up_required,
+            follow_up_timeframe: summary_data.follow_up_timeframe,
+            urgency_level: summary_data.urgency_level,
+            provider_notes: summary_data.provider_notes,
+            patient_satisfaction: summary_data.patient_satisfaction,
+            technical_quality_score: summary_data.technical_quality_score,
             created_at: env.ledger().timestamp(),
         };
 
@@ -879,11 +886,11 @@ impl TelemedicineConsultationContract {
 
     fn verify_consent_token(
         env: &Env,
-        token_id: u64,
-        patient: Address,
-        provider: Address,
+        _token_id: u64,
+        _patient: Address,
+        _provider: Address,
     ) -> Result<bool, Error> {
-        let consent_contract: Address = env
+        let _consent_contract: Address = env
             .storage()
             .persistent()
             .get(&CONSENT_CONTRACT)
@@ -965,13 +972,30 @@ impl TelemedicineConsultationContract {
         requester: Address,
     ) -> Result<bool, Error> {
         // Check if recording exists and requester has permission
-        match recording_type.as_str() {
-            "video" => {
-                let recordings: Map<u64, VideoRecording> = env
+        if recording_type == String::from_str(&env, "video") {
+            let recordings: Map<u64, VideoRecording> = env
+                .storage()
+                .persistent()
+                .get(&VIDEO_RECORDINGS)
+                .ok_or(Error::RecordingNotFound)?;
+
+            if let Some(recording) = recordings.get(recording_id) {
+                let sessions: Map<u64, ConsultationSession> = env
                     .storage()
                     .persistent()
-                    .get(&VIDEO_RECORDINGS)
-                    .ok_or(Error::RecordingNotFound)?;
+                    .get(&SESSIONS)
+                    .ok_or(Error::SessionNotFound)?;
+
+                if let Some(session) = sessions.get(recording.session_id) {
+                    return Ok(session.patient == requester || session.provider == requester);
+                }
+            }
+        } else if recording_type == String::from_str(&env, "audio") {
+            let recordings: Map<u64, AudioRecording> = env
+                .storage()
+                .persistent()
+                .get(&AUDIO_RECORDINGS)
+                .ok_or(Error::RecordingNotFound)?;
 
                 if let Some(recording) = recordings.get(recording_id) {
                     let sessions: Map<u64, ConsultationSession> = env
@@ -984,27 +1008,7 @@ impl TelemedicineConsultationContract {
                         return Ok(session.patient == requester || session.provider == requester);
                     }
                 }
-            }
-            "audio" => {
-                let recordings: Map<u64, AudioRecording> = env
-                    .storage()
-                    .persistent()
-                    .get(&AUDIO_RECORDINGS)
-                    .ok_or(Error::RecordingNotFound)?;
-
-                if let Some(recording) = recordings.get(recording_id) {
-                    let sessions: Map<u64, ConsultationSession> = env
-                        .storage()
-                        .persistent()
-                        .get(&SESSIONS)
-                        .ok_or(Error::SessionNotFound)?;
-
-                    if let Some(session) = sessions.get(recording.session_id) {
-                        return Ok(session.patient == requester || session.provider == requester);
-                    }
-                }
-            }
-            "screen" => {
+            } else if recording_type == String::from_str(&env, "screen") {
                 let recordings: Map<u64, ScreenShareRecording> = env
                     .storage()
                     .persistent()
@@ -1023,8 +1027,6 @@ impl TelemedicineConsultationContract {
                     }
                 }
             }
-            _ => return Err(Error::InvalidRecordingType),
-        }
 
         Ok(false)
     }

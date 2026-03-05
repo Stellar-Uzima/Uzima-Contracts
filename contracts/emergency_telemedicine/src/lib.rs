@@ -122,7 +122,7 @@ pub struct EmergencySession {
     pub outcome: String,
     pub complications: Vec<String>,
     pub follow_up_plan: Vec<String>,
-    pub quality_score: u8, // 0-100
+    pub trauma_score: u32, // 0-100
     pub documentation_complete: bool,
     pub consent_obtained: bool,
     pub consent_token_id: u64,
@@ -132,15 +132,15 @@ pub struct EmergencySession {
 #[derive(Clone)]
 #[contracttype]
 pub struct VitalSigns {
-    pub heart_rate: Option<u16>,
-    pub blood_pressure_systolic: Option<u16>,
-    pub blood_pressure_diastolic: Option<u16>,
-    pub respiratory_rate: Option<u8>,
-    pub oxygen_saturation: Option<u8>,
-    pub temperature: Option<f32>,
-    pub blood_glucose: Option<f32>,
-    pub pain_score: Option<u8>,              // 0-10 scale
-    pub consciousness_level: Option<String>, // "Alert", "Verbal", "Pain", "Unresponsive"
+    pub heart_rate: Option<u32>,
+    pub blood_pressure_systolic: Option<u32>,
+    pub blood_pressure_diastolic: Option<u32>,
+    pub respiratory_rate: Option<u32>,
+    pub oxygen_saturation: Option<u32>,
+    pub temperature: Option<i64>,
+    pub blood_glucose: Option<i64>,
+    pub pain_score: Option<u32>, // 0-10 scale
+    pub consciousness_level: Option<String>,
     pub pupil_reaction: Option<String>,
     pub skin_color: Option<String>,
     pub skin_temperature: Option<String>,
@@ -181,7 +181,7 @@ pub struct EmergencyTeamMember {
     pub availability: bool,
     pub current_location: String,
     pub specialization: Option<String>,
-    pub experience_years: u16,
+    pub experience_years: u32,
     pub certifications: Vec<String>,
 }
 
@@ -223,8 +223,8 @@ pub struct EmergencyResource {
     pub location: String,
     pub status: String, // "available", "busy", "offline", "maintenance"
     pub capabilities: Vec<String>,
-    pub capacity: u8,
-    pub current_load: u8,
+    pub capacity: u32,
+    pub current_load: u32,
     pub response_time_estimate: u32, // minutes
     pub cost_per_use: Option<u64>,
     pub currency: Option<String>,
@@ -250,7 +250,7 @@ pub struct EmergencyAlert {
     pub resolved_by: Option<Address>,
     pub resolved_at: Option<u64>,
     pub resolution_actions: Vec<String>,
-    pub escalation_level: u8, // 0-5
+    pub pain_level: u32, // 0-10 scale
     pub notifications_sent: Vec<Address>,
 }
 
@@ -318,13 +318,13 @@ const RESPONSE_TEAMS: Symbol = symbol_short!("TEAMS");
 const EMERGENCY_RESOURCES: Symbol = symbol_short!("RESOURCES");
 const EMERGENCY_ALERTS: Symbol = symbol_short!("ALERTS");
 const QUALITY_METRICS: Symbol = symbol_short!("METRICS");
-const EMERGENCY_STATISTICS: Symbol = symbol_short!("STATISTICS");
-const PROTOCOL_COUNTER: Symbol = symbol_short!("PROTOCOL_CNT");
-const SESSION_COUNTER: Symbol = symbol_short!("SESSION_CNT");
+const EMERGENCY_STATISTICS: Symbol = symbol_short!("STATS");
+const PROTOCOL_COUNTER: Symbol = symbol_short!("PROTO_CNT");
+const SESSION_COUNTER: Symbol = symbol_short!("SES_CNT");
 const TEAM_COUNTER: Symbol = symbol_short!("TEAM_CNT");
-const RESOURCE_COUNTER: Symbol = symbol_short!("RESOURCE_CNT");
+const RESOURCE_COUNTER: Symbol = symbol_short!("RES_CNT");
 const ALERT_COUNTER: Symbol = symbol_short!("ALERT_CNT");
-const METRIC_COUNTER: Symbol = symbol_short!("METRIC_CNT");
+const METRIC_COUNTER: Symbol = symbol_short!("MET_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
 const MEDICAL_RECORDS_CONTRACT: Symbol = symbol_short!("MEDICAL");
@@ -356,6 +356,44 @@ pub enum Error {
 
 #[contract]
 pub struct EmergencyTelemedicineContract;
+
+/// Emergency protocol data
+#[contracttype]
+#[derive(Clone)]
+pub struct EmergencyProtocolData {
+    pub emergency_type: EmergencyType,
+    pub name: String,
+    pub description: String,
+    pub response_time_target: u32,
+    pub assessment_steps: Vec<String>,
+    pub interventions: Vec<String>,
+    pub medications: Vec<String>,
+    pub equipment_required: Vec<String>,
+    pub specialist_required: bool,
+    pub specialist_type: Option<String>,
+    pub transport_required: bool,
+    pub transport_level: String,
+    pub documentation_required: Vec<String>,
+    pub follow_up_required: bool,
+    pub quality_metrics: Vec<String>,
+}
+
+/// Emergency Resource Registration Data
+#[contracttype]
+#[derive(Clone)]
+pub struct EmergencyResourceData {
+    pub resource_type: String,
+    pub name: String,
+    pub location: String,
+    pub capabilities: Vec<String>,
+    pub capacity: u32,
+    pub response_time_estimate: u32,
+    pub cost_per_use: Option<u64>,
+    pub currency: Option<String>,
+    pub contact_info: String,
+    pub operating_hours: String,
+    pub service_area: String,
+}
 
 #[contractimpl]
 impl EmergencyTelemedicineContract {
@@ -397,21 +435,7 @@ impl EmergencyTelemedicineContract {
     pub fn create_emergency_protocol(
         env: Env,
         admin: Address,
-        emergency_type: EmergencyType,
-        name: String,
-        description: String,
-        response_time_target: u32,
-        assessment_steps: Vec<String>,
-        interventions: Vec<String>,
-        medications: Vec<String>,
-        equipment_required: Vec<String>,
-        specialist_required: bool,
-        specialist_type: Option<String>,
-        transport_required: bool,
-        transport_level: String,
-        documentation_required: Vec<String>,
-        follow_up_required: bool,
-        quality_metrics: Vec<String>,
+        protocol_data: EmergencyProtocolData,
         contraindications: Vec<String>,
         complications: Vec<String>,
         outcome_indicators: Vec<String>,
@@ -437,27 +461,27 @@ impl EmergencyTelemedicineContract {
 
         let protocol = EmergencyProtocol {
             protocol_id,
-            emergency_type,
-            name: name.clone(),
-            description,
-            response_time_target,
-            assessment_steps,
-            interventions,
-            medications,
-            equipment_required,
-            specialist_required,
-            specialist_type,
-            transport_required,
-            transport_level,
-            documentation_required,
-            follow_up_required,
-            quality_metrics,
+            emergency_type: protocol_data.emergency_type,
+            name: protocol_data.name.clone(),
+            description: protocol_data.description,
+            response_time_target: protocol_data.response_time_target,
+            assessment_steps: protocol_data.assessment_steps,
+            interventions: protocol_data.interventions,
+            medications: protocol_data.medications,
+            equipment_required: protocol_data.equipment_required,
+            specialist_required: protocol_data.specialist_required,
+            specialist_type: protocol_data.specialist_type,
+            transport_required: protocol_data.transport_required,
+            transport_level: protocol_data.transport_level,
+            documentation_required: protocol_data.documentation_required,
+            follow_up_required: protocol_data.follow_up_required,
+            quality_metrics: protocol_data.quality_metrics,
             contraindications,
             complications,
             outcome_indicators,
             created_at: timestamp,
             updated_at: timestamp,
-            version: "1.0".to_string(),
+            version: String::from_str(&env, "1.0"),
             is_active: true,
         };
 
@@ -665,7 +689,7 @@ impl EmergencyTelemedicineContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Session"), symbol_short!("StatusUpdated")),
+            (symbol_short!("Session"), symbol_short!("Status")),
             (session_id, new_status),
         );
 
@@ -676,17 +700,7 @@ impl EmergencyTelemedicineContract {
     pub fn register_emergency_resource(
         env: Env,
         admin: Address,
-        resource_type: String,
-        name: String,
-        location: String,
-        capabilities: Vec<String>,
-        capacity: u8,
-        response_time_estimate: u32,
-        cost_per_use: Option<u64>,
-        currency: Option<String>,
-        contact_info: String,
-        operating_hours: String,
-        service_area: String,
+        resource_data: EmergencyResourceData,
     ) -> Result<u64, Error> {
         admin.require_auth();
 
@@ -709,19 +723,19 @@ impl EmergencyTelemedicineContract {
 
         let resource = EmergencyResource {
             resource_id,
-            resource_type: resource_type.clone(),
-            name: name.clone(),
-            location,
-            status: "available".to_string(),
-            capabilities,
-            capacity,
+            resource_type: resource_data.resource_type.clone(),
+            name: resource_data.name.clone(),
+            location: resource_data.location,
+            status: String::from_str(&env, "available"),
+            capabilities: resource_data.capabilities,
+            capacity: resource_data.capacity,
             current_load: 0,
-            response_time_estimate,
-            cost_per_use,
-            currency,
-            contact_info,
-            operating_hours,
-            service_area,
+            response_time_estimate: resource_data.response_time_estimate,
+            cost_per_use: resource_data.cost_per_use,
+            currency: resource_data.currency,
+            contact_info: resource_data.contact_info,
+            operating_hours: resource_data.operating_hours,
+            service_area: resource_data.service_area,
             last_updated: timestamp,
         };
 
@@ -737,7 +751,7 @@ impl EmergencyTelemedicineContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Resource"), symbol_short!("Registered")),
+            (symbol_short!("Resource"), symbol_short!("Reg")),
             (resource_id, name),
         );
 
@@ -774,7 +788,7 @@ impl EmergencyTelemedicineContract {
         // Update resource status
         resource.current_load += 1;
         if resource.current_load >= resource.capacity {
-            resource.status = "busy".to_string();
+            resource.status = String::from_str(&env, "busy");
         }
         resource.last_updated = env.ledger().timestamp();
 
@@ -788,7 +802,7 @@ impl EmergencyTelemedicineContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Resource"), symbol_short!("Dispatched")),
+            (symbol_short!("Resource"), symbol_short!("Disp")),
             (resource_id, session_id),
         );
 
@@ -845,7 +859,7 @@ impl EmergencyTelemedicineContract {
         outcome: String,
         complications: Vec<String>,
         follow_up_plan: Vec<String>,
-        quality_score: u8,
+        quality_score: u32,
     ) -> Result<bool, Error> {
         provider.require_auth();
 
@@ -863,7 +877,7 @@ impl EmergencyTelemedicineContract {
 
         session.response_status = ResponseStatus::Resolved;
         session.resolved_at = Some(env.ledger().timestamp());
-        session.outcome = outcome;
+        session.outcome = outcome.clone();
         session.complications = complications;
         session.follow_up_plan = follow_up_plan;
         session.quality_score = quality_score;
@@ -968,7 +982,7 @@ impl EmergencyTelemedicineContract {
             satisfaction_scores: Map::new(&env),  // Would calculate
             cost_analysis: CostAnalysis {
                 total_cost: 0,
-                currency: "USD".to_string(),
+                currency: String::from_str(&env, "USD"),
                 cost_per_session: 0.0,
                 cost_by_type: Map::new(&env),
                 cost_by_level: Map::new(&env),
@@ -994,7 +1008,7 @@ impl EmergencyTelemedicineContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Statistics"), symbol_short!("Generated")),
+            (symbol_short!("Stats"), symbol_short!("Generated")),
             (timestamp, total_emergencies),
         );
 
@@ -1064,11 +1078,11 @@ impl EmergencyTelemedicineContract {
 
     fn verify_consent_token(
         env: &Env,
-        token_id: u64,
-        patient: Address,
-        provider: Address,
+        _token_id: u64,
+        _patient: Address,
+        _provider: Address,
     ) -> Result<bool, Error> {
-        let consent_contract: Address = env
+        let _consent_contract: Address = env
             .storage()
             .persistent()
             .get(&CONSENT_CONTRACT)
@@ -1087,26 +1101,26 @@ impl EmergencyTelemedicineContract {
         let cardiac_protocol = EmergencyProtocol {
             protocol_id,
             emergency_type: EmergencyType::Cardiac,
-            name: "Cardiac Arrest Emergency".to_string(),
-            description: "Protocol for managing cardiac emergencies including cardiac arrest, chest pain, and arrhythmias".to_string(),
+            name: String::from_str(&env, "Cardiac Arrest Emergency"),
+            description: String::from_str(&env, "Protocol for managing cardiac emergencies including cardiac arrest, chest pain, and arrhythmias"),
             response_time_target: 8, // 8 minutes
-            assessment_steps: vec![env, "Assess consciousness".to_string(), "Check breathing".to_string(), "Check pulse".to_string(), "Attach monitor".to_string()],
-            interventions: vec![env, "CPR".to_string(), "Defibrillation".to_string(), "Airway management".to_string(), "IV access".to_string()],
-            medications: vec![env, "Epinephrine".to_string(), "Amiodarone".to_string(), "Atropine".to_string(), "Lidocaine".to_string()],
-            equipment_required: vec![env, "Defibrillator".to_string(), "Cardiac monitor".to_string(), "Airway kit".to_string(), "IV supplies".to_string()],
+            assessment_steps: vec![env, String::from_str(&env, "Assess consciousness"), String::from_str(&env, "Check breathing"), String::from_str(&env, "Check pulse"), String::from_str(&env, "Attach monitor")],
+            interventions: vec![env, String::from_str(&env, "CPR"), String::from_str(&env, "Defibrillation"), String::from_str(&env, "Airway management"), String::from_str(&env, "IV access")],
+            medications: vec![env, String::from_str(&env, "Epinephrine"), String::from_str(&env, "Amiodarone"), String::from_str(&env, "Atropine"), String::from_str(&env, "Lidocaine")],
+            equipment_required: vec![env, String::from_str(&env, "Defibrillator"), String::from_str(&env, "Cardiac monitor"), String::from_str(&env, "Airway kit"), String::from_str(&env, "IV supplies")],
             specialist_required: true,
-            specialist_type: Some("Cardiologist".to_string()),
+            specialist_type: Some(String::from_str(&env, "Cardiologist")),
             transport_required: true,
-            transport_level: "Critical Care".to_string(),
-            documentation_required: vec![env, "Time stamps".to_string(), "Interventions".to_string(), "Medications".to_string(), "Rhythm strips".to_string()],
+            transport_level: String::from_str(&env, "Critical Care"),
+            documentation_required: vec![env, String::from_str(&env, "Time stamps"), String::from_str(&env, "Interventions"), String::from_str(&env, "Medications"), String::from_str(&env, "Rhythm strips")],
             follow_up_required: true,
-            quality_metrics: vec![env, "Response time".to_string(), "ROSC rate".to_string(), "Documentation completeness".to_string()],
-            contraindications: vec![env, "Do not use defibrillator in water".to_string()],
-            complications: vec![env, "Aspiration".to_string(), "Rib fractures".to_string()],
-            outcome_indicators: vec![env, "ROSC".to_string(), "Survival to discharge".to_string(), "Neurological outcome".to_string()],
+            quality_metrics: vec![env, String::from_str(&env, "Response time"), String::from_str(&env, "ROSC rate"), String::from_str(&env, "Documentation completeness")],
+            contraindications: vec![env, String::from_str(&env, "Do not use defibrillator in water")],
+            complications: vec![env, String::from_str(&env, "Aspiration"), String::from_str(&env, "Rib fractures")],
+            outcome_indicators: vec![env, String::from_str(&env, "ROSC"), String::from_str(&env, "Survival to discharge"), String::from_str(&env, "Neurological outcome")],
             created_at: timestamp,
             updated_at: timestamp,
-            version: "1.0".to_string(),
+            version: String::from_str(&env, "1.0"),
             is_active: true,
         };
 
@@ -1125,26 +1139,26 @@ impl EmergencyTelemedicineContract {
         let respiratory_protocol = EmergencyProtocol {
             protocol_id,
             emergency_type: EmergencyType::Respiratory,
-            name: "Respiratory Distress Emergency".to_string(),
-            description: "Protocol for managing respiratory emergencies including asthma, COPD exacerbation, and airway obstruction".to_string(),
+            name: String::from_str(&env, "Respiratory Distress Emergency"),
+            description: String::from_str(&env, "Protocol for managing respiratory emergencies including asthma, COPD exacerbation, and airway obstruction"),
             response_time_target: 10, // 10 minutes
-            assessment_steps: vec![env, "Assess airway".to_string(), "Check breathing effort".to_string(), "Measure oxygen saturation".to_string(), "Assess work of breathing".to_string()],
-            interventions: vec![env, "Oxygen therapy".to_string(), "Nebulized medications".to_string(), "CPAP/BiPAP".to_string(), "Intubation".to_string()],
-            medications: vec![env, "Albuterol".to_string(), "Ipratropium".to_string(), "Steroids".to_string(), "Magnesium".to_string()],
-            equipment_required: vec![env, "Oxygen tank".to_string(), "Nebulizer".to_string(), "CPAP machine".to_string(), "Intubation kit".to_string()],
+            assessment_steps: vec![env, String::from_str(&env, "Assess airway"), String::from_str(&env, "Check breathing effort"), String::from_str(&env, "Measure oxygen saturation"), String::from_str(&env, "Assess work of breathing")],
+            interventions: vec![env, String::from_str(&env, "Oxygen therapy"), String::from_str(&env, "Nebulized medications"), String::from_str(&env, "CPAP/BiPAP"), String::from_str(&env, "Intubation")],
+            medications: vec![env, String::from_str(&env, "Albuterol"), String::from_str(&env, "Ipratropium"), String::from_str(&env, "Steroids"), String::from_str(&env, "Magnesium")],
+            equipment_required: vec![env, String::from_str(&env, "Oxygen tank"), String::from_str(&env, "Nebulizer"), String::from_str(&env, "CPAP machine"), String::from_str(&env, "Intubation kit")],
             specialist_required: false,
             specialist_type: None,
             transport_required: true,
-            transport_level: "ALS".to_string(),
-            documentation_required: vec![env, "Oxygen saturation".to_string(), "Breath sounds".to_string(), "Medication response".to_string()],
+            transport_level: String::from_str(&env, "ALS"),
+            documentation_required: vec![env, String::from_str(&env, "Oxygen saturation"), String::from_str(&env, "Breath sounds"), String::from_str(&env, "Medication response")],
             follow_up_required: true,
-            quality_metrics: vec![env, "Oxygen saturation improvement".to_string(), "Intubation success rate".to_string()],
-            contraindications: vec![env, "Avoid high oxygen in COPD".to_string()],
-            complications: vec![env, "Barotrauma".to_string(), "Hypotension".to_string()],
-            outcome_indicators: vec![env, "Respiratory stability".to_string(), "Avoided intubation".to_string(), "Length of stay".to_string()],
+            quality_metrics: vec![env, String::from_str(&env, "Oxygen saturation improvement"), String::from_str(&env, "Intubation success rate")],
+            contraindications: vec![env, String::from_str(&env, "Avoid high oxygen in COPD")],
+            complications: vec![env, String::from_str(&env, "Barotrauma"), String::from_str(&env, "Hypotension")],
+            outcome_indicators: vec![env, String::from_str(&env, "Respiratory stability"), String::from_str(&env, "Avoided intubation"), String::from_str(&env, "Length of stay")],
             created_at: timestamp,
             updated_at: timestamp,
-            version: "1.0".to_string(),
+            version: String::from_str(&env, "1.0"),
             is_active: true,
         };
 
@@ -1165,7 +1179,7 @@ impl EmergencyTelemedicineContract {
 
         for (protocol_id, protocol) in protocols.iter() {
             if protocol.emergency_type == emergency_type && protocol.is_active {
-                return Ok(*protocol_id);
+                return Ok(protocol_id);
             }
         }
 
@@ -1173,22 +1187,22 @@ impl EmergencyTelemedicineContract {
     }
 
     fn perform_triage(
-        env: &Env,
+        _env: &Env,
         emergency_level: EmergencyLevel,
-        vital_signs: &VitalSigns,
-        symptoms: &Vec<String>,
+        _vital_signs: &VitalSigns,
+        _symptoms: &Vec<String>,
     ) -> Result<TriageCategory, Error> {
         // Simplified triage algorithm
         match emergency_level {
             EmergencyLevel::LifeThreatening => Ok(TriageCategory::Immediate),
             EmergencyLevel::Critical => {
                 // Check vital signs for immediate category
-                if let Some(o2_sat) = vital_signs.oxygen_saturation {
+                if let Some(o2_sat) = _vital_signs.oxygen_saturation {
                     if o2_sat < 85 {
                         return Ok(TriageCategory::Immediate);
                     }
                 }
-                if let Some(heart_rate) = vital_signs.heart_rate {
+                if let Some(heart_rate) = _vital_signs.heart_rate {
                     if heart_rate < 40 || heart_rate > 140 {
                         return Ok(TriageCategory::Immediate);
                     }
@@ -1219,7 +1233,9 @@ impl EmergencyTelemedicineContract {
         let mut best_distance = f64::MAX;
 
         for resource in resources.values() {
-            if resource.resource_type == "ambulance" && resource.status == "available" {
+            if resource.resource_type == String::from_str(&env, "ambulance")
+                && resource.status == String::from_str(&env, "available")
+            {
                 // Simplified distance calculation - would use actual geolocation
                 let distance = 10.0; // Placeholder
                 if distance < best_distance {
@@ -1231,11 +1247,11 @@ impl EmergencyTelemedicineContract {
 
         if let Some(resource) = best_resource {
             Self::dispatch_resource(
-                env,
+                env.clone(),
                 session_id,
                 resource.resource_id,
                 patient,
-                "urgent".to_string(),
+                String::from_str(&env, "urgent"),
             )?;
         }
 
@@ -1259,7 +1275,7 @@ impl EmergencyTelemedicineContract {
                 metric_id,
                 session_id,
                 metric_name: metric_name.clone(),
-                category: "response_time".to_string(), // Would categorize properly
+                category: String::from_str(&env, "response_time"), // Would categorize properly
                 target_value: protocol.response_time_target as f32,
                 actual_value: 0.0, // To be updated as session progresses
                 achievement_rate: 0,
@@ -1293,14 +1309,14 @@ impl EmergencyTelemedicineContract {
         let team = EmergencyResponseTeam {
             team_id,
             session_id,
-            team_type: "ground_ambulance".to_string(),
+            team_type: String::from_str(&env, "ground_ambulance"),
             members: Vec::new(env), // Would populate with actual team members
             dispatch_time: timestamp,
             en_route_time: None,
             on_scene_time: None,
             transport_time: None,
             arrival_time: None,
-            team_status: "dispatched".to_string(),
+            team_status: String::from_str(&env, "dispatched"),
             equipment_used: Vec::new(env),
             interventions_performed: Vec::new(env),
             medications_administered: Vec::new(env),
@@ -1327,8 +1343,8 @@ impl EmergencyTelemedicineContract {
         // This would find and connect appropriate specialist
         // For now, just emit an event
         env.events().publish(
-            (symbol_short!("Specialist"), symbol_short!("Requested")),
-            (session_id, specialist_type.unwrap_or("general".to_string())),
+            (symbol_short!("Spec"), symbol_short!("Requested")),
+            (session_id, specialist_type.unwrap_or(String::from_str(&env, "general"))),
         );
 
         Ok(())
@@ -1359,18 +1375,17 @@ impl EmergencyTelemedicineContract {
         let alert = EmergencyAlert {
             alert_id,
             session_id,
-            alert_type: "response_time_exceeded".to_string(),
+            alert_type: String::from_str(&env, "response_time_exceeded"),
             severity: if actual_time > target_time as u64 * 2 {
-                "critical"
+                String::from_str(&env, "critical")
             } else {
-                "high"
-            }
-            .to_string(),
-            message: format!(
-                "Response time {} minutes exceeded target of {} minutes",
-                actual_time, target_time
-            ),
-            triggered_by: Address::from_array(env, &[0u8; 32]), // System triggered
+                String::from_str(&env, "high")
+            },
+            message: String::from_str(&env, "Response time exceeded target"),
+            triggered_by: Address::from_string(&String::from_str(
+                &env,
+                "GDQJD3JZK5FQ5XQDHDW4Y6CKK3G3R7P2N7S7K7K7K7K7K7K7K7K7K",
+            )), // System triggered
             triggered_at: timestamp,
             acknowledged_by: None,
             acknowledged_at: None,
@@ -1426,10 +1441,13 @@ impl EmergencyTelemedicineContract {
         let alert = EmergencyAlert {
             alert_id,
             session_id,
-            alert_type: "vital_signs_deterioration".to_string(),
-            severity: "high".to_string(),
-            message: "Vital signs showing deterioration - immediate attention required".to_string(),
-            triggered_by: Address::from_array(env, &[0u8; 32]), // System triggered
+            alert_type: String::from_str(&env, "vital_signs_deterioration"),
+            severity: String::from_str(&env, "high"),
+            message: String::from_str(&env, "Vital signs showing deterioration - immediate attention required"),
+            triggered_by: Address::from_string(&String::from_str(
+                &env,
+                "GDQJD3JZK5FQ5XQDHDW4Y6CKK3G3R7P2N7S7K7K7K7K7K7K7K7K7K",
+            )), // System triggered
             triggered_at: timestamp,
             acknowledged_by: None,
             acknowledged_at: None,
@@ -1454,7 +1472,7 @@ impl EmergencyTelemedicineContract {
     fn update_final_quality_metrics(
         env: &Env,
         session_id: u64,
-        quality_score: u8,
+        quality_score: u32,
     ) -> Result<(), Error> {
         let metrics: Map<u64, EmergencyQualityMetric> = env
             .storage()
@@ -1464,12 +1482,12 @@ impl EmergencyTelemedicineContract {
 
         for (metric_id, mut metric) in metrics.iter() {
             if metric.session_id == session_id {
-                metric.actual_value = quality_score as f32;
+                metric.actual_value = quality_score as i64;
                 metric.achievement_rate = quality_score;
                 metric.recorded_at = env.ledger().timestamp();
 
                 let mut updated_metrics = metrics.clone();
-                updated_metrics.set(*metric_id, metric);
+                updated_metrics.set(metric_id, metric);
                 env.storage()
                     .persistent()
                     .set(&QUALITY_METRICS, &updated_metrics);
@@ -1501,7 +1519,7 @@ impl EmergencyTelemedicineContract {
                     if resource.current_load > 0 {
                         resource.current_load -= 1;
                         if resource.current_load < resource.capacity {
-                            resource.status = "available".to_string();
+                            resource.status = String::from_str(&env, "available");
                         }
                     }
                 }

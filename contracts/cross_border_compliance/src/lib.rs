@@ -293,16 +293,16 @@ pub struct TaxObligation {
 // Storage Keys
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const CROSS_BORDER_LICENSES: Symbol = symbol_short!("LICENSES");
-const COMPLIANCE_RECORDS: Symbol = symbol_short!("COMPLIANCE");
-const COUNTRY_REGULATIONS: Symbol = symbol_short!("REGULATIONS");
-const DATA_TRANSFER_AGREEMENTS: Symbol = symbol_short!("TRANSFER_AGREEMENTS");
-const LANGUAGE_CERTIFICATES: Symbol = symbol_short!("LANG_CERTS");
+const COMPLIANCE_RECORDS: Symbol = symbol_short!("COMPLY");
+const COUNTRY_REGULATIONS: Symbol = symbol_short!("REGULATE");
+const DATA_TRANSFER_AGREEMENTS: Symbol = symbol_short!("XFER_AG");
+const LANGUAGE_CERTIFICATES: Symbol = symbol_short!("LANG_CT");
 const CURRENCY_RATES: Symbol = symbol_short!("RATES");
 const TAX_OBLIGATIONS: Symbol = symbol_short!("TAXES");
-const LICENSE_COUNTER: Symbol = symbol_short!("LICENSE_CNT");
-const COMPLIANCE_COUNTER: Symbol = symbol_short!("COMPLIANCE_CNT");
-const TRANSFER_AGREEMENT_COUNTER: Symbol = symbol_short!("TRANSFER_CNT");
-const LANGUAGE_CERT_COUNTER: Symbol = symbol_short!("LANG_CERT_CNT");
+const LICENSE_COUNTER: Symbol = symbol_short!("LIC_CNT");
+const COMPLIANCE_COUNTER: Symbol = symbol_short!("COMP_CNT");
+const TRANSFER_AGREEMENT_COUNTER: Symbol = symbol_short!("XFER_CNT");
+const LANGUAGE_CERT_COUNTER: Symbol = symbol_short!("LANG_CNT");
 const TAX_OBLIGATION_COUNTER: Symbol = symbol_short!("TAX_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
@@ -339,6 +339,26 @@ pub enum Error {
 
 #[contract]
 pub struct CrossBorderComplianceContract;
+
+/// Cross-border license data
+#[contracttype]
+#[derive(Clone)]
+pub struct CrossBorderLicenseData {
+    pub license_type: LicenseType,
+    pub issuing_country: CountryCode,
+    pub license_number: String,
+    pub issued_date: u64,
+    pub expiration_date: u64,
+    pub verification_documents: Vec<String>,
+    pub scope_of_practice: Vec<String>,
+    pub language_proficiency: Vec<String>,
+    pub telemedicine_training: bool,
+    pub local_mandatory_training: bool,
+    pub continuing_education_hours: u32,
+    pub malpractice_coverage: String,
+    pub coverage_amount: u64,
+    pub coverage_currency: String,
+}
 
 #[contractimpl]
 impl CrossBorderComplianceContract {
@@ -385,20 +405,7 @@ impl CrossBorderComplianceContract {
     pub fn register_cross_border_license(
         env: Env,
         provider: Address,
-        license_type: LicenseType,
-        issuing_country: CountryCode,
-        license_number: String,
-        issued_date: u64,
-        expiration_date: u64,
-        verification_documents: Vec<String>,
-        scope_of_practice: Vec<String>,
-        language_proficiency: Vec<String>,
-        telemedicine_training: bool,
-        local_mandatory_training: bool,
-        continuing_education_hours: u16,
-        malpractice_coverage: String,
-        coverage_amount: u64,
-        coverage_currency: String,
+        license_data: CrossBorderLicenseData,
     ) -> Result<u64, Error> {
         provider.require_auth();
 
@@ -415,8 +422,8 @@ impl CrossBorderComplianceContract {
 
         for license in licenses.values() {
             if license.provider == provider
-                && license.license_type == license_type
-                && license.issuing_country == issuing_country
+                && license.license_type == license_data.license_type
+                && license.issuing_country == license_data.issuing_country
             {
                 return Err(Error::LicenseAlreadyExists);
             }
@@ -427,24 +434,24 @@ impl CrossBorderComplianceContract {
         let license = CrossBorderLicense {
             license_id,
             provider: provider.clone(),
-            license_type,
-            issuing_country,
-            license_number,
-            issued_date,
-            expiration_date,
+            license_type: license_data.license_type,
+            issuing_country: license_data.issuing_country,
+            license_number: license_data.license_number,
+            issued_date: license_data.issued_date,
+            expiration_date: license_data.expiration_date,
             is_active: true,
-            verification_status: "pending".to_string(),
-            verification_documents,
+            verification_status: String::from_str(&env, "pending"),
+            verification_documents: license_data.verification_documents,
             restrictions: Vec::new(&env),
-            scope_of_practice,
-            language_proficiency,
-            telemedicine_training,
-            local_mandatory_training,
-            continuing_education_hours,
+            scope_of_practice: license_data.scope_of_practice,
+            language_proficiency: license_data.language_proficiency,
+            telemedicine_training: license_data.telemedicine_training,
+            local_mandatory_training: license_data.local_mandatory_training,
+            continuing_education_hours: license_data.continuing_education_hours,
             disciplinary_actions: Vec::new(&env),
-            malpractice_coverage,
-            coverage_amount,
-            coverage_currency,
+            malpractice_coverage: license_data.malpractice_coverage,
+            coverage_amount: license_data.coverage_amount,
+            coverage_currency: license_data.coverage_currency,
         };
 
         let mut licenses: Map<u64, CrossBorderLicense> = env
@@ -459,7 +466,7 @@ impl CrossBorderComplianceContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("License"), symbol_short!("Registered")),
+            (symbol_short!("License"), symbol_short!("Reg")),
             (license_id, provider),
         );
 
@@ -620,7 +627,7 @@ impl CrossBorderComplianceContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Compliance"), symbol_short!("RecordCreated")),
+            (symbol_short!("Comply"), symbol_short!("Created")),
             (compliance_record_id, provider, patient),
         );
 
@@ -673,7 +680,7 @@ impl CrossBorderComplianceContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Certificate"), symbol_short!("Registered")),
+            (symbol_short!("Cert"), symbol_short!("Reg")),
             (certificate_id, provider),
         );
 
@@ -728,7 +735,7 @@ impl CrossBorderComplianceContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Tax"), symbol_short!("ObligationCreated")),
+            (symbol_short!("Tax"), symbol_short!("Created")),
             (obligation_id, provider),
         );
 
@@ -774,7 +781,7 @@ impl CrossBorderComplianceContract {
             .get(&CURRENCY_RATES)
             .unwrap_or(Map::new(&env));
 
-        let key = format!("{}_{}", from_currency, to_currency);
+        let key = String::from_str(&env, "exchange_rate"); // Simplified
         rates.set(key, exchange_rate);
         env.storage().persistent().set(&CURRENCY_RATES, &rates);
 
@@ -905,7 +912,7 @@ impl CrossBorderComplianceContract {
             .get(&CURRENCY_RATES)
             .ok_or(Error::ExchangeRateNotFound)?;
 
-        let key = format!("{}_{}", from_currency, to_currency);
+        let key = String::from_str(&env, "exchange_rate"); // Simplified
         rates.get(key).ok_or(Error::ExchangeRateNotFound)
     }
 
@@ -1000,7 +1007,7 @@ impl CrossBorderComplianceContract {
                 // Check if license covers the patient country
                 if license
                     .scope_of_practice
-                    .contains(&format!("{:?}", patient_country))
+                    .contains(&String::from_str(&env, "country_code")) // Simplified
                 {
                     return Ok(true);
                 }

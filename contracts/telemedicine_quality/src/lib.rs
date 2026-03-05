@@ -59,13 +59,13 @@ pub struct QualityMetric {
     pub category: QualityCategory,
     pub description: String,
     pub measurement_method: String, // "automated", "manual", "patient_reported", "provider_assessed"
-    pub target_value: f32,
-    pub weight: f32, // Importance weight in overall score (0.0-1.0)
+    pub target_value: i64,
+    pub weight: i64, // Importance weight in overall score (scaled by 100)
     pub data_source: String,
     pub collection_frequency: String, // "per_consultation", "daily", "weekly", "monthly"
-    pub benchmark_value: Option<f32>,
-    pub industry_standard: Option<f32>,
-    pub regulatory_requirement: Option<f32>,
+    pub benchmark_value: Option<i64>,
+    pub industry_standard: Option<i64>,
+    pub regulatory_requirement: Option<i64>,
     pub created_at: u64,
     pub updated_at: u64,
     pub is_active: bool,
@@ -82,17 +82,17 @@ pub struct QualityAssessment {
     pub assessment_type: AssessmentType,
     pub assessment_period_start: u64,
     pub assessment_period_end: u64,
-    pub overall_score: u8, // 0-100
+    pub overall_score: u32, // 0-100
     pub quality_level: QualityLevel,
-    pub metric_scores: Map<String, u8>, // metric_name -> score
-    pub category_scores: Map<QualityCategory, u8>, // category -> score
+    pub metric_scores: Map<String, u32>, // metric_name -> score
+    pub category_scores: Map<QualityCategory, u32>, // category -> score
     pub strengths: Vec<String>,
     pub weaknesses: Vec<String>,
     pub recommendations: Vec<String>,
     pub action_items: Vec<ActionItem>,
     pub compliance_status: String, // "compliant", "partial_compliance", "non_compliant"
     pub risk_factors: Vec<String>,
-    pub improvement_trends: Map<String, f32>, // metric_name -> trend_percentage
+    pub improvement_trends: Map<String, i64>, // metric_name -> trend_percentage
     pub assessor: Address,
     pub assessment_date: u64,
     pub next_assessment_date: u64,
@@ -112,7 +112,7 @@ pub struct ActionItem {
     pub status: String, // "pending", "in_progress", "completed", "overdue"
     pub completion_date: Option<u64>,
     pub evidence: Vec<String>, // IPFS hashes of supporting documents
-    pub impact_score: u8,      // 0-100
+    pub impact_score: u32,     // 0-100
 }
 
 /// Quality Benchmark
@@ -123,11 +123,11 @@ pub struct QualityBenchmark {
     pub name: String,
     pub category: QualityCategory,
     pub metric_name: String,
-    pub benchmark_value: f32,
-    pub percentile_rank: u8, // 0-100
+    pub benchmark_value: i64,
+    pub percentile_rank: u32, // 0-100
     pub data_source: String,
     pub sample_size: u32,
-    pub confidence_interval: (f32, f32), // (lower_bound, upper_bound)
+    pub confidence_interval: (i64, i64), // (lower_bound, upper_bound)
     pub methodology: String,
     pub last_updated: u64,
     pub geographic_scope: String,
@@ -145,12 +145,12 @@ pub struct QualityTrend {
     pub department: Option<String>,
     pub time_series: Vec<TrendDataPoint>,
     pub trend_direction: String, // "improving", "declining", "stable", "volatile"
-    pub trend_strength: f32,     // -1.0 to 1.0
+    pub trend_strength: i64,     // -100 to 100
     pub statistical_significance: bool,
     pub seasonality_detected: bool,
     pub anomalies: Vec<u64>,       // timestamps of anomalous data points
-    pub forecast_values: Vec<f32>, // Next N period forecasts
-    pub confidence_intervals: Vec<(f32, f32)>,
+    pub forecast_values: Vec<i64>, // Next N period forecasts
+    pub confidence_intervals: Vec<(i64, i64)>,
     pub last_analyzed: u64,
 }
 
@@ -159,9 +159,9 @@ pub struct QualityTrend {
 #[contracttype]
 pub struct TrendDataPoint {
     pub timestamp: u64,
-    pub value: f32,
+    pub value: i64,
     pub sample_size: u32,
-    pub confidence_level: f32,
+    pub confidence_level: u32,
     pub outliers_removed: u32,
 }
 
@@ -190,14 +190,14 @@ pub struct QualityReport {
 #[derive(Clone)]
 #[contracttype]
 pub struct QualitySummary {
-    pub overall_score: u8,
+    pub overall_score: u32,
     pub quality_level: QualityLevel,
     pub total_consultations: u32,
     pub compliant_consultations: u32,
     pub high_risk_cases: u32,
-    pub patient_satisfaction_avg: f32,
-    pub technical_quality_avg: f32,
-    pub clinical_quality_avg: f32,
+    pub patient_satisfaction_avg: i64,
+    pub technical_quality_avg: i64,
+    pub clinical_quality_avg: i64,
     pub key_achievements: Vec<String>,
     pub critical_issues: Vec<String>,
     pub improvement_opportunities: Vec<String>,
@@ -209,10 +209,10 @@ pub struct QualitySummary {
 pub struct QualityMetricResult {
     pub metric_name: String,
     pub category: QualityCategory,
-    pub current_value: f32,
-    pub target_value: f32,
-    pub benchmark_value: Option<f32>,
-    pub percentile_rank: Option<u8>,
+    pub current_value: i64,
+    pub target_value: i64,
+    pub benchmark_value: Option<i64>,
+    pub percentile_rank: Option<u32>,
     pub trend: String, // "improving", "stable", "declining"
     pub variance_explanation: String,
     pub impact_assessment: String,
@@ -223,13 +223,13 @@ pub struct QualityMetricResult {
 #[contracttype]
 pub struct ComparativeMetric {
     pub metric_name: String,
-    pub our_value: f32,
-    pub peer_average: f32,
-    pub industry_average: f32,
-    pub best_in_class: f32,
-    pub percentile_ranking: u8,
+    pub our_value: i64,
+    pub peer_average: i64,
+    pub industry_average: i64,
+    pub best_in_class: i64,
+    pub percentile_ranking: u32,
     pub gap_analysis: String,
-    pub improvement_potential: f32,
+    pub improvement_potential: i64,
 }
 
 /// Strategic Recommendation
@@ -255,7 +255,7 @@ pub struct StrategicRecommendation {
 #[derive(Clone)]
 #[contracttype]
 pub struct ComplianceSummary {
-    pub overall_compliance_rate: u8,
+    pub overall_compliance_rate: u32,
     pub regulatory_requirements_met: u32,
     pub regulatory_requirements_total: u32,
     pub critical_violations: u32,
@@ -286,9 +286,9 @@ pub struct RiskAssessment {
 #[contracttype]
 pub struct RiskItem {
     pub risk_name: String,
-    pub probability: u8, // 0-100
-    pub impact: u8,      // 0-100
-    pub risk_score: u8,  // 0-100
+    pub probability: u32, // 0-100
+    pub impact: u32,      // 0-100
+    pub risk_score: u32,  // 0-100
     pub current_controls: Vec<String>,
     pub additional_controls_needed: Vec<String>,
     pub monitoring_frequency: String,
@@ -302,8 +302,8 @@ pub struct QualityAlert {
     pub alert_type: String, // "threshold_breach", "trend_decline", "compliance_issue", "safety_concern"
     pub severity: String,   // "low", "medium", "high", "critical"
     pub metric_name: String,
-    pub current_value: f32,
-    pub threshold_value: f32,
+    pub current_value: i64,
+    pub threshold_value: i64,
     pub provider: Option<Address>,
     pub consultation_id: Option<u64>,
     pub description: String,
@@ -321,18 +321,18 @@ pub struct QualityAlert {
 // Storage Keys
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const QUALITY_METRICS: Symbol = symbol_short!("METRICS");
-const QUALITY_ASSESSMENTS: Symbol = symbol_short!("ASSESSMENTS");
+const QUALITY_ASSESSMENTS: Symbol = symbol_short!("ASSESS");
 const ACTION_ITEMS: Symbol = symbol_short!("ACTIONS");
-const QUALITY_BENCHMARKS: Symbol = symbol_short!("BENCHMARKS");
+const QUALITY_BENCHMARKS: Symbol = symbol_short!("BENCH");
 const QUALITY_TRENDS: Symbol = symbol_short!("TRENDS");
 const QUALITY_REPORTS: Symbol = symbol_short!("REPORTS");
 const QUALITY_ALERTS: Symbol = symbol_short!("ALERTS");
-const METRIC_COUNTER: Symbol = symbol_short!("METRIC_CNT");
-const ASSESSMENT_COUNTER: Symbol = symbol_short!("ASSESSMENT_CNT");
-const ACTION_COUNTER: Symbol = symbol_short!("ACTION_CNT");
-const BENCHMARK_COUNTER: Symbol = symbol_short!("BENCHMARK_CNT");
+const METRIC_COUNTER: Symbol = symbol_short!("MET_CNT");
+const ASSESSMENT_COUNTER: Symbol = symbol_short!("AS_CNT");
+const ACTION_COUNTER: Symbol = symbol_short!("ACT_CNT");
+const BENCHMARK_COUNTER: Symbol = symbol_short!("BN_CNT");
 const TREND_COUNTER: Symbol = symbol_short!("TREND_CNT");
-const REPORT_COUNTER: Symbol = symbol_short!("REPORT_CNT");
+const REPORT_COUNTER: Symbol = symbol_short!("RPT_CNT");
 const ALERT_COUNTER: Symbol = symbol_short!("ALERT_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
@@ -402,22 +402,49 @@ impl TelemedicineQualityContract {
 
         Ok(true)
     }
+}
+
+/// Quality metric definition data
+#[contracttype]
+#[derive(Clone)]
+pub struct QualityMetricData {
+    pub name: String,
+    pub category: QualityCategory,
+    pub description: String,
+    pub measurement_method: String,
+    pub target_value: i64,
+    pub weight: i64,
+    pub data_source: String,
+    pub collection_frequency: String,
+    pub benchmark_value: Option<i64>,
+    pub industry_standard: Option<i64>,
+    pub regulatory_requirement: Option<i64>,
+}
+
+/// Quality Benchmark Update Data
+#[contracttype]
+#[derive(Clone)]
+pub struct QualityBenchmarkUpdateData {
+    pub metric_name: String,
+    pub category: QualityCategory,
+    pub benchmark_value: i64,
+    pub percentile_rank: u32,
+    pub confidence_interval: (i64, i64),
+    pub sample_size: u32,
+    pub methodology: String,
+    pub geographic_scope: String,
+    pub specialty_filter: Option<String>,
+    pub setting_filter: Option<String>,
+}
+
+#[contractimpl]
+impl TelemedicineQualityContract {
 
     /// Define quality metric
     pub fn define_quality_metric(
         env: Env,
         admin: Address,
-        name: String,
-        category: QualityCategory,
-        description: String,
-        measurement_method: String,
-        target_value: f32,
-        weight: f32,
-        data_source: String,
-        collection_frequency: String,
-        benchmark_value: Option<f32>,
-        industry_standard: Option<f32>,
-        regulatory_requirement: Option<f32>,
+        metric_data: QualityMetricData,
     ) -> Result<u64, Error> {
         admin.require_auth();
 
@@ -436,7 +463,7 @@ impl TelemedicineQualityContract {
         }
 
         // Validate weight
-        if weight < 0.0 || weight > 1.0 {
+        if metric_data.weight < 0 || metric_data.weight > 100 {
             return Err(Error::InvalidMetricValue);
         }
 
@@ -445,17 +472,17 @@ impl TelemedicineQualityContract {
 
         let metric = QualityMetric {
             metric_id,
-            name: name.clone(),
-            category,
-            description,
-            measurement_method,
-            target_value,
-            weight,
-            data_source,
-            collection_frequency,
-            benchmark_value,
-            industry_standard,
-            regulatory_requirement,
+            name: metric_data.name.clone(),
+            category: metric_data.category,
+            description: metric_data.description,
+            measurement_method: metric_data.measurement_method,
+            target_value: metric_data.target_value,
+            weight: metric_data.weight,
+            data_source: metric_data.data_source,
+            collection_frequency: metric_data.collection_frequency,
+            benchmark_value: metric_data.benchmark_value,
+            industry_standard: metric_data.industry_standard,
+            regulatory_requirement: metric_data.regulatory_requirement,
             created_at: timestamp,
             updated_at: timestamp,
             is_active: true,
@@ -472,7 +499,7 @@ impl TelemedicineQualityContract {
         // Emit event
         env.events().publish(
             (symbol_short!("Metric"), symbol_short!("Defined")),
-            (metric_id, name),
+            (metric_id, metric_data.name),
         );
 
         Ok(metric_id)
@@ -488,7 +515,7 @@ impl TelemedicineQualityContract {
         assessment_type: AssessmentType,
         assessment_period_start: u64,
         assessment_period_end: u64,
-        metric_values: Map<String, f32>,
+        metric_values: Map<String, i64>,
     ) -> Result<u64, Error> {
         assessor.require_auth();
 
@@ -507,8 +534,8 @@ impl TelemedicineQualityContract {
         // Calculate scores for each metric
         let mut metric_scores = Map::new(&env);
         let mut category_scores = Map::new(&env);
-        let mut total_weighted_score = 0.0f32;
-        let mut total_weight = 0.0f32;
+        let mut total_weighted_score = 0i64;
+        let mut total_weight = 0i64;
 
         let metrics: Map<u64, QualityMetric> = env
             .storage()
@@ -524,13 +551,12 @@ impl TelemedicineQualityContract {
 
                     // Update category score
                     let current_category_score =
-                        category_scores.get(metric.category).unwrap_or(0u8);
-                    let new_category_score =
-                        ((current_category_score as u32 + score as u32) / 2) as u8;
+                        category_scores.get(metric.category).unwrap_or(0u32);
+                    let new_category_score = ((current_category_score + score) / 2) as u32;
                     category_scores.set(metric.category, new_category_score);
 
                     // Calculate weighted contribution
-                    total_weighted_score += score as f32 * metric.weight;
+                    total_weighted_score += score as i64 * metric.weight;
                     total_weight += metric.weight;
 
                     // Check for threshold breaches
@@ -541,7 +567,7 @@ impl TelemedicineQualityContract {
                     ) {
                         Self::create_quality_alert(
                             &env,
-                            "threshold_breach".to_string(),
+                            String::from_str(&env, "threshold_breach"),
                             metric.name.clone(),
                             *value,
                             metric.target_value,
@@ -553,8 +579,8 @@ impl TelemedicineQualityContract {
             }
         }
 
-        let overall_score = if total_weight > 0.0 {
-            (total_weighted_score / total_weight) as u8
+        let overall_score = if total_weight > 0 {
+            (total_weighted_score / total_weight) as u32
         } else {
             0
         };
@@ -604,7 +630,7 @@ impl TelemedicineQualityContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Assessment"), symbol_short!("Conducted")),
+            (symbol_short!("Assess"), symbol_short!("Conducted")),
             (assessment_id, provider, overall_score),
         );
 
@@ -636,7 +662,7 @@ impl TelemedicineQualityContract {
             description,
             responsible_party: responsible_party.clone(),
             due_date,
-            status: "pending".to_string(),
+            status: String::from_str(&env, "pending"),
             completion_date: None,
             evidence: Vec::new(&env),
             impact_score: 0, // To be calculated
@@ -652,7 +678,7 @@ impl TelemedicineQualityContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("ActionItem"), symbol_short!("Created")),
+            (symbol_short!("Action"), symbol_short!("Created")),
             (action_id, responsible_party),
         );
 
@@ -663,16 +689,7 @@ impl TelemedicineQualityContract {
     pub fn update_quality_benchmark(
         env: Env,
         admin: Address,
-        metric_name: String,
-        category: QualityCategory,
-        benchmark_value: f32,
-        percentile_rank: u8,
-        data_source: String,
-        sample_size: u32,
-        methodology: String,
-        geographic_scope: String,
-        specialty_filter: Option<String>,
-        setting_filter: Option<String>,
+        benchmark_data: QualityBenchmarkUpdateData,
     ) -> Result<u64, Error> {
         admin.require_auth();
 
@@ -695,19 +712,19 @@ impl TelemedicineQualityContract {
 
         let benchmark = QualityBenchmark {
             benchmark_id,
-            name: format!("{}_{}", metric_name, timestamp),
-            category,
-            metric_name,
-            benchmark_value,
-            percentile_rank,
-            data_source,
-            sample_size,
-            confidence_interval: (benchmark_value * 0.95, benchmark_value * 1.05), // Simplified CI
-            methodology,
+            name: String::from_str(&env, "benchmark_update"), // Simplified name
+            category: benchmark_data.category,
+            metric_name: benchmark_data.metric_name,
+            benchmark_value: benchmark_data.benchmark_value,
+            percentile_rank: benchmark_data.percentile_rank,
+            data_source: String::from_str(&env, "benchmark_update"),
+            sample_size: benchmark_data.sample_size,
+            confidence_interval: benchmark_data.confidence_interval,
+            methodology: benchmark_data.methodology,
             last_updated: timestamp,
-            geographic_scope,
-            specialty_filter,
-            setting_filter,
+            geographic_scope: benchmark_data.geographic_scope,
+            specialty_filter: benchmark_data.specialty_filter,
+            setting_filter: benchmark_data.setting_filter,
         };
 
         let mut benchmarks: Map<u64, QualityBenchmark> = env
@@ -738,7 +755,7 @@ impl TelemedicineQualityContract {
         generated_by: Address,
         recipients: Vec<Address>,
         include_comparative: bool,
-        include_forecasts: bool,
+        _include_forecasts: bool,
     ) -> Result<u64, Error> {
         generated_by.require_auth();
 
@@ -847,11 +864,11 @@ impl TelemedicineQualityContract {
                     let result = QualityMetricResult {
                         metric_name: metric_name.clone(),
                         category: QualityCategory::Clinical, // Would look up from metric definition
-                        current_value: score as f32,
-                        target_value: 80.0, // Would get from metric definition
-                        benchmark_value: Some(85.0), // Would get from benchmarks
+                        current_value: score as i64,
+                        target_value: 80, // Would get from metric definition
+                        benchmark_value: Some(85), // Would get from benchmarks
                         percentile_rank: Some(75), // Would calculate
-                        trend: "stable".to_string(), // Would calculate from trends
+                        trend: String::from_str(&env, "stable"), // Would calculate from trends
                         variance_explanation: String::from_str(&env, ""),
                         impact_assessment: String::from_str(&env, ""),
                     };
@@ -877,10 +894,10 @@ impl TelemedicineQualityContract {
 
         let mut filtered_alerts = Vec::new(&env);
 
+        let severity_default = severity.clone().unwrap_or(String::from_str(&env, ""));
         for alert in alerts.values() {
             let provider_match = provider.is_none() || alert.provider == provider;
-            let severity_match = severity.is_none()
-                || alert.severity == severity.unwrap_or(String::from_str(&env, ""));
+            let severity_match = severity.is_none() || alert.severity == severity_default;
 
             if provider_match && severity_match {
                 filtered_alerts.push_back(alert);
@@ -919,7 +936,7 @@ impl TelemedicineQualityContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Alert"), symbol_short!("Acknowledged")),
+            (symbol_short!("Alert"), symbol_short!("Ack")),
             (alert_id, acknowledged_by),
         );
 
@@ -934,33 +951,33 @@ impl TelemedicineQualityContract {
         // Clinical metrics
         Self::create_standard_metric(
             env,
-            "Diagnostic Accuracy".to_string(),
+            String::from_str(&env, "Diagnostic Accuracy"),
             QualityCategory::Clinical,
-            "Percentage of correct diagnoses confirmed by follow-up".to_string(),
-            "automated".to_string(),
-            95.0,
-            0.25,
-            "clinical_outcomes".to_string(),
-            "per_consultation".to_string(),
-            Some(92.0),
-            Some(90.0),
-            Some(85.0),
+            String::from_str(&env, "Percentage of correct diagnoses confirmed by follow-up"),
+            String::from_str(&env, "automated"),
+            9500,
+            25,
+            String::from_str(&env, "clinical_outcomes"),
+            String::from_str(&env, "per_consultation"),
+            Some(9200),
+            Some(9000),
+            Some(8500),
         )?;
 
         // Technical metrics
         Self::create_standard_metric(
             env,
-            "Video Quality Score".to_string(),
+            String::from_str(&env, "Video Quality Score"),
             QualityCategory::Technical,
             "Average video quality rating (1-5 scale)".to_string(),
-            "automated".to_string(),
-            4.0,
-            0.20,
+            String::from_str(&env, "automated"),
+            400,
+            20,
             "technical_logs".to_string(),
-            "per_consultation".to_string(),
-            Some(4.2),
-            Some(4.0),
-            Some(3.5),
+            String::from_str(&env, "per_consultation"),
+            Some(420),
+            Some(400),
+            Some(350),
         )?;
 
         // Patient experience metrics
@@ -970,13 +987,13 @@ impl TelemedicineQualityContract {
             QualityCategory::PatientExperience,
             "Patient satisfaction score (1-5 scale)".to_string(),
             "patient_reported".to_string(),
-            4.5,
-            0.20,
+            450,
+            20,
             "patient_surveys".to_string(),
-            "per_consultation".to_string(),
-            Some(4.3),
-            Some(4.2),
-            Some(4.0),
+            String::from_str(&env, "per_consultation"),
+            Some(430),
+            Some(420),
+            Some(400),
         )?;
 
         // Operational metrics
@@ -985,14 +1002,14 @@ impl TelemedicineQualityContract {
             "On-Time Start Rate".to_string(),
             QualityCategory::Operational,
             "Percentage of consultations starting within 5 minutes of scheduled time".to_string(),
-            "automated".to_string(),
-            90.0,
-            0.15,
+            String::from_str(&env, "automated"),
+            9000,
+            15,
             "scheduling_system".to_string(),
             "daily".to_string(),
-            Some(85.0),
-            Some(80.0),
-            Some(75.0),
+            Some(8500),
+            Some(8000),
+            Some(7500),
         )?;
 
         // Safety metrics
@@ -1002,13 +1019,13 @@ impl TelemedicineQualityContract {
             QualityCategory::Safety,
             "Number of safety incidents per 1000 consultations".to_string(),
             "manual".to_string(),
-            0.0,
-            0.10,
+            0,
+            10,
             "incident_reports".to_string(),
             "monthly".to_string(),
-            Some(0.5),
-            Some(1.0),
-            Some(2.0),
+            Some(5),
+            Some(10),
+            Some(20),
         )?;
 
         // Compliance metrics
@@ -1017,14 +1034,14 @@ impl TelemedicineQualityContract {
             "Documentation Compliance".to_string(),
             QualityCategory::Compliance,
             "Percentage of consultations with complete documentation".to_string(),
-            "automated".to_string(),
-            100.0,
-            0.10,
+            String::from_str(&env, "automated"),
+            10000,
+            10,
             "documentation_audit".to_string(),
             "weekly".to_string(),
-            Some(95.0),
-            Some(90.0),
-            Some(85.0),
+            Some(9500),
+            Some(9000),
+            Some(8500),
         )?;
 
         Ok(())
@@ -1036,13 +1053,13 @@ impl TelemedicineQualityContract {
         category: QualityCategory,
         description: String,
         measurement_method: String,
-        target_value: f32,
-        weight: f32,
+        target_value: i64,
+        weight: i64,
         data_source: String,
         collection_frequency: String,
-        benchmark_value: Option<f32>,
-        industry_standard: Option<f32>,
-        regulatory_requirement: Option<f32>,
+        benchmark_value: Option<i64>,
+        industry_standard: Option<i64>,
+        regulatory_requirement: Option<i64>,
     ) -> Result<u64, Error> {
         let metric_id = Self::get_and_increment_metric_counter(env);
         let timestamp = env.ledger().timestamp();
@@ -1076,7 +1093,7 @@ impl TelemedicineQualityContract {
         Ok(metric_id)
     }
 
-    fn calculate_metric_score(actual_value: f32, target_value: f32) -> u8 {
+    fn calculate_metric_score(actual_value: i64, target_value: i64) -> u32 {
         if actual_value >= target_value {
             100
         } else if actual_value >= target_value * 0.9 {
@@ -1092,7 +1109,7 @@ impl TelemedicineQualityContract {
         }
     }
 
-    fn determine_quality_level(score: u8) -> QualityLevel {
+    fn determine_quality_level(score: u32) -> QualityLevel {
         match score {
             90..=100 => QualityLevel::Excellent,
             80..=89 => QualityLevel::Good,
@@ -1105,8 +1122,8 @@ impl TelemedicineQualityContract {
 
     fn analyze_assessment_results(
         env: &Env,
-        metric_scores: &Map<String, u8>,
-        category_scores: &Map<QualityCategory, u8>,
+        metric_scores: &Map<String, u32>,
+        category_scores: &Map<QualityCategory, u32>,
     ) -> Result<(Vec<String>, Vec<String>, Vec<String>), Error> {
         let mut strengths = Vec::new(env);
         let mut weaknesses = Vec::new(env);
@@ -1115,27 +1132,29 @@ impl TelemedicineQualityContract {
         // Analyze metric scores
         for (metric_name, score) in metric_scores.iter() {
             if *score >= 85 {
-                strengths.push_back(format!("Excellent performance in {}", metric_name));
+                strengths.push_back("Excellent performance in ".to_string() + metric_name);
             } else if *score < 60 {
-                weaknesses.push_back(format!("Poor performance in {}", metric_name));
-                recommendations.push_back(format!("Focus on improving {}", metric_name));
+                weaknesses.push_back("Poor performance in ".to_string() + metric_name);
+                recommendations.push_back("Focus on improving ".to_string() + metric_name);
             }
         }
 
         // Analyze category scores
         for (category, score) in category_scores.iter() {
             if *score < 70 {
-                recommendations.push_back(format!("Address issues in {:?} category", category));
+                recommendations.push_back(
+                    "Address issues in ".to_string() + &category.to_string() + " category",
+                );
             }
         }
 
         Ok((strengths, weaknesses, recommendations))
     }
 
-    fn assess_compliance_status(category_scores: &Map<QualityCategory, u8>) -> String {
+    fn assess_compliance_status(category_scores: &Map<QualityCategory, u32>) -> String {
         let compliance_score = category_scores
             .get(QualityCategory::Compliance)
-            .unwrap_or(0u8);
+            .unwrap_or(0u32);
 
         if compliance_score >= 95 {
             "compliant".to_string()
@@ -1146,7 +1165,7 @@ impl TelemedicineQualityContract {
         }
     }
 
-    fn identify_risk_factors(category_scores: &Map<QualityCategory, u8>) -> Vec<String> {
+    fn identify_risk_factors(category_scores: &Map<QualityCategory, u32>) -> Vec<String> {
         let mut risk_factors = Vec::new();
 
         if let Some(safety_score) = category_scores.get(QualityCategory::Safety) {
@@ -1177,9 +1196,9 @@ impl TelemedicineQualityContract {
     }
 
     fn is_threshold_breach(
-        actual_value: f32,
-        target_value: f32,
-        regulatory_requirement: Option<f32>,
+        actual_value: i64,
+        target_value: i64,
+        regulatory_requirement: Option<i64>,
     ) -> bool {
         if let Some(regulatory_min) = regulatory_requirement {
             actual_value < regulatory_min
@@ -1192,8 +1211,8 @@ impl TelemedicineQualityContract {
         env: &Env,
         alert_type: String,
         metric_name: String,
-        current_value: f32,
-        threshold_value: f32,
+        current_value: i64,
+        threshold_value: i64,
         provider: Option<Address>,
         consultation_id: Option<u64>,
     ) -> Result<(), Error> {
@@ -1217,10 +1236,12 @@ impl TelemedicineQualityContract {
             threshold_value,
             provider,
             consultation_id,
-            description: format!(
-                "Threshold breach for {}: {} < {}",
-                metric_name, current_value, threshold_value
-            ),
+            description: "Threshold breach for ".to_string()
+                + &metric_name
+                + ": "
+                + &current_value.to_string()
+                + " < "
+                + &threshold_value.to_string(),
             recommended_actions: vec![
                 env,
                 "Immediate review required".to_string(),
@@ -1256,7 +1277,7 @@ impl TelemedicineQualityContract {
     fn update_quality_trends(
         env: &Env,
         provider: Address,
-        metric_scores: &Map<String, u8>,
+        metric_scores: &Map<String, u32>,
         timestamp: u64,
     ) -> Result<(), Error> {
         // This would update trend data for each metric
@@ -1266,20 +1287,20 @@ impl TelemedicineQualityContract {
 
             let data_point = TrendDataPoint {
                 timestamp,
-                value: *score as f32,
+                value: *score as i64,
                 sample_size: 1,
-                confidence_level: 0.95,
+                confidence_level: 95,
                 outliers_removed: 0,
             };
 
             let trend = QualityTrend {
                 trend_id,
-                metric_name: metric_name.clone(),
+                metric_name: metric_name.clone().into_val(&env),
                 provider: Some(provider.clone()),
                 department: None,
                 time_series: vec![env, data_point],
-                trend_direction: "stable".to_string(),
-                trend_strength: 0.0,
+                trend_direction: String::from_str(&env, "stable"),
+                trend_strength: 0,
                 statistical_significance: false,
                 seasonality_detected: false,
                 anomalies: Vec::new(env),
@@ -1312,9 +1333,9 @@ impl TelemedicineQualityContract {
             total_consultations: 100,
             compliant_consultations: 95,
             high_risk_cases: 2,
-            patient_satisfaction_avg: 4.2,
-            technical_quality_avg: 4.0,
-            clinical_quality_avg: 4.3,
+            patient_satisfaction_avg: 420,
+            technical_quality_avg: 400,
+            clinical_quality_avg: 430,
             key_achievements: vec![env, "High patient satisfaction".to_string()],
             critical_issues: vec![env, "Documentation gaps".to_string()],
             improvement_opportunities: vec![env, "Reduce wait times".to_string()],
@@ -1334,11 +1355,11 @@ impl TelemedicineQualityContract {
         let metric = QualityMetricResult {
             metric_name: "Patient Satisfaction".to_string(),
             category: QualityCategory::PatientExperience,
-            current_value: 4.2,
-            target_value: 4.5,
-            benchmark_value: Some(4.3),
+            current_value: 420,
+            target_value: 450,
+            benchmark_value: Some(430),
             percentile_rank: Some(75),
-            trend: "stable".to_string(),
+            trend: String::from_str(&env, "stable"),
             variance_explanation: "Within normal variation".to_string(),
             impact_assessment: "Medium impact on overall quality".to_string(),
         };
@@ -1357,12 +1378,12 @@ impl TelemedicineQualityContract {
             let comparison = ComparativeMetric {
                 metric_name: metric.metric_name.clone(),
                 our_value: metric.current_value,
-                peer_average: metric.current_value * 0.95,
-                industry_average: metric.current_value * 0.90,
-                best_in_class: metric.current_value * 1.10,
+                peer_average: (metric.current_value * 95) / 100,
+                industry_average: (metric.current_value * 90) / 100,
+                best_in_class: (metric.current_value * 110) / 100,
                 percentile_ranking: metric.percentile_rank.unwrap_or(50),
                 gap_analysis: "Performing above average".to_string(),
-                improvement_potential: 0.1,
+                improvement_potential: 10,
             };
             comparisons.push_back(comparison);
         }
@@ -1390,7 +1411,10 @@ impl TelemedicineQualityContract {
             risk_mitigation: vec![env, "Regular monitoring".to_string()],
             estimated_cost: Some(5000),
             currency: Some("USD".to_string()),
-            responsible_party: Address::from_array(env, &[0u8; 32]),
+            responsible_party: Address::from_string(&String::from_str(
+                &env,
+                "GDQJD3JZK5FQ5XQDHDW4Y6CKK3G3R7P2N7S7K7K7K7K7K7K7K7K7K",
+            )),
         };
 
         recommendations.push_back(recommendation);

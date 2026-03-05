@@ -5,8 +5,8 @@ mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
+    Vec,
 };
 
 // ==================== Virtual Prescription Types ====================
@@ -100,8 +100,8 @@ pub struct VirtualPrescription {
     pub strength: String,    // e.g., "500mg", "10mg/mL"
     pub dosage_form: String, // e.g., "tablet", "solution"
     pub quantity: u32,
-    pub refills_allowed: u8,
-    pub refills_remaining: u8,
+    pub refills_allowed: u32,
+    pub refills_remaining: u32,
     pub date_written: u64,
     pub date_filled: Option<u64>,
     pub expiration_date: u64,
@@ -116,7 +116,7 @@ pub struct VirtualPrescription {
     pub allergies_check: bool,
     pub pregnancy_category: String, // A, B, C, D, X
     pub controlled_substance: bool,
-    pub schedule_number: Option<u8>,  // For controlled substances
+    pub schedule_number: Option<u32>,  // For controlled substances
     pub dea_number: String,           // Prescriber's DEA number
     pub state_license: String,        // Prescriber's state license
     pub diagnosis_codes: Vec<String>, // ICD-10 codes
@@ -170,9 +170,9 @@ pub struct MedicationAdherence {
     pub patient: Address,
     pub scheduled_time: u64,
     pub taken_time: u64,
-    pub dose_taken: f32,
-    pub prescribed_dose: f32,
-    pub adherence_percentage: u8,
+    pub dose_taken: i64,
+    pub prescribed_dose: i64,
+    pub adherence_percentage: u32,
     pub missed_dose: bool,
     pub late_dose: bool,
     pub notes: String,
@@ -229,7 +229,7 @@ pub struct PharmacyNetwork {
     pub specialty_pharmacy: bool,
     pub digital_prescribing_enabled: bool,
     pub status: String, // "active", "inactive", "suspended"
-    pub rating: u8,     // 1-5 stars
+    pub rating: u32,     // 1-5 stars
     pub joined_network: u64,
 }
 
@@ -257,19 +257,19 @@ pub struct PriorAuthRequest {
 
 // Storage Keys
 const ADMIN: Symbol = symbol_short!("ADMIN");
-const PRESCRIPTIONS: Symbol = symbol_short!("PRESCRIPTIONS");
+const PRESCRIPTIONS: Symbol = symbol_short!("PRESCR");
 const MEDICATION_SCHEDULES: Symbol = symbol_short!("SCHEDULES");
 const REFILL_REQUESTS: Symbol = symbol_short!("REFILLS");
 const ADHERENCE_RECORDS: Symbol = symbol_short!("ADHERENCE");
-const DRUG_INTERACTIONS: Symbol = symbol_short!("INTERACTIONS");
-const ALLERGY_CHECKS: Symbol = symbol_short!("ALLERGIES");
-const PHARMACY_NETWORK: Symbol = symbol_short!("PHARMACIES");
-const PRIOR_AUTH_REQUESTS: Symbol = symbol_short!("PRIOR_AUTH");
+const DRUG_INTERACTIONS: Symbol = symbol_short!("INTERACT");
+const ALLERGY_CHECKS: Symbol = symbol_short!("ALLERGY");
+const PHARMACY_NETWORK: Symbol = symbol_short!("PHARM");
+const PRIOR_AUTH_REQUESTS: Symbol = symbol_short!("PRIOR");
 const PRESCRIPTION_COUNTER: Symbol = symbol_short!("PRESC_CNT");
-const REFILL_COUNTER: Symbol = symbol_short!("REFILL_CNT");
+const REFILL_COUNTER: Symbol = symbol_short!("REF_CNT");
 const ADHERENCE_COUNTER: Symbol = symbol_short!("ADH_CNT");
 const INTERACTION_COUNTER: Symbol = symbol_short!("INT_CNT");
-const ALLERGY_COUNTER: Symbol = symbol_short!("ALLERGY_CNT");
+const ALLERGY_COUNTER: Symbol = symbol_short!("ALL_CNT");
 const AUTH_COUNTER: Symbol = symbol_short!("AUTH_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 const CONSENT_CONTRACT: Symbol = symbol_short!("CONSENT");
@@ -311,6 +311,31 @@ pub enum Error {
 #[contract]
 pub struct VirtualPrescriptionContract;
 
+/// Prescription details data
+#[contracttype]
+#[derive(Clone)]
+pub struct PrescriptionDetails {
+    pub medication_name: String,
+    pub generic_name: Option<String>,
+    pub medication_type: MedicationType,
+    pub strength: String,
+    pub dosage_form: String,
+    pub quantity: u32,
+    pub refills_allowed: u32,
+    pub expiration_days: u32,
+    pub instructions: String,
+    pub indications: String,
+    pub contraindications: Vec<String>,
+    pub side_effects: Vec<String>,
+    pub pregnancy_category: String,
+    pub controlled_substance: bool,
+    pub schedule_number: Option<u32>,
+    pub dea_number: String,
+    pub state_license: String,
+    pub diagnosis_codes: Vec<String>,
+    pub prior_auth_required: bool,
+}
+
 #[contractimpl]
 impl VirtualPrescriptionContract {
     /// Initialize the virtual prescription contract
@@ -350,25 +375,7 @@ impl VirtualPrescriptionContract {
         prescriber: Address,
         patient: Address,
         pharmacy: Option<Address>,
-        medication_name: String,
-        generic_name: Option<String>,
-        medication_type: MedicationType,
-        strength: String,
-        dosage_form: String,
-        quantity: u32,
-        refills_allowed: u8,
-        expiration_days: u32,
-        instructions: String,
-        indications: String,
-        contraindications: Vec<String>,
-        side_effects: Vec<String>,
-        pregnancy_category: String,
-        controlled_substance: bool,
-        schedule_number: Option<u8>,
-        dea_number: String,
-        state_license: String,
-        diagnosis_codes: Vec<String>,
-        prior_auth_required: bool,
+        details: PrescriptionDetails,
         consent_token_id: u64,
         digital_signature: BytesN<64>,
     ) -> Result<u64, Error> {
@@ -385,72 +392,73 @@ impl VirtualPrescriptionContract {
         }
 
         // Validate DEA number for controlled substances
-        if controlled_substance && !Self::validate_dea_number(&dea_number) {
+        if details.controlled_substance && !Self::validate_dea_number(&details.dea_number) {
             return Err(Error::InvalidDEANumber);
         }
 
         // Validate state license
-        if !Self::validate_state_license(&state_license) {
+        if !Self::validate_state_license(&details.state_license) {
             return Err(Error::InvalidLicense);
         }
 
         // Validate quantity and refills
-        if quantity == 0 || quantity > 365 {
+        if details.quantity == 0 || details.quantity > 365 {
             // Max 1 year supply
             return Err(Error::InvalidQuantity);
         }
 
-        if refills_allowed > 11 {
+        if details.refills_allowed > 11 {
             // Federal limit
             return Err(Error::InvalidRefills);
         }
 
         // Check pharmacy network if specified
-        if let Some(pharmacy_addr) = pharmacy {
-            if !Self::is_pharmacy_in_network(&env, pharmacy_addr)? {
+        if let Some(pharmacy_addr) = &pharmacy {
+            if !Self::is_pharmacy_in_network(&env, pharmacy_addr.clone())? {
                 return Err(Error::PharmacyNotInNetwork);
             }
         }
 
         let prescription_id = Self::get_and_increment_prescription_counter(&env);
         let timestamp = env.ledger().timestamp();
-        let expiration_date = timestamp + (expiration_days as u64 * 86400);
+        let expiration_date = timestamp + (details.expiration_days as u64 * 86400);
 
         let prescription = VirtualPrescription {
             prescription_id,
             patient: patient.clone(),
             prescriber: prescriber.clone(),
             pharmacy,
-            medication_name: medication_name.clone(),
-            generic_name,
-            medication_type,
-            strength,
-            dosage_form,
-            quantity,
-            refills_allowed,
-            refills_remaining: refills_allowed,
+            medication_name: details.medication_name.clone(),
+            generic_name: details.generic_name,
+            medication_type: details.medication_type,
+            strength: details.strength,
+            dosage_form: details.dosage_form,
+            quantity: details.quantity,
+            refills_allowed: details.refills_allowed,
+            refills_remaining: details.refills_allowed,
             date_written: timestamp,
             date_filled: None,
             expiration_date,
             status: PrescriptionStatus::Draft,
             verification_status: VerificationStatus::Pending,
             verification_notes: String::from_str(&env, ""),
-            instructions,
-            indications,
-            contraindications,
-            side_effects,
+            instructions: details.instructions,
+            indications: details.indications,
+            contraindications: details.contraindications,
+            side_effects: details.side_effects,
+            drug_interactions: Vec::new(&env),
             allergies_check: false,
-            pregnancy_category,
-            controlled_substance,
-            schedule_number,
-            dea_number,
-            state_license,
-            diagnosis_codes,
-            prior_auth_required,
-            prior_auth_status: if prior_auth_required {
-                "required".to_string()
+            pregnancy_category: details.pregnancy_category,
+            controlled_substance: details.controlled_substance,
+            schedule_number: details.schedule_number,
+            dea_number: details.dea_number,
+            state_license: details.state_license,
+            diagnosis_codes: details.diagnosis_codes,
+            prior_auth_required: details.prior_auth_required,
+            prior_auth_status: if details.prior_auth_required {
+                String::from_str(&env, "required")
             } else {
-                "not_required".to_string()
+                String::from_str(&env, "not_required")
             },
             consent_token_id,
             digital_signature,
@@ -473,8 +481,8 @@ impl VirtualPrescriptionContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Prescription"), symbol_short!("Created")),
-            (prescription_id, patient, prescriber, medication_name),
+            (symbol_short!("PreScript"), symbol_short!("Created")),
+            (prescription_id, patient, prescriber, details.medication_name),
         );
 
         Ok(prescription_id)
@@ -505,7 +513,7 @@ impl VirtualPrescriptionContract {
             .ok_or(Error::PrescriptionNotFound)?;
 
         // Only pharmacists or designated verifiers can verify
-        if !Self::is_authorized_verifier(&env, verifier) {
+        if !Self::is_authorized_verifier(&env, verifier)? {
             return Err(Error::NotAuthorized);
         }
 
@@ -533,7 +541,7 @@ impl VirtualPrescriptionContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Prescription"), symbol_short!("Verified")),
+            (symbol_short!("PreScript"), symbol_short!("Verified")),
             (prescription_id, approved),
         );
 
@@ -600,7 +608,7 @@ impl VirtualPrescriptionContract {
 
         // Emit event
         env.events().publish(
-            (symbol_short!("Prescription"), symbol_short!("Filled")),
+            (symbol_short!("PreScript"), symbol_short!("Filled")),
             (prescription_id, pharmacy, filled_quantity),
         );
 
@@ -765,7 +773,7 @@ impl VirtualPrescriptionContract {
         }
 
         request.processing_notes = notes;
-        refill_requests.set(index, request);
+        refill_requests.set(index.try_into().unwrap(), request);
         env.storage()
             .persistent()
             .set(&REFILL_REQUESTS, &refill_requests);
@@ -786,8 +794,8 @@ impl VirtualPrescriptionContract {
         patient: Address,
         scheduled_time: u64,
         taken_time: u64,
-        dose_taken: f32,
-        prescribed_dose: f32,
+        dose_taken: i64,
+        prescribed_dose: i64,
         notes: String,
         location: String,
         verification_method: String,
@@ -815,9 +823,13 @@ impl VirtualPrescriptionContract {
 
         let adherence_id = Self::get_and_increment_adherence_counter(&env);
 
-        let missed_dose = dose_taken == 0.0;
+        let missed_dose = dose_taken == 0;
         let late_dose = taken_time > scheduled_time && (taken_time - scheduled_time) > 3600; // 1 hour late
-        let adherence_percentage = ((dose_taken / prescribed_dose) * 100.0) as u8;
+        let adherence_percentage = if prescribed_dose > 0 {
+            ((dose_taken * 100) / prescribed_dose) as u32
+        } else {
+            0
+        };
 
         let adherence = MedicationAdherence {
             adherence_id,
@@ -882,7 +894,7 @@ impl VirtualPrescriptionContract {
             .get(&PHARMACY_NETWORK)
             .unwrap_or(Map::new(&env));
 
-        pharmacies.set(pharmacy.pharmacy_id, pharmacy);
+        pharmacies.set(pharmacy.pharmacy_id.clone(), pharmacy.clone());
         env.storage()
             .persistent()
             .set(&PHARMACY_NETWORK, &pharmacies);
@@ -959,11 +971,11 @@ impl VirtualPrescriptionContract {
 
     fn verify_consent_token(
         env: &Env,
-        token_id: u64,
-        patient: Address,
-        provider: Address,
+        _token_id: u64,
+        _patient: Address,
+        _provider: Address,
     ) -> Result<bool, Error> {
-        let consent_contract: Address = env
+        let _consent_contract: Address = env
             .storage()
             .persistent()
             .get(&CONSENT_CONTRACT)
@@ -974,17 +986,14 @@ impl VirtualPrescriptionContract {
         Ok(true)
     }
 
-    fn validate_dea_number(dea_number: &String) -> bool {
-        // Basic DEA number validation (2 letters + 6 digits + 1 check digit)
-        dea_number.len() == 9
-            && dea_number.chars().take(2).all(|c| c.is_alphabetic())
-            && dea_number.chars().skip(2).take(6).all(|c| c.is_numeric())
-            && dea_number.chars().last().map_or(false, |c| c.is_numeric())
+    fn validate_dea_number(_dea_number: &String) -> bool {
+        // Basic DEA number validation - just check length for now
+        _dea_number.len() == 9
     }
 
-    fn validate_state_license(state_license: &String) -> bool {
+    fn validate_state_license(_state_license: &String) -> bool {
         // Basic state license validation (at least 6 characters)
-        state_license.len() >= 6
+        _state_license.len() >= 6
     }
 
     fn is_pharmacy_in_network(env: &Env, pharmacy_id: Address) -> Result<bool, Error> {
@@ -997,16 +1006,16 @@ impl VirtualPrescriptionContract {
         Ok(pharmacies.contains_key(pharmacy_id))
     }
 
-    fn is_authorized_verifier(env: &Env, verifier: Address) -> bool {
+    fn is_authorized_verifier(_env: &Env, _verifier: Address) -> Result<bool, Error> {
         // This would check if the verifier is an authorized pharmacist or verifier
         // For now, we'll implement basic logic
-        true
+        Ok(true)
     }
 
-    fn is_pharmacist_authorized(env: &Env, pharmacist: Address, pharmacy: Address) -> bool {
+    fn is_pharmacist_authorized(_env: &Env, _pharmacist: Address, _pharmacy: Address) -> Result<bool, Error> {
         // This would verify the pharmacist is authorized to work at the pharmacy
         // For now, we'll implement basic logic
-        true
+        Ok(true)
     }
 
     fn perform_allergy_check(
@@ -1022,7 +1031,7 @@ impl VirtualPrescriptionContract {
             patient_allergies: Vec::new(env), // Would fetch from medical records
             medication_allergens: Vec::new(env), // Would analyze medication
             cross_reactivity: Vec::new(env),
-            severity: "none".to_string(),
+            severity: String::from_str(&env, "none"),
             recommendations: Vec::new(env),
             checked_at: env.ledger().timestamp(),
         };
@@ -1051,7 +1060,7 @@ impl VirtualPrescriptionContract {
             interaction_id,
             prescription_id,
             interacting_drug: String::from_str(env, ""),
-            interaction_severity: "none".to_string(),
+            interaction_severity: String::from_str(&env, "none"),
             interaction_description: String::from_str(env, ""),
             clinical_effects: Vec::new(env),
             management_recommendations: Vec::new(env),

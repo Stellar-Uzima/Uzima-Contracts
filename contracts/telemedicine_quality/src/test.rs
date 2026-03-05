@@ -5,7 +5,7 @@ mod tests {
 
     #[test]
     fn test_initialization() {
-        let env = Env::default();
+        let _env = Env::default();
         // Test implementation will go here
     }
 }
