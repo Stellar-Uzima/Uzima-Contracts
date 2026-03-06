@@ -213,6 +213,37 @@ pub struct RareDiseaseRegistry {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct RoundConfig {
+    pub model_type: ModelType,
+    pub min_participants: u32,
+    pub max_participants: u32,
+    pub dp_epsilon: u32,
+    pub dp_delta: u32,
+    pub noise_multiplier: u32,
+    pub clipping_threshold: u32,
+    pub mpc_threshold: u32,
+    pub is_rare_disease: bool,
+    pub disease_code: String,
+    pub reward_per_participant: i128,
+    pub duration_seconds: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ModelOutput {
+    pub new_model_id: BytesN<32>,
+    pub description: String,
+    pub weights_ref: String,
+    pub metrics_ref: String,
+    pub fairness_report_ref: String,
+    pub global_loss: u32,
+    pub global_accuracy: u32,
+    pub validation_score: u32,
+    pub version: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct PlatformConfig {
     pub min_reputation_to_participate: u32,
     pub base_reward_amount: i128,
@@ -315,18 +346,14 @@ impl FederatedLearningContract {
             .instance()
             .set(&DataKey::Coordinator, &coordinator);
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage()
-            .instance()
-            .set(&DataKey::RoundCounter, &0u64);
+        env.storage().instance().set(&DataKey::RoundCounter, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::MPCSessionCounter, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::ListingCounter, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::AuditCounter, &0u64);
+        env.storage().instance().set(&DataKey::AuditCounter, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::InstitutionCount, &0u32);
@@ -655,9 +682,10 @@ impl FederatedLearningContract {
             registered_at: env.ledger().timestamp(),
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::RareDiseaseRegistry(disease_code.clone()), &registry);
+        env.storage().persistent().set(
+            &DataKey::RareDiseaseRegistry(disease_code.clone()),
+            &registry,
+        );
 
         env.events()
             .publish((symbol_short!("RareDis"),), disease_code.clone());
@@ -686,41 +714,30 @@ impl FederatedLearningContract {
         env: Env,
         admin: Address,
         base_model_id: BytesN<32>,
-        model_type: ModelType,
-        min_participants: u32,
-        max_participants: u32,
-        dp_epsilon: u32,
-        dp_delta: u32,
-        noise_multiplier: u32,
-        clipping_threshold: u32,
-        mpc_threshold: u32,
-        is_rare_disease: bool,
-        disease_code: String,
-        reward_per_participant: i128,
-        duration_seconds: u64,
+        cfg: RoundConfig,
     ) -> Result<u64, Error> {
         admin.require_auth();
         Self::ensure_admin(&env, &admin)?;
 
-        let config = Self::get_config(&env);
+        let platform_cfg = Self::get_config(&env);
 
-        if min_participants == 0 || max_participants < min_participants {
+        if cfg.min_participants == 0 || cfg.max_participants < cfg.min_participants {
             return Err(Error::InvalidParameter);
         }
 
-        if dp_epsilon == 0 || dp_epsilon > config.max_epsilon_per_round {
+        if cfg.dp_epsilon == 0 || cfg.dp_epsilon > platform_cfg.max_epsilon_per_round {
             return Err(Error::InvalidDPParameter);
         }
 
-        if dp_delta == 0 {
+        if cfg.dp_delta == 0 {
             return Err(Error::InvalidDPParameter);
         }
 
-        if is_rare_disease
+        if cfg.is_rare_disease
             && !env
                 .storage()
                 .persistent()
-                .has(&DataKey::RareDiseaseRegistry(disease_code.clone()))
+                .has(&DataKey::RareDiseaseRegistry(cfg.disease_code.clone()))
         {
             return Err(Error::RareDiseaseNotRegistered);
         }
@@ -731,28 +748,26 @@ impl FederatedLearningContract {
         let round = FederatedRound {
             id,
             base_model_id,
-            model_type,
-            min_participants,
-            max_participants,
-            dp_epsilon,
-            dp_delta,
-            noise_multiplier,
-            clipping_threshold,
-            mpc_threshold,
-            is_rare_disease,
-            disease_code,
-            reward_per_participant,
+            model_type: cfg.model_type,
+            min_participants: cfg.min_participants,
+            max_participants: cfg.max_participants,
+            dp_epsilon: cfg.dp_epsilon,
+            dp_delta: cfg.dp_delta,
+            noise_multiplier: cfg.noise_multiplier,
+            clipping_threshold: cfg.clipping_threshold,
+            mpc_threshold: cfg.mpc_threshold,
+            is_rare_disease: cfg.is_rare_disease,
+            disease_code: cfg.disease_code,
+            reward_per_participant: cfg.reward_per_participant,
             total_updates: 0,
             status: RoundStatus::Open,
             started_at: now,
-            deadline: now + duration_seconds,
+            deadline: now + cfg.duration_seconds,
             finalized_at: 0,
             aggregated_model_id: BytesN::from_array(&env, &[0u8; 32]),
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Round(id), &round);
+        env.storage().persistent().set(&DataKey::Round(id), &round);
 
         let participants: Vec<Address> = vec![&env];
         env.storage()
@@ -890,11 +905,7 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
-    pub fn begin_aggregation(
-        env: Env,
-        coordinator: Address,
-        round_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn begin_aggregation(env: Env, coordinator: Address, round_id: u64) -> Result<bool, Error> {
         coordinator.require_auth();
         Self::ensure_coordinator(&env, &coordinator)?;
 
@@ -917,8 +928,7 @@ impl FederatedLearningContract {
             .persistent()
             .set(&DataKey::Round(round_id), &round);
 
-        env.events()
-            .publish((symbol_short!("AggStart"),), round_id);
+        env.events().publish((symbol_short!("AggStart"),), round_id);
 
         Ok(true)
     }
@@ -927,15 +937,7 @@ impl FederatedLearningContract {
         env: Env,
         coordinator: Address,
         round_id: u64,
-        new_model_id: BytesN<32>,
-        description: String,
-        weights_ref: String,
-        metrics_ref: String,
-        fairness_report_ref: String,
-        global_loss: u32,
-        global_accuracy: u32,
-        validation_score: u32,
-        version: u32,
+        output: ModelOutput,
     ) -> Result<bool, Error> {
         coordinator.require_auth();
         Self::ensure_coordinator(&env, &coordinator)?;
@@ -956,38 +958,38 @@ impl FederatedLearningContract {
             return Err(Error::RoundNotAggregating);
         }
 
-        if validation_score < config.validation_threshold {
+        if output.validation_score < config.validation_threshold {
             return Err(Error::ValidationFailed);
         }
 
         round.status = RoundStatus::Finalized;
         round.finalized_at = env.ledger().timestamp();
-        round.aggregated_model_id = new_model_id.clone();
+        round.aggregated_model_id = output.new_model_id.clone();
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
 
         let model = ModelMetadata {
-            model_id: new_model_id.clone(),
+            model_id: output.new_model_id.clone(),
             round_id,
             model_type: round.model_type.clone(),
-            description,
-            weights_ref,
-            metrics_ref,
-            fairness_report_ref,
-            global_loss,
-            global_accuracy,
+            description: output.description,
+            weights_ref: output.weights_ref,
+            metrics_ref: output.metrics_ref,
+            fairness_report_ref: output.fairness_report_ref,
+            global_loss: output.global_loss,
+            global_accuracy: output.global_accuracy,
             num_contributors: round.total_updates,
-            validation_score,
+            validation_score: output.validation_score,
             is_rare_disease_model: round.is_rare_disease,
             disease_code: round.disease_code.clone(),
             created_at: round.finalized_at,
-            version,
+            version: output.version,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Model(new_model_id.clone()), &model);
+            .set(&DataKey::Model(model.model_id.clone()), &model);
 
         // Distribute rewards; rare disease rounds apply multiplier
         let participants: Vec<Address> = env
@@ -1011,9 +1013,9 @@ impl FederatedLearningContract {
             {
                 inst.reward_balance += round.reward_per_participant * reward_multiplier;
                 inst.total_contributions += 1;
-                let rep_gain = if validation_score >= 90 {
+                let rep_gain = if output.validation_score >= 90 {
                     3u32
-                } else if validation_score >= 70 {
+                } else if output.validation_score >= 70 {
                     2u32
                 } else {
                     1u32
@@ -1038,7 +1040,7 @@ impl FederatedLearningContract {
         }
 
         env.events()
-            .publish((symbol_short!("RndFin"),), (round_id, new_model_id.clone()));
+            .publish((symbol_short!("RndFin"),), (round_id, output.new_model_id.clone()));
 
         Self::emit_audit(
             &env,
@@ -1127,8 +1129,7 @@ impl FederatedLearningContract {
             .persistent()
             .set(&DataKey::MPCSession(session_id), &session);
 
-        env.events()
-            .publish((symbol_short!("MPCNew"),), session_id);
+        env.events().publish((symbol_short!("MPCNew"),), session_id);
 
         Ok(session_id)
     }
@@ -1208,8 +1209,7 @@ impl FederatedLearningContract {
             .persistent()
             .set(&DataKey::MPCSession(session_id), &session);
 
-        env.events()
-            .publish((symbol_short!("MPCFin"),), session_id);
+        env.events().publish((symbol_short!("MPCFin"),), session_id);
 
         Ok(true)
     }
@@ -1220,11 +1220,7 @@ impl FederatedLearningContract {
             .get(&DataKey::MPCSession(session_id))
     }
 
-    pub fn get_mpc_share(
-        env: Env,
-        session_id: u64,
-        institution: Address,
-    ) -> Option<MPCShare> {
+    pub fn get_mpc_share(env: Env, session_id: u64, institution: Address) -> Option<MPCShare> {
         env.storage()
             .persistent()
             .get(&DataKey::MPCShare(session_id, institution))
@@ -1435,11 +1431,7 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
-    pub fn withdraw_listing(
-        env: Env,
-        seller: Address,
-        listing_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn withdraw_listing(env: Env, seller: Address, listing_id: u64) -> Result<bool, Error> {
         seller.require_auth();
 
         let mut listing: MarketplaceListing = env
@@ -1472,11 +1464,7 @@ impl FederatedLearningContract {
 
     // ── Incentive / Reward Withdrawal ──────────────────────────────────────
 
-    pub fn withdraw_rewards(
-        env: Env,
-        institution: Address,
-        amount: i128,
-    ) -> Result<i128, Error> {
+    pub fn withdraw_rewards(env: Env, institution: Address, amount: i128) -> Result<i128, Error> {
         institution.require_auth();
 
         let mut inst: Institution = env
@@ -1502,11 +1490,7 @@ impl FederatedLearningContract {
 
     // ── Config Management ──────────────────────────────────────────────────
 
-    pub fn update_config(
-        env: Env,
-        admin: Address,
-        config: PlatformConfig,
-    ) -> Result<bool, Error> {
+    pub fn update_config(env: Env, admin: Address, config: PlatformConfig) -> Result<bool, Error> {
         admin.require_auth();
         Self::ensure_admin(&env, &admin)?;
 
@@ -1636,6 +1620,37 @@ mod test {
         inst
     }
 
+    fn round_cfg(env: &Env, model_type: ModelType, min_p: u32, reward: i128) -> RoundConfig {
+        RoundConfig {
+            model_type,
+            min_participants: min_p,
+            max_participants: 10,
+            dp_epsilon: 10,
+            dp_delta: 5,
+            noise_multiplier: 100,
+            clipping_threshold: 50,
+            mpc_threshold: 3,
+            is_rare_disease: false,
+            disease_code: String::from_str(env, ""),
+            reward_per_participant: reward,
+            duration_seconds: 86400,
+        }
+    }
+
+    fn model_out(env: &Env, model_id: &BytesN<32>) -> ModelOutput {
+        ModelOutput {
+            new_model_id: model_id.clone(),
+            description: String::from_str(env, "model"),
+            weights_ref: String::from_str(env, "ipfs://w"),
+            metrics_ref: String::from_str(env, "ipfs://m"),
+            fairness_report_ref: String::from_str(env, "ipfs://f"),
+            global_loss: 100,
+            global_accuracy: 88,
+            validation_score: 80,
+            version: 1,
+        }
+    }
+
     fn start_round_default(
         client: &FederatedLearningContractClient,
         env: &Env,
@@ -1646,18 +1661,7 @@ mod test {
         client.mock_all_auths().start_round(
             admin,
             &BytesN::from_array(env, &[1u8; 32]),
-            &ModelType::CNN,
-            &min_p,
-            &10u32,
-            &10u32,
-            &5u32,
-            &100u32,
-            &50u32,
-            &3u32,
-            &false,
-            &String::from_str(env, ""),
-            &reward,
-            &86400u64,
+            &round_cfg(env, ModelType::CNN, min_p, reward),
         )
     }
 
@@ -1695,21 +1699,25 @@ mod test {
         submit_default(&client, &env, &inst1, round_id, 2);
         submit_default(&client, &env, &inst2, round_id, 3);
 
-        assert!(client.mock_all_auths().begin_aggregation(&coordinator, &round_id));
+        assert!(client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &round_id));
 
         let new_model = BytesN::from_array(&env, &[4u8; 32]);
         assert!(client.mock_all_auths().finalize_round(
             &coordinator,
             &round_id,
-            &new_model,
-            &String::from_str(&env, "FL model v1"),
-            &String::from_str(&env, "ipfs://weights"),
-            &String::from_str(&env, "ipfs://metrics"),
-            &String::from_str(&env, "ipfs://fairness"),
-            &200u32,
-            &87u32,
-            &80u32,
-            &1u32,
+            &ModelOutput {
+                new_model_id: new_model.clone(),
+                description: String::from_str(&env, "FL model v1"),
+                weights_ref: String::from_str(&env, "ipfs://weights"),
+                metrics_ref: String::from_str(&env, "ipfs://metrics"),
+                fairness_report_ref: String::from_str(&env, "ipfs://fairness"),
+                global_loss: 200,
+                global_accuracy: 87,
+                validation_score: 80,
+                version: 1,
+            },
         ));
 
         let r = client.get_round(&round_id).unwrap();
@@ -1790,8 +1798,12 @@ mod test {
         let sh = BytesN::from_array(&env, &[7u8; 32]);
         let co = BytesN::from_array(&env, &[8u8; 32]);
 
-        assert!(client.mock_all_auths().submit_mpc_share(&inst1, &session_id, &sh, &co));
-        assert!(client.mock_all_auths().submit_mpc_share(&inst2, &session_id, &sh, &co));
+        assert!(client
+            .mock_all_auths()
+            .submit_mpc_share(&inst1, &session_id, &sh, &co));
+        assert!(client
+            .mock_all_auths()
+            .submit_mpc_share(&inst2, &session_id, &sh, &co));
 
         let session = client.get_mpc_session(&session_id).unwrap();
         assert!(session.is_complete);
@@ -1813,37 +1825,43 @@ mod test {
         let round_id = client.mock_all_auths().start_round(
             &admin,
             &BytesN::from_array(&env, &[1u8; 32]),
-            &ModelType::RNN,
-            &1u32,
-            &10u32,
-            &10u32,
-            &5u32,
-            &100u32,
-            &50u32,
-            &1u32,
-            &true,
-            &String::from_str(&env, "ORPHA:99999"),
-            &50i128,
-            &86400u64,
+            &RoundConfig {
+                model_type: ModelType::RNN,
+                min_participants: 1,
+                max_participants: 10,
+                dp_epsilon: 10,
+                dp_delta: 5,
+                noise_multiplier: 100,
+                clipping_threshold: 50,
+                mpc_threshold: 1,
+                is_rare_disease: true,
+                disease_code: String::from_str(&env, "ORPHA:99999"),
+                reward_per_participant: 50,
+                duration_seconds: 86400,
+            },
         );
 
         submit_default(&client, &env, &inst, round_id, 2);
 
-        client.mock_all_auths().begin_aggregation(&coordinator, &round_id);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &round_id);
 
         let model_id = BytesN::from_array(&env, &[4u8; 32]);
         client.mock_all_auths().finalize_round(
             &coordinator,
             &round_id,
-            &model_id,
-            &String::from_str(&env, "Rare disease model"),
-            &String::from_str(&env, "ipfs://w"),
-            &String::from_str(&env, "ipfs://m"),
-            &String::from_str(&env, "ipfs://f"),
-            &150u32,
-            &90u32,
-            &85u32,
-            &1u32,
+            &ModelOutput {
+                new_model_id: model_id.clone(),
+                description: String::from_str(&env, "Rare disease model"),
+                weights_ref: String::from_str(&env, "ipfs://w"),
+                metrics_ref: String::from_str(&env, "ipfs://m"),
+                fairness_report_ref: String::from_str(&env, "ipfs://f"),
+                global_loss: 150,
+                global_accuracy: 90,
+                validation_score: 85,
+                version: 1,
+            },
         );
 
         // 50 reward * 3 (rare disease multiplier) = 150
@@ -1868,30 +1886,24 @@ mod test {
         // Seller contributes to a round to earn rewards
         let r1 = start_round_default(&client, &env, &admin, 1, 500);
         submit_default(&client, &env, &seller, r1, 2);
-        client.mock_all_auths().begin_aggregation(&coordinator, &r1);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &r1);
         let model_id = BytesN::from_array(&env, &[4u8; 32]);
-        client.mock_all_auths().finalize_round(
-            &coordinator, &r1, &model_id,
-            &String::from_str(&env, "v1"),
-            &String::from_str(&env, "ipfs://w"),
-            &String::from_str(&env, "ipfs://m"),
-            &String::from_str(&env, "ipfs://f"),
-            &100u32, &88u32, &80u32, &1u32,
-        );
+        client
+            .mock_all_auths()
+            .finalize_round(&coordinator, &r1, &model_out(&env, &model_id));
 
         // Buyer earns rewards from a separate round
         let r2 = start_round_default(&client, &env, &admin, 1, 300);
         submit_default(&client, &env, &buyer, r2, 3);
-        client.mock_all_auths().begin_aggregation(&coordinator, &r2);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &r2);
         let model_id2 = BytesN::from_array(&env, &[6u8; 32]);
-        client.mock_all_auths().finalize_round(
-            &coordinator, &r2, &model_id2,
-            &String::from_str(&env, "v2"),
-            &String::from_str(&env, "ipfs://w2"),
-            &String::from_str(&env, "ipfs://m2"),
-            &String::from_str(&env, "ipfs://f2"),
-            &100u32, &88u32, &80u32, &1u32,
-        );
+        client
+            .mock_all_auths()
+            .finalize_round(&coordinator, &r2, &model_out(&env, &model_id2));
 
         let listing_id = client.mock_all_auths().list_model(
             &seller,
@@ -1923,17 +1935,14 @@ mod test {
 
         let round_id = start_round_default(&client, &env, &admin, 1, 50);
         submit_default(&client, &env, &inst, round_id, 2);
-        client.mock_all_auths().begin_aggregation(&coordinator, &round_id);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &round_id);
 
         let model_id = BytesN::from_array(&env, &[4u8; 32]);
-        client.mock_all_auths().finalize_round(
-            &coordinator, &round_id, &model_id,
-            &String::from_str(&env, "GNN model"),
-            &String::from_str(&env, "ipfs://w"),
-            &String::from_str(&env, "ipfs://m"),
-            &String::from_str(&env, "ipfs://f"),
-            &100u32, &90u32, &80u32, &1u32,
-        );
+        client
+            .mock_all_auths()
+            .finalize_round(&coordinator, &round_id, &model_out(&env, &model_id));
 
         let passed = client.mock_all_auths().submit_model_validation(
             &validator,
@@ -1977,16 +1986,25 @@ mod test {
 
         let round_id = start_round_default(&client, &env, &admin, 1, 50);
         submit_default(&client, &env, &inst, round_id, 2);
-        client.mock_all_auths().begin_aggregation(&coordinator, &round_id);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &round_id);
 
         let model_id = BytesN::from_array(&env, &[4u8; 32]);
         client.mock_all_auths().finalize_round(
-            &coordinator, &round_id, &model_id,
-            &String::from_str(&env, "v1"),
-            &String::from_str(&env, "ipfs://w"),
-            &String::from_str(&env, "ipfs://m"),
-            &String::from_str(&env, "ipfs://f"),
-            &100u32, &90u32, &95u32, &1u32,
+            &coordinator,
+            &round_id,
+            &ModelOutput {
+                new_model_id: model_id.clone(),
+                description: String::from_str(&env, "v1"),
+                weights_ref: String::from_str(&env, "ipfs://w"),
+                metrics_ref: String::from_str(&env, "ipfs://m"),
+                fairness_report_ref: String::from_str(&env, "ipfs://f"),
+                global_loss: 100,
+                global_accuracy: 90,
+                validation_score: 95,
+                version: 1,
+            },
         );
 
         let after = client.get_institution(&inst).unwrap().reputation_score;
@@ -2002,24 +2020,19 @@ mod test {
 
         let round_id = start_round_default(&client, &env, &admin, 1, 200);
         submit_default(&client, &env, &inst, round_id, 2);
-        client.mock_all_auths().begin_aggregation(&coordinator, &round_id);
+        client
+            .mock_all_auths()
+            .begin_aggregation(&coordinator, &round_id);
 
         let model_id = BytesN::from_array(&env, &[4u8; 32]);
-        client.mock_all_auths().finalize_round(
-            &coordinator, &round_id, &model_id,
-            &String::from_str(&env, "v1"),
-            &String::from_str(&env, "ipfs://w"),
-            &String::from_str(&env, "ipfs://m"),
-            &String::from_str(&env, "ipfs://f"),
-            &100u32, &88u32, &80u32, &1u32,
-        );
+        client
+            .mock_all_auths()
+            .finalize_round(&coordinator, &round_id, &model_out(&env, &model_id));
 
         let balance_before = client.get_institution(&inst).unwrap().reward_balance;
         assert!(balance_before >= 100);
 
-        let remaining = client
-            .mock_all_auths()
-            .withdraw_rewards(&inst, &100i128);
+        let remaining = client.mock_all_auths().withdraw_rewards(&inst, &100i128);
 
         assert_eq!(remaining, balance_before - 100);
     }
@@ -2038,9 +2051,12 @@ mod test {
             &round_id,
             &BytesN::from_array(&env, &[2u8; 32]),
             &String::from_str(&env, "ipfs://enc"),
-            &500u32, &200u32, &80u32,
+            &500u32,
+            &200u32,
+            &80u32,
             &BytesN::from_array(&env, &[5u8; 32]),
-            &true, &true,
+            &true,
+            &true,
         );
 
         assert!(res.unwrap().is_err());
@@ -2065,25 +2081,18 @@ mod test {
             let round_id = client.mock_all_auths().start_round(
                 &admin,
                 &BytesN::from_array(&env, &[1u8; 32]),
-                mt,
-                &1u32, &5u32, &10u32, &5u32,
-                &100u32, &50u32, &1u32,
-                &false, &String::from_str(&env, ""),
-                &50i128, &86400u64,
+                &round_cfg(&env, mt.clone(), 1, 50),
             );
 
             submit_default(&client, &env, &inst, round_id, (i + 2) as u8);
-            client.mock_all_auths().begin_aggregation(&coordinator, &round_id);
+            client
+                .mock_all_auths()
+                .begin_aggregation(&coordinator, &round_id);
 
             let model_id = BytesN::from_array(&env, &[(i + 10) as u8; 32]);
-            client.mock_all_auths().finalize_round(
-                &coordinator, &round_id, &model_id,
-                &String::from_str(&env, "model"),
-                &String::from_str(&env, "ipfs://w"),
-                &String::from_str(&env, "ipfs://m"),
-                &String::from_str(&env, "ipfs://f"),
-                &100u32, &85u32, &80u32, &1u32,
-            );
+            client
+                .mock_all_auths()
+                .finalize_round(&coordinator, &round_id, &model_out(&env, &model_id));
 
             let m = client.get_model(&model_id).unwrap();
             assert_eq!(m.model_type, *mt);
