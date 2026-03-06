@@ -17,7 +17,7 @@ pub enum ModelType {
     Hybrid,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[contracttype]
 pub enum RoundStatus {
     Open,
@@ -433,7 +433,7 @@ mod test {
         inst
     }
 
-    fn default_cfg(env: &Env, min_p: u32, reward: i128) -> RoundConfig {
+    fn default_cfg(_env: &Env, min_p: u32, reward: i128) -> RoundConfig {
         RoundConfig {
             model_type: ModelType::CNN,
             min_participants: min_p,
