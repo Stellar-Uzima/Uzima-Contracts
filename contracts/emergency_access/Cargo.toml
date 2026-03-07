@@ -1,0 +1,21 @@
+[package]
+name = "emergency_access"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+upgradeability = { path = "../upgradeability" }
+healthcare_compliance = { path = "../healthcare_compliance" }
+identity_registry = { path = "../identity_registry" }
+governor = { path = "../governor" }
+dispute_resolution = { path = "../dispute_resolution" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
