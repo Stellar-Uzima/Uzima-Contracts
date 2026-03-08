@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct SuicidePreventionManager;
 
@@ -52,27 +52,32 @@ impl SuicidePreventionManager {
                 "suicidal_ideation" => {
                     risk_score += 0.9;
                     risk_factors.push_back(String::from_str(env, "Active suicidal ideation"));
-                    recommended_actions.push_back(String::from_str(env, "Immediate crisis intervention"));
+                    recommended_actions
+                        .push_back(String::from_str(env, "Immediate crisis intervention"));
                 }
                 "suicide_plan" => {
                     risk_score += 1.0;
                     risk_factors.push_back(String::from_str(env, "Suicide plan present"));
-                    recommended_actions.push_back(String::from_str(env, "Emergency psychiatric evaluation"));
+                    recommended_actions
+                        .push_back(String::from_str(env, "Emergency psychiatric evaluation"));
                 }
                 "suicide_attempt_history" => {
                     risk_score += 0.7;
                     risk_factors.push_back(String::from_str(env, "History of suicide attempts"));
-                    recommended_actions.push_back(String::from_str(env, "Close monitoring required"));
+                    recommended_actions
+                        .push_back(String::from_str(env, "Close monitoring required"));
                 }
                 "severe_hopelessness" => {
                     risk_score += 0.6;
                     risk_factors.push_back(String::from_str(env, "Severe hopelessness"));
-                    recommended_actions.push_back(String::from_str(env, "Immediate therapeutic intervention"));
+                    recommended_actions
+                        .push_back(String::from_str(env, "Immediate therapeutic intervention"));
                 }
                 "social_isolation" => {
                     risk_score += 0.4;
                     risk_factors.push_back(String::from_str(env, "Extreme social isolation"));
-                    recommended_actions.push_back(String::from_str(env, "Social support intervention"));
+                    recommended_actions
+                        .push_back(String::from_str(env, "Social support intervention"));
                 }
                 _ => {
                     risk_score += 0.1;
@@ -92,7 +97,8 @@ impl SuicidePreventionManager {
 
         // Check recent crisis history
         let crisis_history = Self::get_patient_prevention_alerts(env, patient_id);
-        let recent_alerts = crisis_history.iter()
+        let recent_alerts = crisis_history
+            .iter()
             .filter(|alert| env.ledger().timestamp() - alert.timestamp < 30 * 24 * 60 * 60)
             .count();
 
@@ -103,11 +109,20 @@ impl SuicidePreventionManager {
 
         // Determine risk level and protocol
         let (risk_level, protocol_id) = if risk_score >= 0.8 {
-            (SuicideRiskLevel::High, Some(Self::get_high_risk_protocol(env)))
+            (
+                SuicideRiskLevel::High,
+                Some(Self::get_high_risk_protocol(env)),
+            )
         } else if risk_score >= 0.5 {
-            (SuicideRiskLevel::Moderate, Some(Self::get_moderate_risk_protocol(env)))
+            (
+                SuicideRiskLevel::Moderate,
+                Some(Self::get_moderate_risk_protocol(env)),
+            )
         } else if risk_score >= 0.2 {
-            (SuicideRiskLevel::Low, Some(Self::get_low_risk_protocol(env)))
+            (
+                SuicideRiskLevel::Low,
+                Some(Self::get_low_risk_protocol(env)),
+            )
         } else {
             (SuicideRiskLevel::None, None)
         };
@@ -145,9 +160,8 @@ impl SuicidePreventionManager {
 
         // Store alert
         let key = String::from_str(env, "prevention_alerts");
-        let mut alerts: Vec<PreventionAlert> = env.storage().instance()
-            .get(&key)
-            .unwrap_or(Vec::new(env));
+        let mut alerts: Vec<PreventionAlert> =
+            env.storage().instance().get(&key).unwrap_or(Vec::new(env));
         alerts.push_back(alert);
         env.storage().instance().set(&key, &alerts);
 
@@ -176,7 +190,9 @@ impl SuicidePreventionManager {
         outcome: PreventionOutcome,
     ) -> Result<(), Error> {
         let key = String::from_str(env, "prevention_alerts");
-        let mut alerts: Vec<PreventionAlert> = env.storage().instance()
+        let mut alerts: Vec<PreventionAlert> = env
+            .storage()
+            .instance()
             .get(&key)
             .ok_or(Error::InvalidInput)?;
 
@@ -210,7 +226,11 @@ impl SuicidePreventionManager {
                 name: String::from_str(env, "National Suicide Prevention Lifeline"),
                 number: String::from_str(env, "988"),
                 country: String::from_str(env, "US"),
-                languages: vec![env, String::from_str(env, "English"), String::from_str(env, "Spanish")],
+                languages: vec![
+                    env,
+                    String::from_str(env, "English"),
+                    String::from_str(env, "Spanish"),
+                ],
                 available_24_7: true,
                 crisis_text_available: true,
                 text_number: Some(String::from_str(env, "988")),
@@ -227,10 +247,7 @@ impl SuicidePreventionManager {
         ]
     }
 
-    pub fn get_crisis_resources(
-        env: &Env,
-        location: Option<String>,
-    ) -> Vec<CrisisResource> {
+    pub fn get_crisis_resources(env: &Env, location: Option<String>) -> Vec<CrisisResource> {
         let mut resources = Vec::new(env);
 
         // Add general resources
@@ -299,14 +316,9 @@ impl SuicidePreventionManager {
         Ok(plan_id)
     }
 
-    pub fn get_patient_prevention_alerts(
-        env: &Env,
-        patient_id: Address,
-    ) -> Vec<PreventionAlert> {
+    pub fn get_patient_prevention_alerts(env: &Env, patient_id: Address) -> Vec<PreventionAlert> {
         let key = String::from_str(env, "prevention_alerts");
-        env.storage().instance()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        env.storage().instance().get(&key).unwrap_or(Vec::new(env))
     }
 
     fn execute_prevention_protocol(env: &Env, patient_id: Address, protocol_id: u64) {
@@ -333,9 +345,8 @@ impl SuicidePreventionManager {
     }
 
     fn update_protocol_success_rate(env: &Env, protocol_id: u64, outcome: PreventionOutcome) {
-        let mut protocol: SuicidePreventionProtocol = env.storage().instance()
-            .get(&protocol_id)
-            .unwrap();
+        let mut protocol: SuicidePreventionProtocol =
+            env.storage().instance().get(&protocol_id).unwrap();
 
         // Simple success rate calculation (would be more sophisticated in reality)
         let success_increment = match outcome {

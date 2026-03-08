@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, Env, Map, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct MoodTracker;
 
@@ -36,7 +36,9 @@ impl MoodTracker {
         };
 
         // Store entry
-        let mut entries: Vec<MoodEntry> = env.storage().instance()
+        let mut entries: Vec<MoodEntry> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
         entries.push_back(entry);
@@ -62,17 +64,19 @@ impl MoodTracker {
         Ok(entry_id)
     }
 
-    pub fn get_mood_history(
-        env: &Env,
-        patient_id: Address,
-        limit: Option<u32>,
-    ) -> Vec<MoodEntry> {
-        let entries: Vec<MoodEntry> = env.storage().instance()
+    pub fn get_mood_history(env: &Env, patient_id: Address, limit: Option<u32>) -> Vec<MoodEntry> {
+        let entries: Vec<MoodEntry> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
 
         if let Some(limit) = limit {
-            let start = if entries.len() > limit { entries.len() - limit } else { 0 };
+            let start = if entries.len() > limit {
+                entries.len() - limit
+            } else {
+                0
+            };
             let mut result = Vec::new(env);
             for i in start..entries.len() {
                 result.push_back(entries.get(i).unwrap());
@@ -83,11 +87,7 @@ impl MoodTracker {
         }
     }
 
-    pub fn analyze_mood_trends(
-        env: &Env,
-        patient_id: Address,
-        days: u32,
-    ) -> MoodTrendAnalysis {
+    pub fn analyze_mood_trends(env: &Env, patient_id: Address, days: u32) -> MoodTrendAnalysis {
         let entries = Self::get_mood_history(env, patient_id, Some(days * 24)); // Assuming hourly entries
 
         if entries.is_empty() {
@@ -166,7 +166,8 @@ impl MoodTracker {
         }
 
         // Generate recommendations
-        let recommendations = Self::generate_recommendations(env, average_mood, trend_direction.clone(), volatility);
+        let recommendations =
+            Self::generate_recommendations(env, average_mood, trend_direction.clone(), volatility);
 
         MoodTrendAnalysis {
             average_mood,
@@ -204,24 +205,38 @@ impl MoodTracker {
         // Check for crisis keywords in triggers
         for trigger in triggers.iter() {
             let trigger_lower = trigger.to_lowercase();
-            if trigger_lower.contains("suicide") || trigger_lower.contains("kill") ||
-               trigger_lower.contains("end it") || trigger_lower.contains("worthless") {
+            if trigger_lower.contains("suicide")
+                || trigger_lower.contains("kill")
+                || trigger_lower.contains("end it")
+                || trigger_lower.contains("worthless")
+            {
                 risk_indicators.push_back(String::from_str(env, "suicidal_ideation"));
             }
-            if trigger_lower.contains("harm") || trigger_lower.contains("cut") ||
-               trigger_lower.contains("hurt myself") {
+            if trigger_lower.contains("harm")
+                || trigger_lower.contains("cut")
+                || trigger_lower.contains("hurt myself")
+            {
                 risk_indicators.push_back(String::from_str(env, "self_harm"));
             }
         }
 
         // Generate recommendations
         if mood_score < 0 {
-            recommendations.push_back(String::from_str(env, "Consider reaching out to a mental health professional"));
-            recommendations.push_back(String::from_str(env, "Practice deep breathing or mindfulness exercises"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consider reaching out to a mental health professional",
+            ));
+            recommendations.push_back(String::from_str(
+                env,
+                "Practice deep breathing or mindfulness exercises",
+            ));
         }
 
         if risk_indicators.len() > 0 {
-            recommendations.push_back(String::from_str(env, "Immediate professional help recommended"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Immediate professional help recommended",
+            ));
         }
 
         MoodAnalysis {
@@ -235,8 +250,10 @@ impl MoodTracker {
 
     fn detect_crisis_risk(risk_indicators: &Vec<String>) -> bool {
         for indicator in risk_indicators.iter() {
-            if indicator == "suicidal_ideation" || indicator == "self_harm" ||
-               indicator == "severe_negative_mood" {
+            if indicator == "suicidal_ideation"
+                || indicator == "self_harm"
+                || indicator == "severe_negative_mood"
+            {
                 return true;
             }
         }
@@ -265,11 +282,17 @@ impl MoodTracker {
         }
 
         if volatility > 3.0 {
-            recommendations.push_back(String::from_str(env, "Mood swings detected - consider mood stabilizing activities"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Mood swings detected - consider mood stabilizing activities",
+            ));
         }
 
         if trend == "declining" {
-            recommendations.push_back(String::from_str(env, "Trend shows declining mood - reach out for support"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Trend shows declining mood - reach out for support",
+            ));
         }
 
         recommendations

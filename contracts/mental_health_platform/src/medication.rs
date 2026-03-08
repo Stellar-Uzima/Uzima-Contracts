@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct MedicationManager;
 
@@ -33,7 +33,9 @@ impl MedicationManager {
         };
 
         // Store plan
-        let mut plans: Vec<MedicationPlan> = env.storage().instance()
+        let mut plans: Vec<MedicationPlan> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
         plans.push_back(plan);
@@ -56,7 +58,9 @@ impl MedicationManager {
         side_effects_experienced: Vec<String>,
         notes: String,
     ) -> Result<(), Error> {
-        let mut plans: Vec<MedicationPlan> = env.storage().instance()
+        let mut plans: Vec<MedicationPlan> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::MedicationPlanNotFound)?;
 
@@ -106,7 +110,9 @@ impl MedicationManager {
             return Err(Error::InvalidInput);
         }
 
-        let mut plans: Vec<MedicationPlan> = env.storage().instance()
+        let mut plans: Vec<MedicationPlan> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::MedicationPlanNotFound)?;
 
@@ -124,11 +130,9 @@ impl MedicationManager {
         Err(Error::MedicationPlanNotFound)
     }
 
-    pub fn get_patient_medication_plans(
-        env: &Env,
-        patient_id: Address,
-    ) -> Vec<MedicationPlan> {
-        env.storage().instance()
+    pub fn get_patient_medication_plans(env: &Env, patient_id: Address) -> Vec<MedicationPlan> {
+        env.storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env))
     }
@@ -143,17 +147,19 @@ impl MedicationManager {
 
         for plan in plans.iter() {
             if plan.plan_id == plan_id {
-                let recent_entries: Vec<AdherenceEntry> = plan.adherence_tracking.iter()
-                    .filter(|entry| env.ledger().timestamp() - entry.timestamp < days * 24 * 60 * 60)
+                let recent_entries: Vec<AdherenceEntry> = plan
+                    .adherence_tracking
+                    .iter()
+                    .filter(|entry| {
+                        env.ledger().timestamp() - entry.timestamp < days * 24 * 60 * 60
+                    })
                     .collect();
 
                 if recent_entries.is_empty() {
                     return Ok(0.0);
                 }
 
-                let taken_count = recent_entries.iter()
-                    .filter(|entry| entry.taken)
-                    .count();
+                let taken_count = recent_entries.iter().filter(|entry| entry.taken).count();
 
                 return Ok(taken_count as f32 / recent_entries.len() as f32);
             }
@@ -191,7 +197,10 @@ impl MedicationManager {
                 }
 
                 let recommendations = Self::generate_medication_recommendations(
-                    env, adherence_rate, effectiveness_rating, side_effects_frequency.len()
+                    env,
+                    adherence_rate,
+                    effectiveness_rating,
+                    side_effects_frequency.len(),
                 );
 
                 return Ok(MedicationEffectivenessAnalysis {
@@ -208,7 +217,8 @@ impl MedicationManager {
     }
 
     fn check_adherence_patterns(env: &Env, patient_id: Address, plan: MedicationPlan) {
-        let adherence_rate = Self::calculate_adherence_rate(env, plan.plan_id, patient_id, 7).unwrap_or(0.0);
+        let adherence_rate =
+            Self::calculate_adherence_rate(env, plan.plan_id, patient_id, 7).unwrap_or(0.0);
 
         if adherence_rate < 0.7 {
             // Low adherence detected
@@ -219,7 +229,9 @@ impl MedicationManager {
         }
 
         // Check for side effect patterns
-        let recent_side_effects: Vec<String> = plan.adherence_tracking.iter()
+        let recent_side_effects: Vec<String> = plan
+            .adherence_tracking
+            .iter()
             .filter(|entry| env.ledger().timestamp() - entry.timestamp < 7 * 24 * 60 * 60)
             .flat_map(|entry| entry.side_effects_experienced.clone())
             .collect();
@@ -241,18 +253,33 @@ impl MedicationManager {
         let mut recommendations = Vec::new(env);
 
         if adherence_rate < 0.8 {
-            recommendations.push_back(String::from_str(env, "Consider adherence support strategies"));
-            recommendations.push_back(String::from_str(env, "Discuss adherence barriers with healthcare provider"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consider adherence support strategies",
+            ));
+            recommendations.push_back(String::from_str(
+                env,
+                "Discuss adherence barriers with healthcare provider",
+            ));
         }
 
         if effectiveness < 5.0 {
-            recommendations.push_back(String::from_str(env, "Discuss alternative medications with prescriber"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Discuss alternative medications with prescriber",
+            ));
             recommendations.push_back(String::from_str(env, "Consider dosage adjustment"));
         }
 
         if side_effects_count > 3 {
-            recommendations.push_back(String::from_str(env, "Report side effects to healthcare provider"));
-            recommendations.push_back(String::from_str(env, "Consider side effect management strategies"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Report side effects to healthcare provider",
+            ));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consider side effect management strategies",
+            ));
         }
 
         if recommendations.is_empty() {

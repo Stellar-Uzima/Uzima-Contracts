@@ -154,13 +154,13 @@ pub struct Assessment {
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum AssessmentType {
-    PHQ9,        // Depression
-    GAD7,        // Anxiety
-    PCL5,        // PTSD
-    AUDIT,       // Alcohol Use
-    DAST,        // Drug Use
-    BDI,         // Beck Depression Inventory
-    BAI,         // Beck Anxiety Inventory
+    PHQ9,  // Depression
+    GAD7,  // Anxiety
+    PCL5,  // PTSD
+    AUDIT, // Alcohol Use
+    DAST,  // Drug Use
+    BDI,   // Beck Depression Inventory
+    BAI,   // Beck Anxiety Inventory
     Custom,
 }
 
