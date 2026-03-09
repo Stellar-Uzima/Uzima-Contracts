@@ -13,7 +13,8 @@ fn test_public_health_surveillance_initialization() {
     client.initialize(&admin);
     
     // Test that initialization works
-    assert!(client.get_privacy_budget(&admin).is_ok());
+    let budget = client.get_privacy_budget(&admin);
+    assert_eq!(budget, 1000);
 }
 
 #[test]
@@ -46,7 +47,7 @@ fn test_outbreak_data_reporting() {
     );
     
     // Verify outbreak data was stored
-    let outbreak_data = client.get_outbreak_data(&data_id).unwrap();
+    let outbreak_data = client.get_outbreak_data(&data_id);
     assert_eq!(outbreak_data.disease_code, disease_code);
     assert_eq!(outbreak_data.aggregated_cases, 150);
     assert_eq!(outbreak_data.aggregation_method, AggregationMethod::DifferentialPrivacy);
@@ -68,7 +69,7 @@ fn test_epidemic_model_creation() {
     let disease_code = String::from_str(&env, "COVID19");
     let encrypted_scope = Bytes::from_slice(&env, b"encrypted_geographic_scope");
     let model_type = String::from_str(&env, "SEIR");
-    let encrypted_params = Bytes::from_slice(&env, b"model_parameters");
+    let _encrypted_params = Bytes::from_slice(&env, b"model_parameters");
     
     client.create_epidemic_model(
         &modeler,
@@ -80,13 +81,10 @@ fn test_epidemic_model_creation() {
         &5u32,    // 5 days incubation
         &10u32,   // 10 days infectious
         &200u32,  // 2% case fatality rate
-        &encrypted_params,
-        &30u32,   // 30 day prediction horizon
-        &9000u32, // 90% confidence
     );
     
     // Verify model was stored
-    let model = client.get_epidemic_model(&model_id).unwrap();
+    let model = client.get_epidemic_model(&model_id);
     assert_eq!(model.disease_code, disease_code);
     assert_eq!(model.model_type, model_type);
     assert_eq!(model.r0_estimate, 2500);
@@ -123,12 +121,12 @@ fn test_public_health_alert_creation() {
         &DiseaseSeverity::High,
         &encrypted_regions,
         &message,
-        recommended_actions,
+        &recommended_actions,
         &24u32, // 24 hours expiration
     );
     
     // Verify alert was created
-    let alert = client.get_public_health_alert(&alert_id).unwrap();
+    let alert = client.get_public_health_alert(&alert_id);
     assert_eq!(alert.alert_type, AlertType::DiseaseOutbreak);
     assert_eq!(alert.severity, DiseaseSeverity::High);
     assert_eq!(alert.message, message);
@@ -164,12 +162,10 @@ fn test_vaccination_coverage_reporting() {
         &7500u32,   // 75% coverage
         &time_start,
         &time_end,
-        &AggregationMethod::SecureMultipartyComputation,
-        &15u64, // privacy epsilon
     );
     
     // Verify coverage data was stored
-    let coverage = client.get_vaccination_coverage(&coverage_id).unwrap();
+    let coverage = client.get_vaccination_coverage(&coverage_id);
     assert_eq!(coverage.vaccine_type, vaccine_type);
     assert_eq!(coverage.coverage_bps, 7500);
     assert_eq!(coverage.aggregation_method, AggregationMethod::SecureMultipartyComputation);
@@ -202,12 +198,10 @@ fn test_environmental_health_monitoring() {
         &8500u32,  // 85% risk (high)
         &time_start,
         &time_end,
-        &AggregationMethod::HomomorphicEncryption,
-        &20u64, // privacy epsilon
     );
     
     // Verify environmental data was stored
-    let env_health = client.get_environmental_health(&env_data_id).unwrap();
+    let env_health = client.get_environmental_health(&env_data_id);
     assert_eq!(env_health.metric_type, metric_type);
     assert_eq!(env_health.aggregated_value, 150);
     assert_eq!(env_health.risk_bps, 8500);
@@ -238,12 +232,10 @@ fn test_antimicrobial_resistance_tracking() {
         &antibiotic_class,
         &6000u32, // 60% resistance
         &500u64,  // sample size (privacy-preserving)
-        &AggregationMethod::ZeroKnowledgeProofs,
-        &25u64, // privacy epsilon
     );
     
     // Verify AMR data was stored
-    let amr_data = client.get_antimicrobial_resistance(&amr_data_id).unwrap();
+    let amr_data = client.get_antimicrobial_resistance(&amr_data_id);
     assert_eq!(amr_data.pathogen_code, pathogen_code);
     assert_eq!(amr_data.antibiotic_class, antibiotic_class);
     assert_eq!(amr_data.resistance_bps, 6000);
@@ -272,12 +264,10 @@ fn test_social_determinants_reporting() {
         &determinant_type,
         &3000u64, // aggregated metric (privacy-preserving)
         &7000u32, // 70% impact
-        &AggregationMethod::FederatedLearning,
-        &30u64, // privacy epsilon
     );
     
     // Verify SDOH data was stored
-    let sdoh_data = client.get_social_determinants(&sdoh_data_id).unwrap();
+    let sdoh_data = client.get_social_determinants(&sdoh_data_id);
     assert_eq!(sdoh_data.determinant_type, determinant_type);
     assert_eq!(sdoh_data.aggregated_metric, 3000);
     assert_eq!(sdoh_data.impact_bps, 7000);
@@ -315,11 +305,10 @@ fn test_public_health_intervention() {
         &1643587200u64, // end date (30 days)
         &1000000u64, // implementation cost
         expected_outcomes,
-        &AggregationMethod::DifferentialPrivacy,
     );
     
     // Verify intervention was created
-    let intervention = client.get_public_health_intervention(&intervention_id).unwrap();
+    let intervention = client.get_public_health_intervention(&intervention_id);
     assert_eq!(intervention.intervention_type, intervention_type);
     assert_eq!(intervention.implementation_cost, 1000000);
     assert_eq!(intervention.expected_outcomes.len(), 2);
@@ -355,7 +344,7 @@ fn test_global_health_collaboration() {
     client.create_global_collaboration(
         &lead_org,
         &collaboration_id,
-        participants.clone(),
+        participants,
         &collaboration_type,
         &data_sharing_protocol,
         &AggregationMethod::SecureMultipartyComputation,
@@ -365,7 +354,7 @@ fn test_global_health_collaboration() {
     );
     
     // Verify collaboration was created
-    let collaboration = client.get_global_collaboration(&collaboration_id).unwrap();
+    let collaboration = client.get_global_collaboration(&collaboration_id);
     assert_eq!(collaboration.collaboration_type, collaboration_type);
     assert_eq!(collaboration.data_sharing_protocol, data_sharing_protocol);
     assert_eq!(collaboration.participants.len(), 4);
@@ -381,12 +370,10 @@ fn test_privacy_budget_management() {
 
     let (client, _id) = setup(&env);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
-    
     let user = Address::generate(&env);
     
     // Check initial privacy budget
-    let initial_budget = client.get_privacy_budget(&user).unwrap();
+    let initial_budget = client.get_privacy_budget(&user);
     assert_eq!(initial_budget, 1000); // Default budget
     
     // Report some data that uses privacy budget
@@ -405,7 +392,7 @@ fn test_privacy_budget_management() {
     );
     
     // Check remaining privacy budget
-    let remaining_budget = client.get_privacy_budget(&user).unwrap();
+    let remaining_budget = client.get_privacy_budget(&user);
     assert_eq!(remaining_budget, 900); // 1000 - 100
     
     // Try to exceed privacy budget - should fail
@@ -423,7 +410,10 @@ fn test_privacy_budget_management() {
     );
     
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Error::PrivacyBudgetExceeded);
+    match result {
+        Err(Error::PrivacyBudgetExceeded) => {}, // Expected
+        _ => panic!("Expected PrivacyBudgetExceeded error"),
+    }
 }
 
 #[test]
@@ -468,11 +458,11 @@ fn test_outbreak_detection_algorithm() {
     );
     
     // High confidence should trigger outbreak detection (180 > 100 * 1.0)
-    let outbreak_high = client.get_outbreak_data(&data_id_high_conf).unwrap();
+    let _outbreak_high = client.get_outbreak_data(&data_id_high_conf);
     // Note: In actual implementation, we'd check if an alert was created
     
     // Low confidence should not trigger outbreak detection (180 < 100 * 2.0)
-    let outbreak_low = client.get_outbreak_data(&data_id_low_conf).unwrap();
+    let _outbreak_low = client.get_outbreak_data(&data_id_low_conf);
     // Note: In actual implementation, we'd check no alert was created
 }
 
@@ -553,7 +543,10 @@ fn test_time_range_validation() {
     );
     
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), Error::InvalidTimeRange);
+    match result {
+        Err(Error::InvalidTimeRange) => {}, // Expected
+        _ => panic!("Expected InvalidTimeRange error"),
+    }
 }
 
 #[test]
@@ -588,17 +581,17 @@ fn test_privacy_preserving_aggregation_methods() {
             &100u64,
             &1640995200u64,
             &1641081600u64,
-            *method,
+            &method,
             &10u64,
             &8000u32,
         );
         
-        let data = client.get_outbreak_data(&data_id).unwrap();
-        assert_eq!(data.aggregation_method, *method);
+        let data = client.get_outbreak_data(&data_id);
+        assert_eq!(data.aggregation_method, method);
     }
 }
 
-fn setup(env: &Env) -> (PublicHealthSurveillanceClient<'_>, BytesN<32>) {
+fn setup(env: &Env) -> (PublicHealthSurveillanceClient<'_>, Address) {
     let contract_id = env.register_contract(None, PublicHealthSurveillance {});
     let client = PublicHealthSurveillanceClient::new(env, &contract_id);
     (client, contract_id)

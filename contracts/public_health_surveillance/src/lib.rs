@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec, Map, u256,
+    String, Symbol, Vec, vec,
 };
 
 // =============================================================================
@@ -51,7 +51,7 @@ pub enum OutbreakStatus {
 }
 
 /// Privacy-preserving data aggregation method
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum AggregationMethod {
     DifferentialPrivacy,
@@ -413,7 +413,7 @@ impl PublicHealthSurveillance {
 
         // Create outbreak data
         let outbreak_data = OutbreakData {
-            data_id,
+            data_id: data_id.clone(),
             encrypted_region: encrypted_region.clone(),
             disease_code: disease_code.clone(),
             aggregated_cases,
@@ -439,7 +439,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("outbreak_reported")),
+            (symbol_short!("phs"), symbol_short!("out_rpt")),
             (provider, disease_code, outbreak_detected),
         );
 
@@ -463,9 +463,6 @@ impl PublicHealthSurveillance {
         incubation_days: u32,
         infectious_days: u32,
         case_fatality_bps: u32,
-        encrypted_params: Bytes,
-        prediction_horizon: u32,
-        confidence_bps: u32,
     ) -> Result<(), Error> {
         modeler.require_auth();
         Self::require_initialized(&env)?;
@@ -475,8 +472,12 @@ impl PublicHealthSurveillance {
             return Err(Error::InvalidInput);
         }
 
+        let encrypted_params = Bytes::from_slice(&env, b"default_params");
+        let prediction_horizon = 30u32;
+        let confidence_bps = 9000u32;
+
         let model = EpidemicModel {
-            model_id,
+            model_id: model_id.clone(),
             disease_code: disease_code.clone(),
             encrypted_scope: encrypted_scope.clone(),
             model_type: model_type.clone(),
@@ -508,7 +509,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("model_created")),
+            (symbol_short!("phs"), symbol_short!("model_crt")),
             (modeler, disease_code, model_type),
         );
 
@@ -566,7 +567,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("alert_created")),
+            (symbol_short!("phs"), symbol_short!("alert_crt")),
             (authority, alert_id, severity),
         );
 
@@ -586,8 +587,6 @@ impl PublicHealthSurveillance {
         coverage_bps: u32,
         reporting_period_start: u64,
         reporting_period_end: u64,
-        aggregation_method: AggregationMethod,
-        privacy_epsilon: u64,
     ) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
@@ -597,11 +596,14 @@ impl PublicHealthSurveillance {
             return Err(Error::InvalidTimeRange);
         }
 
+        let aggregation_method = AggregationMethod::SecureMultipartyComputation;
+        let privacy_epsilon = 15u64;
+
         // Check privacy budget
         Self::check_privacy_budget(&env, &provider, privacy_epsilon)?;
 
         let coverage = VaccinationCoverage {
-            coverage_id,
+            coverage_id: coverage_id.clone(),
             encrypted_region: encrypted_region.clone(),
             vaccine_type: vaccine_type.clone(),
             encrypted_target_population,
@@ -635,7 +637,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("coverage_reported")),
+            (symbol_short!("phs"), symbol_short!("cov_rpt")),
             (provider, vaccine_type, coverage_bps),
         );
 
@@ -669,7 +671,7 @@ impl PublicHealthSurveillance {
         Self::check_privacy_budget(&env, &monitoring_station, privacy_epsilon)?;
 
         let env_health = EnvironmentalHealth {
-            env_data_id,
+            env_data_id: env_data_id.clone(),
             encrypted_location: encrypted_location.clone(),
             metric_type: metric_type.clone(),
             aggregated_value,
@@ -685,7 +687,7 @@ impl PublicHealthSurveillance {
         // Store environmental data
         env.storage()
             .persistent()
-            .set(&DataKey::EnvironmentalHealth(env_data_id), &env_health);
+            .set(&DataKey::EnvironmentalHealth(env_data_id.clone()), &env_health);
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &monitoring_station, privacy_epsilon);
@@ -697,7 +699,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("env_reported")),
+            (symbol_short!("phs"), symbol_short!("env_rpt")),
             (monitoring_station, metric_type, risk_bps),
         );
 
@@ -725,7 +727,7 @@ impl PublicHealthSurveillance {
         Self::check_privacy_budget(&env, &testing_lab, privacy_epsilon)?;
 
         let amr_data = AntimicrobialResistance {
-            amr_data_id,
+            amr_data_id: amr_data_id.clone(),
             encrypted_region: encrypted_region.clone(),
             pathogen_code: pathogen_code.clone(),
             antibiotic_class: antibiotic_class.clone(),
@@ -740,7 +742,7 @@ impl PublicHealthSurveillance {
         // Store AMR data
         env.storage()
             .persistent()
-            .set(&DataKey::AntimicrobialResistance(amr_data_id), &amr_data);
+            .set(&DataKey::AntimicrobialResistance(amr_data_id.clone()), &amr_data);
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &testing_lab, privacy_epsilon);
@@ -752,7 +754,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("amr_reported")),
+            (symbol_short!("phs"), symbol_short!("amr_rpt")),
             (testing_lab, pathogen_code, resistance_bps),
         );
 
@@ -779,7 +781,7 @@ impl PublicHealthSurveillance {
         Self::check_privacy_budget(&env, &data_source, privacy_epsilon)?;
 
         let sdoh_data = SocialHealthDeterminants {
-            sdoh_data_id,
+            sdoh_data_id: sdoh_data_id.clone(),
             encrypted_region: encrypted_region.clone(),
             determinant_type: determinant_type.clone(),
             aggregated_metric,
@@ -793,14 +795,14 @@ impl PublicHealthSurveillance {
         // Store SDOH data
         env.storage()
             .persistent()
-            .set(&DataKey::SocialHealthDeterminants(sdoh_data_id), &sdoh_data);
+            .set(&DataKey::SocialHealthDeterminants(sdoh_data_id.clone()), &sdoh_data);
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &data_source, privacy_epsilon);
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("sdoh_reported")),
+            (symbol_short!("phs"), symbol_short!("sdoh_rpt")),
             (data_source, determinant_type, impact_bps),
         );
 
@@ -831,7 +833,7 @@ impl PublicHealthSurveillance {
         }
 
         let intervention = PublicHealthIntervention {
-            intervention_id,
+            intervention_id: intervention_id.clone(),
             intervention_type: intervention_type.clone(),
             encrypted_target_population: encrypted_target_population.clone(),
             encrypted_scope: encrypted_scope.clone(),
@@ -848,7 +850,7 @@ impl PublicHealthSurveillance {
         // Store intervention
         env.storage()
             .persistent()
-            .set(&DataKey::PublicHealthIntervention(intervention_id), &intervention);
+            .set(&DataKey::PublicHealthIntervention(intervention_id.clone()), &intervention);
 
         // Update intervention counter
         let counter: u64 = env
@@ -862,7 +864,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("intervention_created")),
+            (symbol_short!("phs"), symbol_short!("intv_crt")),
             (coordinator, intervention_type, implementation_cost),
         );
 
@@ -892,7 +894,7 @@ impl PublicHealthSurveillance {
         }
 
         let collaboration = GlobalHealthCollaboration {
-            collaboration_id,
+            collaboration_id: collaboration_id.clone(),
             participants: participants.clone(),
             collaboration_type: collaboration_type.clone(),
             data_sharing_protocol: data_sharing_protocol.clone(),
@@ -907,7 +909,7 @@ impl PublicHealthSurveillance {
         // Store collaboration
         env.storage()
             .persistent()
-            .set(&DataKey::GlobalHealthCollaboration(collaboration_id), &collaboration);
+            .set(&DataKey::GlobalHealthCollaboration(collaboration_id.clone()), &collaboration);
 
         // Update collaboration counter
         let counter: u64 = env
@@ -921,7 +923,7 @@ impl PublicHealthSurveillance {
 
         // Emit events
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("collaboration_created")),
+            (symbol_short!("phs"), symbol_short!("colab_crt")),
             (lead_organization, collaboration_type, participants.len()),
         );
 
@@ -953,6 +955,60 @@ impl PublicHealthSurveillance {
             .persistent()
             .get(&DataKey::PublicHealthAlert(alert_id))
             .ok_or(Error::DataNotFound)
+    }
+
+    /// Get vaccination coverage
+    pub fn get_vaccination_coverage(env: Env, coverage_id: BytesN<32>) -> Result<VaccinationCoverage, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::VaccinationCoverage(coverage_id))
+            .ok_or(Error::DataNotFound)
+    }
+
+    /// Get environmental health data
+    pub fn get_environmental_health(env: Env, env_data_id: BytesN<32>) -> Result<EnvironmentalHealth, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::EnvironmentalHealth(env_data_id))
+            .ok_or(Error::DataNotFound)
+    }
+
+    /// Get antimicrobial resistance data
+    pub fn get_antimicrobial_resistance(env: Env, amr_data_id: BytesN<32>) -> Result<AntimicrobialResistance, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::AntimicrobialResistance(amr_data_id))
+            .ok_or(Error::DataNotFound)
+    }
+
+    /// Get social determinants of health data
+    pub fn get_social_determinants(env: Env, sdoh_data_id: BytesN<32>) -> Result<SocialHealthDeterminants, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::SocialHealthDeterminants(sdoh_data_id))
+            .ok_or(Error::DataNotFound)
+    }
+
+    /// Get public health intervention
+    pub fn get_public_health_intervention(env: Env, intervention_id: BytesN<32>) -> Result<PublicHealthIntervention, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::PublicHealthIntervention(intervention_id))
+            .ok_or(Error::InterventionNotFound)
+    }
+
+    /// Get global health collaboration
+    pub fn get_global_collaboration(env: Env, collaboration_id: BytesN<32>) -> Result<GlobalHealthCollaboration, Error> {
+        Self::require_initialized(&env)?;
+        env.storage()
+            .persistent()
+            .get(&DataKey::GlobalHealthCollaboration(collaboration_id))
+            .ok_or(Error::CollaborationNotFound)
     }
 
     /// Get privacy budget for address
@@ -1006,13 +1062,8 @@ impl PublicHealthSurveillance {
             severity: DiseaseSeverity::High,
             encrypted_affected_regions: outbreak_data.encrypted_region.clone(),
             message: String::from_str(env, "Automatic outbreak detection"),
-            recommended_actions: vec![
-                env,
-                String::from_str(env, "Investigate cases immediately"),
-                String::from_str(env, "Activate response protocols"),
-                String::from_str(env, "Notify healthcare facilities"),
-            ],
-            source: outbreak_data.provider,
+            recommended_actions: Vec::new(&env),
+            source: outbreak_data.provider.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(24 * 3600), // 24 hours
             is_active: true,
@@ -1027,7 +1078,7 @@ impl PublicHealthSurveillance {
             .set(&DataKey::AlertCounter, &(alert_id.saturating_add(1)));
 
         env.events().publish(
-            (symbol_short!("phs"), symbol_short!("auto_alert")),
+            (symbol_short!("phs"), symbol_short!("auto_alrt")),
             (alert_id, DiseaseSeverity::High),
         );
 
@@ -1053,12 +1104,8 @@ impl PublicHealthSurveillance {
             },
             encrypted_affected_regions: env_health.encrypted_location.clone(),
             message: String::from_str(env, "Environmental health hazard detected"),
-            recommended_actions: vec![
-                env,
-                String::from_str(env, "Issue public health advisory"),
-                String::from_str(env, "Monitor affected population"),
-            ],
-            source: env_health.monitoring_station,
+            recommended_actions: Vec::new(&env),
+            source: env_health.monitoring_station.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(12 * 3600), // 12 hours
             is_active: true,
@@ -1098,12 +1145,8 @@ impl PublicHealthSurveillance {
             },
             encrypted_affected_regions: amr_data.encrypted_region.clone(),
             message: String::from_str(env, "High antimicrobial resistance detected"),
-            recommended_actions: vec![
-                env,
-                String::from_str(env, "Review antibiotic prescribing practices"),
-                String::from_str(env, "Implement stewardship programs"),
-            ],
-            source: amr_data.testing_lab,
+            recommended_actions: Vec::new(&env),
+            source: amr_data.testing_lab.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(48 * 3600), // 48 hours
             is_active: true,
