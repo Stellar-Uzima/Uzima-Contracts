@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec, vec,
+    String, Symbol, Vec,
 };
 
 // =============================================================================
@@ -685,15 +685,17 @@ impl PublicHealthSurveillance {
         };
 
         // Store environmental data
-        env.storage()
-            .persistent()
-            .set(&DataKey::EnvironmentalHealth(env_data_id.clone()), &env_health);
+        env.storage().persistent().set(
+            &DataKey::EnvironmentalHealth(env_data_id.clone()),
+            &env_health,
+        );
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &monitoring_station, privacy_epsilon);
 
         // Check for environmental hazards
-        if risk_bps > 8000 { // High risk threshold
+        if risk_bps > 8000 {
+            // High risk threshold
             Self::create_environmental_alert(&env, &env_health)?;
         }
 
@@ -740,15 +742,17 @@ impl PublicHealthSurveillance {
         };
 
         // Store AMR data
-        env.storage()
-            .persistent()
-            .set(&DataKey::AntimicrobialResistance(amr_data_id.clone()), &amr_data);
+        env.storage().persistent().set(
+            &DataKey::AntimicrobialResistance(amr_data_id.clone()),
+            &amr_data,
+        );
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &testing_lab, privacy_epsilon);
 
         // Check for high resistance levels
-        if resistance_bps > 5000 { // 50% resistance threshold
+        if resistance_bps > 5000 {
+            // 50% resistance threshold
             Self::create_amr_alert(&env, &amr_data)?;
         }
 
@@ -793,9 +797,10 @@ impl PublicHealthSurveillance {
         };
 
         // Store SDOH data
-        env.storage()
-            .persistent()
-            .set(&DataKey::SocialHealthDeterminants(sdoh_data_id.clone()), &sdoh_data);
+        env.storage().persistent().set(
+            &DataKey::SocialHealthDeterminants(sdoh_data_id.clone()),
+            &sdoh_data,
+        );
 
         // Update privacy budget
         Self::update_privacy_budget(&env, &data_source, privacy_epsilon);
@@ -848,9 +853,10 @@ impl PublicHealthSurveillance {
         };
 
         // Store intervention
-        env.storage()
-            .persistent()
-            .set(&DataKey::PublicHealthIntervention(intervention_id.clone()), &intervention);
+        env.storage().persistent().set(
+            &DataKey::PublicHealthIntervention(intervention_id.clone()),
+            &intervention,
+        );
 
         // Update intervention counter
         let counter: u64 = env
@@ -907,9 +913,10 @@ impl PublicHealthSurveillance {
         };
 
         // Store collaboration
-        env.storage()
-            .persistent()
-            .set(&DataKey::GlobalHealthCollaboration(collaboration_id.clone()), &collaboration);
+        env.storage().persistent().set(
+            &DataKey::GlobalHealthCollaboration(collaboration_id.clone()),
+            &collaboration,
+        );
 
         // Update collaboration counter
         let counter: u64 = env
@@ -958,7 +965,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get vaccination coverage
-    pub fn get_vaccination_coverage(env: Env, coverage_id: BytesN<32>) -> Result<VaccinationCoverage, Error> {
+    pub fn get_vaccination_coverage(
+        env: Env,
+        coverage_id: BytesN<32>,
+    ) -> Result<VaccinationCoverage, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -967,7 +977,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get environmental health data
-    pub fn get_environmental_health(env: Env, env_data_id: BytesN<32>) -> Result<EnvironmentalHealth, Error> {
+    pub fn get_environmental_health(
+        env: Env,
+        env_data_id: BytesN<32>,
+    ) -> Result<EnvironmentalHealth, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -976,7 +989,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get antimicrobial resistance data
-    pub fn get_antimicrobial_resistance(env: Env, amr_data_id: BytesN<32>) -> Result<AntimicrobialResistance, Error> {
+    pub fn get_antimicrobial_resistance(
+        env: Env,
+        amr_data_id: BytesN<32>,
+    ) -> Result<AntimicrobialResistance, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -985,7 +1001,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get social determinants of health data
-    pub fn get_social_determinants(env: Env, sdoh_data_id: BytesN<32>) -> Result<SocialHealthDeterminants, Error> {
+    pub fn get_social_determinants(
+        env: Env,
+        sdoh_data_id: BytesN<32>,
+    ) -> Result<SocialHealthDeterminants, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -994,7 +1013,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get public health intervention
-    pub fn get_public_health_intervention(env: Env, intervention_id: BytesN<32>) -> Result<PublicHealthIntervention, Error> {
+    pub fn get_public_health_intervention(
+        env: Env,
+        intervention_id: BytesN<32>,
+    ) -> Result<PublicHealthIntervention, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -1003,7 +1025,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Get global health collaboration
-    pub fn get_global_collaboration(env: Env, collaboration_id: BytesN<32>) -> Result<GlobalHealthCollaboration, Error> {
+    pub fn get_global_collaboration(
+        env: Env,
+        collaboration_id: BytesN<32>,
+    ) -> Result<GlobalHealthCollaboration, Error> {
         Self::require_initialized(&env)?;
         env.storage()
             .persistent()
@@ -1037,8 +1062,8 @@ impl PublicHealthSurveillance {
         // Simple outbreak detection: if cases exceed threshold based on confidence
         let threshold_multiplier = match data.confidence_bps {
             0..=3000 => 2.0,    // Low confidence
-            3001..=7000 => 1.5,  // Medium confidence
-            _ => 1.0,             // High confidence
+            3001..=7000 => 1.5, // Medium confidence
+            _ => 1.0,           // High confidence
         };
 
         // Calculate expected baseline (simplified - in production would use historical data)
@@ -1062,7 +1087,7 @@ impl PublicHealthSurveillance {
             severity: DiseaseSeverity::High,
             encrypted_affected_regions: outbreak_data.encrypted_region.clone(),
             message: String::from_str(env, "Automatic outbreak detection"),
-            recommended_actions: Vec::new(&env),
+            recommended_actions: Vec::new(env),
             source: outbreak_data.provider.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(24 * 3600), // 24 hours
@@ -1086,7 +1111,10 @@ impl PublicHealthSurveillance {
     }
 
     /// Create environmental hazard alert
-    fn create_environmental_alert(env: &Env, env_health: &EnvironmentalHealth) -> Result<(), Error> {
+    fn create_environmental_alert(
+        env: &Env,
+        env_health: &EnvironmentalHealth,
+    ) -> Result<(), Error> {
         let alert_id: u64 = env
             .storage()
             .persistent()
@@ -1104,7 +1132,7 @@ impl PublicHealthSurveillance {
             },
             encrypted_affected_regions: env_health.encrypted_location.clone(),
             message: String::from_str(env, "Environmental health hazard detected"),
-            recommended_actions: Vec::new(&env),
+            recommended_actions: Vec::new(env),
             source: env_health.monitoring_station.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(12 * 3600), // 12 hours
@@ -1145,7 +1173,7 @@ impl PublicHealthSurveillance {
             },
             encrypted_affected_regions: amr_data.encrypted_region.clone(),
             message: String::from_str(env, "High antimicrobial resistance detected"),
-            recommended_actions: Vec::new(&env),
+            recommended_actions: Vec::new(env),
             source: amr_data.testing_lab.clone(),
             created_at: env.ledger().timestamp(),
             expires_at: env.ledger().timestamp().saturating_add(48 * 3600), // 48 hours
