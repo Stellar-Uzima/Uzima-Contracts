@@ -411,7 +411,7 @@ mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
 
-    fn setup(env: &Env) -> (FederatedLearningContractClient, Address, Address) {
+    fn setup(env: &Env) -> (FederatedLearningContractClient<'_>, Address, Address) {
         let client = FederatedLearningContractClient::new(
             env,
             &env.register_contract(None, FederatedLearningContract),
