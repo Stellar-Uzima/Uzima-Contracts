@@ -1,4 +1,4 @@
-#[allow(clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments)]
 use soroban_sdk::{
     contract, contractimpl, contracttype, log, Address, Bytes, Env, Map, String, Vec,
 };
@@ -348,14 +348,14 @@ impl PharmaSupplyChain {
         certifications: Vec<String>,
         country: String,
     ) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Storage must be initialized");
         admin.require_auth();
 
         let mut manufacturers: Map<String, Manufacturer> = env
             .storage()
             .instance()
             .get(&DataKey::Manufacturers)
-            .unwrap();
+            .expect("Storage must be initialized");
 
         let manufacturer = Manufacturer {
             id: id.clone(),
@@ -386,14 +386,14 @@ impl PharmaSupplyChain {
 
     /// Deactivate a manufacturer
     pub fn deactivate_manufacturer(env: Env, manufacturer_id: String) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Storage must be initialized");
         admin.require_auth();
 
         let mut manufacturers: Map<String, Manufacturer> = env
             .storage()
             .instance()
             .get(&DataKey::Manufacturers)
-            .unwrap();
+            .expect("Storage must be initialized");
 
         if let Some(mut manufacturer) = manufacturers.get(manufacturer_id.clone()) {
             manufacturer.is_active = false;
@@ -430,7 +430,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Manufacturers)
-            .unwrap();
+            .expect("Storage must be initialized");
 
         let manufacturer = manufacturers
             .get(manufacturer_id.clone())
@@ -438,7 +438,7 @@ impl PharmaSupplyChain {
         manufacturer.address.require_auth();
 
         let mut medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
 
         let medication = Medication {
             id: id.clone(),
@@ -489,7 +489,7 @@ impl PharmaSupplyChain {
         quality_certificate: String,
     ) -> Bytes {
         let medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
         let medication = medications
             .get(medication_id.clone())
             .expect("Medication not found");
@@ -498,7 +498,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Manufacturers)
-            .unwrap();
+            .expect("Storage must be initialized");
         let manufacturer = manufacturers
             .get(medication.manufacturer_id.clone())
             .expect("Manufacturer not found");
@@ -523,7 +523,7 @@ impl PharmaSupplyChain {
         let expiry_date = manufacturing_date + (medication.shelf_life_days as u64 * 86400);
 
         let mut batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
 
         let batch = MedicationBatch {
             batch_id: batch_id.clone(),
@@ -549,7 +549,7 @@ impl PharmaSupplyChain {
 
         // Update analytics
         let mut analytics: SupplyChainAnalytics =
-            env.storage().instance().get(&DataKey::Analytics).unwrap();
+            env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
         analytics.total_batches += 1;
         env.storage()
             .instance()
@@ -573,7 +573,7 @@ impl PharmaSupplyChain {
     /// Verify batch authenticity using cryptographic hash
     pub fn verify_batch_authenticity(env: Env, batch_id: String, provided_hash: Bytes) -> bool {
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
 
         if let Some(batch) = batches.get(batch_id.clone()) {
             let is_valid = batch.authentication_hash == provided_hash;
@@ -581,7 +581,7 @@ impl PharmaSupplyChain {
             if !is_valid {
                 // Log potential counterfeit attempt
                 let mut analytics: SupplyChainAnalytics =
-                    env.storage().instance().get(&DataKey::Analytics).unwrap();
+                    env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
                 analytics.counterfeit_attempts += 1;
                 env.storage()
                     .instance()
@@ -614,7 +614,7 @@ impl PharmaSupplyChain {
         iot_device_id: Option<String>,
     ) {
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
         let batch = batches.get(batch_id.clone()).expect("Batch not found");
 
         batch.current_holder.require_auth();
@@ -636,7 +636,7 @@ impl PharmaSupplyChain {
         let digital_signature = env.crypto().sha256(&signature_data);
 
         let mut shipments: Map<String, Shipment> =
-            env.storage().instance().get(&DataKey::Shipments).unwrap();
+            env.storage().instance().get(&DataKey::Shipments).expect("Storage must be initialized");
 
         let shipment = Shipment {
             shipment_id: shipment_id.clone(),
@@ -662,7 +662,7 @@ impl PharmaSupplyChain {
 
         // Update analytics
         let mut analytics: SupplyChainAnalytics =
-            env.storage().instance().get(&DataKey::Analytics).unwrap();
+            env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
         analytics.active_shipments += 1;
         env.storage()
             .instance()
@@ -695,7 +695,7 @@ impl PharmaSupplyChain {
         iot_device_id: String,
     ) {
         let shipments: Map<String, Shipment> =
-            env.storage().instance().get(&DataKey::Shipments).unwrap();
+            env.storage().instance().get(&DataKey::Shipments).expect("Storage must be initialized");
         let shipment = shipments
             .get(shipment_id.clone())
             .expect("Shipment not found");
@@ -708,13 +708,13 @@ impl PharmaSupplyChain {
         }
 
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
         let batch = batches
             .get(shipment.batch_id.clone())
             .expect("Batch not found");
 
         let medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
         let medication = medications
             .get(batch.medication_id.clone())
             .expect("Medication not found");
@@ -751,7 +751,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::ConditionLogs)
-            .unwrap();
+            .expect("Storage must be initialized");
         condition_logs.push_back(condition_log);
         env.storage()
             .instance()
@@ -760,8 +760,8 @@ impl PharmaSupplyChain {
         // If violation detected, update shipment status and analytics
         if is_violation {
             let mut shipments_mut: Map<String, Shipment> =
-                env.storage().instance().get(&DataKey::Shipments).unwrap();
-            let mut shipment_mut = shipments_mut.get(shipment_id.clone()).unwrap();
+                env.storage().instance().get(&DataKey::Shipments).expect("Storage must be initialized");
+            let mut shipment_mut = shipments_mut.get(shipment_id.clone()).expect("Storage must be initialized");
             shipment_mut.status = ShipmentStatus::ConditionViolation;
             shipments_mut.set(shipment_id.clone(), shipment_mut);
             env.storage()
@@ -769,7 +769,7 @@ impl PharmaSupplyChain {
                 .set(&DataKey::Shipments, &shipments_mut);
 
             let mut analytics: SupplyChainAnalytics =
-                env.storage().instance().get(&DataKey::Analytics).unwrap();
+                env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
             analytics.condition_violations += 1;
             env.storage()
                 .instance()
@@ -786,7 +786,7 @@ impl PharmaSupplyChain {
     /// Complete a shipment delivery
     pub fn complete_shipment(env: Env, shipment_id: String, conditions_verified: bool) {
         let mut shipments: Map<String, Shipment> =
-            env.storage().instance().get(&DataKey::Shipments).unwrap();
+            env.storage().instance().get(&DataKey::Shipments).expect("Storage must be initialized");
         let mut shipment = shipments
             .get(shipment_id.clone())
             .expect("Shipment not found");
@@ -809,8 +809,8 @@ impl PharmaSupplyChain {
 
         // Update batch location and stage
         let mut batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
-        let mut batch = batches.get(shipment.batch_id.clone()).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
+        let mut batch = batches.get(shipment.batch_id.clone()).expect("Storage must be initialized");
         batch.current_holder = shipment.to_address.clone();
         batch.current_stage = shipment.to_stage.clone();
         batches.set(shipment.batch_id.clone(), batch);
@@ -818,11 +818,11 @@ impl PharmaSupplyChain {
 
         // Update analytics
         let mut analytics: SupplyChainAnalytics =
-            env.storage().instance().get(&DataKey::Analytics).unwrap();
+            env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
         analytics.active_shipments = analytics.active_shipments.saturating_sub(1);
 
         // Update average delivery time
-        let delivery_time = shipment.delivered_at.unwrap() - shipment.started_at;
+        let delivery_time = shipment.delivered_at.expect("Storage must be initialized") - shipment.started_at;
         if analytics.total_batches > 0 {
             analytics.avg_delivery_time =
                 (analytics.avg_delivery_time * (analytics.total_batches - 1) + delivery_time)
@@ -865,7 +865,7 @@ impl PharmaSupplyChain {
         prescriber_address.require_auth();
 
         let medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
         medications
             .get(medication_id.clone())
             .expect("Medication not found");
@@ -874,7 +874,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Prescriptions)
-            .unwrap();
+            .expect("Storage must be initialized");
 
         let prescription = Prescription {
             prescription_id: prescription_id.clone(),
@@ -923,7 +923,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Prescriptions)
-            .unwrap();
+            .expect("Storage must be initialized");
         let mut prescription = prescriptions
             .get(prescription_id.clone())
             .expect("Prescription not found");
@@ -943,7 +943,7 @@ impl PharmaSupplyChain {
 
         // Verify batch exists and matches medication
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
         let batch = batches.get(batch_id.clone()).expect("Batch not found");
 
         if batch.medication_id != prescription.medication_id {
@@ -974,7 +974,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Dispensations)
-            .unwrap();
+            .expect("Storage must be initialized");
 
         let dispensation = Dispensation {
             dispensation_id: dispensation_id.clone(),
@@ -1002,12 +1002,12 @@ impl PharmaSupplyChain {
 
         // Track controlled substances
         let medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
-        let medication = medications.get(prescription.medication_id.clone()).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
+        let medication = medications.get(prescription.medication_id.clone()).expect("Storage must be initialized");
 
         if medication.schedule != ControlledSubstanceSchedule::NotControlled {
             let mut analytics: SupplyChainAnalytics =
-                env.storage().instance().get(&DataKey::Analytics).unwrap();
+                env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
             analytics.cs_dispensations += 1;
             env.storage()
                 .instance()
@@ -1036,15 +1036,15 @@ impl PharmaSupplyChain {
         level: RecallLevel,
         reason: String,
     ) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Storage must be initialized");
         admin.require_auth();
 
         let mut batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
 
         // Mark all batches as recalled
         for i in 0..batch_ids.len() {
-            let batch_id = batch_ids.get(i).unwrap();
+            let batch_id = batch_ids.get(i).expect("Storage must be initialized");
             if let Some(mut batch) = batches.get(batch_id.clone()) {
                 batch.is_recalled = true;
                 batch.recall_reason = Some(reason.clone());
@@ -1058,14 +1058,14 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::Dispensations)
-            .unwrap();
+            .expect("Storage must be initialized");
         let affected_patients = Vec::<Address>::new(&env);
 
         // Simplified: would iterate through all dispensations
         // For production, would use indexed queries
 
         let mut recalls: Map<String, Recall> =
-            env.storage().instance().get(&DataKey::Recalls).unwrap();
+            env.storage().instance().get(&DataKey::Recalls).expect("Storage must be initialized");
 
         let recall = Recall {
             recall_id: recall_id.clone(),
@@ -1086,7 +1086,7 @@ impl PharmaSupplyChain {
 
         // Update analytics
         let mut analytics: SupplyChainAnalytics =
-            env.storage().instance().get(&DataKey::Analytics).unwrap();
+            env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
         analytics.total_recalls += 1;
         env.storage()
             .instance()
@@ -1109,11 +1109,11 @@ impl PharmaSupplyChain {
 
     /// Update recall recovery status
     pub fn update_recall_recovery(env: Env, recall_id: String, units_recovered: u64) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Storage must be initialized");
         admin.require_auth();
 
         let mut recalls: Map<String, Recall> =
-            env.storage().instance().get(&DataKey::Recalls).unwrap();
+            env.storage().instance().get(&DataKey::Recalls).expect("Storage must be initialized");
 
         if let Some(mut recall) = recalls.get(recall_id.clone()) {
             recall.units_recovered += units_recovered;
@@ -1155,7 +1155,7 @@ impl PharmaSupplyChain {
             .storage()
             .instance()
             .get(&DataKey::AdverseEvents)
-            .unwrap();
+            .expect("Storage must be initialized");
         adverse_events.push_back(adverse_event);
         env.storage()
             .instance()
@@ -1163,7 +1163,7 @@ impl PharmaSupplyChain {
 
         // Update analytics
         let mut analytics: SupplyChainAnalytics =
-            env.storage().instance().get(&DataKey::Analytics).unwrap();
+            env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized");
         analytics.total_adverse_events += 1;
         env.storage()
             .instance()
@@ -1184,34 +1184,34 @@ impl PharmaSupplyChain {
 
     /// Get supply chain analytics
     pub fn get_analytics(env: Env) -> SupplyChainAnalytics {
-        env.storage().instance().get(&DataKey::Analytics).unwrap()
+        env.storage().instance().get(&DataKey::Analytics).expect("Storage must be initialized")
     }
 
     /// Get batch information
     pub fn get_batch(env: Env, batch_id: String) -> Option<MedicationBatch> {
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
         batches.get(batch_id)
     }
 
     /// Get medication information
     pub fn get_medication(env: Env, medication_id: String) -> Option<Medication> {
         let medications: Map<String, Medication> =
-            env.storage().instance().get(&DataKey::Medications).unwrap();
+            env.storage().instance().get(&DataKey::Medications).expect("Storage must be initialized");
         medications.get(medication_id)
     }
 
     /// Get shipment status
     pub fn get_shipment(env: Env, shipment_id: String) -> Option<Shipment> {
         let shipments: Map<String, Shipment> =
-            env.storage().instance().get(&DataKey::Shipments).unwrap();
+            env.storage().instance().get(&DataKey::Shipments).expect("Storage must be initialized");
         shipments.get(shipment_id)
     }
 
     /// Check if batch is expired
     pub fn is_batch_expired(env: Env, batch_id: String) -> bool {
         let batches: Map<String, MedicationBatch> =
-            env.storage().instance().get(&DataKey::Batches).unwrap();
+            env.storage().instance().get(&DataKey::Batches).expect("Storage must be initialized");
 
         if let Some(batch) = batches.get(batch_id) {
             env.ledger().timestamp() > batch.expiry_date
@@ -1222,7 +1222,7 @@ impl PharmaSupplyChain {
 
     /// Get recall information
     pub fn get_recall(env: Env, recall_id: String) -> Option<Recall> {
-        let recalls: Map<String, Recall> = env.storage().instance().get(&DataKey::Recalls).unwrap();
+        let recalls: Map<String, Recall> = env.storage().instance().get(&DataKey::Recalls).expect("Storage must be initialized");
         recalls.get(recall_id)
     }
 
@@ -1258,7 +1258,7 @@ impl PharmaSupplyChain {
         };
 
         let mut audit_trail: Vec<AuditEntry> =
-            env.storage().instance().get(&DataKey::AuditTrail).unwrap();
+            env.storage().instance().get(&DataKey::AuditTrail).expect("Storage must be initialized");
         audit_trail.push_back(audit_entry);
         env.storage()
             .instance()
