@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct TherapyManager;
 
@@ -30,7 +30,9 @@ impl TherapyManager {
         };
 
         // Store session
-        let mut sessions: Vec<TherapySession> = env.storage().instance()
+        let mut sessions: Vec<TherapySession> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
         sessions.push_back(session);
@@ -58,7 +60,9 @@ impl TherapyManager {
         notes: String,
         ai_insights: Option<String>,
     ) -> Result<(), Error> {
-        let mut sessions: Vec<TherapySession> = env.storage().instance()
+        let mut sessions: Vec<TherapySession> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::SessionNotFound)?;
 
@@ -82,7 +86,9 @@ impl TherapyManager {
         patient_id: Address,
         recording_hash: BytesN<32>,
     ) -> Result<(), Error> {
-        let mut sessions: Vec<TherapySession> = env.storage().instance()
+        let mut sessions: Vec<TherapySession> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::SessionNotFound)?;
 
@@ -99,19 +105,14 @@ impl TherapyManager {
         Err(Error::SessionNotFound)
     }
 
-    pub fn get_patient_sessions(
-        env: &Env,
-        patient_id: Address,
-    ) -> Vec<TherapySession> {
-        env.storage().instance()
+    pub fn get_patient_sessions(env: &Env, patient_id: Address) -> Vec<TherapySession> {
+        env.storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env))
     }
 
-    pub fn analyze_session_patterns(
-        env: &Env,
-        patient_id: Address,
-    ) -> String {
+    pub fn analyze_session_patterns(env: &Env, patient_id: Address) -> String {
         let sessions = Self::get_patient_sessions(env, patient_id);
 
         if sessions.is_empty() {

@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct PeerSupportManager;
 
@@ -37,12 +37,10 @@ impl PeerSupportManager {
         Ok(())
     }
 
-    pub fn join_peer_group(
-        env: &Env,
-        group_id: String,
-        user: Address,
-    ) -> Result<(), Error> {
-        let mut group: PeerGroup = env.storage().instance()
+    pub fn join_peer_group(env: &Env, group_id: String, user: Address) -> Result<(), Error> {
+        let mut group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -61,20 +59,16 @@ impl PeerSupportManager {
         group.members.push_back(user.clone());
         env.storage().instance().set(&group_id, &group);
 
-        env.events().publish(
-            (Symbol::new(env, "user_joined_group"),),
-            (group_id, user),
-        );
+        env.events()
+            .publish((Symbol::new(env, "user_joined_group"),), (group_id, user));
 
         Ok(())
     }
 
-    pub fn leave_peer_group(
-        env: &Env,
-        group_id: String,
-        user: Address,
-    ) -> Result<(), Error> {
-        let mut group: PeerGroup = env.storage().instance()
+    pub fn leave_peer_group(env: &Env, group_id: String, user: Address) -> Result<(), Error> {
+        let mut group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -96,10 +90,8 @@ impl PeerSupportManager {
         group.members = new_members;
         env.storage().instance().set(&group_id, &group);
 
-        env.events().publish(
-            (Symbol::new(env, "user_left_group"),),
-            (group_id, user),
-        );
+        env.events()
+            .publish((Symbol::new(env, "user_left_group"),), (group_id, user));
 
         Ok(())
     }
@@ -112,7 +104,9 @@ impl PeerSupportManager {
         message_type: MessageType,
     ) -> Result<u64, Error> {
         // Verify sender is member of group
-        let group: PeerGroup = env.storage().instance()
+        let group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -142,7 +136,9 @@ impl PeerSupportManager {
 
         // Store message (in a real implementation, this would be more sophisticated)
         let messages_key = String::from_str(env, "group_messages");
-        let mut messages: Vec<PeerMessage> = env.storage().instance()
+        let mut messages: Vec<PeerMessage> = env
+            .storage()
+            .instance()
             .get(&messages_key)
             .unwrap_or(Vec::new(env));
         messages.push_back(message);
@@ -174,7 +170,9 @@ impl PeerSupportManager {
         limit: Option<u32>,
     ) -> Result<Vec<PeerMessage>, Error> {
         // Verify user has access to group
-        let group: PeerGroup = env.storage().instance()
+        let group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -191,7 +189,9 @@ impl PeerSupportManager {
         }
 
         let messages_key = String::from_str(env, "group_messages");
-        let mut messages: Vec<PeerMessage> = env.storage().instance()
+        let mut messages: Vec<PeerMessage> = env
+            .storage()
+            .instance()
             .get(&messages_key)
             .unwrap_or(Vec::new(env));
 
@@ -217,7 +217,9 @@ impl PeerSupportManager {
         moderator: Address,
         approved: bool,
     ) -> Result<(), Error> {
-        let group: PeerGroup = env.storage().instance()
+        let group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -226,7 +228,9 @@ impl PeerSupportManager {
         }
 
         let messages_key = String::from_str(env, "group_messages");
-        let mut messages: Vec<PeerMessage> = env.storage().instance()
+        let mut messages: Vec<PeerMessage> = env
+            .storage()
+            .instance()
             .get(&messages_key)
             .unwrap_or(Vec::new(env));
 
@@ -261,7 +265,9 @@ impl PeerSupportManager {
         moderator: Address,
         rules: Vec<String>,
     ) -> Result<(), Error> {
-        let mut group: PeerGroup = env.storage().instance()
+        let mut group: PeerGroup = env
+            .storage()
+            .instance()
             .get(&group_id)
             .ok_or(Error::GroupNotFound)?;
 
@@ -272,10 +278,8 @@ impl PeerSupportManager {
         group.rules = rules;
         env.storage().instance().set(&group_id, &group);
 
-        env.events().publish(
-            (Symbol::new(env, "group_rules_updated"),),
-            group_id,
-        );
+        env.events()
+            .publish((Symbol::new(env, "group_rules_updated"),), group_id);
 
         Ok(())
     }
@@ -289,9 +293,17 @@ impl PeerSupportManager {
 
         // Crisis keywords
         let crisis_words = [
-            "suicide", "kill myself", "end it", "not worth living",
-            "self harm", "cut myself", "hurt myself", "overdose",
-            "crisis", "emergency", "help me"
+            "suicide",
+            "kill myself",
+            "end it",
+            "not worth living",
+            "self harm",
+            "cut myself",
+            "hurt myself",
+            "overdose",
+            "crisis",
+            "emergency",
+            "help me",
         ];
 
         for word in crisis_words.iter() {

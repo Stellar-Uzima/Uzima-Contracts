@@ -1,5 +1,5 @@
+use crate::{errors::Error, events::*, types::*};
 use soroban_sdk::{contracttype, Address, Env, Map, String, Vec};
-use crate::{types::*, errors::Error, events::*};
 
 pub struct ProfessionalDirectoryManager;
 
@@ -31,7 +31,9 @@ impl ProfessionalDirectoryManager {
             insurance_accepted,
         };
 
-        env.storage().instance().set(&professional_id, &professional);
+        env.storage()
+            .instance()
+            .set(&professional_id, &professional);
 
         env.events().publish(
             (Symbol::new(env, "professional_registered"),),
@@ -46,12 +48,16 @@ impl ProfessionalDirectoryManager {
         professional_id: Address,
         availability: AvailabilitySchedule,
     ) -> Result<(), Error> {
-        let mut professional: MentalHealthProfessional = env.storage().instance()
+        let mut professional: MentalHealthProfessional = env
+            .storage()
+            .instance()
             .get(&professional_id)
             .ok_or(Error::ProfessionalNotFound)?;
 
         professional.availability = availability;
-        env.storage().instance().set(&professional_id, &professional);
+        env.storage()
+            .instance()
+            .set(&professional_id, &professional);
 
         Ok(())
     }
@@ -72,7 +78,8 @@ impl ProfessionalDirectoryManager {
         env: &Env,
         professional_id: Address,
     ) -> Result<MentalHealthProfessional, Error> {
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&professional_id)
             .ok_or(Error::ProfessionalNotFound)
     }
@@ -88,7 +95,9 @@ impl ProfessionalDirectoryManager {
             return Err(Error::InvalidInput);
         }
 
-        let mut professional: MentalHealthProfessional = env.storage().instance()
+        let mut professional: MentalHealthProfessional = env
+            .storage()
+            .instance()
             .get(&professional_id)
             .ok_or(Error::ProfessionalNotFound)?;
 
@@ -97,7 +106,9 @@ impl ProfessionalDirectoryManager {
         professional.review_count += 1;
         professional.rating = total_rating / professional.review_count as f32;
 
-        env.storage().instance().set(&professional_id, &professional);
+        env.storage()
+            .instance()
+            .set(&professional_id, &professional);
 
         // Store review (simplified)
         let review = ProfessionalReview {
@@ -108,7 +119,9 @@ impl ProfessionalDirectoryManager {
         };
 
         let reviews_key = String::from_str(env, "professional_reviews");
-        let mut reviews: Vec<ProfessionalReview> = env.storage().instance()
+        let mut reviews: Vec<ProfessionalReview> = env
+            .storage()
+            .instance()
             .get(&reviews_key)
             .unwrap_or(Vec::new(env));
         reviews.push_back(review);
@@ -128,7 +141,9 @@ impl ProfessionalDirectoryManager {
         limit: Option<u32>,
     ) -> Vec<ProfessionalReview> {
         let reviews_key = String::from_str(env, "professional_reviews");
-        let mut reviews: Vec<ProfessionalReview> = env.storage().instance()
+        let mut reviews: Vec<ProfessionalReview> = env
+            .storage()
+            .instance()
             .get(&reviews_key)
             .unwrap_or(Vec::new(env));
 
@@ -153,12 +168,16 @@ impl ProfessionalDirectoryManager {
         verified: bool,
     ) -> Result<(), Error> {
         // In a real implementation, only authorized verifiers can do this
-        let mut professional: MentalHealthProfessional = env.storage().instance()
+        let mut professional: MentalHealthProfessional = env
+            .storage()
+            .instance()
             .get(&professional_id)
             .ok_or(Error::ProfessionalNotFound)?;
 
         professional.verified = verified;
-        env.storage().instance().set(&professional_id, &professional);
+        env.storage()
+            .instance()
+            .set(&professional_id, &professional);
 
         env.events().publish(
             (Symbol::new(env, "professional_verified"),),
@@ -179,9 +198,7 @@ impl ProfessionalDirectoryManager {
         let mut results = Vec::new(env);
 
         // Get patient's profile and needs
-        let patient_profile: UserProfile = env.storage().instance()
-            .get(&patient_id)
-            .unwrap();
+        let patient_profile: UserProfile = env.storage().instance().get(&patient_id).unwrap();
 
         // This is a placeholder - in reality, we'd need to search through all professionals
         // For now, return empty results
@@ -198,7 +215,9 @@ impl ProfessionalDirectoryManager {
         notes: String,
     ) -> Result<u64, Error> {
         // Verify professional exists
-        let _: MentalHealthProfessional = env.storage().instance()
+        let _: MentalHealthProfessional = env
+            .storage()
+            .instance()
             .get(&professional_id)
             .ok_or(Error::ProfessionalNotFound)?;
 
@@ -217,11 +236,15 @@ impl ProfessionalDirectoryManager {
 
         // Store appointment
         let appointments_key = String::from_str(env, "professional_appointments");
-        let mut appointments: Vec<Appointment> = env.storage().instance()
+        let mut appointments: Vec<Appointment> = env
+            .storage()
+            .instance()
             .get(&appointments_key)
             .unwrap_or(Vec::new(env));
         appointments.push_back(appointment);
-        env.storage().instance().set(&appointments_key, &appointments);
+        env.storage()
+            .instance()
+            .set(&appointments_key, &appointments);
 
         env.events().publish(
             (Symbol::new(env, "appointment_scheduled"),),
@@ -238,11 +261,14 @@ impl ProfessionalDirectoryManager {
         end_time: u64,
     ) -> Vec<Appointment> {
         let appointments_key = String::from_str(env, "professional_appointments");
-        let appointments: Vec<Appointment> = env.storage().instance()
+        let appointments: Vec<Appointment> = env
+            .storage()
+            .instance()
             .get(&appointments_key)
             .unwrap_or(Vec::new(env));
 
-        appointments.iter()
+        appointments
+            .iter()
             .filter(|apt| apt.appointment_time >= start_time && apt.appointment_time <= end_time)
             .collect()
     }
