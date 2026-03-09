@@ -152,7 +152,7 @@ fn test_create_batch_with_authentication() {
         &String::from_str(&env, "QC-CERT-001"),
     );
 
-    assert!(auth_hash.len() > 0);
+    assert!(!auth_hash.is_empty());
 
     let batch = client.get_batch(&String::from_str(&env, "BATCH001"));
     assert!(batch.is_some());
