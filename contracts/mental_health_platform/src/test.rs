@@ -1,12 +1,9 @@
 #![cfg(test)]
 
+use crate::{types::*, MentalHealthPlatform, MentalHealthPlatformClient};
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, Env, IntoVal, String, Vec,
-};
-use crate::{
-    types::*,
-    MentalHealthPlatform, MentalHealthPlatformClient,
 };
 
 #[test]
@@ -82,11 +79,7 @@ fn test_assessment_creation() {
     client.register_user(&patient, &UserType::Patient, &true);
     client.register_user(&therapist, &UserType::MentalHealthProfessional, &true);
 
-    let assessment_id = client.create_assessment(
-        &patient,
-        &AssessmentType::PHQ9,
-        &therapist,
-    );
+    let assessment_id = client.create_assessment(&patient, &AssessmentType::PHQ9, &therapist);
 
     assert_eq!(assessment_id, 1); // First assessment should have ID 1
 }

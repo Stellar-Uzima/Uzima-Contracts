@@ -6,8 +6,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Genomic Data Formats ====================
@@ -313,9 +312,7 @@ impl GenomicDataContract {
         env.storage()
             .instance()
             .set(&DataKey::GenomicRecordNextId, &1u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::ConsentNextId, &1u64);
+        env.storage().instance().set(&DataKey::ConsentNextId, &1u64);
         env.storage()
             .instance()
             .set(&DataKey::AssociationNextId, &1u64);
@@ -325,12 +322,8 @@ impl GenomicDataContract {
         env.storage()
             .instance()
             .set(&DataKey::ResearchShareNextId, &1u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::ListingNextId, &1u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::BreachNextId, &1u64);
+        env.storage().instance().set(&DataKey::ListingNextId, &1u64);
+        env.storage().instance().set(&DataKey::BreachNextId, &1u64);
         env.storage()
             .instance()
             .set(&DataKey::PharmaProfileCount, &0u64);
@@ -460,8 +453,10 @@ impl GenomicDataContract {
             .persistent()
             .set(&DataKey::Consent(consent_id), &consent);
 
-        env.events()
-            .publish((Symbol::new(&env, "ConsentRevoked"),), (consent_id, patient));
+        env.events().publish(
+            (Symbol::new(&env, "ConsentRevoked"),),
+            (consent_id, patient),
+        );
         Ok(())
     }
 
@@ -759,11 +754,7 @@ impl GenomicDataContract {
     }
 
     /// Purchase a marketplace listing (payment handled off-chain or via token contract)
-    pub fn purchase_listing(
-        env: Env,
-        buyer: Address,
-        listing_id: u64,
-    ) -> Result<(), Error> {
+    pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> Result<(), Error> {
         buyer.require_auth();
         Self::require_initialized(&env)?;
 
@@ -931,8 +922,10 @@ impl GenomicDataContract {
             .persistent()
             .set(&DataKey::Breach(id), &incident);
 
-        env.events()
-            .publish((Symbol::new(&env, "BreachReported"),), (id, severity, reporter));
+        env.events().publish(
+            (Symbol::new(&env, "BreachReported"),),
+            (id, severity, reporter),
+        );
         Ok(id)
     }
 

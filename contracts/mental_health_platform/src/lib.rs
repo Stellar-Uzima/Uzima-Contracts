@@ -5,26 +5,24 @@
 #[cfg(test)]
 mod test;
 
-mod errors;
-mod events;
-mod types;
-mod therapy;
-mod mood_tracking;
+mod anonymization;
 mod assessments;
 mod crisis_intervention;
+mod errors;
+mod events;
 mod medication;
+mod mood_tracking;
 mod peer_support;
-mod anonymization;
-mod wellness;
 mod professional_directory;
 mod suicide_prevention;
+mod therapy;
+mod types;
+mod wellness;
 
-pub use errors::Error;
-pub use types::*;
+pub use crate::{errors::Error, types::*};
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contractimpl, symbol_short, Address, Env, Map, String, Symbol, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
@@ -44,14 +42,38 @@ impl MentalHealthPlatform {
         env.storage().instance().set(&VERSION, &1u32);
 
         // Initialize storage maps
-        env.storage().instance().set(&symbol_short!("therapy_sessions"), &Map::<Address, Vec<TherapySession>>::new(&env));
-        env.storage().instance().set(&symbol_short!("mood_entries"), &Map::<Address, Vec<MoodEntry>>::new(&env));
-        env.storage().instance().set(&symbol_short!("assessments"), &Map::<Address, Vec<Assessment>>::new(&env));
-        env.storage().instance().set(&symbol_short!("medication_plans"), &Map::<Address, Vec<MedicationPlan>>::new(&env));
-        env.storage().instance().set(&symbol_short!("crisis_alerts"), &Map::<Address, Vec<CrisisAlert>>::new(&env));
-        env.storage().instance().set(&symbol_short!("peer_groups"), &Map::<String, PeerGroup>::new(&env));
-        env.storage().instance().set(&symbol_short!("professionals"), &Map::<Address, MentalHealthProfessional>::new(&env));
-        env.storage().instance().set(&symbol_short!("wellness_programs"), &Map::<Address, Vec<WellnessProgram>>::new(&env));
+        env.storage().instance().set(
+            &Symbol::new(&env, "therapy_sessions"),
+            &Map::<Address, Vec<TherapySession>>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "mood_entries"),
+            &Map::<Address, Vec<MoodEntry>>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "assessments"),
+            &Map::<Address, Vec<Assessment>>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "medication_plans"),
+            &Map::<Address, Vec<MedicationPlan>>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "crisis_alerts"),
+            &Map::<Address, Vec<CrisisAlert>>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "peer_groups"),
+            &Map::<String, PeerGroup>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "professionals"),
+            &Map::<Address, MentalHealthProfessional>::new(&env),
+        );
+        env.storage().instance().set(
+            &Symbol::new(&env, "wellness_programs"),
+            &Map::<Address, Vec<WellnessProgram>>::new(&env),
+        );
 
         env.events().publish((symbol_short!("init"),), (admin,));
     }
@@ -76,7 +98,8 @@ impl MentalHealthPlatform {
         };
 
         env.storage().instance().set(&user, &user_profile);
-        env.events().publish((symbol_short!("user_registered"),), (user, user_type));
+        env.events()
+            .publish((Symbol::new(&env, "user_registered"),), (user, user_type));
     }
 
     /// Update user privacy settings
@@ -88,7 +111,8 @@ impl MentalHealthPlatform {
         profile.privacy_settings = settings;
         env.storage().instance().set(&user, &profile);
 
-        env.events().publish((symbol_short!("privacy_updated"),), (user,));
+        env.events()
+            .publish((Symbol::new(&env, "privacy_updated"),), (user,));
     }
 
     /// Add emergency contact
@@ -97,10 +121,13 @@ impl MentalHealthPlatform {
         Self::require_user_registered(&env, &user);
 
         let mut profile: UserProfile = env.storage().instance().get(&user).unwrap();
-        profile.emergency_contacts.push_back(contact);
+        profile.emergency_contacts.push_back(contact.clone());
         env.storage().instance().set(&user, &profile);
 
-        env.events().publish((symbol_short!("emergency_contact_added"),), (user, contact.name));
+        env.events().publish(
+            (Symbol::new(&env, "emergency_contact_added"),),
+            (user, contact.name),
+        );
     }
 
     // ========== THERAPY SESSION FUNCTIONS ==========
@@ -116,7 +143,12 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         therapy::TherapyManager::create_session(
-            &env, patient_id, therapist_id, session_type, duration_minutes, confidentiality_level
+            &env,
+            patient_id,
+            therapist_id,
+            session_type,
+            duration_minutes,
+            confidentiality_level,
         )
     }
 
@@ -129,7 +161,13 @@ impl MentalHealthPlatform {
         ai_insights: Option<String>,
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
-        therapy::TherapyManager::record_session_notes(&env, session_id, patient_id, notes, ai_insights)
+        therapy::TherapyManager::record_session_notes(
+            &env,
+            session_id,
+            patient_id,
+            notes,
+            ai_insights,
+        )
     }
 
     /// Get patient therapy sessions
@@ -152,7 +190,13 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         mood_tracking::MoodTracker::record_mood(
-            &env, patient_id, mood_score, emotions, triggers, notes, location_context
+            &env,
+            patient_id,
+            mood_score,
+            emotions,
+            triggers,
+            notes,
+            location_context,
         )
     }
 
@@ -163,7 +207,11 @@ impl MentalHealthPlatform {
     }
 
     /// Analyze mood trends
-    pub fn analyze_mood_trends(env: Env, patient_id: Address, days: u32) -> mood_tracking::MoodTrendAnalysis {
+    pub fn analyze_mood_trends(
+        env: Env,
+        patient_id: Address,
+        days: u32,
+    ) -> mood_tracking::MoodTrendAnalysis {
         Self::require_initialized(&env);
         mood_tracking::MoodTracker::analyze_mood_trends(&env, patient_id, days)
     }
@@ -178,7 +226,12 @@ impl MentalHealthPlatform {
         administered_by: Address,
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
-        assessments::AssessmentManager::create_assessment(&env, patient_id, assessment_type, administered_by)
+        assessments::AssessmentManager::create_assessment(
+            &env,
+            patient_id,
+            assessment_type,
+            administered_by,
+        )
     }
 
     /// Submit assessment responses
@@ -189,7 +242,12 @@ impl MentalHealthPlatform {
         responses: Map<String, String>,
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
-        assessments::AssessmentManager::submit_assessment_responses(&env, assessment_id, patient_id, responses)
+        assessments::AssessmentManager::submit_assessment_responses(
+            &env,
+            assessment_id,
+            patient_id,
+            responses,
+        )
     }
 
     /// Get patient assessments
@@ -211,7 +269,12 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         crisis_intervention::CrisisInterventionManager::create_crisis_alert(
-            &env, patient_id, alert_type, severity, description, location
+            &env,
+            patient_id,
+            alert_type,
+            severity,
+            description,
+            location,
         )
     }
 
@@ -226,7 +289,12 @@ impl MentalHealthPlatform {
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
         crisis_intervention::CrisisInterventionManager::update_crisis_resolution(
-            &env, alert_id, patient_id, resolution_status, actions_taken, follow_up_required
+            &env,
+            alert_id,
+            patient_id,
+            resolution_status,
+            actions_taken,
+            follow_up_required,
         )
     }
 
@@ -237,7 +305,9 @@ impl MentalHealthPlatform {
         indicators: Vec<String>,
     ) -> crisis_intervention::CrisisRiskAssessment {
         Self::require_initialized(&env);
-        crisis_intervention::CrisisInterventionManager::assess_crisis_risk(&env, patient_id, indicators)
+        crisis_intervention::CrisisInterventionManager::assess_crisis_risk(
+            &env, patient_id, indicators,
+        )
     }
 
     // ========== MEDICATION MANAGEMENT FUNCTIONS ==========
@@ -256,8 +326,15 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         medication::MedicationManager::create_medication_plan(
-            &env, patient_id, medication_name, dosage, frequency, start_date, end_date,
-            prescribed_by, side_effects
+            &env,
+            patient_id,
+            medication_name,
+            dosage,
+            frequency,
+            start_date,
+            end_date,
+            prescribed_by,
+            side_effects,
         )
     }
 
@@ -273,7 +350,13 @@ impl MentalHealthPlatform {
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
         medication::MedicationManager::record_adherence(
-            &env, plan_id, patient_id, taken, dosage_taken, side_effects_experienced, notes
+            &env,
+            plan_id,
+            patient_id,
+            taken,
+            dosage_taken,
+            side_effects_experienced,
+            notes,
         )
     }
 
@@ -283,7 +366,7 @@ impl MentalHealthPlatform {
         plan_id: u64,
         patient_id: Address,
         days: u32,
-    ) -> Result<f32, Error> {
+    ) -> Result<u32, Error> {
         Self::require_initialized(&env);
         medication::MedicationManager::calculate_adherence_rate(&env, plan_id, patient_id, days)
     }
@@ -303,7 +386,14 @@ impl MentalHealthPlatform {
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
         peer_support::PeerSupportManager::create_peer_group(
-            &env, group_id, name, description, focus_area, moderator, max_members, privacy_level
+            &env,
+            group_id,
+            name,
+            description,
+            focus_area,
+            moderator,
+            max_members,
+            privacy_level,
         )
     }
 
@@ -322,7 +412,13 @@ impl MentalHealthPlatform {
         message_type: MessageType,
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
-        peer_support::PeerSupportManager::post_message(&env, group_id, sender, content, message_type)
+        peer_support::PeerSupportManager::post_message(
+            &env,
+            group_id,
+            sender,
+            content,
+            message_type,
+        )
     }
 
     // ========== PROFESSIONAL DIRECTORY FUNCTIONS ==========
@@ -342,8 +438,16 @@ impl MentalHealthPlatform {
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
         professional_directory::ProfessionalDirectoryManager::register_professional(
-            &env, professional_id, name, credentials, specializations, languages,
-            availability, contact_info, bio, insurance_accepted
+            &env,
+            professional_id,
+            name,
+            credentials,
+            specializations,
+            languages,
+            availability,
+            contact_info,
+            bio,
+            insurance_accepted,
         )
     }
 
@@ -358,7 +462,12 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         professional_directory::ProfessionalDirectoryManager::schedule_appointment(
-            &env, patient_id, professional_id, appointment_time, appointment_type, notes
+            &env,
+            patient_id,
+            professional_id,
+            appointment_time,
+            appointment_type,
+            notes,
         )
     }
 
@@ -375,12 +484,21 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         wellness::WellnessManager::create_wellness_program(
-            &env, name, description, category, duration_weeks, modules
+            &env,
+            name,
+            description,
+            category,
+            duration_weeks,
+            modules,
         )
     }
 
     /// Enroll in wellness program
-    pub fn enroll_wellness_program(env: Env, program_id: u64, user_id: Address) -> Result<(), Error> {
+    pub fn enroll_wellness_program(
+        env: Env,
+        program_id: u64,
+        user_id: Address,
+    ) -> Result<(), Error> {
         Self::require_initialized(&env);
         wellness::WellnessManager::enroll_in_program(&env, program_id, user_id)
     }
@@ -394,11 +512,20 @@ impl MentalHealthPlatform {
         session_duration: u32,
     ) -> Result<(), Error> {
         Self::require_initialized(&env);
-        wellness::WellnessManager::complete_module(&env, program_id, user_id, module_id, session_duration)
+        wellness::WellnessManager::complete_module(
+            &env,
+            program_id,
+            user_id,
+            module_id,
+            session_duration,
+        )
     }
 
     /// Get personalized wellness recommendations
-    pub fn get_wellness_recommendations(env: Env, user_id: Address) -> Vec<wellness::WellnessRecommendation> {
+    pub fn get_wellness_recommendations(
+        env: Env,
+        user_id: Address,
+    ) -> Vec<wellness::WellnessRecommendation> {
         Self::require_initialized(&env);
         wellness::WellnessManager::generate_personalized_recommendations(&env, user_id)
     }
@@ -416,7 +543,12 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         anonymization::DataAnonymizationManager::create_anonymized_dataset(
-            &env, name, description, data_fields, anonymization_method, creator
+            &env,
+            name,
+            description,
+            data_fields,
+            anonymization_method,
+            creator,
         )
     }
 
@@ -430,7 +562,11 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         anonymization::DataAnonymizationManager::submit_research_query(
-            &env, researcher_id, dataset_id, query_type, parameters
+            &env,
+            researcher_id,
+            dataset_id,
+            query_type,
+            parameters,
         )
     }
 
@@ -448,7 +584,13 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         suicide_prevention::SuicidePreventionManager::create_prevention_protocol(
-            &env, name, triggers, risk_factors, intervention_steps, emergency_contacts, resources
+            &env,
+            name,
+            triggers,
+            risk_factors,
+            intervention_steps,
+            emergency_contacts,
+            resources,
         )
     }
 
@@ -461,7 +603,10 @@ impl MentalHealthPlatform {
     ) -> suicide_prevention::SuicideRiskAssessment {
         Self::require_initialized(&env);
         suicide_prevention::SuicidePreventionManager::detect_suicide_risk(
-            &env, patient_id, indicators, context_data
+            &env,
+            patient_id,
+            indicators,
+            context_data,
         )
     }
 
@@ -483,8 +628,13 @@ impl MentalHealthPlatform {
     ) -> Result<u64, Error> {
         Self::require_initialized(&env);
         suicide_prevention::SuicidePreventionManager::create_safety_plan(
-            &env, patient_id, warning_signs, coping_strategies, reasons_to_live,
-            support_contacts, professional_contacts
+            &env,
+            patient_id,
+            warning_signs,
+            coping_strategies,
+            reasons_to_live,
+            support_contacts,
+            professional_contacts,
         )
     }
 }
@@ -502,7 +652,7 @@ impl MentalHealthPlatform {
         })
     }
 
-    fn check_permission(env: &Env, user: &Address, permission: Permission) -> bool {
+    fn check_permission(env: &Env, user: &Address, _permission: Permission) -> bool {
         // Implementation would check against healthcare_compliance contract
         // For now, allow all registered users
         env.storage().instance().has(user)

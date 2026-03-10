@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, String, Symbol};
+use soroban_sdk::{contracttype, Address, String};
 
 #[contracttype]
 #[derive(Clone)]
@@ -71,7 +71,7 @@ pub struct PeerMessageEvent {
 pub struct WellnessProgressEvent {
     pub user_id: Address,
     pub program_id: u64,
-    pub progress_percentage: f32,
+    pub progress_percentage: u32,
     pub timestamp: u64,
 }
 
@@ -91,6 +91,6 @@ pub struct PreventionAlertEvent {
     pub alert_id: u64,
     pub patient_id: Address,
     pub protocol_id: u64,
-    pub risk_score: f32,
+    pub risk_score: u32,
     pub timestamp: u64,
 }

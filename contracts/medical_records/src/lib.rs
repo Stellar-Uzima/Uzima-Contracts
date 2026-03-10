@@ -3905,7 +3905,7 @@ impl MedicalRecordsContract {
             &env,
             new_wasm_hash,
             new_version,
-            symbol_short!("Upgrade"),
+            Symbol::new(&env, "emergency_contact_added"),
         )
         .map_err(|e| match e {
             upgradeability::UpgradeError::ContractPaused => Error::ContractPaused,

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Map, String, Vec};
 
 #[derive(Clone)]
 #[contracttype]
@@ -128,7 +128,7 @@ pub struct MoodEntry {
 #[derive(Clone)]
 #[contracttype]
 pub struct MoodAnalysis {
-    pub sentiment_score: f32,
+    pub sentiment_score: u32,
     pub dominant_emotion: String,
     pub risk_indicators: Vec<String>,
     pub recommendations: Vec<String>,
@@ -154,13 +154,13 @@ pub struct Assessment {
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum AssessmentType {
-    PHQ9,        // Depression
-    GAD7,        // Anxiety
-    PCL5,        // PTSD
-    AUDIT,       // Alcohol Use
-    DAST,        // Drug Use
-    BDI,         // Beck Depression Inventory
-    BAI,         // Beck Anxiety Inventory
+    PHQ9,  // Depression
+    GAD7,  // Anxiety
+    PCL5,  // PTSD
+    AUDIT, // Alcohol Use
+    DAST,  // Drug Use
+    BDI,   // Beck Depression Inventory
+    BAI,   // Beck Anxiety Inventory
     Custom,
 }
 
@@ -297,7 +297,7 @@ pub struct MentalHealthProfessional {
     pub availability: AvailabilitySchedule,
     pub contact_info: ContactInfo,
     pub bio: String,
-    pub rating: f32,
+    pub rating: u32,
     pub review_count: u32,
     pub verified: bool,
     pub insurance_accepted: Vec<String>,
@@ -357,8 +357,8 @@ pub struct WellnessProgram {
     pub duration_weeks: u32,
     pub enrolled_users: Vec<Address>,
     pub modules: Vec<WellnessModule>,
-    pub completion_rate: f32,
-    pub effectiveness_score: f32,
+    pub completion_rate: u32,
+    pub effectiveness_score: u32,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -394,7 +394,7 @@ pub struct UserWellnessProgress {
     pub current_streak: u32,
     pub total_sessions: u32,
     pub last_activity: u64,
-    pub progress_percentage: f32,
+    pub progress_percentage: u32,
 }
 
 // Data Anonymization Types
@@ -464,7 +464,7 @@ pub struct SuicidePreventionProtocol {
     pub intervention_steps: Vec<String>,
     pub emergency_contacts: Vec<EmergencyContact>,
     pub resources: Vec<String>,
-    pub success_rate: f32,
+    pub success_rate: u32,
 }
 
 #[derive(Clone)]
@@ -474,7 +474,7 @@ pub struct PreventionAlert {
     pub patient_id: Address,
     pub protocol_id: u64,
     pub trigger_reason: String,
-    pub risk_score: f32,
+    pub risk_score: u32,
     pub timestamp: u64,
     pub actions_taken: Vec<String>,
     pub outcome: PreventionOutcome,

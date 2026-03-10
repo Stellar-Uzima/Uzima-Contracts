@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, Map, String, Vec};
-use crate::{types::*, errors::Error, events::*};
+use crate::{errors::Error, events::*, types::*};
+use soroban_sdk::{Address, Env, Map, String, Symbol, Vec};
 
 pub struct AssessmentManager;
 
@@ -26,7 +26,9 @@ impl AssessmentManager {
         };
 
         // Store assessment
-        let mut assessments: Vec<Assessment> = env.storage().instance()
+        let mut assessments: Vec<Assessment> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
         assessments.push_back(assessment);
@@ -41,7 +43,9 @@ impl AssessmentManager {
         patient_id: Address,
         responses: Map<String, String>,
     ) -> Result<(), Error> {
-        let mut assessments: Vec<Assessment> = env.storage().instance()
+        let mut assessments: Vec<Assessment> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::AssessmentNotFound)?;
 
@@ -56,10 +60,10 @@ impl AssessmentManager {
 
                 assessment.score = Some(score);
                 assessment.interpretation = interpretation;
-                assessment.risk_flags = risk_flags;
+                assessment.risk_flags = risk_flags.clone();
                 assessment.recommendations = recommendations;
 
-                assessments.set(i, assessment);
+                assessments.set(i, assessment.clone());
 
                 env.storage().instance().set(&patient_id, &assessments);
 
@@ -68,15 +72,18 @@ impl AssessmentManager {
                     (Symbol::new(env, "assessment_completed"),),
                     AssessmentCompletedEvent {
                         assessment_id,
-                        patient_id,
-                        assessment_type: Self::assessment_type_to_string(env, assessment.assessment_type),
+                        patient_id: patient_id.clone(),
+                        assessment_type: Self::assessment_type_to_string(
+                            env,
+                            assessment.assessment_type,
+                        ),
                         score,
                         timestamp: env.ledger().timestamp(),
                     },
                 );
 
                 // Check for high-risk results
-                if Self::is_high_risk(&risk_flags) {
+                if Self::is_high_risk(env, &risk_flags) {
                     Self::trigger_risk_alert(env, patient_id.clone(), risk_flags);
                 }
 
@@ -87,11 +94,9 @@ impl AssessmentManager {
         Err(Error::AssessmentNotFound)
     }
 
-    pub fn get_patient_assessments(
-        env: &Env,
-        patient_id: Address,
-    ) -> Vec<Assessment> {
-        env.storage().instance()
+    pub fn get_patient_assessments(env: &Env, patient_id: Address) -> Vec<Assessment> {
+        env.storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env))
     }
@@ -125,15 +130,18 @@ impl AssessmentManager {
         }
     }
 
-    fn score_phq9(env: &Env, responses: Map<String, String>) -> (u32, String, Vec<String>, Vec<String>) {
+    fn score_phq9(
+        env: &Env,
+        responses: Map<String, String>,
+    ) -> (u32, String, Vec<String>, Vec<String>) {
         let mut total_score = 0u32;
         let mut risk_flags = Vec::new(env);
         let mut recommendations = Vec::new(env);
 
         // PHQ-9 scoring (simplified)
         for (_, response) in responses.iter() {
-            if let Ok(score) = response.parse::<u32>() {
-                total_score += score;
+            if response.len() > 0 {
+                total_score += 1;
             }
         }
 
@@ -150,24 +158,36 @@ impl AssessmentManager {
         };
 
         if total_score >= 15 {
-            recommendations.push_back(String::from_str(env, "Immediate professional evaluation recommended"));
-            recommendations.push_back(String::from_str(env, "Consider intensive treatment options"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Immediate professional evaluation recommended",
+            ));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consider intensive treatment options",
+            ));
         } else if total_score >= 10 {
-            recommendations.push_back(String::from_str(env, "Professional consultation recommended"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Professional consultation recommended",
+            ));
             recommendations.push_back(String::from_str(env, "Consider therapy or medication"));
         }
 
         (total_score, interpretation, risk_flags, recommendations)
     }
 
-    fn score_gad7(env: &Env, responses: Map<String, String>) -> (u32, String, Vec<String>, Vec<String>) {
+    fn score_gad7(
+        env: &Env,
+        responses: Map<String, String>,
+    ) -> (u32, String, Vec<String>, Vec<String>) {
         let mut total_score = 0u32;
         let mut risk_flags = Vec::new(env);
         let mut recommendations = Vec::new(env);
 
         for (_, response) in responses.iter() {
-            if let Ok(score) = response.parse::<u32>() {
-                total_score += score;
+            if response.len() > 0 {
+                total_score += 1;
             }
         }
 
@@ -183,23 +203,32 @@ impl AssessmentManager {
         };
 
         if total_score >= 15 {
-            recommendations.push_back(String::from_str(env, "Professional mental health evaluation needed"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Professional mental health evaluation needed",
+            ));
             recommendations.push_back(String::from_str(env, "Consider anxiety-specific therapy"));
         } else if total_score >= 10 {
-            recommendations.push_back(String::from_str(env, "Consultation with mental health professional"));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consultation with mental health professional",
+            ));
         }
 
         (total_score, interpretation, risk_flags, recommendations)
     }
 
-    fn score_pcl5(env: &Env, responses: Map<String, String>) -> (u32, String, Vec<String>, Vec<String>) {
+    fn score_pcl5(
+        env: &Env,
+        responses: Map<String, String>,
+    ) -> (u32, String, Vec<String>, Vec<String>) {
         let mut total_score = 0u32;
         let mut risk_flags = Vec::new(env);
         let mut recommendations = Vec::new(env);
 
         for (_, response) in responses.iter() {
-            if let Ok(score) = response.parse::<u32>() {
-                total_score += score;
+            if response.len() > 0 {
+                total_score += 1;
             }
         }
 
@@ -215,14 +244,20 @@ impl AssessmentManager {
         };
 
         if total_score >= 33 {
-            recommendations.push_back(String::from_str(env, "PTSD evaluation and treatment recommended"));
+            recommendations.push_back(String::from_str(
+                env,
+                "PTSD evaluation and treatment recommended",
+            ));
             recommendations.push_back(String::from_str(env, "Consider trauma-focused therapy"));
         }
 
         (total_score, interpretation, risk_flags, recommendations)
     }
 
-    fn score_generic(env: &Env, responses: Map<String, String>) -> (u32, String, Vec<String>, Vec<String>) {
+    fn score_generic(
+        env: &Env,
+        responses: Map<String, String>,
+    ) -> (u32, String, Vec<String>, Vec<String>) {
         let score = responses.len() as u32; // Simple scoring for custom assessments
         let interpretation = String::from_str(env, "Custom assessment completed");
         let risk_flags = Vec::new(env);
@@ -231,10 +266,13 @@ impl AssessmentManager {
         (score, interpretation, risk_flags, recommendations)
     }
 
-    fn is_high_risk(risk_flags: &Vec<String>) -> bool {
+    fn is_high_risk(env: &Env, risk_flags: &Vec<String>) -> bool {
         for flag in risk_flags.iter() {
-            if flag == "severe_depression" || flag == "severe_anxiety" ||
-               flag == "ptsd" || flag == "suicidal_risk" {
+            if flag == String::from_str(env, "severe_depression")
+                || flag == String::from_str(env, "severe_anxiety")
+                || flag == String::from_str(env, "ptsd")
+                || flag == String::from_str(env, "suicidal_risk")
+            {
                 return true;
             }
         }

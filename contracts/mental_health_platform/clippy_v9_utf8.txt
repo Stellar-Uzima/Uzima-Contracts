@@ -1,0 +1,170 @@
+﻿cargo : warning: C:\Use
+rs\EMMA\Desktop\uzima\c
+ontracts\clinical_trial
+\Cargo.toml: 
+`default-features` is 
+ignored for 
+soroban-sdk, since 
+`default-features` was 
+not specified for `work
+space.dependencies.soro
+ban-sdk`, this could 
+become a hard error in 
+the future
+At line:1 char:1
++ cargo clippy 
+--package 
+mental_health_platform 
+-- -D warnings 2>&1 | 
+O ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (warning: C:\U   
+ se...r in the futu    
+re:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+    Checking 
+mental_health_platform 
+v0.1.0 (C:\Users\EMMA\D
+esktop\uzima\contracts\
+mental_health_platform)
+error: unused 
+variable: 
+`professional_id`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:140:9
+    |
+140 |         
+professional_id: 
+Address,
+    |         
+^^^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_professional_id`
+    |
+    = note: `-D 
+unused-variables` 
+implied by `-D 
+warnings`
+    = help: to 
+override `-D warnings` 
+add `#[allow(unused_var
+iables)]`
+
+error[E0382]: borrow 
+of moved value: 
+`patient_id`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:305
+:23
+    |
+280 |         
+patient_id: Address,
+    |         
+---------- move occurs 
+because `patient_id` 
+has type `soroban_sdk::
+Address`, which does 
+not implement the 
+`Copy` trait
+...
+291 |             
+patient_id,
+    |             
+---------- value moved 
+here
+...
+305 |             
+(plan_id, 
+patient_id.clone()),
+    |                  
+     ^^^^^^^^^^ value 
+borrowed here after 
+move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+291 |             
+patient_id: 
+patient_id.clone(),
+    |                  
+     
+++++++++++++++++++++
+
+error[E0382]: use of 
+moved value: `user_id`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:291:14
+    |
+267 |         user_id: 
+Address,
+    |         ------- 
+move occurs because 
+`user_id` has type `sor
+oban_sdk::Address`, 
+which does not 
+implement the `Copy` 
+trait
+...
+273 |             
+user_id,
+    |             
+------- value moved 
+here
+...
+291 |             
+(user_id, 
+duration_minutes),
+    |              
+^^^^^^^ value used 
+here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+273 |             
+user_id: 
+user_id.clone(),
+    |                  
+  +++++++++++++++++
+
+error: unused 
+variable: `user_id`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:299:9
+    |
+299 |         user_id: 
+Address,
+    |         ^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_user_id`
+
+For more information 
+about this error, try 
+`rustc --explain 
+E0382`.
+error: could not 
+compile `mental_health_
+platform` (lib) due to 
+4 previous errors

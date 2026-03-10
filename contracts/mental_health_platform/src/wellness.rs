@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
+use crate::{errors::Error, events::*, types::*};
+use soroban_sdk::{contracttype, Address, Env, String, Symbol, Vec};
 
 pub struct WellnessManager;
 
@@ -22,26 +22,22 @@ impl WellnessManager {
             duration_weeks,
             enrolled_users: Vec::new(env),
             modules,
-            completion_rate: 0.0,
-            effectiveness_score: 0.0,
+            completion_rate: 0,
+            effectiveness_score: 0,
         };
 
         env.storage().instance().set(&program_id, &program);
 
-        env.events().publish(
-            (Symbol::new(env, "wellness_program_created"),),
-            program_id,
-        );
+        env.events()
+            .publish((Symbol::new(env, "wellness_program_created"),), program_id);
 
         Ok(program_id)
     }
 
-    pub fn enroll_in_program(
-        env: &Env,
-        program_id: u64,
-        user_id: Address,
-    ) -> Result<(), Error> {
-        let mut program: WellnessProgram = env.storage().instance()
+    pub fn enroll_in_program(env: &Env, program_id: u64, user_id: Address) -> Result<(), Error> {
+        let mut program: WellnessProgram = env
+            .storage()
+            .instance()
             .get(&program_id)
             .ok_or(Error::ProgramNotFound)?;
 
@@ -64,7 +60,7 @@ impl WellnessManager {
             current_streak: 0,
             total_sessions: 0,
             last_activity: env.ledger().timestamp(),
-            progress_percentage: 0.0,
+            progress_percentage: 0,
         };
 
         let progress_key = String::from_str(env, "user_program_progress");
@@ -83,16 +79,18 @@ impl WellnessManager {
         program_id: u64,
         user_id: Address,
         module_id: u64,
-        session_duration: u32,
+        _session_duration: u32,
     ) -> Result<(), Error> {
         let progress_key = String::from_str(env, "user_program_progress");
-        let mut progress: UserWellnessProgress = env.storage().instance()
+        let mut progress: UserWellnessProgress = env
+            .storage()
+            .instance()
             .get(&progress_key)
             .ok_or(Error::ProgramNotFound)?;
 
         // Check if module already completed
         for completed_module in progress.completed_modules.iter() {
-            if *completed_module == module_id {
+            if completed_module == module_id {
                 return Err(Error::InvalidInput); // Already completed
             }
         }
@@ -102,10 +100,8 @@ impl WellnessManager {
         progress.last_activity = env.ledger().timestamp();
 
         // Calculate progress percentage
-        let program: WellnessProgram = env.storage().instance()
-            .get(&program_id)
-            .unwrap();
-        progress.progress_percentage = progress.completed_modules.len() as f32 / program.modules.len() as f32 * 100.0;
+        let program: WellnessProgram = env.storage().instance().get(&program_id).unwrap();
+        progress.progress_percentage = (progress.completed_modules.len() as u32 * 100) / (program.modules.len() as u32);
 
         // Update streak (simplified - assumes daily activity)
         let days_since_last = (env.ledger().timestamp() - progress.last_activity) / (24 * 60 * 60);
@@ -115,7 +111,7 @@ impl WellnessManager {
             progress.current_streak = 1;
         }
 
-        env.storage().instance().set(&key, &progress);
+        env.storage().instance().set(&progress_key, &progress);
 
         env.events().publish(
             (Symbol::new(env, "module_completed"),),
@@ -132,16 +128,20 @@ impl WellnessManager {
 
     pub fn get_user_progress(
         env: &Env,
-        program_id: u64,
-        user_id: Address,
+        _program_id: u64,
+        _user_id: Address,
     ) -> Result<UserWellnessProgress, Error> {
         let progress_key = String::from_str(env, "user_program_progress");
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&progress_key)
             .ok_or(Error::ProgramNotFound)
     }
 
-    pub fn get_available_programs(env: &Env, category: Option<WellnessCategory>) -> Vec<WellnessProgram> {
+    pub fn get_available_programs(
+        env: &Env,
+        _category: Option<WellnessCategory>,
+    ) -> Vec<WellnessProgram> {
         // In a real implementation, this would query all programs
         // For now, return empty vec
         Vec::new(env)
@@ -160,7 +160,7 @@ impl WellnessManager {
         }
 
         let feedback = WellnessFeedback {
-            user_id,
+            user_id: user_id.clone(),
             program_id,
             overall_rating,
             helpful_modules,
@@ -169,7 +169,9 @@ impl WellnessManager {
         };
 
         let feedback_key = String::from_str(env, "program_feedback");
-        let mut feedbacks: Vec<WellnessFeedback> = env.storage().instance()
+        let mut feedbacks: Vec<WellnessFeedback> = env
+            .storage()
+            .instance()
             .get(&feedback_key)
             .unwrap_or(Vec::new(env));
         feedbacks.push_back(feedback);
@@ -180,18 +182,16 @@ impl WellnessManager {
 
         env.events().publish(
             (Symbol::new(env, "wellness_feedback_submitted"),),
-            (user_id, program_id, overall_rating),
+            (user_id.clone(), program_id, overall_rating),
         );
 
         Ok(())
     }
 
-    pub fn get_program_feedback(
-        env: &Env,
-        program_id: u64,
-    ) -> Vec<WellnessFeedback> {
+    pub fn get_program_feedback(env: &Env, _program_id: u64) -> Vec<WellnessFeedback> {
         let feedback_key = String::from_str(env, "program_feedback");
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&feedback_key)
             .unwrap_or(Vec::new(env))
     }
@@ -206,7 +206,9 @@ impl WellnessManager {
         // This is simplified - in reality, would analyze comprehensive data
 
         // Check recent mood entries
-        let mood_entries: Vec<MoodEntry> = env.storage().instance()
+        let mood_entries: Vec<MoodEntry> = env
+            .storage()
+            .instance()
             .get(&user_id)
             .unwrap_or(Vec::new(env));
 
@@ -217,7 +219,10 @@ impl WellnessManager {
                 recommendations.push_back(WellnessRecommendation {
                     recommendation_type: String::from_str(env, "mindfulness"),
                     title: String::from_str(env, "Guided Meditation"),
-                    description: String::from_str(env, "Daily 10-minute mindfulness meditation to reduce stress"),
+                    description: String::from_str(
+                        env,
+                        "Daily 10-minute mindfulness meditation to reduce stress",
+                    ),
                     priority: 9,
                 });
 
@@ -230,9 +235,9 @@ impl WellnessManager {
             }
 
             // Check for sleep-related concerns
-            let sleep_issues = recent_mood.triggers.iter()
-                .any(|trigger| trigger.to_lowercase().contains("sleep") ||
-                            trigger.to_lowercase().contains("tired"));
+            let sleep_issues = recent_mood.triggers.iter().any(|trigger| {
+                trigger == String::from_str(env, "sleep") || trigger == String::from_str(env, "tired")
+            });
 
             if sleep_issues {
                 recommendations.push_back(WellnessRecommendation {
@@ -273,7 +278,9 @@ impl WellnessManager {
         };
 
         let activities_key = String::from_str(env, "user_activities");
-        let mut activities: Vec<WellnessActivity> = env.storage().instance()
+        let mut activities: Vec<WellnessActivity> = env
+            .storage()
+            .instance()
             .get(&activities_key)
             .unwrap_or(Vec::new(env));
         activities.push_back(activity);
@@ -293,15 +300,21 @@ impl WellnessManager {
         days: u32,
     ) -> Vec<WellnessActivity> {
         let activities_key = String::from_str(env, "user_activities");
-        let activities: Vec<WellnessActivity> = env.storage().instance()
+        let activities: Vec<WellnessActivity> = env
+            .storage()
+            .instance()
             .get(&activities_key)
             .unwrap_or(Vec::new(env));
 
         let cutoff_time = env.ledger().timestamp() - (days as u64 * 24 * 60 * 60);
 
-        activities.iter()
-            .filter(|activity| activity.timestamp >= cutoff_time)
-            .collect()
+        let mut result = Vec::new(env);
+        for activity in activities.iter() {
+            if activity.timestamp >= cutoff_time {
+                result.push_back(activity);
+            }
+        }
+        result
     }
 
     fn update_program_effectiveness(env: &Env, program_id: u64) {
@@ -311,16 +324,14 @@ impl WellnessManager {
             return;
         }
 
-        let mut total_rating = 0.0;
+        let mut total_rating = 0;
         for feedback in feedbacks.iter() {
-            total_rating += feedback.overall_rating as f32;
+            total_rating += feedback.overall_rating;
         }
 
-        let average_rating = total_rating / feedbacks.len() as f32;
+        let average_rating = (total_rating * 10) / feedbacks.len();
 
-        let mut program: WellnessProgram = env.storage().instance()
-            .get(&program_id)
-            .unwrap();
+        let mut program: WellnessProgram = env.storage().instance().get(&program_id).unwrap();
         program.effectiveness_score = average_rating;
         env.storage().instance().set(&program_id, &program);
     }

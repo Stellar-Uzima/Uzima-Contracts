@@ -1,0 +1,3081 @@
+﻿cargo : warning: C:\Use
+rs\EMMA\Desktop\uzima\c
+ontracts\clinical_trial
+\Cargo.toml: 
+`default-features` is 
+ignored for 
+soroban-sdk, since 
+`default-features` was 
+not specified for `work
+space.dependencies.soro
+ban-sdk`, this could 
+become a hard error in 
+the future
+At line:1 char:1
++ cargo clippy 
+--package 
+mental_health_platform 
+-- -D warnings > 
+clippy ...
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (warning: C:\U   
+ se...r in the futu    
+re:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+    Checking 
+mental_health_platform 
+v0.1.0 (C:\Users\EMMA\D
+esktop\uzima\contracts\
+mental_health_platform)
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`Symbol`
+  --> contracts\mental_
+health_platform\src\wel
+lness.rs:32:23
+   |
+32 |             .publi
+sh((Symbol::new(env, "w
+ellness_program_created
+"),), program_id);
+   |                   
+    ^^^^^^ use of 
+undeclared type 
+`Symbol`
+   |
+help: consider 
+importing one of these 
+structs
+   |
+ 1 + use crate::Symbol;
+   |
+ 1 + use 
+soroban_sdk::Symbol;
+   |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`Symbol`
+  --> contracts\mental_
+health_platform\src\wel
+lness.rs:70:14
+   |
+70 |             
+(Symbol::new(env, "user
+_enrolled_program"),),
+   |              
+^^^^^^ use of 
+undeclared type 
+`Symbol`
+   |
+help: consider 
+importing one of these 
+structs
+   |
+ 1 + use crate::Symbol;
+   |
+ 1 + use 
+soroban_sdk::Symbol;
+   |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`Symbol`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:117:14
+    |
+117 |             
+(Symbol::new(env, 
+"module_completed"),),
+    |              
+^^^^^^ use of 
+undeclared type 
+`Symbol`
+    |
+help: consider 
+importing one of these 
+structs
+    |
+  1 + use 
+crate::Symbol;
+    |
+  1 + use 
+soroban_sdk::Symbol;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`Symbol`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:184:14
+    |
+184 |             
+(Symbol::new(env, "well
+ness_feedback_submitted
+"),),
+    |              
+^^^^^^ use of 
+undeclared type 
+`Symbol`
+    |
+help: consider 
+importing one of these 
+structs
+    |
+  1 + use 
+crate::Symbol;
+    |
+  1 + use 
+soroban_sdk::Symbol;
+    |
+
+error[E0433]: failed 
+to resolve: use of 
+undeclared type 
+`Symbol`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:290:14
+    |
+290 |             
+(Symbol::new(env, "well
+ness_activity_tracked")
+,),
+    |              
+^^^^^^ use of 
+undeclared type 
+`Symbol`
+    |
+help: consider 
+importing one of these 
+structs
+    |
+  1 + use 
+crate::Symbol;
+    |
+  1 + use 
+soroban_sdk::Symbol;
+    |
+
+error: unused import: 
+`contracttype`
+ --> contracts\mental_h
+ealth_platform\src\asse
+ssments.rs:2:19
+  |
+2 | use soroban_sdk::{c
+ontracttype, Address, 
+Env, Map, String, 
+Symbol, Vec};
+  |                   
+^^^^^^^^^^^^
+  |
+  = note: `-D 
+unused-imports` 
+implied by `-D 
+warnings`
+  = help: to override 
+`-D warnings` add `#[al
+low(unused_imports)]`
+
+error: unused import: 
+`Map`
+ --> contracts\mental_h
+ealth_platform\src\cris
+is_intervention.rs:2:47
+  |
+2 | use soroban_sdk::{c
+ontracttype, Address, 
+Env, Map, String, 
+Symbol, Vec};
+  |                    
+                       
+    ^^^
+
+error: unused import: 
+`Symbol`
+ --> contracts\mental_h
+ealth_platform\src\even
+ts.rs:1:50
+  |
+1 | use soroban_sdk::{c
+ontracttype, Address, 
+String, Symbol};
+  |                    
+                       
+       ^^^^^^
+
+error: unused imports: 
+`Map` and 
+`contracttype`
+ --> contracts\mental_h
+ealth_platform\src\peer
+_support.rs:2:19
+  |
+2 | use soroban_sdk::{c
+ontracttype, Address, 
+Env, Map, String, 
+Symbol, Vec};
+  |                   
+^^^^^^^^^^^^           
+     ^^^
+
+error: unused import: 
+`events::*`
+ --> contracts\mental_h
+ealth_platform\src\prof
+essional_directory.rs:1
+:28
+  |
+1 | use 
+crate::{errors::Error, 
+events::*, types::*};
+  |                    
+        ^^^^^^^^^
+
+error: unused import: 
+`Map`
+ --> contracts\mental_h
+ealth_platform\src\prof
+essional_directory.rs:2
+:47
+  |
+2 | use soroban_sdk::{c
+ontracttype, Address, 
+Env, Map, String, 
+Symbol, Vec};
+  |                    
+                       
+    ^^^
+
+error: unused import: 
+`contracttype`
+ --> contracts\mental_h
+ealth_platform\src\ther
+apy.rs:2:19
+  |
+2 | use soroban_sdk::{c
+ontracttype, Address, 
+BytesN, Env, String, 
+Symbol, Vec};
+  |                   
+^^^^^^^^^^^^
+
+error: unused imports: 
+`Bytes` and `Env`
+ --> contracts\mental_h
+ealth_platform\src\type
+s.rs:1:42
+  |
+1 | use soroban_sdk::{c
+ontracttype, Address, 
+Bytes, BytesN, Env, 
+Map, String, Vec};
+  |                    
+                      
+^^^^^          ^^^
+
+error: unused imports: 
+`BytesN`, `Bytes`, and 
+`contracttype`
+  --> contracts\mental_
+health_platform\src\lib
+.rs:26:29
+   |
+26 |     contract, 
+contractimpl, 
+contracttype, 
+symbol_short, Address, 
+Bytes, BytesN, Env, 
+Map, String,
+   |                   
+          ^^^^^^^^^^^^ 
+                       
+ ^^^^^  ^^^^^^
+
+error[E0277]: the 
+trait bound `f32: sorob
+an_sdk::TryFromVal<soro
+ban_sdk::Env, 
+soroban_sdk::Val>` is 
+not satisfied
+  --> contracts\mental_
+health_platform\src\lib
+.rs:34:1
+   |
+34 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ 
+the trait `soroban_sdk:
+:TryFromVal<soroban_sdk
+::Env, 
+soroban_sdk::Val>` is 
+not implemented for 
+`f32`
+   |
+   = help: the 
+following other types 
+implement trait `soroba
+n_sdk::TryFromVal<E, 
+V>`:
+             `i128` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+             `i128` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i128>`
+             `i32` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+             `i32` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i32>`
+             `i64` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+             `i64` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i64>`
+             `u128` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+             `u128` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, u128>`
+           and 7 others
+   = note: this error 
+originates in the 
+attribute macro `soroba
+n_sdk::contractclient` 
+(in Nightly builds, 
+run with -Z 
+macro-backtrace for 
+more info)
+
+error[E0614]: type 
+`soroban_sdk::Address` 
+cannot be dereferenced
+   --> contracts\mental
+_health_platform\src\an
+onymization.rs:110:20
+    |
+110 |                 
+if 
+*approved_researcher 
+== query.researcher_id 
+{
+    |                  
+  ^^^^^^^^^^^^^^^^^^^^ 
+can't be dereferenced
+
+error[E0599]: no 
+method named `as_str` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\an
+onymization.rs:200:25
+    |
+200 |             
+match field.as_str() {
+    |                  
+       ^^^^^^ method 
+not found in 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named `parse` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:143:41
+    |
+143 |             if 
+let Ok(score) = respons
+e.parse::<u32>() {
+    |                  
+                       
+^^^^^ method not found 
+in 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named `parse` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:189:41
+    |
+189 |             if 
+let Ok(score) = respons
+e.parse::<u32>() {
+    |                  
+                       
+^^^^^ method not found 
+in 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named `parse` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:230:41
+    |
+230 |             if 
+let Ok(score) = respons
+e.parse::<u32>() {
+    |                  
+                       
+^^^^^ method not found 
+in 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:271:24
+    |
+271 |             if 
+flag == 
+"severe_depression"
+    |                
+----    
+^^^^^^^^^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |                |
+    |                
+expected because this 
+is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:272:28
+    |
+272 |                 
+|| flag == 
+"severe_anxiety"
+    |                  
+  ----    
+^^^^^^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |                  
+  |
+    |                  
+  expected because 
+this is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:273:28
+    |
+273 |                 
+|| flag == "ptsd"
+    |                  
+  ----    ^^^^^^ 
+expected `String`, 
+found `&str`
+    |                  
+  |
+    |                  
+  expected because 
+this is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\as
+sessments.rs:274:28
+    |
+274 |                 
+|| flag == 
+"suicidal_risk"
+    |                  
+  ----    
+^^^^^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |                  
+  |
+    |                  
+  expected because 
+this is 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named `as_str` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\cr
+isis_intervention.rs:14
+4:29
+    |
+144 |             
+match 
+indicator.as_str() {
+    |                  
+           ^^^^^^ 
+method not found in 
+`soroban_sdk::String`
+
+error[E0277]: a value 
+of type `soroban_sdk::V
+ec<types::AdherenceEntr
+y>` cannot be built 
+from an iterator over 
+elements of type 
+`types::AdherenceEntry`
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:156:22
+     |
+ 156 |                 
+    .collect();
+     |                 
+     ^^^^^^^ value of 
+type `soroban_sdk::Vec<
+types::AdherenceEntry>`
+ cannot be built from `
+std::iter::Iterator<Ite
+m=types::AdherenceEntry
+>`
+     |
+     = help: the trait 
+`core::iter::FromIterat
+or<types::AdherenceEntr
+y>` is not implemented 
+for `soroban_sdk::Vec<t
+ypes::AdherenceEntry>`
+note: the method call 
+chain might not have 
+had the expected 
+associated types
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:152:22
+     |
+ 150 |                 
+  let recent_entries: 
+Vec<AdherenceEntry> = 
+plan
+     |  _______________
+_______________________
+_____________________-
+ 151 | |               
+      
+.adherence_tracking
+     | |_______________
+_______________________
+_- this expression has 
+type 
+`Vec<AdherenceEntry>`
+ 152 |                 
+      .iter()
+     |                 
+       ^^^^^^ 
+`Iterator::Item` is 
+`AdherenceEntry` here
+ 153 |                 
+      .filter(|entry| {
+     |  
+______________________-
+ 154 | |               
+          env.ledger().
+timestamp() - 
+entry.timestamp < days 
+as u64 * 24 * 60 * 60
+ 155 | |               
+      })
+     | |_______________
+_______- 
+`Iterator::Item` 
+remains 
+`AdherenceEntry` here
+note: required by a 
+bound in `core::iter::I
+terator::collect`
+    --> C:\Users\EMMA\.
+rustup\toolchains\stabl
+e-x86_64-pc-windows-msv
+c\lib/rustlib/src/rust\
+library\core\src\iter\t
+raits\iterator.rs:2022:
+19
+     |
+2022 |     fn 
+collect<B: FromIterator
+<Self::Item>>(self) -> 
+B
+     |                 
+  ^^^^^^^^^^^^^^^^^^^^^
+^^^ required by this 
+bound in 
+`Iterator::collect`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:159:31
+    |
+159 |                  
+   return Ok(0);
+    |                  
+          -- ^ 
+expected `f32`, found 
+integer
+    |                  
+          |
+    |                  
+          arguments to 
+this enum variant are 
+incorrect
+    |
+help: the type 
+constructed contains 
+`{integer}` due to the 
+type of the argument 
+passed
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:159:28
+    |
+159 |                  
+   return Ok(0);
+    |                  
+          ^^^-^
+    |                  
+             |
+    |                  
+             this 
+argument influences 
+the type of `Ok`
+note: tuple variant 
+defined here
+   --> C:\Users\EMMA\.r
+ustup\toolchains\stable
+-x86_64-pc-windows-msvc
+\lib/rustlib/src/rust\l
+ibrary\core\src\result.
+rs:561:5
+    |
+561 |     
+Ok(#[stable(feature = 
+"rust1", since = 
+"1.0.0")] T),
+    |     ^^
+help: use a float 
+literal
+    |
+159 |                  
+   return Ok(0.0);
+    |                  
+              ++
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:164:27
+    |
+164 |                 
+return Ok(taken_count 
+* 100 / 
+recent_entries.len() 
+as u32);
+    |                  
+      -- ^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^ expected 
+`f32`, found `u32`
+    |                  
+      |
+    |                  
+      arguments to 
+this enum variant are 
+incorrect
+    |
+help: the type 
+constructed contains 
+`u32` due to the type 
+of the argument passed
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:164:24
+    |
+164 |                 
+return Ok(taken_count 
+* 100 / 
+recent_entries.len() 
+as u32);
+    |                  
+      ^^^--------------
+-----------------------
+----------^
+    |                  
+         |
+    |                  
+         this argument 
+influences the type of 
+`Ok`
+note: tuple variant 
+defined here
+   --> C:\Users\EMMA\.r
+ustup\toolchains\stable
+-x86_64-pc-windows-msvc
+\lib/rustlib/src/rust\l
+ibrary\core\src\result.
+rs:561:5
+    |
+561 |     
+Ok(#[stable(feature = 
+"rust1", since = 
+"1.0.0")] T),
+    |     ^^
+help: you can cast a 
+`u32` to an `f32`, 
+producing the floating 
+point representation 
+of the integer, 
+rounded if necessary
+    |
+164 |                 
+return Ok((taken_count 
+* 100 / 
+recent_entries.len() 
+as u32) as f32);
+    |                  
+         +             
+                       
+           ++++++++
+
+error[E0308]: 
+arguments to this 
+function are incorrect
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:199:39
+    |
+199 |                 
+let recommendations = S
+elf::generate_medicatio
+n_recommendations(
+    |                  
+                     ^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^
+200 |                  
+   env,
+201 |                  
+   adherence_rate,
+    |                  
+   -------------- 
+unexpected argument #2 
+of type `f32`
+202 |                  
+   
+effectiveness_rating,
+203 |                  
+   side_effects_frequen
+cy.len(),
+    |                  
+   --------------------
+-------- argument #4 
+of type `usize` is 
+missing
+    |
+note: associated 
+function defined here
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:247:8
+    |
+247 |     fn generate_m
+edication_recommendatio
+ns(
+    |        ^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^
+...
+251 |         
+side_effects_count: 
+usize,
+    |         ---------
+----------------
+help: did you mean
+    |
+199 ~                 
+let recommendations = S
+elf::generate_medicatio
+n_recommendations(
+200 +                  
+   env,
+201 +                  
+   side_effects_frequen
+cy.len(),
+202 +                  
+   
+effectiveness_rating,
+203 +                  
+   /* usize */,
+204 ~                 
+);
+    |
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:207:21
+    |
+207 |                  
+   adherence_rate,
+    |                  
+   ^^^^^^^^^^^^^^ 
+expected `u32`, found 
+`f32`
+
+error[E0308]: 
+mismatched types
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:221:88
+     |
+ 221 |             Self
+::calculate_adherence_r
+ate(env, plan.plan_id, 
+patient_id, 
+7).unwrap_or(0);
+     |                 
+                       
+                       
+               
+--------- ^ expected 
+`f32`, found integer
+     |                 
+                       
+                       
+               |
+     |                 
+                       
+                       
+               
+arguments to this 
+method are incorrect
+     |
+help: the return type 
+of this call is 
+`{integer}` due to the 
+type of the argument 
+passed
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:221:13
+     |
+ 221 |             Self
+::calculate_adherence_r
+ate(env, plan.plan_id, 
+patient_id, 
+7).unwrap_or(0);
+     |             ^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^-^
+     |                 
+                       
+                       
+                       
+  |
+     |                 
+                       
+                       
+                       
+  this argument 
+influences the return 
+type of `unwrap_or`
+note: method defined 
+here
+    --> C:\Users\EMMA\.
+rustup\toolchains\stabl
+e-x86_64-pc-windows-msv
+c\lib/rustlib/src/rust\
+library\core\src\result
+.rs:1590:18
+     |
+1590 |     pub const 
+fn unwrap_or(self, 
+default: T) -> T
+     |                 
+ ^^^^^^^^^
+help: use a float 
+literal
+     |
+ 221 |             Self
+::calculate_adherence_r
+ate(env, plan.plan_id, 
+patient_id, 
+7).unwrap_or(0.0);
+     |                 
+                       
+                       
+                       
+   ++
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:223:29
+    |
+223 |         if 
+adherence_rate < 70 {
+    |            
+--------------   ^^ 
+expected `f32`, found 
+integer
+    |            |
+    |            
+expected because this 
+is `f32`
+    |
+help: use a float 
+literal
+    |
+223 |         if 
+adherence_rate < 70.0 {
+    |                  
+             ++
+
+error[E0277]: the 
+trait bound 
+`soroban_sdk::Val: soro
+ban_sdk::TryFromVal<sor
+oban_sdk::Env, f32>` 
+is not satisfied
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:227:17
+    |
+225 |             
+env.events().publish(
+    |                  
+        ------- 
+required by a bound 
+introduced by this call
+226 |                 
+(Symbol::new(env, "low_
+adherence_alert"),),
+227 |                 
+(plan.plan_id, 
+patient_id, 
+adherence_rate),
+    |                 ^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^ the 
+trait `soroban_sdk::Try
+FromVal<soroban_sdk::En
+v, f32>` is not 
+implemented for 
+`soroban_sdk::Val`
+    |
+    = help: the 
+following other types 
+implement trait `soroba
+n_sdk::TryFromVal<E, 
+V>`:
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, &[u8]>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, &str>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, ()>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1)>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2)>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3)>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3, T4)>`
+              
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3, T4, T5)>`
+            and 275 
+others
+    = note: required 
+for `f32` to implement 
+`soroban_sdk::TryIntoVa
+l<soroban_sdk::Env, 
+soroban_sdk::Val>`
+    = note: required 
+for `soroban_sdk::Val` 
+to implement `soroban_s
+dk::TryFromVal<soroban_
+sdk::Env, (u64, 
+soroban_sdk::Address, 
+f32)>`
+    = note: required 
+for `soroban_sdk::Val` 
+to implement `soroban_s
+dk::FromVal<soroban_sdk
+::Env, (u64, 
+soroban_sdk::Address, 
+f32)>`
+    = note: required 
+for `(u64, 
+soroban_sdk::Address, 
+f32)` to implement `sor
+oban_sdk::IntoVal<sorob
+an_sdk::Env, 
+soroban_sdk::Val>`
+note: required by a 
+bound in `soroban_sdk::
+events::Events::publish
+`
+   --> C:\Users\EMMA\.c
+argo\registry\src\index
+.crates.io-1949cf8c6b5b
+557f\soroban-sdk-21.7.7
+\src\events.rs:91:12
+    |
+ 88 |     pub fn 
+publish<T, D>(&self, 
+topics: T, data: D)
+    |            
+------- required by a 
+bound in this 
+associated function
+...
+ 91 |         D: 
+IntoVal<Env, Val>,
+    |            
+^^^^^^^^^^^^^^^^^ 
+required by this bound 
+in `Events::publish`
+    = note: the full 
+name for the type has 
+been written to 'C:\Use
+rs\EMMA\Desktop\uzima\t
+arget\debug\deps\mental
+_health_platform-db7ab0
+4a208f8e23.long-type-79
+90905416475714470.txt'
+    = note: consider 
+using `--verbose` to 
+print the full type 
+name to the console
+
+error[E0277]: a value 
+of type `soroban_sdk::V
+ec<soroban_sdk::String>
+` cannot be built from 
+an iterator over 
+elements of type 
+`soroban_sdk::String`
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:237:14
+     |
+ 237 |             
+.collect();
+     |              
+^^^^^^^ value of type `
+soroban_sdk::Vec<soroba
+n_sdk::String>` cannot 
+be built from `std::ite
+r::Iterator<Item=soroba
+n_sdk::String>`
+     |
+     = help: the trait 
+`core::iter::FromIterat
+or<soroban_sdk::String>
+` is not implemented 
+for `soroban_sdk::Vec<s
+oroban_sdk::String>`
+note: the method call 
+chain might not have 
+had the expected 
+associated types
+    --> contracts\menta
+l_health_platform\src\m
+edication.rs:236:14
+     |
+ 232 |           let 
+recent_side_effects: 
+Vec<String> = plan
+     |  _______________
+_______________________
+__________-
+ 233 | |             
+.adherence_tracking
+     | |_______________
+________________- this 
+expression has type 
+`Vec<AdherenceEntry>`
+ 234 |               
+.iter()
+     |                
+------ 
+`Iterator::Item` is 
+`AdherenceEntry` here
+ 235 |               
+.filter(|entry| env.led
+ger().timestamp() - 
+entry.timestamp < 7 * 
+24 * 60 * 60)
+     |                -
+-----------------------
+-----------------------
+-----------------------
+------- 
+`Iterator::Item` 
+remains 
+`AdherenceEntry` here
+ 236 |               
+.flat_map(|entry| entry
+.side_effects_experienc
+ed.clone())
+     |                ^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^ 
+`Iterator::Item` 
+changed to `String` 
+here
+note: required by a 
+bound in `core::iter::I
+terator::collect`
+    --> C:\Users\EMMA\.
+rustup\toolchains\stabl
+e-x86_64-pc-windows-msv
+c\lib/rustlib/src/rust\
+library\core\src\iter\t
+raits\iterator.rs:2022:
+19
+     |
+2022 |     fn 
+collect<B: FromIterator
+<Self::Item>>(self) -> 
+B
+     |                 
+  ^^^^^^^^^^^^^^^^^^^^^
+^^^ required by this 
+bound in 
+`Iterator::collect`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\me
+dication.rs:266:28
+    |
+266 |         if 
+effectiveness < 5.0 {
+    |            
+-------------   ^^^ 
+expected `u32`, found 
+floating-point number
+    |            |
+    |            
+expected because this 
+is `u32`
+
+error[E0599]: no 
+method named 
+`to_lowercase` found 
+for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\mo
+od_tracking.rs:207:41
+    |
+207 |             let 
+trigger_lower = 
+trigger.to_lowercase();
+    |                  
+                       
+^^^^^^^^^^^^ method 
+not found in 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\mo
+od_tracking.rs:253:29
+    |
+253 |             if 
+indicator == 
+"suicidal_ideation"
+    |                
+---------    
+^^^^^^^^^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |                |
+    |                
+expected because this 
+is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\mo
+od_tracking.rs:254:33
+    |
+254 |                 
+|| indicator == 
+"self_harm"
+    |                  
+  ---------    
+^^^^^^^^^^^ expected 
+`String`, found `&str`
+    |                  
+  |
+    |                  
+  expected because 
+this is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\mo
+od_tracking.rs:255:33
+    |
+255 |                 
+|| indicator == 
+"severe_negative_mood"
+    |                  
+  ---------    
+^^^^^^^^^^^^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |                  
+  |
+    |                  
+  expected because 
+this is 
+`soroban_sdk::String`
+
+error[E0308]: 
+mismatched types
+   --> contracts\mental
+_health_platform\src\mo
+od_tracking.rs:291:21
+    |
+291 |         if trend 
+== "declining" {
+    |            ----- 
+   ^^^^^^^^^^^ 
+expected `String`, 
+found `&str`
+    |            |
+    |            
+expected because this 
+is 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named 
+`to_lowercase` found 
+for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\pe
+er_support.rs:292:37
+    |
+292 |         let 
+content_lower = 
+content.to_lowercase();
+    |                  
+                   
+^^^^^^^^^^^^ method 
+not found in 
+`soroban_sdk::String`
+
+error[E0277]: a value 
+of type `soroban_sdk::V
+ec<professional_directo
+ry::Appointment>` 
+cannot be built from 
+an iterator over 
+elements of type `profe
+ssional_directory::Appo
+intment`
+    --> contracts\menta
+l_health_platform\src\p
+rofessional_directory.r
+s:273:14
+     |
+ 273 |             
+.collect()
+     |              
+^^^^^^^ value of type `
+soroban_sdk::Vec<profes
+sional_directory::Appoi
+ntment>` cannot be 
+built from `std::iter::
+Iterator<Item=professio
+nal_directory::Appointm
+ent>`
+     |
+     = help: the trait 
+`core::iter::FromIterat
+or<professional_directo
+ry::Appointment>` is 
+not implemented for `so
+roban_sdk::Vec<professi
+onal_directory::Appoint
+ment>`
+note: required by a 
+bound in `core::iter::I
+terator::collect`
+    --> C:\Users\EMMA\.
+rustup\toolchains\stabl
+e-x86_64-pc-windows-msv
+c\lib/rustlib/src/rust\
+library\core\src\iter\t
+raits\iterator.rs:2022:
+19
+     |
+2022 |     fn 
+collect<B: FromIterator
+<Self::Item>>(self) -> 
+B
+     |                 
+  ^^^^^^^^^^^^^^^^^^^^^
+^^^ required by this 
+bound in 
+`Iterator::collect`
+
+error[E0599]: no 
+method named `as_str` 
+found for struct 
+`soroban_sdk::String` 
+in the current scope
+  --> contracts\mental_
+health_platform\src\sui
+cide_prevention.rs:51:2
+9
+   |
+51 |             match 
+indicator.as_str() {
+   |                   
+          ^^^^^^ 
+method not found in 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named 
+`contains` found for 
+struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:272
+:25
+    |
+272 |             if lo
+cation.contains("US") {
+    |                  
+       ^^^^^^^^ method 
+not found in 
+`soroban_sdk::String`
+
+error[E0614]: type 
+`u64` cannot be 
+dereferenced
+  --> contracts\mental_
+health_platform\src\wel
+lness.rs:93:16
+   |
+93 |             if 
+*completed_module == 
+module_id {
+   |                
+^^^^^^^^^^^^^^^^^ 
+can't be dereferenced
+
+error[E0599]: no 
+method named 
+`to_lowercase` found 
+for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:239:25
+    |
+239 |                 t
+rigger.to_lowercase().c
+ontains("sleep") || tri
+gger.to_lowercase().con
+tains("tired")
+    |                  
+       ^^^^^^^^^^^^ 
+method not found in 
+`soroban_sdk::String`
+
+error[E0599]: no 
+method named 
+`to_lowercase` found 
+for struct 
+`soroban_sdk::String` 
+in the current scope
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:239:69
+    |
+239 |                 t
+rigger.to_lowercase().c
+ontains("sleep") || tri
+gger.to_lowercase().con
+tains("tired")
+    |                  
+                       
+                       
+     ^^^^^^^^^^^^ 
+method not found in 
+`soroban_sdk::String`
+
+error[E0277]: a value 
+of type `soroban_sdk::V
+ec<wellness::WellnessAc
+tivity>` cannot be 
+built from an iterator 
+over elements of type `
+wellness::WellnessActiv
+ity`
+    --> contracts\menta
+l_health_platform\src\w
+ellness.rs:314:14
+     |
+ 314 |             
+.collect()
+     |              
+^^^^^^^ value of type `
+soroban_sdk::Vec<wellne
+ss::WellnessActivity>` 
+cannot be built from `s
+td::iter::Iterator<Item
+=wellness::WellnessActi
+vity>`
+     |
+     = help: the trait 
+`core::iter::FromIterat
+or<wellness::WellnessAc
+tivity>` is not 
+implemented for `soroba
+n_sdk::Vec<wellness::We
+llnessActivity>`
+note: required by a 
+bound in `core::iter::I
+terator::collect`
+    --> C:\Users\EMMA\.
+rustup\toolchains\stabl
+e-x86_64-pc-windows-msv
+c\lib/rustlib/src/rust\
+library\core\src\iter\t
+raits\iterator.rs:2022:
+19
+     |
+2022 |     fn 
+collect<B: FromIterator
+<Self::Item>>(self) -> 
+B
+     |                 
+  ^^^^^^^^^^^^^^^^^^^^^
+^^^ required by this 
+bound in 
+`Iterator::collect`
+
+error[E0277]: the 
+trait bound `f32: sorob
+an_sdk::TryFromVal<soro
+ban_sdk::Env, 
+soroban_sdk::Val>` is 
+not satisfied
+   --> contracts\mental
+_health_platform\src\li
+b.rs:34:1
+    |
+ 34 | #[contractimpl]
+    | ^^^^^^^^^^^^^^^ 
+the trait `soroban_sdk:
+:TryFromVal<soroban_sdk
+::Env, 
+soroban_sdk::Val>` is 
+not implemented for 
+`f32`
+    |
+    = help: the 
+following other types 
+implement trait `soroba
+n_sdk::TryFromVal<E, 
+V>`:
+              `i128` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+              `i128` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i128>`
+              `i32` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+              `i32` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i32>`
+              `i64` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+              `i64` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, i64>`
+              `u128` 
+implements `soroban_sdk
+::TryFromVal<E, 
+soroban_sdk::Val>`
+              `u128` 
+implements `soroban_sdk
+::TryFromVal<soroban_sd
+k::Env, u128>`
+            and 7 
+others
+note: required by a 
+bound in `soroban_sdk::
+Env::invoke_contract`
+   --> C:\Users\EMMA\.c
+argo\registry\src\index
+.crates.io-1949cf8c6b5b
+557f\soroban-sdk-21.7.7
+\src\env.rs:377:12
+    |
+370 |     pub fn 
+invoke_contract<T>(
+    |            
+--------------- 
+required by a bound in 
+this associated 
+function
+...
+377 |         T: 
+TryFromVal<Env, Val>,
+    |            
+^^^^^^^^^^^^^^^^^^^^ 
+required by this bound 
+in 
+`Env::invoke_contract`
+    = note: this error 
+originates in the 
+attribute macro `soroba
+n_sdk::contractclient` 
+(in Nightly builds, 
+run with -Z 
+macro-backtrace for 
+more info)
+
+error[E0277]: the 
+trait bound 
+`soroban_sdk::Val: soro
+ban_sdk::TryFromVal<sor
+oban_sdk::Env, f32>` 
+is not satisfied
+  --> contracts\mental_
+health_platform\src\lib
+.rs:34:1
+   |
+34 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ 
+the trait `soroban_sdk:
+:TryFromVal<soroban_sdk
+::Env, f32>` is not 
+implemented for 
+`soroban_sdk::Val`
+   |
+   = help: the 
+following other types 
+implement trait `soroba
+n_sdk::TryFromVal<E, 
+V>`:
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, &[u8]>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, &str>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, ()>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1)>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2)>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3)>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3, T4)>`
+             
+`soroban_sdk::Val` 
+implements `soroban_sdk
+::TryFromVal<E, (T0, 
+T1, T2, T3, T4, T5)>`
+           and 275 
+others
+   = note: required 
+for `soroban_sdk::Val` 
+to implement `soroban_s
+dk::TryFromVal<soroban_
+sdk::Env, core::result:
+:Result<f32, 
+errors::Error>>`
+   = note: required 
+for `soroban_sdk::Val` 
+to implement `soroban_s
+dk::FromVal<soroban_sdk
+::Env, core::result::Re
+sult<f32, 
+errors::Error>>`
+   = note: required 
+for `core::result::Resu
+lt<f32, 
+errors::Error>` to 
+implement `soroban_sdk:
+:IntoVal<soroban_sdk::E
+nv, soroban_sdk::Val>`
+   = note: the full 
+name for the type has 
+been written to 'C:\Use
+rs\EMMA\Desktop\uzima\t
+arget\debug\deps\mental
+_health_platform-db7ab0
+4a208f8e23.long-type-79
+90905416475714470.txt'
+   = note: consider 
+using `--verbose` to 
+print the full type 
+name to the console
+   = note: this error 
+originates in the 
+attribute macro 
+`contractimpl` (in 
+Nightly builds, run 
+with -Z 
+macro-backtrace for 
+more info)
+
+error: unused 
+variable: 
+`researcher_id`
+   --> contracts\mental
+_health_platform\src\an
+onymization.rs:170:46
+    |
+170 |     pub fn get_re
+searcher_queries(env: 
+&Env, researcher_id: 
+Address) -> 
+Vec<ResearchQuery> {
+    |                  
+                       
+     ^^^^^^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_researcher_id`
+    |
+    = note: `-D 
+unused-variables` 
+implied by `-D 
+warnings`
+    = help: to 
+override `-D warnings` 
+add `#[allow(unused_var
+iables)]`
+
+error[E0382]: use of 
+moved value: 
+`assessment`
+  --> contracts\mental_
+health_platform\src\ass
+essments.rs:78:29
+   |
+53 |             let 
+mut assessment = assess
+ments.get(i).unwrap();
+   |                 
+-------------- move 
+occurs because 
+`assessment` has type 
+`types::Assessment`, 
+which does not 
+implement the `Copy` 
+trait
+...
+66 |                 
+assessments.set(i, 
+assessment);
+   |                   
+                 
+---------- value moved 
+here
+...
+78 |                   
+          assessment.as
+sessment_type,
+   |                   
+          ^^^^^^^^^^^^^
+^^^^^^^^^^^^^ value 
+used here after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+66 |                 
+assessments.set(i, 
+assessment.clone());
+   |                   
+                       
+    ++++++++
+
+error[E0382]: borrow 
+of moved value: 
+`risk_flags`
+  --> contracts\mental_
+health_platform\src\ass
+essments.rs:86:39
+   |
+58 |                 
+let (score, 
+interpretation, 
+risk_flags, 
+recommendations) =
+   |                   
+                       
+   ---------- move 
+occurs because 
+`risk_flags` has type `
+soroban_sdk::Vec<soroba
+n_sdk::String>`, which 
+does not implement the 
+`Copy` trait
+...
+63 |                 
+assessment.risk_flags 
+= risk_flags;
+   |                   
+                      
+---------- value moved 
+here
+...
+86 |                 
+if Self::is_high_risk(&
+risk_flags) {
+   |                   
+                    
+^^^^^^^^^^^ value 
+borrowed here after 
+move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+63 |                 
+assessment.risk_flags 
+= risk_flags.clone();
+   |                   
+                       
+         ++++++++
+
+error[E0382]: borrow 
+of moved value: 
+`patient_id`
+  --> contracts\mental_
+health_platform\src\ass
+essments.rs:87:51
+   |
+43 |         
+patient_id: Address,
+   |         
+---------- move occurs 
+because `patient_id` 
+has type `soroban_sdk::
+Address`, which does 
+not implement the 
+`Copy` trait
+...
+52 |         for i in 
+0..assessments.len() {
+   |         ----------
+------------------- 
+inside of this loop
+...
+75 |                   
+      patient_id,
+   |                   
+      ---------- value 
+moved here
+...
+87 |                   
+  Self::trigger_risk_al
+ert(env, 
+patient_id.clone(), 
+risk_flags);
+   |                   
+                       
+         ^^^^^^^^^^ 
+value borrowed here 
+after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+75 |                   
+      patient_id: 
+patient_id.clone(),
+   |                   
+                
+++++++++++++++++++++
+
+error[E0382]: use of 
+moved value: 
+`patient_id`
+   --> contracts\mental
+_health_platform\src\cr
+isis_intervention.rs:25
+6:14
+    |
+236 |     fn activate_e
+mergency_protocol(env: 
+&Env, patient_id: 
+Address, alert_type: 
+CrisisType) {
+    |                  
+                       
+      ---------- move 
+occurs because 
+`patient_id` has type `
+soroban_sdk::Address`, 
+which does not 
+implement the `Copy` 
+trait
+...
+251 |             Self:
+:activate_suicide_preve
+ntion(env, patient_id);
+    |                  
+                       
+           ---------- 
+value moved here
+...
+256 |             
+(patient_id, 
+alert_type),
+    |              
+^^^^^^^^^^ value used 
+here after move
+    |
+note: consider 
+changing this 
+parameter type in 
+method `activate_suicid
+e_prevention` to 
+borrow instead if 
+owning the value isn't 
+necessary
+   --> contracts\mental
+_health_platform\src\cr
+isis_intervention.rs:27
+5:59
+    |
+275 |     fn activate_s
+uicide_prevention(env: 
+&Env, patient_id: 
+Address) {
+    |        ----------
+----------------- in 
+this method         
+^^^^^^^ this parameter 
+takes ownership of the 
+value
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+251 |             Self:
+:activate_suicide_preve
+ntion(env, 
+patient_id.clone());
+    |                  
+                       
+                     
+++++++++
+
+error[E0382]: use of 
+moved value: 
+`prescribed_by`
+  --> contracts\mental_
+health_platform\src\med
+ication.rs:46:35
+   |
+15 |         
+prescribed_by: Address,
+   |         
+------------- move 
+occurs because 
+`prescribed_by` has 
+type `soroban_sdk::Addr
+ess`, which does not 
+implement the `Copy` 
+trait
+...
+28 |             
+prescribed_by,
+   |             
+------------- value 
+moved here
+...
+46 |             
+(plan_id, patient_id, 
+prescribed_by),
+   |                   
+                
+^^^^^^^^^^^^^ value 
+used here after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+28 |             
+prescribed_by: 
+prescribed_by.clone(),
+   |                   
+       
++++++++++++++++++++++++
+
+error[E0382]: borrow 
+of moved value: 
+`patient_id`
+  --> contracts\mental_
+health_platform\src\med
+ication.rs:94:53
+   |
+55 |         
+patient_id: Address,
+   |         
+---------- move occurs 
+because `patient_id` 
+has type `soroban_sdk::
+Address`, which does 
+not implement the 
+`Copy` trait
+...
+67 |         for i in 
+0..plans.len() {
+   |         ----------
+------------- inside 
+of this loop
+...
+87 |                   
+      patient_id,
+   |                   
+      ---------- value 
+moved here
+...
+94 |                 Se
+lf::check_adherence_pat
+terns(env, 
+patient_id.clone(), 
+plan);
+   |                   
+                       
+           ^^^^^^^^^^ 
+value borrowed here 
+after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+87 |                   
+      patient_id: 
+patient_id.clone(),
+   |                   
+                
+++++++++++++++++++++
+
+error[E0382]: use of 
+moved value: `plan`
+  --> contracts\mental_
+health_platform\src\med
+ication.rs:94:73
+   |
+68 |             let 
+mut plan = 
+plans.get(i).unwrap();
+   |                 
+-------- move occurs 
+because `plan` has 
+type `types::Medication
+Plan`, which does not 
+implement the `Copy` 
+trait
+...
+79 |                 
+plans.set(i, plan);
+   |                   
+           ---- value 
+moved here
+...
+94 |                 Se
+lf::check_adherence_pat
+terns(env, 
+patient_id.clone(), 
+plan);
+   |                   
+                       
+                       
+        ^^^^ value 
+used here after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+79 |                 
+plans.set(i, 
+plan.clone());
+   |                   
+               ++++++++
+
+error[E0382]: borrow 
+of moved value: `ai_ana
+lysis.risk_indicators`
+  --> contracts\mental_
+health_platform\src\moo
+d_tracking.rs:48:37
+   |
+24 |         let 
+ai_analysis = Self::ana
+lyze_mood(env, 
+mood_score, 
+emotions.clone(), 
+triggers.clone());
+   |             
+----------- move 
+occurs because 
+`ai_analysis` has type 
+`types::MoodAnalysis`, 
+which does not 
+implement the `Copy` 
+trait
+...
+35 |             
+ai_analysis: 
+Some(ai_analysis),
+   |                   
+            
+----------- value 
+moved here
+...
+48 |         if Self::d
+etect_crisis_risk(&ai_a
+nalysis.risk_indicators
+) {
+   |                   
+                  ^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^
+ value borrowed here 
+after move
+
+error[E0382]: use of 
+moved value: 
+`moderator`
+  --> contracts\mental_
+health_platform\src\pee
+r_support.rs:34:24
+   |
+13 |         
+moderator: Address,
+   |         --------- 
+move occurs because 
+`moderator` has type `s
+oroban_sdk::Address`, 
+which does not 
+implement the `Copy` 
+trait
+...
+22 |             
+moderator,
+   |             
+--------- value moved 
+here
+...
+34 |             
+(group_id, moderator),
+   |                   
+     ^^^^^^^^^ value 
+used here after move
+   |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+   |
+22 |             
+moderator: 
+moderator.clone(),
+   |                   
+   +++++++++++++++++++
+
+error[E0382]: borrow 
+of moved value: 
+`content`
+   --> contracts\mental
+_health_platform\src\pe
+er_support.rs:148:62
+    |
+103 |         content: 
+String,
+    |         ------- 
+move occurs because 
+`content` has type 
+`soroban_sdk::String`, 
+which does not 
+implement the `Copy` 
+trait
+...
+132 |             
+content,
+    |             
+------- value moved 
+here
+...
+148 |         if Self::
+contains_crisis_keyword
+s(env, message_type, 
+content.clone()) {
+    |                  
+                       
+                     
+^^^^^^^ value borrowed 
+here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+132 |             
+content: 
+content.clone(),
+    |                  
+  +++++++++++++++++
+
+error[E0382]: use of 
+moved value: `sender`
+   --> contracts\mental
+_health_platform\src\pe
+er_support.rs:149:74
+    |
+102 |         sender: 
+Address,
+    |         ------ 
+move occurs because 
+`sender` has type `soro
+ban_sdk::Address`, 
+which does not 
+implement the `Copy` 
+trait
+...
+130 |             
+sender,
+    |             
+------ value moved here
+...
+149 |             Self:
+:flag_crisis_message(en
+v, message_id, 
+group_id.clone(), 
+sender);
+    |                  
+                       
+                       
+          ^^^^^^ value 
+used here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+130 |             
+sender: sender.clone(),
+    |                  
+ ++++++++++++++++
+
+error[E0382]: use of 
+moved value: `sender`
+   --> contracts\mental
+_health_platform\src\pe
+er_support.rs:157:17
+    |
+102 |         sender: 
+Address,
+    |         ------ 
+move occurs because 
+`sender` has type `soro
+ban_sdk::Address`, 
+which does not 
+implement the `Copy` 
+trait
+...
+130 |             
+sender,
+    |             
+------ value moved here
+...
+149 |             Self:
+:flag_crisis_message(en
+v, message_id, 
+group_id.clone(), 
+sender);
+    |                  
+                       
+                       
+          ------ value 
+moved here
+...
+157 |                 
+sender,
+    |                 
+^^^^^^ value used here 
+after move
+    |
+note: consider 
+changing this 
+parameter type in 
+method 
+`flag_crisis_message` 
+to borrow instead if 
+owning the value isn't 
+necessary
+   --> contracts\mental
+_health_platform\src\pe
+er_support.rs:318:82
+    |
+318 |     fn flag_crisi
+s_message(env: &Env, 
+message_id: u64, 
+group_id: String, 
+sender: Address) {
+    |        
+------------------- in 
+this method            
+                       
+     ^^^^^^^ this 
+parameter takes 
+ownership of the value
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+130 |             
+sender: sender.clone(),
+    |                  
+ ++++++++++++++++
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+149 |             Self:
+:flag_crisis_message(en
+v, message_id, 
+group_id.clone(), 
+sender.clone());
+    |                  
+                       
+                       
+                
+++++++++
+
+error: unused 
+variable: 
+`specialization`
+  --> contracts\mental_
+health_platform\src\pro
+fessional_directory.rs:
+67:9
+   |
+67 |         
+specialization: 
+Option<String>,
+   |         
+^^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_specialization`
+
+error: unused 
+variable: `language`
+  --> contracts\mental_
+health_platform\src\pro
+fessional_directory.rs:
+68:9
+   |
+68 |         language: 
+Option<String>,
+   |         ^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_language`
+
+error: unused 
+variable: `insurance`
+  --> contracts\mental_
+health_platform\src\pro
+fessional_directory.rs:
+69:9
+   |
+69 |         
+insurance: 
+Option<String>,
+   |         ^^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_insurance`
+
+error: unused 
+variable: `max_results`
+  --> contracts\mental_
+health_platform\src\pro
+fessional_directory.rs:
+70:9
+   |
+70 |         
+max_results: u32,
+   |         
+^^^^^^^^^^^ help: if 
+this is intentional, 
+prefix it with an 
+underscore: 
+`_max_results`
+
+error[E0382]: use of 
+moved value: 
+`reviewer_id`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:132:31
+    |
+ 90 |         
+reviewer_id: Address,
+    |         
+----------- move 
+occurs because 
+`reviewer_id` has type 
+`soroban_sdk::Address`,
+ which does not 
+implement the `Copy` 
+trait
+...
+115 |             
+reviewer_id,
+    |             
+----------- value 
+moved here
+...
+132 |             
+(professional_id, 
+reviewer_id, rating),
+    |                  
+             
+^^^^^^^^^^^ value used 
+here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+115 |             
+reviewer_id: 
+reviewer_id.clone(),
+    |                  
+      
++++++++++++++++++++++
+
+error: unused 
+variable: 
+`professional_id`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:140:9
+    |
+140 |         
+professional_id: 
+Address,
+    |         
+^^^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_professional_id`
+
+error: unused 
+variable: `verifier`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:167:9
+    |
+167 |         
+verifier: Address,
+    |         ^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_verifier`
+
+error: variable does 
+not need to be mutable
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:198:13
+    |
+198 |         let mut 
+results = 
+Vec::new(env);
+    |             
+----^^^^^^^
+    |             |
+    |             
+help: remove this `mut`
+    |
+    = note: `-D 
+unused-mut` implied by 
+`-D warnings`
+    = help: to 
+override `-D warnings` 
+add 
+`#[allow(unused_mut)]`
+
+error: unused 
+variable: `preferences`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:193:9
+    |
+193 |         
+preferences: 
+MatchingPreferences,
+    |         
+^^^^^^^^^^^ help: if 
+this is intentional, 
+prefix it with an 
+underscore: 
+`_preferences`
+
+error: unused 
+variable: 
+`patient_profile`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:201:13
+    |
+201 |         let 
+patient_profile: 
+UserProfile = env.stora
+ge().instance().get(&pa
+tient_id).unwrap();
+    |             
+^^^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_patient_profile`
+
+error[E0382]: use of 
+moved value: 
+`patient_id`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:251:30
+    |
+211 |         
+patient_id: Address,
+    |         
+---------- move occurs 
+because `patient_id` 
+has type `soroban_sdk::
+Address`, which does 
+not implement the 
+`Copy` trait
+...
+228 |             
+patient_id,
+    |             
+---------- value moved 
+here
+...
+251 |             
+(appointment_id, 
+patient_id, 
+professional_id),
+    |                  
+            ^^^^^^^^^^ 
+value used here after 
+move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+228 |             
+patient_id: 
+patient_id.clone(),
+    |                  
+     
+++++++++++++++++++++
+
+error[E0382]: use of 
+moved value: 
+`professional_id`
+   --> contracts\mental
+_health_platform\src\pr
+ofessional_directory.rs
+:251:42
+    |
+212 |         
+professional_id: 
+Address,
+    |         
+--------------- move 
+occurs because 
+`professional_id` has 
+type `soroban_sdk::Addr
+ess`, which does not 
+implement the `Copy` 
+trait
+...
+229 |             
+professional_id,
+    |             
+--------------- value 
+moved here
+...
+251 |             
+(appointment_id, 
+patient_id, 
+professional_id),
+    |                  
+                       
+ ^^^^^^^^^^^^^^^ value 
+used here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+229 |             
+professional_id: profes
+sional_id.clone(),
+    |                  
+          +++++++++++++
+++++++++++++
+
+error[E0382]: use of 
+moved value: `alert`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:208
+:57
+    |
+200 |             let 
+mut alert = 
+alerts.get(i).unwrap();
+    |                 
+--------- move occurs 
+because `alert` has 
+type `types::Prevention
+Alert`, which does not 
+implement the `Copy` 
+trait
+...
+204 |                 
+alerts.set(i, alert);
+    |                  
+             ----- 
+value moved here
+...
+208 |                 S
+elf::update_protocol_su
+ccess_rate(env, 
+alert.protocol_id, 
+outcome);
+    |                  
+                       
+                
+^^^^^^^^^^^^^^^^^ 
+value used here after 
+move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+204 |                 
+alerts.set(i, 
+alert.clone());
+    |                  
+                  
+++++++++
+
+error[E0382]: use of 
+moved value: 
+`patient_id`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:313
+:23
+    |
+288 |         
+patient_id: Address,
+    |         
+---------- move occurs 
+because `patient_id` 
+has type `soroban_sdk::
+Address`, which does 
+not implement the 
+`Copy` trait
+...
+299 |             
+patient_id,
+    |             
+---------- value moved 
+here
+...
+313 |             
+(plan_id, patient_id),
+    |                  
+     ^^^^^^^^^^ value 
+used here after move
+    |
+help: consider cloning 
+the value if the 
+performance cost is 
+acceptable
+    |
+299 |             
+patient_id: 
+patient_id.clone(),
+    |                  
+     
+++++++++++++++++++++
+
+error: unused 
+variable: `patient_id`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:319
+:53
+    |
+319 |     pub fn get_pa
+tient_prevention_alerts
+(env: &Env, 
+patient_id: Address) 
+-> 
+Vec<PreventionAlert> {
+    |                  
+                       
+            ^^^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_patient_id`
+
+error: unused 
+variable: `env`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:364
+:31
+    |
+364 |     fn get_high_r
+isk_protocol(env: 
+&Env) -> u64 {
+    |                  
+             ^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_env`
+
+error: unused 
+variable: `env`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:370
+:35
+    |
+370 |     fn get_modera
+te_risk_protocol(env: 
+&Env) -> u64 {
+    |                  
+                 ^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_env`
+
+error: unused 
+variable: `env`
+   --> contracts\mental
+_health_platform\src\su
+icide_prevention.rs:374
+:30
+    |
+374 |     fn get_low_ri
+sk_protocol(env: &Env) 
+-> u64 {
+    |                  
+            ^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_env`
+
+error: unused 
+variable: 
+`total_sessions`
+   --> contracts\mental
+_health_platform\src\th
+erapy.rs:123:13
+    |
+123 |         let 
+total_sessions = 
+sessions.len();
+    |             
+^^^^^^^^^^^^^^ help: 
+if this is 
+intentional, prefix it 
+with an underscore: 
+`_total_sessions`
+
+error: variable 
+`crisis_sessions` is 
+assigned to, but never 
+used
+   --> contracts\mental
+_health_platform\src\th
+erapy.rs:124:13
+    |
+124 |         let mut 
+crisis_sessions = 0;
+    |             
+^^^^^^^^^^^^^^^^^^^
+    |
+    = note: consider 
+using 
+`_crisis_sessions` 
+instead
+
+error: variable 
+`follow_ups` is 
+assigned to, but never 
+used
+   --> contracts\mental
+_health_platform\src\th
+erapy.rs:125:13
+    |
+125 |         let mut 
+follow_ups = 0;
+    |             
+^^^^^^^^^^^^^^
+    |
+    = note: consider 
+using `_follow_ups` 
+instead
+
+error: value assigned 
+to `crisis_sessions` 
+is never read
+   --> contracts\mental
+_health_platform\src\th
+erapy.rs:129:17
+    |
+129 |                 
+crisis_sessions += 1;
+    |                 
+^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+    = note: `-D 
+unused-assignments` 
+implied by `-D 
+warnings`
+    = help: to 
+override `-D warnings` 
+add `#[allow(unused_ass
+ignments)]`
+
+error: value assigned 
+to `follow_ups` is 
+never read
+   --> contracts\mental
+_health_platform\src\th
+erapy.rs:132:17
+    |
+132 |                 
+follow_ups += 1;
+    |                 
+^^^^^^^^^^^^^^^
+    |
+    = help: maybe it 
+is overwritten before 
+being read?
+
+error: unused 
+variable: `program_id`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:131:9
+    |
+131 |         
+program_id: u64,
+    |         
+^^^^^^^^^^ help: if 
+this is intentional, 
+prefix it with an 
+underscore: 
+`_program_id`
+
+error: unused 
+variable: `user_id`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:132:9
+    |
+132 |         user_id: 
+Address,
+    |         ^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_user_id`
+
+error: unused 
+variable: `category`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:143:9
+    |
+143 |         
+category: Option<Wellne
+ssCategory>,
+    |         ^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_category`
+
+error: unused 
+variable: `program_id`
+   --> contracts\mental
+_health_platform\src\we
+llness.rs:191:44
+    |
+191 |     pub fn get_pr
+ogram_feedback(env: 
+&Env, program_id: u64) 
+-> 
+Vec<WellnessFeedback> {
+    |                  
+                       
+   ^^^^^^^^^^ help: if 
+this is intentional, 
+prefix it with an 
+underscore: 
+`_program_id`
+
+error[E0382]: use of 
+moved value: 
+`contact.name`
+   --> contracts\mental
+_health_platform\src\li
+b.rs:131:20
+    |
+121 |     pub fn add_em
+ergency_contact(env: 
+Env, user: Address, 
+contact: 
+EmergencyContact) {
+    |                  
+                       
+                  
+------- move occurs 
+because `contact` has 
+type `types::EmergencyC
+ontact`, which does 
+not implement the 
+`Copy` trait
+...
+126 |         profile.e
+mergency_contacts.push_
+back(contact);
+    |                  
+                       
+     ------- value 
+moved here
+...
+131 |             
+(user, contact.name),
+    |                  
+  ^^^^^^^^^^^^ value 
+used here after move
+
+error: unused 
+variable: `permission`
+   --> contracts\mental
+_health_platform\src\li
+b.rs:657:52
+    |
+657 |     fn 
+check_permission(env: 
+&Env, user: &Address, 
+permission: 
+Permission) -> bool {
+    |                  
+                       
+           ^^^^^^^^^^ 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_permission`
+
+Some errors have 
+detailed explanations: 
+E0277, E0308, E0382, 
+E0433, E0599, E0614.
+For more information 
+about an error, try 
+`rustc --explain 
+E0277`.
+error: could not 
+compile `mental_health_
+platform` (lib) due to 
+92 previous errors

@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, Env, String, Vec};
-use crate::{types::*, errors::Error, events::*};
+use crate::{errors::Error, events::*, types::*};
+use soroban_sdk::{contracttype, Address, Env, String, Symbol, Vec};
 
 pub struct CrisisInterventionManager;
 
@@ -29,7 +29,9 @@ impl CrisisInterventionManager {
         };
 
         // Store alert
-        let mut alerts: Vec<CrisisAlert> = env.storage().instance()
+        let mut alerts: Vec<CrisisAlert> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env));
         alerts.push_back(alert);
@@ -61,7 +63,9 @@ impl CrisisInterventionManager {
         actions_taken: Vec<String>,
         follow_up_required: bool,
     ) -> Result<(), Error> {
-        let mut alerts: Vec<CrisisAlert> = env.storage().instance()
+        let mut alerts: Vec<CrisisAlert> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::InvalidInput)?;
 
@@ -87,11 +91,9 @@ impl CrisisInterventionManager {
         Err(Error::InvalidInput)
     }
 
-    pub fn get_patient_crisis_history(
-        env: &Env,
-        patient_id: Address,
-    ) -> Vec<CrisisAlert> {
-        env.storage().instance()
+    pub fn get_patient_crisis_history(env: &Env, patient_id: Address) -> Vec<CrisisAlert> {
+        env.storage()
+            .instance()
             .get(&patient_id)
             .unwrap_or(Vec::new(env))
     }
@@ -102,7 +104,9 @@ impl CrisisInterventionManager {
         patient_id: Address,
         contacts: Vec<Address>,
     ) -> Result<(), Error> {
-        let mut alerts: Vec<CrisisAlert> = env.storage().instance()
+        let mut alerts: Vec<CrisisAlert> = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::InvalidInput)?;
 
@@ -131,68 +135,64 @@ impl CrisisInterventionManager {
         patient_id: Address,
         indicators: Vec<String>,
     ) -> CrisisRiskAssessment {
-        let mut risk_score = 0.0;
+        let mut intensity_score: u32 = 0;
         let mut risk_factors = Vec::new(env);
         let mut recommended_actions = Vec::new(env);
 
         // Analyze risk indicators
         for indicator in indicators.iter() {
-            match indicator.as_str() {
-                "suicidal_ideation" => {
-                    risk_score += 0.9;
-                    risk_factors.push_back(String::from_str(env, "Suicidal thoughts"));
-                    recommended_actions.push_back(String::from_str(env, "Immediate emergency intervention"));
-                }
-                "self_harm" => {
-                    risk_score += 0.8;
-                    risk_factors.push_back(String::from_str(env, "Self-harm risk"));
-                    recommended_actions.push_back(String::from_str(env, "Crisis counseling"));
-                }
-                "severe_depression" => {
-                    risk_score += 0.6;
-                    risk_factors.push_back(String::from_str(env, "Severe depression"));
-                    recommended_actions.push_back(String::from_str(env, "Professional evaluation"));
-                }
-                "severe_anxiety" => {
-                    risk_score += 0.5;
-                    risk_factors.push_back(String::from_str(env, "Severe anxiety"));
-                    recommended_actions.push_back(String::from_str(env, "Anxiety management support"));
-                }
-                "ptsd" => {
-                    risk_score += 0.7;
-                    risk_factors.push_back(String::from_str(env, "PTSD symptoms"));
-                    recommended_actions.push_back(String::from_str(env, "Trauma-informed care"));
-                }
-                _ => {
-                    risk_score += 0.1;
-                }
+            if indicator == String::from_str(env, "suicidal_ideation") {
+                intensity_score += 90; // 0.9 * 100
+                risk_factors.push_back(String::from_str(env, "Suicidal thoughts"));
+                recommended_actions
+                    .push_back(String::from_str(env, "Immediate emergency intervention"));
+            } else if indicator == String::from_str(env, "self_harm") {
+                intensity_score += 80; // 0.8 * 100
+                risk_factors.push_back(String::from_str(env, "Self-harm risk"));
+                recommended_actions.push_back(String::from_str(env, "Crisis counseling"));
+            } else if indicator == String::from_str(env, "severe_depression") {
+                intensity_score += 60; // 0.6 * 100
+                risk_factors.push_back(String::from_str(env, "Severe depression"));
+                recommended_actions.push_back(String::from_str(env, "Professional evaluation"));
+            } else if indicator == String::from_str(env, "severe_anxiety") {
+                intensity_score += 50; // 0.5 * 100
+                risk_factors.push_back(String::from_str(env, "Severe anxiety"));
+                recommended_actions
+                    .push_back(String::from_str(env, "Anxiety management support"));
+            } else if indicator == String::from_str(env, "ptsd") {
+                intensity_score += 70; // 0.7 * 100
+                risk_factors.push_back(String::from_str(env, "PTSD symptoms"));
+                recommended_actions.push_back(String::from_str(env, "Trauma-informed care"));
+            } else {
+                intensity_score += 10; // 0.1 * 100
             }
         }
 
         // Check recent crisis history
         let crisis_history = Self::get_patient_crisis_history(env, patient_id);
-        let recent_crises = crisis_history.iter()
+        let recent_crises = crisis_history
+            .iter()
             .filter(|alert| env.ledger().timestamp() - alert.timestamp < 30 * 24 * 60 * 60) // Last 30 days
             .count();
 
         if recent_crises > 0 {
-            risk_score += 0.2 * recent_crises as f32;
+            intensity_score += (20 * recent_crises) as u32; // 0.2 * 100 * recent_crises
             risk_factors.push_back(String::from_str(env, "Recent crisis history"));
         }
 
         // Determine risk level
-        let risk_level = if risk_score >= 0.8 {
+        let risk_level = if intensity_score >= 80 { // 0.8 * 100
             CrisisSeverity::Critical
-        } else if risk_score >= 0.6 {
+        } else if intensity_score >= 60 { // 0.6 * 100
             CrisisSeverity::High
-        } else if risk_score >= 0.4 {
+        } else if intensity_score >= 40 { // 0.4 * 100
             CrisisSeverity::Moderate
         } else {
             CrisisSeverity::Low
         };
 
         CrisisRiskAssessment {
-            risk_score,
+            intensity_score,
             risk_level,
             risk_factors,
             recommended_actions,
@@ -241,34 +241,28 @@ impl CrisisInterventionManager {
 
         // Trigger suicide prevention protocol if applicable
         if alert_type == CrisisType::SuicidalIdeation {
-            Self::activate_suicide_prevention(env, patient_id);
+            Self::activate_suicide_prevention(env, patient_id.clone());
         }
 
         env.events().publish(
             (Symbol::new(env, "emergency_protocol_activated"),),
-            (patient_id, alert_type),
+            (patient_id.clone(), alert_type),
         );
     }
 
     fn schedule_urgent_response(env: &Env, patient_id: Address) {
-        env.events().publish(
-            (Symbol::new(env, "urgent_response_scheduled"),),
-            patient_id,
-        );
+        env.events()
+            .publish((Symbol::new(env, "urgent_response_scheduled"),), patient_id);
     }
 
     fn schedule_follow_up(env: &Env, patient_id: Address) {
-        env.events().publish(
-            (Symbol::new(env, "follow_up_scheduled"),),
-            patient_id,
-        );
+        env.events()
+            .publish((Symbol::new(env, "follow_up_scheduled"),), patient_id);
     }
 
     fn schedule_monitoring(env: &Env, patient_id: Address) {
-        env.events().publish(
-            (Symbol::new(env, "monitoring_scheduled"),),
-            patient_id,
-        );
+        env.events()
+            .publish((Symbol::new(env, "monitoring_scheduled"),), patient_id);
     }
 
     fn activate_suicide_prevention(env: &Env, patient_id: Address) {
@@ -283,7 +277,7 @@ impl CrisisInterventionManager {
 #[contracttype]
 #[derive(Clone)]
 pub struct CrisisRiskAssessment {
-    pub risk_score: f32,
+    pub intensity_score: u32,
     pub risk_level: CrisisSeverity,
     pub risk_factors: Vec<String>,
     pub recommended_actions: Vec<String>,

@@ -1,5 +1,5 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env, Map, String, Vec};
-use crate::{types::*, errors::Error, events::*};
+use crate::{errors::Error, events::*, types::*};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Map, String, Symbol, Vec};
 
 pub struct DataAnonymizationManager;
 
@@ -44,7 +44,9 @@ impl DataAnonymizationManager {
         parameters: Map<String, String>,
     ) -> Result<u64, Error> {
         // Verify dataset exists
-        let _: AnonymizedDataset = env.storage().instance()
+        let _: AnonymizedDataset = env
+            .storage()
+            .instance()
             .get(&dataset_id)
             .ok_or(Error::DatasetNotFound)?;
 
@@ -80,11 +82,13 @@ impl DataAnonymizationManager {
     pub fn approve_research_query(
         env: &Env,
         query_id: u64,
-        approver: Address,
+        _approver: Address,
         approved: bool,
         restrictions: Option<Vec<String>>,
     ) -> Result<(), Error> {
-        let mut query: ResearchQuery = env.storage().instance()
+        let mut query: ResearchQuery = env
+            .storage()
+            .instance()
             .get(&query_id)
             .ok_or(Error::InvalidInput)?;
 
@@ -98,20 +102,21 @@ impl DataAnonymizationManager {
 
         if approved {
             // Add researcher to approved list for the dataset
-            let mut dataset: AnonymizedDataset = env.storage().instance()
-                .get(&query.dataset_id)
-                .unwrap();
+            let mut dataset: AnonymizedDataset =
+                env.storage().instance().get(&query.dataset_id).unwrap();
 
             let mut already_approved = false;
             for approved_researcher in dataset.approved_researchers.iter() {
-                if *approved_researcher == query.researcher_id {
+                if approved_researcher == query.researcher_id {
                     already_approved = true;
                     break;
                 }
             }
 
             if !already_approved {
-                dataset.approved_researchers.push_back(query.researcher_id.clone());
+                dataset
+                    .approved_researchers
+                    .push_back(query.researcher_id.clone());
             }
 
             if let Some(restrictions) = restrictions {
@@ -135,7 +140,9 @@ impl DataAnonymizationManager {
         researcher_id: Address,
         results_hash: BytesN<32>,
     ) -> Result<(), Error> {
-        let mut query: ResearchQuery = env.storage().instance()
+        let mut query: ResearchQuery = env
+            .storage()
+            .instance()
             .get(&query_id)
             .ok_or(Error::InvalidInput)?;
 
@@ -160,20 +167,15 @@ impl DataAnonymizationManager {
         Ok(())
     }
 
-    pub fn get_researcher_queries(
-        env: &Env,
-        researcher_id: Address,
-    ) -> Vec<ResearchQuery> {
+    pub fn get_researcher_queries(env: &Env, _researcher_id: Address) -> Vec<ResearchQuery> {
         // In a real implementation, this would query an index
         // For now, return empty vec
         Vec::new(env)
     }
 
-    pub fn get_dataset_info(
-        env: &Env,
-        dataset_id: u64,
-    ) -> Result<AnonymizedDataset, Error> {
-        env.storage().instance()
+    pub fn get_dataset_info(env: &Env, dataset_id: u64) -> Result<AnonymizedDataset, Error> {
+        env.storage()
+            .instance()
             .get(&dataset_id)
             .ok_or(Error::DatasetNotFound)
     }
@@ -185,7 +187,9 @@ impl DataAnonymizationManager {
         anonymization_level: AnonymizationMethod,
     ) -> Result<AnonymizedPatientRecord, Error> {
         // Get patient profile
-        let profile: UserProfile = env.storage().instance()
+        let _profile: UserProfile = env
+            .storage()
+            .instance()
             .get(&patient_id)
             .ok_or(Error::UserNotRegistered)?;
 
@@ -193,27 +197,33 @@ impl DataAnonymizationManager {
         let mut anonymized_data = Map::new(env);
 
         for field in fields_to_include.iter() {
-            match field.as_str() {
-                "age_group" => {
-                    // Instead of exact age, provide age group
-                    anonymized_data.set(String::from_str(env, "age_group"), String::from_str(env, "25-34"));
-                }
-                "gender" => {
-                    // Keep gender but could generalize if needed
-                    anonymized_data.set(String::from_str(env, "gender"), String::from_str(env, "not_specified"));
-                }
-                "diagnosis_category" => {
-                    // Broad categories instead of specific diagnoses
-                    anonymized_data.set(String::from_str(env, "diagnosis_category"), String::from_str(env, "mood_disorder"));
-                }
-                "treatment_outcome" => {
-                    // Aggregated outcomes
-                    anonymized_data.set(String::from_str(env, "treatment_outcome"), String::from_str(env, "improved"));
-                }
-                _ => {
-                    // Default to redacted
-                    anonymized_data.set(field.clone(), String::from_str(env, "[REDACTED]"));
-                }
+            if field == String::from_str(env, "age_group") {
+                // Instead of exact age, provide age group
+                anonymized_data.set(
+                    String::from_str(env, "age_group"),
+                    String::from_str(env, "25-34"),
+                );
+            } else if field == String::from_str(env, "gender") {
+                // Keep gender but could generalize if needed
+                anonymized_data.set(
+                    String::from_str(env, "gender"),
+                    String::from_str(env, "not_specified"),
+                );
+            } else if field == String::from_str(env, "diagnosis_category") {
+                // Broad categories instead of specific diagnoses
+                anonymized_data.set(
+                    String::from_str(env, "diagnosis_category"),
+                    String::from_str(env, "mood_disorder"),
+                );
+            } else if field == String::from_str(env, "treatment_outcome") {
+                // Aggregated outcomes
+                anonymized_data.set(
+                    String::from_str(env, "treatment_outcome"),
+                    String::from_str(env, "improved"),
+                );
+            } else {
+                // Default to redacted
+                anonymized_data.set(field.clone(), String::from_str(env, "[REDACTED]"));
             }
         }
 
@@ -234,22 +244,26 @@ impl DataAnonymizationManager {
         record: AnonymizedPatientRecord,
     ) -> AnonymizationValidationResult {
         let mut validation_checks = Vec::new(env);
-        let mut re_identification_risk = 0.0;
+        let mut re_identification_risk: u32 = 0;
 
         // Check K-anonymity
         if record.k_anonymity_value >= 5 {
             validation_checks.push_back(String::from_str(env, "K-anonymity satisfied"));
         } else {
             validation_checks.push_back(String::from_str(env, "K-anonymity too low"));
-            re_identification_risk += 0.3;
+            re_identification_risk += 30;
         }
 
         // Check for direct identifiers
         let direct_identifiers = ["name", "address", "phone", "email", "ssn"];
         for identifier in direct_identifiers.iter() {
-            if record.anonymized_data.get(String::from_str(env, *identifier)).is_some() {
+            if record
+                .anonymized_data
+                .get(String::from_str(env, *identifier))
+                .is_some()
+            {
                 validation_checks.push_back(String::from_str(env, "Direct identifier present"));
-                re_identification_risk += 0.5;
+                re_identification_risk += 50;
             }
         }
 
@@ -262,27 +276,34 @@ impl DataAnonymizationManager {
             }
             AnonymizationMethod::DifferentialPrivacy => {
                 validation_checks.push_back(String::from_str(env, "Differential privacy applied"));
-                re_identification_risk -= 0.2;
+                if re_identification_risk >= 20 {
+                    re_identification_risk -= 20;
+                } else {
+                    re_identification_risk = 0;
+                }
             }
             _ => {
                 validation_checks.push_back(String::from_str(env, "Basic anonymization applied"));
             }
         }
 
-        let overall_risk = if re_identification_risk > 0.5 {
+        let overall_risk = if re_identification_risk > 50 {
             String::from_str(env, "High")
-        } else if re_identification_risk > 0.2 {
+        } else if re_identification_risk > 20 {
             String::from_str(env, "Medium")
         } else {
             String::from_str(env, "Low")
         };
 
         AnonymizationValidationResult {
-            is_valid: re_identification_risk <= 0.5,
+            is_valid: re_identification_risk <= 50,
             re_identification_risk,
             risk_level: overall_risk,
             validation_checks,
-            recommendations: Self::generate_anonymization_recommendations(env, re_identification_risk),
+            recommendations: Self::generate_anonymization_recommendations(
+                env,
+                re_identification_risk,
+            ),
         }
     }
 
@@ -291,7 +312,9 @@ impl DataAnonymizationManager {
         dataset_id: u64,
         record: AnonymizedPatientRecord,
     ) -> Result<(), Error> {
-        let mut dataset: AnonymizedDataset = env.storage().instance()
+        let mut dataset: AnonymizedDataset = env
+            .storage()
+            .instance()
             .get(&dataset_id)
             .ok_or(Error::DatasetNotFound)?;
 
@@ -305,17 +328,20 @@ impl DataAnonymizationManager {
         Ok(())
     }
 
-    fn generate_anonymization_recommendations(
-        env: &Env,
-        risk_score: f32,
-    ) -> Vec<String> {
+    fn generate_anonymization_recommendations(env: &Env, risk_score: u32) -> Vec<String> {
         let mut recommendations = Vec::new(env);
 
-        if risk_score > 0.5 {
+        if risk_score > 50 {
             recommendations.push_back(String::from_str(env, "Increase K-anonymity parameter"));
-            recommendations.push_back(String::from_str(env, "Remove or generalize direct identifiers"));
-            recommendations.push_back(String::from_str(env, "Consider differential privacy mechanisms"));
-        } else if risk_score > 0.2 {
+            recommendations.push_back(String::from_str(
+                env,
+                "Remove or generalize direct identifiers",
+            ));
+            recommendations.push_back(String::from_str(
+                env,
+                "Consider differential privacy mechanisms",
+            ));
+        } else if risk_score > 20 {
             recommendations.push_back(String::from_str(env, "Review quasi-identifiers"));
             recommendations.push_back(String::from_str(env, "Consider additional generalization"));
         } else {
@@ -341,7 +367,7 @@ pub struct AnonymizedPatientRecord {
 #[derive(Clone)]
 pub struct AnonymizationValidationResult {
     pub is_valid: bool,
-    pub re_identification_risk: f32,
+    pub re_identification_risk: u32,
     pub risk_level: String,
     pub validation_checks: Vec<String>,
     pub recommendations: Vec<String>,

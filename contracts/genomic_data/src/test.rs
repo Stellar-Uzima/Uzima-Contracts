@@ -3,9 +3,8 @@ extern crate std;
 use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Vec};
 
 use crate::{
-    AnalysisType, BreachSeverity, BreachStatus, ConsentPurpose,
-    GenomicDataContract, GenomicDataContractClient, GenomicDataFormat,
-    MetabolizerStatus,
+    AnalysisType, BreachSeverity, BreachStatus, ConsentPurpose, GenomicDataContract,
+    GenomicDataContractClient, GenomicDataFormat, MetabolizerStatus,
 };
 
 fn setup_env() -> (Env, GenomicDataContractClient<'static>, Address) {
@@ -123,19 +122,17 @@ fn test_grant_and_check_consent() {
         &researcher,
         &ConsentPurpose::Research,
         &String::from_str(&env, "full_genome"),
-        &0u64,    // no expiry
-        &true,    // revocable
+        &0u64, // no expiry
+        &true, // revocable
     );
 
     assert_eq!(consent_id, 1);
 
-    let has_consent =
-        client.check_consent(&patient, &researcher, &ConsentPurpose::Research);
+    let has_consent = client.check_consent(&patient, &researcher, &ConsentPurpose::Research);
     assert!(has_consent);
 
     // Different purpose should not match
-    let no_consent =
-        client.check_consent(&patient, &researcher, &ConsentPurpose::Marketplace);
+    let no_consent = client.check_consent(&patient, &researcher, &ConsentPurpose::Marketplace);
     assert!(!no_consent);
 }
 
@@ -202,8 +199,7 @@ fn test_register_and_query_gene_disease_association() {
 #[test]
 fn test_query_empty_gene_returns_empty() {
     let (env, client, _admin) = setup_env();
-    let results =
-        client.query_associations_by_gene(&String::from_str(&env, "UNKNOWN_GENE"));
+    let results = client.query_associations_by_gene(&String::from_str(&env, "UNKNOWN_GENE"));
     assert_eq!(results.len(), 0);
 }
 
@@ -232,10 +228,7 @@ fn test_run_and_get_analysis() {
         String::from_str(&env, "SNP_rs12345"),
         String::from_str(&env, "INDEL_chr1_100"),
     ];
-    let risks: Vec<String> = vec![
-        &env,
-        String::from_str(&env, "elevated_cardiac"),
-    ];
+    let risks: Vec<String> = vec![&env, String::from_str(&env, "elevated_cardiac")];
 
     let analysis_id = client.run_analysis(
         &analyst,
@@ -462,7 +455,10 @@ fn test_store_and_get_pharmacogenomic_profile() {
 
     let profile = client.get_pharmacogenomic_profile(&patient);
     assert_eq!(profile.patient, patient);
-    assert_eq!(profile.metabolizer_status, MetabolizerStatus::PoorMetabolizer);
+    assert_eq!(
+        profile.metabolizer_status,
+        MetabolizerStatus::PoorMetabolizer
+    );
     assert_eq!(profile.risk_level, 4);
 }
 
