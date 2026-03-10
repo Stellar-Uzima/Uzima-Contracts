@@ -1,6 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{vec, Address, Bytes, BytesN, Env, String};
+use soroban_sdk::{vec, Address, BytesN, Env, String};
 
 #[test]
 fn test_initialize_and_add_record() {
@@ -15,7 +15,11 @@ fn test_initialize_and_add_record() {
     let data_ref = String::from_str(&env, "ipfs://QmData");
     let data_hash = BytesN::from_array(&env, &[1u8; 32]);
     let cipher_hash = BytesN::from_array(&env, &[2u8; 32]);
-    let tags = vec![&env, String::from_str(&env, "genomics"), String::from_str(&env, "vcf")];
+    let tags = vec![
+        &env,
+        String::from_str(&env, "genomics"),
+        String::from_str(&env, "vcf"),
+    ];
     let envelopes = Vec::new(&env);
 
     let id = client.add_record(
@@ -151,7 +155,12 @@ fn test_analysis_endpoints() {
             bps: 2000,
         },
     ];
-    let ok = client.set_ancestry_profile(&uploader, &rid, &comps, &String::from_str(&env, "ADMIXTURE"));
+    let ok = client.set_ancestry_profile(
+        &uploader,
+        &rid,
+        &comps,
+        &String::from_str(&env, "ADMIXTURE"),
+    );
     assert!(ok);
     let didx = client.add_drug_response(
         &uploader,

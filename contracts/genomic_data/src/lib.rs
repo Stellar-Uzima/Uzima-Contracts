@@ -6,10 +6,10 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Symbol,
-    Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
+    Symbol, Vec,
 };
-use upgradeability::storage::{self as upg, ADMIN as UPGRADE_ADMIN, VERSION};
+use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -219,8 +219,12 @@ pub enum DataKey {
 
 #[soroban_sdk::contractclient(name = "ZkVerifierClient")]
 pub trait ZkVerifier {
-    fn verify_proof(env: Env, vk_version: u32, public_inputs_hash: BytesN<32>, proof: Bytes)
-        -> bool;
+    fn verify_proof(
+        env: Env,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+    ) -> bool;
 }
 
 #[contract]
@@ -228,7 +232,14 @@ pub struct GenomicDataContract;
 
 #[contractimpl]
 impl GenomicDataContract {
-    fn emit_log(env: &Env, level: LogLevel, operation: &str, actor: Option<&Address>, record_id: Option<u64>, message: &str) {
+    fn emit_log(
+        env: &Env,
+        level: LogLevel,
+        operation: &str,
+        actor: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
@@ -254,16 +265,36 @@ impl GenomicDataContract {
         env.storage().instance().set(&VERSION, &1u32);
         env.storage().persistent().set(&DataKey::Initialized, &true);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
-        env.storage().persistent().set(&DataKey::ListingNextId, &0u64);
-        Self::emit_log(&env, LogLevel::Info, "initialize", Some(&admin), None, "initialized");
+        env.storage()
+            .persistent()
+            .set(&DataKey::ListingNextId, &0u64);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "initialize",
+            Some(&admin),
+            None,
+            "initialized",
+        );
         true
     }
 
     pub fn set_zk_verifier(env: Env, admin: Address, contract_id: Address) -> bool {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
-        env.storage().persistent().set(&DataKey::ZkVerifierContract, &contract_id);
-        Self::emit_log(&env, LogLevel::Info, "set_zk_verifier", Some(&admin), None, "zk verifier set");
+        if !Self::require_admin(&env, &admin) {
+            return false;
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkVerifierContract, &contract_id);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "set_zk_verifier",
+            Some(&admin),
+            None,
+            "zk verifier set",
+        );
         true
     }
 
@@ -304,28 +335,44 @@ impl GenomicDataContract {
             envelopes,
             consent_id,
         };
-        env.storage().persistent().set(&DataKey::Record(new_id), &record);
-        env.storage().persistent().set(&DataKey::RecordHeader(new_id), &header);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Record(new_id), &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordHeader(new_id), &header);
         let mut list: Vec<u64> = env
             .storage()
             .persistent()
             .get::<DataKey, Vec<u64>>(&DataKey::PatientRecords(patient.clone()))
             .unwrap_or(Vec::new(&env));
         list.push_back(new_id);
-        env.storage().persistent().set(&DataKey::PatientRecords(patient), &list);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecords(patient), &list);
         env.storage().persistent().set(&DataKey::NextId, &new_id);
-        Self::emit_log(&env, LogLevel::Info, "add_record", Some(&uploader), Some(new_id), "record added");
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "add_record",
+            Some(&uploader),
+            Some(new_id),
+            "record added",
+        );
         new_id
     }
 
     pub fn get_record_header(env: Env, caller: Address, id: u64) -> Option<GenomicRecordHeader> {
         caller.require_auth();
-        let header = env.storage().persistent().get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(id));
-        if header.is_none() {
-            return None;
-        }
-        let h = header.as_ref().unwrap();
-        if caller == h.patient || caller == h.uploader || Self::is_consent_granted(&env, id, &caller) {
+        let header = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(id));
+        let h = header.as_ref()?;
+        if caller == h.patient
+            || caller == h.uploader
+            || Self::is_consent_granted(&env, id, &caller)
+        {
             header
         } else {
             None
@@ -341,11 +388,15 @@ impl GenomicDataContract {
         expires_at: u64,
     ) -> bool {
         patient.require_auth();
-        let header = env.storage().persistent().get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
-        if header.is_none() {
-            return false;
-        }
-        if header.as_ref().unwrap().patient != patient {
+        let header_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        if let Some(header) = header_opt.as_ref() {
+            if header.patient != patient {
+                return false;
+            }
+        } else {
             return false;
         }
         env.storage().persistent().set(
@@ -359,23 +410,43 @@ impl GenomicDataContract {
                 active: true,
             },
         );
-        Self::emit_log(&env, LogLevel::Info, "grant_consent", Some(&patient), Some(record_id), "consent granted");
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "grant_consent",
+            Some(&patient),
+            Some(record_id),
+            "consent granted",
+        );
         true
     }
 
     pub fn revoke_consent(env: Env, patient: Address, record_id: u64, grantee: Address) -> bool {
         patient.require_auth();
-        let ce = env.storage().persistent().get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
-        if ce.is_none() {
+        let ce_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
+        let mut entry = if let Some(entry) = ce_opt {
+            if entry.patient != patient {
+                return false;
+            }
+            entry
+        } else {
             return false;
-        }
-        if ce.as_ref().unwrap().patient != patient {
-            return false;
-        }
-        let mut entry = ce.unwrap();
+        };
         entry.active = false;
-        env.storage().persistent().set(&DataKey::Consent(record_id, grantee), &entry);
-        Self::emit_log(&env, LogLevel::Info, "revoke_consent", Some(&patient), Some(record_id), "consent revoked");
+        env.storage()
+            .persistent()
+            .set(&DataKey::Consent(record_id, grantee), &entry);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "revoke_consent",
+            Some(&patient),
+            Some(record_id),
+            "consent revoked",
+        );
         true
     }
 
@@ -391,8 +462,15 @@ impl GenomicDataContract {
         expires_at: u64,
     ) -> bool {
         patient.require_auth();
-        let header = env.storage().persistent().get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
-        if header.is_none() || header.as_ref().unwrap().patient != patient {
+        let header_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        if let Some(h) = header_opt.as_ref() {
+            if h.patient != patient {
+                return false;
+            }
+        } else {
             return false;
         }
         let verifier = env
@@ -417,7 +495,14 @@ impl GenomicDataContract {
             &(Symbol::new(&env, "pg"), record_id, requester.clone()),
             &grant,
         );
-        Self::emit_log(&env, LogLevel::Info, "verify_and_grant_access", Some(&patient), Some(record_id), "zk access granted");
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "verify_and_grant_access",
+            Some(&patient),
+            Some(record_id),
+            "zk access granted",
+        );
         true
     }
 
@@ -460,7 +545,14 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::AssocCount(record_id), &new_idx);
-        Self::emit_log(&env, LogLevel::Info, "add_gene_disease_assoc", None, Some(record_id), "assoc added");
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "add_gene_disease_assoc",
+            None,
+            Some(record_id),
+            "assoc added",
+        );
         new_idx
     }
 
@@ -502,11 +594,24 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::DrugRespCount(record_id), &new_idx);
-        Self::emit_log(&env, LogLevel::Info, "add_drug_response", None, Some(record_id), "pharmacogenomic added");
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "add_drug_response",
+            None,
+            Some(record_id),
+            "pharmacogenomic added",
+        );
         new_idx
     }
 
-    pub fn set_ancestry_profile(env: Env, caller: Address, record_id: u64, components: Vec<PopulationShare>, method: String) -> bool {
+    pub fn set_ancestry_profile(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        components: Vec<PopulationShare>,
+        method: String,
+    ) -> bool {
         caller.require_auth();
         if env
             .storage()
@@ -522,15 +627,38 @@ impl GenomicDataContract {
             method,
             created_at: env.ledger().timestamp(),
         };
-        env.storage().persistent().set(&DataKey::Ancestry(record_id), &profile);
-        Self::emit_log(&env, LogLevel::Info, "set_ancestry_profile", Some(&caller), Some(record_id), "ancestry set");
+        env.storage()
+            .persistent()
+            .set(&DataKey::Ancestry(record_id), &profile);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "set_ancestry_profile",
+            Some(&caller),
+            Some(record_id),
+            "ancestry set",
+        );
         true
     }
 
-    pub fn create_listing(env: Env, seller: Address, record_id: u64, price: i128, currency: Address, escrow: Option<Address>) -> u64 {
+    pub fn create_listing(
+        env: Env,
+        seller: Address,
+        record_id: u64,
+        price: i128,
+        currency: Address,
+        escrow: Option<Address>,
+    ) -> u64 {
         seller.require_auth();
-        let header = env.storage().persistent().get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
-        if header.is_none() || header.as_ref().unwrap().uploader != seller {
+        let header_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        if let Some(h) = header_opt.as_ref() {
+            if h.uploader != seller {
+                return 0;
+            }
+        } else {
             return 0;
         }
         let lid = env
@@ -550,37 +678,69 @@ impl GenomicDataContract {
             status: ListingStatus::Active,
             created_at: env.ledger().timestamp(),
         };
-        env.storage().persistent().set(&DataKey::Listing(lid), &listing);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Listing(lid), &listing);
         let mut ids: Vec<u64> = env
             .storage()
             .persistent()
             .get::<DataKey, Vec<u64>>(&DataKey::RecordListings(record_id))
             .unwrap_or(Vec::new(&env));
         ids.push_back(lid);
-        env.storage().persistent().set(&DataKey::RecordListings(record_id), &ids);
-        env.storage().persistent().set(&DataKey::ListingNextId, &lid);
-        Self::emit_log(&env, LogLevel::Info, "create_listing", Some(&seller), Some(record_id), "listing created");
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordListings(record_id), &ids);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ListingNextId, &lid);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "create_listing",
+            Some(&seller),
+            Some(record_id),
+            "listing created",
+        );
         lid
     }
 
     pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> bool {
         buyer.require_auth();
-        let l = env.storage().persistent().get::<DataKey, Listing>(&DataKey::Listing(listing_id));
-        if l.is_none() {
+        let l_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Listing>(&DataKey::Listing(listing_id));
+        let mut listing = if let Some(listing) = l_opt {
+            listing
+        } else {
             return false;
-        }
-        let mut listing = l.unwrap();
+        };
         if listing.status != ListingStatus::Active {
             return false;
         }
         listing.buyer = Some(buyer.clone());
         listing.status = ListingStatus::Purchased;
-        env.storage().persistent().set(&DataKey::Listing(listing_id), &listing);
-        Self::emit_log(&env, LogLevel::Info, "purchase_listing", Some(&buyer), Some(listing.record_id), "listing purchased");
+        env.storage()
+            .persistent()
+            .set(&DataKey::Listing(listing_id), &listing);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "purchase_listing",
+            Some(&buyer),
+            Some(listing.record_id),
+            "listing purchased",
+        );
         true
     }
 
-    pub fn report_breach(env: Env, reporter: Address, record_id: Option<u64>, severity_bps: u32, message: String) -> u64 {
+    pub fn report_breach(
+        env: Env,
+        reporter: Address,
+        record_id: Option<u64>,
+        severity_bps: u32,
+        message: String,
+    ) -> u64 {
         reporter.require_auth();
         let id = env
             .storage()
@@ -598,19 +758,30 @@ impl GenomicDataContract {
         };
         env.storage().persistent().set(&DataKey::Breach(id), &ev);
         env.storage().persistent().set(&DataKey::BreachCount, &id);
-        Self::emit_log(&env, LogLevel::Warning, "report_breach", Some(&reporter), record_id, "breach reported");
+        Self::emit_log(
+            &env,
+            LogLevel::Warning,
+            "report_breach",
+            Some(&reporter),
+            record_id,
+            "breach reported",
+        );
         id
     }
 
-    fn require_admin(env: &Env, who: &Address) {
-        let admin = upgradeability::storage::get_admin(env).unwrap();
-        if &admin != who {
-            panic!("not admin")
+    fn require_admin(env: &Env, who: &Address) -> bool {
+        if let Some(admin) = upgradeability::storage::get_admin(env) {
+            &admin == who
+        } else {
+            false
         }
     }
 
     fn is_consent_granted(env: &Env, record_id: u64, grantee: &Address) -> bool {
-        let ce = env.storage().persistent().get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
+        let ce = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
         if let Some(c) = ce {
             if c.active && (c.expires_at == 0 || env.ledger().timestamp() <= c.expires_at) {
                 return true;
