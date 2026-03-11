@@ -268,12 +268,15 @@ pub struct EmergencyCase {
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    Admin, // stores the admin Address
+    // Fix: store admin as a simple key (not keyed by address)
+    // so require_admin can retrieve it without knowing the address
+    Admin,
     Paused,
     Provider(BytesN<32>),
     Patient(BytesN<32>),
     Consent(BytesN<32>),
-    PatientConsent(BytesN<32>, u32), // (patient_id_hash, consent_type as u32)
+    // Index: patient_id -> Vec of consent_ids for that patient
+    PatientConsents(BytesN<32>),
     Consultation(BytesN<32>),
     Prescription(BytesN<32>),
     MonitoringSession(BytesN<32>),
@@ -304,15 +307,13 @@ impl TelemedicineContract {
         if env.storage().persistent().has(&DataKey::Paused) {
             return Err(TelemedicineError::NotPaused);
         }
-
-        // Store the admin address so require_admin can verify it
+        // Store admin address under a simple key
         env.storage().persistent().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(
             &DataKey::PlatformStats,
             &(0u64, 0u64, 0u64, 0u64, 0u64, 0u64),
         );
-
         log!(&env, "Telemedicine contract initialized");
         Ok(())
     }
@@ -346,7 +347,6 @@ impl TelemedicineContract {
         license_expiry: u64,
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         if env
             .storage()
             .persistent()
@@ -354,12 +354,10 @@ impl TelemedicineContract {
         {
             return Err(TelemedicineError::ProviderAlreadyRegistered);
         }
-
         let current_time = env.ledger().timestamp();
         if license_expiry < current_time {
             return Err(TelemedicineError::LicenseExpired);
         }
-
         let provider = Provider {
             provider_id: provider_id.clone(),
             address,
@@ -371,12 +369,10 @@ impl TelemedicineContract {
             is_active: true,
             registration_date: current_time,
         };
-
         env.storage()
             .persistent()
             .set(&DataKey::Provider(provider_id), &provider);
         Self::increment_platform_stat(env, 0);
-
         log!(&env, "Provider registered");
         Ok(())
     }
@@ -393,18 +389,15 @@ impl TelemedicineContract {
         provider_id: BytesN<32>,
     ) -> Result<(), TelemedicineError> {
         Self::require_admin(env)?;
-
         let mut provider: Provider = env
             .storage()
             .persistent()
             .get(&DataKey::Provider(provider_id.clone()))
             .ok_or(TelemedicineError::ProviderNotFound)?;
-
         provider.is_active = false;
         env.storage()
             .persistent()
             .set(&DataKey::Provider(provider_id), &provider);
-
         log!(&env, "Provider deactivated");
         Ok(())
     }
@@ -423,7 +416,6 @@ impl TelemedicineContract {
         preferred_language: String,
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         if env
             .storage()
             .persistent()
@@ -431,7 +423,6 @@ impl TelemedicineContract {
         {
             return Err(TelemedicineError::PatientAlreadyRegistered);
         }
-
         let patient = Patient {
             patient_id: patient_id.clone(),
             address,
@@ -442,12 +433,10 @@ impl TelemedicineContract {
             preferred_language,
             registration_date: env.ledger().timestamp(),
         };
-
         env.storage()
             .persistent()
             .set(&DataKey::Patient(patient_id), &patient);
         Self::increment_platform_stat(env, 1);
-
         log!(&env, "Patient registered");
         Ok(())
     }
@@ -472,7 +461,6 @@ impl TelemedicineContract {
         expiry: Option<u64>,
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         let consent = ConsentRecord {
             consent_id: consent_id.clone(),
             patient_id: patient_id.clone(),
@@ -482,17 +470,20 @@ impl TelemedicineContract {
             expiry: expiry.unwrap_or(u64::MAX),
             scope,
         };
-
-        // Store by consent_id for revocation
         env.storage()
             .persistent()
-            .set(&DataKey::Consent(consent_id), &consent);
+            .set(&DataKey::Consent(consent_id.clone()), &consent);
 
-        // Also store a lookup by (patient_id, consent_type) for has_valid_consent
-        let type_index = consent_type as u32;
+        // Maintain a per-patient index of consent IDs
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientConsents(patient_id.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        ids.push_back(consent_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientConsent(patient_id, type_index), &true);
+            .set(&DataKey::PatientConsents(patient_id), &ids);
 
         log!(&env, "Consent granted");
         Ok(())
@@ -500,40 +491,45 @@ impl TelemedicineContract {
 
     pub fn revoke_consent(env: &Env, consent_id: BytesN<32>) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         let mut consent: ConsentRecord = env
             .storage()
             .persistent()
             .get(&DataKey::Consent(consent_id.clone()))
             .ok_or(TelemedicineError::ConsentNotGiven)?;
-
         consent.granted = false;
         env.storage()
             .persistent()
             .set(&DataKey::Consent(consent_id), &consent);
-
-        // Remove the patient-consent lookup so has_valid_consent returns false
-        let type_index = consent.consent_type as u32;
-        env.storage()
-            .persistent()
-            .remove(&DataKey::PatientConsent(consent.patient_id, type_index));
-
         log!(&env, "Consent revoked");
         Ok(())
     }
 
+    /// Returns true only if the patient has at least one active, non-expired
+    /// consent record of the requested type.
     pub fn has_valid_consent(
         env: &Env,
         patient_id: BytesN<32>,
         consent_type: ConsentType,
     ) -> Result<bool, TelemedicineError> {
-        let type_index = consent_type as u32;
-        let has = env
+        let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientConsent(patient_id, type_index))
-            .unwrap_or(false);
-        Ok(has)
+            .get(&DataKey::PatientConsents(patient_id))
+            .unwrap_or_else(|| Vec::new(env));
+
+        let now = env.ledger().timestamp();
+        for id in ids.iter() {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ConsentRecord>(&DataKey::Consent(id.clone()))
+            {
+                if record.granted && record.consent_type == consent_type && record.expiry >= now {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
     }
 
     // ============================================================
@@ -550,27 +546,22 @@ impl TelemedicineContract {
         _appointment_id: BytesN<32>,
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         let provider: Provider = env
             .storage()
             .persistent()
             .get(&DataKey::Provider(provider_id.clone()))
             .ok_or(TelemedicineError::ProviderNotFound)?;
-
         if !provider.is_active {
             return Err(TelemedicineError::ProviderNotActive);
         }
-
         let _: Patient = env
             .storage()
             .persistent()
             .get(&DataKey::Patient(patient_id.clone()))
             .ok_or(TelemedicineError::PatientNotFound)?;
-
         if !Self::has_valid_consent(env, patient_id.clone(), ConsentType::VideoConsultation)? {
             return Err(TelemedicineError::ConsentNotGiven);
         }
-
         let consultation = Consultation {
             session_id: session_id.clone(),
             patient_id: patient_id.clone(),
@@ -584,12 +575,10 @@ impl TelemedicineContract {
             consultation_type,
             quality_score: 0,
         };
-
         env.storage()
             .persistent()
             .set(&DataKey::Consultation(session_id), &consultation);
         Self::increment_platform_stat(env, 2);
-
         log!(&env, "Consultation scheduled");
         Ok(())
     }
@@ -601,24 +590,19 @@ impl TelemedicineContract {
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         caller.require_auth();
-
         let mut consultation: Consultation = env
             .storage()
             .persistent()
             .get(&DataKey::Consultation(session_id.clone()))
             .ok_or(TelemedicineError::ConsultationNotFound)?;
-
         if consultation.status != ConsultationStatus::Scheduled {
             return Err(TelemedicineError::ConsultationNotScheduled);
         }
-
         consultation.status = ConsultationStatus::Active;
         consultation.start_time = env.ledger().timestamp();
-
         env.storage()
             .persistent()
             .set(&DataKey::Consultation(session_id), &consultation);
-
         log!(&env, "Consultation started");
         Ok(())
     }
@@ -633,26 +617,21 @@ impl TelemedicineContract {
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         provider_address.require_auth();
-
         let mut consultation: Consultation = env
             .storage()
             .persistent()
             .get(&DataKey::Consultation(session_id.clone()))
             .ok_or(TelemedicineError::ConsultationNotFound)?;
-
         if consultation.status != ConsultationStatus::Active {
             return Err(TelemedicineError::ConsultationNotActive);
         }
-
         consultation.status = ConsultationStatus::Completed;
         consultation.end_time = env.ledger().timestamp();
-        consultation.recording_hash = recording_hash;
+        consultation.recording_hash = recording_hash.clone();
         consultation.quality_score = quality_score;
-
         env.storage()
             .persistent()
             .set(&DataKey::Consultation(session_id), &consultation);
-
         log!(&env, "Consultation completed");
         Ok(())
     }
@@ -684,17 +663,14 @@ impl TelemedicineContract {
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         provider_address.require_auth();
-
         let consultation: Consultation = env
             .storage()
             .persistent()
             .get(&DataKey::Consultation(consultation_id.clone()))
             .ok_or(TelemedicineError::ConsultationNotFound)?;
-
         if consultation.status != ConsultationStatus::Completed {
             return Err(TelemedicineError::ConsultationNotActive);
         }
-
         let prescription = Prescription {
             prescription_id: prescription_id.clone(),
             consultation_id,
@@ -708,12 +684,10 @@ impl TelemedicineContract {
             cross_border: false,
             jurisdiction: String::from_str(env, "KE"),
         };
-
         env.storage()
             .persistent()
             .set(&DataKey::Prescription(prescription_id), &prescription);
         Self::increment_platform_stat(env, 3);
-
         log!(&env, "Prescription issued");
         Ok(())
     }
@@ -740,19 +714,16 @@ impl TelemedicineContract {
         _duration_hours: u32,
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
-
         let _: Patient = env
             .storage()
             .persistent()
             .get(&DataKey::Patient(patient_id.clone()))
             .ok_or(TelemedicineError::PatientNotFound)?;
-
         let _: Provider = env
             .storage()
             .persistent()
             .get(&DataKey::Provider(provider_id.clone()))
             .ok_or(TelemedicineError::ProviderNotFound)?;
-
         let session = MonitoringSession {
             session_id: session_id.clone(),
             patient_id,
@@ -763,11 +734,9 @@ impl TelemedicineContract {
             vital_signs_count: 0,
             alerts_count: 0,
         };
-
         env.storage()
             .persistent()
             .set(&DataKey::MonitoringSession(session_id), &session);
-
         log!(&env, "Monitoring session started");
         Ok(())
     }
@@ -777,20 +746,16 @@ impl TelemedicineContract {
         session_id: BytesN<32>,
     ) -> Result<MonitoringSession, TelemedicineError> {
         Self::require_not_paused(env)?;
-
         let mut session: MonitoringSession = env
             .storage()
             .persistent()
             .get(&DataKey::MonitoringSession(session_id.clone()))
             .ok_or(TelemedicineError::MonitoringSessionNotFound)?;
-
         session.is_active = false;
         session.end_time = env.ledger().timestamp();
-
         env.storage()
             .persistent()
             .set(&DataKey::MonitoringSession(session_id), &session.clone());
-
         log!(&env, "Monitoring session ended");
         Ok(session)
     }
@@ -799,8 +764,8 @@ impl TelemedicineContract {
     // UTILITY FUNCTIONS
     // ============================================================
 
-    /// Verify that the stored admin address has authorized this call.
     fn require_admin(env: &Env) -> Result<(), TelemedicineError> {
+        // Retrieve the stored admin address and require their auth
         let admin: Address = env
             .storage()
             .persistent()
@@ -836,17 +801,15 @@ impl TelemedicineContract {
             .persistent()
             .get(&DataKey::PlatformStats)
             .unwrap_or((0, 0, 0, 0, 0, 0));
-
         match stat_index {
-            0 => stats.0 += 1,
-            1 => stats.1 += 1,
-            2 => stats.2 += 1,
-            3 => stats.3 += 1,
-            4 => stats.4 += 1,
-            5 => stats.5 += 1,
+            0 => stats.0 = stats.0.saturating_add(1),
+            1 => stats.1 = stats.1.saturating_add(1),
+            2 => stats.2 = stats.2.saturating_add(1),
+            3 => stats.3 = stats.3.saturating_add(1),
+            4 => stats.4 = stats.4.saturating_add(1),
+            5 => stats.5 = stats.5.saturating_add(1),
             _ => {}
         }
-
         env.storage()
             .persistent()
             .set(&DataKey::PlatformStats, &stats);

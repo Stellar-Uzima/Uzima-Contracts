@@ -10,6 +10,16 @@ fn generate_test_address(env: &Env) -> Address {
     <Address as TestAddress>::generate(env)
 }
 
+// Extracts the contract error from a try_ call without using unwrap/unwrap_err
+macro_rules! assert_err {
+    ($result:expr, $expected:expr) => {
+        match $result {
+            Err(Ok(e)) => assert_eq!(e, $expected),
+            other => panic!("expected Err(Ok({:?})), got {:?}", $expected, other),
+        }
+    };
+}
+
 struct TestContext {
     env: Env,
     client: TelemedicineContractClient<'static>,
@@ -26,6 +36,7 @@ impl TestContext {
         env.mock_all_auths();
 
         let contract_id = env.register_contract(None, TelemedicineContract);
+        // SAFETY: env outlives client within the same test function
         let client =
             TelemedicineContractClient::new(unsafe { &*(&env as *const Env) }, &contract_id);
 
@@ -76,15 +87,17 @@ impl TestContext {
         );
     }
 
-    // consent_id [100u8; 32] — used consistently for grant + revoke
-    fn setup_consent(&self, consent_type: ConsentType) {
+    /// Grant consent and return the consent_id used so callers can revoke it
+    fn setup_consent(&self, consent_type: ConsentType) -> BytesN<32> {
+        let consent_id = BytesN::from_array(&self.env, &[100u8; 32]);
         self.client.grant_consent(
-            &BytesN::from_array(&self.env, &[100u8; 32]),
+            &consent_id,
             &self.patient_id,
             &consent_type,
             &String::from_str(&self.env, "General consent"),
             &None,
         );
+        consent_id
     }
 }
 
@@ -96,7 +109,6 @@ impl TestContext {
 fn test_initialize_contract() {
     let env = Env::default();
     env.mock_all_auths();
-
     let contract_id = env.register_contract(None, TelemedicineContract);
     let client = TelemedicineContractClient::new(&env, &contract_id);
     let admin = generate_test_address(&env);
@@ -117,7 +129,7 @@ fn test_initialize_contract() {
 fn test_double_initialization() {
     let ctx = TestContext::new();
     let result = ctx.client.try_initialize(&ctx.admin);
-    assert_eq!(result.unwrap_err().unwrap(), TelemedicineError::NotPaused);
+    assert_err!(result, TelemedicineError::NotPaused);
 }
 
 // ============================================================
@@ -138,10 +150,7 @@ fn test_pause_unpause() {
         &String::from_str(&ctx.env, "+254700000002"),
         &String::from_str(&ctx.env, "English"),
     );
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TelemedicineError::ContractPaused
-    );
+    assert_err!(result, TelemedicineError::ContractPaused);
 
     ctx.client.unpause();
 
@@ -194,10 +203,7 @@ fn test_register_expired_provider() {
         &String::from_str(&ctx.env, "Cardiology"),
         &500_000u64,
     );
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TelemedicineError::LicenseExpired
-    );
+    assert_err!(result, TelemedicineError::LicenseExpired);
 }
 
 #[test]
@@ -266,17 +272,15 @@ fn test_revoke_consent() {
     let ctx = TestContext::new();
     ctx.setup_provider();
     ctx.setup_patient();
-    // setup_consent stores with key [100u8; 32]
-    ctx.setup_consent(ConsentType::VideoConsultation);
+    // setup_consent returns the id it used — reuse it for revoke
+    let consent_id = ctx.setup_consent(ConsentType::VideoConsultation);
 
     let has_consent = ctx
         .client
         .has_valid_consent(&ctx.patient_id, &ConsentType::VideoConsultation);
     assert!(has_consent);
 
-    // Revoke using the same key [100u8; 32]
-    ctx.client
-        .revoke_consent(&BytesN::from_array(&ctx.env, &[100u8; 32]));
+    ctx.client.revoke_consent(&consent_id);
 
     let has_consent = ctx
         .client
@@ -343,7 +347,7 @@ fn test_consultation_without_consent() {
     let ctx = TestContext::new();
     ctx.setup_provider();
     ctx.setup_patient();
-    // No consent granted — schedule_consultation should fail
+    // No consent granted — schedule should fail
 
     let result = ctx.client.try_schedule_consultation(
         &BytesN::from_array(&ctx.env, &[47u8; 32]),
@@ -353,10 +357,7 @@ fn test_consultation_without_consent() {
         &String::from_str(&ctx.env, "General Consultation"),
         &BytesN::from_array(&ctx.env, &[48u8; 32]),
     );
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TelemedicineError::ConsentNotGiven
-    );
+    assert_err!(result, TelemedicineError::ConsentNotGiven);
 }
 
 // ============================================================
@@ -527,34 +528,23 @@ fn test_invalid_jurisdiction() {
 fn test_expired_provider_license() {
     let ctx = TestContext::new();
 
+    // Register a provider with an already-expired license (no timestamp set = 0)
     let mut jurisdictions = Vec::new(&ctx.env);
     jurisdictions.push_back(String::from_str(&ctx.env, "KE"));
 
-    // Register provider with already-expired license (timestamp 0, expiry 500_000 — still valid at t=0)
-    ctx.client.register_provider(
+    // license_expiry 0 < current timestamp 0 is NOT expired (equal), so advance time first
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_000_000);
+
+    let result = ctx.client.try_register_provider(
         &BytesN::from_array(&ctx.env, &[80u8; 32]),
         &ctx.provider,
         &String::from_str(&ctx.env, "Dr. Expired"),
         &BytesN::from_array(&ctx.env, &[81u8; 32]),
         &jurisdictions,
         &String::from_str(&ctx.env, "General Practice"),
-        &500_000u64,
+        &500_000u64, // expired: 500_000 < 1_000_000
     );
-
-    ctx.setup_patient();
-    // No consent — scheduling should fail with ConsentNotGiven
-    let result = ctx.client.try_schedule_consultation(
-        &BytesN::from_array(&ctx.env, &[82u8; 32]),
-        &ctx.patient_id,
-        &BytesN::from_array(&ctx.env, &[80u8; 32]),
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "consultation"),
-        &BytesN::from_array(&ctx.env, &[83u8; 32]),
-    );
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TelemedicineError::ConsentNotGiven
-    );
+    assert_err!(result, TelemedicineError::LicenseExpired);
 }
 
 #[test]
@@ -571,10 +561,7 @@ fn test_contract_pause() {
         &String::from_str(&ctx.env, "+254700000001"),
         &String::from_str(&ctx.env, "English"),
     );
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        TelemedicineError::ContractPaused
-    );
+    assert_err!(result, TelemedicineError::ContractPaused);
 
     ctx.client.unpause();
 
