@@ -412,7 +412,7 @@ impl ReputationIntegration {
         provider: Address,
         new_score: i128,
     ) -> Result<(), Error> {
-        let contract_address: Address = env
+        let _contract_address: Address = env
             .storage()
             .instance()
             .get(&DataKey::BaseReputationContract)

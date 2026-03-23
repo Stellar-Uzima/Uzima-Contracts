@@ -724,7 +724,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate experience score (0-100)
-    fn calculate_experience_score(env: &Env, provider: Address) -> Result<u32, Error> {
+    fn calculate_experience_score(env: &Env, _provider: Address) -> Result<u32, Error> {
         // Get provider profile from provider directory if available
         // For now, use a simple time-based calculation
         let current_time = env.ledger().timestamp();

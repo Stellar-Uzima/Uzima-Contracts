@@ -47,12 +47,19 @@ pub enum AccessLevel {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub enum TimeRestrictionPolicy {
+    None,
+    Restricted(TimeRestriction),
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AccessPolicy {
     pub resource_type: ResourceType,
     pub min_reputation_score: u32,
     pub required_credentials: Vec<Symbol>, // Credential types required
     pub access_level: AccessLevel,
-    pub time_restrictions: Option<TimeRestriction>,
+    pub time_restriction: TimeRestrictionPolicy,
     pub special_conditions: Vec<Symbol>,
 }
 
@@ -173,10 +180,13 @@ impl ReputationAccessControl {
         }
 
         // Check time restrictions
-        if let Some(time_restriction) = &policy.time_restrictions {
-            if !Self::check_time_restriction(&env, time_restriction)? {
-                return Ok(false);
+        match &policy.time_restriction {
+            TimeRestrictionPolicy::Restricted(time_restriction) => {
+                if !Self::check_time_restriction(&env, time_restriction)? {
+                    return Ok(false);
+                }
             }
+            TimeRestrictionPolicy::None => {}
         }
 
         // Check if requested access level is allowed
@@ -408,7 +418,7 @@ impl ReputationAccessControl {
             min_reputation_score: 80,
             required_credentials: vec![env, med_lic.clone(), state_lic.clone()],
             access_level: AccessLevel::Read,
-            time_restrictions: None,
+            time_restriction: TimeRestrictionPolicy::None,
             special_conditions: vec![env, hipaa.clone()],
         };
 
@@ -423,7 +433,7 @@ impl ReputationAccessControl {
                 state_lic.clone(),
             ],
             access_level: AccessLevel::Write,
-            time_restrictions: None,
+            time_restriction: TimeRestrictionPolicy::None,
             special_conditions: vec![env, presc_auth.clone()],
         };
 
@@ -433,7 +443,7 @@ impl ReputationAccessControl {
             min_reputation_score: 60,
             required_credentials: vec![env, med_lic],
             access_level: AccessLevel::Admin,
-            time_restrictions: None,
+            time_restriction: TimeRestrictionPolicy::None,
             special_conditions: vec![env, emrg_just],
         };
 
