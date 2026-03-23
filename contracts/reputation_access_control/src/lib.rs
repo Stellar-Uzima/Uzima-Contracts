@@ -1,8 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    String, Symbol, Vec,
 };
 
 #[contracterror]
@@ -104,7 +104,7 @@ pub struct ReputationAccessControl;
 #[contractimpl]
 impl ReputationAccessControl {
     // Initialize access control system
-    pub fn initialize(env: Env, admin: Address, reputation_contract: Address) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address, _reputation_contract: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
@@ -163,7 +163,7 @@ impl ReputationAccessControl {
             .ok_or(Error::PolicyNotFound)?;
 
         // Check reputation score requirement
-        if !Self::check_reputation_requirement(&env, provider, policy.min_reputation_score)? {
+        if !Self::check_reputation_requirement(&env, provider.clone(), policy.min_reputation_score)? {
             return Ok(false);
         }
 
@@ -202,7 +202,7 @@ impl ReputationAccessControl {
         let current_time = env.ledger().timestamp();
 
         let request = AccessRequest {
-            request_id,
+            request_id: request_id.clone(),
             provider: provider.clone(),
             resource_type,
             requested_access,
@@ -214,22 +214,22 @@ impl ReputationAccessControl {
         // Store request
         env.storage()
             .persistent()
-            .set(&DataKey::AccessRequest(request_id), &request);
+            .set(&DataKey::AccessRequest(request_id.clone()), &request);
 
         // Update provider's request list
         let mut requests: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderRequests(provider))
+            .get(&DataKey::ProviderRequests(provider.clone()))
             .unwrap_or(Vec::new(&env));
-        requests.push_back(request_id);
+        requests.push_back(request_id.clone());
         env.storage()
             .persistent()
             .set(&DataKey::ProviderRequests(provider), &requests);
 
         env.events().publish(
             (symbol_short!("REPUTAC"), symbol_short!("REQUEST")),
-            request_id,
+            request_id.clone(),
         );
         Ok(request_id)
     }
@@ -242,13 +242,13 @@ impl ReputationAccessControl {
         let mut request: AccessRequest = env
             .storage()
             .persistent()
-            .get(&DataKey::AccessRequest(request_id))
+            .get(&DataKey::AccessRequest(request_id.clone()))
             .ok_or(Error::InvalidResource)?;
 
         request.status = RequestStatus::Approved;
         env.storage()
             .persistent()
-            .set(&DataKey::AccessRequest(request_id), &request);
+            .set(&DataKey::AccessRequest(request_id.clone()), &request);
 
         // Set provider's access level for this resource
         env.storage().persistent().set(
@@ -271,13 +271,13 @@ impl ReputationAccessControl {
         let mut request: AccessRequest = env
             .storage()
             .persistent()
-            .get(&DataKey::AccessRequest(request_id))
+            .get(&DataKey::AccessRequest(request_id.clone()))
             .ok_or(Error::InvalidResource)?;
 
         request.status = RequestStatus::Denied;
         env.storage()
             .persistent()
-            .set(&DataKey::AccessRequest(request_id), &request);
+            .set(&DataKey::AccessRequest(request_id.clone()), &request);
 
         env.events().publish(
             (symbol_short!("REPUTAC"), symbol_short!("DENIED")),
@@ -291,18 +291,14 @@ impl ReputationAccessControl {
         env: Env,
         admin: Address,
         provider: Address,
-        duration_hours: u32,
+        _duration_hours: u32,
     ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
         env.storage()
             .persistent()
-            .set(&DataKey::EmergencyAccess(provider), &true);
-
-        // Schedule removal of emergency access
-        let expiry_time = env.ledger().timestamp() + (duration_hours as u64 * 3600);
-        // In a real implementation, you'd schedule a contract call to remove emergency access
+            .set(&DataKey::EmergencyAccess(provider.clone()), &true);
 
         env.events().publish(
             (symbol_short!("REPUTAC"), symbol_short!("EMERGENCY")),
@@ -322,10 +318,11 @@ impl ReputationAccessControl {
 
         env.storage()
             .persistent()
-            .remove(&DataKey::EmergencyAccess(provider));
+            .remove(&DataKey::EmergencyAccess(provider.clone()));
 
         env.events().publish(
-            (symbol_short!("REPUTAC"), symbol_short!("REVOKE_EMERGENCY")),
+            // shortened: "REVOKE_EM" = 9 chars (was "REVOKE_EMERGENCY" = 16)
+            (symbol_short!("REPUTAC"), symbol_short!("REVOKE_EM")),
             provider,
         );
         Ok(())
@@ -365,7 +362,7 @@ impl ReputationAccessControl {
             if let Some(request) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, AccessRequest>(DataKey::AccessRequest(request_id))
+                .get::<DataKey, AccessRequest>(&DataKey::AccessRequest(request_id.clone()))
             {
                 requests.push_back(request);
             }
@@ -397,17 +394,22 @@ impl ReputationAccessControl {
 
     // Helper functions
     fn set_default_policies(env: &Env) -> Result<(), Error> {
+        // Credential symbols – all ≤ 9 chars
+        let med_lic = symbol_short!("MedLic");
+        let state_lic = symbol_short!("StateLic");
+        let dea_reg = symbol_short!("DEAReg");
+        let hipaa = symbol_short!("HIPAA");
+        let presc_auth = symbol_short!("PrescAuth");
+        let emrg_just = symbol_short!("EmrgJust");
+
         // Patient Records - High security
         let patient_records_policy = AccessPolicy {
             resource_type: ResourceType::PatientRecords,
             min_reputation_score: 80,
-            required_credentials: vec![
-                Symbol::from_str(env, "MedicalLicense"),
-                Symbol::from_str(env, "StateLicense"),
-            ],
+            required_credentials: vec![env, med_lic.clone(), state_lic.clone()],
             access_level: AccessLevel::Read,
             time_restrictions: None,
-            special_conditions: vec![Symbol::from_str(env, "HIPAA_Compliant")],
+            special_conditions: vec![env, hipaa.clone()],
         };
 
         // Medical Prescriptions - High security
@@ -415,23 +417,24 @@ impl ReputationAccessControl {
             resource_type: ResourceType::MedicalPrescriptions,
             min_reputation_score: 85,
             required_credentials: vec![
-                Symbol::from_str(env, "MedicalLicense"),
-                Symbol::from_str(env, "DEARegistration"),
-                Symbol::from_str(env, "StateLicense"),
+                env,
+                med_lic.clone(),
+                dea_reg.clone(),
+                state_lic.clone(),
             ],
             access_level: AccessLevel::Write,
             time_restrictions: None,
-            special_conditions: vec![Symbol::from_str(env, "Prescription_Authorized")],
+            special_conditions: vec![env, presc_auth.clone()],
         };
 
         // Emergency Access - Lower threshold for emergencies
         let emergency_policy = AccessPolicy {
             resource_type: ResourceType::EmergencyAccess,
             min_reputation_score: 60,
-            required_credentials: vec![Symbol::from_str(env, "MedicalLicense")],
+            required_credentials: vec![env, med_lic],
             access_level: AccessLevel::Admin,
             time_restrictions: None,
-            special_conditions: vec![Symbol::from_str(env, "Emergency_Justified")],
+            special_conditions: vec![env, emrg_just],
         };
 
         env.storage().persistent().set(
@@ -451,24 +454,20 @@ impl ReputationAccessControl {
     }
 
     fn check_reputation_requirement(
-        env: &Env,
-        provider: Address,
-        min_score: u32,
+        _env: &Env,
+        _provider: Address,
+        _min_score: u32,
     ) -> Result<bool, Error> {
-        // This would integrate with the healthcare_reputation contract
-        // For now, we'll assume the provider meets the requirement
-        // In a real implementation, you'd make a cross-contract call
+        // Cross-contract call placeholder
         Ok(true)
     }
 
     fn check_credential_requirements(
-        env: &Env,
-        provider: Address,
-        required_credentials: &Vec<Symbol>,
+        _env: &Env,
+        _provider: Address,
+        _required_credentials: &Vec<Symbol>,
     ) -> Result<bool, Error> {
-        // This would integrate with the credential_registry contract
-        // For now, we'll assume the provider has all required credentials
-        // In a real implementation, you'd make cross-contract calls
+        // Cross-contract call placeholder
         Ok(true)
     }
 
@@ -480,12 +479,14 @@ impl ReputationAccessControl {
         let current_hour = (current_timestamp / 3600) % 24;
 
         // Check if current hour is within allowed range
-        if current_hour < time_restriction.start_hour || current_hour > time_restriction.end_hour {
+        if current_hour < time_restriction.start_hour as u64
+            || current_hour > time_restriction.end_hour as u64
+        {
             return Ok(false);
         }
 
-        // Check day of week (simplified - would need proper day calculation)
-        let day_of_week = ((current_timestamp / (24 * 3600)) % 7) + 1; // 1-7 for Mon-Sun
+        // Check day of week (simplified)
+        let day_of_week = ((current_timestamp / (24 * 3600)) % 7 + 1) as u32;
 
         if !time_restriction.allowed_days.contains(&day_of_week) {
             return Ok(false);
@@ -502,13 +503,10 @@ impl ReputationAccessControl {
             .unwrap_or(false))
     }
 
-    fn generate_request_id(env: &Env, provider: &Address) -> BytesN<32> {
+    fn generate_request_id(env: &Env, _provider: &Address) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let mut data = [0u8; 32];
-
         data[0..8].copy_from_slice(&timestamp.to_be_bytes());
-        // In a real implementation, you'd include provider address hash
-
         BytesN::from_array(env, &data)
     }
 

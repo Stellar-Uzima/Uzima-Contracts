@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
 };
 
 #[contracterror]
@@ -237,7 +236,7 @@ impl ReputationIntegration {
             .set(&DataKey::ScoreMapping, &mapping);
 
         env.events().publish(
-            (symbol_short!("REPUTINT"), symbol_short!("MAPPING_UPDATED")),
+            (symbol_short!("REPUTINT"), symbol_short!("MAP_UPD")),
             mapping,
         );
         Ok(())
@@ -257,7 +256,7 @@ impl ReputationIntegration {
             .set(&DataKey::SyncSettings, &settings);
 
         env.events().publish(
-            (symbol_short!("REPUTINT"), symbol_short!("SETTINGS_UPDATED")),
+            (symbol_short!("REPUTINT"), symbol_short!("SET_UPD")),
             settings,
         );
         Ok(())
@@ -298,7 +297,7 @@ impl ReputationIntegration {
             if let Some(record) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, SyncRecord>(DataKey::SyncRecord(provider, *timestamp))
+                .get::<DataKey, SyncRecord>(&DataKey::SyncRecord(provider.clone(), timestamp))
             {
                 records.push_back(record);
                 count += 1;
@@ -437,7 +436,7 @@ impl ReputationIntegration {
         // In a real implementation, you'd make a cross-contract call to update the score
         // For now, we'll just emit an event
         env.events().publish(
-            (symbol_short!("REPUTINT"), symbol_short!("BASE_UPDATE")),
+            (symbol_short!("REPUTINT"), symbol_short!("BASE_UPD")),
             (provider, new_score),
         );
 
@@ -445,19 +444,19 @@ impl ReputationIntegration {
     }
 
     fn store_sync_record(env: &Env, record: SyncRecord) -> Result<(), Error> {
-        let provider = record.provider;
+        let provider = record.provider.clone();
         let timestamp = record.timestamp;
 
         // Store the sync record
         env.storage()
             .persistent()
-            .set(&DataKey::SyncRecord(provider, timestamp), &record);
+            .set(&DataKey::SyncRecord(provider.clone(), timestamp), &record);
 
         // Update provider's sync list
         let mut sync_list: Vec<u64> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderSyncList(provider))
+            .get(&DataKey::ProviderSyncList(provider.clone()))
             .unwrap_or(Vec::new(env));
         sync_list.push_back(timestamp);
 
@@ -468,7 +467,7 @@ impl ReputationIntegration {
 
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderSyncList(provider), &sync_list);
+            .set(&DataKey::ProviderSyncList(provider.clone()), &sync_list);
 
         // Update last sync time
         env.storage()

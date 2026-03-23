@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
 
@@ -75,7 +75,7 @@ pub struct PatientFeedback {
     pub feedback_id: BytesN<32>,
     pub provider: Address,
     pub patient: Address,
-    pub rating: u8, // 1-5 stars
+    pub rating: u32, // 1-5 stars
     pub comment: String,
     pub timestamp: u64,
     pub is_verified: bool,
@@ -102,7 +102,7 @@ pub struct ConductEntry {
     pub provider: Address,
     pub conduct_type: ConductType,
     pub description: String,
-    pub severity: u8, // 1-10
+    pub severity: u32, // 1-10
     pub reporter: Address,
     pub timestamp: u64,
     pub is_verified: bool,
@@ -222,13 +222,13 @@ impl HealthcareReputationSystem {
         // Check if credential already exists
         if env.storage().persistent().has(&DataKey::ProviderCredential(
             provider.clone(),
-            credential_id,
+            credential_id.clone(),
         )) {
             return Err(Error::DuplicateCredential);
         }
 
         let credential = ProviderCredential {
-            credential_id,
+            credential_id: credential_id.clone(),
             provider: provider.clone(),
             credential_type,
             issuer,
@@ -241,7 +241,7 @@ impl HealthcareReputationSystem {
 
         // Store credential
         env.storage().persistent().set(
-            &DataKey::ProviderCredential(provider.clone(), credential_id),
+            &DataKey::ProviderCredential(provider.clone(), credential_id.clone()),
             &credential,
         );
 
@@ -251,14 +251,14 @@ impl HealthcareReputationSystem {
             .persistent()
             .get(&DataKey::ProviderCredentials(provider.clone()))
             .unwrap_or(Vec::new(&env));
-        credentials.push_back(credential_id);
+        credentials.push_back(credential_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderCredentials(provider), &credentials);
+            .set(&DataKey::ProviderCredentials(provider.clone()), &credentials);
 
         // Schedule expiration notification
         env.storage().persistent().set(
-            &DataKey::ExpirationNotification(provider, expiration_date),
+            &DataKey::ExpirationNotification(provider.clone(), expiration_date),
             &credential_id,
         );
 
@@ -278,15 +278,16 @@ impl HealthcareReputationSystem {
         credential_id: BytesN<32>,
         verified: bool,
     ) -> Result<(), Error> {
+        let admin_clone = admin.clone();
         admin.require_auth();
-        Self::require_admin(&env, &admin)?;
+        Self::require_admin(&env, &admin_clone)?;
 
         let mut credential: ProviderCredential = env
             .storage()
             .persistent()
             .get(&DataKey::ProviderCredential(
                 provider.clone(),
-                credential_id,
+                credential_id.clone(),
             ))
             .ok_or(Error::CredentialNotFound)?;
 
@@ -297,12 +298,12 @@ impl HealthcareReputationSystem {
         };
 
         env.storage().persistent().set(
-            &DataKey::ProviderCredential(provider, credential_id),
+            &DataKey::ProviderCredential(provider.clone(), credential_id.clone()),
             &credential,
         );
 
         // Update reputation score
-        Self::update_reputation_score(&env, provider)?;
+        Self::update_reputation_score(&env, provider.clone())?;
 
         env.events().publish(
             (symbol_short!("HLTHREP"), symbol_short!("CRED_VER")),
@@ -317,7 +318,7 @@ impl HealthcareReputationSystem {
         env: Env,
         provider: Address,
         patient: Address,
-        rating: u8,
+        rating: u32,
         comment: String,
         feedback_type: FeedbackType,
     ) -> Result<(), Error> {
@@ -335,41 +336,18 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
+                0, 0, 0, 0,
             ],
         );
 
         let feedback = PatientFeedback {
-            feedback_id,
+            feedback_id: feedback_id.clone(),
             provider: provider.clone(),
             patient,
             rating,
@@ -382,7 +360,7 @@ impl HealthcareReputationSystem {
         // Store feedback
         env.storage()
             .persistent()
-            .set(&DataKey::PatientFeedback(feedback_id), &feedback);
+            .set(&DataKey::PatientFeedback(feedback_id.clone()), &feedback);
 
         // Update provider's feedback list
         let mut feedback_list: Vec<BytesN<32>> = env
@@ -390,13 +368,13 @@ impl HealthcareReputationSystem {
             .persistent()
             .get(&DataKey::ProviderFeedback(provider.clone()))
             .unwrap_or(Vec::new(&env));
-        feedback_list.push_back(feedback_id);
+        feedback_list.push_back(feedback_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderFeedback(provider), &feedback_list);
+            .set(&DataKey::ProviderFeedback(provider.clone()), &feedback_list);
 
         // Update reputation score
-        Self::update_reputation_score(&env, provider)?;
+        Self::update_reputation_score(&env, provider.clone())?;
 
         env.events().publish(
             (symbol_short!("HLTHREP"), symbol_short!("FEEDBACK")),
@@ -464,7 +442,7 @@ impl HealthcareReputationSystem {
         );
 
         let conduct_entry = ConductEntry {
-            entry_id,
+            entry_id: entry_id.clone(),
             provider: provider.clone(),
             conduct_type,
             description,
@@ -478,7 +456,7 @@ impl HealthcareReputationSystem {
         // Store conduct entry
         env.storage()
             .persistent()
-            .set(&DataKey::ConductEntry(entry_id), &conduct_entry);
+            .set(&DataKey::ConductEntry(entry_id.clone()), &conduct_entry);
 
         // Update provider's conduct list
         let mut conduct_list: Vec<BytesN<32>> = env
@@ -486,13 +464,13 @@ impl HealthcareReputationSystem {
             .persistent()
             .get(&DataKey::ProviderConduct(provider.clone()))
             .unwrap_or(Vec::new(&env));
-        conduct_list.push_back(entry_id);
+        conduct_list.push_back(entry_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderConduct(provider), &conduct_list);
+            .set(&DataKey::ProviderConduct(provider.clone()), &conduct_list);
 
         // Update reputation score
-        Self::update_reputation_score(&env, provider)?;
+        Self::update_reputation_score(&env, provider.clone())?;
 
         env.events().publish(
             (symbol_short!("HLTHREP"), symbol_short!("CONDUCT")),
@@ -555,7 +533,7 @@ impl HealthcareReputationSystem {
         );
 
         let dispute = ReputationDispute {
-            dispute_id,
+            dispute_id: dispute_id.clone(),
             provider: provider.clone(),
             challenger,
             dispute_type,
@@ -569,7 +547,7 @@ impl HealthcareReputationSystem {
         // Store dispute
         env.storage()
             .persistent()
-            .set(&DataKey::ReputationDispute(dispute_id), &dispute);
+            .set(&DataKey::ReputationDispute(dispute_id.clone()), &dispute);
 
         // Update provider's dispute list
         let mut dispute_list: Vec<BytesN<32>> = env
@@ -577,10 +555,10 @@ impl HealthcareReputationSystem {
             .persistent()
             .get(&DataKey::ProviderDisputes(provider.clone()))
             .unwrap_or(Vec::new(&env));
-        dispute_list.push_back(dispute_id);
+        dispute_list.push_back(dispute_id.clone());
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderDisputes(provider), &dispute_list);
+            .set(&DataKey::ProviderDisputes(provider.clone()), &dispute_list);
 
         env.events().publish(
             (symbol_short!("HLTHREP"), symbol_short!("DISPUTE")),
@@ -604,7 +582,7 @@ impl HealthcareReputationSystem {
         let mut dispute: ReputationDispute = env
             .storage()
             .persistent()
-            .get(&DataKey::ReputationDispute(dispute_id))
+            .get(&DataKey::ReputationDispute(dispute_id.clone()))
             .ok_or(Error::DisputeNotFound)?;
 
         dispute.status = if approved {
@@ -616,7 +594,7 @@ impl HealthcareReputationSystem {
 
         env.storage()
             .persistent()
-            .set(&DataKey::ReputationDispute(dispute_id), &dispute);
+            .set(&DataKey::ReputationDispute(dispute_id.clone()), &dispute);
 
         // Update reputation score if dispute was resolved in favor of challenger
         if approved {
@@ -688,9 +666,9 @@ impl HealthcareReputationSystem {
             if let Some(credential) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, ProviderCredential>(DataKey::ProviderCredential(
-                    provider,
-                    credential_id,
+                .get::<DataKey, ProviderCredential>(&DataKey::ProviderCredential(
+                    provider.clone(),
+                    credential_id.clone(),
                 ))
             {
                 let weight = match credential.credential_type {
@@ -735,9 +713,9 @@ impl HealthcareReputationSystem {
             if let Some(feedback) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, PatientFeedback>(DataKey::PatientFeedback(feedback_id))
+                .get::<DataKey, PatientFeedback>(&DataKey::PatientFeedback(feedback_id.clone()))
             {
-                total_rating += feedback.rating as u32;
+                total_rating += feedback.rating;
                 count += 1;
             }
         }
@@ -768,20 +746,20 @@ impl HealthcareReputationSystem {
             if let Some(entry) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, ConductEntry>(DataKey::ConductEntry(entry_id))
+                .get::<DataKey, ConductEntry>(&DataKey::ConductEntry(entry_id.clone()))
             {
                 match entry.conduct_type {
                     ConductType::Positive | ConductType::ProfessionalAchievement => {
                         score = score.saturating_add(5);
                     }
                     ConductType::Complaint => {
-                        score = score.saturating_sub(entry.severity as u32);
+                        score = score.saturating_sub(entry.severity);
                     }
                     ConductType::Malpractice => {
-                        score = score.saturating_sub(entry.severity as u32 * 2);
+                        score = score.saturating_sub(entry.severity * 2);
                     }
                     ConductType::EthicsViolation => {
-                        score = score.saturating_sub(entry.severity as u32 * 3);
+                        score = score.saturating_sub(entry.severity * 3);
                     }
                     _ => {}
                 }
@@ -852,9 +830,9 @@ impl HealthcareReputationSystem {
             if let Some(credential) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, ProviderCredential>(DataKey::ProviderCredential(
-                    provider,
-                    credential_id,
+                .get::<DataKey, ProviderCredential>(&DataKey::ProviderCredential(
+                    provider.clone(),
+                    credential_id.clone(),
                 ))
             {
                 credentials.push_back(credential);
@@ -880,7 +858,7 @@ impl HealthcareReputationSystem {
             if let Some(fb) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, PatientFeedback>(DataKey::PatientFeedback(feedback_id))
+                .get::<DataKey, PatientFeedback>(&DataKey::PatientFeedback(feedback_id.clone()))
             {
                 feedback.push_back(fb);
             }
