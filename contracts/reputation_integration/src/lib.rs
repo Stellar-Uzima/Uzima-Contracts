@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec,
 };
 
 #[contracterror]
@@ -134,8 +134,8 @@ impl ReputationIntegration {
         admin.require_auth();
         Self::require_initialized(&env)?;
 
-        let base_score = Self::get_base_reputation_score(&env, provider)?;
-        let healthcare_score = Self::get_healthcare_reputation_score(&env, provider)?;
+        let base_score = Self::get_base_reputation_score(&env, provider.clone())?;
+        let healthcare_score = Self::get_healthcare_reputation_score(&env, provider.clone())?;
         let combined_score = Self::calculate_combined_score(&env, base_score, healthcare_score)?;
 
         // Record sync
@@ -151,7 +151,7 @@ impl ReputationIntegration {
         Self::store_sync_record(&env, sync_record)?;
 
         // Update base reputation contract with combined score
-        Self::update_base_reputation_score(&env, provider, combined_score)?;
+        Self::update_base_reputation_score(&env, provider.clone(), combined_score)?;
 
         env.events().publish(
             (symbol_short!("REPUTINT"), symbol_short!("SYNC")),
@@ -266,7 +266,7 @@ impl ReputationIntegration {
     pub fn get_combined_score(env: Env, provider: Address) -> Result<i128, Error> {
         Self::require_initialized(&env)?;
 
-        let base_score = Self::get_base_reputation_score(&env, provider)?;
+        let base_score = Self::get_base_reputation_score(&env, provider.clone())?;
         let healthcare_score = Self::get_healthcare_reputation_score(&env, provider)?;
         Self::calculate_combined_score(&env, base_score, healthcare_score)
     }
@@ -282,7 +282,7 @@ impl ReputationIntegration {
         let sync_timestamps: Vec<u64> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderSyncList(provider))
+            .get(&DataKey::ProviderSyncList(provider.clone()))
             .unwrap_or(Vec::new(&env));
 
         let mut records = Vec::new(&env);
@@ -327,7 +327,6 @@ impl ReputationIntegration {
 
             Self::sync_provider_reputation(env, admin, provider)?;
         }
-
         Ok(())
     }
 
@@ -378,28 +377,14 @@ impl ReputationIntegration {
     }
 
     // Helper functions
-    fn get_base_reputation_score(env: &Env, provider: Address) -> Result<i128, Error> {
-        let contract_address: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::BaseReputationContract)
-            .ok_or(Error::ReputationContractNotFound)?;
-
-        // In a real implementation, you'd make a cross-contract call
-        // For now, return a placeholder value
-        Ok(50) // Placeholder
+    fn get_base_reputation_score(_env: &Env, _provider: Address) -> Result<i128, Error> {
+        // Cross-contract call placeholder
+        Ok(50)
     }
 
-    fn get_healthcare_reputation_score(env: &Env, provider: Address) -> Result<u32, Error> {
-        let contract_address: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::HealthcareReputationContract)
-            .ok_or(Error::HealthcareReputationContractNotFound)?;
-
-        // In a real implementation, you'd make a cross-contract call
-        // For now, return a placeholder value
-        Ok(75) // Placeholder
+    fn get_healthcare_reputation_score(_env: &Env, _provider: Address) -> Result<u32, Error> {
+        // Cross-contract call placeholder
+        Ok(75)
     }
 
     fn calculate_combined_score(

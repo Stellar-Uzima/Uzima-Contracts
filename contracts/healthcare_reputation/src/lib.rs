@@ -2,7 +2,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    String, Symbol, Vec,
+    String, Vec,
 };
 
 // Error types for Healthcare Reputation System
@@ -391,7 +391,7 @@ impl HealthcareReputationSystem {
         provider: Address,
         conduct_type: ConductType,
         description: String,
-        severity: u8,
+        severity: u32,
         action_taken: String,
     ) -> Result<(), Error> {
         reporter.require_auth();
@@ -408,36 +408,13 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
-                1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
+                1, 1, 1, 1,
             ],
         );
 
@@ -499,36 +476,13 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
-                2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
+                2, 2, 2, 2,
             ],
         );
 
@@ -598,7 +552,7 @@ impl HealthcareReputationSystem {
 
         // Update reputation score if dispute was resolved in favor of challenger
         if approved {
-            Self::update_reputation_score(&env, dispute.provider)?;
+            Self::update_reputation_score(&env, dispute.provider.clone())?;
         }
 
         env.events().publish(
@@ -620,7 +574,7 @@ impl HealthcareReputationSystem {
         // Store components and total score
         env.storage()
             .persistent()
-            .set(&DataKey::ReputationComponents(provider), &components);
+            .set(&DataKey::ReputationComponents(provider.clone()), &components);
         env.storage()
             .persistent()
             .set(&DataKey::ReputationScore(provider), &total_score);
@@ -633,9 +587,9 @@ impl HealthcareReputationSystem {
         env: &Env,
         provider: Address,
     ) -> Result<ReputationComponents, Error> {
-        let credential_score = Self::calculate_credential_score(env, provider)?;
-        let feedback_score = Self::calculate_feedback_score(env, provider)?;
-        let conduct_score = Self::calculate_conduct_score(env, provider)?;
+        let credential_score = Self::calculate_credential_score(env, provider.clone())?;
+        let feedback_score = Self::calculate_feedback_score(env, provider.clone())?;
+        let conduct_score = Self::calculate_conduct_score(env, provider.clone())?;
         let experience_score = Self::calculate_experience_score(env, provider)?;
 
         Ok(ReputationComponents {
@@ -652,7 +606,7 @@ impl HealthcareReputationSystem {
         let credentials: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderCredentials(provider))
+            .get(&DataKey::ProviderCredentials(provider.clone()))
             .unwrap_or(Vec::new(env));
 
         if credentials.is_empty() {
@@ -699,7 +653,7 @@ impl HealthcareReputationSystem {
         let feedback_list: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderFeedback(provider))
+            .get(&DataKey::ProviderFeedback(provider.clone()))
             .unwrap_or(Vec::new(env));
 
         if feedback_list.is_empty() {
@@ -733,14 +687,14 @@ impl HealthcareReputationSystem {
         let conduct_list: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderConduct(provider))
+            .get(&DataKey::ProviderConduct(provider.clone()))
             .unwrap_or(Vec::new(env));
 
         if conduct_list.is_empty() {
             return Ok(70); // Good baseline for no conduct issues
         }
 
-        let mut score = 70; // Start with good baseline
+        let mut score: u32 = 70; // Start with good baseline
 
         for entry_id in conduct_list.iter() {
             if let Some(entry) = env
@@ -822,7 +776,7 @@ impl HealthcareReputationSystem {
         let credential_ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderCredentials(provider))
+            .get(&DataKey::ProviderCredentials(provider.clone()))
             .unwrap_or(Vec::new(&env));
 
         let mut credentials = Vec::new(&env);
@@ -850,7 +804,7 @@ impl HealthcareReputationSystem {
         let feedback_ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderFeedback(provider))
+            .get(&DataKey::ProviderFeedback(provider.clone()))
             .unwrap_or(Vec::new(&env));
 
         let mut feedback = Vec::new(&env);
@@ -872,7 +826,7 @@ impl HealthcareReputationSystem {
         env: Env,
         provider: Address,
     ) -> Result<Vec<BytesN<32>>, Error> {
-        let credentials = Self::get_provider_credentials(env, provider)?;
+        let credentials = Self::get_provider_credentials(env.clone(), provider.clone())?;
         let current_time = env.ledger().timestamp();
         let mut expired = Vec::new(&env);
 
