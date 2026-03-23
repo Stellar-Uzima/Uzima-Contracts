@@ -92,7 +92,7 @@ pub enum DataKey {
     Initialized,
     AccessPolicy(ResourceType),
     AccessRequest(BytesN<32>),
-    ProviderRequests(Address), // Vec<BytesN<32>>
+    ProviderRequests(Address),                  // Vec<BytesN<32>>
     ProviderAccessLevel(Address, ResourceType), // Current access level
     ReputationThreshold(ResourceType),
     EmergencyAccess(Address), // bool for emergency access granted
@@ -134,8 +134,10 @@ impl ReputationAccessControl {
             .persistent()
             .set(&DataKey::AccessPolicy(resource_type), &policy);
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("POLICY")), resource_type);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("POLICY")),
+            resource_type,
+        );
         Ok(())
     }
 
@@ -225,17 +227,15 @@ impl ReputationAccessControl {
             .persistent()
             .set(&DataKey::ProviderRequests(provider), &requests);
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("REQUEST")), request_id);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("REQUEST")),
+            request_id,
+        );
         Ok(request_id)
     }
 
     // Approve access request
-    pub fn approve_request(
-        env: Env,
-        admin: Address,
-        request_id: BytesN<32>,
-    ) -> Result<(), Error> {
+    pub fn approve_request(env: Env, admin: Address, request_id: BytesN<32>) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
@@ -256,17 +256,15 @@ impl ReputationAccessControl {
             &request.requested_access,
         );
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("APPROVED")), request_id);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("APPROVED")),
+            request_id,
+        );
         Ok(())
     }
 
     // Deny access request
-    pub fn deny_request(
-        env: Env,
-        admin: Address,
-        request_id: BytesN<32>,
-    ) -> Result<(), Error> {
+    pub fn deny_request(env: Env, admin: Address, request_id: BytesN<32>) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
@@ -281,8 +279,10 @@ impl ReputationAccessControl {
             .persistent()
             .set(&DataKey::AccessRequest(request_id), &request);
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("DENIED")), request_id);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("DENIED")),
+            request_id,
+        );
         Ok(())
     }
 
@@ -304,8 +304,10 @@ impl ReputationAccessControl {
         let expiry_time = env.ledger().timestamp() + (duration_hours as u64 * 3600);
         // In a real implementation, you'd schedule a contract call to remove emergency access
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("EMERGENCY")), provider);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("EMERGENCY")),
+            provider,
+        );
         Ok(())
     }
 
@@ -322,8 +324,10 @@ impl ReputationAccessControl {
             .persistent()
             .remove(&DataKey::EmergencyAccess(provider));
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("REVOKE_EMERGENCY")), provider);
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("REVOKE_EMERGENCY")),
+            provider,
+        );
         Ok(())
     }
 
@@ -347,10 +351,7 @@ impl ReputationAccessControl {
     }
 
     // Get provider's access requests
-    pub fn get_provider_requests(
-        env: Env,
-        provider: Address,
-    ) -> Result<Vec<AccessRequest>, Error> {
+    pub fn get_provider_requests(env: Env, provider: Address) -> Result<Vec<AccessRequest>, Error> {
         Self::require_initialized(&env)?;
 
         let request_ids: Vec<BytesN<32>> = env
@@ -387,8 +388,10 @@ impl ReputationAccessControl {
             .persistent()
             .set(&DataKey::ReputationThreshold(resource_type), &threshold);
 
-        env.events()
-            .publish((symbol_short!("REPUTAC"), symbol_short!("THRESHOLD")), (resource_type, threshold));
+        env.events().publish(
+            (symbol_short!("REPUTAC"), symbol_short!("THRESHOLD")),
+            (resource_type, threshold),
+        );
         Ok(())
     }
 
@@ -431,15 +434,18 @@ impl ReputationAccessControl {
             special_conditions: vec![Symbol::from_str(env, "Emergency_Justified")],
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::AccessPolicy(ResourceType::PatientRecords), &patient_records_policy);
-        env.storage()
-            .persistent()
-            .set(&DataKey::AccessPolicy(ResourceType::MedicalPrescriptions), &prescriptions_policy);
-        env.storage()
-            .persistent()
-            .set(&DataKey::AccessPolicy(ResourceType::EmergencyAccess), &emergency_policy);
+        env.storage().persistent().set(
+            &DataKey::AccessPolicy(ResourceType::PatientRecords),
+            &patient_records_policy,
+        );
+        env.storage().persistent().set(
+            &DataKey::AccessPolicy(ResourceType::MedicalPrescriptions),
+            &prescriptions_policy,
+        );
+        env.storage().persistent().set(
+            &DataKey::AccessPolicy(ResourceType::EmergencyAccess),
+            &emergency_policy,
+        );
 
         Ok(())
     }
@@ -472,7 +478,7 @@ impl ReputationAccessControl {
     ) -> Result<bool, Error> {
         let current_timestamp = env.ledger().timestamp();
         let current_hour = (current_timestamp / 3600) % 24;
-        
+
         // Check if current hour is within allowed range
         if current_hour < time_restriction.start_hour || current_hour > time_restriction.end_hour {
             return Ok(false);
@@ -480,7 +486,7 @@ impl ReputationAccessControl {
 
         // Check day of week (simplified - would need proper day calculation)
         let day_of_week = ((current_timestamp / (24 * 3600)) % 7) + 1; // 1-7 for Mon-Sun
-        
+
         if !time_restriction.allowed_days.contains(&day_of_week) {
             return Ok(false);
         }
@@ -499,10 +505,10 @@ impl ReputationAccessControl {
     fn generate_request_id(env: &Env, provider: &Address) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let mut data = [0u8; 32];
-        
+
         data[0..8].copy_from_slice(&timestamp.to_be_bytes());
         // In a real implementation, you'd include provider address hash
-        
+
         BytesN::from_array(env, &data)
     }
 

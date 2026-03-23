@@ -45,8 +45,8 @@ pub struct CredentialNotification {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NotificationSettings {
     pub provider: Address,
-    pub expiration_warning_days: u32,    // Days before expiration to warn
-    pub renewal_reminder_days: u32,      // Days after expiration to remind
+    pub expiration_warning_days: u32, // Days before expiration to warn
+    pub renewal_reminder_days: u32,   // Days after expiration to remind
     pub enable_notifications: bool,
     pub notification_channels: Vec<Symbol>, // email, sms, in_app
 }
@@ -94,8 +94,10 @@ impl CredentialNotificationSystem {
             .persistent()
             .set(&DataKey::NotificationSettings(provider), &settings);
 
-        env.events()
-            .publish((symbol_short!("CREDNOTIF"), symbol_short!("SETTINGS")), provider);
+        env.events().publish(
+            (symbol_short!("CREDNOTIF"), symbol_short!("SETTINGS")),
+            provider,
+        );
         Ok(())
     }
 
@@ -120,12 +122,14 @@ impl CredentialNotificationSystem {
 
         if days_until_expiration <= settings.expiration_warning_days as u64 {
             let notification_id = Self::generate_notification_id(&env, &provider, 1);
-            
-            let message = String::from_str(&env, &format!(
-                "Your credential will expire in {} days. Please renew before {}.",
-                days_until_expiration,
-                expiration_date
-            ));
+
+            let message = String::from_str(
+                &env,
+                &format!(
+                    "Your credential will expire in {} days. Please renew before {}.",
+                    days_until_expiration, expiration_date
+                ),
+            );
 
             let notification = CredentialNotification {
                 notification_id,
@@ -163,7 +167,8 @@ impl CredentialNotificationSystem {
         let notification_id = Self::generate_notification_id(&env, &provider, 2);
         let current_time = env.ledger().timestamp();
 
-        let message = String::from_str(&env, 
+        let message = String::from_str(
+            &env,
             "Your credential has expired. Please renew immediately to maintain your verified status."
         );
 
@@ -176,13 +181,19 @@ impl CredentialNotificationSystem {
             timestamp: current_time,
             is_read: false,
             action_required: true,
-            deadline: current_time.saturating_add(settings.renewal_reminder_days as u64 * 24 * 60 * 60),
+            deadline: current_time
+                .saturating_add(settings.renewal_reminder_days as u64 * 24 * 60 * 60),
         };
 
         Self::store_notification(&env, notification)?;
 
         // Schedule renewal reminders
-        Self::schedule_renewal_reminders(&env, provider, credential_id, settings.renewal_reminder_days)?;
+        Self::schedule_renewal_reminders(
+            &env,
+            provider,
+            credential_id,
+            settings.renewal_reminder_days,
+        )?;
 
         Ok(())
     }
@@ -206,10 +217,13 @@ impl CredentialNotificationSystem {
         let notification_id = Self::generate_notification_id(&env, &provider, 3);
         let current_time = env.ledger().timestamp();
 
-        let message = String::from_str(&env, &format!(
-            "Credential renewal required. Please complete renewal before {}.",
-            renewal_deadline
-        ));
+        let message = String::from_str(
+            &env,
+            &format!(
+                "Credential renewal required. Please complete renewal before {}.",
+                renewal_deadline
+            ),
+        );
 
         let notification = CredentialNotification {
             notification_id,
@@ -245,8 +259,9 @@ impl CredentialNotificationSystem {
         let notification_id = Self::generate_notification_id(&env, &provider, 4);
         let current_time = env.ledger().timestamp();
 
-        let message = String::from_str(&env, 
-            "Your credential requires verification. Please submit required documentation."
+        let message = String::from_str(
+            &env,
+            "Your credential requires verification. Please submit required documentation.",
         );
 
         let notification = CredentialNotification {
@@ -289,8 +304,10 @@ impl CredentialNotificationSystem {
             .persistent()
             .set(&DataKey::Notification(notification_id), &notification);
 
-        env.events()
-            .publish((symbol_short!("CREDNOTIF"), symbol_short!("READ")), notification_id);
+        env.events().publish(
+            (symbol_short!("CREDNOTIF"), symbol_short!("READ")),
+            notification_id,
+        );
         Ok(())
     }
 
@@ -372,8 +389,10 @@ impl CredentialNotificationSystem {
         // For this implementation, we'll return the count of notifications that should be processed
         // In a real implementation, you'd have a more sophisticated scheduling system
 
-        env.events()
-            .publish((symbol_short!("CREDNOTIF"), symbol_short!("PROCESSED")), processed_count);
+        env.events().publish(
+            (symbol_short!("CREDNOTIF"), symbol_short!("PROCESSED")),
+            processed_count,
+        );
         Ok(processed_count)
     }
 
@@ -395,9 +414,10 @@ impl CredentialNotificationSystem {
             .get(&DataKey::ProviderNotifications(provider))
             .unwrap_or(Vec::new(env));
         provider_notifications.push_back(notification_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderNotifications(provider), &provider_notifications);
+        env.storage().persistent().set(
+            &DataKey::ProviderNotifications(provider),
+            &provider_notifications,
+        );
 
         // Update credential's notification list
         let mut credential_notifications: Vec<BytesN<32>> = env
@@ -406,12 +426,15 @@ impl CredentialNotificationSystem {
             .get(&DataKey::CredentialNotifications(provider, credential_id))
             .unwrap_or(Vec::new(env));
         credential_notifications.push_back(notification_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::CredentialNotifications(provider, credential_id), &credential_notifications);
+        env.storage().persistent().set(
+            &DataKey::CredentialNotifications(provider, credential_id),
+            &credential_notifications,
+        );
 
-        env.events()
-            .publish((symbol_short!("CREDNOTIF"), symbol_short!("CREATED")), notification_id);
+        env.events().publish(
+            (symbol_short!("CREDNOTIF"), symbol_short!("CREATED")),
+            notification_id,
+        );
         Ok(())
     }
 
@@ -423,22 +446,22 @@ impl CredentialNotificationSystem {
         reminder_days: u32,
     ) -> Result<(), Error> {
         let current_time = env.ledger().timestamp();
-        
+
         // Schedule reminders at different intervals
         let intervals = vec![7, 14, 30]; // Days after expiration
-        
+
         for days in intervals {
             if days <= reminder_days {
                 let reminder_time = current_time.saturating_add(days as u64 * 24 * 60 * 60);
                 let notification_id = Self::generate_notification_id(env, &provider, days);
-                
+
                 env.storage().persistent().set(
                     &DataKey::ScheduledNotification(provider, reminder_time),
                     &notification_id,
                 );
             }
         }
-        
+
         Ok(())
     }
 
@@ -446,17 +469,20 @@ impl CredentialNotificationSystem {
     fn generate_notification_id(env: &Env, provider: &Address, sequence: u32) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let mut data = [0u8; 32];
-        
+
         // Use timestamp, provider address, and sequence to create unique ID
         data[0..8].copy_from_slice(&timestamp.to_be_bytes());
         data[8..12].copy_from_slice(&sequence.to_be_bytes());
-        
+
         // In a real implementation, you'd include provider address hash
         BytesN::from_array(env, &data)
     }
 
     // Get notification settings with defaults
-    fn get_notification_settings(env: &Env, provider: &Address) -> Result<NotificationSettings, Error> {
+    fn get_notification_settings(
+        env: &Env,
+        provider: &Address,
+    ) -> Result<NotificationSettings, Error> {
         if let Some(settings) = env
             .storage()
             .persistent()
@@ -472,7 +498,7 @@ impl CredentialNotificationSystem {
                 enable_notifications: true,
                 notification_channels: vec![
                     Symbol::from_str(env, "email"),
-                    Symbol::from_str(env, "in_app")
+                    Symbol::from_str(env, "in_app"),
                 ],
             })
         }

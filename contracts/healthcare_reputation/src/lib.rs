@@ -160,11 +160,11 @@ pub enum DisputeStatus {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ReputationComponents {
-    pub credential_score: u32,    // 40% weight
-    pub feedback_score: u32,      // 30% weight
-    pub conduct_score: u32,        // 20% weight
-    pub experience_score: u32,     // 10% weight
-    pub total_score: u32,         // Weighted total
+    pub credential_score: u32, // 40% weight
+    pub feedback_score: u32,   // 30% weight
+    pub conduct_score: u32,    // 20% weight
+    pub experience_score: u32, // 10% weight
+    pub total_score: u32,      // Weighted total
 }
 
 // Storage keys
@@ -240,9 +240,10 @@ impl HealthcareReputationSystem {
         };
 
         // Store credential
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderCredential(provider.clone(), credential_id), &credential);
+        env.storage().persistent().set(
+            &DataKey::ProviderCredential(provider.clone(), credential_id),
+            &credential,
+        );
 
         // Update provider's credential list
         let mut credentials: Vec<BytesN<32>> = env
@@ -283,7 +284,10 @@ impl HealthcareReputationSystem {
         let mut credential: ProviderCredential = env
             .storage()
             .persistent()
-            .get(&DataKey::ProviderCredential(provider.clone(), credential_id))
+            .get(&DataKey::ProviderCredential(
+                provider.clone(),
+                credential_id,
+            ))
             .ok_or(Error::CredentialNotFound)?;
 
         credential.verification_status = if verified {
@@ -292,9 +296,10 @@ impl HealthcareReputationSystem {
             VerificationStatus::Rejected
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderCredential(provider, credential_id), &credential);
+        env.storage().persistent().set(
+            &DataKey::ProviderCredential(provider, credential_id),
+            &credential,
+        );
 
         // Update reputation score
         Self::update_reputation_score(&env, provider)?;
@@ -323,14 +328,45 @@ impl HealthcareReputationSystem {
             return Err(Error::InvalidRating);
         }
 
-        let feedback_id = BytesN::from_array(&env, &[
-            (env.ledger().timestamp() >> 24) as u8,
-            (env.ledger().timestamp() >> 16) as u8,
-            (env.ledger().timestamp() >> 8) as u8,
-            env.ledger().timestamp() as u8,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        ]);
+        let feedback_id = BytesN::from_array(
+            &env,
+            &[
+                (env.ledger().timestamp() >> 24) as u8,
+                (env.ledger().timestamp() >> 16) as u8,
+                (env.ledger().timestamp() >> 8) as u8,
+                env.ledger().timestamp() as u8,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+            ],
+        );
 
         let feedback = PatientFeedback {
             feedback_id,
@@ -387,14 +423,45 @@ impl HealthcareReputationSystem {
             return Err(Error::InvalidConductEntry);
         }
 
-        let entry_id = BytesN::from_array(&env, &[
-            (env.ledger().timestamp() >> 24) as u8,
-            (env.ledger().timestamp() >> 16) as u8,
-            (env.ledger().timestamp() >> 8) as u8,
-            env.ledger().timestamp() as u8,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-        ]);
+        let entry_id = BytesN::from_array(
+            &env,
+            &[
+                (env.ledger().timestamp() >> 24) as u8,
+                (env.ledger().timestamp() >> 16) as u8,
+                (env.ledger().timestamp() >> 8) as u8,
+                env.ledger().timestamp() as u8,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+            ],
+        );
 
         let conduct_entry = ConductEntry {
             entry_id,
@@ -447,14 +514,45 @@ impl HealthcareReputationSystem {
         challenger.require_auth();
         Self::require_initialized(&env)?;
 
-        let dispute_id = BytesN::from_array(&env, &[
-            (env.ledger().timestamp() >> 24) as u8,
-            (env.ledger().timestamp() >> 16) as u8,
-            (env.ledger().timestamp() >> 8) as u8,
-            env.ledger().timestamp() as u8,
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-            2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-        ]);
+        let dispute_id = BytesN::from_array(
+            &env,
+            &[
+                (env.ledger().timestamp() >> 24) as u8,
+                (env.ledger().timestamp() >> 16) as u8,
+                (env.ledger().timestamp() >> 8) as u8,
+                env.ledger().timestamp() as u8,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+            ],
+        );
 
         let dispute = ReputationDispute {
             dispute_id,
@@ -553,7 +651,10 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate reputation components
-    fn calculate_reputation_components(env: &Env, provider: Address) -> Result<ReputationComponents, Error> {
+    fn calculate_reputation_components(
+        env: &Env,
+        provider: Address,
+    ) -> Result<ReputationComponents, Error> {
         let credential_score = Self::calculate_credential_score(env, provider)?;
         let feedback_score = Self::calculate_feedback_score(env, provider)?;
         let conduct_score = Self::calculate_conduct_score(env, provider)?;
@@ -695,7 +796,7 @@ impl HealthcareReputationSystem {
         // Get provider profile from provider directory if available
         // For now, use a simple time-based calculation
         let current_time = env.ledger().timestamp();
-        
+
         // Assume provider joined 1 year ago for this example
         // In real implementation, this would come from provider directory
         let join_time = current_time.saturating_sub(365 * 24 * 60 * 60);
@@ -715,7 +816,10 @@ impl HealthcareReputationSystem {
     }
 
     // Get provider reputation components
-    pub fn get_reputation_components(env: Env, provider: Address) -> Result<ReputationComponents, Error> {
+    pub fn get_reputation_components(
+        env: Env,
+        provider: Address,
+    ) -> Result<ReputationComponents, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::ReputationComponents(provider))
@@ -733,7 +837,10 @@ impl HealthcareReputationSystem {
     }
 
     // Get provider credentials
-    pub fn get_provider_credentials(env: Env, provider: Address) -> Result<Vec<ProviderCredential>, Error> {
+    pub fn get_provider_credentials(
+        env: Env,
+        provider: Address,
+    ) -> Result<Vec<ProviderCredential>, Error> {
         let credential_ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -758,7 +865,10 @@ impl HealthcareReputationSystem {
     }
 
     // Get provider feedback
-    pub fn get_provider_feedback(env: Env, provider: Address) -> Result<Vec<PatientFeedback>, Error> {
+    pub fn get_provider_feedback(
+        env: Env,
+        provider: Address,
+    ) -> Result<Vec<PatientFeedback>, Error> {
         let feedback_ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
@@ -780,7 +890,10 @@ impl HealthcareReputationSystem {
     }
 
     // Check for expired credentials
-    pub fn check_expired_credentials(env: Env, provider: Address) -> Result<Vec<BytesN<32>>, Error> {
+    pub fn check_expired_credentials(
+        env: Env,
+        provider: Address,
+    ) -> Result<Vec<BytesN<32>>, Error> {
         let credentials = Self::get_provider_credentials(env, provider)?;
         let current_time = env.ledger().timestamp();
         let mut expired = Vec::new(&env);

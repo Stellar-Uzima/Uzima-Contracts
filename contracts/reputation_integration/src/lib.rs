@@ -22,9 +22,9 @@ pub enum Error {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScoreMapping {
-    pub base_reputation_weight: u32,    // Weight for base reputation score (0-100)
+    pub base_reputation_weight: u32, // Weight for base reputation score (0-100)
     pub healthcare_reputation_weight: u32, // Weight for healthcare reputation score (0-100)
-    pub adjustment_factor: i32,         // Adjustment factor for healthcare-specific factors
+    pub adjustment_factor: i32,      // Adjustment factor for healthcare-specific factors
     pub last_sync_timestamp: u64,
 }
 
@@ -56,9 +56,9 @@ pub enum DataKey {
     BaseReputationContract,
     HealthcareReputationContract,
     ScoreMapping,
-    SyncRecord(Address, u64), // provider, timestamp
+    SyncRecord(Address, u64),  // provider, timestamp
     ProviderSyncList(Address), // Vec<u64> timestamps
-    LastSyncTime(Address), // u64 timestamp
+    LastSyncTime(Address),     // u64 timestamp
     SyncSettings,
 }
 
@@ -93,15 +93,16 @@ impl ReputationIntegration {
         env.storage()
             .instance()
             .set(&DataKey::BaseReputationContract, &base_reputation_contract);
-        env.storage()
-            .instance()
-            .set(&DataKey::HealthcareReputationContract, &healthcare_reputation_contract);
+        env.storage().instance().set(
+            &DataKey::HealthcareReputationContract,
+            &healthcare_reputation_contract,
+        );
 
         // Set default score mapping
         let default_mapping = ScoreMapping {
-            base_reputation_weight: 60,    // 60% weight to base reputation
+            base_reputation_weight: 60,       // 60% weight to base reputation
             healthcare_reputation_weight: 40, // 40% weight to healthcare reputation
-            adjustment_factor: 0,         // No adjustment initially
+            adjustment_factor: 0,             // No adjustment initially
             last_sync_timestamp: env.ledger().timestamp(),
         };
         env.storage()
@@ -153,8 +154,10 @@ impl ReputationIntegration {
         // Update base reputation contract with combined score
         Self::update_base_reputation_score(&env, provider, combined_score)?;
 
-        env.events()
-            .publish((symbol_short!("REPUTINT"), symbol_short!("SYNC")), (provider, combined_score));
+        env.events().publish(
+            (symbol_short!("REPUTINT"), symbol_short!("SYNC")),
+            (provider, combined_score),
+        );
         Ok(combined_score)
     }
 
@@ -200,8 +203,10 @@ impl ReputationIntegration {
         // For now, we'll return 0 as placeholder
         let synced_count = 0;
 
-        env.events()
-            .publish((symbol_short!("REPUTINT"), symbol_short!("AUTO_SYNC")), synced_count);
+        env.events().publish(
+            (symbol_short!("REPUTINT"), symbol_short!("AUTO_SYNC")),
+            synced_count,
+        );
         Ok(synced_count)
     }
 
@@ -231,8 +236,10 @@ impl ReputationIntegration {
             .instance()
             .set(&DataKey::ScoreMapping, &mapping);
 
-        env.events()
-            .publish((symbol_short!("REPUTINT"), symbol_short!("MAPPING_UPDATED")), mapping);
+        env.events().publish(
+            (symbol_short!("REPUTINT"), symbol_short!("MAPPING_UPDATED")),
+            mapping,
+        );
         Ok(())
     }
 
@@ -249,8 +256,10 @@ impl ReputationIntegration {
             .instance()
             .set(&DataKey::SyncSettings, &settings);
 
-        env.events()
-            .publish((symbol_short!("REPUTINT"), symbol_short!("SETTINGS_UPDATED")), settings);
+        env.events().publish(
+            (symbol_short!("REPUTINT"), symbol_short!("SETTINGS_UPDATED")),
+            settings,
+        );
         Ok(())
     }
 
@@ -300,10 +309,7 @@ impl ReputationIntegration {
     }
 
     // Trigger sync on credential change
-    pub fn trigger_credential_sync(
-        env: Env,
-        provider: Address,
-    ) -> Result<(), Error> {
+    pub fn trigger_credential_sync(env: Env, provider: Address) -> Result<(), Error> {
         Self::require_initialized(&env)?;
 
         let settings: SyncSettings = env
@@ -327,10 +333,7 @@ impl ReputationIntegration {
     }
 
     // Trigger sync on feedback change
-    pub fn trigger_feedback_sync(
-        env: Env,
-        provider: Address,
-    ) -> Result<(), Error> {
+    pub fn trigger_feedback_sync(env: Env, provider: Address) -> Result<(), Error> {
         Self::require_initialized(&env)?;
 
         let settings: SyncSettings = env
@@ -353,10 +356,7 @@ impl ReputationIntegration {
     }
 
     // Trigger sync on conduct change
-    pub fn trigger_conduct_sync(
-        env: Env,
-        provider: Address,
-    ) -> Result<(), Error> {
+    pub fn trigger_conduct_sync(env: Env, provider: Address) -> Result<(), Error> {
         Self::require_initialized(&env)?;
 
         let settings: SyncSettings = env
@@ -415,10 +415,11 @@ impl ReputationIntegration {
             .ok_or(Error::InvalidScoreMapping)?;
 
         let base_weighted = (base_score * mapping.base_reputation_weight as i128) / 100;
-        let healthcare_weighted = (healthcare_score as i128 * mapping.healthcare_reputation_weight as i128) / 100;
-        
+        let healthcare_weighted =
+            (healthcare_score as i128 * mapping.healthcare_reputation_weight as i128) / 100;
+
         let combined = base_weighted + healthcare_weighted + mapping.adjustment_factor as i128;
-        
+
         Ok(combined.max(0)) // Ensure non-negative score
     }
 
@@ -435,9 +436,11 @@ impl ReputationIntegration {
 
         // In a real implementation, you'd make a cross-contract call to update the score
         // For now, we'll just emit an event
-        env.events()
-            .publish((symbol_short!("REPUTINT"), symbol_short!("BASE_UPDATE")), (provider, new_score));
-        
+        env.events().publish(
+            (symbol_short!("REPUTINT"), symbol_short!("BASE_UPDATE")),
+            (provider, new_score),
+        );
+
         Ok(())
     }
 
@@ -457,12 +460,12 @@ impl ReputationIntegration {
             .get(&DataKey::ProviderSyncList(provider))
             .unwrap_or(Vec::new(env));
         sync_list.push_back(timestamp);
-        
+
         // Keep only last 100 sync records to prevent unlimited growth
         if sync_list.len() > 100 {
             sync_list.remove(0);
         }
-        
+
         env.storage()
             .persistent()
             .set(&DataKey::ProviderSyncList(provider), &sync_list);
