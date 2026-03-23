@@ -140,10 +140,10 @@ pub struct ReputationDispute {
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum DisputeType {
-    CredentialDispute = 0,
-    FeedbackDispute = 1,
-    ConductDispute = 2,
-    ScoreDispute = 3,
+    Credential = 0,
+    Feedback = 1,
+    Conduct = 2,
+    Score = 3,
 }
 
 // Dispute status
@@ -206,6 +206,7 @@ impl HealthcareReputationSystem {
     }
 
     // Add provider credential
+    #[allow(clippy::too_many_arguments)]
     pub fn add_credential(
         env: Env,
         provider: Address,
@@ -325,7 +326,7 @@ impl HealthcareReputationSystem {
         patient.require_auth();
         Self::require_initialized(&env)?;
 
-        if rating < 1 || rating > 5 {
+        if !(1..=5).contains(&rating) {
             return Err(Error::InvalidRating);
         }
 
@@ -397,7 +398,7 @@ impl HealthcareReputationSystem {
         reporter.require_auth();
         Self::require_initialized(&env)?;
 
-        if severity < 1 || severity > 10 {
+        if !(1..=10).contains(&severity) {
             return Err(Error::InvalidConductEntry);
         }
 
@@ -720,7 +721,7 @@ impl HealthcareReputationSystem {
             }
         }
 
-        Ok(score.min(100).max(0))
+        Ok(score.clamp(0, 100))
     }
 
     // Calculate experience score (0-100)

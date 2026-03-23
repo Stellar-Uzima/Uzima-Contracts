@@ -342,7 +342,7 @@ impl CredentialNotificationSystem {
         Self::require_initialized(&env)?;
 
         let notifications = Self::get_provider_notifications(env, provider, true)?;
-        Ok(notifications.len() as u32)
+        Ok(notifications.len())
     }
 
     // Get notifications by credential
@@ -433,7 +433,7 @@ impl CredentialNotificationSystem {
     fn schedule_renewal_reminders(
         env: &Env,
         provider: Address,
-        credential_id: BytesN<32>,
+        _credential_id: BytesN<32>,
         reminder_days: u32,
     ) -> Result<(), Error> {
         let current_time = env.ledger().timestamp();

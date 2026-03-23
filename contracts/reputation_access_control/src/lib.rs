@@ -498,7 +498,7 @@ impl ReputationAccessControl {
         // Check day of week (simplified)
         let day_of_week = ((current_timestamp / (24 * 3600)) % 7 + 1) as u32;
 
-        if !time_restriction.allowed_days.contains(&day_of_week) {
+        if !time_restriction.allowed_days.contains(day_of_week) {
             return Ok(false);
         }
 
