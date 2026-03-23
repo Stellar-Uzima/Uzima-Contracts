@@ -565,7 +565,7 @@ impl HealthcareReputationSystem {
 
     // Calculate and update reputation score
     fn update_reputation_score(env: &Env, provider: Address) -> Result<(), Error> {
-        let components = Self::calculate_reputation_components(env, provider)?;
+        let components = Self::calculate_reputation_components(env, provider.clone())?;
         let total_score = components.credential_score * 40 / 100
             + components.feedback_score * 30 / 100
             + components.conduct_score * 20 / 100
