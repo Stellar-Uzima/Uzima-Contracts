@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
@@ -486,7 +487,14 @@ impl ReputationAccessControl {
         time_restriction: &TimeRestriction,
     ) -> Result<bool, Error> {
         let current_timestamp = env.ledger().timestamp();
-        let current_hour = (current_timestamp / 3600) % 24;
+
+        // Use checked arithmetic to satisfy clippy::arithmetic_side_effects
+        let seconds_per_hour: u64 = 3600;
+        let hours_per_day: u64 = 24;
+        let seconds_per_day: u64 = seconds_per_hour.checked_mul(hours_per_day).unwrap_or(86400);
+
+        let total_hours = current_timestamp.checked_div(seconds_per_hour).unwrap_or(0);
+        let current_hour = total_hours.checked_rem(hours_per_day).unwrap_or(0);
 
         // Check if current hour is within allowed range
         if current_hour < time_restriction.start_hour as u64
@@ -496,7 +504,9 @@ impl ReputationAccessControl {
         }
 
         // Check day of week (simplified)
-        let day_of_week = ((current_timestamp / (24 * 3600)) % 7 + 1) as u32;
+        let total_days = current_timestamp.checked_div(seconds_per_day).unwrap_or(0);
+        let day_index = total_days.checked_rem(7).unwrap_or(0);
+        let day_of_week = day_index.checked_add(1).unwrap_or(1) as u32;
 
         if !time_restriction.allowed_days.contains(day_of_week) {
             return Ok(false);
