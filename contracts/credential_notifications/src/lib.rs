@@ -120,7 +120,9 @@ impl CredentialNotificationSystem {
         }
 
         let current_time = env.ledger().timestamp();
-        let days_until_expiration = (expiration_date.saturating_sub(current_time)).checked_div(SECONDS_PER_DAY).unwrap_or(0);
+        let days_until_expiration = (expiration_date.saturating_sub(current_time))
+            .checked_div(SECONDS_PER_DAY)
+            .unwrap_or(0);
 
         if days_until_expiration <= settings.expiration_warning_days as u64 {
             let notification_id = Self::generate_notification_id(&env, &provider, 1);
@@ -172,7 +174,9 @@ impl CredentialNotificationSystem {
         );
 
         let deadline = current_time.saturating_add(
-            (settings.renewal_reminder_days as u64).checked_mul(SECONDS_PER_DAY).unwrap_or(0),
+            (settings.renewal_reminder_days as u64)
+                .checked_mul(SECONDS_PER_DAY)
+                .unwrap_or(0),
         );
 
         let notification = CredentialNotification {
@@ -272,9 +276,8 @@ impl CredentialNotificationSystem {
             timestamp: current_time,
             is_read: false,
             action_required: true,
-            deadline: current_time.saturating_add(
-                (30u64).checked_mul(SECONDS_PER_DAY).unwrap_or(0),
-            ), // 30 days
+            deadline: current_time
+                .saturating_add((30u64).checked_mul(SECONDS_PER_DAY).unwrap_or(0)), // 30 days
         };
 
         Self::store_notification(&env, notification)?;
@@ -460,9 +463,8 @@ impl CredentialNotificationSystem {
 
         for days in intervals {
             if days <= reminder_days {
-                let reminder_time = current_time.saturating_add(
-                    (days as u64).checked_mul(SECONDS_PER_DAY).unwrap_or(0),
-                );
+                let reminder_time = current_time
+                    .saturating_add((days as u64).checked_mul(SECONDS_PER_DAY).unwrap_or(0));
                 let notification_id = Self::generate_notification_id(env, &provider, days);
 
                 env.storage().persistent().set(

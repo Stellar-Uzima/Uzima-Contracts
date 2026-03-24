@@ -220,7 +220,7 @@ impl ReputationIntegration {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
-        if base_weight + healthcare_weight != 100 {
+        if base_weight.checked_add(healthcare_weight) != Some(100) {
             return Err(Error::InvalidScoreMapping);
         }
 
@@ -300,7 +300,7 @@ impl ReputationIntegration {
                 .get::<DataKey, SyncRecord>(&DataKey::SyncRecord(provider.clone(), timestamp))
             {
                 records.push_back(record);
-                count += 1;
+                count = count.saturating_add(1);
             }
         }
 
@@ -398,11 +398,20 @@ impl ReputationIntegration {
             .get(&DataKey::ScoreMapping)
             .ok_or(Error::InvalidScoreMapping)?;
 
-        let base_weighted = (base_score * mapping.base_reputation_weight as i128) / 100;
-        let healthcare_weighted =
-            (healthcare_score as i128 * mapping.healthcare_reputation_weight as i128) / 100;
+        let base_weighted = base_score
+            .checked_mul(mapping.base_reputation_weight as i128)
+            .unwrap_or(0)
+            .checked_div(100)
+            .unwrap_or(0);
+        let healthcare_weighted = (healthcare_score as i128)
+            .checked_mul(mapping.healthcare_reputation_weight as i128)
+            .unwrap_or(0)
+            .checked_div(100)
+            .unwrap_or(0);
 
-        let combined = base_weighted + healthcare_weighted + mapping.adjustment_factor as i128;
+        let combined = base_weighted
+            .saturating_add(healthcare_weighted)
+            .saturating_add(mapping.adjustment_factor as i128);
 
         Ok(combined.max(0)) // Ensure non-negative score
     }
