@@ -421,6 +421,7 @@ impl CrossChainEnhancements {
     }
 
     /// Verify Merkle path proof
+    #[allow(clippy::expect_used)]
     fn verify_merkle_path(
         leaf: &BytesN<32>,
         path: &Vec<BytesN<32>>,
