@@ -2,8 +2,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec,
 };
 
 // =============================================================================
@@ -231,7 +230,7 @@ impl CrossChainEnhancements {
         }
 
         let proof_id = Self::generate_integrity_proof_id(&env);
-        let _now = env.ledger().timestamp();
+        let now = env.ledger().timestamp();
 
         let integrity_proof = ZKDataIntegrityProof {
             proof_id: proof_id.clone(),
@@ -267,14 +266,14 @@ impl CrossChainEnhancements {
             .persistent()
             .get::<DataKey, ReplayProtection>(&DataKey::SeenMessage(message_hash.clone()))
         {
-            let _now = env.ledger().timestamp();
+            let now = env.ledger().timestamp();
             if now < seen.expires_at {
                 return Err(Error::ReplayDetected);
             }
         }
 
         // Mark message as seen
-        let _now = env.ledger().timestamp();
+        let now = env.ledger().timestamp();
         let replay = ReplayProtection {
             message_hash: message_hash.clone(),
             source_chain,
@@ -299,7 +298,7 @@ impl CrossChainEnhancements {
         admin.require_auth();
         Self::require_initialized(&env)?;
 
-        let _now = env.ledger().timestamp();
+        let now = env.ledger().timestamp();
         let rate_limit = RateLimit {
             address: address.clone(),
             daily_limit,
@@ -323,7 +322,7 @@ impl CrossChainEnhancements {
     pub fn check_rate_limit(env: Env, caller: Address, amount: u64) -> Result<bool, Error> {
         Self::require_initialized(&env)?;
 
-        let _now = env.ledger().timestamp();
+        let now = env.ledger().timestamp();
         let mut rate_limit: RateLimit = env
             .storage()
             .persistent()
