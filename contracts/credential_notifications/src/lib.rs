@@ -169,8 +169,8 @@ impl CredentialNotificationSystem {
             "Your credential has expired. Please renew immediately to maintain your verified status.",
         );
 
-        let deadline = current_time
-            .saturating_add(settings.renewal_reminder_days as u64 * 24 * 60 * 60);
+        let deadline =
+            current_time.saturating_add(settings.renewal_reminder_days as u64 * 24 * 60 * 60);
 
         let notification = CredentialNotification {
             notification_id: notification_id.clone(),
@@ -296,9 +296,10 @@ impl CredentialNotificationSystem {
         }
 
         notification.is_read = true;
-        env.storage()
-            .persistent()
-            .set(&DataKey::Notification(notification_id.clone()), &notification);
+        env.storage().persistent().set(
+            &DataKey::Notification(notification_id.clone()),
+            &notification,
+        );
 
         env.events().publish(
             (symbol_short!("CREDNTIF"), symbol_short!("READ")),
@@ -326,7 +327,9 @@ impl CredentialNotificationSystem {
             if let Some(notification) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, CredentialNotification>(&DataKey::Notification(notification_id.clone()))
+                .get::<DataKey, CredentialNotification>(&DataKey::Notification(
+                    notification_id.clone(),
+                ))
             {
                 if !unread_only || !notification.is_read {
                     notifications.push_back(notification);
@@ -356,7 +359,10 @@ impl CredentialNotificationSystem {
         let notification_ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::CredentialNotifications(provider.clone(), credential_id.clone()))
+            .get(&DataKey::CredentialNotifications(
+                provider.clone(),
+                credential_id.clone(),
+            ))
             .unwrap_or(Vec::new(&env));
 
         let mut notifications = Vec::new(&env);
@@ -364,7 +370,9 @@ impl CredentialNotificationSystem {
             if let Some(notification) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, CredentialNotification>(&DataKey::Notification(notification_id.clone()))
+                .get::<DataKey, CredentialNotification>(&DataKey::Notification(
+                    notification_id.clone(),
+                ))
             {
                 notifications.push_back(notification);
             }
@@ -394,9 +402,10 @@ impl CredentialNotificationSystem {
         let credential_id = notification.credential_id.clone();
 
         // Store notification
-        env.storage()
-            .persistent()
-            .set(&DataKey::Notification(notification_id.clone()), &notification);
+        env.storage().persistent().set(
+            &DataKey::Notification(notification_id.clone()),
+            &notification,
+        );
 
         // Update provider's notification list
         let mut provider_notifications: Vec<BytesN<32>> = env
@@ -414,7 +423,10 @@ impl CredentialNotificationSystem {
         let mut credential_notifications: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::CredentialNotifications(provider.clone(), credential_id.clone()))
+            .get(&DataKey::CredentialNotifications(
+                provider.clone(),
+                credential_id.clone(),
+            ))
             .unwrap_or(Vec::new(env));
         credential_notifications.push_back(notification_id.clone());
         env.storage().persistent().set(
@@ -486,11 +498,7 @@ impl CredentialNotificationSystem {
                 expiration_warning_days: 30,
                 renewal_reminder_days: 14,
                 enable_notifications: true,
-                notification_channels: vec![
-                    env,
-                    symbol_short!("email"),
-                    symbol_short!("in_app"),
-                ],
+                notification_channels: vec![env, symbol_short!("email"), symbol_short!("in_app")],
             })
         }
     }

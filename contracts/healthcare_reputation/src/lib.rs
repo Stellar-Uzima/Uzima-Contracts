@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
@@ -253,9 +254,10 @@ impl HealthcareReputationSystem {
             .get(&DataKey::ProviderCredentials(provider.clone()))
             .unwrap_or(Vec::new(&env));
         credentials.push_back(credential_id.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderCredentials(provider.clone()), &credentials);
+        env.storage().persistent().set(
+            &DataKey::ProviderCredentials(provider.clone()),
+            &credentials,
+        );
 
         // Schedule expiration notification
         env.storage().persistent().set(
@@ -337,13 +339,34 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
-                0, 0, 0, 0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
             ],
         );
 
@@ -409,13 +432,34 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
-                1, 1, 1, 1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
+                1,
             ],
         );
 
@@ -477,13 +521,34 @@ impl HealthcareReputationSystem {
                 (env.ledger().timestamp() >> 16) as u8,
                 (env.ledger().timestamp() >> 8) as u8,
                 env.ledger().timestamp() as u8,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
-                2, 2, 2, 2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
+                2,
             ],
         );
 
@@ -573,9 +638,10 @@ impl HealthcareReputationSystem {
             + components.experience_score * 10 / 100;
 
         // Store components and total score
-        env.storage()
-            .persistent()
-            .set(&DataKey::ReputationComponents(provider.clone()), &components);
+        env.storage().persistent().set(
+            &DataKey::ReputationComponents(provider.clone()),
+            &components,
+        );
         env.storage()
             .persistent()
             .set(&DataKey::ReputationScore(provider), &total_score);

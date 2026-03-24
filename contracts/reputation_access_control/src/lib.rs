@@ -111,7 +111,11 @@ pub struct ReputationAccessControl;
 #[contractimpl]
 impl ReputationAccessControl {
     // Initialize access control system
-    pub fn initialize(env: Env, admin: Address, _reputation_contract: Address) -> Result<(), Error> {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        _reputation_contract: Address,
+    ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
@@ -170,7 +174,8 @@ impl ReputationAccessControl {
             .ok_or(Error::PolicyNotFound)?;
 
         // Check reputation score requirement
-        if !Self::check_reputation_requirement(&env, provider.clone(), policy.min_reputation_score)? {
+        if !Self::check_reputation_requirement(&env, provider.clone(), policy.min_reputation_score)?
+        {
             return Ok(false);
         }
 
@@ -426,12 +431,7 @@ impl ReputationAccessControl {
         let prescriptions_policy = AccessPolicy {
             resource_type: ResourceType::MedicalPrescriptions,
             min_reputation_score: 85,
-            required_credentials: vec![
-                env,
-                med_lic.clone(),
-                dea_reg.clone(),
-                state_lic.clone(),
-            ],
+            required_credentials: vec![env, med_lic.clone(), dea_reg.clone(), state_lic.clone()],
             access_level: AccessLevel::Write,
             time_restriction: TimeRestrictionPolicy::None,
             special_conditions: vec![env, presc_auth.clone()],

@@ -490,7 +490,6 @@ mod test {
         assert!(client
             .mock_all_auths()
             .try_submit_update(&inst1, &round_id, &BytesN::from_array(&env, &[9u8; 32]))
-            .unwrap()
             .is_err());
     }
 }
