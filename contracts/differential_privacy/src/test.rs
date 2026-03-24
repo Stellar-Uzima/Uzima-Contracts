@@ -1,6 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{BytesN, Env};
+use soroban_sdk::Env;
 
 fn setup() -> (Env, DifferentialPrivacyContractClient<'static>, Address) {
     let env = Env::default();

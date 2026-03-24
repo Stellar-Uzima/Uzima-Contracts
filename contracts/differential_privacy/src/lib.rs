@@ -6,7 +6,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
 };
 
 // =============================================================================
@@ -60,8 +60,6 @@ pub enum DataKey {
     BudgetCounter,
     QueryCounter,
 }
-
-const ADMIN: Symbol = symbol_short!("ADMIN");
 
 // =============================================================================
 // Errors
@@ -330,6 +328,7 @@ impl DifferentialPrivacyContract {
     }
 
     /// Generate Laplace noise using pseudo-random generation
+    #[allow(clippy::arithmetic_side_effects)]
     fn generate_laplace_noise(env: &Env, seed: &BytesN<32>, scale: i64) -> i64 {
         let hash = env.crypto().sha256(&seed.clone().into());
         let hash_bytes: [u8; 32] = hash.into();
@@ -341,6 +340,7 @@ impl DifferentialPrivacyContract {
     }
 
     /// Generate Gaussian noise using pseudo-random generation
+    #[allow(clippy::arithmetic_side_effects)]
     fn generate_gaussian_noise(env: &Env, seed: &BytesN<32>, scale: i64) -> i64 {
         let hash = env.crypto().sha256(&seed.clone().into());
         let hash_bytes: [u8; 32] = hash.into();
