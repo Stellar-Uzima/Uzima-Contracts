@@ -1,0 +1,21 @@
+[package]
+name = "reputation_access_control"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk.workspace = true
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+healthcare_reputation = { path = "../healthcare_reputation" }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

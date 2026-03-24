@@ -7,4 +7,4 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-soroban-sdk = { workspace = true, default-features = false }
+soroban-sdk = { workspace = true }
