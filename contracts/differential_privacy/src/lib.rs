@@ -6,8 +6,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol,
 };
 
 // =============================================================================
@@ -151,7 +150,7 @@ impl DifferentialPrivacyContract {
     ) -> Result<PrivacyQuery, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
-        
+
         let mut budget = Self::load_budget(&env, &budget_id)?;
         if !budget.is_active {
             return Err(Error::BudgetNotActive);
@@ -170,7 +169,9 @@ impl DifferentialPrivacyContract {
 
         // Generate Laplace noise (simplified deterministic version)
         let noise = Self::generate_laplace_noise(&env, &query_id, sensitivity as i64);
-        let noisy_result = true_value.checked_add(noise).ok_or(Error::ArithmeticOverflow)?;
+        let noisy_result = true_value
+            .checked_add(noise)
+            .ok_or(Error::ArithmeticOverflow)?;
 
         // Deduct from budget
         budget.epsilon_remaining = budget
@@ -216,7 +217,7 @@ impl DifferentialPrivacyContract {
     ) -> Result<PrivacyQuery, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
-        
+
         let mut budget = Self::load_budget(&env, &budget_id)?;
         if !budget.is_active {
             return Err(Error::BudgetNotActive);
@@ -227,7 +228,9 @@ impl DifferentialPrivacyContract {
         }
 
         // Gaussian mechanism has higher cost (2x sensitivity)
-        let epsilon_cost = sensitivity.checked_mul(2).ok_or(Error::ArithmeticOverflow)?;
+        let epsilon_cost = sensitivity
+            .checked_mul(2)
+            .ok_or(Error::ArithmeticOverflow)?;
 
         if epsilon_cost > budget.epsilon_remaining {
             return Err(Error::InsufficientBudget);
@@ -235,7 +238,9 @@ impl DifferentialPrivacyContract {
 
         // Generate Gaussian noise (simplified)
         let noise = Self::generate_gaussian_noise(&env, &query_id, sensitivity as i64);
-        let noisy_result = true_value.checked_add(noise).ok_or(Error::ArithmeticOverflow)?;
+        let noisy_result = true_value
+            .checked_add(noise)
+            .ok_or(Error::ArithmeticOverflow)?;
 
         // Deduct from budget
         budget.epsilon_remaining = budget
@@ -277,9 +282,7 @@ impl DifferentialPrivacyContract {
 
     /// Get query by ID
     pub fn get_query(env: Env, query_id: BytesN<32>) -> Option<PrivacyQuery> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Query(query_id))
+        env.storage().persistent().get(&DataKey::Query(query_id))
     }
 
     /// Deactivate a privacy budget
@@ -293,10 +296,8 @@ impl DifferentialPrivacyContract {
             .persistent()
             .set(&DataKey::Budget(budget_id.clone()), &budget);
 
-        env.events().publish(
-            (symbol_short!("dp"), symbol_short!("deactiv")),
-            budget_id,
-        );
+        env.events()
+            .publish((symbol_short!("dp"), symbol_short!("deactiv")), budget_id);
         Ok(())
     }
 
@@ -333,7 +334,7 @@ impl DifferentialPrivacyContract {
         let hash = env.crypto().sha256(&seed.clone().into());
         let hash_bytes: [u8; 32] = hash.into();
         let hash_int = u64::from_le_bytes(hash_bytes[0..8].try_into().unwrap_or([0; 8]));
-        
+
         // Convert to signed noise centered around 0
         let noise = (hash_int % (scale.unsigned_abs() * 2)) as i64;
         noise - scale.unsigned_abs() as i64
@@ -344,7 +345,7 @@ impl DifferentialPrivacyContract {
         let hash = env.crypto().sha256(&seed.clone().into());
         let hash_bytes: [u8; 32] = hash.into();
         let hash_int = u64::from_le_bytes(hash_bytes[0..8].try_into().unwrap_or([0; 8]));
-        
+
         // Approximate normal distribution (3σ range)
         let noise = (hash_int % (scale.unsigned_abs() * 6)) as i64;
         noise - (scale.unsigned_abs() * 3) as i64
