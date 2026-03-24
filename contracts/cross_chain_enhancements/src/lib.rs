@@ -432,7 +432,7 @@ impl CrossChainEnhancements {
         let mut idx = index;
 
         for i in 0..path.len() {
-            let sibling = path.get(i).unwrap();
+            let sibling = path.get(i).expect("path index out of bounds");
 
             // Determine order based on bit at position i
             if (idx & 1) == 0 {
