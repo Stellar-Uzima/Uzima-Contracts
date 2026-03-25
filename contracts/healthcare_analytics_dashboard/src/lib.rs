@@ -177,6 +177,33 @@ pub struct HealthcareAnalyticsDashboardContract;
 
 #[contractimpl]
 impl HealthcareAnalyticsDashboardContract {
+    fn safe_u64_to_u32(value: u64) -> u32 {
+        u32::try_from(value).unwrap_or(u32::MAX)
+    }
+
+    fn ratio_to_bps(numerator: u32, denominator: u32) -> u32 {
+        if denominator == 0 {
+            return 0;
+        }
+
+        let scaled = u64::from(numerator).saturating_mul(10_000);
+        let ratio = scaled
+            .checked_div(u64::from(denominator))
+            .unwrap_or(u64::MAX);
+        Self::safe_u64_to_u32(ratio).min(10_000)
+    }
+
+    fn rolling_average_bps(prev_avg: u32, prev_count: u32, new_value: u32, new_count: u32) -> u32 {
+        if new_count == 0 {
+            return 0;
+        }
+
+        let prev_weighted = u64::from(prev_avg).saturating_mul(u64::from(prev_count));
+        let total = prev_weighted.saturating_add(u64::from(new_value));
+        let avg = total.checked_div(u64::from(new_count)).unwrap_or(0);
+        Self::safe_u64_to_u32(avg)
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -251,7 +278,9 @@ impl HealthcareAnalyticsDashboardContract {
             return value_bps;
         }
 
-        let max_noise = (value_bps / 100).saturating_mul(noise_bps / 100);
+        let value_component = value_bps.checked_div(100).unwrap_or(0);
+        let noise_component = noise_bps.checked_div(100).unwrap_or(0);
+        let max_noise = value_component.saturating_mul(noise_component);
         if max_noise == 0 {
             return value_bps;
         }
@@ -259,8 +288,9 @@ impl HealthcareAnalyticsDashboardContract {
         let seed = (period_id as u32)
             .wrapping_mul(31)
             .wrapping_add(sample_index.wrapping_mul(17));
-        let noise = seed % (max_noise.saturating_add(1));
-        if seed % 2 == 0 {
+        let divisor = max_noise.saturating_add(1);
+        let noise = seed.checked_rem(divisor).unwrap_or(0);
+        if seed.is_multiple_of(2) {
             value_bps.saturating_add(noise).min(10_000)
         } else {
             value_bps.saturating_sub(noise)
@@ -355,8 +385,11 @@ impl HealthcareAnalyticsDashboardContract {
                     .saturating_add(u64::from(noisy_value));
                 aggregate.min_value_bps = aggregate.min_value_bps.min(noisy_value);
                 aggregate.max_value_bps = aggregate.max_value_bps.max(noisy_value);
-                aggregate.avg_value_bps =
-                    (aggregate.total_value_bps / u64::from(aggregate.count)) as u32;
+                let avg = aggregate
+                    .total_value_bps
+                    .checked_div(u64::from(aggregate.count))
+                    .unwrap_or(0);
+                aggregate.avg_value_bps = Self::safe_u64_to_u32(avg);
                 aggregate.last_updated = timestamp;
                 aggregate
             }
@@ -424,19 +457,23 @@ impl HealthcareAnalyticsDashboardContract {
         let error_rate_bps = if tx_count == 0 {
             0
         } else {
-            ((u64::from(error_count) * 10_000) / u64::from(tx_count)) as u32
+            Self::ratio_to_bps(error_count, tx_count)
         };
 
-        kpi.avg_latency_p95_ms = ((u64::from(kpi.avg_latency_p95_ms) * u64::from(kpi.total_snapshots)
-            + u64::from(latency_p95_ms))
-            / u64::from(new_count)) as u32;
-        kpi.avg_uptime_bps = ((u64::from(kpi.avg_uptime_bps) * u64::from(kpi.total_snapshots)
-            + u64::from(uptime_bps))
-            / u64::from(new_count)) as u32;
-        kpi.avg_error_rate_bps =
-            ((u64::from(kpi.avg_error_rate_bps) * u64::from(kpi.total_snapshots)
-                + u64::from(error_rate_bps))
-                / u64::from(new_count)) as u32;
+        kpi.avg_latency_p95_ms = Self::rolling_average_bps(
+            kpi.avg_latency_p95_ms,
+            kpi.total_snapshots,
+            latency_p95_ms,
+            new_count,
+        );
+        kpi.avg_uptime_bps =
+            Self::rolling_average_bps(kpi.avg_uptime_bps, kpi.total_snapshots, uptime_bps, new_count);
+        kpi.avg_error_rate_bps = Self::rolling_average_bps(
+            kpi.avg_error_rate_bps,
+            kpi.total_snapshots,
+            error_rate_bps,
+            new_count,
+        );
         kpi.total_snapshots = new_count;
         kpi.last_updated = timestamp;
 
@@ -627,8 +664,7 @@ impl HealthcareAnalyticsDashboardContract {
         let participation_bps = if round.min_participants == 0 {
             0
         } else {
-            ((u64::from(round.total_updates) * 10_000) / u64::from(round.min_participants)).min(10_000)
-                as u32
+            Self::ratio_to_bps(round.total_updates, round.min_participants)
         };
 
         let insight = AiRoundInsight {
