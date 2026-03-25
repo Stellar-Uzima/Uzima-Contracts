@@ -227,8 +227,12 @@ impl HealthcareAnalyticsDashboardContract {
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::TemplateCounter, &0u64);
-        env.storage().instance().set(&DataKey::ScheduleCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::TemplateCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScheduleCounter, &0u64);
         env.storage().instance().set(&DataKey::ExportCounter, &0u64);
 
         env.events().publish((symbol_short!("DashInit"),), true);
@@ -373,8 +377,12 @@ impl HealthcareAnalyticsDashboardContract {
 
         let key = DataKey::Metric(metric_name.clone(), period_id);
         let existing: Option<MetricAggregate> = env.storage().instance().get(&key);
-        let sample_index = existing.as_ref().map(|aggregate| aggregate.count).unwrap_or(0);
-        let noisy_value = Self::add_noise(metric_value_bps, config.noise_bps, period_id, sample_index);
+        let sample_index = existing
+            .as_ref()
+            .map(|aggregate| aggregate.count)
+            .unwrap_or(0);
+        let noisy_value =
+            Self::add_noise(metric_value_bps, config.noise_bps, period_id, sample_index);
         let timestamp = env.ledger().timestamp();
 
         let next = match existing {
@@ -439,7 +447,9 @@ impl HealthcareAnalyticsDashboardContract {
             uptime_bps,
             timestamp,
         };
-        env.storage().instance().set(&DataKey::LatestSnapshot, &snapshot);
+        env.storage()
+            .instance()
+            .set(&DataKey::LatestSnapshot, &snapshot);
 
         let mut kpi: PerformanceKpi = env
             .storage()
@@ -466,8 +476,12 @@ impl HealthcareAnalyticsDashboardContract {
             latency_p95_ms,
             new_count,
         );
-        kpi.avg_uptime_bps =
-            Self::rolling_average_bps(kpi.avg_uptime_bps, kpi.total_snapshots, uptime_bps, new_count);
+        kpi.avg_uptime_bps = Self::rolling_average_bps(
+            kpi.avg_uptime_bps,
+            kpi.total_snapshots,
+            uptime_bps,
+            new_count,
+        );
         kpi.avg_error_rate_bps = Self::rolling_average_bps(
             kpi.avg_error_rate_bps,
             kpi.total_snapshots,
@@ -511,7 +525,9 @@ impl HealthcareAnalyticsDashboardContract {
             created_at: env.ledger().timestamp(),
         };
 
-        env.storage().instance().set(&DataKey::Template(id), &template);
+        env.storage()
+            .instance()
+            .set(&DataKey::Template(id), &template);
         env.events().publish((symbol_short!("TplCreate"),), id);
         Ok(id)
     }
@@ -543,7 +559,9 @@ impl HealthcareAnalyticsDashboardContract {
             last_run_at: 0,
             enabled: true,
         };
-        env.storage().instance().set(&DataKey::Schedule(id), &schedule);
+        env.storage()
+            .instance()
+            .set(&DataKey::Schedule(id), &schedule);
         env.events()
             .publish((symbol_short!("RptSched"),), (id, template_id));
         Ok(id)
@@ -588,7 +606,9 @@ impl HealthcareAnalyticsDashboardContract {
         schedule.last_run_at = now;
         schedule.next_run_at = now.saturating_add(schedule.cadence_seconds);
 
-        env.storage().instance().set(&DataKey::Export(export_id), &export);
+        env.storage()
+            .instance()
+            .set(&DataKey::Export(export_id), &export);
         env.storage()
             .instance()
             .set(&DataKey::Schedule(schedule_id), &schedule);
@@ -648,7 +668,11 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(true)
     }
 
-    pub fn sync_ai_round(env: Env, caller: Address, round_id: u64) -> Result<AiRoundInsight, Error> {
+    pub fn sync_ai_round(
+        env: Env,
+        caller: Address,
+        round_id: u64,
+    ) -> Result<AiRoundInsight, Error> {
         caller.require_auth();
         Self::ensure_collector_or_admin(&env, &caller)?;
 
@@ -713,15 +737,21 @@ impl HealthcareAnalyticsDashboardContract {
     }
 
     pub fn get_report_template(env: Env, template_id: u64) -> Option<ReportTemplate> {
-        env.storage().instance().get(&DataKey::Template(template_id))
+        env.storage()
+            .instance()
+            .get(&DataKey::Template(template_id))
     }
 
     pub fn get_report_schedule(env: Env, schedule_id: u64) -> Option<ReportSchedule> {
-        env.storage().instance().get(&DataKey::Schedule(schedule_id))
+        env.storage()
+            .instance()
+            .get(&DataKey::Schedule(schedule_id))
     }
 
     pub fn get_compliance_summary(env: Env, period_id: u64) -> Option<ComplianceSummary> {
-        env.storage().instance().get(&DataKey::Compliance(period_id))
+        env.storage()
+            .instance()
+            .get(&DataKey::Compliance(period_id))
     }
 
     pub fn get_export_record(env: Env, export_id: u64) -> Option<ExportRecord> {
@@ -811,14 +841,9 @@ mod test {
         let aggregate = client.get_metric_aggregate(&metric, &20260325u64);
         assert_eq!(aggregate.count, 1u32);
 
-        assert!(client.mock_all_auths().record_system_snapshot(
-            &collector,
-            &120u32,
-            &1000u32,
-            &10u32,
-            &180u32,
-            &9900u32,
-        ));
+        assert!(client
+            .mock_all_auths()
+            .record_system_snapshot(&collector, &120u32, &1000u32, &10u32, &180u32, &9900u32,));
 
         let kpi = client.get_performance_kpi().unwrap();
         assert_eq!(kpi.total_snapshots, 1u32);
@@ -855,9 +880,10 @@ mod test {
         let template = client.get_report_template(&template_id).unwrap();
         assert_eq!(template.output_format, String::from_str(&env, "csv"));
 
-        let schedule_id = client
-            .mock_all_auths()
-            .schedule_report(&admin, &template_id, &86400u64, &100u64);
+        let schedule_id =
+            client
+                .mock_all_auths()
+                .schedule_report(&admin, &template_id, &86400u64, &100u64);
         let schedule = client.get_report_schedule(&schedule_id).unwrap();
         assert!(schedule.enabled);
 
@@ -902,10 +928,9 @@ mod test {
         ai_client.mock_all_auths().initialize(&admin);
 
         let base_model = BytesN::from_array(&env, &[1u8; 32]);
-        let round_id =
-            ai_client
-                .mock_all_auths()
-                .start_round(&admin, &base_model, &2u32, &50u32);
+        let round_id = ai_client
+            .mock_all_auths()
+            .start_round(&admin, &base_model, &2u32, &50u32);
 
         ai_client.mock_all_auths().submit_update(
             &participant_1,
@@ -929,12 +954,16 @@ mod test {
             &String::from_str(&env, "ipfs://fairness"),
         );
 
-        dash_client.mock_all_auths().initialize(&admin, &2u32, &50u32);
+        dash_client
+            .mock_all_auths()
+            .initialize(&admin, &2u32, &50u32);
         dash_client
             .mock_all_auths()
             .configure_ai_analytics(&admin, &ai_id);
 
-        let insight = dash_client.mock_all_auths().sync_ai_round(&admin, &round_id);
+        let insight = dash_client
+            .mock_all_auths()
+            .sync_ai_round(&admin, &round_id);
         assert_eq!(insight.round_id, round_id);
         assert_eq!(insight.total_updates, 2u32);
         assert_eq!(insight.participation_bps, 10_000u32);
