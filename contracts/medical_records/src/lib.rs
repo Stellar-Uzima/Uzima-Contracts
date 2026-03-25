@@ -565,6 +565,91 @@ pub struct FieldCompleteness {
     pub completed_fields: u32,
 }
 
+// ==================== Correction Workflow Types ====================
+
+/// Priority level for a correction item, derived from issue severity.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionPriority {
+    /// Blocks record acceptance; requires immediate attention (maps to Critical severity).
+    Critical,
+    /// Required for record validity; must be resolved (maps to ValidationErr severity).
+    High,
+    /// Recommended fix that improves quality (maps to Warning severity).
+    Medium,
+    /// Optional enhancement (maps to Info severity).
+    Low,
+}
+
+/// The type of corrective action recommended for a validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionAction {
+    /// A required field is absent and must be provided.
+    AddMissingField,
+    /// A field value is present but fails format or length constraints.
+    FixFormat,
+    /// A field value can be auto-normalized (e.g., category casing).
+    NormalizeValue,
+    /// Two or more fields have an inconsistent relationship.
+    CheckConsistency,
+    /// The field does not satisfy a FHIR R4 structural requirement.
+    ReviewFhirRequirement,
+}
+
+/// A single actionable correction derived from a validation issue.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionItem {
+    /// The name of the field that needs correction.
+    pub field_name: String,
+    /// The recommended type of corrective action.
+    pub action: CorrectionAction,
+    /// Human-readable description of the issue.
+    pub description: String,
+    /// Concrete suggested value or fix, when deterministic.
+    pub suggested_value: Option<String>,
+    /// Priority ordering for the correction.
+    pub priority: CorrectionPriority,
+}
+
+/// Complete correction workflow for a medical record, grouping all issues
+/// into prioritised, actionable correction items.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionWorkflow {
+    /// The record this workflow applies to.
+    pub record_id: u64,
+    /// Total number of validation issues found.
+    pub total_issues: u32,
+    /// Number of Critical-priority issues.
+    pub critical_count: u32,
+    /// Number of High-priority (ValidationErr) issues.
+    pub error_count: u32,
+    /// Number of Medium-priority (Warning) issues.
+    pub warning_count: u32,
+    /// Number of Low-priority (Info) issues.
+    pub info_count: u32,
+    /// Ordered list of corrections (Critical first, then High, Medium, Low).
+    pub corrections: Vec<CorrectionItem>,
+    /// True when no Critical/High issues exist (only auto-fixable minor issues remain).
+    pub can_auto_fix: bool,
+    /// Ledger timestamp when this workflow was generated.
+    pub workflow_created_at: u64,
+}
+
+/// Result returned by the on-chain record cleansing operation.
+#[derive(Clone)]
+#[contracttype]
+pub struct CleanseResult {
+    /// The (potentially modified) medical record after auto-normalization.
+    pub record: MedicalRecord,
+    /// Human-readable descriptions of each change applied.
+    pub changes_made: Vec<String>,
+    /// True if at least one field was modified during cleansing.
+    pub was_modified: bool,
+}
+
 // ==================== Constants ====================
 
 const APPROVAL_THRESHOLD: u32 = 2;
@@ -4830,6 +4915,92 @@ impl MedicalRecordsContract {
 
         validation::validate_record_by_type(&env, &record, record_type)?;
         Ok(true)
+    }
+
+    /// Returns a prioritised `CorrectionWorkflow` for a stored medical record.
+    ///
+    /// The workflow maps every validation issue into an actionable `CorrectionItem`
+    /// (with severity-based priority and suggested fix), counts issues by category,
+    /// and sets `can_auto_fix` when only minor, non-blocking issues remain.
+    ///
+    /// Callers with `ReadRecord` permission may invoke this function to build a
+    /// step-by-step remediation plan without modifying the stored record.
+    pub fn get_correction_workflow(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CorrectionWorkflow, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+        let workflow = validation::build_correction_workflow(&env, record_id, &report);
+
+        Ok(workflow)
+    }
+
+    /// Auto-cleanses a stored medical record using deterministic normalization rules.
+    ///
+    /// Applies safe, non-clinical transformations:
+    /// - Normalises category casing to the canonical allowed value.
+    /// - Removes empty `doctor_did` strings (replaces `Some("")` with `None`).
+    ///
+    /// If any changes were made, the updated record is persisted and a
+    /// `DataQualityValidated` event is emitted with the post-cleanse quality score.
+    /// Returns a `CleanseResult` describing what (if anything) changed.
+    ///
+    /// Requires `UpdateRecord` permission.
+    pub fn cleanse_record_data(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CleanseResult, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let result = validation::auto_cleanse_record(&env, &record);
+
+        if result.was_modified {
+            env.storage()
+                .persistent()
+                .set(&DataKey::Record(record_id), &result.record);
+
+            let post_report =
+                validation::validate_record_with_report(&env, record_id, &result.record);
+
+            events::emit_data_quality_validated(
+                &env,
+                caller,
+                record_id,
+                post_report.quality_score.overall_score,
+                post_report.is_fhir_compliant,
+                post_report.quality_score.issue_count,
+            );
+        }
+
+        Ok(result)
     }
 }
 
