@@ -1011,13 +1011,15 @@ pub fn compute_quality_score(
 /// - Timestamp present (FHIR: `authoredOn` / `recordedDate`)
 /// - Clinical text present (FHIR: `text.div` narrative)
 /// - Category coded value (FHIR: `category` binding)
+/// - Treatment / dosage instruction present (FHIR: `dosageInstruction`)
+/// - Data reference / attachment present (FHIR: `content.attachment`)
 ///
 /// Returns `(score_bps, Vec<ValidationIssue>)`.
 #[allow(clippy::arithmetic_side_effects)]
 pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<ValidationIssue>) {
     let mut issues: Vec<ValidationIssue> = Vec::new(env);
     let mut checks_passed = 0u32;
-    let total_checks = 5u32;
+    let total_checks = 7u32;
 
     // FHIR: subject (patient) reference is mandatory
     // Validates that a real patient address is present and differs from the doctor.
