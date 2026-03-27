@@ -11,7 +11,7 @@ impl MockPaymentRouter {
     pub fn compute_split(_env: Env, amount: i128) -> (i128, i128) {
         // 5% router fee for integration smoke test.
         let fee = amount / 20;
-        (amount - fee, fee)
+        (amount.saturating_sub(fee), fee)
     }
 }
 
