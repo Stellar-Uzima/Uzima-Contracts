@@ -96,6 +96,21 @@ pub struct Listing {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
+pub struct ListingPayload {
+    pub data_ref: String,
+    pub data_hash: BytesN<32>,
+    pub format: DataFormat,
+    pub anonymization: AnonymizationLevel,
+    pub min_k: u32,
+    pub dp_epsilon_milli: u32,
+    pub quality: QualityMetrics,
+    pub royalty: RoyaltyPolicy,
+    pub price: i128,
+    pub token: Address,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
 pub struct PurchaseIntent {
     pub id: u64,
     pub listing_id: u64,
@@ -237,24 +252,19 @@ impl HealthcareDataMarketplace {
     pub fn create_listing(
         env: Env,
         provider: Address,
-        data_ref: String,
-        data_hash: BytesN<32>,
-        format: DataFormat,
-        anonymization: AnonymizationLevel,
-        min_k: u32,
-        dp_epsilon_milli: u32,
-        quality: QualityMetrics,
-        royalty: RoyaltyPolicy,
-        price: i128,
-        token: Address,
+        payload: ListingPayload,
     ) -> Result<u64, Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
         Self::require_provider_active(&env, &provider)?;
-        Self::validate_anonymization(anonymization, min_k, dp_epsilon_milli)?;
-        Self::validate_quality(&quality)?;
-        Self::validate_royalty(&royalty)?;
-        if price <= 0 {
+        Self::validate_anonymization(
+            payload.anonymization,
+            payload.min_k,
+            payload.dp_epsilon_milli,
+        )?;
+        Self::validate_quality(&payload.quality)?;
+        Self::validate_royalty(&payload.royalty)?;
+        if payload.price <= 0 {
             return Err(Error::InvalidPricing);
         }
 
@@ -262,21 +272,21 @@ impl HealthcareDataMarketplace {
             .storage()
             .instance()
             .get(&DataKey::NextListingId)
-            .unwrap_or(0)
+            .unwrap_or(0u64)
             .saturating_add(1);
         let listing = Listing {
             id: next_id,
             provider: provider.clone(),
-            data_ref,
-            data_hash,
-            format,
-            anonymization,
-            min_k,
-            dp_epsilon_milli,
-            quality,
-            royalty,
-            price,
-            token,
+            data_ref: payload.data_ref,
+            data_hash: payload.data_hash,
+            format: payload.format,
+            anonymization: payload.anonymization,
+            min_k: payload.min_k,
+            dp_epsilon_milli: payload.dp_epsilon_milli,
+            quality: payload.quality,
+            royalty: payload.royalty,
+            price: payload.price,
+            token: payload.token,
             created_at: env.ledger().timestamp(),
             status: ListingStatus::Active,
         };
@@ -325,7 +335,7 @@ impl HealthcareDataMarketplace {
             .storage()
             .instance()
             .get(&DataKey::NextIntentId)
-            .unwrap_or(0)
+            .unwrap_or(0u64)
             .saturating_add(1);
         let intent = PurchaseIntent {
             id: intent_id,
@@ -376,7 +386,7 @@ impl HealthcareDataMarketplace {
             .storage()
             .instance()
             .get(&DataKey::NextEscrowOrderId)
-            .unwrap_or(0)
+            .unwrap_or(0u64)
             .saturating_add(1);
         env.storage()
             .instance()

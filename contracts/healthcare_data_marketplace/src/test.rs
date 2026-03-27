@@ -1,5 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::Ledger as _;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 #[contract]
@@ -62,19 +63,19 @@ fn test_create_listing_requires_valid_anonymization_and_quality() {
         curator_bps: 1000,
         platform_bps: 1000,
     };
-    let result = client.try_create_listing(
-        &provider,
-        &String::from_str(&env, "ipfs://dataset"),
-        &BytesN::from_array(&env, &[1u8; 32]),
-        &DataFormat::FhirJson,
-        &AnonymizationLevel::KAnonymity,
-        &3u32,
-        &0u32,
-        &bad_quality,
-        &royalty,
-        &1_000i128,
-        &Address::generate(&env),
-    );
+    let payload = ListingPayload {
+        data_ref: String::from_str(&env, "ipfs://dataset"),
+        data_hash: BytesN::from_array(&env, &[1u8; 32]),
+        format: DataFormat::FhirJson,
+        anonymization: AnonymizationLevel::KAnonymity,
+        min_k: 3u32,
+        dp_epsilon_milli: 0u32,
+        quality: bad_quality,
+        royalty,
+        price: 1_000i128,
+        token: Address::generate(&env),
+    };
+    let result = client.try_create_listing(&provider, &payload);
     assert_eq!(result, Err(Ok(Error::InvalidAnonymization)));
 }
 
@@ -129,19 +130,19 @@ fn test_settlement_timeout_enforced_under_five_minutes() {
         platform_bps: 1000,
     };
 
-    let listing_id = client.create_listing(
-        &provider,
-        &String::from_str(&env, "s3://fhir/chunk"),
-        &BytesN::from_array(&env, &[7u8; 32]),
-        &DataFormat::Parquet,
-        &AnonymizationLevel::DifferentialPrivacy,
-        &0u32,
-        &1000u32,
-        &quality,
-        &royalty,
-        &5_000i128,
-        &Address::generate(&env),
-    );
+    let payload = ListingPayload {
+        data_ref: String::from_str(&env, "s3://fhir/chunk"),
+        data_hash: BytesN::from_array(&env, &[7u8; 32]),
+        format: DataFormat::Parquet,
+        anonymization: AnonymizationLevel::DifferentialPrivacy,
+        min_k: 0u32,
+        dp_epsilon_milli: 1000u32,
+        quality,
+        royalty,
+        price: 5_000i128,
+        token: Address::generate(&env),
+    };
+    let listing_id = client.create_listing(&provider, &payload);
     let buyer = Address::generate(&env);
     let intent_id = client.reserve_purchase(&buyer, &listing_id);
     let _escrow_order_id = client.initiate_transaction(&buyer, &intent_id);
