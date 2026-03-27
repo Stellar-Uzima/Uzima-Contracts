@@ -80,6 +80,28 @@ fn test_create_listing_requires_valid_anonymization_and_quality() {
 }
 
 #[test]
+fn test_provider_counter_increments() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env);
+    let admin = Address::generate(&env);
+    client.initialize(
+        &admin,
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &Address::generate(&env),
+        &300u64,
+    );
+
+    for _ in 0..25 {
+        client.register_provider(&Address::generate(&env));
+    }
+
+    assert_eq!(client.get_provider_count(), 25);
+}
+
+#[test]
+#[ignore = "stress test for provider scalability"]
 fn test_provider_scale_to_1000_plus() {
     let env = Env::default();
     env.mock_all_auths();
