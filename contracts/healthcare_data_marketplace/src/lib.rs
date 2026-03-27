@@ -579,7 +579,7 @@ impl HealthcareDataMarketplace {
             quality.validity_bps,
         ];
         for metric in fields {
-            if metric < 7_000 || metric > 10_000 {
+            if !(7_000..=10_000).contains(&metric) {
                 return Err(Error::InvalidQuality);
             }
         }
