@@ -317,6 +317,34 @@ pub struct EncryptedRecordHeader {
     pub doctor_did: Option<String>,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct UserAccessAttribute {
+    pub namespace: String,
+    pub value: String,
+    pub issued_by: Address,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub revoked_at: u64,
+    pub epoch: u32,
+    pub is_active: bool,
+    pub is_verified: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AbePolicyMetadata {
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub compiled_at: u64,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CryptoAuditAction {
@@ -420,6 +448,11 @@ pub enum DataKey {
     // Encrypted records
     EncryptedRecord(u64),
     PatientEncryptedRecords(Address),
+    EncryptedRecordAbePolicy(u64),
+
+    // Advanced access control / ABE
+    UserAccessAttributes(Address),
+    AccessAttributeEpoch(String),
 
     // Crypto audit log
     CryptoAuditCount,
@@ -831,6 +864,7 @@ impl MedicalRecordsContract {
         };
 
         if let Some(profile) = existing {
+            let previous_role = profile.role;
             let prev_str = match profile.role {
                 Role::Admin => "Admin",
                 Role::Doctor => "Doctor",
@@ -861,6 +895,16 @@ impl MedicalRecordsContract {
                 None,
                 "User role updated",
             );
+            if previous_role != role {
+                Self::bump_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, previous_role),
+                );
+                Self::ensure_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, role),
+                );
+            }
         } else {
             users.set(
                 user.clone(),
@@ -879,6 +923,10 @@ impl MedicalRecordsContract {
                 Some(&user),
                 None,
                 "User created",
+            );
+            Self::ensure_access_attribute_epoch(
+                &env,
+                &Self::role_attribute_key_from_role(&env, role),
             );
         }
 
@@ -1086,6 +1134,10 @@ impl MedicalRecordsContract {
         }
 
         env.storage().persistent().set(&key, &new_grants);
+        Self::ensure_access_attribute_epoch(
+            &env,
+            &Self::permission_attribute_key(&env, permission),
+        );
         events::emit_permission_granted(
             &env,
             granter.clone(),
@@ -1148,6 +1200,10 @@ impl MedicalRecordsContract {
 
         if removed {
             env.storage().persistent().set(&key, &new_grants);
+            Self::bump_access_attribute_epoch(
+                &env,
+                &Self::permission_attribute_key(&env, permission),
+            );
             events::emit_permission_revoked(
                 &env,
                 revoker.clone(),
@@ -1174,6 +1230,166 @@ impl MedicalRecordsContract {
         }
 
         Ok(removed)
+    }
+
+    pub fn issue_access_attribute(
+        env: Env,
+        issuer: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+        expires_at: u64,
+        is_verified: bool,
+    ) -> Result<bool, Error> {
+        issuer.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &issuer)
+            && !Self::check_permission(&env, &issuer, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Self::require_active_user(&env, &user)?;
+
+        let attr_key = Self::custom_attribute_key(&env, &namespace, &value);
+        let epoch = Self::read_access_attribute_epoch(&env, &attr_key);
+        let now = env.ledger().timestamp();
+        let key = DataKey::UserAccessAttributes(user.clone());
+        let current: Vec<UserAccessAttribute> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+
+        let mut replaced = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value {
+                updated.push_back(UserAccessAttribute {
+                    namespace: namespace.clone(),
+                    value: value.clone(),
+                    issued_by: issuer.clone(),
+                    issued_at: now,
+                    expires_at,
+                    revoked_at: 0,
+                    epoch,
+                    is_active: true,
+                    is_verified,
+                });
+                replaced = true;
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if !replaced {
+            updated.push_back(UserAccessAttribute {
+                namespace,
+                value,
+                issued_by: issuer,
+                issued_at: now,
+                expires_at,
+                revoked_at: 0,
+                epoch,
+                is_active: true,
+                is_verified,
+            });
+        }
+
+        env.storage().persistent().set(&key, &updated);
+        Ok(true)
+    }
+
+    pub fn revoke_access_attribute(
+        env: Env,
+        revoker: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+    ) -> Result<bool, Error> {
+        revoker.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &revoker)
+            && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+
+        let key = DataKey::UserAccessAttributes(user);
+        let current: Vec<UserAccessAttribute> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        let now = env.ledger().timestamp();
+
+        let mut revoked = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value && attr.is_active {
+                revoked = true;
+                updated.push_back(UserAccessAttribute {
+                    namespace: attr.namespace,
+                    value: attr.value,
+                    issued_by: attr.issued_by,
+                    issued_at: attr.issued_at,
+                    expires_at: attr.expires_at,
+                    revoked_at: now,
+                    epoch: attr.epoch,
+                    is_active: false,
+                    is_verified: attr.is_verified,
+                });
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if revoked {
+            env.storage().persistent().set(&key, &updated);
+            Self::bump_access_attribute_epoch(
+                &env,
+                &Self::custom_attribute_key(&env, &namespace, &value),
+            );
+        }
+
+        Ok(revoked)
+    }
+
+    pub fn get_user_access_attributes(
+        env: Env,
+        user: Address,
+    ) -> Result<Vec<UserAccessAttribute>, Error> {
+        user.require_auth();
+        Self::require_initialized(&env)?;
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserAccessAttributes(user))
+            .unwrap_or(Vec::new(&env)))
+    }
+
+    pub fn get_access_attribute_epoch(
+        env: Env,
+        namespace: String,
+        value: String,
+    ) -> Result<u32, Error> {
+        Self::require_initialized(&env)?;
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Ok(Self::read_access_attribute_epoch(
+            &env,
+            &Self::custom_attribute_key(&env, &namespace, &value),
+        ))
     }
 
     // ---------------------------------------------------------------------
@@ -2657,6 +2873,56 @@ impl MedicalRecordsContract {
     // Encrypted records (E2E-ready)
     // ---------------------------------------------------------------------
 
+    pub fn add_advanced_encrypted_record(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        ciphertext_ref: String,
+        ciphertext_hash: BytesN<32>,
+        envelopes: Vec<KeyEnvelope>,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<u64, Error> {
+        let record_id = Self::add_encrypted_record(
+            env.clone(),
+            caller.clone(),
+            patient,
+            is_confidential,
+            tags,
+            category,
+            treatment_type,
+            ciphertext_ref,
+            ciphertext_hash,
+            envelopes,
+        )?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            valid_until,
+            revocation_epoch,
+        )?;
+
+        Ok(record_id)
+    }
+
     pub fn add_encrypted_record(
         env: Env,
         caller: Address,
@@ -2790,6 +3056,40 @@ impl MedicalRecordsContract {
         );
 
         Ok(record_id)
+    }
+
+    pub fn bind_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            valid_until,
+            revocation_epoch,
+        )?;
+
+        Ok(true)
     }
 
     pub fn get_encrypted_record_header(
@@ -2938,6 +3238,36 @@ impl MedicalRecordsContract {
         );
 
         Ok(true)
+    }
+
+    pub fn get_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<Option<AbePolicyMetadata>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: EncryptedRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+        {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
+            return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            return Err(Error::InvalidCredential);
+        }
+
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecordAbePolicy(record_id)))
     }
 
     pub fn get_crypto_audit_logs(
@@ -3993,6 +4323,14 @@ impl MedicalRecordsContract {
         }
     }
 
+    fn require_active_user(env: &Env, user: &Address) -> Result<(), Error> {
+        let users = Self::read_users(env);
+        match users.get(user.clone()) {
+            Some(profile) if profile.active => Ok(()),
+            _ => Err(Error::NotAuthorized),
+        }
+    }
+
     fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
         if Self::is_active_patient(env, patient) {
             Ok(())
@@ -4385,6 +4723,115 @@ impl MedicalRecordsContract {
             &record.envelopes.len().to_be_bytes(),
         ));
         env.crypto().sha256(&payload).into()
+    }
+
+    fn bind_encrypted_record_abe_policy_internal(
+        env: &Env,
+        caller: &Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<(), Error> {
+        validation::validate_policy_ref(env, &policy_ref)?;
+        validation::validate_policy_ref(env, &access_ciphertext_ref)?;
+        if attribute_count == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let record: EncryptedRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if *caller != record.patient_id
+            && *caller != record.doctor_id
+            && !Self::is_admin(env, caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let policy = AbePolicyMetadata {
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            compiled_at: env.ledger().timestamp(),
+            valid_until,
+            revocation_epoch,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::EncryptedRecordAbePolicy(record_id), &policy);
+
+        Ok(())
+    }
+
+    fn custom_attribute_key(env: &Env, namespace: &String, value: &String) -> String {
+        let mut out = namespace.clone();
+        out.push_str(&String::from_str(env, ":"));
+        out.push_str(value);
+        out
+    }
+
+    fn role_attribute_key_from_role(env: &Env, role: Role) -> String {
+        match role {
+            Role::Admin => String::from_str(env, "role:admin"),
+            Role::Doctor => String::from_str(env, "role:doctor"),
+            Role::Patient => String::from_str(env, "role:patient"),
+            Role::None => String::from_str(env, "role:none"),
+        }
+    }
+
+    fn permission_attribute_key(env: &Env, permission: Permission) -> String {
+        match permission {
+            Permission::ManageUsers => String::from_str(env, "permission:manage_users"),
+            Permission::ManageSystem => String::from_str(env, "permission:manage_system"),
+            Permission::CreateRecord => String::from_str(env, "permission:create_record"),
+            Permission::ReadRecord => String::from_str(env, "permission:read_record"),
+            Permission::UpdateRecord => String::from_str(env, "permission:update_record"),
+            Permission::DeleteRecord => String::from_str(env, "permission:delete_record"),
+            Permission::ReadConfidential => String::from_str(env, "permission:read_confidential"),
+            Permission::DelegatePermission => {
+                String::from_str(env, "permission:delegate_permission")
+            }
+        }
+    }
+
+    fn read_access_attribute_epoch(env: &Env, key: &String) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AccessAttributeEpoch(key.clone()))
+            .unwrap_or(1)
+    }
+
+    fn ensure_access_attribute_epoch(env: &Env, key: &String) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::AccessAttributeEpoch(key.clone()))
+        {
+            return;
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessAttributeEpoch(key.clone()), &1u32);
+    }
+
+    fn bump_access_attribute_epoch(env: &Env, key: &String) {
+        let next = Self::read_access_attribute_epoch(env, key).saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessAttributeEpoch(key.clone()), &next);
     }
 
     fn can_view_record(
