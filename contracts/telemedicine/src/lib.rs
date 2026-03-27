@@ -354,8 +354,8 @@ pub struct Consultation {
     pub appointment_id: BytesN<32>,
     pub consultation_type: String,
     pub quality_score: u32,
-    pub video_session_id: Option<BytesN<32>>,
-    pub waiting_room_id: Option<BytesN<32>>,
+    pub video_session_id: BytesN<32>,
+    pub waiting_room_id: BytesN<32>,
     pub devices_used: Vec<BytesN<32>>,
     pub hipaa_compliance_verified: bool,
 }
@@ -454,8 +454,8 @@ pub struct QualityAssessment {
     pub assessment_id: BytesN<32>,
     pub consultation_id: BytesN<32>,
     pub assessor_provider: Address,
-    pub technical_quality: QualityRating,
-    pub clinical_quality: QualityRating,
+    pub technical_quality: u32,
+    pub clinical_quality: u32,
     pub patient_satisfaction: u32,
     pub connection_quality: u32,
     pub issues: Vec<String>,
@@ -526,6 +526,38 @@ pub enum DataKey {
 #[contract]
 pub struct TelemedicineContract;
 
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ProviderCapabilities {
+    pub max_concurrent_sessions: u32,
+    pub supported_video_qualities: Vec<VideoQuality>,
+    pub supported_codecs: Vec<VideoCodec>,
+    pub hipaa_training_verified: bool,
+    pub digital_signature_certificate: BytesN<32>,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ESIGNRequest {
+    pub medications: Vec<String>,
+    pub dosage_instructions: Vec<String>,
+    pub valid_days: u64,
+    pub pharmacy_id: String,
+    pub digital_signature: BytesN<64>,
+    pub certificate_id: BytesN<32>,
+    pub jurisdiction: String,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct PatientCapabilities {
+    pub video_consent_granted: bool,
+    pub remote_monitoring_consent: bool,
+    pub device_consent_granted: bool,
+    pub max_video_quality: VideoQuality,
+    pub bandwidth_limit_kbps: u32,
+}
+
 #[contractimpl]
 impl TelemedicineContract {
     // ============================================================
@@ -556,9 +588,15 @@ impl TelemedicineContract {
                 timestamp: env.ledger().timestamp(),
             })
         );
-        env.storage().persistent().set(&DataKey::ActiveVideoSessions, &Vec::new(&env));
-        env.storage().persistent().set(&DataKey::DeviceRegistry, &Vec::new(&env));
-        env.storage().persistent().set(&DataKey::ESIGNCertificates, &Vec::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveVideoSessions, &Vec::<BytesN<32>>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::DeviceRegistry, &Vec::<BytesN<32>>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::ESIGNCertificates, &Vec::<BytesN<32>>::new(&env));
         log!(&env, "Telemedicine contract initialized with telehealth integration");
         Ok(())
     }
@@ -590,11 +628,7 @@ impl TelemedicineContract {
         jurisdictions: Vec<String>,
         specialty: String,
         license_expiry: u64,
-        max_concurrent_sessions: u32,
-        supported_video_qualities: Vec<VideoQuality>,
-        supported_codecs: Vec<VideoCodec>,
-        hipaa_training_verified: bool,
-        digital_signature_certificate: BytesN<32>
+        capabilities: ProviderCapabilities
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         if env.storage().persistent().has(&DataKey::Provider(provider_id.clone())) {
@@ -614,11 +648,11 @@ impl TelemedicineContract {
             license_expiry,
             is_active: true,
             registration_date: current_time,
-            max_concurrent_sessions,
-            supported_video_qualities,
-            supported_codecs,
-            hipaa_training_verified,
-            digital_signature_certificate,
+            max_concurrent_sessions: capabilities.max_concurrent_sessions,
+            supported_video_qualities: capabilities.supported_video_qualities,
+            supported_codecs: capabilities.supported_codecs,
+            hipaa_training_verified: capabilities.hipaa_training_verified,
+            digital_signature_certificate: capabilities.digital_signature_certificate,
         };
         env.storage().persistent().set(&DataKey::Provider(provider_id), &provider);
         Self::increment_platform_stat(env, 0);
@@ -661,11 +695,7 @@ impl TelemedicineContract {
         jurisdiction: String,
         contact_info: String,
         preferred_language: String,
-        video_consent_granted: bool,
-        remote_monitoring_consent: bool,
-        device_consent_granted: bool,
-        max_video_quality: VideoQuality,
-        bandwidth_limit_kbps: u32
+        capabilities: PatientCapabilities
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         if env.storage().persistent().has(&DataKey::Patient(patient_id.clone())) {
@@ -680,11 +710,11 @@ impl TelemedicineContract {
             contact_info,
             preferred_language,
             registration_date: env.ledger().timestamp(),
-            video_consent_granted,
-            remote_monitoring_consent,
-            device_consent_granted,
-            max_video_quality,
-            bandwidth_limit_kbps,
+            video_consent_granted: capabilities.video_consent_granted,
+            remote_monitoring_consent: capabilities.remote_monitoring_consent,
+            device_consent_granted: capabilities.device_consent_granted,
+            max_video_quality: capabilities.max_video_quality,
+            bandwidth_limit_kbps: capabilities.bandwidth_limit_kbps,
         };
         env.storage().persistent().set(&DataKey::Patient(patient_id), &patient);
         Self::increment_platform_stat(env, 1);
@@ -820,8 +850,8 @@ impl TelemedicineContract {
             appointment_id: _appointment_id.clone(),
             consultation_type,
             quality_score: 0,
-            video_session_id: None,
-            waiting_room_id: None,
+            video_session_id: BytesN::from_array(env, &[0u8; 32]),
+            waiting_room_id: BytesN::from_array(env, &[0u8; 32]),
             devices_used: Vec::new(env),
             hipaa_compliance_verified: false,
         };
@@ -1118,7 +1148,7 @@ impl TelemedicineContract {
 
         let video_session = VideoSession {
             session_id: session_id.clone(),
-            consultation_id,
+            consultation_id: consultation_id.clone(),
             patient_id,
             provider_id,
             room_id,
@@ -1139,14 +1169,14 @@ impl TelemedicineContract {
             hipaa_compliant: encryption_level != EncryptionLevel::Standard,
         };
 
-        env.storage().persistent().set(&DataKey::VideoSession(session_id), &video_session);
+        env.storage().persistent().set(&DataKey::VideoSession(session_id.clone()), &video_session);
 
         // Update consultation with video session reference
         let mut updated_consultation = consultation;
-        updated_consultation.video_session_id = Some(session_id);
+        updated_consultation.video_session_id = session_id.clone();
         env.storage()
             .persistent()
-            .set(&DataKey::Consultation(consultation.consultation_id), &updated_consultation);
+            .set(&DataKey::Consultation(consultation_id), &updated_consultation);
 
         log!(&env, "Video session created for telehealth integration");
         Ok(())
@@ -1209,7 +1239,7 @@ impl TelemedicineContract {
         }
 
         // Store quality metrics
-        env.storage().persistent().set(&DataKey::VideoQualityMetrics(session_id), &metrics);
+        env.storage().persistent().set(&DataKey::VideoQualityMetrics(session_id.clone()), &metrics);
 
         // Update session with current metrics
         let mut updated_session = session;
@@ -1404,7 +1434,7 @@ impl TelemedicineContract {
         let mut found = false;
         let mut new_queue = Vec::new(env);
         for queued_patient in room.patient_queue.iter() {
-            if queued_patient == &patient_id {
+            if queued_patient == patient_id {
                 found = true;
             } else {
                 new_queue.push_back(queued_patient.clone());
@@ -1442,13 +1472,7 @@ impl TelemedicineContract {
         patient_id: BytesN<32>,
         provider_id: BytesN<32>,
         provider_address: Address,
-        medications: Vec<String>,
-        dosage_instructions: Vec<String>,
-        valid_days: u64,
-        pharmacy_id: String,
-        digital_signature: BytesN<64>,
-        certificate_id: BytesN<32>,
-        jurisdiction: String
+        request: ESIGNRequest
     ) -> Result<(), TelemedicineError> {
         Self::require_not_paused(env)?;
         provider_address.require_auth();
@@ -1471,7 +1495,7 @@ impl TelemedicineContract {
             .get(&DataKey::Provider(provider_id.clone()))
             .ok_or(TelemedicineError::ProviderNotFound)?;
 
-        if provider.digital_signature_certificate != certificate_id {
+        if provider.digital_signature_certificate != request.certificate_id {
             return Err(TelemedicineError::ESIGNInvalidSignature);
         }
 
@@ -1484,17 +1508,17 @@ impl TelemedicineContract {
             consultation_id,
             patient_id,
             provider_id,
-            medications,
-            dosage_instructions,
+            medications: request.medications,
+            dosage_instructions: request.dosage_instructions,
             issued_date: env.ledger().timestamp(),
-            valid_days,
-            pharmacy_id,
-            digital_signature,
-            certificate_id,
+            valid_days: request.valid_days,
+            pharmacy_id: request.pharmacy_id,
+            digital_signature: request.digital_signature,
+            certificate_id: request.certificate_id,
             signature_timestamp: env.ledger().timestamp(),
             status: ESIGNStatus::Pending,
             verification_hash: BytesN::from_array(env, &[0u8; 32]),
-            jurisdiction,
+            jurisdiction: request.jurisdiction,
             cross_border: false,
         };
 
