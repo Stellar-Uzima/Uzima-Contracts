@@ -6,11 +6,15 @@
 #![allow(clippy::cast_lossless)]
 #![allow(clippy::used_underscore_binding)]
 
+extern crate alloc;
+
 #[cfg(test)]
 mod test;
 
+use alloc::string::{String as StdString, ToString};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, log, Address, BytesN, Env, String, Vec,
+    contract, contracterror, contractimpl, contracttype, log, Address, Bytes, BytesN, Env, String,
+    Vec,
 };
 
 // ============================================================
@@ -43,6 +47,11 @@ pub enum TelemedicineError {
     EmergencyAlreadyResolved = 21,
     InvalidJurisdiction = 22,
     DataTransferNotApproved = 23,
+    UnsupportedLanguage = 24,
+    ChatbotInquiryNotFound = 25,
+    InvalidChatMessage = 26,
+    KnowledgeEntryAlreadyExists = 27,
+    KnowledgeEntryNotFound = 28,
 }
 
 // ============================================================
@@ -85,6 +94,16 @@ pub enum QualityRating {
     Good = 2,
     VeryGood = 3,
     Excellent = 4,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum ChatIntent {
+    SymptomCheck = 0,
+    HealthEducation = 1,
+    MedicationGuidance = 2,
+    EmergencySupport = 3,
+    GeneralInquiry = 4,
 }
 
 #[derive(Clone, Debug)]
@@ -261,6 +280,56 @@ pub struct EmergencyCase {
     pub escalated_to_physical: bool,
 }
 
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct MedicalKnowledgeEntry {
+    pub entry_id: BytesN<32>,
+    pub category: String,
+    pub language: String,
+    pub title: String,
+    pub summary: String,
+    pub guidance: String,
+    pub source_ref: String,
+    pub content_hash: BytesN<32>,
+    pub updated_at: u64,
+    pub is_active: bool,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct EmergencyProtocol {
+    pub protocol_id: BytesN<32>,
+    pub emergency_contact: String,
+    pub escalation_message_en: String,
+    pub escalation_message_sw: String,
+    pub escalation_message_fr: String,
+    pub ambulance_ref: String,
+    pub updated_at: u64,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ChatbotInquiry {
+    pub inquiry_id: BytesN<32>,
+    pub patient_id: BytesN<32>,
+    pub patient_address: Address,
+    pub original_message: String,
+    pub normalized_message: String,
+    pub detected_language: String,
+    pub intent: ChatIntent,
+    pub confidence_bps: u32,
+    pub triage_level: EmergencyLevel,
+    pub emergency_detected: bool,
+    pub escalation_required: bool,
+    pub recommended_action: String,
+    pub health_education: String,
+    pub knowledge_source_ref: String,
+    pub matched_articles: Vec<BytesN<32>>,
+    pub emergency_case_id: BytesN<32>,
+    pub response_time_ms: u32,
+    pub created_at: u64,
+}
+
 // ============================================================
 // STORAGE KEYS
 // ============================================================
@@ -285,6 +354,11 @@ pub enum DataKey {
     DigitalTherapeutic(BytesN<32>),
     QualityAssessment(BytesN<32>),
     Emergency(BytesN<32>),
+    KnowledgeEntry(BytesN<32>),
+    KnowledgeIndex,
+    EmergencyProtocol,
+    ChatbotInquiry(BytesN<32>),
+    LatestPatientInquiry(BytesN<32>),
     ProviderSchedule(BytesN<32>),
     ActiveEmergencies,
     PlatformStats,
@@ -314,6 +388,33 @@ impl TelemedicineContract {
             &DataKey::PlatformStats,
             &(0u64, 0u64, 0u64, 0u64, 0u64, 0u64),
         );
+        env.storage().persistent().set(
+            &DataKey::EmergencyProtocol,
+            &EmergencyProtocol {
+                protocol_id: BytesN::from_array(&env, &[0u8; 32]),
+                emergency_contact: String::from_str(&env, "112"),
+                escalation_message_en: String::from_str(
+                    &env,
+                    "Emergency warning: call emergency services immediately and proceed to the nearest hospital.",
+                ),
+                escalation_message_sw: String::from_str(
+                    &env,
+                    "Onyo la dharura: piga huduma za dharura mara moja na uende hospitali iliyo karibu.",
+                ),
+                escalation_message_fr: String::from_str(
+                    &env,
+                    "Urgence medicale: appelez les services d'urgence immediatement et rendez-vous a l'hopital le plus proche.",
+                ),
+                ambulance_ref: String::from_str(&env, "standard-emergency-protocol"),
+                updated_at: env.ledger().timestamp(),
+            },
+        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::KnowledgeIndex, &Vec::<BytesN<32>>::new(&env));
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveEmergencies, &Vec::<BytesN<32>>::new(&env));
         log!(&env, "Telemedicine contract initialized");
         Ok(())
     }
@@ -761,6 +862,306 @@ impl TelemedicineContract {
     }
 
     // ============================================================
+    // MEDICAL KNOWLEDGE BASE
+    // ============================================================
+
+    pub fn upsert_knowledge_entry(
+        env: &Env,
+        entry_id: BytesN<32>,
+        category: String,
+        language: String,
+        title: String,
+        summary: String,
+        guidance: String,
+        source_ref: String,
+    ) -> Result<(), TelemedicineError> {
+        Self::require_admin(env)?;
+        Self::require_supported_language(&language)?;
+
+        let entry = MedicalKnowledgeEntry {
+            entry_id: entry_id.clone(),
+            category,
+            language,
+            title,
+            summary,
+            guidance: guidance.clone(),
+            source_ref,
+            content_hash: Self::hash_text(env, &guidance),
+            updated_at: env.ledger().timestamp(),
+            is_active: true,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::KnowledgeEntry(entry_id.clone()), &entry);
+
+        let mut index: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::KnowledgeIndex)
+            .unwrap_or_else(|| Vec::new(env));
+        if !Self::vec_contains_bytes32(&index, &entry_id) {
+            index.push_back(entry_id);
+            env.storage().persistent().set(&DataKey::KnowledgeIndex, &index);
+        }
+
+        Ok(())
+    }
+
+    pub fn get_knowledge_entry(
+        env: &Env,
+        entry_id: BytesN<32>,
+    ) -> Result<MedicalKnowledgeEntry, TelemedicineError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::KnowledgeEntry(entry_id))
+            .ok_or(TelemedicineError::KnowledgeEntryNotFound)
+    }
+
+    pub fn configure_emergency_protocol(
+        env: &Env,
+        protocol_id: BytesN<32>,
+        emergency_contact: String,
+        escalation_message_en: String,
+        escalation_message_sw: String,
+        escalation_message_fr: String,
+        ambulance_ref: String,
+    ) -> Result<(), TelemedicineError> {
+        Self::require_admin(env)?;
+        env.storage().persistent().set(
+            &DataKey::EmergencyProtocol,
+            &EmergencyProtocol {
+                protocol_id,
+                emergency_contact,
+                escalation_message_en,
+                escalation_message_sw,
+                escalation_message_fr,
+                ambulance_ref,
+                updated_at: env.ledger().timestamp(),
+            },
+        );
+        Ok(())
+    }
+
+    pub fn get_emergency_protocol(env: &Env) -> EmergencyProtocol {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EmergencyProtocol)
+            .unwrap_or_else(|| EmergencyProtocol {
+                protocol_id: BytesN::from_array(env, &[0u8; 32]),
+                emergency_contact: String::from_str(env, "112"),
+                escalation_message_en: String::from_str(
+                    env,
+                    "Emergency warning: call emergency services immediately and proceed to the nearest hospital.",
+                ),
+                escalation_message_sw: String::from_str(
+                    env,
+                    "Onyo la dharura: piga huduma za dharura mara moja na uende hospitali iliyo karibu.",
+                ),
+                escalation_message_fr: String::from_str(
+                    env,
+                    "Urgence medicale: appelez les services d'urgence immediatement et rendez-vous a l'hopital le plus proche.",
+                ),
+                ambulance_ref: String::from_str(env, "standard-emergency-protocol"),
+                updated_at: env.ledger().timestamp(),
+            })
+    }
+
+    // ============================================================
+    // CHATBOT / TRIAGE
+    // ============================================================
+
+    pub fn submit_chatbot_inquiry(
+        env: &Env,
+        inquiry_id: BytesN<32>,
+        patient_id: BytesN<32>,
+        caller: Address,
+        message: String,
+    ) -> Result<ChatbotInquiry, TelemedicineError> {
+        Self::require_not_paused(env)?;
+        caller.require_auth();
+
+        if message.is_empty() {
+            return Err(TelemedicineError::InvalidChatMessage);
+        }
+
+        let patient: Patient = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Patient(patient_id.clone()))
+            .ok_or(TelemedicineError::PatientNotFound)?;
+
+        if patient.address != caller {
+            return Err(TelemedicineError::PatientNotFound);
+        }
+
+        let normalized = Self::normalize(&message);
+        let language = Self::resolve_language(env, &patient.preferred_language, &normalized)?;
+        let intent = Self::detect_intent(&normalized);
+        let triage_level = Self::detect_triage_level(&normalized);
+        let emergency_detected = triage_level == EmergencyLevel::Critical;
+        let escalation_required =
+            emergency_detected || Self::should_escalate_to_provider(intent, triage_level);
+        let confidence_bps = Self::confidence_for_message(&normalized, intent, triage_level);
+        let response_time_ms = Self::estimated_response_time_ms(&normalized);
+        let matched_articles = Self::match_knowledge_entries(env, &normalized, &language, intent);
+        let knowledge_source_ref = Self::knowledge_source_ref(env, &matched_articles);
+        let health_education = Self::compose_health_education(
+            env,
+            &patient,
+            &normalized,
+            intent,
+            triage_level,
+            &language,
+            &matched_articles,
+        );
+        let recommended_action = Self::compose_recommended_action(
+            env,
+            &patient,
+            intent,
+            triage_level,
+            escalation_required,
+            &language,
+        );
+
+        let emergency_case_id = if emergency_detected {
+            Self::create_emergency_case_internal(
+                env,
+                &patient,
+                &inquiry_id,
+                &message,
+                triage_level,
+                escalation_required,
+            )?
+        } else {
+            BytesN::from_array(env, &[0u8; 32])
+        };
+
+        let inquiry = ChatbotInquiry {
+            inquiry_id: inquiry_id.clone(),
+            patient_id: patient_id.clone(),
+            patient_address: caller,
+            original_message: message,
+            normalized_message: String::from_str(env, normalized.as_str()),
+            detected_language: language,
+            intent,
+            confidence_bps,
+            triage_level,
+            emergency_detected,
+            escalation_required,
+            recommended_action,
+            health_education,
+            knowledge_source_ref,
+            matched_articles,
+            emergency_case_id,
+            response_time_ms,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ChatbotInquiry(inquiry_id.clone()), &inquiry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::LatestPatientInquiry(patient_id), &inquiry_id);
+
+        Ok(inquiry)
+    }
+
+    pub fn get_chatbot_inquiry(
+        env: &Env,
+        inquiry_id: BytesN<32>,
+    ) -> Result<ChatbotInquiry, TelemedicineError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ChatbotInquiry(inquiry_id))
+            .ok_or(TelemedicineError::ChatbotInquiryNotFound)
+    }
+
+    pub fn get_latest_patient_inquiry(
+        env: &Env,
+        patient_id: BytesN<32>,
+    ) -> Result<ChatbotInquiry, TelemedicineError> {
+        let inquiry_id: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LatestPatientInquiry(patient_id))
+            .ok_or(TelemedicineError::ChatbotInquiryNotFound)?;
+        Self::get_chatbot_inquiry(env, inquiry_id)
+    }
+
+    pub fn is_chatbot_inquiry_accurate(
+        env: &Env,
+        inquiry_id: BytesN<32>,
+    ) -> Result<bool, TelemedicineError> {
+        let inquiry = Self::get_chatbot_inquiry(env, inquiry_id)?;
+        Ok(inquiry.confidence_bps >= 9000)
+    }
+
+    pub fn get_chatbot_response_time_ms(
+        env: &Env,
+        inquiry_id: BytesN<32>,
+    ) -> Result<u32, TelemedicineError> {
+        let inquiry = Self::get_chatbot_inquiry(env, inquiry_id)?;
+        Ok(inquiry.response_time_ms)
+    }
+
+    // ============================================================
+    // EMERGENCY MANAGEMENT
+    // ============================================================
+
+    pub fn get_emergency_case(
+        env: &Env,
+        emergency_id: BytesN<32>,
+    ) -> Result<EmergencyCase, TelemedicineError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Emergency(emergency_id))
+            .ok_or(TelemedicineError::EmergencyNotFound)
+    }
+
+    pub fn get_active_emergencies(env: &Env) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ActiveEmergencies)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn resolve_emergency_case(
+        env: &Env,
+        emergency_id: BytesN<32>,
+    ) -> Result<EmergencyCase, TelemedicineError> {
+        Self::require_admin(env)?;
+
+        let mut emergency: EmergencyCase = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Emergency(emergency_id.clone()))
+            .ok_or(TelemedicineError::EmergencyNotFound)?;
+        if emergency.is_resolved {
+            return Err(TelemedicineError::EmergencyAlreadyResolved);
+        }
+
+        emergency.is_resolved = true;
+        emergency.resolved_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Emergency(emergency_id.clone()), &emergency);
+
+        let mut active: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ActiveEmergencies)
+            .unwrap_or_else(|| Vec::new(env));
+        active = Self::remove_bytes32(env, active, &emergency_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveEmergencies, &active);
+
+        Ok(emergency)
+    }
+
+    // ============================================================
     // UTILITY FUNCTIONS
     // ============================================================
 
@@ -785,6 +1186,550 @@ impl TelemedicineContract {
             return Err(TelemedicineError::ContractPaused);
         }
         Ok(())
+    }
+
+    fn require_supported_language(language: &String) -> Result<(), TelemedicineError> {
+        let lang = Self::normalize_string(language);
+        if matches!(lang.as_str(), "english" | "swahili" | "french" | "en" | "sw" | "fr") {
+            Ok(())
+        } else {
+            Err(TelemedicineError::UnsupportedLanguage)
+        }
+    }
+
+    fn normalize_string(value: &String) -> StdString {
+        value.to_string().to_ascii_lowercase()
+    }
+
+    fn normalize(value: &String) -> StdString {
+        let mut normalized = value.to_string().to_ascii_lowercase();
+        normalized = normalized.replace(',', " ");
+        normalized = normalized.replace('.', " ");
+        normalized = normalized.replace('!', " ");
+        normalized = normalized.replace('?', " ");
+        normalized = normalized.replace(';', " ");
+        normalized = normalized.replace(':', " ");
+        normalized
+    }
+
+    fn resolve_language(
+        env: &Env,
+        preferred_language: &String,
+        normalized_message: &str,
+    ) -> Result<String, TelemedicineError> {
+        let preferred = Self::normalize_string(preferred_language);
+        let language = if preferred == "swahili"
+            || preferred == "sw"
+            || normalized_message.contains("maumivu")
+            || normalized_message.contains("kupumua")
+            || normalized_message.contains("homa")
+        {
+            "Swahili"
+        } else if preferred == "french"
+            || preferred == "fr"
+            || normalized_message.contains("douleur")
+            || normalized_message.contains("respirer")
+            || normalized_message.contains("fievre")
+        {
+            "French"
+        } else if preferred == "english"
+            || preferred == "en"
+            || preferred.is_empty()
+        {
+            "English"
+        } else {
+            return Err(TelemedicineError::UnsupportedLanguage);
+        };
+
+        Ok(String::from_str(env, language))
+    }
+
+    fn detect_intent(normalized_message: &str) -> ChatIntent {
+        if Self::contains_any(
+            normalized_message,
+            &[
+                "chest pain",
+                "difficulty breathing",
+                "cant breathe",
+                "cannot breathe",
+                "severe bleeding",
+                "unconscious",
+                "seizure",
+                "stroke",
+                "maumivu ya kifua",
+                "kupumua kwa shida",
+                "douleur thoracique",
+                "difficulte a respirer",
+            ],
+        ) {
+            ChatIntent::EmergencySupport
+        } else if Self::contains_any(
+            normalized_message,
+            &[
+                "symptom",
+                "fever",
+                "cough",
+                "headache",
+                "pain",
+                "rash",
+                "nausea",
+                "vomiting",
+                "homa",
+                "kikohozi",
+                "maumivu",
+                "fievre",
+                "toux",
+                "douleur",
+            ],
+        ) {
+            ChatIntent::SymptomCheck
+        } else if Self::contains_any(
+            normalized_message,
+            &[
+                "medicine",
+                "medication",
+                "dose",
+                "drug",
+                "tablet",
+                "antibiotic",
+                "dawa",
+                "medicament",
+            ],
+        ) {
+            ChatIntent::MedicationGuidance
+        } else if Self::contains_any(
+            normalized_message,
+            &[
+                "prevent",
+                "education",
+                "what is",
+                "explain",
+                "diet",
+                "manage",
+                "wellness",
+                "afya",
+                "prevention",
+                "education",
+            ],
+        ) {
+            ChatIntent::HealthEducation
+        } else {
+            ChatIntent::GeneralInquiry
+        }
+    }
+
+    fn detect_triage_level(normalized_message: &str) -> EmergencyLevel {
+        if Self::contains_any(
+            normalized_message,
+            &[
+                "chest pain",
+                "difficulty breathing",
+                "cant breathe",
+                "cannot breathe",
+                "shortness of breath",
+                "severe bleeding",
+                "fainted",
+                "unconscious",
+                "seizure",
+                "stroke",
+                "suicidal",
+                "blue lips",
+                "maumivu ya kifua",
+                "kupumua kwa shida",
+                "kutokwa damu nyingi",
+                "amezimia",
+                "degedege",
+                "douleur thoracique",
+                "difficulte a respirer",
+                "saignement severe",
+                "inconscient",
+            ],
+        ) {
+            EmergencyLevel::Critical
+        } else if Self::contains_any(
+            normalized_message,
+            &[
+                "high fever",
+                "persistent vomiting",
+                "dehydration",
+                "severe pain",
+                "blood pressure",
+                "pregnant and bleeding",
+                "confusion",
+                "homa kali",
+                "kutapika sana",
+                "douleur intense",
+                "vomissements persistants",
+            ],
+        ) {
+            EmergencyLevel::High
+        } else if Self::contains_any(
+            normalized_message,
+            &[
+                "fever",
+                "cough",
+                "headache",
+                "rash",
+                "nausea",
+                "diarrhea",
+                "tired",
+                "dizzy",
+                "homa",
+                "kikohozi",
+                "upele",
+                "fievre",
+                "toux",
+                "eruption",
+            ],
+        ) {
+            EmergencyLevel::Medium
+        } else {
+            EmergencyLevel::Low
+        }
+    }
+
+    fn should_escalate_to_provider(intent: ChatIntent, triage_level: EmergencyLevel) -> bool {
+        triage_level == EmergencyLevel::Critical
+            || triage_level == EmergencyLevel::High
+            || matches!(
+                intent,
+                ChatIntent::EmergencySupport | ChatIntent::MedicationGuidance
+            )
+    }
+
+    fn confidence_for_message(
+        normalized_message: &str,
+        intent: ChatIntent,
+        triage_level: EmergencyLevel,
+    ) -> u32 {
+        let mut confidence = 7800u32;
+        if matches!(
+            intent,
+            ChatIntent::EmergencySupport | ChatIntent::SymptomCheck | ChatIntent::HealthEducation
+        ) {
+            confidence = confidence.saturating_add(700);
+        }
+        if Self::word_count(normalized_message) >= 6 {
+            confidence = confidence.saturating_add(500);
+        }
+        if matches!(triage_level, EmergencyLevel::Critical | EmergencyLevel::High) {
+            confidence = confidence.saturating_add(1200);
+        }
+        confidence.min(9800)
+    }
+
+    fn estimated_response_time_ms(normalized_message: &str) -> u32 {
+        let base = 320u32;
+        let variable = (Self::word_count(normalized_message) as u32).saturating_mul(40);
+        base.saturating_add(variable).min(1800)
+    }
+
+    fn match_knowledge_entries(
+        env: &Env,
+        normalized_message: &str,
+        language: &String,
+        intent: ChatIntent,
+    ) -> Vec<BytesN<32>> {
+        let mut matches = Vec::new(env);
+        let normalized_language = Self::normalize_string(language);
+        let index: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::KnowledgeIndex)
+            .unwrap_or_else(|| Vec::new(env));
+
+        for entry_id in index.iter() {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, MedicalKnowledgeEntry>(&DataKey::KnowledgeEntry(entry_id.clone()))
+            {
+                if !entry.is_active {
+                    continue;
+                }
+                let entry_language = Self::normalize_string(&entry.language);
+                let entry_category = Self::normalize_string(&entry.category);
+                let summary = Self::normalize_string(&entry.summary);
+                let title = Self::normalize_string(&entry.title);
+
+                let language_matches =
+                    entry_language == normalized_language || entry_language == "english";
+                let category_matches =
+                    Self::entry_matches_intent(&entry_category, intent)
+                        || summary.contains(normalized_message)
+                        || normalized_message.contains(summary.as_str())
+                        || title.contains(normalized_message)
+                        || normalized_message.contains(title.as_str());
+
+                if language_matches && category_matches {
+                    matches.push_back(entry_id);
+                }
+            }
+        }
+
+        matches
+    }
+
+    fn entry_matches_intent(category: &str, intent: ChatIntent) -> bool {
+        match intent {
+            ChatIntent::SymptomCheck => category.contains("symptom") || category.contains("triage"),
+            ChatIntent::HealthEducation => {
+                category.contains("education") || category.contains("wellness")
+            }
+            ChatIntent::MedicationGuidance => category.contains("medication"),
+            ChatIntent::EmergencySupport => category.contains("emergency"),
+            ChatIntent::GeneralInquiry => category.contains("general"),
+        }
+    }
+
+    fn knowledge_source_ref(env: &Env, article_ids: &Vec<BytesN<32>>) -> String {
+        for article_id in article_ids.iter() {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, MedicalKnowledgeEntry>(&DataKey::KnowledgeEntry(article_id.clone()))
+            {
+                return entry.source_ref;
+            }
+        }
+        String::from_str(env, "internal://medical-knowledge/default")
+    }
+
+    fn compose_health_education(
+        env: &Env,
+        patient: &Patient,
+        normalized_message: &str,
+        intent: ChatIntent,
+        triage_level: EmergencyLevel,
+        language: &String,
+        article_ids: &Vec<BytesN<32>>,
+    ) -> String {
+        for article_id in article_ids.iter() {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, MedicalKnowledgeEntry>(&DataKey::KnowledgeEntry(article_id.clone()))
+            {
+                return entry.guidance;
+            }
+        }
+
+        let preferred = Self::normalize_string(language);
+        let is_sw = preferred == "swahili";
+        let is_fr = preferred == "french";
+        let chronic_hint = if normalized_message.contains("diabetes") {
+            if is_sw {
+                "Fuata ratiba ya dawa, pima sukari mara kwa mara, na kunywa maji ya kutosha."
+            } else if is_fr {
+                "Respectez vos medicaments, surveillez votre glycemie et maintenez une bonne hydratation."
+            } else {
+                "Keep taking medication as prescribed, monitor blood sugar, and stay hydrated."
+            }
+        } else if normalized_message.contains("pressure") || normalized_message.contains("hypertension")
+        {
+            if is_sw {
+                "Punguza chumvi, endelea na dawa zako, na fuatilia presha yako mara kwa mara."
+            } else if is_fr {
+                "Reduisez le sel, prenez vos medicaments regulierement et surveillez votre tension."
+            } else {
+                "Reduce salt intake, stay on your medicines, and monitor blood pressure regularly."
+            }
+        } else if matches!(intent, ChatIntent::SymptomCheck) {
+            if is_sw {
+                "Pumzika, kunywa maji, fuatilia dalili zako, na tafuta ushauri wa daktari zikiongezeka."
+            } else if is_fr {
+                "Reposez-vous, hydratez-vous, surveillez vos symptomes et consultez si l'etat s'aggrave."
+            } else {
+                "Rest, hydrate well, monitor symptoms closely, and seek care if they worsen."
+            }
+        } else if is_sw {
+            "Endelea na mpango wako wa matibabu na wasiliana na daktari wako wa kawaida kwa ushauri wa kibinafsi."
+        } else if is_fr {
+            "Poursuivez votre plan de soins et contactez votre medecin traitant pour des conseils personnalises."
+        } else {
+            "Continue your care plan and follow up with your primary provider for personalized guidance."
+        };
+
+        let tailored = if is_sw {
+            if triage_level == EmergencyLevel::Low {
+                "Elimu ya afya: hali yako inaonekana kuwa ya hatari ndogo kwa sasa. "
+            } else {
+                "Elimu ya afya: dalili zako zinahitaji uangalizi wa karibu. "
+            }
+        } else if is_fr {
+            if triage_level == EmergencyLevel::Low {
+                "Education sante: votre situation semble actuellement a faible risque. "
+            } else {
+                "Education sante: vos symptomes necessitent une surveillance attentive. "
+            }
+        } else if triage_level == EmergencyLevel::Low {
+            "Health education: your current presentation appears low risk at the moment. "
+        } else {
+            "Health education: your symptoms deserve close monitoring. "
+        };
+
+        String::from_str(
+            env,
+            &(tailored.to_owned() + chronic_hint),
+        )
+    }
+
+    fn compose_recommended_action(
+        env: &Env,
+        patient: &Patient,
+        intent: ChatIntent,
+        triage_level: EmergencyLevel,
+        escalation_required: bool,
+        language: &String,
+    ) -> String {
+        let protocol = Self::get_emergency_protocol(env);
+        let normalized_language = Self::normalize_string(language);
+
+        if triage_level == EmergencyLevel::Critical {
+            let message = if normalized_language == "swahili" {
+                protocol.escalation_message_sw
+            } else if normalized_language == "french" {
+                protocol.escalation_message_fr
+            } else {
+                protocol.escalation_message_en
+            };
+            return String::from_str(
+                env,
+                &(message.to_string()
+                    + " Contact: "
+                    + &protocol.emergency_contact.to_string()),
+            );
+        }
+
+        let action = match (intent, triage_level, normalized_language.as_str()) {
+            (_, EmergencyLevel::High, "swahili") => {
+                "Panga telemedicine ya haraka ndani ya saa 4 na fuatilia dalili zako kila baada ya dakika 30."
+            }
+            (_, EmergencyLevel::High, "french") => {
+                "Planifiez une teleconsultation urgente sous 4 heures et surveillez vos symptomes toutes les 30 minutes."
+            }
+            (_, EmergencyLevel::High, _) => {
+                "Arrange an urgent telemedicine review within 4 hours and monitor symptoms every 30 minutes."
+            }
+            (ChatIntent::MedicationGuidance, _, "swahili") => {
+                "Kagua dawa zako na mtoa huduma kabla ya kubadili dozi yoyote."
+            }
+            (ChatIntent::MedicationGuidance, _, "french") => {
+                "Verifiez vos medicaments avec un clinicien avant tout changement de dose."
+            }
+            (ChatIntent::MedicationGuidance, _, _) => {
+                "Review your medicines with a clinician before changing any dose."
+            }
+            (ChatIntent::HealthEducation, _, "swahili") => {
+                "Fuata hatua za kinga na uwasiliane na daktari wako wa kawaida kwa mpango binafsi."
+            }
+            (ChatIntent::HealthEducation, _, "french") => {
+                "Suivez les mesures preventives et contactez votre medecin traitant pour un plan personnalise."
+            }
+            (ChatIntent::HealthEducation, _, _) => {
+                "Follow preventive steps and check in with your primary provider for a personalized plan."
+            }
+            (_, _, "swahili") if escalation_required => {
+                "Wasiliana na mtoa huduma wako leo kwa tathmini ya dalili."
+            }
+            (_, _, "french") if escalation_required => {
+                "Contactez votre professionnel de sante aujourd'hui pour une evaluation clinique."
+            }
+            (_, _, _) if escalation_required => {
+                "Contact your care team today for a clinical assessment."
+            }
+            (_, _, "swahili") => {
+                "Endelea kujitunza nyumbani na ufanye miadi kama dalili zitaendelea."
+            }
+            (_, _, "french") => {
+                "Poursuivez l'autosoins a domicile et prenez rendez-vous si les symptomes persistent."
+            }
+            _ => "Continue home care and book a consultation if symptoms persist.",
+        };
+
+        String::from_str(env, action)
+    }
+
+    fn create_emergency_case_internal(
+        env: &Env,
+        patient: &Patient,
+        inquiry_id: &BytesN<32>,
+        message: &String,
+        triage_level: EmergencyLevel,
+        escalation_required: bool,
+    ) -> Result<BytesN<32>, TelemedicineError> {
+        let emergency_id = inquiry_id.clone();
+        let emergency = EmergencyCase {
+            emergency_id: emergency_id.clone(),
+            patient_id: patient.patient_id.clone(),
+            reporting_provider: patient.primary_care_physician.clone(),
+            responding_provider: patient.primary_care_physician.clone(),
+            emergency_level: triage_level,
+            reported_symptoms: message.clone(),
+            triage_notes_hash: Self::hash_text(env, message),
+            triggered_at: env.ledger().timestamp(),
+            response_time: 0,
+            resolved_at: 0,
+            is_resolved: false,
+            escalated_to_physical: escalation_required,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Emergency(emergency_id.clone()), &emergency);
+
+        let mut active: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ActiveEmergencies)
+            .unwrap_or_else(|| Vec::new(env));
+        if !Self::vec_contains_bytes32(&active, &emergency_id) {
+            active.push_back(emergency_id.clone());
+            env.storage()
+                .persistent()
+                .set(&DataKey::ActiveEmergencies, &active);
+        }
+        Self::increment_platform_stat(env, 5);
+
+        Ok(emergency_id)
+    }
+
+    fn hash_text(env: &Env, text: &String) -> BytesN<32> {
+        let rust = text.to_string();
+        let bytes = Bytes::from_slice(env, rust.as_bytes());
+        env.crypto().sha256(&bytes).into()
+    }
+
+    fn word_count(message: &str) -> usize {
+        message.split_whitespace().count()
+    }
+
+    fn contains_any(message: &str, terms: &[&str]) -> bool {
+        for term in terms {
+            if message.contains(term) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn vec_contains_bytes32(values: &Vec<BytesN<32>>, target: &BytesN<32>) -> bool {
+        for value in values.iter() {
+            if value == *target {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn remove_bytes32(env: &Env, values: Vec<BytesN<32>>, target: &BytesN<32>) -> Vec<BytesN<32>> {
+        let mut filtered = Vec::new(env);
+        for value in values.iter() {
+            if value != *target {
+                filtered.push_back(value);
+            }
+        }
+        filtered
     }
 
     #[allow(dead_code)]
