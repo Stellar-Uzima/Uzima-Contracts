@@ -345,6 +345,30 @@ pub struct AbePolicyMetadata {
     pub revocation_epoch: u32,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedAccessState {
+    pub record_policies: Map<u64, AbePolicyMetadata>,
+    pub user_attributes: Map<Address, Vec<UserAccessAttribute>>,
+    pub attribute_epochs: Map<BytesN<32>, u32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedEncryptedRecordInput {
+    pub ciphertext_ref: String,
+    pub ciphertext_hash: BytesN<32>,
+    pub envelopes: Vec<KeyEnvelope>,
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CryptoAuditAction {
@@ -448,11 +472,6 @@ pub enum DataKey {
     // Encrypted records
     EncryptedRecord(u64),
     PatientEncryptedRecords(Address),
-    EncryptedRecordAbePolicy(u64),
-
-    // Advanced access control / ABE
-    UserAccessAttributes(Address),
-    AccessAttributeEpoch(String),
 
     // Crypto audit log
     CryptoAuditCount,
@@ -1255,14 +1274,13 @@ impl MedicalRecordsContract {
         validation::validate_attribute_value(&value)?;
         Self::require_active_user(&env, &user)?;
 
-        let attr_key = Self::custom_attribute_key(&env, &namespace, &value);
+        let attr_key = Self::attribute_epoch_key(&env, &namespace, &value);
         let epoch = Self::read_access_attribute_epoch(&env, &attr_key);
         let now = env.ledger().timestamp();
-        let key = DataKey::UserAccessAttributes(user.clone());
-        let current: Vec<UserAccessAttribute> = env
-            .storage()
-            .persistent()
-            .get(&key)
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
             .unwrap_or(Vec::new(&env));
 
         let mut replaced = false;
@@ -1300,7 +1318,8 @@ impl MedicalRecordsContract {
             });
         }
 
-        env.storage().persistent().set(&key, &updated);
+        state.user_attributes.set(user, updated);
+        Self::write_advanced_access_state(&env, &state);
         Ok(true)
     }
 
@@ -1324,11 +1343,10 @@ impl MedicalRecordsContract {
         validation::validate_attribute_namespace(&namespace)?;
         validation::validate_attribute_value(&value)?;
 
-        let key = DataKey::UserAccessAttributes(user);
-        let current: Vec<UserAccessAttribute> = env
-            .storage()
-            .persistent()
-            .get(&key)
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
             .unwrap_or(Vec::new(&env));
         let now = env.ledger().timestamp();
 
@@ -1354,11 +1372,11 @@ impl MedicalRecordsContract {
         }
 
         if revoked {
-            env.storage().persistent().set(&key, &updated);
-            Self::bump_access_attribute_epoch(
-                &env,
-                &Self::custom_attribute_key(&env, &namespace, &value),
-            );
+            state.user_attributes.set(user, updated);
+            let epoch_key = Self::attribute_epoch_key(&env, &namespace, &value);
+            let next_epoch = Self::read_access_attribute_epoch(&env, &epoch_key).saturating_add(1);
+            state.attribute_epochs.set(epoch_key, next_epoch);
+            Self::write_advanced_access_state(&env, &state);
         }
 
         Ok(revoked)
@@ -1373,8 +1391,9 @@ impl MedicalRecordsContract {
 
         Ok(env
             .storage()
-            .persistent()
-            .get(&DataKey::UserAccessAttributes(user))
+            .instance()
+            .get::<_, AdvancedAccessState>(&Symbol::new(&env, "adv_access"))
+            .map(|state| state.user_attributes.get(user).unwrap_or(Vec::new(&env)))
             .unwrap_or(Vec::new(&env)))
     }
 
@@ -1388,7 +1407,7 @@ impl MedicalRecordsContract {
         validation::validate_attribute_value(&value)?;
         Ok(Self::read_access_attribute_epoch(
             &env,
-            &Self::custom_attribute_key(&env, &namespace, &value),
+            &Self::attribute_epoch_key(&env, &namespace, &value),
         ))
     }
 
@@ -2881,17 +2900,7 @@ impl MedicalRecordsContract {
         tags: Vec<String>,
         category: String,
         treatment_type: String,
-        ciphertext_ref: String,
-        ciphertext_hash: BytesN<32>,
-        envelopes: Vec<KeyEnvelope>,
-        policy_ref: String,
-        policy_hash: BytesN<32>,
-        access_ciphertext_ref: String,
-        access_ciphertext_hash: BytesN<32>,
-        required_permission: Permission,
-        attribute_count: u32,
-        valid_until: u64,
-        revocation_epoch: u32,
+        advanced: AdvancedEncryptedRecordInput,
     ) -> Result<u64, Error> {
         let record_id = Self::add_encrypted_record(
             env.clone(),
@@ -2901,23 +2910,23 @@ impl MedicalRecordsContract {
             tags,
             category,
             treatment_type,
-            ciphertext_ref,
-            ciphertext_hash,
-            envelopes,
+            advanced.ciphertext_ref,
+            advanced.ciphertext_hash,
+            advanced.envelopes,
         )?;
 
         Self::bind_encrypted_record_abe_policy_internal(
             &env,
             &caller,
             record_id,
-            policy_ref,
-            policy_hash,
-            access_ciphertext_ref,
-            access_ciphertext_hash,
-            required_permission,
-            attribute_count,
-            valid_until,
-            revocation_epoch,
+            advanced.policy_ref,
+            advanced.policy_hash,
+            advanced.access_ciphertext_ref,
+            advanced.access_ciphertext_hash,
+            advanced.required_permission,
+            advanced.attribute_count,
+            advanced.valid_until,
+            advanced.revocation_epoch,
         )?;
 
         Ok(record_id)
@@ -3264,10 +3273,8 @@ impl MedicalRecordsContract {
             return Err(Error::InvalidCredential);
         }
 
-        Ok(env
-            .storage()
-            .persistent()
-            .get(&DataKey::EncryptedRecordAbePolicy(record_id)))
+        let state = Self::read_advanced_access_state(&env);
+        Ok(state.record_policies.get(record_id))
     }
 
     pub fn get_crypto_audit_logs(
@@ -4769,69 +4776,88 @@ impl MedicalRecordsContract {
             revocation_epoch,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::EncryptedRecordAbePolicy(record_id), &policy);
+        let mut state = Self::read_advanced_access_state(env);
+        state.record_policies.set(record_id, policy);
+        Self::write_advanced_access_state(env, &state);
 
         Ok(())
     }
 
-    fn custom_attribute_key(env: &Env, namespace: &String, value: &String) -> String {
-        let mut out = namespace.clone();
-        out.push_str(&String::from_str(env, ":"));
-        out.push_str(value);
-        out
+    fn role_attribute_key_from_role(env: &Env, role: Role) -> BytesN<32> {
+        let (namespace, value) = match role {
+            Role::Admin => ("role", "admin"),
+            Role::Doctor => ("role", "doctor"),
+            Role::Patient => ("role", "patient"),
+            Role::None => ("role", "none"),
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, namespace),
+            &String::from_str(env, value),
+        )
     }
 
-    fn role_attribute_key_from_role(env: &Env, role: Role) -> String {
-        match role {
-            Role::Admin => String::from_str(env, "role:admin"),
-            Role::Doctor => String::from_str(env, "role:doctor"),
-            Role::Patient => String::from_str(env, "role:patient"),
-            Role::None => String::from_str(env, "role:none"),
-        }
+    fn permission_attribute_key(env: &Env, permission: Permission) -> BytesN<32> {
+        let value = match permission {
+            Permission::ManageUsers => "manage_users",
+            Permission::ManageSystem => "manage_system",
+            Permission::CreateRecord => "create_record",
+            Permission::ReadRecord => "read_record",
+            Permission::UpdateRecord => "update_record",
+            Permission::DeleteRecord => "delete_record",
+            Permission::ReadConfidential => "read_confidential",
+            Permission::DelegatePermission => "delegate_permission",
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, "permission"),
+            &String::from_str(env, value),
+        )
     }
 
-    fn permission_attribute_key(env: &Env, permission: Permission) -> String {
-        match permission {
-            Permission::ManageUsers => String::from_str(env, "permission:manage_users"),
-            Permission::ManageSystem => String::from_str(env, "permission:manage_system"),
-            Permission::CreateRecord => String::from_str(env, "permission:create_record"),
-            Permission::ReadRecord => String::from_str(env, "permission:read_record"),
-            Permission::UpdateRecord => String::from_str(env, "permission:update_record"),
-            Permission::DeleteRecord => String::from_str(env, "permission:delete_record"),
-            Permission::ReadConfidential => String::from_str(env, "permission:read_confidential"),
-            Permission::DelegatePermission => {
-                String::from_str(env, "permission:delegate_permission")
-            }
-        }
+    fn read_access_attribute_epoch(env: &Env, key: &BytesN<32>) -> u32 {
+        let state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.get(key.clone()).unwrap_or(1)
     }
 
-    fn read_access_attribute_epoch(env: &Env, key: &String) -> u32 {
-        env.storage()
-            .persistent()
-            .get(&DataKey::AccessAttributeEpoch(key.clone()))
-            .unwrap_or(1)
-    }
-
-    fn ensure_access_attribute_epoch(env: &Env, key: &String) {
-        if env
-            .storage()
-            .persistent()
-            .has(&DataKey::AccessAttributeEpoch(key.clone()))
-        {
+    fn ensure_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
+        let mut state = Self::read_advanced_access_state(env);
+        if state.attribute_epochs.contains_key(key.clone()) {
             return;
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::AccessAttributeEpoch(key.clone()), &1u32);
+        state.attribute_epochs.set(key.clone(), 1u32);
+        Self::write_advanced_access_state(env, &state);
     }
 
-    fn bump_access_attribute_epoch(env: &Env, key: &String) {
+    fn bump_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
         let next = Self::read_access_attribute_epoch(env, key).saturating_add(1);
+        let mut state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.set(key.clone(), next);
+        Self::write_advanced_access_state(env, &state);
+    }
+
+    fn attribute_epoch_key(env: &Env, namespace: &String, value: &String) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&namespace.clone().to_xdr(env));
+        payload.append(&value.clone().to_xdr(env));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn read_advanced_access_state(env: &Env) -> AdvancedAccessState {
         env.storage()
-            .persistent()
-            .set(&DataKey::AccessAttributeEpoch(key.clone()), &next);
+            .instance()
+            .get(&Symbol::new(env, "adv_access"))
+            .unwrap_or(AdvancedAccessState {
+                record_policies: Map::new(env),
+                user_attributes: Map::new(env),
+                attribute_epochs: Map::new(env),
+            })
+    }
+
+    fn write_advanced_access_state(env: &Env, state: &AdvancedAccessState) {
+        env.storage()
+            .instance()
+            .set(&Symbol::new(env, "adv_access"), state);
     }
 
     fn can_view_record(

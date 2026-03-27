@@ -4,7 +4,10 @@
 mod common;
 
 use common::setup_uzima;
-use medical_records::{CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope, Permission};
+use medical_records::{
+    AdvancedEncryptedRecordInput, CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope,
+    Permission,
+};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Bytes, BytesN, String, Vec};
 
@@ -210,17 +213,19 @@ fn test_advanced_encrypted_record_persists_abe_policy_metadata() {
         &tags,
         &String::from_str(&env, "Modern"),
         &String::from_str(&env, "Medication"),
-        &String::from_str(&env, "ipfs://ciphertextcid-advanced"),
-        &BytesN::from_array(&env, &[8u8; 32]),
-        &make_envelopes(&env, &t.patient, &t.doctor),
-        &String::from_str(&env, "ipfs://abe-policy-001"),
-        &BytesN::from_array(&env, &[4u8; 32]),
-        &String::from_str(&env, "ipfs://abe-access-ct-001"),
-        &BytesN::from_array(&env, &[6u8; 32]),
-        &Permission::ReadConfidential,
-        &101u32,
-        &1_900_000_000u64,
-        &3u32,
+        &AdvancedEncryptedRecordInput {
+            ciphertext_ref: String::from_str(&env, "ipfs://ciphertextcid-advanced"),
+            ciphertext_hash: BytesN::from_array(&env, &[8u8; 32]),
+            envelopes: make_envelopes(&env, &t.patient, &t.doctor),
+            policy_ref: String::from_str(&env, "ipfs://abe-policy-001"),
+            policy_hash: BytesN::from_array(&env, &[4u8; 32]),
+            access_ciphertext_ref: String::from_str(&env, "ipfs://abe-access-ct-001"),
+            access_ciphertext_hash: BytesN::from_array(&env, &[6u8; 32]),
+            required_permission: Permission::ReadConfidential,
+            attribute_count: 101u32,
+            valid_until: 1_900_000_000u64,
+            revocation_epoch: 3u32,
+        },
     );
 
     let policy = t
