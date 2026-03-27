@@ -230,11 +230,13 @@ fn test_advanced_encrypted_record_persists_abe_policy_metadata() {
 
     let policy = t
         .client
-        .get_encrypted_record_abe_policy(&t.patient, &record_id)
-        .expect("policy metadata should be present");
-    assert_eq!(policy.attribute_count, 101);
-    assert_eq!(policy.required_permission, Permission::ReadConfidential);
-    assert_eq!(policy.revocation_epoch, 3);
+        .get_encrypted_record_abe_policy(&t.patient, &record_id);
+    assert!(policy.is_some(), "policy metadata should be present");
+    if let Some(policy) = policy {
+        assert_eq!(policy.attribute_count, 101);
+        assert_eq!(policy.required_permission, Permission::ReadConfidential);
+        assert_eq!(policy.revocation_epoch, 3);
+    }
 }
 
 #[test]
