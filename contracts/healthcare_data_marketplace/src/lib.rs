@@ -172,14 +172,20 @@ impl HealthcareDataMarketplace {
         env.storage().instance().set(&DataKey::ProviderCount, &0u64);
         env.storage().instance().set(&DataKey::NextListingId, &0u64);
         env.storage().instance().set(&DataKey::NextIntentId, &0u64);
-        env.storage().instance().set(&DataKey::NextEscrowOrderId, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextEscrowOrderId, &0u64);
         Ok(())
     }
 
     pub fn register_provider(env: Env, provider: Address) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
-        if env.storage().persistent().has(&DataKey::Provider(provider.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Provider(provider.clone()))
+        {
             return Err(Error::ProviderExists);
         }
 
@@ -193,7 +199,11 @@ impl HealthcareDataMarketplace {
             .persistent()
             .set(&DataKey::Provider(provider), &profile);
 
-        let count: u64 = env.storage().instance().get(&DataKey::ProviderCount).unwrap_or(0);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProviderCount)
+            .unwrap_or(0);
         env.storage()
             .instance()
             .set(&DataKey::ProviderCount, &count.saturating_add(1));
@@ -329,7 +339,9 @@ impl HealthcareDataMarketplace {
         env.storage()
             .persistent()
             .set(&DataKey::Intent(intent_id), &intent);
-        env.storage().instance().set(&DataKey::NextIntentId, &intent_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextIntentId, &intent_id);
         Ok(intent_id)
     }
 
@@ -428,10 +440,14 @@ impl HealthcareDataMarketplace {
             return Err(Error::InvalidStatus);
         }
 
-        let provider_amount =
-            intent.amount.saturating_mul(listing.royalty.provider_bps as i128) / 10_000;
-        let curator_amount =
-            intent.amount.saturating_mul(listing.royalty.curator_bps as i128) / 10_000;
+        let provider_amount = intent
+            .amount
+            .saturating_mul(listing.royalty.provider_bps as i128)
+            / 10_000;
+        let curator_amount = intent
+            .amount
+            .saturating_mul(listing.royalty.curator_bps as i128)
+            / 10_000;
         let platform_amount = intent
             .amount
             .saturating_sub(provider_amount)
@@ -476,7 +492,10 @@ impl HealthcareDataMarketplace {
     }
 
     pub fn get_provider_count(env: Env) -> u64 {
-        env.storage().instance().get(&DataKey::ProviderCount).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&DataKey::ProviderCount)
+            .unwrap_or(0)
     }
 
     pub fn get_provider(env: Env, provider: Address) -> Option<ProviderProfile> {
@@ -484,7 +503,9 @@ impl HealthcareDataMarketplace {
     }
 
     pub fn get_listing(env: Env, listing_id: u64) -> Option<Listing> {
-        env.storage().persistent().get(&DataKey::Listing(listing_id))
+        env.storage()
+            .persistent()
+            .get(&DataKey::Listing(listing_id))
     }
 
     pub fn get_intent(env: Env, intent_id: u64) -> Option<PurchaseIntent> {
