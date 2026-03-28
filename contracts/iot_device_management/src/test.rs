@@ -111,3 +111,132 @@ fn test_deactivate_manufacturer() {
     let mfr = client.get_manufacturer(&mfr_id);
     assert_eq!(mfr.is_active, false);
 }
+
+fn register_device(
+    env: &Env,
+    client: &IoTDeviceManagementClient,
+    operator: &Address,
+    mfr_id: &BytesN<32>,
+    device_byte: u8,
+) -> BytesN<32> {
+    let device_id = make_bytes32(env, device_byte);
+    let model = String::from_str(env, "Model-X100");
+    let serial = String::from_str(env, "SN-00001");
+    let location = String::from_str(env, "Ward A, Room 101");
+    let enc_key = make_bytes32(env, device_byte.wrapping_add(50));
+    let metadata = String::from_str(env, "ipfs://Qm...");
+    client.register_device(
+        operator,
+        &device_id,
+        mfr_id,
+        &DeviceType::VitalSignsMonitor,
+        &model,
+        &serial,
+        &location,
+        &enc_key,
+        &metadata,
+    );
+    device_id
+}
+
+#[test]
+fn test_register_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.status, DeviceStatus::Provisioning);
+    assert_eq!(device.device_type, DeviceType::VitalSignsMonitor);
+    assert_eq!(device.operator, operator);
+}
+
+#[test]
+fn test_register_device_duplicate() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+
+    let model = String::from_str(&env, "M");
+    let serial = String::from_str(&env, "S");
+    let location = String::from_str(&env, "L");
+    let enc = make_bytes32(&env, 99);
+    let meta = String::from_str(&env, "x");
+    let result = client.try_register_device(
+        &operator, &device_id, &mfr_id,
+        &DeviceType::VitalSignsMonitor, &model, &serial, &location, &enc, &meta,
+    );
+    assert_eq!(result, Err(Ok(IoTError::DeviceAlreadyRegistered)));
+}
+
+#[test]
+fn test_activate_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+
+    client.activate_device(&operator, &device_id);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.status, DeviceStatus::Active);
+}
+
+#[test]
+fn test_suspend_and_reactivate_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    client.suspend_device(&operator, &device_id);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.status, DeviceStatus::Suspended);
+
+    client.activate_device(&operator, &device_id);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.status, DeviceStatus::Active);
+}
+
+#[test]
+fn test_decommission_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+
+    client.decommission_device(&admin, &device_id);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.status, DeviceStatus::Decommissioned);
+}
+
+#[test]
+fn test_get_device_count() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    register_device(&env, &client, &operator, &mfr_id, 10);
+    register_device(&env, &client, &operator, &mfr_id, 11);
+
+    assert_eq!(client.get_device_count(), 2);
+}

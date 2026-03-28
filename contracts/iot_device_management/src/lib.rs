@@ -384,4 +384,221 @@ impl IoTDeviceManagement {
         env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id), &mfr);
         Ok(())
     }
+
+    // ============================================================
+    // DEVICE ENROLLMENT & PROVISIONING
+    // ============================================================
+
+    pub fn register_device(
+        env: Env,
+        operator: Address,
+        device_id: BytesN<32>,
+        manufacturer_id: BytesN<32>,
+        device_type: DeviceType,
+        model: String,
+        serial_number: String,
+        location: String,
+        encryption_key_hash: BytesN<32>,
+        metadata_ref: String,
+    ) -> Result<(), IoTError> {
+        operator.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &operator, Role::Operator)?;
+
+        validation::validate_model(&model)?;
+        validation::validate_serial(&serial_number)?;
+        validation::validate_location(&location)?;
+
+        if env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+            return Err(IoTError::DeviceAlreadyRegistered);
+        }
+
+        let mfr: Manufacturer = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Manufacturer(manufacturer_id.clone()))
+            .ok_or(IoTError::ManufacturerNotRegistered)?;
+        if !mfr.is_active {
+            return Err(IoTError::ManufacturerNotRegistered);
+        }
+
+        let now = env.ledger().timestamp();
+        let device = Device {
+            device_id: device_id.clone(),
+            manufacturer_id: manufacturer_id.clone(),
+            device_type,
+            model,
+            serial_number,
+            firmware_version: 0,
+            status: DeviceStatus::Provisioning,
+            operator: operator.clone(),
+            location,
+            registered_at: now,
+            last_heartbeat: 0,
+            health_status: HealthStatus::Offline,
+            uptime_start: 0,
+            total_uptime_secs: 0,
+            total_downtime_secs: 0,
+            encryption_key_hash,
+            metadata_ref,
+        };
+
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        // Index by operator
+        let mut op_devices: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DevicesByOperator(operator.clone()))
+            .unwrap_or(Vec::new(&env));
+        op_devices.push_back(device_id.clone());
+        env.storage().persistent().set(&DataKey::DevicesByOperator(operator.clone()), &op_devices);
+
+        // Index by manufacturer
+        let mut mfr_devices: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DevicesByManufacturer(manufacturer_id.clone()))
+            .unwrap_or(Vec::new(&env));
+        mfr_devices.push_back(device_id.clone());
+        env.storage().persistent().set(&DataKey::DevicesByManufacturer(manufacturer_id.clone()), &mfr_devices);
+
+        // Update manufacturer device count
+        let mut updated_mfr = mfr;
+        updated_mfr.device_count = updated_mfr.device_count.checked_add(1).unwrap();
+        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id), &updated_mfr);
+
+        // Increment device count
+        let count: u64 = env.storage().persistent().get(&DataKey::DeviceCount).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::DeviceCount, &count.checked_add(1).unwrap());
+
+        events::emit_device_registered(&env, &device_id, device_type, &operator);
+        Ok(())
+    }
+
+    pub fn get_device(env: Env, device_id: BytesN<32>) -> Result<Device, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Device(device_id))
+            .ok_or(IoTError::DeviceNotFound)
+    }
+
+    pub fn get_device_count(env: Env) -> u64 {
+        env.storage().persistent().get(&DataKey::DeviceCount).unwrap_or(0)
+    }
+
+    pub fn get_devices_by_operator(env: Env, operator: Address) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DevicesByOperator(operator))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn activate_device(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        if device.status == DeviceStatus::Decommissioned {
+            return Err(IoTError::DeviceDecommissioned);
+        }
+
+        let old_status = device.status;
+        let now = env.ledger().timestamp();
+        device.status = DeviceStatus::Active;
+        device.health_status = HealthStatus::Healthy;
+        device.uptime_start = now;
+
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        // Increment active count if transitioning from non-active
+        if old_status != DeviceStatus::Active {
+            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
+            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.checked_add(1).unwrap());
+        }
+
+        events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Active);
+        Ok(())
+    }
+
+    pub fn suspend_device(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        if device.status == DeviceStatus::Decommissioned {
+            return Err(IoTError::DeviceDecommissioned);
+        }
+
+        let old_status = device.status;
+        let now = env.ledger().timestamp();
+
+        // Accumulate uptime if was active
+        if old_status == DeviceStatus::Active && device.uptime_start > 0 {
+            let uptime_delta = now.saturating_sub(device.uptime_start);
+            device.total_uptime_secs = device.total_uptime_secs.saturating_add(uptime_delta);
+        }
+
+        device.status = DeviceStatus::Suspended;
+        device.uptime_start = 0;
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        if old_status == DeviceStatus::Active {
+            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
+            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
+        }
+
+        events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Suspended);
+        Ok(())
+    }
+
+    pub fn decommission_device(
+        env: Env,
+        admin: Address,
+        device_id: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        Self::check_not_paused(&env)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        let old_status = device.status;
+        device.status = DeviceStatus::Decommissioned;
+        device.health_status = HealthStatus::Offline;
+        device.uptime_start = 0;
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        if old_status == DeviceStatus::Active {
+            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
+            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
+        }
+
+        events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Decommissioned);
+        Ok(())
+    }
 }
