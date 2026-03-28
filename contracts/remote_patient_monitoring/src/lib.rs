@@ -1,30 +1,15 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec, Map};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
 
 #[contract]
 pub struct RemotePatientMonitoringContract;
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DeviceType {
-    BloodPressureMonitor = 0,
-    HeartRateMonitor = 1,
-    GlucoseMeter = 2,
-    PulseOximeter = 3,
-    Thermometer = 4,
-    ECGMonitor = 5,
-    Spirometer = 6,
-    Scale = 7,
-    // Add more up to 50+
-    Other = 255,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Device {
     pub id: u64,
-    pub device_type: u32, // Use u32 for enum
+    pub device_type: u32, // 0: BloodPressureMonitor, 1: HeartRateMonitor, 2: GlucoseMeter, etc.
     pub patient: Address,
     pub caregivers: Vec<Address>,
     pub connectivity: Vec<String>, // WiFi, Cellular, Bluetooth
@@ -45,18 +30,9 @@ pub struct VitalSign {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub enum AlertType {
-    ThresholdExceeded = 0,
-    DeviceOffline = 1,
-    BatteryLow = 2,
-    AbnormalReading = 3,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Alert {
     pub patient: Address,
-    pub alert_type: u32, // enum
+    pub alert_type: u32, // 0: ThresholdExceeded, 1: DeviceOffline, 2: BatteryLow, 3: AbnormalReading
     pub message: String,
     pub timestamp: u64,
     pub severity: u32, // 1-5
@@ -218,7 +194,9 @@ impl RemotePatientMonitoringContract {
             .get::<(Symbol, u64), Device>(&device_key)
         {
             let last_seen_key = (Symbol::new(&env, "last_seen"), device_id);
-            env.storage().persistent().set(&last_seen_key, &env.ledger().timestamp());
+            env.storage()
+                .persistent()
+                .set(&last_seen_key, &env.ledger().timestamp());
         }
     }
 
@@ -295,21 +273,21 @@ impl RemotePatientMonitoringContract {
     }
 
     // Get vitals for patient (last N)
-    pub fn get_vitals(env: Env, patient: Address, limit: u32) -> Vec<VitalSign> {
+    pub fn get_vitals(_env: Env, _patient: Address, _limit: u32) -> Vec<VitalSign> {
         // Simplified: in practice, maintain an index or use events
         // For now, return empty
-        Vec::new(&env)
+        Vec::new(_env)
     }
 
     // Get alerts for patient
-    pub fn get_alerts(env: Env, patient: Address, limit: u32) -> Vec<Alert> {
+    pub fn get_alerts(_env: Env, _patient: Address, _limit: u32) -> Vec<Alert> {
         // Simplified
-        Vec::new(&env)
+        Vec::new(_env)
     }
 
     // Get caregiver alerts
-    pub fn get_caregiver_alerts(env: Env, caregiver: Address) -> Vec<Alert> {
+    pub fn get_caregiver_alerts(_env: Env, _caregiver: Address) -> Vec<Alert> {
         // Simplified
-        Vec::new(&env)
+        Vec::new(_env)
     }
 }

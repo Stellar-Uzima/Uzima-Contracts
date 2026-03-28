@@ -18,10 +18,13 @@ fn test_register_device() {
 
     client.initialize(&admin);
 
-    let connectivity = soroban_sdk::Vec::from_array(&env, [
-        soroban_sdk::String::from_str(&env, "WiFi"),
-        soroban_sdk::String::from_str(&env, "Bluetooth"),
-    ]);
+    let connectivity = soroban_sdk::Vec::from_array(
+        &env,
+        [
+            soroban_sdk::String::from_str(&env, "WiFi"),
+            soroban_sdk::String::from_str(&env, "Bluetooth"),
+        ],
+    );
 
     client.register_device(&admin, &1, &0, &patient, &connectivity); // 0 for BloodPressureMonitor
 
@@ -42,9 +45,8 @@ fn test_submit_vital_sign() {
     let patient = Address::generate(&env);
 
     client.initialize(&admin);
-    let connectivity = soroban_sdk::Vec::from_array(&env, [
-        soroban_sdk::String::from_str(&env, "WiFi"),
-    ]);
+    let connectivity =
+        soroban_sdk::Vec::from_array(&env, [soroban_sdk::String::from_str(&env, "WiFi")]);
     client.register_device(&admin, &1, &1, &patient, &connectivity); // 1 for HeartRateMonitor
 
     client.submit_vital_sign(
@@ -94,9 +96,8 @@ fn test_add_caregiver() {
     let caregiver = Address::generate(&env);
 
     client.initialize(&admin);
-    let connectivity = soroban_sdk::Vec::from_array(&env, [
-        soroban_sdk::String::from_str(&env, "WiFi"),
-    ]);
+    let connectivity =
+        soroban_sdk::Vec::from_array(&env, [soroban_sdk::String::from_str(&env, "WiFi")]);
     client.register_device(&admin, &1, &0, &patient, &connectivity);
 
     client.add_caregiver(&patient, &1, &caregiver);
