@@ -417,3 +417,95 @@ fn test_get_active_device_count() {
     client.suspend_device(&operator, &d1);
     assert_eq!(client.get_active_device_count(), 1);
 }
+
+#[test]
+fn test_create_comm_channel() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    let channel_id = make_bytes32(&env, 30);
+    let enc_key_hash = make_bytes32(&env, 31);
+    let protocol = String::from_str(&env, "TLS1.3-MQTT");
+    client.create_comm_channel(&operator, &device_id, &channel_id, &enc_key_hash, &protocol);
+
+    let channel = client.get_comm_channel(&channel_id);
+    assert_eq!(channel.device_id, device_id);
+    assert_eq!(channel.rotation_count, 0);
+}
+
+#[test]
+fn test_rotate_encryption_key() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    let channel_id = make_bytes32(&env, 30);
+    let enc_key_hash = make_bytes32(&env, 31);
+    let protocol = String::from_str(&env, "TLS1.3");
+    client.create_comm_channel(&operator, &device_id, &channel_id, &enc_key_hash, &protocol);
+
+    // Advance time past rotation interval
+    env.ledger().with_mut(|li| li.timestamp = 5000);
+    let new_key = make_bytes32(&env, 32);
+    client.rotate_encryption_key(&operator, &channel_id, &new_key);
+
+    let channel = client.get_comm_channel(&channel_id);
+    assert_eq!(channel.encryption_key_hash, new_key);
+    assert_eq!(channel.rotation_count, 1);
+}
+
+#[test]
+fn test_rotate_key_too_frequent() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    let channel_id = make_bytes32(&env, 30);
+    let enc_key = make_bytes32(&env, 31);
+    let protocol = String::from_str(&env, "TLS1.3");
+    client.create_comm_channel(&operator, &device_id, &channel_id, &enc_key, &protocol);
+
+    // Rotate once
+    env.ledger().with_mut(|li| li.timestamp = 5000);
+    let key2 = make_bytes32(&env, 32);
+    client.rotate_encryption_key(&operator, &channel_id, &key2);
+
+    // Try again too soon
+    env.ledger().with_mut(|li| li.timestamp = 5100);
+    let key3 = make_bytes32(&env, 33);
+    let result = client.try_rotate_encryption_key(&operator, &channel_id, &key3);
+    assert_eq!(result, Err(Ok(IoTError::KeyRotationTooFrequent)));
+}
+
+#[test]
+fn test_rotate_device_encryption_key() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+
+    let new_key = make_bytes32(&env, 99);
+    client.rotate_device_key(&operator, &device_id, &new_key);
+
+    let device = client.get_device(&device_id);
+    assert_eq!(device.encryption_key_hash, new_key);
+}

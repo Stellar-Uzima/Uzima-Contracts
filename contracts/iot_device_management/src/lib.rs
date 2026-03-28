@@ -940,4 +940,126 @@ impl IoTDeviceManagement {
         env.storage().persistent().set(&DataKey::HeartbeatMinInterval, &interval_secs);
         Ok(())
     }
+
+    // ============================================================
+    // SECURE DEVICE COMMUNICATION
+    // ============================================================
+
+    pub fn create_comm_channel(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+        channel_id: BytesN<32>,
+        encryption_key_hash: BytesN<32>,
+        protocol: String,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        // Device must exist
+        let _device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let channel = CommChannel {
+            channel_id: channel_id.clone(),
+            device_id: device_id.clone(),
+            encryption_key_hash,
+            protocol,
+            created_at: now,
+            last_rotated: now,
+            rotation_count: 0,
+        };
+
+        env.storage().persistent().set(&DataKey::CommChannel(channel_id.clone()), &channel);
+        env.storage().persistent().set(&DataKey::DeviceChannel(device_id), &channel_id);
+        Ok(())
+    }
+
+    pub fn get_comm_channel(
+        env: Env,
+        channel_id: BytesN<32>,
+    ) -> Result<CommChannel, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CommChannel(channel_id))
+            .ok_or(IoTError::ChannelNotFound)
+    }
+
+    pub fn rotate_encryption_key(
+        env: Env,
+        caller: Address,
+        channel_id: BytesN<32>,
+        new_encryption_key_hash: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        let mut channel: CommChannel = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CommChannel(channel_id.clone()))
+            .ok_or(IoTError::ChannelNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let min_interval: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::KeyRotationMinInterval)
+            .unwrap_or(3600);
+
+        if now.saturating_sub(channel.last_rotated) < min_interval {
+            return Err(IoTError::KeyRotationTooFrequent);
+        }
+
+        channel.encryption_key_hash = new_encryption_key_hash;
+        channel.last_rotated = now;
+        channel.rotation_count = channel.rotation_count.checked_add(1).unwrap();
+
+        env.storage().persistent().set(&DataKey::CommChannel(channel_id), &channel);
+        events::emit_key_rotated(&env, &channel.device_id, channel.rotation_count);
+        Ok(())
+    }
+
+    pub fn rotate_device_key(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+        new_encryption_key_hash: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        if device.status == DeviceStatus::Decommissioned {
+            return Err(IoTError::DeviceDecommissioned);
+        }
+
+        device.encryption_key_hash = new_encryption_key_hash;
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        events::emit_key_rotated(&env, &device_id, 0);
+        Ok(())
+    }
+
+    pub fn set_key_rotation_interval(
+        env: Env,
+        admin: Address,
+        interval_secs: u64,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        env.storage().persistent().set(&DataKey::KeyRotationMinInterval, &interval_secs);
+        Ok(())
+    }
 }
