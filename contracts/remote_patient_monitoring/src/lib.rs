@@ -12,7 +12,7 @@ pub struct Device {
     pub device_type: u32, // 0: BloodPressureMonitor, 1: HeartRateMonitor, 2: GlucoseMeter, etc.
     pub patient: Address,
     pub caregivers: Vec<Address>,
-    pub connectivity: Vec<String>, // WiFi, Cellular, Bluetooth
+    pub connectivity: Vec<String>,  // WiFi, Cellular, Bluetooth
     pub battery_level: Option<u32>, // 0-100
 }
 
@@ -108,6 +108,7 @@ impl RemotePatientMonitoringContract {
     }
 
     // Submit vital sign
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_vital_sign(
         env: Env,
         caller: Address,
@@ -188,7 +189,7 @@ impl RemotePatientMonitoringContract {
 
         // Update device last seen
         let device_key = (Symbol::new(&env, "device"), device_id);
-        if let Some(mut device) = env
+        if let Some(_device) = env
             .storage()
             .persistent()
             .get::<(Symbol, u64), Device>(&device_key)
@@ -276,18 +277,18 @@ impl RemotePatientMonitoringContract {
     pub fn get_vitals(_env: Env, _patient: Address, _limit: u32) -> Vec<VitalSign> {
         // Simplified: in practice, maintain an index or use events
         // For now, return empty
-        Vec::new(_env)
+        Vec::new(&_env)
     }
 
     // Get alerts for patient
     pub fn get_alerts(_env: Env, _patient: Address, _limit: u32) -> Vec<Alert> {
         // Simplified
-        Vec::new(_env)
+        Vec::new(&_env)
     }
 
     // Get caregiver alerts
     pub fn get_caregiver_alerts(_env: Env, _caregiver: Address) -> Vec<Alert> {
         // Simplified
-        Vec::new(_env)
+        Vec::new(&_env)
     }
 }
