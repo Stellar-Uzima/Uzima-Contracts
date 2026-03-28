@@ -5,6 +5,7 @@
 #![allow(clippy::used_underscore_binding)]
 
 mod errors;
+mod events;
 pub use errors::IoTError;
 
 #[cfg(test)]
