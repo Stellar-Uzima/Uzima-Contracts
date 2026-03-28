@@ -431,3 +431,142 @@ fn test_submit_segmentation_too_many_regions() {
         &250,
     );
 }
+
+// ── Task 6 Tests ────────────────────────────────────────────────────────
+
+#[test]
+fn test_record_evaluation_updates_window() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_test_model(&env, &client, &admin, 1);
+
+    let evaluator = Address::generate(&env);
+    client.register_evaluator(&admin, &evaluator);
+
+    let caller = Address::generate(&env);
+    let findings = vec![&env, make_finding(&env, 1)];
+    let result_id = client.submit_analysis(
+        &caller,
+        &1u64,
+        &hash(&env, 1),
+        &hash(&env, 99),
+        &sig(&env, 99),
+        &findings,
+        &9000,
+        &150,
+    );
+
+    let perf = client.record_evaluation(&evaluator, &result_id, &true);
+    assert_eq!(perf.window_total, 1);
+    assert_eq!(perf.window_correct, 1);
+    assert_eq!(perf.rolling_accuracy_bps, 10_000);
+    assert_eq!(perf.total_evaluated, 1);
+    assert_eq!(perf.correct_count, 1);
+    assert_eq!(perf.lifetime_accuracy_bps, 10_000);
+}
+
+#[test]
+fn test_model_degrades_on_low_accuracy() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Fresh contract with min_samples=5 for testing
+    let contract_id = Address::generate(&env);
+    env.register_contract(&contract_id, MedicalImagingAiContract);
+    let client = MedicalImagingAiContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    client.initialize(&admin, &9200, &8500, &5);
+
+    register_test_model(&env, &client, &admin, 1);
+
+    let evaluator = Address::generate(&env);
+    client.register_evaluator(&admin, &evaluator);
+
+    let caller = Address::generate(&env);
+    let findings = vec![&env, make_finding(&env, 1)];
+
+    // Submit 10 analyses with unique attestation hashes
+    let mut result_ids: [u64; 10] = [0; 10];
+    for i in 0u8..10 {
+        let rid = client.submit_analysis(
+            &caller,
+            &1u64,
+            &hash(&env, 1),
+            &hash(&env, 100u8.saturating_add(i)),
+            &sig(&env, 100u8.saturating_add(i)),
+            &findings,
+            &9000,
+            &150,
+        );
+        result_ids[i as usize] = rid;
+    }
+
+    // Record 9 correct, 1 incorrect → 90% < 92% warning → Degraded
+    for i in 0..9 {
+        client.record_evaluation(&evaluator, &result_ids[i], &true);
+    }
+    client.record_evaluation(&evaluator, &result_ids[9], &false);
+
+    let model = client.get_model(&hash(&env, 1));
+    assert_eq!(model.status, ModelStatus::Degraded);
+}
+
+#[test]
+fn test_no_enforcement_below_min_samples() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env); // min_samples=50
+
+    register_test_model(&env, &client, &admin, 1);
+
+    let evaluator = Address::generate(&env);
+    client.register_evaluator(&admin, &evaluator);
+
+    let caller = Address::generate(&env);
+    let findings = vec![&env, make_finding(&env, 1)];
+    let result_id = client.submit_analysis(
+        &caller,
+        &1u64,
+        &hash(&env, 1),
+        &hash(&env, 99),
+        &sig(&env, 99),
+        &findings,
+        &9000,
+        &150,
+    );
+
+    // Record 1 incorrect → 0% accuracy but only 1 sample (< 50 min)
+    client.record_evaluation(&evaluator, &result_id, &false);
+
+    let model = client.get_model(&hash(&env, 1));
+    assert_eq!(model.status, ModelStatus::Active);
+}
+
+#[test]
+fn test_configure_thresholds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_test_model(&env, &client, &admin, 1);
+
+    client.configure_thresholds(&admin, &hash(&env, 1), &9500, &9000, &20, &50);
+
+    let perf = client.get_performance(&hash(&env, 1));
+    assert_eq!(perf.warning_threshold_bps, 9500);
+    assert_eq!(perf.critical_threshold_bps, 9000);
+    assert_eq!(perf.min_sample_size, 20);
+    assert_eq!(perf.window_size, 50);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn test_configure_thresholds_invalid() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_test_model(&env, &client, &admin, 1);
+
+    // warning <= critical → InvalidThreshold
+    client.configure_thresholds(&admin, &hash(&env, 1), &8500, &9000, &20, &50);
+}

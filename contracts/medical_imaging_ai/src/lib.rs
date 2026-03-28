@@ -550,6 +550,213 @@ impl MedicalImagingAiContract {
         matches!(model.status, ModelStatus::Active | ModelStatus::Degraded)
     }
 
+    // ── Task 6: Performance Benchmarking ─────────────────────────────────
+
+    pub fn record_evaluation(
+        env: Env,
+        caller: Address,
+        result_id: u64,
+        is_correct: bool,
+    ) -> Result<ModelPerformance, Error> {
+        caller.require_auth();
+        Self::require_evaluator(&env, &caller)?;
+
+        let result: AnalysisResult = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AnalysisResult(result_id))
+            .ok_or(Error::ResultNotFound)?;
+
+        let model: CnnModelMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CnnModel(result.model_id.clone()))
+            .ok_or(Error::ModelNotFound)?;
+
+        let warning_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultWarningBps)
+            .unwrap_or(9200);
+        let critical_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultCriticalBps)
+            .unwrap_or(8500);
+        let min_samples: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultMinSamples)
+            .unwrap_or(50);
+
+        let mut perf: ModelPerformance = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Performance(result.model_id.clone()))
+            .unwrap_or(ModelPerformance {
+                model_id: result.model_id.clone(),
+                modality: model.modality,
+                total_evaluated: 0,
+                correct_count: 0,
+                lifetime_accuracy_bps: 0,
+                window_size: 100,
+                window_correct: 0,
+                window_total: 0,
+                rolling_accuracy_bps: 0,
+                avg_processing_time_ms: 0,
+                warning_threshold_bps: warning_bps,
+                critical_threshold_bps: critical_bps,
+                min_sample_size: min_samples,
+                last_updated: 0,
+            });
+
+        // Update lifetime counters
+        perf.total_evaluated = perf.total_evaluated.saturating_add(1);
+        if is_correct {
+            perf.correct_count = perf.correct_count.saturating_add(1);
+        }
+        perf.lifetime_accuracy_bps = (perf
+            .correct_count
+            .saturating_mul(10_000)
+            .checked_div(perf.total_evaluated)
+            .unwrap_or(0)) as u32;
+
+        // Rolling window: reset if full
+        if perf.window_total >= perf.window_size {
+            perf.window_correct = 0;
+            perf.window_total = 0;
+        }
+        perf.window_total = perf.window_total.saturating_add(1);
+        if is_correct {
+            perf.window_correct = perf.window_correct.saturating_add(1);
+        }
+        perf.rolling_accuracy_bps = (perf
+            .window_correct
+            .saturating_mul(10_000)
+            .checked_div(perf.window_total)
+            .unwrap_or(0)) as u32;
+
+        // Update avg processing time (cumulative moving average)
+        let prev_total = perf.total_evaluated.saturating_sub(1);
+        perf.avg_processing_time_ms = ((u64::from(perf.avg_processing_time_ms)
+            .saturating_mul(prev_total)
+            .saturating_add(u64::from(result.processing_time_ms)))
+        .checked_div(perf.total_evaluated)
+        .unwrap_or(0)) as u32;
+
+        perf.last_updated = env.ledger().timestamp();
+
+        // Threshold enforcement (only if enough samples in window)
+        if perf.window_total >= perf.min_sample_size {
+            if perf.rolling_accuracy_bps < perf.critical_threshold_bps
+                && model.status != ModelStatus::Deactivated
+            {
+                // Deactivate the model
+                let mut m = model.clone();
+                m.status = ModelStatus::Deactivated;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::CnnModel(result.model_id.clone()), &m);
+                env.events()
+                    .publish((symbol_short!("MDL_DEAC"),), result.model_id.clone());
+            } else if perf.rolling_accuracy_bps < perf.warning_threshold_bps
+                && model.status == ModelStatus::Active
+            {
+                // Degrade the model
+                let mut m = model.clone();
+                m.status = ModelStatus::Degraded;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::CnnModel(result.model_id.clone()), &m);
+                env.events()
+                    .publish((symbol_short!("MDL_WARN"),), result.model_id.clone());
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Performance(result.model_id.clone()), &perf);
+
+        Ok(perf)
+    }
+
+    pub fn get_performance(env: Env, model_id: BytesN<32>) -> ModelPerformance {
+        let warning_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultWarningBps)
+            .unwrap_or(9200);
+        let critical_bps: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultCriticalBps)
+            .unwrap_or(8500);
+        let min_samples: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DefaultMinSamples)
+            .unwrap_or(50);
+
+        env.storage()
+            .persistent()
+            .get(&DataKey::Performance(model_id.clone()))
+            .unwrap_or(ModelPerformance {
+                model_id,
+                modality: ImagingModality::Custom(0),
+                total_evaluated: 0,
+                correct_count: 0,
+                lifetime_accuracy_bps: 0,
+                window_size: 100,
+                window_correct: 0,
+                window_total: 0,
+                rolling_accuracy_bps: 0,
+                avg_processing_time_ms: 0,
+                warning_threshold_bps: warning_bps,
+                critical_threshold_bps: critical_bps,
+                min_sample_size: min_samples,
+                last_updated: 0,
+            })
+    }
+
+    pub fn configure_thresholds(
+        env: Env,
+        admin: Address,
+        model_id: BytesN<32>,
+        warning_bps: u32,
+        critical_bps: u32,
+        min_samples: u64,
+        window_size: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+
+        if warning_bps <= critical_bps || warning_bps > 10_000 {
+            return Err(Error::InvalidThreshold);
+        }
+        if min_samples == 0 || window_size == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        // Model must exist
+        let _model: CnnModelMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CnnModel(model_id.clone()))
+            .ok_or(Error::ModelNotFound)?;
+
+        let mut perf = Self::get_performance(env.clone(), model_id.clone());
+        perf.warning_threshold_bps = warning_bps;
+        perf.critical_threshold_bps = critical_bps;
+        perf.min_sample_size = min_samples;
+        perf.window_size = window_size;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Performance(model_id), &perf);
+
+        Ok(true)
+    }
+
     // ── Private helpers ─────────────────────────────────────────────────
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
@@ -572,7 +779,6 @@ impl MedicalImagingAiContract {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn require_evaluator(env: &Env, caller: &Address) -> Result<(), Error> {
         let is_eval: bool = env
             .storage()
