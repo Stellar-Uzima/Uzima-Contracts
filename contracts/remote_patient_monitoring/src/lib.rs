@@ -78,12 +78,7 @@ impl RemotePatientMonitoringContract {
     }
 
     // Add caregiver to device
-    pub fn add_caregiver(
-        env: Env,
-        caller: Address,
-        device_id: u64,
-        caregiver: Address,
-    ) {
+    pub fn add_caregiver(env: Env, caller: Address, device_id: u64, caregiver: Address) {
         caller.require_auth();
         let key = (Symbol::new(&env, "device"), device_id);
         if let Some(mut device) = env
