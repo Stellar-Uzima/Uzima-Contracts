@@ -12,9 +12,7 @@ pub use errors::IoTError;
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, String, Vec};
 
 // ============================================================
 // ENUMS
@@ -193,20 +191,20 @@ pub enum DataKey {
     ActiveDeviceCount,
 
     // Firmware
-    Firmware(BytesN<32>, u32),         // (manufacturer_id, version)
-    LatestFirmware(BytesN<32>, u32),   // (manufacturer_id, device_type) -> version
+    Firmware(BytesN<32>, u32),       // (manufacturer_id, version)
+    LatestFirmware(BytesN<32>, u32), // (manufacturer_id, device_type) -> version
     FirmwareUpdateRecord(u64),
     FirmwareUpdateCount,
     DeviceFirmwareUpdates(BytesN<32>), // device_id -> Vec<u64>
 
     // Health
-    DeviceHeartbeats(BytesN<32>),      // device_id -> Vec<Heartbeat> (last N)
-    HeartbeatMinInterval,              // u64 seconds
+    DeviceHeartbeats(BytesN<32>), // device_id -> Vec<Heartbeat> (last N)
+    HeartbeatMinInterval,         // u64 seconds
 
     // Communication
-    CommChannel(BytesN<32>),           // channel_id -> CommChannel
-    DeviceChannel(BytesN<32>),         // device_id -> channel_id
-    KeyRotationMinInterval,            // u64 seconds
+    CommChannel(BytesN<32>),   // channel_id -> CommChannel
+    DeviceChannel(BytesN<32>), // device_id -> channel_id
+    KeyRotationMinInterval,    // u64 seconds
 }
 
 // ============================================================
@@ -231,11 +229,21 @@ impl IoTDeviceManagement {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::DeviceCount, &0u64);
-        env.storage().persistent().set(&DataKey::ActiveDeviceCount, &0u64);
-        env.storage().persistent().set(&DataKey::ManufacturerCount, &0u32);
-        env.storage().persistent().set(&DataKey::FirmwareUpdateCount, &0u64);
-        env.storage().persistent().set(&DataKey::HeartbeatMinInterval, &60u64);
-        env.storage().persistent().set(&DataKey::KeyRotationMinInterval, &3600u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveDeviceCount, &0u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ManufacturerCount, &0u32);
+        env.storage()
+            .persistent()
+            .set(&DataKey::FirmwareUpdateCount, &0u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::HeartbeatMinInterval, &60u64);
+        env.storage()
+            .persistent()
+            .set(&DataKey::KeyRotationMinInterval, &3600u64);
         events::emit_initialized(&env, &admin);
         Ok(())
     }
@@ -251,7 +259,11 @@ impl IoTDeviceManagement {
     pub fn unpause(env: Env, admin: Address) -> Result<(), IoTError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if !paused {
             return Err(IoTError::NotPaused);
         }
@@ -268,7 +280,9 @@ impl IoTDeviceManagement {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
-        env.storage().persistent().set(&DataKey::UserRole(user), &role);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserRole(user), &role);
         Ok(())
     }
 
@@ -295,7 +309,11 @@ impl IoTDeviceManagement {
     }
 
     fn check_not_paused(env: &Env) -> Result<(), IoTError> {
-        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        let paused: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
         if paused {
             return Err(IoTError::ContractPaused);
         }
@@ -335,7 +353,11 @@ impl IoTDeviceManagement {
         Self::check_not_paused(&env)?;
         validation::validate_name(&name)?;
 
-        if env.storage().persistent().has(&DataKey::Manufacturer(manufacturer_id.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Manufacturer(manufacturer_id.clone()))
+        {
             return Err(IoTError::ManufacturerAlreadyRegistered);
         }
 
@@ -349,16 +371,30 @@ impl IoTDeviceManagement {
             device_count: 0,
         };
 
-        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id.clone()), &mfr);
-        env.storage().persistent().set(&DataKey::ManufacturerByAddr(admin.clone()), &manufacturer_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Manufacturer(manufacturer_id.clone()), &mfr);
+        env.storage().persistent().set(
+            &DataKey::ManufacturerByAddr(admin.clone()),
+            &manufacturer_id,
+        );
 
-        let count: u32 = env.storage().persistent().get(&DataKey::ManufacturerCount).unwrap_or(0);
-        env.storage().persistent().set(&DataKey::ManufacturerCount, &count.checked_add(1).unwrap());
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ManufacturerCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ManufacturerCount, &count.checked_add(1).unwrap());
 
         Ok(())
     }
 
-    pub fn get_manufacturer(env: Env, manufacturer_id: BytesN<32>) -> Result<Manufacturer, IoTError> {
+    pub fn get_manufacturer(
+        env: Env,
+        manufacturer_id: BytesN<32>,
+    ) -> Result<Manufacturer, IoTError> {
         env.storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id))
@@ -381,7 +417,9 @@ impl IoTDeviceManagement {
             .ok_or(IoTError::ManufacturerNotRegistered)?;
 
         mfr.is_active = false;
-        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id), &mfr);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Manufacturer(manufacturer_id), &mfr);
         Ok(())
     }
 
@@ -409,7 +447,11 @@ impl IoTDeviceManagement {
         validation::validate_serial(&serial_number)?;
         validation::validate_location(&location)?;
 
-        if env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Device(device_id.clone()))
+        {
             return Err(IoTError::DeviceAlreadyRegistered);
         }
 
@@ -443,7 +485,9 @@ impl IoTDeviceManagement {
             metadata_ref,
         };
 
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         // Index by operator
         let mut op_devices: Vec<BytesN<32>> = env
@@ -452,7 +496,9 @@ impl IoTDeviceManagement {
             .get(&DataKey::DevicesByOperator(operator.clone()))
             .unwrap_or(Vec::new(&env));
         op_devices.push_back(device_id.clone());
-        env.storage().persistent().set(&DataKey::DevicesByOperator(operator.clone()), &op_devices);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DevicesByOperator(operator.clone()), &op_devices);
 
         // Index by manufacturer
         let mut mfr_devices: Vec<BytesN<32>> = env
@@ -461,16 +507,27 @@ impl IoTDeviceManagement {
             .get(&DataKey::DevicesByManufacturer(manufacturer_id.clone()))
             .unwrap_or(Vec::new(&env));
         mfr_devices.push_back(device_id.clone());
-        env.storage().persistent().set(&DataKey::DevicesByManufacturer(manufacturer_id.clone()), &mfr_devices);
+        env.storage().persistent().set(
+            &DataKey::DevicesByManufacturer(manufacturer_id.clone()),
+            &mfr_devices,
+        );
 
         // Update manufacturer device count
         let mut updated_mfr = mfr;
         updated_mfr.device_count = updated_mfr.device_count.checked_add(1).unwrap();
-        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id), &updated_mfr);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Manufacturer(manufacturer_id), &updated_mfr);
 
         // Increment device count
-        let count: u64 = env.storage().persistent().get(&DataKey::DeviceCount).unwrap_or(0);
-        env.storage().persistent().set(&DataKey::DeviceCount, &count.checked_add(1).unwrap());
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DeviceCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DeviceCount, &count.checked_add(1).unwrap());
 
         events::emit_device_registered(&env, &device_id, device_type, &operator);
         Ok(())
@@ -484,7 +541,10 @@ impl IoTDeviceManagement {
     }
 
     pub fn get_device_count(env: Env) -> u64 {
-        env.storage().persistent().get(&DataKey::DeviceCount).unwrap_or(0)
+        env.storage()
+            .persistent()
+            .get(&DataKey::DeviceCount)
+            .unwrap_or(0)
     }
 
     pub fn get_devices_by_operator(env: Env, operator: Address) -> Vec<BytesN<32>> {
@@ -519,12 +579,20 @@ impl IoTDeviceManagement {
         device.health_status = HealthStatus::Healthy;
         device.uptime_start = now;
 
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         // Increment active count if transitioning from non-active
         if old_status != DeviceStatus::Active {
-            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
-            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.checked_add(1).unwrap());
+            let active: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ActiveDeviceCount)
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::ActiveDeviceCount, &active.checked_add(1).unwrap());
         }
 
         events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Active);
@@ -561,11 +629,19 @@ impl IoTDeviceManagement {
 
         device.status = DeviceStatus::Suspended;
         device.uptime_start = 0;
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         if old_status == DeviceStatus::Active {
-            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
-            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
+            let active: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ActiveDeviceCount)
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
         }
 
         events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Suspended);
@@ -591,14 +667,27 @@ impl IoTDeviceManagement {
         device.status = DeviceStatus::Decommissioned;
         device.health_status = HealthStatus::Offline;
         device.uptime_start = 0;
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         if old_status == DeviceStatus::Active {
-            let active: u64 = env.storage().persistent().get(&DataKey::ActiveDeviceCount).unwrap_or(0);
-            env.storage().persistent().set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
+            let active: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ActiveDeviceCount)
+                .unwrap_or(0);
+            env.storage()
+                .persistent()
+                .set(&DataKey::ActiveDeviceCount, &active.saturating_sub(1));
         }
 
-        events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Decommissioned);
+        events::emit_device_status_changed(
+            &env,
+            &device_id,
+            old_status,
+            DeviceStatus::Decommissioned,
+        );
         Ok(())
     }
 
@@ -628,7 +717,11 @@ impl IoTDeviceManagement {
             .get(&DataKey::Manufacturer(manufacturer_id.clone()))
             .ok_or(IoTError::ManufacturerNotRegistered)?;
 
-        if env.storage().persistent().has(&DataKey::Firmware(manufacturer_id.clone(), version)) {
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Firmware(manufacturer_id.clone(), version))
+        {
             return Err(IoTError::FirmwareAlreadyExists);
         }
 
@@ -645,7 +738,9 @@ impl IoTDeviceManagement {
             size_bytes,
         };
 
-        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
         events::emit_firmware_published(&env, &manufacturer_id, version, device_type);
         Ok(())
     }
@@ -668,7 +763,9 @@ impl IoTDeviceManagement {
 
         fw.status = FirmwareStatus::Approved;
         fw.approved_by = admin;
-        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
 
         // Update latest firmware pointer
         env.storage().persistent().set(
@@ -676,7 +773,12 @@ impl IoTDeviceManagement {
             &version,
         );
 
-        events::emit_firmware_status_changed(&env, &manufacturer_id, version, FirmwareStatus::Approved);
+        events::emit_firmware_status_changed(
+            &env,
+            &manufacturer_id,
+            version,
+            FirmwareStatus::Approved,
+        );
         Ok(())
     }
 
@@ -696,8 +798,15 @@ impl IoTDeviceManagement {
             .ok_or(IoTError::FirmwareVersionNotFound)?;
 
         fw.status = FirmwareStatus::Rejected;
-        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
-        events::emit_firmware_status_changed(&env, &manufacturer_id, version, FirmwareStatus::Rejected);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+        events::emit_firmware_status_changed(
+            &env,
+            &manufacturer_id,
+            version,
+            FirmwareStatus::Rejected,
+        );
         Ok(())
     }
 
@@ -719,7 +828,10 @@ impl IoTDeviceManagement {
     ) -> Result<u32, IoTError> {
         env.storage()
             .persistent()
-            .get(&DataKey::LatestFirmware(manufacturer_id, device_type as u32))
+            .get(&DataKey::LatestFirmware(
+                manufacturer_id,
+                device_type as u32,
+            ))
             .ok_or(IoTError::FirmwareVersionNotFound)
     }
 
@@ -752,7 +864,10 @@ impl IoTDeviceManagement {
         let fw: FirmwareVersion = env
             .storage()
             .persistent()
-            .get(&DataKey::Firmware(device.manufacturer_id.clone(), target_version))
+            .get(&DataKey::Firmware(
+                device.manufacturer_id.clone(),
+                target_version,
+            ))
             .ok_or(IoTError::FirmwareVersionNotFound)?;
 
         if fw.status != FirmwareStatus::Approved {
@@ -763,7 +878,11 @@ impl IoTDeviceManagement {
         let now = env.ledger().timestamp();
 
         // Record the update
-        let update_count: u64 = env.storage().persistent().get(&DataKey::FirmwareUpdateCount).unwrap_or(0);
+        let update_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::FirmwareUpdateCount)
+            .unwrap_or(0);
         let update_id = update_count;
 
         let record = FirmwareUpdateRecord {
@@ -778,8 +897,13 @@ impl IoTDeviceManagement {
             error_ref: String::from_str(&env, ""),
         };
 
-        env.storage().persistent().set(&DataKey::FirmwareUpdateRecord(update_id), &record);
-        env.storage().persistent().set(&DataKey::FirmwareUpdateCount, &update_count.checked_add(1).unwrap());
+        env.storage()
+            .persistent()
+            .set(&DataKey::FirmwareUpdateRecord(update_id), &record);
+        env.storage().persistent().set(
+            &DataKey::FirmwareUpdateCount,
+            &update_count.checked_add(1).unwrap(),
+        );
 
         // Track per-device updates
         let mut device_updates: Vec<u64> = env
@@ -788,11 +912,16 @@ impl IoTDeviceManagement {
             .get(&DataKey::DeviceFirmwareUpdates(device_id.clone()))
             .unwrap_or(Vec::new(&env));
         device_updates.push_back(update_id);
-        env.storage().persistent().set(&DataKey::DeviceFirmwareUpdates(device_id.clone()), &device_updates);
+        env.storage().persistent().set(
+            &DataKey::DeviceFirmwareUpdates(device_id.clone()),
+            &device_updates,
+        );
 
         // Update device firmware version
         device.firmware_version = target_version;
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         events::emit_firmware_updated(&env, &device_id, from_version, target_version, true);
         Ok(update_id)
@@ -864,12 +993,16 @@ impl IoTDeviceManagement {
             heartbeats.remove(0);
         }
         heartbeats.push_back(heartbeat);
-        env.storage().persistent().set(&DataKey::DeviceHeartbeats(device_id.clone()), &heartbeats);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DeviceHeartbeats(device_id.clone()), &heartbeats);
 
         // Update device health
         device.last_heartbeat = now;
         device.health_status = health_status;
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
 
         events::emit_heartbeat(&env, &device_id, health_status);
         Ok(())
@@ -879,7 +1012,11 @@ impl IoTDeviceManagement {
         env: Env,
         device_id: BytesN<32>,
     ) -> Result<Vec<Heartbeat>, IoTError> {
-        if !env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Device(device_id.clone()))
+        {
             return Err(IoTError::DeviceNotFound);
         }
         Ok(env
@@ -915,8 +1052,7 @@ impl IoTDeviceManagement {
 
         // bps = (uptime / total) * 10000
         let bps = total_up
-            .checked_mul(10000)
-            .unwrap_or(u64::MAX)
+            .saturating_mul(10000)
             .checked_div(total_time)
             .unwrap_or(0);
 
@@ -937,7 +1073,9 @@ impl IoTDeviceManagement {
     ) -> Result<(), IoTError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
-        env.storage().persistent().set(&DataKey::HeartbeatMinInterval, &interval_secs);
+        env.storage()
+            .persistent()
+            .set(&DataKey::HeartbeatMinInterval, &interval_secs);
         Ok(())
     }
 
@@ -975,15 +1113,16 @@ impl IoTDeviceManagement {
             rotation_count: 0,
         };
 
-        env.storage().persistent().set(&DataKey::CommChannel(channel_id.clone()), &channel);
-        env.storage().persistent().set(&DataKey::DeviceChannel(device_id), &channel_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CommChannel(channel_id.clone()), &channel);
+        env.storage()
+            .persistent()
+            .set(&DataKey::DeviceChannel(device_id), &channel_id);
         Ok(())
     }
 
-    pub fn get_comm_channel(
-        env: Env,
-        channel_id: BytesN<32>,
-    ) -> Result<CommChannel, IoTError> {
+    pub fn get_comm_channel(env: Env, channel_id: BytesN<32>) -> Result<CommChannel, IoTError> {
         env.storage()
             .persistent()
             .get(&DataKey::CommChannel(channel_id))
@@ -1021,7 +1160,9 @@ impl IoTDeviceManagement {
         channel.last_rotated = now;
         channel.rotation_count = channel.rotation_count.checked_add(1).unwrap();
 
-        env.storage().persistent().set(&DataKey::CommChannel(channel_id), &channel);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CommChannel(channel_id), &channel);
         events::emit_key_rotated(&env, &channel.device_id, channel.rotation_count);
         Ok(())
     }
@@ -1047,7 +1188,9 @@ impl IoTDeviceManagement {
         }
 
         device.encryption_key_hash = new_encryption_key_hash;
-        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Device(device_id.clone()), &device);
         events::emit_key_rotated(&env, &device_id, 0);
         Ok(())
     }
@@ -1059,7 +1202,9 @@ impl IoTDeviceManagement {
     ) -> Result<(), IoTError> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
-        env.storage().persistent().set(&DataKey::KeyRotationMinInterval, &interval_secs);
+        env.storage()
+            .persistent()
+            .set(&DataKey::KeyRotationMinInterval, &interval_secs);
         Ok(())
     }
 
@@ -1067,10 +1212,7 @@ impl IoTDeviceManagement {
     // QUERIES & REPORTING
     // ============================================================
 
-    pub fn get_devices_by_manufacturer(
-        env: Env,
-        manufacturer_id: BytesN<32>,
-    ) -> Vec<BytesN<32>> {
+    pub fn get_devices_by_manufacturer(env: Env, manufacturer_id: BytesN<32>) -> Vec<BytesN<32>> {
         env.storage()
             .persistent()
             .get(&DataKey::DevicesByManufacturer(manufacturer_id))
@@ -1081,7 +1223,11 @@ impl IoTDeviceManagement {
         env: Env,
         device_id: BytesN<32>,
     ) -> Result<Vec<FirmwareUpdateRecord>, IoTError> {
-        if !env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Device(device_id.clone()))
+        {
             return Err(IoTError::DeviceNotFound);
         }
 

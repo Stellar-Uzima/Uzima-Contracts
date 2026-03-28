@@ -82,11 +82,10 @@ pub fn emit_key_rotated(env: &Env, device_id: &BytesN<32>, rotation_count: u32) 
     );
 }
 
-pub fn emit_manufacturer_registered(env: &Env, manufacturer_id: &BytesN<32>, name: &str) {
-    env.events().publish(
-        ("IoT", symbol_short!("mfr_reg")),
-        manufacturer_id.clone(),
-    );
+#[allow(dead_code)]
+pub fn emit_manufacturer_registered(env: &Env, manufacturer_id: &BytesN<32>, _name: &str) {
+    env.events()
+        .publish(("IoT", symbol_short!("mfr_reg")), manufacturer_id.clone());
 }
 
 pub fn emit_paused(env: &Env, admin: &Address) {

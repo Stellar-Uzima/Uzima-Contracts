@@ -171,8 +171,15 @@ fn test_register_device_duplicate() {
     let enc = make_bytes32(&env, 99);
     let meta = String::from_str(&env, "x");
     let result = client.try_register_device(
-        &operator, &device_id, &mfr_id,
-        &DeviceType::VitalSignsMonitor, &model, &serial, &location, &enc, &meta,
+        &operator,
+        &device_id,
+        &mfr_id,
+        &DeviceType::VitalSignsMonitor,
+        &model,
+        &serial,
+        &location,
+        &enc,
+        &meta,
     );
     assert_eq!(result, Err(Ok(IoTError::DeviceAlreadyRegistered)));
 }
@@ -251,8 +258,14 @@ fn test_publish_firmware() {
     let binary_hash = make_bytes32(&env, 200);
     let notes = String::from_str(&env, "ipfs://release-notes");
     client.publish_firmware(
-        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
-        &binary_hash, &notes, &0u32, &1024u64,
+        &admin,
+        &mfr_id,
+        &1u32,
+        &DeviceType::VitalSignsMonitor,
+        &binary_hash,
+        &notes,
+        &0u32,
+        &1024u64,
     );
 
     let fw = client.get_firmware(&mfr_id, &1u32);
@@ -270,8 +283,14 @@ fn test_approve_firmware() {
     let binary_hash = make_bytes32(&env, 200);
     let notes = String::from_str(&env, "notes");
     client.publish_firmware(
-        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
-        &binary_hash, &notes, &0u32, &1024u64,
+        &admin,
+        &mfr_id,
+        &1u32,
+        &DeviceType::VitalSignsMonitor,
+        &binary_hash,
+        &notes,
+        &0u32,
+        &1024u64,
     );
     client.approve_firmware(&admin, &mfr_id, &1u32);
     let fw = client.get_firmware(&mfr_id, &1u32);
@@ -293,8 +312,14 @@ fn test_update_device_firmware() {
     let binary_hash = make_bytes32(&env, 200);
     let notes = String::from_str(&env, "v1");
     client.publish_firmware(
-        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
-        &binary_hash, &notes, &0u32, &1024u64,
+        &admin,
+        &mfr_id,
+        &1u32,
+        &DeviceType::VitalSignsMonitor,
+        &binary_hash,
+        &notes,
+        &0u32,
+        &1024u64,
     );
     client.approve_firmware(&admin, &mfr_id, &1u32);
 
@@ -319,9 +344,27 @@ fn test_firmware_downgrade_not_allowed() {
     let hash1 = make_bytes32(&env, 200);
     let hash2 = make_bytes32(&env, 201);
     let notes = String::from_str(&env, "notes");
-    client.publish_firmware(&admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor, &hash1, &notes, &0u32, &512u64);
+    client.publish_firmware(
+        &admin,
+        &mfr_id,
+        &1u32,
+        &DeviceType::VitalSignsMonitor,
+        &hash1,
+        &notes,
+        &0u32,
+        &512u64,
+    );
     client.approve_firmware(&admin, &mfr_id, &1u32);
-    client.publish_firmware(&admin, &mfr_id, &2u32, &DeviceType::VitalSignsMonitor, &hash2, &notes, &1u32, &1024u64);
+    client.publish_firmware(
+        &admin,
+        &mfr_id,
+        &2u32,
+        &DeviceType::VitalSignsMonitor,
+        &hash2,
+        &notes,
+        &1u32,
+        &1024u64,
+    );
     client.approve_firmware(&admin, &mfr_id, &2u32);
 
     // Update to v2
@@ -348,8 +391,13 @@ fn test_submit_heartbeat() {
 
     let metrics_ref = String::from_str(&env, "ipfs://metrics-001");
     client.submit_heartbeat(
-        &operator, &device_id, &HealthStatus::Healthy,
-        &95u32, &80u32, &0u32, &metrics_ref,
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &95u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
     );
 
     let device = client.get_device(&device_id);
@@ -370,11 +418,27 @@ fn test_heartbeat_too_frequent() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
     let metrics_ref = String::from_str(&env, "m");
-    client.submit_heartbeat(&operator, &device_id, &HealthStatus::Healthy, &95u32, &80u32, &0u32, &metrics_ref);
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &95u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
 
     // Try again too soon (within 60s default interval)
     env.ledger().with_mut(|li| li.timestamp = 1030);
-    let result = client.try_submit_heartbeat(&operator, &device_id, &HealthStatus::Healthy, &95u32, &80u32, &0u32, &metrics_ref);
+    let result = client.try_submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &95u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
     assert_eq!(result, Err(Ok(IoTError::HeartbeatTooFrequent)));
 }
 
@@ -540,7 +604,16 @@ fn test_get_firmware_update_history() {
     // Publish, approve, update to v1
     let hash = make_bytes32(&env, 200);
     let notes = String::from_str(&env, "v1");
-    client.publish_firmware(&admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor, &hash, &notes, &0u32, &512u64);
+    client.publish_firmware(
+        &admin,
+        &mfr_id,
+        &1u32,
+        &DeviceType::VitalSignsMonitor,
+        &hash,
+        &notes,
+        &0u32,
+        &512u64,
+    );
     client.approve_firmware(&admin, &mfr_id, &1u32);
     client.update_device_firmware(&operator, &device_id, &1u32);
 
