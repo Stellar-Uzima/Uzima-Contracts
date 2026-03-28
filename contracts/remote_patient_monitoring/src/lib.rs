@@ -21,7 +21,7 @@ pub struct VitalSign {
     pub device_id: u64,
     pub timestamp: u64,
     pub vital_type: String, // e.g., "heart_rate", "blood_pressure"
-    pub value: i64, // scaled value
+    pub value: i64,         // scaled value
     pub unit: String,
 }
 
@@ -46,7 +46,9 @@ pub struct Threshold {
 impl RemotePatientMonitoringContract {
     // Initialize the contract
     pub fn initialize(env: Env, admin: Address) {
-        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
     }
 
     // Register a device
@@ -58,7 +60,11 @@ impl RemotePatientMonitoringContract {
         patient: Address,
     ) {
         caller.require_auth();
-        let admin: Address = env.storage().instance().get(&Symbol::new(&env, "admin")).unwrap();
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin"))
+            .unwrap();
         assert!(caller == admin || caller == patient, "Unauthorized");
 
         let device = Device {
@@ -106,12 +112,24 @@ impl RemotePatientMonitoringContract {
         };
 
         // Store vital sign
-        let key = (Symbol::new(&env, "vital"), patient.clone(), env.ledger().sequence());
+        let key = (
+            Symbol::new(&env, "vital"),
+            patient.clone(),
+            env.ledger().sequence(),
+        );
         env.storage().persistent().set(&key, &vital);
 
         // Check thresholds and create alert if needed
-        let threshold_key = (Symbol::new(&env, "threshold"), patient.clone(), vital_type.clone());
-        if let Some(threshold) = env.storage().persistent().get::<(Symbol, Address, String), Threshold>(&threshold_key) {
+        let threshold_key = (
+            Symbol::new(&env, "threshold"),
+            patient.clone(),
+            vital_type.clone(),
+        );
+        if let Some(threshold) = env
+            .storage()
+            .persistent()
+            .get::<(Symbol, Address, String), Threshold>(&threshold_key)
+        {
             if value < threshold.min_value || value > threshold.max_value {
                 let alert = Alert {
                     patient: patient.clone(),
@@ -119,11 +137,16 @@ impl RemotePatientMonitoringContract {
                     message: String::from_str(&env, "out of range"), // Simplified, no format
                     timestamp: env.ledger().timestamp(),
                 };
-                let alert_key = (Symbol::new(&env, "alert"), patient.clone(), env.ledger().sequence());
+                let alert_key = (
+                    Symbol::new(&env, "alert"),
+                    patient.clone(),
+                    env.ledger().sequence(),
+                );
                 env.storage().persistent().set(&alert_key, &alert);
 
                 // Emit event
-                env.events().publish((Symbol::new(&env, "alert"), patient), alert);
+                env.events()
+                    .publish((Symbol::new(&env, "alert"), patient), alert);
             }
         }
     }
@@ -140,7 +163,10 @@ impl RemotePatientMonitoringContract {
         caller.require_auth();
         let device_key = (Symbol::new(&env, "device"), 0u64); // Assuming device 0 for simplicity
         let device: Device = env.storage().persistent().get(&device_key).unwrap();
-        assert!(caller == device.patient || device.caregivers.contains(&caller), "Unauthorized");
+        assert!(
+            caller == device.patient || device.caregivers.contains(&caller),
+            "Unauthorized"
+        );
 
         let threshold = Threshold {
             vital_type: vital_type.clone(),
@@ -154,15 +180,13 @@ impl RemotePatientMonitoringContract {
     // Get vitals for patient
     pub fn get_vitals(env: Env, _patient: Address) -> Vec<VitalSign> {
         // Simplified: return last few vitals
-        let vitals = Vec::new(&env);
         // In practice, iterate over storage keys
-        vitals
+        Vec::new(&env)
     }
 
     // Get alerts for patient
     pub fn get_alerts(env: Env, _patient: Address) -> Vec<Alert> {
-        let alerts = Vec::new(&env);
         // Simplified
-        alerts
+        Vec::new(&env)
     }
 }
