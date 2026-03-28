@@ -601,4 +601,200 @@ impl IoTDeviceManagement {
         events::emit_device_status_changed(&env, &device_id, old_status, DeviceStatus::Decommissioned);
         Ok(())
     }
+
+    // ============================================================
+    // FIRMWARE MANAGEMENT
+    // ============================================================
+
+    pub fn publish_firmware(
+        env: Env,
+        caller: Address,
+        manufacturer_id: BytesN<32>,
+        version: u32,
+        device_type: DeviceType,
+        binary_hash: BytesN<32>,
+        release_notes_ref: String,
+        min_version: u32,
+        size_bytes: u64,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Manufacturer)?;
+
+        // Verify manufacturer exists
+        let _mfr: Manufacturer = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Manufacturer(manufacturer_id.clone()))
+            .ok_or(IoTError::ManufacturerNotRegistered)?;
+
+        if env.storage().persistent().has(&DataKey::Firmware(manufacturer_id.clone(), version)) {
+            return Err(IoTError::FirmwareAlreadyExists);
+        }
+
+        let fw = FirmwareVersion {
+            version,
+            manufacturer_id: manufacturer_id.clone(),
+            device_type,
+            binary_hash,
+            release_notes_ref,
+            status: FirmwareStatus::Pending,
+            min_version,
+            published_at: env.ledger().timestamp(),
+            approved_by: caller.clone(),
+            size_bytes,
+        };
+
+        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+        events::emit_firmware_published(&env, &manufacturer_id, version, device_type);
+        Ok(())
+    }
+
+    pub fn approve_firmware(
+        env: Env,
+        admin: Address,
+        manufacturer_id: BytesN<32>,
+        version: u32,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        Self::check_not_paused(&env)?;
+
+        let mut fw: FirmwareVersion = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Firmware(manufacturer_id.clone(), version))
+            .ok_or(IoTError::FirmwareVersionNotFound)?;
+
+        fw.status = FirmwareStatus::Approved;
+        fw.approved_by = admin;
+        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+
+        // Update latest firmware pointer
+        env.storage().persistent().set(
+            &DataKey::LatestFirmware(manufacturer_id.clone(), fw.device_type as u32),
+            &version,
+        );
+
+        events::emit_firmware_status_changed(&env, &manufacturer_id, version, FirmwareStatus::Approved);
+        Ok(())
+    }
+
+    pub fn reject_firmware(
+        env: Env,
+        admin: Address,
+        manufacturer_id: BytesN<32>,
+        version: u32,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+
+        let mut fw: FirmwareVersion = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Firmware(manufacturer_id.clone(), version))
+            .ok_or(IoTError::FirmwareVersionNotFound)?;
+
+        fw.status = FirmwareStatus::Rejected;
+        env.storage().persistent().set(&DataKey::Firmware(manufacturer_id.clone(), version), &fw);
+        events::emit_firmware_status_changed(&env, &manufacturer_id, version, FirmwareStatus::Rejected);
+        Ok(())
+    }
+
+    pub fn get_firmware(
+        env: Env,
+        manufacturer_id: BytesN<32>,
+        version: u32,
+    ) -> Result<FirmwareVersion, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Firmware(manufacturer_id, version))
+            .ok_or(IoTError::FirmwareVersionNotFound)
+    }
+
+    pub fn get_latest_firmware_version(
+        env: Env,
+        manufacturer_id: BytesN<32>,
+        device_type: DeviceType,
+    ) -> Result<u32, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::LatestFirmware(manufacturer_id, device_type as u32))
+            .ok_or(IoTError::FirmwareVersionNotFound)
+    }
+
+    pub fn update_device_firmware(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+        target_version: u32,
+    ) -> Result<u64, IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        if device.status == DeviceStatus::Decommissioned {
+            return Err(IoTError::DeviceDecommissioned);
+        }
+
+        // Cannot downgrade
+        if target_version <= device.firmware_version {
+            return Err(IoTError::DowngradeNotAllowed);
+        }
+
+        // Firmware must be approved
+        let fw: FirmwareVersion = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Firmware(device.manufacturer_id.clone(), target_version))
+            .ok_or(IoTError::FirmwareVersionNotFound)?;
+
+        if fw.status != FirmwareStatus::Approved {
+            return Err(IoTError::FirmwareNotApproved);
+        }
+
+        let from_version = device.firmware_version;
+        let now = env.ledger().timestamp();
+
+        // Record the update
+        let update_count: u64 = env.storage().persistent().get(&DataKey::FirmwareUpdateCount).unwrap_or(0);
+        let update_id = update_count;
+
+        let record = FirmwareUpdateRecord {
+            update_id,
+            device_id: device_id.clone(),
+            from_version,
+            to_version: target_version,
+            initiated_by: caller.clone(),
+            initiated_at: now,
+            completed_at: now,
+            success: true,
+            error_ref: String::from_str(&env, ""),
+        };
+
+        env.storage().persistent().set(&DataKey::FirmwareUpdateRecord(update_id), &record);
+        env.storage().persistent().set(&DataKey::FirmwareUpdateCount, &update_count.checked_add(1).unwrap());
+
+        // Track per-device updates
+        let mut device_updates: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DeviceFirmwareUpdates(device_id.clone()))
+            .unwrap_or(Vec::new(&env));
+        device_updates.push_back(update_id);
+        env.storage().persistent().set(&DataKey::DeviceFirmwareUpdates(device_id.clone()), &device_updates);
+
+        // Update device firmware version
+        device.firmware_version = target_version;
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        events::emit_firmware_updated(&env, &device_id, from_version, target_version, true);
+        Ok(update_id)
+    }
 }

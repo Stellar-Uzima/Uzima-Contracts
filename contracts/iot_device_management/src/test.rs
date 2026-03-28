@@ -240,3 +240,94 @@ fn test_get_device_count() {
 
     assert_eq!(client.get_device_count(), 2);
 }
+
+#[test]
+fn test_publish_firmware() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+
+    let binary_hash = make_bytes32(&env, 200);
+    let notes = String::from_str(&env, "ipfs://release-notes");
+    client.publish_firmware(
+        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
+        &binary_hash, &notes, &0u32, &1024u64,
+    );
+
+    let fw = client.get_firmware(&mfr_id, &1u32);
+    assert_eq!(fw.status, FirmwareStatus::Pending);
+    assert_eq!(fw.size_bytes, 1024);
+}
+
+#[test]
+fn test_approve_firmware() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+
+    let binary_hash = make_bytes32(&env, 200);
+    let notes = String::from_str(&env, "notes");
+    client.publish_firmware(
+        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
+        &binary_hash, &notes, &0u32, &1024u64,
+    );
+    client.approve_firmware(&admin, &mfr_id, &1u32);
+    let fw = client.get_firmware(&mfr_id, &1u32);
+    assert_eq!(fw.status, FirmwareStatus::Approved);
+}
+
+#[test]
+fn test_update_device_firmware() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    // Publish and approve firmware v1
+    let binary_hash = make_bytes32(&env, 200);
+    let notes = String::from_str(&env, "v1");
+    client.publish_firmware(
+        &admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor,
+        &binary_hash, &notes, &0u32, &1024u64,
+    );
+    client.approve_firmware(&admin, &mfr_id, &1u32);
+
+    // Update device
+    client.update_device_firmware(&operator, &device_id, &1u32);
+    let device = client.get_device(&device_id);
+    assert_eq!(device.firmware_version, 1);
+}
+
+#[test]
+fn test_firmware_downgrade_not_allowed() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    // Publish and approve v1 and v2
+    let hash1 = make_bytes32(&env, 200);
+    let hash2 = make_bytes32(&env, 201);
+    let notes = String::from_str(&env, "notes");
+    client.publish_firmware(&admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor, &hash1, &notes, &0u32, &512u64);
+    client.approve_firmware(&admin, &mfr_id, &1u32);
+    client.publish_firmware(&admin, &mfr_id, &2u32, &DeviceType::VitalSignsMonitor, &hash2, &notes, &1u32, &1024u64);
+    client.approve_firmware(&admin, &mfr_id, &2u32);
+
+    // Update to v2
+    client.update_device_firmware(&operator, &device_id, &2u32);
+
+    // Try to downgrade to v1
+    let result = client.try_update_device_firmware(&operator, &device_id, &1u32);
+    assert_eq!(result, Err(Ok(IoTError::DowngradeNotAllowed)));
+}
