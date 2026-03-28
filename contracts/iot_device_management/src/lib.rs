@@ -1062,4 +1062,62 @@ impl IoTDeviceManagement {
         env.storage().persistent().set(&DataKey::KeyRotationMinInterval, &interval_secs);
         Ok(())
     }
+
+    // ============================================================
+    // QUERIES & REPORTING
+    // ============================================================
+
+    pub fn get_devices_by_manufacturer(
+        env: Env,
+        manufacturer_id: BytesN<32>,
+    ) -> Vec<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DevicesByManufacturer(manufacturer_id))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_device_firmware_history(
+        env: Env,
+        device_id: BytesN<32>,
+    ) -> Result<Vec<FirmwareUpdateRecord>, IoTError> {
+        if !env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+            return Err(IoTError::DeviceNotFound);
+        }
+
+        let update_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DeviceFirmwareUpdates(device_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut records = Vec::new(&env);
+        for id in update_ids.iter() {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, FirmwareUpdateRecord>(&DataKey::FirmwareUpdateRecord(id))
+            {
+                records.push_back(record);
+            }
+        }
+        Ok(records)
+    }
+
+    pub fn get_manufacturer_count(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ManufacturerCount)
+            .unwrap_or(0)
+    }
+
+    pub fn get_firmware_update_record(
+        env: Env,
+        update_id: u64,
+    ) -> Result<FirmwareUpdateRecord, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FirmwareUpdateRecord(update_id))
+            .ok_or(IoTError::FirmwareVersionNotFound)
+    }
 }

@@ -509,3 +509,52 @@ fn test_rotate_device_encryption_key() {
     let device = client.get_device(&device_id);
     assert_eq!(device.encryption_key_hash, new_key);
 }
+
+#[test]
+fn test_get_devices_by_manufacturer() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+
+    register_device(&env, &client, &operator, &mfr_id, 10);
+    register_device(&env, &client, &operator, &mfr_id, 11);
+
+    let devices = client.get_devices_by_manufacturer(&mfr_id);
+    assert_eq!(devices.len(), 2);
+}
+
+#[test]
+fn test_get_firmware_update_history() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    // Publish, approve, update to v1
+    let hash = make_bytes32(&env, 200);
+    let notes = String::from_str(&env, "v1");
+    client.publish_firmware(&admin, &mfr_id, &1u32, &DeviceType::VitalSignsMonitor, &hash, &notes, &0u32, &512u64);
+    client.approve_firmware(&admin, &mfr_id, &1u32);
+    client.update_device_firmware(&operator, &device_id, &1u32);
+
+    let history = client.get_device_firmware_history(&device_id);
+    assert_eq!(history.len(), 1);
+    assert_eq!(history.get(0).unwrap().to_version, 1);
+}
+
+#[test]
+fn test_get_manufacturer_count() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    register_manufacturer(&env, &client, &admin, 1);
+    register_manufacturer(&env, &client, &admin, 2);
+    assert_eq!(client.get_manufacturer_count(), 2);
+}
