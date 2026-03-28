@@ -331,3 +331,89 @@ fn test_firmware_downgrade_not_allowed() {
     let result = client.try_update_device_firmware(&operator, &device_id, &1u32);
     assert_eq!(result, Err(Ok(IoTError::DowngradeNotAllowed)));
 }
+
+#[test]
+fn test_submit_heartbeat() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    // Advance ledger time
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+
+    let metrics_ref = String::from_str(&env, "ipfs://metrics-001");
+    client.submit_heartbeat(
+        &operator, &device_id, &HealthStatus::Healthy,
+        &95u32, &80u32, &0u32, &metrics_ref,
+    );
+
+    let device = client.get_device(&device_id);
+    assert_eq!(device.last_heartbeat, 1000);
+    assert_eq!(device.health_status, HealthStatus::Healthy);
+}
+
+#[test]
+fn test_heartbeat_too_frequent() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(&operator, &device_id, &HealthStatus::Healthy, &95u32, &80u32, &0u32, &metrics_ref);
+
+    // Try again too soon (within 60s default interval)
+    env.ledger().with_mut(|li| li.timestamp = 1030);
+    let result = client.try_submit_heartbeat(&operator, &device_id, &HealthStatus::Healthy, &95u32, &80u32, &0u32, &metrics_ref);
+    assert_eq!(result, Err(Ok(IoTError::HeartbeatTooFrequent)));
+}
+
+#[test]
+fn test_get_device_uptime() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    client.activate_device(&operator, &device_id);
+
+    // Check uptime at t=2000 (1000s uptime)
+    env.ledger().with_mut(|li| li.timestamp = 2000);
+    let uptime_bps = client.get_device_uptime_bps(&device_id);
+    // 1000s uptime, 0s downtime => 10000 bps (100%)
+    assert_eq!(uptime_bps, 10000);
+}
+
+#[test]
+fn test_get_active_device_count() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+
+    let d1 = register_device(&env, &client, &operator, &mfr_id, 10);
+    let d2 = register_device(&env, &client, &operator, &mfr_id, 11);
+    client.activate_device(&operator, &d1);
+    client.activate_device(&operator, &d2);
+
+    assert_eq!(client.get_active_device_count(), 2);
+
+    client.suspend_device(&operator, &d1);
+    assert_eq!(client.get_active_device_count(), 1);
+}

@@ -797,4 +797,147 @@ impl IoTDeviceManagement {
         events::emit_firmware_updated(&env, &device_id, from_version, target_version, true);
         Ok(update_id)
     }
+
+    // ============================================================
+    // DEVICE HEALTH MONITORING
+    // ============================================================
+
+    pub fn submit_heartbeat(
+        env: Env,
+        caller: Address,
+        device_id: BytesN<32>,
+        health_status: HealthStatus,
+        battery_pct: u32,
+        signal_strength: u32,
+        error_count: u32,
+        metrics_ref: String,
+    ) -> Result<(), IoTError> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+
+        validation::validate_metric_value(battery_pct, 100)?;
+        validation::validate_metric_value(signal_strength, 100)?;
+
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id.clone()))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        if device.status == DeviceStatus::Decommissioned {
+            return Err(IoTError::DeviceDecommissioned);
+        }
+        if device.status != DeviceStatus::Active && device.status != DeviceStatus::Maintenance {
+            return Err(IoTError::DeviceNotActive);
+        }
+
+        let now = env.ledger().timestamp();
+        let min_interval: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HeartbeatMinInterval)
+            .unwrap_or(60);
+
+        if device.last_heartbeat > 0 && now.saturating_sub(device.last_heartbeat) < min_interval {
+            return Err(IoTError::HeartbeatTooFrequent);
+        }
+
+        let heartbeat = Heartbeat {
+            device_id: device_id.clone(),
+            timestamp: now,
+            health_status,
+            battery_pct,
+            signal_strength,
+            error_count,
+            metrics_ref,
+        };
+
+        // Store last N heartbeats (rolling window of 10)
+        let mut heartbeats: Vec<Heartbeat> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::DeviceHeartbeats(device_id.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        if heartbeats.len() >= 10 {
+            heartbeats.remove(0);
+        }
+        heartbeats.push_back(heartbeat);
+        env.storage().persistent().set(&DataKey::DeviceHeartbeats(device_id.clone()), &heartbeats);
+
+        // Update device health
+        device.last_heartbeat = now;
+        device.health_status = health_status;
+        env.storage().persistent().set(&DataKey::Device(device_id.clone()), &device);
+
+        events::emit_heartbeat(&env, &device_id, health_status);
+        Ok(())
+    }
+
+    pub fn get_device_heartbeats(
+        env: Env,
+        device_id: BytesN<32>,
+    ) -> Result<Vec<Heartbeat>, IoTError> {
+        if !env.storage().persistent().has(&DataKey::Device(device_id.clone())) {
+            return Err(IoTError::DeviceNotFound);
+        }
+        Ok(env
+            .storage()
+            .persistent()
+            .get(&DataKey::DeviceHeartbeats(device_id))
+            .unwrap_or(Vec::new(&env)))
+    }
+
+    pub fn get_device_uptime_bps(env: Env, device_id: BytesN<32>) -> Result<u32, IoTError> {
+        let device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id))
+            .ok_or(IoTError::DeviceNotFound)?;
+
+        let now = env.ledger().timestamp();
+
+        // Calculate current uptime
+        let mut total_up = device.total_uptime_secs;
+        if device.status == DeviceStatus::Active && device.uptime_start > 0 {
+            total_up = total_up.saturating_add(now.saturating_sub(device.uptime_start));
+        }
+
+        let total_time = total_up.saturating_add(device.total_downtime_secs);
+        if total_time == 0 {
+            // Device just registered, consider it at 100% if active
+            if device.status == DeviceStatus::Active {
+                return Ok(10000);
+            }
+            return Ok(0);
+        }
+
+        // bps = (uptime / total) * 10000
+        let bps = total_up
+            .checked_mul(10000)
+            .unwrap_or(u64::MAX)
+            .checked_div(total_time)
+            .unwrap_or(0);
+
+        Ok(bps as u32)
+    }
+
+    pub fn get_active_device_count(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ActiveDeviceCount)
+            .unwrap_or(0)
+    }
+
+    pub fn set_heartbeat_interval(
+        env: Env,
+        admin: Address,
+        interval_secs: u64,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        env.storage().persistent().set(&DataKey::HeartbeatMinInterval, &interval_secs);
+        Ok(())
+    }
 }
