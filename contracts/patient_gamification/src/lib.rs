@@ -541,7 +541,7 @@ impl PatientGamificationContract {
         }
 
         let key = DataKey::ChallengeParticipant(challenge_id, patient_id.clone());
-        let mut participant = env
+        let mut participant: ChallengeParticipant = env
             .storage()
             .instance()
             .get(&key)
@@ -773,7 +773,7 @@ impl PatientGamificationContract {
         patient_id: &Address,
         points: u64,
     ) -> Result<(), Error> {
-        let mut leaderboard: Vec<LeaderboardEntry> = env
+        let leaderboard: Vec<LeaderboardEntry> = env
             .storage()
             .instance()
             .get(&DataKey::Leaderboard)
