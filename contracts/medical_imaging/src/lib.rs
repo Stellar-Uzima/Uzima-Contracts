@@ -1546,6 +1546,75 @@ impl MedicalImagingContract {
         panic!("report not found");
     }
 
+    // ── Study Finalization & Amendment ──
+
+    pub fn finalize_study(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        _final_report_ref: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::PreliminaryReport {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let old_status = study.status;
+        study.status = StudyStatus::FinalReport;
+        study.finalized_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Self::update_status_index(&env, study_id, &old_status, &StudyStatus::FinalReport);
+
+        env.events()
+            .publish((symbol_short!("STDY_FIN"),), (study_id, caller));
+        Ok(true)
+    }
+
+    pub fn amend_study(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        _amendment_ref: String,
+        _reason_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::FinalReport && study.status != StudyStatus::Amended {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let old_status = study.status;
+        study.status = StudyStatus::Amended;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+
+        if old_status == StudyStatus::FinalReport {
+            Self::update_status_index(&env, study_id, &old_status, &StudyStatus::Amended);
+        }
+
+        env.events()
+            .publish((symbol_short!("STDY_AMD"),), (study_id, caller));
+        Ok(true)
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

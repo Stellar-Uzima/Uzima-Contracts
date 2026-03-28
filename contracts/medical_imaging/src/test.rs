@@ -630,3 +630,182 @@ fn test_blind_review_enforcement() {
     let my_report = client.get_my_report(&reader1, &study_id);
     assert_eq!(my_report.study_id, study_id);
 }
+
+// ── Finalization & Amendment Tests ──
+
+#[test]
+fn test_finalize_study() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    let same_diag = hash(&env, 200);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &same_diag,
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    client.submit_reader_report(
+        &reader2,
+        &study_id,
+        &same_diag,
+        &hash(&env, 202),
+        &String::from_str(&env, "ipfs://findings2"),
+        &true,
+        &8500,
+    );
+
+    assert_eq!(
+        client.get_study(&study_id).unwrap().status,
+        StudyStatus::PreliminaryReport
+    );
+
+    env.ledger().set_timestamp(1000);
+
+    client.finalize_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://final-report"),
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::FinalReport);
+    assert!(study.finalized_at > 0);
+}
+
+#[test]
+fn test_amend_study() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    let same_diag = hash(&env, 200);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &same_diag,
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    client.submit_reader_report(
+        &reader2,
+        &study_id,
+        &same_diag,
+        &hash(&env, 202),
+        &String::from_str(&env, "ipfs://findings2"),
+        &true,
+        &8500,
+    );
+
+    client.finalize_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://final-report"),
+    );
+
+    client.amend_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://amendment"),
+        &hash(&env, 250),
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::Amended);
+}
+
+#[test]
+fn test_amend_study_multiple() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    let same_diag = hash(&env, 200);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &same_diag,
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    client.submit_reader_report(
+        &reader2,
+        &study_id,
+        &same_diag,
+        &hash(&env, 202),
+        &String::from_str(&env, "ipfs://findings2"),
+        &true,
+        &8500,
+    );
+
+    client.finalize_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://final-report"),
+    );
+
+    client.amend_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://amendment1"),
+        &hash(&env, 250),
+    );
+
+    client.amend_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://amendment2"),
+        &hash(&env, 251),
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::Amended);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn test_finalize_wrong_status() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, _reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    // Only 1 of 2 readers submitted → InReview
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    // Study is in InReview, not PreliminaryReport → should fail
+    client.finalize_study(
+        &reader1,
+        &study_id,
+        &String::from_str(&env, "ipfs://final-report"),
+    );
+}
