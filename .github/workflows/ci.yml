@@ -171,15 +171,29 @@ jobs:
 
       - name: Build optimized contracts
         run: |
+          set -euo pipefail
+
+          BUILD_RESULT="success"
           for contract in contracts/*/; do
-            if [ -d "$contract" ]; then
-              contract_name=$(basename "$contract")
-              echo "Building contract: $contract_name"
-              cd "$contract"
-              cargo build --target wasm32-unknown-unknown --release
-              cd - > /dev/null
+            [ -d "$contract" ] || continue
+            contract_name=$(basename "$contract")
+            echo "Building contract: $contract_name"
+
+            pushd "$contract" > /dev/null
+            if cargo build --target wasm32-unknown-unknown --release; then
+              echo "  ✅ $contract_name build succeeded"
+            else
+              echo "  ❌ $contract_name build failed"
+              BUILD_RESULT="failure"
             fi
+            popd > /dev/null
           done
+
+          echo "Build summary: $BUILD_RESULT"
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "One or more contracts failed to build."
+            exit 1
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
