@@ -6,6 +6,7 @@
 
 mod errors;
 mod events;
+mod validation;
 pub use errors::IoTError;
 
 #[cfg(test)]
