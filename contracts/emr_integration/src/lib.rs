@@ -842,7 +842,11 @@ impl EMRIntegrationContract {
             batch_size
         };
         let elapsed_ms = (effective_batch / 2).max(1000) / 2;
-        let messages_per_second = effective_batch.saturating_mul(1000) / elapsed_ms.max(1);
+        let denominator = elapsed_ms.max(1);
+        let messages_per_second = effective_batch
+            .checked_mul(1000)
+            .and_then(|value| value.checked_div(denominator))
+            .unwrap_or(u32::MAX);
 
         let benchmark = ThroughputBenchmark {
             benchmark_id: benchmark_id.clone(),
@@ -1167,7 +1171,9 @@ impl EMRIntegrationContract {
         );
 
         let segment_count = payload.matches('<').count() as u32;
-        let field_count = payload.matches('=').count() as u32 + payload.matches('>').count() as u32;
+        let attribute_count = payload.matches('=').count() as u32;
+        let close_tag_count = payload.matches('>').count() as u32;
+        let field_count = attribute_count.saturating_add(close_tag_count);
 
         Ok((
             String::from_str(env, &message_type),
@@ -1534,10 +1540,11 @@ impl EMRIntegrationContract {
     fn extract_root_tag(payload: &str) -> Option<RustString> {
         let mut rest = payload;
         if let Some(xml_start) = rest.find("?>") {
-            rest = &rest[xml_start + 2..];
+            let next_index = xml_start.checked_add(2)?;
+            rest = rest.get(next_index..)?;
         }
-        let tag_start = rest.find('<')? + 1;
-        let tag_rest = &rest[tag_start..];
+        let tag_start = rest.find('<')?.checked_add(1)?;
+        let tag_rest = rest.get(tag_start..)?;
         let end = tag_rest.find(['>', ' ', '/']).unwrap_or(tag_rest.len());
         let tag = &tag_rest[..end];
         if tag.is_empty() {
@@ -1549,8 +1556,8 @@ impl EMRIntegrationContract {
 
     fn extract_attr(payload: &str, attr: &str) -> Option<RustString> {
         let needle = format!("{attr}=\"");
-        let start = payload.find(&needle)? + needle.len();
-        let rest = &payload[start..];
+        let start = payload.find(&needle)?.checked_add(needle.len())?;
+        let rest = payload.get(start..)?;
         let end = rest.find('"')?;
         Some(rest[..end].to_string())
     }
@@ -1558,8 +1565,8 @@ impl EMRIntegrationContract {
     fn extract_tag_text(payload: &str, tag: &str) -> Option<RustString> {
         let open = format!("<{tag}>");
         let close = format!("</{tag}>");
-        let start = payload.find(&open)? + open.len();
-        let rest = &payload[start..];
+        let start = payload.find(&open)?.checked_add(open.len())?;
+        let rest = payload.get(start..)?;
         let end = rest.find(&close)?;
         Some(rest[..end].to_string())
     }
