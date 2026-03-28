@@ -427,7 +427,7 @@ impl Fido2AuthenticatorContract {
         }
 
         // Verify User Presence (UP) flag at byte 32
-        let flags = auth_data.get(32).unwrap_or(0) as u8;
+        let flags = auth_data.get(32).unwrap_or(0);
         if flags & FLAG_UP == 0 {
             return Err(Error::UserPresenceNotVerified);
         }
@@ -1163,8 +1163,8 @@ mod tests {
         // Build authenticatorData with wrong rpIdHash
         let mut auth_data_arr = [0u8; 37];
         // bytes 0-31: wrong rp_id_hash (all 0xBB)
-        for i in 0..32 {
-            auth_data_arr[i] = 0xBBu8;
+        for byte in auth_data_arr.iter_mut().take(32) {
+            *byte = 0xBBu8;
         }
         // byte 32: UP flag set
         auth_data_arr[32] = FLAG_UP;
