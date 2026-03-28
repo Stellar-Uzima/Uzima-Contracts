@@ -8,10 +8,65 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::string::{String as RustString, ToString};
+#[cfg(all(target_arch = "wasm32", not(test)))]
+use core::alloc::{GlobalAlloc, Layout};
+#[cfg(all(target_arch = "wasm32", not(test)))]
+use core::arch::wasm32;
+#[cfg(all(target_arch = "wasm32", not(test)))]
+use core::cell::UnsafeCell;
+#[cfg(all(target_arch = "wasm32", not(test)))]
+use core::ptr;
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
     Symbol, Vec,
+};
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+struct WasmBumpAllocator {
+    next: UnsafeCell<usize>,
+}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+unsafe impl Sync for WasmBumpAllocator {}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+unsafe impl GlobalAlloc for WasmBumpAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let align = layout.align().max(1);
+        let size = layout.size();
+        let next = self.next.get();
+
+        if *next == 0 {
+            *next = (wasm32::memory_size(0) as usize) * 65536;
+        }
+
+        let aligned = (*next + align - 1) & !(align - 1);
+        let end = match aligned.checked_add(size) {
+            Some(end) => end,
+            None => return ptr::null_mut(),
+        };
+
+        let current_bytes = (wasm32::memory_size(0) as usize) * 65536;
+        if end > current_bytes {
+            let additional = end - current_bytes;
+            let pages = additional.div_ceil(65536);
+            if wasm32::memory_grow(0, pages) == usize::MAX {
+                return ptr::null_mut();
+            }
+        }
+
+        *next = end;
+        aligned as *mut u8
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+#[global_allocator]
+static ALLOC: WasmBumpAllocator = WasmBumpAllocator {
+    next: UnsafeCell::new(0),
 };
 
 const MAX_MESSAGE_BYTES: usize = 8192;
