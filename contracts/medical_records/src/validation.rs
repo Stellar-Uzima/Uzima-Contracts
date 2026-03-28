@@ -1083,6 +1083,36 @@ pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<
         });
     }
 
+    // FHIR: dosageInstruction / treatment plan must be present
+    if record.treatment.len() >= MIN_TREATMENT_LENGTH {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "treatment"),
+            issue_description: String::from_str(
+                env,
+                "FHIR: dosageInstruction is missing or too short",
+            ),
+            suggestion: String::from_str(env, "Add a treatment plan for FHIR compliance"),
+        });
+    }
+
+    // FHIR: content.attachment — external data reference should be present
+    if record.data_ref.len() >= MIN_DATA_REF_LENGTH {
+        checks_passed += 1;
+    } else {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "data_ref"),
+            issue_description: String::from_str(
+                env,
+                "FHIR: content.attachment reference is missing",
+            ),
+            suggestion: String::from_str(env, "Provide a data reference for FHIR compliance"),
+        });
+    }
+
     let score = if total_checks > 0 {
         (checks_passed * MAX_SCORE_BPS) / total_checks
     } else {
@@ -1332,7 +1362,7 @@ fn try_normalize_category(env: &Env, input: &String) -> Option<String> {
     let variants: [(&str, &str); 12] = [
         ("modern", "Modern"),
         ("MODERN", "Modern"),
-        ("Modern ", "Modern"),  // trailing space variant
+        ("Modern ", "Modern"), // trailing space variant
         ("traditional", "Traditional"),
         ("TRADITIONAL", "Traditional"),
         ("Traditional ", "Traditional"),
