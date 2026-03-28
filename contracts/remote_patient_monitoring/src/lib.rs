@@ -46,6 +46,7 @@ pub struct Threshold {
 impl RemotePatientMonitoringContract {
     // Initialize the contract
     pub fn initialize(env: Env, admin: Address) {
+        admin.require_auth();
         env.storage()
             .instance()
             .set(&Symbol::new(&env, "admin"), &admin);
@@ -62,34 +63,40 @@ impl RemotePatientMonitoringContract {
         caller.require_auth();
         let admin_opt: Option<Address> = env.storage().instance().get(&Symbol::new(&env, "admin"));
         if let Some(admin) = admin_opt {
-            assert!(caller == admin || caller == patient, "Unauthorized");
+            if caller == admin || caller == patient {
+                let device = Device {
+                    id: device_id,
+                    device_type,
+                    patient: patient.clone(),
+                    caregivers: Vec::new(&env),
+                };
 
-            let device = Device {
-                id: device_id,
-                device_type,
-                patient: patient.clone(),
-                caregivers: Vec::new(&env),
-            };
-
-            let key = (Symbol::new(&env, "device"), device_id);
-            env.storage().persistent().set(&key, &device);
-        } else {
-            panic!("Admin not initialized");
+                let key = (Symbol::new(&env, "device"), device_id);
+                env.storage().persistent().set(&key, &device);
+            }
         }
     }
 
     // Add caregiver to device
-    pub fn add_caregiver(env: Env, caller: Address, device_id: u64, caregiver: Address) {
+    pub fn add_caregiver(
+        env: Env,
+        caller: Address,
+        device_id: u64,
+        caregiver: Address,
+    ) {
         caller.require_auth();
         let key = (Symbol::new(&env, "device"), device_id);
-        let device_opt: Option<Device> = env.storage().persistent().get(&key);
-        if let Some(mut device) = device_opt {
-            assert!(caller == device.patient, "Only patient can add caregivers");
+        if let Some(mut device) = env
+            .storage()
+            .persistent()
+            .get::<(Symbol, u64), Device>(&key)
+        {
+            if caller != device.patient {
+                return;
+            }
 
             device.caregivers.push_back(caregiver);
             env.storage().persistent().set(&key, &device);
-        } else {
-            panic!("Device not found");
         }
     }
 
@@ -166,12 +173,14 @@ impl RemotePatientMonitoringContract {
     ) {
         caller.require_auth();
         let device_key = (Symbol::new(&env, "device"), 0u64); // Assuming device 0 for simplicity
-        let device_opt: Option<Device> = env.storage().persistent().get(&device_key);
-        if let Some(device) = device_opt {
-            assert!(
-                caller == device.patient || device.caregivers.contains(&caller),
-                "Unauthorized"
-            );
+        if let Some(device) = env
+            .storage()
+            .persistent()
+            .get::<(Symbol, u64), Device>(&device_key)
+        {
+            if caller != device.patient && !device.caregivers.contains(&caller) {
+                return;
+            }
 
             let threshold = Threshold {
                 vital_type: vital_type.clone(),
@@ -180,8 +189,6 @@ impl RemotePatientMonitoringContract {
             };
             let key = (Symbol::new(&env, "threshold"), patient, vital_type);
             env.storage().persistent().set(&key, &threshold);
-        } else {
-            panic!("Device not found");
         }
     }
 
