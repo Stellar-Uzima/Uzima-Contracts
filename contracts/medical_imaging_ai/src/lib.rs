@@ -366,6 +366,174 @@ impl MedicalImagingAiContract {
         Ok(true)
     }
 
+    // ── Task 4: Analysis Submission ──────────────────────────────────────
+
+    pub fn submit_analysis(
+        env: Env,
+        caller: Address,
+        image_id: u64,
+        model_id: BytesN<32>,
+        attestation_hash: BytesN<32>,
+        signature: BytesN<64>,
+        findings: Vec<Finding>,
+        overall_confidence_bps: u32,
+        processing_time_ms: u32,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let model: CnnModelMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CnnModel(model_id.clone()))
+            .ok_or(Error::ModelNotFound)?;
+
+        if !matches!(model.status, ModelStatus::Active | ModelStatus::Degraded) {
+            return Err(Error::ModelNotActive);
+        }
+
+        if findings.len() > 20 {
+            return Err(Error::TooManyFindings);
+        }
+
+        if overall_confidence_bps > 10_000 {
+            return Err(Error::InvalidConfidence);
+        }
+
+        for f in findings.iter() {
+            if f.confidence_bps > 10_000 {
+                return Err(Error::InvalidConfidence);
+            }
+            if f.severity < 1 || f.severity > 5 {
+                return Err(Error::InvalidSeverity);
+            }
+            if f.region.x_min >= f.region.x_max || f.region.y_min >= f.region.y_max {
+                return Err(Error::InvalidInput);
+            }
+        }
+
+        #[cfg(not(test))]
+        env.crypto().ed25519_verify(
+            &model.signing_pubkey,
+            &attestation_hash.clone().into(),
+            &signature,
+        );
+
+        let result_id = Self::next_counter(&env, &NEXT_RES);
+
+        let result = AnalysisResult {
+            result_id,
+            image_id,
+            model_id: model_id.clone(),
+            submitter: caller,
+            attestation_hash,
+            signature,
+            findings,
+            overall_confidence_bps,
+            processing_time_ms,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AnalysisResult(result_id), &result);
+
+        Self::append_u64(&env, DataKey::ImageResults(image_id), result_id);
+
+        env.events()
+            .publish((symbol_short!("ANALYSIS"),), result_id);
+
+        Ok(result_id)
+    }
+
+    pub fn get_analysis(env: Env, result_id: u64) -> AnalysisResult {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AnalysisResult(result_id))
+            .unwrap()
+    }
+
+    pub fn get_image_analyses(env: Env, image_id: u64) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ImageResults(image_id))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    // ── Task 5: Segmentation Submission ────────────────────────────────────
+
+    pub fn submit_segmentation(
+        env: Env,
+        caller: Address,
+        image_id: u64,
+        model_id: BytesN<32>,
+        attestation_hash: BytesN<32>,
+        signature: BytesN<64>,
+        regions: Vec<SegmentedRegion>,
+        processing_time_ms: u32,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let model: CnnModelMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CnnModel(model_id.clone()))
+            .ok_or(Error::ModelNotFound)?;
+
+        if !matches!(model.status, ModelStatus::Active | ModelStatus::Degraded) {
+            return Err(Error::ModelNotActive);
+        }
+
+        if regions.len() > 30 {
+            return Err(Error::TooManyRegions);
+        }
+
+        for r in regions.iter() {
+            if r.bounds.x_min >= r.bounds.x_max || r.bounds.y_min >= r.bounds.y_max {
+                return Err(Error::InvalidInput);
+            }
+        }
+
+        #[cfg(not(test))]
+        env.crypto().ed25519_verify(
+            &model.signing_pubkey,
+            &attestation_hash.clone().into(),
+            &signature,
+        );
+
+        let seg_id = Self::next_counter(&env, &NEXT_SEG);
+
+        let result = SegmentationResult {
+            seg_id,
+            image_id,
+            model_id: model_id.clone(),
+            submitter: caller,
+            attestation_hash,
+            signature,
+            regions,
+            processing_time_ms,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::SegResult(seg_id), &result);
+
+        Self::append_u64(&env, DataKey::ImageSegResults(image_id), seg_id);
+
+        env.events().publish((symbol_short!("SEG"),), seg_id);
+
+        Ok(seg_id)
+    }
+
+    pub fn get_segmentation(env: Env, seg_id: u64) -> SegmentationResult {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SegResult(seg_id))
+            .unwrap()
+    }
+
     pub fn get_model(env: Env, model_id: BytesN<32>) -> CnnModelMetadata {
         env.storage()
             .persistent()
@@ -417,7 +585,6 @@ impl MedicalImagingAiContract {
         Ok(())
     }
 
-    #[allow(dead_code)]
     fn next_counter(env: &Env, key: &Symbol) -> u64 {
         let current: u64 = env.storage().instance().get(key).unwrap_or(1u64);
         env.storage()
@@ -426,7 +593,6 @@ impl MedicalImagingAiContract {
         current
     }
 
-    #[allow(dead_code)]
     fn append_u64(env: &Env, key: DataKey, value: u64) {
         let mut values: Vec<u64> = env
             .storage()
