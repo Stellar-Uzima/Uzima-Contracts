@@ -109,6 +109,7 @@ pub struct Config {
     pub escrow_contract: Address,
     pub treasury: Address,
     pub token: Address,
+    pub anomaly_detection_contract: Option<Address>,
 }
 
 #[derive(Clone)]
@@ -147,6 +148,7 @@ impl HealthcarePayment {
             escrow_contract,
             treasury,
             token,
+            anomaly_detection_contract: None,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
@@ -156,6 +158,25 @@ impl HealthcarePayment {
             .instance()
             .set(&DataKey::PaymentPlanCount, &0u64);
 
+        Ok(())
+    }
+
+    pub fn set_anomaly_detection_contract(
+        env: Env,
+        admin: Address,
+        anomaly_contract: Address,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        let mut config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
+        if config.admin != admin {
+            return Err(Error::Unauthorized);
+        }
+        config.anomaly_detection_contract = Some(anomaly_contract);
+        env.storage().instance().set(&DataKey::Config, &config);
         Ok(())
     }
 
@@ -204,7 +225,38 @@ impl HealthcarePayment {
             .set(&DataKey::ClaimCount, &claim_id);
 
         env.events()
-            .publish((symbol_short!("CLAIM_SUB"),), (claim_id, provider, amount));
+            .publish((symbol_short!("CLAIM_SUB"),), (claim_id, provider.clone(), amount));
+
+        // Integrate with anomaly detection for fraud analytics on claims
+        if let Some(config) = env.storage().instance().get::<DataKey, Config>(&DataKey::Config) {
+            if let Some(ad_contract) = config.anomaly_detection_contract {
+                let _risk_score: u32 = env.invoke_contract(
+                    &ad_contract,
+                    &Symbol::new(&env, "assess_payment_claim"),
+                    (
+                        env.current_contract_address(),
+                        claim_id,
+                        provider.clone(),
+                        patient.clone(),
+                        amount,
+                        claim.service_id.clone(),
+                    ),
+                );
+                // If risk is very high, mark claim as disputed
+                if _risk_score >= 5000 {
+                    let mut c = claim;
+                    c.status = ClaimStatus::Disputed;
+                    c.updated_at = env.ledger().timestamp();
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Claim(claim_id), &c);
+                    env.events().publish(
+                        (symbol_short!("CLAIM_DIS"),),
+                        (claim_id, _risk_score),
+                    );
+                }
+            }
+        }
 
         Ok(claim_id)
     }
@@ -242,6 +294,20 @@ impl HealthcarePayment {
             .persistent()
             .get(&DataKey::Claim(claim_id))
             .ok_or(Error::ClaimNotFound)?;
+
+        // Cross-contract fraud score check
+        if let Some(config) = env.storage().instance().get::<DataKey, Config>(&DataKey::Config) {
+            if let Some(ad_contract) = config.anomaly_detection_contract {
+                let provider_risk: u32 = env.invoke_contract(
+                    &ad_contract,
+                    &Symbol::new(&env, "detect_network_fraud"),
+                    (claim.provider.clone(),),
+                );
+                if provider_risk >= 7500 {
+                    return Err(Error::FraudDetected);
+                }
+            }
+        }
 
         if env
             .storage()

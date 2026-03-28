@@ -162,3 +162,5 @@ fn test_payment_plan() {
 
     assert_eq!(token_client.balance(&provider), 250);
 }
+
+

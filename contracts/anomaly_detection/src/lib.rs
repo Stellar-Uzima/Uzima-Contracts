@@ -7,7 +7,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    IntoVal, Map, String, Symbol,
+    IntoVal, Map, String, Symbol, Vec,
 };
 
 // ==================== Alert Lifecycle Types ====================
@@ -69,15 +69,31 @@ pub struct DetectionStats {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct ProviderProfile {
+    pub provider: Address,
+    pub total_claims: u64,
+    pub total_amount: i128,
+    pub high_risk_claims: u64,
+    pub risk_score_bps: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub enum DataKey {
     Config,
     AnomalyRecord(u64),
     AnomalyCountByPatient(Address),
     Stats,
     Whitelist(Address),
+    ProviderProfile(Address),
+    ProviderNeighbors(Address),
+    PatientProviders(Address),
+    PaymentContract,
     Alert(u64),
     AlertCount,
     FeedbackCount,
+    ConfirmedFeedbackCount,
+    FalsePositiveFeedbackCount,
     AuditForensicsContract,
 }
 
@@ -168,6 +184,230 @@ impl AnomalyDetectionContract {
         next
     }
 
+    fn get_provider_profile(env: &Env, provider: &Address) -> ProviderProfile {
+        env.storage()
+            .instance()
+            .get(&DataKey::ProviderProfile(provider.clone()))
+            .unwrap_or(ProviderProfile {
+                provider: provider.clone(),
+                total_claims: 0,
+                total_amount: 0,
+                high_risk_claims: 0,
+                risk_score_bps: 0,
+            })
+    }
+
+    fn set_provider_profile(env: &Env, profile: ProviderProfile) {
+        env.storage()
+            .instance()
+            .set(&DataKey::ProviderProfile(profile.provider.clone()), &profile);
+    }
+
+    fn add_provider_neighbor(env: &Env, provider: Address, neighbor: Address) {
+        if provider == neighbor {
+            return;
+        }
+        let mut neighbors: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProviderNeighbors(provider.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        let mut exists = false;
+        for existing in neighbors.iter() {
+            if existing == neighbor {
+                exists = true;
+                break;
+            }
+        }
+
+        if !exists {
+            neighbors.push_back(neighbor.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::ProviderNeighbors(provider.clone()), &neighbors);
+        }
+    }
+
+    fn add_patient_provider(env: &Env, patient: Address, provider: Address) {
+        let mut providers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PatientProviders(patient.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        let mut exists = false;
+        for p in providers.iter() {
+            if p == provider {
+                exists = true;
+                break;
+            }
+        }
+
+        if !exists {
+            for p in providers.iter() {
+                Self::add_provider_neighbor(env, p.clone(), provider.clone());
+                Self::add_provider_neighbor(env, provider.clone(), p.clone());
+            }
+            providers.push_back(provider.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::PatientProviders(patient), &providers);
+        }
+    }
+
+    fn compute_network_influence(env: &Env, provider: &Address) -> u32 {
+        let neighbors: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProviderNeighbors(provider.clone()))
+            .unwrap_or(Vec::new(&env));
+
+        let mut influence: u32 = 0;
+        for neighbor in neighbors.iter() {
+            let profile = Self::get_provider_profile(env, &neighbor);
+            influence = influence.saturating_add(profile.risk_score_bps / 10);
+        }
+        influence.min(5000) // cap influence at 50%
+    }
+
+    fn recompute_provider_risk(env: &Env, provider: &Address) {
+        let mut profile = Self::get_provider_profile(env, provider);
+        if profile.total_claims == 0 {
+            profile.risk_score_bps = 0;
+        } else {
+            let base_risk = (profile.high_risk_claims.saturating_mul(10_000) / profile.total_claims)
+                .min(10_000);
+            let network = Self::compute_network_influence(env, provider);
+            profile.risk_score_bps = (base_risk.saturating_add(network)).min(10_000);
+        }
+        Self::set_provider_profile(env, profile);
+    }
+
+    pub fn assess_payment_claim(
+        env: Env,
+        caller: Address,
+        claim_id: u64,
+        provider: Address,
+        patient: Address,
+        amount: i128,
+        service_id: String,
+    ) -> Result<u32, Error> {
+        let config = Self::ensure_enabled(&env)?;
+
+        // if payment contract is set, enforce it for caller
+        if let Some(payment_contract) = env.storage().instance().get(&DataKey::PaymentContract) {
+            if payment_contract != caller {
+                return Err(Error::NotAuthorized);
+            }
+        }
+
+        let mut profile = Self::get_provider_profile(&env, &provider);
+        profile.total_claims = profile.total_claims.saturating_add(1);
+        profile.total_amount = profile.total_amount.saturating_add(amount);
+
+        let mut claim_score = 0u32;
+        if amount > 10_000 {
+            claim_score = claim_score.saturating_add(3_000);
+        }
+        if amount > 50_000 {
+            claim_score = claim_score.saturating_add(3_000);
+        }
+        if claim_score == 0 {
+            claim_score = 500;
+        }
+
+        if profile.total_claims > 20 && profile.total_amount as u128 > 1_000_000u128 {
+            profile.high_risk_claims = profile.high_risk_claims.saturating_add(1);
+            claim_score = claim_score.saturating_add(2_000);
+        }
+
+        Self::add_patient_provider(&env, patient.clone(), provider.clone());
+        Self::set_provider_profile(&env, profile);
+        Self::recompute_provider_risk(&env, &provider);
+
+        let provider_risk = Self::get_provider_profile(&env, &provider).risk_score_bps;
+        let network_risk = Self::compute_network_influence(&env, &provider);
+        let final_score = (claim_score + provider_risk + network_risk).min(10_000);
+
+        if final_score >= config.threshold_bps {
+            let metadata = String::from_str(&env, "{\"pattern\":\"network_behavior\"}");
+            let explanation_ref = String::from_str(&env, "ipfs://network-fraud-explain");
+
+            let _ = Self::detect_anomaly(
+                env.clone(),
+                config.detector.clone(),
+                claim_id,
+                patient.clone(),
+                final_score,
+                4,
+                metadata,
+                explanation_ref,
+            );
+
+            env.events().publish((symbol_short!("RealTime"),), (claim_id, final_score));
+        }
+
+        Ok(final_score)
+    }
+
+    pub fn get_provider_profile_record(env: Env, provider: Address) -> ProviderProfile {
+        Self::get_provider_profile(&env, &provider)
+    }
+
+    pub fn get_detection_performance(env: Env) -> (u32, u32) {
+        let confirmed: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ConfirmedFeedbackCount)
+            .unwrap_or(0);
+        let false_pos: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FalsePositiveFeedbackCount)
+            .unwrap_or(0);
+        let total = confirmed.saturating_add(false_pos);
+        if total == 0 {
+            return (10_000, 0); // 100% accuracy if no feedback yet
+        }
+
+        let accuracy = ((confirmed as u128).saturating_mul(10_000) / (total as u128)) as u32;
+        let false_rate = ((false_pos as u128).saturating_mul(10_000) / (total as u128)) as u32;
+        (accuracy.min(10_000), false_rate.min(10_000))
+    }
+
+    pub fn detect_network_fraud(env: Env, provider: Address) -> u32 {
+        let profile = Self::get_provider_profile(&env, &provider);
+        let net = Self::compute_network_influence(&env, &provider);
+        (profile.risk_score_bps.saturating_add(net)).min(10_000)
+    }
+
+    pub fn report_provider_behavior(
+        env: Env,
+        provider: Address,
+        claim_id: u64,
+        score_bps: u32,
+    ) -> bool {
+        let mut profile = Self::get_provider_profile(&env, &provider);
+        profile.total_claims = profile.total_claims.saturating_add(1);
+        if score_bps >= 7000 {
+            profile.high_risk_claims = profile.high_risk_claims.saturating_add(1);
+        }
+        Self::set_provider_profile(&env, profile);
+        Self::recompute_provider_risk(&env, &provider);
+        env.events().publish((symbol_short!("ProvBeh"),), (provider, claim_id, score_bps));
+        true
+    }
+
+    pub fn create_realtime_alert(env: Env, caller: Address, anomaly_id: u64) -> Result<u64, Error> {
+        // pass through to existing create_alert;
+        Self::create_alert(env, caller, anomaly_id)
+    }
+
+    pub fn get_alert_accuracy_rates(env: Env) -> (u32, u32) {
+        Self::get_detection_performance(env)
+    }
+
     pub fn update_config(
         env: Env,
         caller: Address,
@@ -217,6 +457,19 @@ impl AnomalyDetectionContract {
         env.storage()
             .instance()
             .set(&DataKey::AuditForensicsContract, &forensics);
+        Ok(true)
+    }
+
+    pub fn set_payment_contract(
+        env: Env,
+        admin: Address,
+        payment_contract: Address,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::ensure_admin(&env, &admin)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::PaymentContract, &payment_contract);
         Ok(true)
     }
 
@@ -342,6 +595,14 @@ impl AnomalyDetectionContract {
             (symbol_short!("AnomDet"),),
             (anomaly_id, record_id, score_bps, severity),
         );
+
+        // Real-time alerting for high-severity or high-score anomalies
+        if severity >= 4 || score_bps >= 7500 {
+            env.events().publish(
+                (symbol_short!("RealTimeAlert"),),
+                (anomaly_id, record_id, score_bps, severity),
+            );
+        }
 
         Ok(anomaly_id)
     }
@@ -558,8 +819,24 @@ impl AnomalyDetectionContract {
         const LEARNING_RATE: u32 = 50;
         if confirmed {
             config.threshold_bps = config.threshold_bps.saturating_sub(LEARNING_RATE);
+            let current: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::ConfirmedFeedbackCount)
+                .unwrap_or(0);
+            env.storage()
+                .instance()
+                .set(&DataKey::ConfirmedFeedbackCount, &(current.saturating_add(1)));
         } else {
             config.threshold_bps = (config.threshold_bps + LEARNING_RATE).min(10_000);
+            let current: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::FalsePositiveFeedbackCount)
+                .unwrap_or(0);
+            env.storage()
+                .instance()
+                .set(&DataKey::FalsePositiveFeedbackCount, &(current.saturating_add(1)));
         }
         env.storage().instance().set(&DataKey::Config, &config);
 
@@ -871,5 +1148,86 @@ mod test {
             &String::from_str(&env, "again"),
         );
         assert_eq!(result, Err(Ok(Error::AlertAlreadyResolved)));
+    }
+
+    #[test]
+    fn test_assess_payment_claim_and_performance() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client.mock_all_auths().initialize(&admin, &detector, &7500u32);
+        client
+            .mock_all_auths()
+            .update_config(&admin, &None, &Some(1000u32), &None, &Some(true));
+
+        let score = client
+            .assess_payment_claim(
+                &env.current_contract_address(),
+                &1u64,
+                &provider,
+                &patient,
+                &20_000i128,
+                &String::from_str(&env, "SERVICE-ABC"),
+            )
+            .unwrap();
+
+        assert!(score >= 6000);
+
+        let anomaly = client.get_anomaly_record(&1u64).unwrap();
+        assert_eq!(anomaly.record_id, 1u64);
+
+        assert!(client.submit_feedback(&admin, &1u64, &true).unwrap());
+        assert!(client.submit_feedback(&admin, &1u64, &false).unwrap());
+        let (accuracy, false_rate) = client.get_alert_accuracy_rates();
+        assert!(accuracy >= 5000); // at least 50%
+        assert!(false_rate <= 5000);
+    }
+
+    #[test]
+    fn test_network_fraud_score_increases_from_provider_graph() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, AnomalyDetectionContract);
+        let client = AnomalyDetectionContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let detector = Address::generate(&env);
+        let provider1 = Address::generate(&env);
+        let provider2 = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        client.mock_all_auths().initialize(&admin, &detector, &5000u32);
+
+        let _ = client
+            .assess_payment_claim(
+                &env.current_contract_address(),
+                &1u64,
+                &provider1,
+                &patient,
+                &10_000i128,
+                &String::from_str(&env, "SVC1"),
+            )
+            .unwrap();
+        let _ = client
+            .assess_payment_claim(
+                &env.current_contract_address(),
+                &2u64,
+                &provider2,
+                &patient,
+                &15_000i128,
+                &String::from_str(&env, "SVC2"),
+            )
+            .unwrap();
+
+        let risk1 = client.detect_network_fraud(&provider1);
+        let risk2 = client.detect_network_fraud(&provider2);
+
+        assert!(risk1 > 0);
+        assert!(risk2 > 0);
     }
 }
