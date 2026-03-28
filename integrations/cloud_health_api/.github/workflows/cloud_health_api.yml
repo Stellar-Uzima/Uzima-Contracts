@@ -1,0 +1,25 @@
+name: Cloud Health API CI
+
+on:
+  push:
+    branches: [ cloud_health_api ]
+  pull_request:
+    branches: [ main, cloud_health_api ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+      - name: Install dependencies
+        run: |
+          cd integrations/cloud_health_api
+          npm ci
+      - name: Run tests
+        run: |
+          cd integrations/cloud_health_api
+          npm test

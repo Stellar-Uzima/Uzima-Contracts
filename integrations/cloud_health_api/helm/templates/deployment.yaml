@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "uzima-cloud-health-api.fullname" . | default .Chart.Name }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "uzima-cloud-health-api.fullname" . | default .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "uzima-cloud-health-api.fullname" . | default .Chart.Name }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.port }}
+          env:
+            - name: UZIMA_USE_GOOGLE_REAL
+              value: "0"
