@@ -299,7 +299,9 @@ impl Fido2AuthenticatorContract {
             return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::RpIdHash, &rp_id_hash);
+        env.storage()
+            .instance()
+            .set(&DataKey::RpIdHash, &rp_id_hash);
         env.storage().instance().set(&DataKey::Initialized, &true);
         Ok(())
     }
@@ -439,10 +441,8 @@ impl Fido2AuthenticatorContract {
             .set(&DataKey::UserDevices(user.clone()), &devices);
 
         // Bind to DID document if identity registry is configured.
-        let maybe_registry: Option<Address> = env
-            .storage()
-            .instance()
-            .get(&DataKey::IdentityRegistry);
+        let maybe_registry: Option<Address> =
+            env.storage().instance().get(&DataKey::IdentityRegistry);
         if let Some(registry_addr) = maybe_registry {
             let algorithm_tag: u32 = match algorithm {
                 PublicKeyAlgorithm::EdDSA => 1,
@@ -954,7 +954,10 @@ impl Fido2AuthenticatorContract {
     }
 
     /// Validates that the public key byte length is consistent with `algorithm`.
-    fn validate_public_key_size(public_key: &Bytes, algorithm: PublicKeyAlgorithm) -> Result<(), Error> {
+    fn validate_public_key_size(
+        public_key: &Bytes,
+        algorithm: PublicKeyAlgorithm,
+    ) -> Result<(), Error> {
         let len = public_key.len();
         match algorithm {
             PublicKeyAlgorithm::EdDSA => {
@@ -1022,10 +1025,9 @@ mod tests {
 
     /// SHA-256 of the ASCII string "uzima.health" — used as the test RP ID hash.
     const TEST_RP_ID_HASH: [u8; 32] = [
-        0x27, 0x08, 0x6a, 0x75, 0x68, 0x88, 0xde, 0x5c,
-        0xd7, 0x93, 0x04, 0x4d, 0x4b, 0x79, 0x3c, 0x21,
-        0x4a, 0x4e, 0x8c, 0x7c, 0x86, 0xc3, 0xd4, 0x7e,
-        0x36, 0xaf, 0xbc, 0xd3, 0x3e, 0x0b, 0xed, 0x9c,
+        0x27, 0x08, 0x6a, 0x75, 0x68, 0x88, 0xde, 0x5c, 0xd7, 0x93, 0x04, 0x4d, 0x4b, 0x79, 0x3c,
+        0x21, 0x4a, 0x4e, 0x8c, 0x7c, 0x86, 0xc3, 0xd4, 0x7e, 0x36, 0xaf, 0xbc, 0xd3, 0x3e, 0x0b,
+        0xed, 0x9c,
     ];
 
     fn setup_contract(env: &Env) -> (Fido2AuthenticatorContractClient, Address) {
@@ -1267,7 +1269,8 @@ mod tests {
         client.issue_registration_challenge(&user);
 
         // Advance time past the TTL.
-        env.ledger().with_mut(|l| l.timestamp = 1000 + CHALLENGE_TTL_SECS + 1);
+        env.ledger()
+            .with_mut(|l| l.timestamp = 1000 + CHALLENGE_TTL_SECS + 1);
 
         let cred_hash = BytesN::from_array(&env, &[0x01u8; 32]);
         let pub_key = Bytes::from_array(&env, &[0x02u8; 32]);
@@ -1559,7 +1562,12 @@ mod tests {
         let sig = BytesN::from_array(&env, &signing_key.sign(&msg).to_bytes());
 
         let result = client.try_verify_ed25519_assertion(
-            &user, &cred_hash, &auth_data, &client_data_hash, &sig, &3u32,
+            &user,
+            &cred_hash,
+            &auth_data,
+            &client_data_hash,
+            &sig,
+            &3u32,
         );
         assert!(matches!(result, Err(Ok(Error::SignCountRegression))));
     }
@@ -1623,7 +1631,13 @@ mod tests {
         let proof = Bytes::from_array(&env, &[0u8; 64]);
 
         let result = client.try_verify_zk_assertion(
-            &user, &cred_hash, &nullifier, &commitment, &proof, &1u32, &1u32,
+            &user,
+            &cred_hash,
+            &nullifier,
+            &commitment,
+            &proof,
+            &1u32,
+            &1u32,
         );
         assert!(matches!(result, Err(Ok(Error::NullifierAlreadyUsed))));
     }
