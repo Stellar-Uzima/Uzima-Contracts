@@ -2,7 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
-    contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address,
     Env, String, Vec,
 };
 
@@ -319,7 +319,7 @@ impl PatientGamificationContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
-        let achievement = env
+        let achievement: Achievement = env
             .storage()
             .instance()
             .get(&DataKey::Achievement(achievement_id))
@@ -444,7 +444,7 @@ impl PatientGamificationContract {
             .set(&DataKey::Challenge(challenge_id), &challenge);
 
         env.events().publish(
-            (symbol_short!("ChalCreate"),),
+            (symbol_short!("ChalCrt"),),
             (challenge_id, name, points_reward),
         );
         Ok(challenge_id)
@@ -464,7 +464,7 @@ impl PatientGamificationContract {
     ) -> Result<bool, Error> {
         patient_id.require_auth();
 
-        let mut challenge = env
+        let mut challenge: HealthChallenge = env
             .storage()
             .instance()
             .get(&DataKey::Challenge(challenge_id))
@@ -528,7 +528,7 @@ impl PatientGamificationContract {
     ) -> Result<bool, Error> {
         caller.require_auth();
 
-        let challenge = env
+        let challenge: HealthChallenge = env
             .storage()
             .instance()
             .get(&DataKey::Challenge(challenge_id))
@@ -561,7 +561,7 @@ impl PatientGamificationContract {
             Self::award_points_internal(&env, &patient_id, challenge.points_reward)?;
 
             env.events().publish(
-                (symbol_short!("ChalComplete"),),
+                (symbol_short!("ChalComp"),),
                 (patient_id, challenge_id, challenge.points_reward),
             );
         }
@@ -601,7 +601,7 @@ impl PatientGamificationContract {
         patient_id: &Address,
         points: u32,
     ) -> Result<(), Error> {
-        let config = Self::load_config(env)?;
+        let _config = Self::load_config(env)?;
         let timestamp = env.ledger().timestamp();
 
         let mut reward_points: RewardPoints = env
@@ -636,7 +636,7 @@ impl PatientGamificationContract {
         Ok(env
             .storage()
             .instance()
-            .get(&DataKey::RewardPoints(patient_id))
+            .get(&DataKey::RewardPoints(patient_id.clone()))
             .unwrap_or(RewardPoints {
                 patient_id,
                 total_points: 0,
@@ -653,7 +653,7 @@ impl PatientGamificationContract {
     ) -> Result<bool, Error> {
         patient_id.require_auth();
 
-        let mut reward_points = env
+        let mut reward_points: RewardPoints = env
             .storage()
             .instance()
             .get(&DataKey::RewardPoints(patient_id.clone()))
@@ -718,7 +718,7 @@ impl PatientGamificationContract {
             .set(&DataKey::SocialProfile(patient_id.clone()), &profile);
 
         env.events().publish(
-            (symbol_short!("ProfileCreate"),),
+            (symbol_short!("ProfCrt"),),
             patient_id,
         );
         Ok(true)
@@ -744,7 +744,7 @@ impl PatientGamificationContract {
     ) -> Result<bool, Error> {
         patient_id.require_auth();
 
-        let mut profile = env
+        let mut profile: SocialProfile = env
             .storage()
             .instance()
             .get(&DataKey::SocialProfile(patient_id.clone()))
@@ -843,7 +843,7 @@ impl PatientGamificationContract {
         let mut sorted_leaderboard = Vec::new(env);
         let mut temp_vec: Vec<LeaderboardEntry> = Vec::new(env);
         for entry in new_leaderboard.iter() {
-            temp_vec.push(entry.clone());
+            temp_vec.push_back(entry.clone());
         }
 
         // Simple bubble sort for on-chain sorting
@@ -1065,7 +1065,7 @@ impl PatientGamificationContract {
         Ok(env
             .storage()
             .instance()
-            .get(&DataKey::DailyStreak(patient_id))
+            .get(&DataKey::DailyStreak(patient_id.clone()))
             .unwrap_or(DailyStreak {
                 patient_id,
                 current_streak: 0,
@@ -1120,7 +1120,7 @@ impl PatientGamificationContract {
         caller.require_auth();
         Self::ensure_admin(&env, &caller)?;
 
-        let mut achievement = env
+        let mut achievement: Achievement = env
             .storage()
             .instance()
             .get(&DataKey::Achievement(achievement_id))
@@ -1142,7 +1142,7 @@ impl PatientGamificationContract {
         caller.require_auth();
         Self::ensure_admin(&env, &caller)?;
 
-        let mut challenge = env
+        let mut challenge: HealthChallenge = env
             .storage()
             .instance()
             .get(&DataKey::Challenge(challenge_id))
