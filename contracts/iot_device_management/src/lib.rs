@@ -215,3 +215,107 @@ pub enum DataKey {
 
 #[contract]
 pub struct IoTDeviceManagement;
+
+#[contractimpl]
+impl IoTDeviceManagement {
+    // ============================================================
+    // SYSTEM
+    // ============================================================
+
+    pub fn initialize(env: Env, admin: Address) -> Result<(), IoTError> {
+        admin.require_auth();
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(IoTError::AlreadyInitialized);
+        }
+        env.storage().instance().set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().persistent().set(&DataKey::DeviceCount, &0u64);
+        env.storage().persistent().set(&DataKey::ActiveDeviceCount, &0u64);
+        env.storage().persistent().set(&DataKey::ManufacturerCount, &0u32);
+        env.storage().persistent().set(&DataKey::FirmwareUpdateCount, &0u64);
+        env.storage().persistent().set(&DataKey::HeartbeatMinInterval, &60u64);
+        env.storage().persistent().set(&DataKey::KeyRotationMinInterval, &3600u64);
+        events::emit_initialized(&env, &admin);
+        Ok(())
+    }
+
+    pub fn pause(env: Env, admin: Address) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        events::emit_paused(&env, &admin);
+        Ok(())
+    }
+
+    pub fn unpause(env: Env, admin: Address) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if !paused {
+            return Err(IoTError::NotPaused);
+        }
+        env.storage().instance().set(&DataKey::Paused, &false);
+        events::emit_unpaused(&env, &admin);
+        Ok(())
+    }
+
+    // ============================================================
+    // RBAC
+    // ============================================================
+
+    pub fn set_role(env: Env, admin: Address, user: Address, role: Role) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        Self::check_not_paused(&env)?;
+        env.storage().persistent().set(&DataKey::UserRole(user), &role);
+        Ok(())
+    }
+
+    pub fn get_role(env: Env, user: Address) -> Role {
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserRole(user))
+            .unwrap_or(Role::Viewer)
+    }
+
+    // ============================================================
+    // INTERNAL HELPERS
+    // ============================================================
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), IoTError> {
+        if !env.storage().instance().has(&DataKey::Initialized) {
+            return Err(IoTError::NotInitialized);
+        }
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if caller != &admin {
+            return Err(IoTError::NotAdmin);
+        }
+        Ok(())
+    }
+
+    fn check_not_paused(env: &Env) -> Result<(), IoTError> {
+        let paused: bool = env.storage().instance().get(&DataKey::Paused).unwrap_or(false);
+        if paused {
+            return Err(IoTError::ContractPaused);
+        }
+        Ok(())
+    }
+
+    fn require_role(env: &Env, caller: &Address, required: Role) -> Result<(), IoTError> {
+        let role: Role = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRole(caller.clone()))
+            .unwrap_or(Role::Viewer);
+        // Admin can do anything; otherwise must match
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if caller == &admin {
+            return Ok(());
+        }
+        if role as u32 > required as u32 {
+            return Err(IoTError::NotAuthorized);
+        }
+        Ok(())
+    }
+}
