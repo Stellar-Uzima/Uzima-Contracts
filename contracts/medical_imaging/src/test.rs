@@ -299,3 +299,107 @@ fn duplicate_dicom_sop_rejected() {
 
     assert_eq!(err, Err(Ok(Error::DuplicateDicomSop)));
 }
+
+// ── Study Workflow Tests ──
+
+#[test]
+fn test_create_study() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let patient = Address::generate(&env);
+    let tech = Address::generate(&env);
+    let physician = Address::generate(&env);
+    client.assign_role(&admin, &physician, &4u32);
+
+    let (xray_id, mri_id, _ct_id) =
+        upload_three_modalities(&env, &client, &admin, &tech, &patient);
+
+    let mut image_ids = Vec::new(&env);
+    image_ids.push_back(xray_id);
+    image_ids.push_back(mri_id);
+
+    let study_id = client.create_study(
+        &physician,
+        &patient,
+        &ImagingModality::XRay,
+        &image_ids,
+        &2,
+    );
+    assert_eq!(study_id, 1);
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::Pending);
+    assert_eq!(study.required_readers, 2);
+    assert_eq!(study.image_ids.len(), 2);
+
+    let by_patient = client.get_studies_by_patient(&patient);
+    assert!(by_patient.iter().any(|id| id == study_id));
+
+    let by_status = client.get_studies_by_status(&StudyStatus::Pending);
+    assert!(by_status.iter().any(|id| id == study_id));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #18)")]
+fn test_create_study_too_many_readers() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let patient = Address::generate(&env);
+    let tech = Address::generate(&env);
+    let physician = Address::generate(&env);
+    client.assign_role(&admin, &physician, &4u32);
+
+    let (xray_id, _mri_id, _ct_id) =
+        upload_three_modalities(&env, &client, &admin, &tech, &patient);
+
+    let mut image_ids = Vec::new(&env);
+    image_ids.push_back(xray_id);
+
+    client.create_study(
+        &physician,
+        &patient,
+        &ImagingModality::XRay,
+        &image_ids,
+        &6,
+    );
+}
+
+#[test]
+fn test_assign_reader() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let patient = Address::generate(&env);
+    let tech = Address::generate(&env);
+    let physician = Address::generate(&env);
+    let radiologist = Address::generate(&env);
+    client.assign_role(&admin, &physician, &4u32);
+    client.assign_role(&admin, &radiologist, &2u32);
+
+    let (xray_id, _mri_id, _ct_id) =
+        upload_three_modalities(&env, &client, &admin, &tech, &patient);
+
+    let mut image_ids = Vec::new(&env);
+    image_ids.push_back(xray_id);
+
+    let study_id = client.create_study(
+        &physician,
+        &patient,
+        &ImagingModality::XRay,
+        &image_ids,
+        &2,
+    );
+
+    client.assign_reader(&physician, &study_id, &radiologist);
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::Assigned);
+
+    let by_reader = client.get_studies_by_reader(&radiologist);
+    assert!(by_reader.iter().any(|id| id == study_id));
+}

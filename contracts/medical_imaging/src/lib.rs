@@ -1118,6 +1118,195 @@ impl MedicalImagingContract {
             .get(&DataKey::DoseSummary(patient))
     }
 
+    // ── Study Creation & Reader Assignment ──
+
+    pub fn create_study(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        modality: ImagingModality,
+        image_ids: Vec<u64>,
+        required_readers: u32,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        if required_readers == 0 || required_readers > 5 {
+            return Err(Error::TooManyReaders);
+        }
+        if image_ids.is_empty() || image_ids.len() > 500 {
+            return Err(Error::TooManyImages);
+        }
+        for img_id in image_ids.iter() {
+            Self::require_image_exists(&env, img_id)?;
+        }
+
+        let study_id = Self::next_counter(&env, &NEXT_STD);
+        let now = env.ledger().timestamp();
+
+        let study = ImagingStudy {
+            study_id,
+            patient: patient.clone(),
+            created_by: caller.clone(),
+            modality,
+            image_ids,
+            ai_result_ids: Vec::new(&env),
+            required_readers,
+            status: StudyStatus::Pending,
+            created_at: now,
+            finalized_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Self::append_u64(
+            &env,
+            DataKey::PatientStudies(patient),
+            study_id,
+        );
+        Self::append_u64(
+            &env,
+            DataKey::StatusStudies(Self::status_to_u32(&StudyStatus::Pending)),
+            study_id,
+        );
+
+        env.events()
+            .publish((symbol_short!("STDY_NEW"),), (study_id, caller));
+        Ok(study_id)
+    }
+
+    pub fn assign_reader(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        reader: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+        Self::require_role_or_admin(&env, &reader, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::Pending && study.status != StudyStatus::Assigned {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let readers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReaders(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        if readers.iter().any(|r| r == reader) {
+            return Err(Error::InvalidInput);
+        }
+        if readers.len() >= study.required_readers {
+            return Err(Error::TooManyReaders);
+        }
+
+        let mut new_readers = readers;
+        new_readers.push_back(reader.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::StudyReaders(study_id), &new_readers);
+
+        Self::append_u64(&env, DataKey::ReaderStudies(reader.clone()), study_id);
+
+        if study.status == StudyStatus::Pending {
+            let old_status = study.status;
+            study.status = StudyStatus::Assigned;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &StudyStatus::Assigned);
+        }
+
+        env.events()
+            .publish((symbol_short!("STDY_ASG"),), (study_id, reader));
+        Ok(true)
+    }
+
+    pub fn assign_arbitrator(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        arbitrator: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        let study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::DiscrepancyReview {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::StudyArbitrator(study_id), &arbitrator);
+        Ok(true)
+    }
+
+    pub fn link_ai_results(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        result_ids: Vec<u64>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        for rid in result_ids.iter() {
+            study.ai_result_ids.push_back(rid);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Ok(true)
+    }
+
+    pub fn get_study(env: Env, study_id: u64) -> Option<ImagingStudy> {
+        env.storage().persistent().get(&DataKey::Study(study_id))
+    }
+
+    pub fn get_studies_by_reader(env: Env, reader: Address) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ReaderStudies(reader))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_studies_by_status(env: Env, status: StudyStatus) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::StatusStudies(Self::status_to_u32(&status)))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_studies_by_patient(env: Env, patient: Address) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientStudies(patient))
+            .unwrap_or(Vec::new(&env))
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
