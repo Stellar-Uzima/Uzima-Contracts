@@ -1,0 +1,5 @@
+apiVersion: v2
+name: uzima-cloud-health-api
+description: Helm chart for Uzima Cloud Health API integration (example)
+version: 0.1.0
+appVersion: "0.1.0"
