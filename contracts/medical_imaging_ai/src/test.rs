@@ -503,8 +503,8 @@ fn test_model_degrades_on_low_accuracy() {
     }
 
     // Record 9 correct, 1 incorrect → 90% < 92% warning → Degraded
-    for i in 0..9 {
-        client.record_evaluation(&evaluator, &result_ids[i], &true);
+    for rid in result_ids.iter().take(9) {
+        client.record_evaluation(&evaluator, rid, &true);
     }
     client.record_evaluation(&evaluator, &result_ids[9], &false);
 

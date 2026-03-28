@@ -245,11 +245,7 @@ impl MedicalImagingAiContract {
         Ok(true)
     }
 
-    pub fn register_evaluator(
-        env: Env,
-        admin: Address,
-        evaluator: Address,
-    ) -> Result<bool, Error> {
+    pub fn register_evaluator(env: Env, admin: Address, evaluator: Address) -> Result<bool, Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         env.storage()
@@ -258,11 +254,7 @@ impl MedicalImagingAiContract {
         Ok(true)
     }
 
-    pub fn revoke_evaluator(
-        env: Env,
-        admin: Address,
-        evaluator: Address,
-    ) -> Result<bool, Error> {
+    pub fn revoke_evaluator(env: Env, admin: Address, evaluator: Address) -> Result<bool, Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         env.storage()
@@ -324,8 +316,7 @@ impl MedicalImagingAiContract {
             .persistent()
             .set(&DataKey::CnnModel(model_id.clone()), &model);
 
-        env.events()
-            .publish((symbol_short!("MDL_REG"),), model_id);
+        env.events().publish((symbol_short!("MDL_REG"),), model_id);
 
         Ok(true)
     }
@@ -357,8 +348,7 @@ impl MedicalImagingAiContract {
                     .publish((symbol_short!("MDL_REACT"),), model_id);
             }
             ModelStatus::Retired => {
-                env.events()
-                    .publish((symbol_short!("MDL_RET"),), model_id);
+                env.events().publish((symbol_short!("MDL_RET"),), model_id);
             }
             _ => {}
         }

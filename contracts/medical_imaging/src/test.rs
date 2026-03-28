@@ -313,20 +313,14 @@ fn test_create_study() {
     let physician = Address::generate(&env);
     client.assign_role(&admin, &physician, &4u32);
 
-    let (xray_id, mri_id, _ct_id) =
-        upload_three_modalities(&env, &client, &admin, &tech, &patient);
+    let (xray_id, mri_id, _ct_id) = upload_three_modalities(&env, &client, &admin, &tech, &patient);
 
     let mut image_ids = Vec::new(&env);
     image_ids.push_back(xray_id);
     image_ids.push_back(mri_id);
 
-    let study_id = client.create_study(
-        &physician,
-        &patient,
-        &ImagingModality::XRay,
-        &image_ids,
-        &2,
-    );
+    let study_id =
+        client.create_study(&physician, &patient, &ImagingModality::XRay, &image_ids, &2);
     assert_eq!(study_id, 1);
 
     let study = client.get_study(&study_id).unwrap();
@@ -359,13 +353,7 @@ fn test_create_study_too_many_readers() {
     let mut image_ids = Vec::new(&env);
     image_ids.push_back(xray_id);
 
-    client.create_study(
-        &physician,
-        &patient,
-        &ImagingModality::XRay,
-        &image_ids,
-        &6,
-    );
+    client.create_study(&physician, &patient, &ImagingModality::XRay, &image_ids, &6);
 }
 
 #[test]
@@ -387,13 +375,8 @@ fn test_assign_reader() {
     let mut image_ids = Vec::new(&env);
     image_ids.push_back(xray_id);
 
-    let study_id = client.create_study(
-        &physician,
-        &patient,
-        &ImagingModality::XRay,
-        &image_ids,
-        &2,
-    );
+    let study_id =
+        client.create_study(&physician, &patient, &ImagingModality::XRay, &image_ids, &2);
 
     client.assign_reader(&physician, &study_id, &radiologist);
 
@@ -420,19 +403,13 @@ fn setup_study_with_readers(
     client.assign_role(admin, &reader1, &2u32);
     client.assign_role(admin, &reader2, &2u32);
 
-    let (xray_id, _mri_id, _ct_id) =
-        upload_three_modalities(env, client, admin, &tech, &patient);
+    let (xray_id, _mri_id, _ct_id) = upload_three_modalities(env, client, admin, &tech, &patient);
 
     let mut image_ids = Vec::new(env);
     image_ids.push_back(xray_id);
 
-    let study_id = client.create_study(
-        &physician,
-        &patient,
-        &ImagingModality::XRay,
-        &image_ids,
-        &2,
-    );
+    let study_id =
+        client.create_study(&physician, &patient, &ImagingModality::XRay, &image_ids, &2);
 
     client.assign_reader(&physician, &study_id, &reader1);
     client.assign_reader(&physician, &study_id, &reader2);
@@ -580,13 +557,8 @@ fn test_single_reader_study() {
     let mut image_ids = Vec::new(&env);
     image_ids.push_back(xray_id);
 
-    let study_id = client.create_study(
-        &physician,
-        &patient,
-        &ImagingModality::XRay,
-        &image_ids,
-        &1,
-    );
+    let study_id =
+        client.create_study(&physician, &patient, &ImagingModality::XRay, &image_ids, &1);
 
     client.assign_reader(&physician, &study_id, &reader1);
 
