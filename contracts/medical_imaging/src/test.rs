@@ -403,3 +403,230 @@ fn test_assign_reader() {
     let by_reader = client.get_studies_by_reader(&radiologist);
     assert!(by_reader.iter().any(|id| id == study_id));
 }
+
+// ── Reader Report Tests ──
+
+fn setup_study_with_readers(
+    env: &Env,
+    client: &MedicalImagingContractClient<'_>,
+    admin: &Address,
+) -> (u64, Address, Address) {
+    let patient = Address::generate(env);
+    let tech = Address::generate(env);
+    let physician = Address::generate(env);
+    let reader1 = Address::generate(env);
+    let reader2 = Address::generate(env);
+    client.assign_role(admin, &physician, &4u32);
+    client.assign_role(admin, &reader1, &2u32);
+    client.assign_role(admin, &reader2, &2u32);
+
+    let (xray_id, _mri_id, _ct_id) =
+        upload_three_modalities(env, client, admin, &tech, &patient);
+
+    let mut image_ids = Vec::new(env);
+    image_ids.push_back(xray_id);
+
+    let study_id = client.create_study(
+        &physician,
+        &patient,
+        &ImagingModality::XRay,
+        &image_ids,
+        &2,
+    );
+
+    client.assign_reader(&physician, &study_id, &reader1);
+    client.assign_reader(&physician, &study_id, &reader2);
+
+    (study_id, reader1, reader2)
+}
+
+#[test]
+fn test_submit_reader_report_agreement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    let same_diag = hash(&env, 200);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &same_diag,
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::InReview);
+
+    client.submit_reader_report(
+        &reader2,
+        &study_id,
+        &same_diag,
+        &hash(&env, 202),
+        &String::from_str(&env, "ipfs://findings2"),
+        &true,
+        &8500,
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::PreliminaryReport);
+}
+
+#[test]
+fn test_submit_reader_report_discrepancy() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    client.submit_reader_report(
+        &reader2,
+        &study_id,
+        &hash(&env, 210),
+        &hash(&env, 211),
+        &String::from_str(&env, "ipfs://findings2"),
+        &false,
+        &5000,
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::DiscrepancyReview);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")]
+fn test_submit_report_not_assigned() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, _reader1, _reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    let stranger = Address::generate(&env);
+
+    client.submit_reader_report(
+        &stranger,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings"),
+        &true,
+        &9000,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #17)")]
+fn test_submit_report_duplicate() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, _reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+}
+
+#[test]
+fn test_single_reader_study() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let patient = Address::generate(&env);
+    let tech = Address::generate(&env);
+    let physician = Address::generate(&env);
+    let reader1 = Address::generate(&env);
+    client.assign_role(&admin, &physician, &4u32);
+    client.assign_role(&admin, &reader1, &2u32);
+
+    let (xray_id, _mri_id, _ct_id) =
+        upload_three_modalities(&env, &client, &admin, &tech, &patient);
+
+    let mut image_ids = Vec::new(&env);
+    image_ids.push_back(xray_id);
+
+    let study_id = client.create_study(
+        &physician,
+        &patient,
+        &ImagingModality::XRay,
+        &image_ids,
+        &1,
+    );
+
+    client.assign_reader(&physician, &study_id, &reader1);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    let study = client.get_study(&study_id).unwrap();
+    assert_eq!(study.status, StudyStatus::PreliminaryReport);
+}
+
+#[test]
+fn test_blind_review_enforcement() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let (study_id, reader1, reader2) = setup_study_with_readers(&env, &client, &admin);
+
+    client.submit_reader_report(
+        &reader1,
+        &study_id,
+        &hash(&env, 200),
+        &hash(&env, 201),
+        &String::from_str(&env, "ipfs://findings1"),
+        &true,
+        &9000,
+    );
+
+    // Reader2 tries to see reports while still InReview → empty
+    let reports = client.get_reader_reports(&reader2, &study_id);
+    assert_eq!(reports.len(), 0);
+
+    // Reader1 can still see own report
+    let my_report = client.get_my_report(&reader1, &study_id);
+    assert_eq!(my_report.study_id, study_id);
+}

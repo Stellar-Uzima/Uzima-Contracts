@@ -1307,6 +1307,245 @@ impl MedicalImagingContract {
             .unwrap_or(Vec::new(&env))
     }
 
+    // ── Reader Report Submission ──
+
+    pub fn submit_reader_report(
+        env: Env,
+        reader: Address,
+        study_id: u64,
+        diagnosis_hash: BytesN<32>,
+        findings_hash: BytesN<32>,
+        findings_ref: String,
+        agrees_with_ai: bool,
+        ai_accuracy_feedback_bps: u32,
+    ) -> Result<u64, Error> {
+        reader.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::Assigned
+            && study.status != StudyStatus::InReview
+            && study.status != StudyStatus::DiscrepancyReview
+        {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        // Check reader is assigned or is the arbitrator
+        let readers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReaders(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        let is_reader = readers.iter().any(|r| r == reader);
+        let is_arbitrator = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::StudyArbitrator(study_id))
+            .map(|a| a == reader)
+            .unwrap_or(false);
+
+        if !is_reader && !is_arbitrator {
+            return Err(Error::ReaderNotAssigned);
+        }
+
+        // Check for duplicate submission
+        let existing_report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        for rid in existing_report_ids.iter() {
+            let existing: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if existing.reader == reader {
+                return Err(Error::ReaderAlreadySubmitted);
+            }
+        }
+
+        if ai_accuracy_feedback_bps > 10_000 {
+            return Err(Error::InvalidInput);
+        }
+
+        let report_id = Self::next_counter(&env, &NEXT_RPT);
+        let report = ReaderReport {
+            report_id,
+            study_id,
+            reader: reader.clone(),
+            diagnosis_hash: diagnosis_hash.clone(),
+            findings_hash,
+            findings_ref,
+            agrees_with_ai,
+            ai_accuracy_feedback_bps,
+            submitted_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ReaderReportEntry(report_id), &report);
+        Self::append_u64(&env, DataKey::StudyReports(study_id), report_id);
+
+        // Auto-transition logic
+        let old_status = study.status;
+
+        if old_status == StudyStatus::Assigned {
+            study.status = StudyStatus::InReview;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &study.status);
+        }
+
+        // Check if arbitrator submitted in DiscrepancyReview
+        if is_arbitrator && old_status == StudyStatus::DiscrepancyReview {
+            study.status = StudyStatus::PreliminaryReport;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &study.status);
+        }
+
+        // Check if all required readers have submitted
+        let updated_report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        // Count only reports from assigned readers (not arbitrator)
+        let mut reader_report_count = 0u32;
+        let mut all_diagnosis_hashes: Vec<BytesN<32>> = Vec::new(&env);
+        for rid in updated_report_ids.iter() {
+            let rpt: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if readers.iter().any(|r| r == rpt.reader) {
+                reader_report_count = reader_report_count.saturating_add(1);
+                all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+            }
+        }
+
+        if reader_report_count >= study.required_readers
+            && study.status != StudyStatus::PreliminaryReport
+        {
+            // Reload study in case it was updated
+            let mut study: ImagingStudy = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Study(study_id))
+                .unwrap();
+            let current_status = study.status;
+
+            // Check if all hashes match
+            let first_hash = all_diagnosis_hashes.get(0).unwrap();
+            let all_match = all_diagnosis_hashes.iter().all(|h| h == first_hash);
+
+            if all_match {
+                study.status = StudyStatus::PreliminaryReport;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Study(study_id), &study);
+                Self::update_status_index(
+                    &env,
+                    study_id,
+                    &current_status,
+                    &StudyStatus::PreliminaryReport,
+                );
+            } else {
+                study.status = StudyStatus::DiscrepancyReview;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Study(study_id), &study);
+                Self::update_status_index(
+                    &env,
+                    study_id,
+                    &current_status,
+                    &StudyStatus::DiscrepancyReview,
+                );
+                env.events()
+                    .publish((symbol_short!("DISCREP"),), study_id);
+            }
+        }
+
+        env.events()
+            .publish((symbol_short!("RPT_SUB"),), (study_id, report_id, reader));
+        Ok(report_id)
+    }
+
+    pub fn get_reader_reports(env: Env, caller: Address, study_id: u64) -> Vec<ReaderReport> {
+        let study: Option<ImagingStudy> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id));
+
+        let can_view = match &study {
+            Some(s) => {
+                matches!(
+                    s.status,
+                    StudyStatus::PreliminaryReport
+                        | StudyStatus::DiscrepancyReview
+                        | StudyStatus::FinalReport
+                        | StudyStatus::Amended
+                ) || Self::require_admin(&env, &caller).is_ok()
+            }
+            None => false,
+        };
+
+        if !can_view {
+            return Vec::new(&env);
+        }
+
+        let report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut out = Vec::new(&env);
+        for rid in report_ids.iter() {
+            if let Some(rpt) = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+            {
+                out.push_back(rpt);
+            }
+        }
+        out
+    }
+
+    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> ReaderReport {
+        reader.require_auth();
+        let report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        for rid in report_ids.iter() {
+            let rpt: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if rpt.reader == reader {
+                return rpt;
+            }
+        }
+        panic!("report not found");
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
