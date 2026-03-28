@@ -1161,11 +1161,7 @@ impl MedicalImagingContract {
         env.storage()
             .persistent()
             .set(&DataKey::Study(study_id), &study);
-        Self::append_u64(
-            &env,
-            DataKey::PatientStudies(patient),
-            study_id,
-        );
+        Self::append_u64(&env, DataKey::PatientStudies(patient), study_id);
         Self::append_u64(
             &env,
             DataKey::StatusStudies(Self::status_to_u32(&StudyStatus::Pending)),
@@ -1473,8 +1469,7 @@ impl MedicalImagingContract {
                     &current_status,
                     &StudyStatus::DiscrepancyReview,
                 );
-                env.events()
-                    .publish((symbol_short!("DISCREP"),), study_id);
+                env.events().publish((symbol_short!("DISCREP"),), study_id);
             }
         }
 
@@ -1484,10 +1479,7 @@ impl MedicalImagingContract {
     }
 
     pub fn get_reader_reports(env: Env, caller: Address, study_id: u64) -> Vec<ReaderReport> {
-        let study: Option<ImagingStudy> = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Study(study_id));
+        let study: Option<ImagingStudy> = env.storage().persistent().get(&DataKey::Study(study_id));
 
         let can_view = match &study {
             Some(s) => {
@@ -1710,6 +1702,10 @@ impl MedicalImagingContract {
         }
         env.storage().persistent().set(&old_key, &new_vec);
         // Add to new status index
-        Self::append_u64(env, DataKey::StatusStudies(Self::status_to_u32(new_status)), study_id);
+        Self::append_u64(
+            env,
+            DataKey::StatusStudies(Self::status_to_u32(new_status)),
+            study_id,
+        );
     }
 }
