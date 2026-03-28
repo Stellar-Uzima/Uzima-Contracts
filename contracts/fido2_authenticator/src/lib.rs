@@ -269,9 +269,10 @@ impl Fido2AuthenticatorContract {
 
         // Check for duplicate credential
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                return Err(Error::DeviceAlreadyRegistered);
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    return Err(Error::DeviceAlreadyRegistered);
+                }
             }
         }
 
@@ -336,9 +337,10 @@ impl Fido2AuthenticatorContract {
         }
 
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                return Err(Error::DeviceAlreadyRegistered);
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    return Err(Error::DeviceAlreadyRegistered);
+                }
             }
         }
 
@@ -411,7 +413,10 @@ impl Fido2AuthenticatorContract {
             .instance()
             .get(&DataKey::RpIdHash)
             .ok_or(Error::NotInitialized)?;
-        let auth_data_rp_id_hash: BytesN<32> = auth_data.slice(0..32).try_into().unwrap();
+        let auth_data_rp_id_hash: BytesN<32> = auth_data
+            .slice(0..32)
+            .try_into()
+            .map_err(|_| Error::InvalidAuthenticatorData)?;
         if auth_data_rp_id_hash != stored_rp_id_hash {
             return Err(Error::RpIdHashMismatch);
         }
@@ -426,17 +431,18 @@ impl Fido2AuthenticatorContract {
         let mut devices = Self::load_devices(&env, &user);
         let mut device_idx: Option<u32> = None;
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                if !d.is_active {
-                    return Err(Error::DeviceRevoked);
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    if !d.is_active {
+                        return Err(Error::DeviceRevoked);
+                    }
+                    device_idx = Some(i);
+                    break;
                 }
-                device_idx = Some(i);
-                break;
             }
         }
         let idx = device_idx.ok_or(Error::DeviceNotFound)?;
-        let device: Fido2Device = devices.get(idx).expect("safe: index within bounds");
+        let device: Fido2Device = devices.get(idx).ok_or(Error::DeviceNotFound)?;
 
         if device.algorithm != PublicKeyAlgorithm::EdDSA {
             return Err(Error::UnsupportedAlgorithm);
@@ -520,17 +526,18 @@ impl Fido2AuthenticatorContract {
         let mut devices = Self::load_devices(&env, &user);
         let mut device_idx: Option<u32> = None;
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                if !d.is_active {
-                    return Err(Error::DeviceRevoked);
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    if !d.is_active {
+                        return Err(Error::DeviceRevoked);
+                    }
+                    device_idx = Some(i);
+                    break;
                 }
-                device_idx = Some(i);
-                break;
             }
         }
         let idx = device_idx.ok_or(Error::DeviceNotFound)?;
-        let device: Fido2Device = devices.get(idx).expect("safe: index within bounds");
+        let device: Fido2Device = devices.get(idx).ok_or(Error::DeviceNotFound)?;
 
         if device.algorithm != PublicKeyAlgorithm::ES256 {
             return Err(Error::UnsupportedAlgorithm);
@@ -622,15 +629,16 @@ impl Fido2AuthenticatorContract {
         let mut devices = Self::load_devices(&env, &user);
         let mut found = false;
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                let revoked = Fido2Device {
-                    is_active: false,
-                    ..d
-                };
-                devices.set(i, revoked);
-                found = true;
-                break;
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    let revoked = Fido2Device {
+                        is_active: false,
+                        ..d
+                    };
+                    devices.set(i, revoked);
+                    found = true;
+                    break;
+                }
             }
         }
         if !found {
@@ -672,15 +680,16 @@ impl Fido2AuthenticatorContract {
         let mut devices = Self::load_devices(&env, &user);
         let mut found = false;
         for i in 0..devices.len() {
-            let d: Fido2Device = devices.get(i).expect("safe: index within bounds");
-            if d.credential_id == credential_id {
-                let revoked = Fido2Device {
-                    is_active: false,
-                    ..d
-                };
-                devices.set(i, revoked);
-                found = true;
-                break;
+            if let Some(d) = devices.get(i) {
+                if d.credential_id == credential_id {
+                    let revoked = Fido2Device {
+                        is_active: false,
+                        ..d
+                    };
+                    devices.set(i, revoked);
+                    found = true;
+                    break;
+                }
             }
         }
         if !found {
