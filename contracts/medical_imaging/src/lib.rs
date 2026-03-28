@@ -24,6 +24,8 @@ const NEXT_ANN: Symbol = symbol_short!("NANN");
 const NEXT_DGN: Symbol = symbol_short!("NDIAG");
 const NEXT_DSE: Symbol = symbol_short!("NDOSE");
 const SAFE_DSE: Symbol = symbol_short!("SAFE_DSE");
+const NEXT_STD: Symbol = symbol_short!("NSTD");
+const NEXT_RPT: Symbol = symbol_short!("NRPT");
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -219,6 +221,47 @@ pub struct DoseSummary {
     pub safety_alerts: u32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum StudyStatus {
+    Pending,
+    Assigned,
+    InReview,
+    PreliminaryReport,
+    DiscrepancyReview,
+    FinalReport,
+    Amended,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct ImagingStudy {
+    pub study_id: u64,
+    pub patient: Address,
+    pub created_by: Address,
+    pub modality: ImagingModality,
+    pub image_ids: Vec<u64>,
+    pub ai_result_ids: Vec<u64>,
+    pub required_readers: u32,
+    pub status: StudyStatus,
+    pub created_at: u64,
+    pub finalized_at: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct ReaderReport {
+    pub report_id: u64,
+    pub study_id: u64,
+    pub reader: Address,
+    pub diagnosis_hash: BytesN<32>,
+    pub findings_hash: BytesN<32>,
+    pub findings_ref: String,
+    pub agrees_with_ai: bool,
+    pub ai_accuracy_feedback_bps: u32,
+    pub submitted_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -240,6 +283,14 @@ pub enum DataKey {
     Link(u64),
     DoseEntry(u64),
     DoseSummary(Address),
+    Study(u64),
+    ReaderReportEntry(u64),
+    StudyReports(u64),
+    StudyReaders(u64),
+    ReaderStudies(Address),
+    StatusStudies(u32),
+    PatientStudies(Address),
+    StudyArbitrator(u64),
 }
 
 #[contracterror]
@@ -259,6 +310,16 @@ pub enum Error {
     LinkNotFound = 11,
     DuplicateDicomSop = 12,
     IntegrityMismatch = 13,
+    StudyNotFound = 14,
+    StudyNotInExpectedStatus = 15,
+    ReaderNotAssigned = 16,
+    ReaderAlreadySubmitted = 17,
+    TooManyReaders = 18,
+    TooManyImages = 19,
+    AllReadersNotSubmitted = 20,
+    ArbitratorNotAssigned = 21,
+    InvalidStatusTransition = 22,
+    ReportsNotYetAvailable = 23,
 }
 
 #[contract]
@@ -284,6 +345,8 @@ impl MedicalImagingContract {
         env.storage()
             .instance()
             .set(&SAFE_DSE, &safety_threshold_mgy);
+        env.storage().instance().set(&NEXT_STD, &1u64);
+        env.storage().instance().set(&NEXT_RPT, &1u64);
         env.storage()
             .persistent()
             .set(&DataKey::ImageIds, &Vec::<u64>::new(&env));
@@ -1115,5 +1178,41 @@ impl MedicalImagingContract {
             values.push_back(value);
             env.storage().persistent().set(&key, &values);
         }
+    }
+
+    fn status_to_u32(status: &StudyStatus) -> u32 {
+        match status {
+            StudyStatus::Pending => 0,
+            StudyStatus::Assigned => 1,
+            StudyStatus::InReview => 2,
+            StudyStatus::PreliminaryReport => 3,
+            StudyStatus::DiscrepancyReview => 4,
+            StudyStatus::FinalReport => 5,
+            StudyStatus::Amended => 6,
+        }
+    }
+
+    fn update_status_index(
+        env: &Env,
+        study_id: u64,
+        old_status: &StudyStatus,
+        new_status: &StudyStatus,
+    ) {
+        // Remove from old status index
+        let old_key = DataKey::StatusStudies(Self::status_to_u32(old_status));
+        let old_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&old_key)
+            .unwrap_or(Vec::new(env));
+        let mut new_vec = Vec::new(env);
+        for id in old_ids.iter() {
+            if id != study_id {
+                new_vec.push_back(id);
+            }
+        }
+        env.storage().persistent().set(&old_key, &new_vec);
+        // Add to new status index
+        Self::append_u64(env, DataKey::StatusStudies(Self::status_to_u32(new_status)), study_id);
     }
 }
