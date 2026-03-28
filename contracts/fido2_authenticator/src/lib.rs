@@ -1030,7 +1030,7 @@ mod tests {
         0xed, 0x9c,
     ];
 
-    fn setup_contract(env: &Env) -> (Fido2AuthenticatorContractClient, Address) {
+    fn setup_contract(env: &Env) -> (Fido2AuthenticatorContractClient<'_>, Address) {
         let admin = Address::generate(env);
         let contract_id = env.register_contract(None, Fido2AuthenticatorContract);
         let client = Fido2AuthenticatorContractClient::new(env, &contract_id);
@@ -1046,7 +1046,7 @@ mod tests {
         // bytes 0-31: rpIdHash
         data[..32].copy_from_slice(&TEST_RP_ID_HASH);
         // byte 32: flags — UP bit set
-        data[32] = FLAG_UP as u8;
+        data[32] = FLAG_UP;
         // bytes 33-36: sign count (big-endian)
         data[33] = ((sign_count >> 24) & 0xff) as u8;
         data[34] = ((sign_count >> 16) & 0xff) as u8;
@@ -1493,8 +1493,8 @@ mod tests {
 
         // Build the message the authenticator signs: authenticatorData (37 bytes) || clientDataHash (32 bytes).
         let mut message = [0u8; 69];
-        for i in 0..37usize {
-            message[i] = auth_data_bytes.get(i as u32).unwrap_or(0) as u8;
+        for (i, byte) in message.iter_mut().enumerate().take(37) {
+            *byte = auth_data_bytes.get(i as u32).unwrap_or(0);
         }
         message[37..69].copy_from_slice(&[0x42u8; 32]);
 
@@ -1555,8 +1555,8 @@ mod tests {
         let client_data_hash = BytesN::from_array(&env, &[0x11u8; 32]);
 
         let mut msg = [0u8; 69];
-        for i in 0..37usize {
-            msg[i] = auth_data.get(i as u32).unwrap_or(0) as u8;
+        for (i, byte) in msg.iter_mut().enumerate().take(37) {
+            *byte = auth_data.get(i as u32).unwrap_or(0);
         }
         msg[37..69].copy_from_slice(&[0x11u8; 32]);
         let sig = BytesN::from_array(&env, &signing_key.sign(&msg).to_bytes());
