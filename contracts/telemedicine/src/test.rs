@@ -87,7 +87,12 @@ impl TestContext {
         );
     }
 
-    fn setup_patient_with_language(&self, patient_id: &BytesN<32>, patient: &Address, language: &str) {
+    fn setup_patient_with_language(
+        &self,
+        patient_id: &BytesN<32>,
+        patient: &Address,
+        language: &str,
+    ) {
         self.client.register_patient(
             patient_id,
             patient,
@@ -663,7 +668,10 @@ fn test_chatbot_symptom_triage_and_education() {
     );
 
     let latest = ctx.client.get_latest_patient_inquiry(&ctx.patient_id);
-    assert_eq!(latest.inquiry_id, BytesN::from_array(&ctx.env, &[130u8; 32]));
+    assert_eq!(
+        latest.inquiry_id,
+        BytesN::from_array(&ctx.env, &[130u8; 32])
+    );
 }
 
 #[test]
@@ -682,7 +690,10 @@ fn test_chatbot_multilingual_support() {
         &String::from_str(&ctx.env, "Nina homa na kikohozi, nifanye nini?"),
     );
 
-    assert_eq!(inquiry.detected_language, String::from_str(&ctx.env, "Swahili"));
+    assert_eq!(
+        inquiry.detected_language,
+        String::from_str(&ctx.env, "Swahili")
+    );
     assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
     assert_eq!(
         inquiry.knowledge_source_ref,
@@ -738,7 +749,10 @@ fn test_chatbot_emergency_detection_and_escalation() {
 
     let emergency = ctx.client.get_emergency_case(&inquiry_id);
     assert_eq!(emergency.patient_id, ctx.patient_id);
-    assert!(matches!(emergency.emergency_level, EmergencyLevel::Critical));
+    assert!(matches!(
+        emergency.emergency_level,
+        EmergencyLevel::Critical
+    ));
     assert!(emergency.escalated_to_physical);
 
     let active = ctx.client.get_active_emergencies();
@@ -768,10 +782,12 @@ fn test_chatbot_accuracy_and_response_time_guarantee() {
         &String::from_str(&ctx.env, "I have fever and headache, have I got COVID-19?"),
     );
 
-    assert!(ctx
-        .client
-        .is_chatbot_inquiry_accurate(&inquiry_id)
-        .unwrap());
-    assert!(ctx.client.get_chatbot_response_time_ms(&inquiry_id).unwrap() < 2000);
+    assert!(ctx.client.is_chatbot_inquiry_accurate(&inquiry_id).unwrap());
+    assert!(
+        ctx.client
+            .get_chatbot_response_time_ms(&inquiry_id)
+            .unwrap()
+            < 2000
+    );
     assert!(inquiry.confidence_bps >= 9000);
 }

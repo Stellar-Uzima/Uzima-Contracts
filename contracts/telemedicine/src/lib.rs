@@ -1595,9 +1595,7 @@ impl TelemedicineContract {
             };
             return String::from_str(
                 env,
-                &(message.to_string()
-                    + " Contact: "
-                    + &protocol.emergency_contact.to_string()),
+                &(message.to_string() + " Contact: " + &protocol.emergency_contact.to_string()),
             );
         }
 
