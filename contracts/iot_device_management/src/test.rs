@@ -64,3 +64,50 @@ fn test_set_role() {
     let role = client.get_role(&user);
     assert_eq!(role, Role::Operator);
 }
+
+fn register_manufacturer(
+    env: &Env,
+    client: &IoTDeviceManagementClient,
+    admin: &Address,
+    id_byte: u8,
+) -> BytesN<32> {
+    let mfr_id = make_bytes32(env, id_byte);
+    let cert = make_bytes32(env, id_byte.wrapping_add(100));
+    let name = String::from_str(env, "TestManufacturer");
+    client.register_manufacturer(admin, &mfr_id, &name, &cert);
+    mfr_id
+}
+
+#[test]
+fn test_register_manufacturer() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let mfr = client.get_manufacturer(&mfr_id);
+    assert_eq!(mfr.is_active, true);
+    assert_eq!(mfr.device_count, 0);
+}
+
+#[test]
+fn test_register_manufacturer_duplicate() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let cert = make_bytes32(&env, 200);
+    let name = String::from_str(&env, "Dup");
+    let result = client.try_register_manufacturer(&admin, &mfr_id, &name, &cert);
+    assert_eq!(result, Err(Ok(IoTError::ManufacturerAlreadyRegistered)));
+}
+
+#[test]
+fn test_deactivate_manufacturer() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    client.deactivate_manufacturer(&admin, &mfr_id);
+    let mfr = client.get_manufacturer(&mfr_id);
+    assert_eq!(mfr.is_active, false);
+}

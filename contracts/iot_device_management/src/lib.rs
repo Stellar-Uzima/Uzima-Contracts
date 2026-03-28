@@ -318,4 +318,70 @@ impl IoTDeviceManagement {
         }
         Ok(())
     }
+
+    // ============================================================
+    // MANUFACTURERS
+    // ============================================================
+
+    pub fn register_manufacturer(
+        env: Env,
+        admin: Address,
+        manufacturer_id: BytesN<32>,
+        name: String,
+        certification_hash: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        Self::check_not_paused(&env)?;
+        validation::validate_name(&name)?;
+
+        if env.storage().persistent().has(&DataKey::Manufacturer(manufacturer_id.clone())) {
+            return Err(IoTError::ManufacturerAlreadyRegistered);
+        }
+
+        let mfr = Manufacturer {
+            manufacturer_id: manufacturer_id.clone(),
+            address: admin.clone(),
+            name,
+            certification_hash,
+            is_active: true,
+            registered_at: env.ledger().timestamp(),
+            device_count: 0,
+        };
+
+        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id.clone()), &mfr);
+        env.storage().persistent().set(&DataKey::ManufacturerByAddr(admin.clone()), &manufacturer_id);
+
+        let count: u32 = env.storage().persistent().get(&DataKey::ManufacturerCount).unwrap_or(0);
+        env.storage().persistent().set(&DataKey::ManufacturerCount, &count.checked_add(1).unwrap());
+
+        Ok(())
+    }
+
+    pub fn get_manufacturer(env: Env, manufacturer_id: BytesN<32>) -> Result<Manufacturer, IoTError> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Manufacturer(manufacturer_id))
+            .ok_or(IoTError::ManufacturerNotRegistered)
+    }
+
+    pub fn deactivate_manufacturer(
+        env: Env,
+        admin: Address,
+        manufacturer_id: BytesN<32>,
+    ) -> Result<(), IoTError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        Self::check_not_paused(&env)?;
+
+        let mut mfr: Manufacturer = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Manufacturer(manufacturer_id.clone()))
+            .ok_or(IoTError::ManufacturerNotRegistered)?;
+
+        mfr.is_active = false;
+        env.storage().persistent().set(&DataKey::Manufacturer(manufacturer_id), &mfr);
+        Ok(())
+    }
 }
