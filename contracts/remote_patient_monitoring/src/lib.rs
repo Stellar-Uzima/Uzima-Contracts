@@ -64,7 +64,7 @@ impl RemotePatientMonitoringContract {
             .storage()
             .instance()
             .get(&Symbol::new(&env, "admin"))
-            .unwrap();
+            .expect("Admin not initialized");
         assert!(caller == admin || caller == patient, "Unauthorized");
 
         let device = Device {
@@ -82,7 +82,11 @@ impl RemotePatientMonitoringContract {
     pub fn add_caregiver(env: Env, caller: Address, device_id: u64, caregiver: Address) {
         caller.require_auth();
         let key = (Symbol::new(&env, "device"), device_id);
-        let mut device: Device = env.storage().persistent().get(&key).unwrap();
+        let mut device: Device = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("Device not found");
         assert!(caller == device.patient, "Only patient can add caregivers");
 
         device.caregivers.push_back(caregiver);
@@ -162,7 +166,11 @@ impl RemotePatientMonitoringContract {
     ) {
         caller.require_auth();
         let device_key = (Symbol::new(&env, "device"), 0u64); // Assuming device 0 for simplicity
-        let device: Device = env.storage().persistent().get(&device_key).unwrap();
+        let device: Device = env
+            .storage()
+            .persistent()
+            .get(&device_key)
+            .expect("Device not found");
         assert!(
             caller == device.patient || device.caregivers.contains(&caller),
             "Unauthorized"
