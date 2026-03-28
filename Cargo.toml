@@ -5,6 +5,7 @@ members = [
     "contracts/anomaly_detection",
     "contracts/anomaly_detector",
     "contracts/audit_forensics",
+    "contracts/clinical_trial",
     "contracts/credential_registry",
     "contracts/cross_chain_access",
     "contracts/cross_chain_bridge",
