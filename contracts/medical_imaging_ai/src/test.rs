@@ -147,3 +147,51 @@ fn test_update_model_status_retire() {
     client.update_model_status(&admin, &hash(&env, 1), &ModelStatus::Retired);
     assert!(!client.is_model_active(&hash(&env, 1)));
 }
+
+#[test]
+fn test_is_model_active_degraded() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_test_model(&env, &client, &admin, 1);
+    client.update_model_status(&admin, &hash(&env, 1), &ModelStatus::Degraded);
+    assert!(client.is_model_active(&hash(&env, 1)));
+}
+
+#[test]
+fn test_update_model_status_reactivate() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_test_model(&env, &client, &admin, 1);
+    client.update_model_status(&admin, &hash(&env, 1), &ModelStatus::Retired);
+    assert!(!client.is_model_active(&hash(&env, 1)));
+    client.update_model_status(&admin, &hash(&env, 1), &ModelStatus::Active);
+    assert!(client.is_model_active(&hash(&env, 1)));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn test_initialize_warning_lte_critical() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = Address::generate(&env);
+    env.register_contract(&contract_id, MedicalImagingAiContract);
+    let client = MedicalImagingAiContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    // warning_bps == critical_bps — must reject with InvalidThreshold (#15)
+    client.initialize(&admin, &8500, &8500, &50);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #5)")]
+fn test_initialize_min_samples_zero() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = Address::generate(&env);
+    env.register_contract(&contract_id, MedicalImagingAiContract);
+    let client = MedicalImagingAiContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    // min_samples == 0 — must reject with InvalidInput (#5)
+    client.initialize(&admin, &9200, &8500, &0);
+}
