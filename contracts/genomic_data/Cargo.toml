@@ -1,5 +1,5 @@
 [package]
-name = "ai_analytics"
+name = "genomic_data"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -10,10 +10,12 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk.workspace = true
+soroban-sdk = { workspace = true }
+upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [features]
+default = []
 testutils = ["soroban-sdk/testutils"]

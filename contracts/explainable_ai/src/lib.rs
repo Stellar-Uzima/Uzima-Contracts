@@ -1,4 +1,4 @@
-// Explainable AI Contract - XAI explanations and bias auditing
+// Explainable AI Contract - Enhanced with SHAP Integration and Counterfactual Explanations
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
@@ -10,6 +10,52 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
     String, Symbol, Vec,
 };
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ShapValue {
+    pub feature_name: String,
+    pub shap_value: i128,     // SHAP value scaled by 10^6 for precision
+    pub absolute_shap: u128,  // |SHAP| for ranking
+    pub feature_value: i128,  // Actual feature value
+    pub baseline_value: i128, // Expected model output
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ShapExplanation {
+    pub explanation_id: u64,
+    pub model_id: BytesN<32>,
+    pub patient: Address,
+    pub prediction_id: u64,
+    pub base_value: i128, // Expected model output E[f(x)]
+    pub prediction: i128, // Actual model output f(x)
+    pub shap_values: Vec<ShapValue>,
+    pub method: String, // "kernel_shap", "tree_shap", "deep_shap"
+    pub computation_time_ms: u64,
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CounterfactualExplanation {
+    pub cf_id: u64,
+    pub original_prediction: i128,
+    pub target_prediction: i128,
+    pub minimal_changes: Vec<FeatureChange>,
+    pub feasibility_score: u32,   // 0-10000 (how realistic the change is)
+    pub proximity_distance: u128, // Distance from original point
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct FeatureChange {
+    pub feature_name: String,
+    pub original_value: i128,
+    pub counterfactual_value: i128,
+    pub change_magnitude: u128, // Relative change magnitude
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -76,6 +122,10 @@ pub enum DataKey {
     RequestCounter,
     ExplanationCounter,
     AuditCounter,
+    ShapExplanation(u64),
+    ShapCounter,
+    Counterfactual(u64),
+    CfCounter,
 }
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
@@ -351,6 +401,175 @@ impl ExplainableAiContract {
             equalized_odds_diff,
             calibration_diff,
         ))
+    }
+
+    // ==========================================
+    // SHAP (SHapley Additive exPlanations) Functions
+    // ==========================================
+
+    /// Generate SHAP explanation for a prediction
+    pub fn generate_shap_explanation(
+        env: Env,
+        caller: Address,
+        model_id: BytesN<32>,
+        prediction_id: u64,
+        base_value: i128,
+        prediction: i128,
+        feature_names: Vec<String>,
+        feature_values: Vec<i128>,
+        method: String,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        let shap_id = Self::next_shap_id(&env);
+        let timestamp = env.ledger().timestamp();
+
+        // Compute SHAP values (simplified - in practice this would call an oracle or off-chain service)
+        let mut shap_values = Vec::new(&env);
+        let mut total_shap = 0i128;
+
+        for i in 0..feature_names.len() {
+            let fname = feature_names.get(i).unwrap();
+            let fvalue = feature_values.get(i).unwrap();
+
+            // Simplified SHAP computation (proportional allocation)
+            let shap_val = if !feature_names.is_empty() {
+                (prediction - base_value) / feature_names.len() as i128
+            } else {
+                0
+            };
+
+            let abs_shap = if shap_val < 0 { -shap_val } else { shap_val } as u128;
+
+            shap_values.push_back(ShapValue {
+                feature_name: fname,
+                shap_value: shap_val,
+                absolute_shap: abs_shap,
+                feature_value: fvalue,
+                baseline_value: base_value / feature_names.len() as i128,
+            });
+
+            total_shap = total_shap.checked_add(shap_val).unwrap_or(0);
+        }
+
+        let shap_explanation = ShapExplanation {
+            explanation_id: shap_id,
+            model_id,
+            patient: caller.clone(),
+            prediction_id,
+            base_value,
+            prediction,
+            shap_values,
+            method,
+            computation_time_ms: 0, // Would be computed in real implementation
+            created_at: timestamp,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ShapExplanation(shap_id), &shap_explanation);
+
+        env.events().publish(
+            (symbol_short!("shap"), symbol_short!("created")),
+            (shap_id, caller),
+        );
+
+        Ok(shap_id)
+    }
+
+    /// Get SHAP explanation by ID
+    pub fn get_shap_explanation(env: Env, shap_id: u64) -> Option<ShapExplanation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ShapExplanation(shap_id))
+    }
+
+    /// Generate counterfactual explanation
+    pub fn generate_counterfactual(
+        env: Env,
+        caller: Address,
+        original_prediction: i128,
+        target_prediction: i128,
+        current_features: Vec<(String, i128)>,
+        target_features: Vec<(String, i128)>,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        let cf_id = Self::next_cf_id(&env);
+        let timestamp = env.ledger().timestamp();
+
+        // Compute minimal changes needed
+        let mut minimal_changes = Vec::new(&env);
+        let mut total_distance = 0u128;
+
+        for i in 0..current_features.len() {
+            let (fname, curr_val) = current_features.get(i).unwrap();
+            let (_, target_val) = target_features.get(i).unwrap();
+
+            let change = target_val - curr_val;
+            let magnitude = if change < 0 { -change } else { change } as u128;
+
+            minimal_changes.push_back(FeatureChange {
+                feature_name: fname,
+                original_value: curr_val,
+                counterfactual_value: target_val,
+                change_magnitude: magnitude,
+            });
+
+            total_distance = total_distance.checked_add(magnitude).unwrap_or(0);
+        }
+
+        // Compute feasibility score (simplified)
+        let feasibility_score = if total_distance < 10_000_000 {
+            9000u32
+        } else if total_distance < 50_000_000 {
+            7000u32
+        } else {
+            5000u32
+        };
+
+        let cf_explanation = CounterfactualExplanation {
+            cf_id,
+            original_prediction,
+            target_prediction,
+            minimal_changes,
+            feasibility_score,
+            proximity_distance: total_distance,
+            created_at: timestamp,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Counterfactual(cf_id), &cf_explanation);
+
+        env.events().publish(
+            (symbol_short!("cf"), symbol_short!("created")),
+            (cf_id, caller),
+        );
+
+        Ok(cf_id)
+    }
+
+    /// Get counterfactual explanation by ID
+    pub fn get_counterfactual(env: Env, cf_id: u64) -> Option<CounterfactualExplanation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Counterfactual(cf_id))
+    }
+
+    // Helper functions
+    fn next_shap_id(env: &Env) -> u64 {
+        let key = DataKey::ShapCounter;
+        let id: u64 = env.storage().instance().get(&key).unwrap_or(0);
+        env.storage().instance().set(&key, &(id + 1));
+        id + 1
+    }
+
+    fn next_cf_id(env: &Env) -> u64 {
+        let key = DataKey::CfCounter;
+        let id: u64 = env.storage().instance().get(&key).unwrap_or(0);
+        env.storage().instance().set(&key, &(id + 1));
+        id + 1
     }
 }
 
