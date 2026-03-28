@@ -389,7 +389,7 @@ impl Fido2AuthenticatorContract {
         Self::validate_public_key_size(&public_key, algorithm)?;
 
         // Validate device name length.
-        if device_name.len() == 0 || device_name.len() > MAX_DEVICE_NAME_LEN {
+        if device_name.is_empty() || device_name.len() > MAX_DEVICE_NAME_LEN {
             return Err(Error::InvalidDeviceName);
         }
 
@@ -690,7 +690,7 @@ impl Fido2AuthenticatorContract {
         if caller != user && caller != admin {
             return Err(Error::NotAuthorized);
         }
-        if reason.len() == 0 || reason.len() > MAX_REASON_LEN {
+        if reason.is_empty() || reason.len() > MAX_REASON_LEN {
             return Err(Error::InvalidRevocationReason);
         }
 
@@ -745,7 +745,7 @@ impl Fido2AuthenticatorContract {
         user.require_auth();
         Self::require_initialized(&env)?;
 
-        if new_name.len() == 0 || new_name.len() > MAX_DEVICE_NAME_LEN {
+        if new_name.is_empty() || new_name.len() > MAX_DEVICE_NAME_LEN {
             return Err(Error::InvalidDeviceName);
         }
 
@@ -936,8 +936,8 @@ impl Fido2AuthenticatorContract {
             .ok_or(Error::NotInitialized)?;
 
         let mut rp_arr = [0u8; 32];
-        for i in 0..32usize {
-            rp_arr[i] = auth_data.get(i as u32).unwrap_or(0) as u8;
+        for (i, byte) in rp_arr.iter_mut().enumerate() {
+            *byte = auth_data.get(i as u32).unwrap_or(0);
         }
         let auth_rp_hash = BytesN::<32>::from_array(env, &rp_arr);
         if auth_rp_hash != rp_id_hash {
@@ -945,7 +945,7 @@ impl Fido2AuthenticatorContract {
         }
 
         // Validate User Presence flag (byte 32).
-        let flags = auth_data.get(32).unwrap_or(0) as u8;
+        let flags = auth_data.get(32).unwrap_or(0);
         if flags & FLAG_UP == 0 {
             return Err(Error::UserPresenceNotVerified);
         }
@@ -983,8 +983,8 @@ impl Fido2AuthenticatorContract {
             return Err(Error::InvalidPublicKey);
         }
         let mut arr = [0u8; 32];
-        for i in 0..32usize {
-            arr[i] = key_bytes.get(i as u32).unwrap_or(0) as u8;
+        for (i, byte) in arr.iter_mut().enumerate() {
+            *byte = key_bytes.get(i as u32).unwrap_or(0);
         }
         Ok(BytesN::<32>::from_array(env, &arr))
     }
