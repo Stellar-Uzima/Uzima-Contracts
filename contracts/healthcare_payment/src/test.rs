@@ -1,4 +1,4 @@
-use super::{Error, HealthcarePayment, HealthcarePaymentClient};
+use super::{ClaimSubmissionStatus, Error, HealthcarePayment, HealthcarePaymentClient};
 use soroban_sdk::{contract, contractimpl, testutils::Address as _, token, Address, Env, String};
 
 #[contract]
@@ -161,4 +161,145 @@ fn test_payment_plan() {
     client.pay_installment(&plan_id);
 
     assert_eq!(token_client.balance(&provider), 250);
+}
+
+#[test]
+fn test_insurance_eligibility_claim_submission_and_eob_flow() {
+    let (env, client, admin, provider, patient, _, _, _) = setup_env_and_clients();
+
+    let insurance_provider_id = client.register_insurance_provider(
+        &admin,
+        &String::from_str(&env, "Uzima Insurance"),
+        &String::from_str(&env, "UZM001"),
+        &true,
+        &true,
+    );
+
+    let coverage_policy_id = client.register_coverage_policy(
+        &patient,
+        &patient,
+        &insurance_provider_id,
+        &String::from_str(&env, "POLICY-INS-1"),
+        &String::from_str(&env, "MEMBER-77"),
+        &String::from_str(&env, "GROUP-A"),
+        &500i128,
+        &25i128,
+        &2000u32,
+    );
+
+    let eligibility_id = client.verify_insurance_eligibility(
+        &provider,
+        &coverage_policy_id,
+        &String::from_str(&env, "CONSULT-01"),
+        &8000u32,
+        &String::from_str(&env, "271-ACK-001"),
+    );
+    let eligibility = client.get_eligibility_check(&eligibility_id);
+    assert!(eligibility.eligible);
+    assert_eq!(eligibility.deductible_remaining, 500);
+
+    let claim_id = client.submit_claim(
+        &patient,
+        &provider,
+        &String::from_str(&env, "CONSULT-01"),
+        &1000i128,
+        &String::from_str(&env, "POLICY-INS-1"),
+        &None,
+    );
+
+    assert!(client.submit_insurance_claim(
+        &provider,
+        &claim_id,
+        &coverage_policy_id,
+        &String::from_str(&env, "PAYER-REF-001"),
+        &String::from_str(&env, "837"),
+    ));
+
+    let enrollment_id = client.sync_coverage_enrollment(
+        &admin,
+        &coverage_policy_id,
+        &String::from_str(&env, "ENROLL-ACK-001"),
+        &String::from_str(&env, "834"),
+    );
+    let enrollment = client.get_coverage_enrollment(&enrollment_id);
+    assert_eq!(enrollment.policy_id, coverage_policy_id);
+
+    assert!(client.process_eob(
+        &admin,
+        &claim_id,
+        &coverage_policy_id,
+        &900i128,
+        &700i128,
+        &150i128,
+        &String::from_str(&env, "Adjudicated successfully"),
+        &String::from_str(&env, "835"),
+    ));
+
+    let submission = client.get_claim_submission(&claim_id);
+    assert_eq!(submission.status, ClaimSubmissionStatus::Adjudicated);
+
+    let eob = client.get_explanation_of_benefits(&claim_id);
+    assert_eq!(eob.insurer_paid, 700);
+    assert_eq!(eob.patient_responsibility, 225);
+
+    let responsibility = client.get_patient_responsibility(&patient);
+    assert!(responsibility.is_some());
+    if let Some(responsibility) = responsibility {
+        assert_eq!(responsibility.total_copay_tracked, 25);
+        assert_eq!(responsibility.total_deductible_tracked, 150);
+    }
+
+    let policy = client.get_coverage_policy(&coverage_policy_id);
+    assert_eq!(policy.deductible_met, 150);
+}
+
+#[test]
+fn test_insurance_claim_requires_matching_policy() {
+    let (env, client, admin, provider, patient, _, _, _) = setup_env_and_clients();
+
+    let insurance_provider_id = client.register_insurance_provider(
+        &admin,
+        &String::from_str(&env, "Uzima Insurance"),
+        &String::from_str(&env, "UZM002"),
+        &true,
+        &true,
+    );
+
+    let coverage_policy_id = client.register_coverage_policy(
+        &patient,
+        &patient,
+        &insurance_provider_id,
+        &String::from_str(&env, "POLICY-MATCH"),
+        &String::from_str(&env, "MEMBER-88"),
+        &String::from_str(&env, "GROUP-B"),
+        &300i128,
+        &10i128,
+        &1000u32,
+    );
+
+    client.verify_insurance_eligibility(
+        &provider,
+        &coverage_policy_id,
+        &String::from_str(&env, "LAB-01"),
+        &9000u32,
+        &String::from_str(&env, "271-ACK-XYZ"),
+    );
+
+    let claim_id = client.submit_claim(
+        &patient,
+        &provider,
+        &String::from_str(&env, "LAB-01"),
+        &400i128,
+        &String::from_str(&env, "POLICY-OTHER"),
+        &None,
+    );
+
+    let result = client.try_submit_insurance_claim(
+        &provider,
+        &claim_id,
+        &coverage_policy_id,
+        &String::from_str(&env, "PAYER-REF-999"),
+        &String::from_str(&env, "837"),
+    );
+    assert_eq!(result, Err(Ok(Error::PolicyMismatch)));
 }
