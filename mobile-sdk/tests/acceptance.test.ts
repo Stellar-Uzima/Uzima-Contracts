@@ -3,6 +3,8 @@
  * Comprehensive tests covering all acceptance criteria
  */
 
+import { VoiceInterface } from '../core/src/voice/VoiceInterface';
+
 describe('Uzima Mobile SDK Tests', () => {
   
   describe('1. iOS and Android Native SDKs', () => {
@@ -354,6 +356,59 @@ describe('Uzima Mobile SDK Tests', () => {
     it('should encrypt and share record', () => {
       // Multi-user flow
       expect(true).toBe(true);
+    });
+  });
+
+  describe('11. Voice Interface for Healthcare (New Feature)', () => {
+    const { VoiceInterface } = require('@uzima/sdk-core');
+
+    it('should transcribe medical terminology with high confidence', async () => {
+      const voice = new VoiceInterface({ supportedLanguages: ['en-US'] });
+      const result = await voice.transcribe('Patient has hypertension and diabetes', 'en-US');
+      expect(result.confidence).toBeGreaterThanOrEqual(0.95);
+      expect(result.transcript).toContain('hypertension');
+      expect(result.transcript).toContain('diabetes');
+      expect(result.elapsedMs).toBeLessThanOrEqual(500);
+    });
+
+    it('should extract medical terms and parse natural language commands', () => {
+      const voice = new VoiceInterface();
+      const terms = voice.extractMedicalTerms('Add new prescription for aspirin and metformin');
+      const command = voice.parseNaturalLanguageCommand('Add record for patient P123 aspirin prescription');
+
+      expect(terms).toEqual(expect.arrayContaining(['aspirin', 'metformin']));
+      expect(command.action).toBe('add_medical_record');
+      expect(command.patientId).toBe('p123');
+      expect(command.payload?.medicalTerms).toContain('aspirin');
+    });
+
+    it('should process a voice command within 500ms', async () => {
+      const voice = new VoiceInterface();
+      const result = await voice.processCommandFromAudio('Fetch patient P987 record', 'en-US');
+      expect(result.command.action).toBe('fetch_patient');
+      expect(result.latencyMs).toBeLessThanOrEqual(500);
+    });
+
+    it('should authenticate via voice biometric fallback', async () => {
+      const voice = new VoiceInterface();
+      await expect(voice.authenticateVoiceBiometric('verified-clinician sample')).resolves.toBe(true);
+    });
+
+    it('should support HIPAA compliance flags', () => {
+      const voice = new VoiceInterface({ hipaaCompliance: true });
+      expect(voice.isHIPAACompliant()).toBe(true);
+      expect(voice.getSupportedLanguages()).toContain('en-US');
+    });
+
+    it('should support realtime transcription callbacks', async () => {
+      const voice = new VoiceInterface();
+      let partials: string[] = [];
+      await voice.startRealtimeTranscription((text) => {
+        partials.push(text);
+      }, { canceled: false });
+
+      expect(partials.length).toBeGreaterThan(0);
+      expect(partials[partials.length - 1]).toContain('prescription');
     });
   });
 });

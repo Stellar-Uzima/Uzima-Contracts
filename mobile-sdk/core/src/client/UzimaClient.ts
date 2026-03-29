@@ -5,6 +5,7 @@ import { EncryptionManager } from '../crypto/EncryptionManager';
 import { MedicalRecordsManager } from '../records/MedicalRecordsManager';
 import { OfflineManager } from '../sync/OfflineManager';
 import { NotificationManager } from '../notifications/NotificationManager';
+import { VoiceInterface } from '../voice/VoiceInterface';
 import { UzimaConfig } from '../types';
 
 /**
@@ -16,6 +17,7 @@ export class UzimaClient {
   private apiClient: APIClient;
   private authManager: AuthManager;
   private biometricAuth: BiometricAuth;
+  private voiceInterface: VoiceInterface;
   private encryptionManager: typeof EncryptionManager;
   private recordsManager: MedicalRecordsManager;
   private offlineManager: OfflineManager;
@@ -36,6 +38,12 @@ export class UzimaClient {
     this.recordsManager = new MedicalRecordsManager(this.apiClient);
     this.offlineManager = new OfflineManager(this.apiClient);
     this.notificationManager = new NotificationManager(this.apiClient);
+    this.voiceInterface = new VoiceInterface({
+      supportedLanguages: ['en-US', 'es-ES', 'fr-FR'],
+      accents: ['us', 'uk', 'au', 'in'],
+      hipaaCompliance: true,
+      maxResponseTimeMs: 500,
+    });
   }
 
   /**
@@ -123,6 +131,20 @@ export class UzimaClient {
    */
   getAPIClient(): APIClient {
     return this.apiClient;
+  }
+
+  /**
+   * Get voice interface
+   */
+  getVoiceInterface(): VoiceInterface {
+    return this.voiceInterface;
+  }
+
+  /**
+   * Process voice command through transcription + NLP
+   */
+  async processVoiceCommand(input: string | ArrayBuffer, language = 'en-US') {
+    return this.voiceInterface.processCommandFromAudio(input, language);
   }
 
   /**
