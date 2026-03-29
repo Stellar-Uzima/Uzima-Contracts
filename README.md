@@ -20,6 +20,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
+- [Developer Guide](#developer-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
 - [License](#license)
