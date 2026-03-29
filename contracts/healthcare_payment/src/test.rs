@@ -242,9 +242,12 @@ fn test_insurance_eligibility_claim_submission_and_eob_flow() {
     assert_eq!(eob.insurer_paid, 700);
     assert_eq!(eob.patient_responsibility, 225);
 
-    let responsibility = client.get_patient_responsibility(&patient).unwrap();
-    assert_eq!(responsibility.total_copay_tracked, 25);
-    assert_eq!(responsibility.total_deductible_tracked, 150);
+    let responsibility = client.get_patient_responsibility(&patient);
+    assert!(responsibility.is_some());
+    if let Some(responsibility) = responsibility {
+        assert_eq!(responsibility.total_copay_tracked, 25);
+        assert_eq!(responsibility.total_deductible_tracked, 150);
+    }
 
     let policy = client.get_coverage_policy(&coverage_policy_id);
     assert_eq!(policy.deductible_met, 150);
