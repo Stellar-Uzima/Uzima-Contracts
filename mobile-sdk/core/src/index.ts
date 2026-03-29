@@ -5,6 +5,7 @@ export { BiometricAuth } from './auth/BiometricAuth';
 export { MedicalRecordsManager } from './records/MedicalRecordsManager';
 export { OfflineManager } from './sync/OfflineManager';
 export { NotificationManager } from './notifications/NotificationManager';
+export { VoiceInterface } from './voice/VoiceInterface';
 export { EncryptionManager } from './crypto/EncryptionManager';
 export { APIClient } from './network/APIClient';
 
