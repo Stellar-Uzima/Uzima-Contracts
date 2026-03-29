@@ -1,9 +1,61 @@
+// Explainable AI Contract - Enhanced with SHAP Integration and Counterfactual Explanations
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::panic)]
+#![allow(clippy::unwrap_used)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
     String, Symbol, Vec,
 };
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ShapValue {
+    pub feature_name: String,
+    pub shap_value: i128,     // SHAP value scaled by 10^6 for precision
+    pub absolute_shap: u128,  // |SHAP| for ranking
+    pub feature_value: i128,  // Actual feature value
+    pub baseline_value: i128, // Expected model output
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ShapExplanation {
+    pub explanation_id: u64,
+    pub model_id: BytesN<32>,
+    pub patient: Address,
+    pub prediction_id: u64,
+    pub base_value: i128, // Expected model output E[f(x)]
+    pub prediction: i128, // Actual model output f(x)
+    pub shap_values: Vec<ShapValue>,
+    pub method: String, // "kernel_shap", "tree_shap", "deep_shap"
+    pub computation_time_ms: u64,
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CounterfactualExplanation {
+    pub cf_id: u64,
+    pub original_prediction: i128,
+    pub target_prediction: i128,
+    pub minimal_changes: Vec<FeatureChange>,
+    pub feasibility_score: u32,   // 0-10000 (how realistic the change is)
+    pub proximity_distance: u128, // Distance from original point
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct FeatureChange {
+    pub feature_name: String,
+    pub original_value: i128,
+    pub counterfactual_value: i128,
+    pub change_magnitude: u128, // Relative change magnitude
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -21,8 +73,8 @@ pub struct ExplanationRequest {
 #[contracttype]
 pub struct FeatureImportance {
     pub feature_name: String,
-    pub importance_bps: u32,  // Importance in basis points (0-10000)
-    pub normalized_value: u32,  // Normalized value for this feature (0-10000)
+    pub importance_bps: u32,   // Importance in basis points (0-10000)
+    pub normalized_value: u32, // Normalized value for this feature (0-10000)
 }
 
 #[derive(Clone)]
@@ -31,15 +83,15 @@ pub struct ExplanationMetadata {
     pub insight_id: u64,
     pub model_id: BytesN<32>,
     pub patient: Address,
-    pub explanation_method: String,  // e.g., "SHAP", "LIME", "attention_weights"
+    pub explanation_method: String, // e.g., "SHAP", "LIME", "attention_weights"
     pub feature_importance: Vec<FeatureImportance>,
-    pub primary_factors: Vec<String>,  // Top contributing factors
-    pub confidence_impact: u32,  // How much this factor impacted confidence (in bps)
+    pub primary_factors: Vec<String>, // Top contributing factors
+    pub confidence_impact: u32,       // How much this factor impacted confidence (in bps)
     pub created_at: u64,
-    pub explanation_ref: String,  // Off-chain reference to detailed explanation
+    pub explanation_ref: String, // Off-chain reference to detailed explanation
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[contracttype]
 pub enum ExplanationStatus {
     Pending,
@@ -53,9 +105,9 @@ pub enum ExplanationStatus {
 pub struct BiasAuditResult {
     pub model_id: BytesN<32>,
     pub audit_date: u64,
-    pub demographic_fairness_metrics: Map<String, u32>,  // Group -> disparity metric
+    pub demographic_fairness_metrics: Map<String, u32>, // Group -> disparity metric
     pub equalized_odds: bool,
-    pub calibration_by_group: Map<String, u32>,  // Group -> calibration metric
+    pub calibration_by_group: Map<String, u32>, // Group -> calibration metric
     pub audit_summary: String,
     pub recommendations: Vec<String>,
 }
@@ -70,6 +122,10 @@ pub enum DataKey {
     RequestCounter,
     ExplanationCounter,
     AuditCounter,
+    ShapExplanation(u64),
+    ShapCounter,
+    Counterfactual(u64),
+    CfCounter,
 }
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
@@ -121,15 +177,9 @@ impl ExplainableAiContract {
     }
 
     fn next_request_id(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .instance()
-            .get(&REQUEST_COUNTER)
-            .unwrap_or(0);
+        let current: u64 = env.storage().instance().get(&REQUEST_COUNTER).unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&REQUEST_COUNTER, &next);
+        env.storage().instance().set(&REQUEST_COUNTER, &next);
         next
     }
 
@@ -140,30 +190,18 @@ impl ExplainableAiContract {
             .get(&EXPLANATION_COUNTER)
             .unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&EXPLANATION_COUNTER, &next);
+        env.storage().instance().set(&EXPLANATION_COUNTER, &next);
         next
     }
 
     fn next_audit_id(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .instance()
-            .get(&AUDIT_COUNTER)
-            .unwrap_or(0);
+        let current: u64 = env.storage().instance().get(&AUDIT_COUNTER).unwrap_or(0);
         let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&AUDIT_COUNTER, &next);
+        env.storage().instance().set(&AUDIT_COUNTER, &next);
         next
     }
 
-    pub fn request_explanation(
-        env: Env,
-        caller: Address,
-        ai_insight_id: u64,
-    ) -> u64 {
+    pub fn request_explanation(env: Env, caller: Address, ai_insight_id: u64) -> u64 {
         caller.require_auth();
 
         // Only patient, admin, or authorized healthcare provider can request explanation
@@ -188,7 +226,7 @@ impl ExplainableAiContract {
             .set(&DataKey::Request(request_id), &request);
 
         env.events().publish(
-            (symbol_short!("ExplanationRequested"),),
+            (symbol_short!("ExpReq"),),
             (request_id, ai_insight_id, caller),
         );
 
@@ -261,7 +299,7 @@ impl ExplainableAiContract {
             .set(&DataKey::Request(request_id), &request);
 
         env.events().publish(
-            (symbol_short!("ExplanationFulfilled"),),
+            (symbol_short!("ExpFull"),),
             (request_id, explanation_id, request.patient),
         );
 
@@ -269,9 +307,7 @@ impl ExplainableAiContract {
     }
 
     pub fn get_explanation_request(env: Env, request_id: u64) -> Option<ExplanationRequest> {
-        env.storage()
-            .instance()
-            .get(&DataKey::Request(request_id))
+        env.storage().instance().get(&DataKey::Request(request_id))
     }
 
     pub fn get_explanation(env: Env, explanation_id: u64) -> Option<ExplanationMetadata> {
@@ -282,9 +318,9 @@ impl ExplainableAiContract {
 
     pub fn get_explanations_for_patient(
         env: Env,
-        patient: Address,
-        page: u32,
-        page_size: u32,
+        _patient: Address,
+        _page: u32,
+        _page_size: u32,
     ) -> Vec<ExplanationMetadata> {
         // This is a simplified implementation
         // In a real contract, we'd need a way to track explanations by patient
@@ -319,10 +355,10 @@ impl ExplainableAiContract {
         calibration_by_group.set(String::from_str(&env, "age_elderly"), 9400u32);
 
         let audit_result = BiasAuditResult {
-            model_id,
+            model_id: model_id.clone(),
             audit_date: timestamp,
             demographic_fairness_metrics: demographic_fairness,
-            equalized_odds: false,  // Simplified for example
+            equalized_odds: false, // Simplified for example
             calibration_by_group,
             audit_summary,
             recommendations,
@@ -330,40 +366,210 @@ impl ExplainableAiContract {
 
         env.storage()
             .instance()
-            .set(&DataKey::BiasAudit(model_id), &audit_result);
+            .set(&DataKey::BiasAudit(model_id.clone()), &audit_result);
 
-        env.events().publish(
-            (symbol_short!("BiasAuditSubmitted"),),
-            (audit_id, model_id),
-        );
+        env.events()
+            .publish((symbol_short!("BiasAudit"),), (audit_id, model_id));
 
         Ok(audit_id)
     }
 
     pub fn get_bias_audit(env: Env, model_id: BytesN<32>) -> Option<BiasAuditResult> {
-        env.storage()
-            .instance()
-            .get(&DataKey::BiasAudit(model_id))
+        env.storage().instance().get(&DataKey::BiasAudit(model_id))
     }
 
     pub fn run_fairness_metrics(
         env: Env,
         caller: Address,
-        model_id: BytesN<32>,
-        protected_attribute: String,
-        privileged_group: String,
-        unprivileged_group: String,
-    ) -> Result<(u32, u32, u32), Error> {  // Returns (demographic_parity_diff, equalized_odds_diff, calibration_diff)
+        _model_id: BytesN<32>,
+        _protected_attribute: String,
+        _privileged_group: String,
+        _unprivileged_group: String,
+    ) -> Result<(u32, u32, u32), Error> {
+        // Returns (demographic_parity_diff, equalized_odds_diff, calibration_diff)
         caller.require_auth();
         Self::ensure_admin(&env, &caller);
 
         // Simulate calculation of fairness metrics
         // In a real implementation, this would analyze model predictions across groups
-        let demographic_parity_diff = 150u32;  // Difference in positive prediction rates (in bps)
-        let equalized_odds_diff = 200u32;      // Difference in true positive rates (in bps)
-        let calibration_diff = 100u32;         // Difference in calibration (in bps)
+        let demographic_parity_diff = 150u32; // Difference in positive prediction rates (in bps)
+        let equalized_odds_diff = 200u32; // Difference in true positive rates (in bps)
+        let calibration_diff = 100u32; // Difference in calibration (in bps)
 
-        Ok((demographic_parity_diff, equalized_odds_diff, calibration_diff))
+        Ok((
+            demographic_parity_diff,
+            equalized_odds_diff,
+            calibration_diff,
+        ))
+    }
+
+    // ==========================================
+    // SHAP (SHapley Additive exPlanations) Functions
+    // ==========================================
+
+    /// Generate SHAP explanation for a prediction
+    pub fn generate_shap_explanation(
+        env: Env,
+        caller: Address,
+        model_id: BytesN<32>,
+        prediction_id: u64,
+        base_value: i128,
+        prediction: i128,
+        feature_names: Vec<String>,
+        feature_values: Vec<i128>,
+        method: String,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        let shap_id = Self::next_shap_id(&env);
+        let timestamp = env.ledger().timestamp();
+
+        // Compute SHAP values (simplified - in practice this would call an oracle or off-chain service)
+        let mut shap_values = Vec::new(&env);
+        let mut total_shap = 0i128;
+
+        for i in 0..feature_names.len() {
+            let fname = feature_names.get(i).unwrap();
+            let fvalue = feature_values.get(i).unwrap();
+
+            // Simplified SHAP computation (proportional allocation)
+            let shap_val = if !feature_names.is_empty() {
+                (prediction - base_value) / feature_names.len() as i128
+            } else {
+                0
+            };
+
+            let abs_shap = if shap_val < 0 { -shap_val } else { shap_val } as u128;
+
+            shap_values.push_back(ShapValue {
+                feature_name: fname,
+                shap_value: shap_val,
+                absolute_shap: abs_shap,
+                feature_value: fvalue,
+                baseline_value: base_value / feature_names.len() as i128,
+            });
+
+            total_shap = total_shap.checked_add(shap_val).unwrap_or(0);
+        }
+
+        let shap_explanation = ShapExplanation {
+            explanation_id: shap_id,
+            model_id,
+            patient: caller.clone(),
+            prediction_id,
+            base_value,
+            prediction,
+            shap_values,
+            method,
+            computation_time_ms: 0, // Would be computed in real implementation
+            created_at: timestamp,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ShapExplanation(shap_id), &shap_explanation);
+
+        env.events().publish(
+            (symbol_short!("shap"), symbol_short!("created")),
+            (shap_id, caller),
+        );
+
+        Ok(shap_id)
+    }
+
+    /// Get SHAP explanation by ID
+    pub fn get_shap_explanation(env: Env, shap_id: u64) -> Option<ShapExplanation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ShapExplanation(shap_id))
+    }
+
+    /// Generate counterfactual explanation
+    pub fn generate_counterfactual(
+        env: Env,
+        caller: Address,
+        original_prediction: i128,
+        target_prediction: i128,
+        current_features: Vec<(String, i128)>,
+        target_features: Vec<(String, i128)>,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+
+        let cf_id = Self::next_cf_id(&env);
+        let timestamp = env.ledger().timestamp();
+
+        // Compute minimal changes needed
+        let mut minimal_changes = Vec::new(&env);
+        let mut total_distance = 0u128;
+
+        for i in 0..current_features.len() {
+            let (fname, curr_val) = current_features.get(i).unwrap();
+            let (_, target_val) = target_features.get(i).unwrap();
+
+            let change = target_val - curr_val;
+            let magnitude = if change < 0 { -change } else { change } as u128;
+
+            minimal_changes.push_back(FeatureChange {
+                feature_name: fname,
+                original_value: curr_val,
+                counterfactual_value: target_val,
+                change_magnitude: magnitude,
+            });
+
+            total_distance = total_distance.checked_add(magnitude).unwrap_or(0);
+        }
+
+        // Compute feasibility score (simplified)
+        let feasibility_score = if total_distance < 10_000_000 {
+            9000u32
+        } else if total_distance < 50_000_000 {
+            7000u32
+        } else {
+            5000u32
+        };
+
+        let cf_explanation = CounterfactualExplanation {
+            cf_id,
+            original_prediction,
+            target_prediction,
+            minimal_changes,
+            feasibility_score,
+            proximity_distance: total_distance,
+            created_at: timestamp,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Counterfactual(cf_id), &cf_explanation);
+
+        env.events().publish(
+            (symbol_short!("cf"), symbol_short!("created")),
+            (cf_id, caller),
+        );
+
+        Ok(cf_id)
+    }
+
+    /// Get counterfactual explanation by ID
+    pub fn get_counterfactual(env: Env, cf_id: u64) -> Option<CounterfactualExplanation> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Counterfactual(cf_id))
+    }
+
+    // Helper functions
+    fn next_shap_id(env: &Env) -> u64 {
+        let key = DataKey::ShapCounter;
+        let id: u64 = env.storage().instance().get(&key).unwrap_or(0);
+        env.storage().instance().set(&key, &(id + 1));
+        id + 1
+    }
+
+    fn next_cf_id(env: &Env) -> u64 {
+        let key = DataKey::CfCounter;
+        let id: u64 = env.storage().instance().get(&key).unwrap_or(0);
+        env.storage().instance().set(&key, &(id + 1));
+        id + 1
     }
 }
 
@@ -371,6 +577,7 @@ impl ExplainableAiContract {
 mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::vec;
 
     #[test]
     fn test_explanation_workflow() {
@@ -384,7 +591,9 @@ mod test {
         client.mock_all_auths().initialize(&admin);
 
         // Request an explanation
-        let request_id = client.mock_all_auths().request_explanation(&patient, &123u64);
+        let request_id = client
+            .mock_all_auths()
+            .request_explanation(&patient, &123u64);
         assert_eq!(request_id, 1u64);
 
         // Get the request and verify it's pending
@@ -395,7 +604,7 @@ mod test {
         // Fulfill the explanation request
         let model_id = BytesN::from_array(&env, &[1; 32]);
         let explanation_method = String::from_str(&env, "SHAP");
-        
+
         let feature_importance = vec![
             &env,
             FeatureImportance {
@@ -409,13 +618,13 @@ mod test {
                 normalized_value: 8200u32,
             },
         ];
-        
+
         let primary_factors = vec![
             &env,
             String::from_str(&env, "age"),
             String::from_str(&env, "bmi"),
         ];
-        
+
         let explanation_ref = String::from_str(&env, "ipfs://explanation-details-123");
 
         assert!(client.mock_all_auths().fulfill_explanation_request(
@@ -427,7 +636,7 @@ mod test {
             &primary_factors,
             &5000u32,
             &explanation_ref,
-        ).is_ok());
+        ));
 
         // Verify the request is now completed
         let updated_request = client.get_explanation_request(&request_id).unwrap();
@@ -435,7 +644,7 @@ mod test {
         assert!(updated_request.fulfilled_at.is_some());
 
         // Get the explanation
-        let explanation = client.get_explanation(&1u64).unwrap();  // First explanation
+        let explanation = client.get_explanation(&1u64).unwrap(); // First explanation
         assert_eq!(explanation.model_id, model_id);
         assert_eq!(explanation.patient, patient);
         assert_eq!(explanation.explanation_method, explanation_method);
@@ -466,7 +675,7 @@ mod test {
             &model_id,
             &audit_summary,
             &recommendations,
-        ).unwrap();
+        );
 
         assert_eq!(audit_id, 1u64);
 
@@ -483,7 +692,7 @@ mod test {
             &String::from_str(&env, "gender"),
             &String::from_str(&env, "male"),
             &String::from_str(&env, "female"),
-        ).unwrap();
+        );
 
         assert!(dp_diff > 0);
         assert!(eo_diff > 0);

@@ -110,8 +110,8 @@ fi
 if [ -n "$CONTRACTS" ]; then
     IFS=',' read -ra CONTRACT_ARRAY <<< "$CONTRACTS"
 else
-    # Deploy all contracts
-    CONTRACT_ARRAY=($(ls -d contracts/*/ | xargs -n1 basename))
+    # Deploy all contracts - use mapfile for safe array population
+    mapfile -t CONTRACT_ARRAY < <(find contracts -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
 fi
 
 print_status "Deploying contracts: ${CONTRACT_ARRAY[*]}"

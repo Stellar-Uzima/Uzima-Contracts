@@ -3,6 +3,8 @@
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
 use soroban_sdk::{log, Address, BytesN, Env, String, Vec, symbol_short};
 
+#[allow(clippy::panic)]
+
 use medical_records_contract::medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
 use medical_records_contract::events;
 

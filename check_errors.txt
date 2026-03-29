@@ -1,0 +1,147 @@
+    Checking provider_directory v0.1.0 (/Users/anu/Uzima-Contracts/contracts/provider_directory)
+error: cannot find attribute `contracterror` in this scope
+ --> contracts/provider_directory/src/types.rs:5:3
+  |
+5 | #[contracterror]
+  |   ^^^^^^^^^^^^^
+  |
+help: consider importing this attribute macro
+  |
+3 + use soroban_sdk::contracterror;
+  |
+
+warning: unused imports: `Map` and `symbol_short`
+ --> contracts/provider_directory/src/lib.rs:5:43
+  |
+5 | use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Map, String, Symbol, Vec};
+  |                                           ^^^^^^^^^^^^                ^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `Referral`
+ --> contracts/provider_directory/src/lib.rs:6:77
+  |
+6 | use types::{Availability, DataKey, Error, PrivacySettings, ProviderProfile, Referral};
+  |                                                                             ^^^^^^^^
+
+error[E0204]: the trait `core::marker::Copy` cannot be implemented for this type
+  --> contracts/provider_directory/src/types.rs:35:10
+   |
+35 | #[derive(Copy, Clone, Debug, Eq, PartialEq)]
+   |          ^^^^
+...
+40 |     pub timezone: String,
+   |     -------------------- this field does not implement `core::marker::Copy`
+
+warning: the `#![no_std]` attribute can only be used at the crate root
+ --> contracts/provider_directory/src/types.rs:1:1
+  |
+1 | #![no_std]
+  | ^^^^^^^^^^
+  |
+  = note: `#[warn(unused_attributes)]` (part of `#[warn(unused)]`) on by default
+
+error[E0277]: the trait bound `types::Error: From<soroban_sdk::Error>` is not satisfied
+   --> contracts/provider_directory/src/lib.rs:123:14
+    |
+123 |             .get(&DataKey::Availability(provider))
+    |              ^^^ unsatisfied trait bound
+    |
+help: the trait `From<soroban_sdk::Error>` is not implemented for `types::Error`
+   --> contracts/provider_directory/src/types.rs:8:1
+    |
+  8 | pub enum Error {
+    | ^^^^^^^^^^^^^^
+    = help: the trait `TryFromVal<E, soroban_sdk::Val>` is implemented for `core::result::Result<T, R>`
+    = note: required for `soroban_sdk::Error` to implement `Into<types::Error>`
+    = note: required for `types::Error` to implement `TryFrom<soroban_sdk::Error>`
+    = note: required for `core::result::Result<soroban_sdk::Vec<Availability>, types::Error>` to implement `TryFromVal<Env, soroban_sdk::Val>`
+
+error[E0277]: the trait bound `types::Error: From<soroban_sdk::Error>` is not satisfied
+  --> contracts/provider_directory/src/lib.rs:11:1
+   |
+11 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `From<soroban_sdk::Error>` is not implemented for `types::Error`
+  --> contracts/provider_directory/src/types.rs:8:1
+   |
+ 8 | pub enum Error {
+   | ^^^^^^^^^^^^^^
+   = note: required for `soroban_sdk::Error` to implement `Into<types::Error>`
+   = note: required for `types::Error` to implement `TryFrom<soroban_sdk::Error>`
+   = note: this error originates in the attribute macro `soroban_sdk::contractclient` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `for<'a> soroban_sdk::Error: From<&'a types::Error>` is not satisfied
+  --> contracts/provider_directory/src/lib.rs:11:1
+   |
+11 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ the trait `for<'a> From<&'a types::Error>` is not implemented for `soroban_sdk::Error`
+   |
+   = help: the following other types implement trait `From<T>`:
+             `soroban_sdk::Error` implements `From<&soroban_sdk::Error>`
+             `soroban_sdk::Error` implements `From<(soroban_sdk::xdr::ScErrorType, soroban_sdk::xdr::ScErrorCode)>`
+             `soroban_sdk::Error` implements `From<ConversionError>`
+             `soroban_sdk::Error` implements `From<Infallible>`
+             `soroban_sdk::Error` implements `From<soroban_env_common::symbol::SymbolError>`
+             `soroban_sdk::Error` implements `From<soroban_env_host::builtin_contracts::contract_error::ContractError>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::Error>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::ScError>`
+           and 4 others
+   = note: required for `&'a types::Error` to implement `for<'a> Into<soroban_sdk::Error>`
+   = note: required for `soroban_sdk::Error` to implement `for<'a> TryFrom<&'a types::Error>`
+   = note: required for `soroban_sdk::Val` to implement `TryFromVal<Env, core::result::Result<(), types::Error>>`
+   = note: required for `soroban_sdk::Val` to implement `FromVal<Env, core::result::Result<(), types::Error>>`
+   = note: required for `core::result::Result<(), types::Error>` to implement `IntoVal<Env, soroban_sdk::Val>`
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `for<'a> soroban_sdk::Error: From<&'a types::Error>` is not satisfied
+  --> contracts/provider_directory/src/lib.rs:11:1
+   |
+11 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ the trait `for<'a> From<&'a types::Error>` is not implemented for `soroban_sdk::Error`
+   |
+   = help: the following other types implement trait `From<T>`:
+             `soroban_sdk::Error` implements `From<&soroban_sdk::Error>`
+             `soroban_sdk::Error` implements `From<(soroban_sdk::xdr::ScErrorType, soroban_sdk::xdr::ScErrorCode)>`
+             `soroban_sdk::Error` implements `From<ConversionError>`
+             `soroban_sdk::Error` implements `From<Infallible>`
+             `soroban_sdk::Error` implements `From<soroban_env_common::symbol::SymbolError>`
+             `soroban_sdk::Error` implements `From<soroban_env_host::builtin_contracts::contract_error::ContractError>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::Error>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::ScError>`
+           and 4 others
+   = note: required for `&'a types::Error` to implement `for<'a> Into<soroban_sdk::Error>`
+   = note: required for `soroban_sdk::Error` to implement `for<'a> TryFrom<&'a types::Error>`
+   = note: required for `soroban_sdk::Val` to implement `TryFromVal<Env, core::result::Result<ProviderProfile, types::Error>>`
+   = note: required for `soroban_sdk::Val` to implement `FromVal<Env, core::result::Result<ProviderProfile, types::Error>>`
+   = note: required for `core::result::Result<ProviderProfile, types::Error>` to implement `IntoVal<Env, soroban_sdk::Val>`
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `for<'a> soroban_sdk::Error: From<&'a types::Error>` is not satisfied
+  --> contracts/provider_directory/src/lib.rs:11:1
+   |
+11 | #[contractimpl]
+   | ^^^^^^^^^^^^^^^ the trait `for<'a> From<&'a types::Error>` is not implemented for `soroban_sdk::Error`
+   |
+   = help: the following other types implement trait `From<T>`:
+             `soroban_sdk::Error` implements `From<&soroban_sdk::Error>`
+             `soroban_sdk::Error` implements `From<(soroban_sdk::xdr::ScErrorType, soroban_sdk::xdr::ScErrorCode)>`
+             `soroban_sdk::Error` implements `From<ConversionError>`
+             `soroban_sdk::Error` implements `From<Infallible>`
+             `soroban_sdk::Error` implements `From<soroban_env_common::symbol::SymbolError>`
+             `soroban_sdk::Error` implements `From<soroban_env_host::builtin_contracts::contract_error::ContractError>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::Error>`
+             `soroban_sdk::Error` implements `From<soroban_sdk::xdr::ScError>`
+           and 4 others
+   = note: required for `&'a types::Error` to implement `for<'a> Into<soroban_sdk::Error>`
+   = note: required for `soroban_sdk::Error` to implement `for<'a> TryFrom<&'a types::Error>`
+   = note: required for `soroban_sdk::Val` to implement `TryFromVal<Env, core::result::Result<soroban_sdk::Vec<Availability>, types::Error>>`
+   = note: required for `soroban_sdk::Val` to implement `FromVal<Env, core::result::Result<soroban_sdk::Vec<Availability>, types::Error>>`
+   = note: required for `core::result::Result<soroban_sdk::Vec<Availability>, types::Error>` to implement `IntoVal<Env, soroban_sdk::Val>`
+   = note: this error originates in the attribute macro `contractimpl` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+Some errors have detailed explanations: E0204, E0277.
+For more information about an error, try `rustc --explain E0204`.
+warning: `provider_directory` (lib) generated 3 warnings
+error: could not compile `provider_directory` (lib) due to 17 previous errors; 3 warnings emitted

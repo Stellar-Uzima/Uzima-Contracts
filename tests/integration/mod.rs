@@ -1,6 +1,8 @@
 // tests/integration/mod.rs
 use soroban_sdk::{vec, Address, Env, String};
 
+pub mod healthcare_workflows;
+
 pub mod medical_records_tests {
     use super::*;
     use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};

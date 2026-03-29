@@ -1,0 +1,23 @@
+# ShellCheck configuration for Uzima-Contracts
+# See https://www.shellcheck.net/wiki/
+
+# Disable "Not following" warnings for sourced files that aren't tracked
+disable=SC1091
+
+# Disable "Declare and assign separately" warning (common pattern)
+disable=SC2155
+
+# Disable warnings about expressions in single quotes (heredoc content)
+disable=SC2016
+
+# Disable warnings about $'...' not being POSIX
+disable=SC3003
+
+# Disable warnings about using `command` to test for command existence
+disable=SC2312
+
+# Set default shell to bash (not sh)
+shell=bash
+
+# Allow source statements from the same directory
+source-path=SCRIPTDIR

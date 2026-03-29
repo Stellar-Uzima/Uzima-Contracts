@@ -9,6 +9,7 @@ CONTRACTS_DIR="$PROJECT_ROOT/contracts"
 TESTS_DIR="$PROJECT_ROOT/tests"
 
 # Colors for output
+# shellcheck disable=SC2034  # Color variables used in echo -e statements
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'

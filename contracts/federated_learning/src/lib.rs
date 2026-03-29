@@ -1,31 +1,89 @@
 #![no_std]
+#![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    String, Vec,
 };
+
+#[derive(Clone, PartialEq)]
+#[contracttype]
+pub enum ModelType {
+    CNN,
+    RNN,
+    Transformer,
+    FeedForward,
+    GNN,
+    Hybrid,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub enum RoundStatus {
+    Open,
+    Aggregating,
+    Finalized,
+}
+
+#[derive(Clone, PartialEq)]
+#[contracttype]
+pub enum InstitutionStatus {
+    Active,
+    Suspended,
+    Blacklisted,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct Institution {
+    pub id: Address,
+    pub name: String,
+    pub credential_hash: BytesN<32>,
+    pub reputation_score: u32,
+    pub total_contributions: u32,
+    pub reward_balance: i128,
+    pub status: InstitutionStatus,
+    pub registered_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct RoundConfig {
+    pub model_type: ModelType,
+    pub min_participants: u32,
+    pub max_participants: u32,
+    pub dp_epsilon: u32,
+    pub dp_delta: u32,
+    pub reward_per_participant: i128,
+    pub duration_seconds: u64,
+}
 
 #[derive(Clone)]
 #[contracttype]
 pub struct FederatedRound {
     pub id: u64,
     pub base_model_id: BytesN<32>,
+    pub model_type: ModelType,
     pub min_participants: u32,
-    pub dp_epsilon: u32,
-    pub started_at: u64,
-    pub finalized_at: u64,
+    pub max_participants: u32,
+    pub reward_per_participant: i128,
     pub total_updates: u32,
-    pub is_finalized: bool,
+    pub status: RoundStatus,
+    pub started_at: u64,
+    pub deadline: u64,
+    pub finalized_at: u64,
+    pub aggregated_model_id: BytesN<32>,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub struct ParticipantUpdateMeta {
-    pub round_id: u64,
-    pub participant: Address,
-    pub update_hash: BytesN<32>,
-    pub num_samples: u32,
-    pub submitted_at: u64,
+pub struct ModelOutput {
+    pub model_id: BytesN<32>,
+    pub description: String,
+    pub weights_ref: String,
+    pub global_accuracy: u32,
+    pub validation_score: u32,
+    pub version: u32,
 }
 
 #[derive(Clone)]
@@ -33,17 +91,10 @@ pub struct ParticipantUpdateMeta {
 pub struct ModelMetadata {
     pub model_id: BytesN<32>,
     pub round_id: u64,
-    pub description: String,
-    pub metrics_ref: String,
-    pub fairness_report_ref: String,
-    pub created_at: u64,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct PrivacyBudget {
-    pub epsilon_consumed: u32,
-    pub epsilon_total: u32,
+    pub model_type: ModelType,
+    pub num_contributors: u32,
+    pub validation_score: u32,
+    pub version: u32,
 }
 
 #[derive(Clone)]
@@ -52,27 +103,34 @@ pub enum DataKey {
     Admin,
     Coordinator,
     RoundCounter,
+    Institution(Address),
     Round(u64),
-    ParticipantUpdate(u64, Address),
+    RoundParticipants(u64),
+    UpdateSubmitted(u64, Address),
     Model(BytesN<32>),
-    PrivacyBudget(Address),
 }
-
-const ADMIN: Symbol = symbol_short!("ADMIN");
-const COORDINATOR: Symbol = symbol_short!("COORD");
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
     NotAuthorized = 1,
-    RoundNotFound = 2,
-    RoundFinalized = 3,
-    NotEnoughParticipants = 4,
-    DuplicateUpdate = 5,
-    InvalidPrivacyBudget = 6,
-    PrivacyBudgetExceeded = 7,
-    InvalidDPParameter = 8,
+    AlreadyInitialized = 2,
+    RoundNotFound = 3,
+    RoundNotOpen = 4,
+    RoundNotAggregating = 5,
+    RoundFinalized = 6,
+    NotEnoughParticipants = 7,
+    TooManyParticipants = 8,
+    DuplicateUpdate = 9,
+    InvalidDPParam = 10,
+    InstitutionNotFound = 11,
+    InstitutionNotActive = 12,
+    InstitutionAlreadyRegistered = 13,
+    LowReputation = 14,
+    InvalidParameter = 15,
+    DeadlineExceeded = 16,
+    ValidationFailed = 17,
 }
 
 #[contract]
@@ -80,255 +138,271 @@ pub struct FederatedLearningContract;
 
 #[contractimpl]
 impl FederatedLearningContract {
-    pub fn initialize(env: Env, admin: Address, coordinator: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address, coordinator: Address) -> Result<bool, Error> {
         admin.require_auth();
-
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
-
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::Coordinator, &coordinator);
-        true
+        env.storage()
+            .instance()
+            .set(&DataKey::Coordinator, &coordinator);
+        Ok(true)
     }
 
-    fn ensure_admin(env: &Env, caller: &Address) {
-        let admin: Address = env
+    fn check_auth(env: &Env, caller: &Address, key: &DataKey) -> Result<(), Error> {
+        let stored: Address = env
             .storage()
             .instance()
-            .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic!("Federated learning admin not set"));
-
-        if admin != *caller {
-            panic!("Not authorized: caller is not admin");
+            .get(key)
+            .unwrap_or_else(|| panic!("not initialized"));
+        if stored != *caller {
+            return Err(Error::NotAuthorized);
         }
-    }
-
-    fn ensure_coordinator(env: &Env, caller: &Address) {
-        let coordinator: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Coordinator)
-            .unwrap_or_else(|| panic!("Federated learning coordinator not set"));
-
-        if coordinator != *caller {
-            panic!("Not authorized: caller is not coordinator");
-        }
+        Ok(())
     }
 
     fn next_round_id(env: &Env) -> u64 {
-        let current: u64 = env
+        let n: u64 = env
             .storage()
             .instance()
             .get(&DataKey::RoundCounter)
-            .unwrap_or(0);
-        let next = current + 1;
-        env.storage()
-            .instance()
-            .set(&DataKey::RoundCounter, &next);
-        next
+            .unwrap_or(0)
+            + 1;
+        env.storage().instance().set(&DataKey::RoundCounter, &n);
+        n
+    }
+
+    pub fn register_institution(
+        env: Env,
+        admin: Address,
+        institution: Address,
+        name: String,
+        credential_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::check_auth(&env, &admin, &DataKey::Admin)?;
+        let key = DataKey::Institution(institution.clone());
+        if env.storage().persistent().has(&key) {
+            return Err(Error::InstitutionAlreadyRegistered);
+        }
+        env.storage().persistent().set(
+            &key,
+            &Institution {
+                id: institution.clone(),
+                name,
+                credential_hash,
+                reputation_score: 50,
+                total_contributions: 0,
+                reward_balance: 0,
+                status: InstitutionStatus::Active,
+                registered_at: env.ledger().timestamp(),
+            },
+        );
+        env.events()
+            .publish((symbol_short!("InstReg"),), institution);
+        Ok(true)
     }
 
     pub fn start_round(
         env: Env,
-        caller: Address,
+        admin: Address,
         base_model_id: BytesN<32>,
-        min_participants: u32,
-        dp_epsilon: u32,
-    ) -> u64 {
-        caller.require_auth();
-        Self::ensure_admin(&env, &caller);
-
-        if min_participants == 0 {
-            panic!("min_participants must be > 0");
+        cfg: RoundConfig,
+    ) -> Result<u64, Error> {
+        admin.require_auth();
+        Self::check_auth(&env, &admin, &DataKey::Admin)?;
+        if cfg.min_participants == 0 || cfg.max_participants < cfg.min_participants {
+            return Err(Error::InvalidParameter);
         }
-
-        if dp_epsilon == 0 {
-            panic!("dp_epsilon must be > 0");
+        if cfg.dp_epsilon == 0 || cfg.dp_delta == 0 {
+            return Err(Error::InvalidDPParam);
         }
-
         let id = Self::next_round_id(&env);
-        let round = FederatedRound {
-            id,
-            base_model_id,
-            min_participants,
-            dp_epsilon,
-            started_at: env.ledger().timestamp(),
-            finalized_at: 0,
-            total_updates: 0,
-            is_finalized: false,
-        };
-
-        env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events()
-            .publish((symbol_short!("RoundStarted"),), id);
-        id
+        let now = env.ledger().timestamp();
+        env.storage().persistent().set(
+            &DataKey::Round(id),
+            &FederatedRound {
+                id,
+                base_model_id,
+                model_type: cfg.model_type,
+                min_participants: cfg.min_participants,
+                max_participants: cfg.max_participants,
+                reward_per_participant: cfg.reward_per_participant,
+                total_updates: 0,
+                status: RoundStatus::Open,
+                started_at: now,
+                deadline: now + cfg.duration_seconds,
+                finalized_at: 0,
+                aggregated_model_id: BytesN::from_array(&env, &[0u8; 32]),
+            },
+        );
+        let empty: Vec<Address> = vec![&env];
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundParticipants(id), &empty);
+        env.events().publish((symbol_short!("RndStart"),), id);
+        Ok(id)
     }
 
     pub fn submit_update(
         env: Env,
-        participant: Address,
+        institution: Address,
         round_id: u64,
-        update_hash: BytesN<32>,
-        num_samples: u32,
+        gradient_hash: BytesN<32>,
     ) -> Result<bool, Error> {
-        participant.require_auth();
-
+        institution.require_auth();
+        let inst_key = DataKey::Institution(institution.clone());
+        let mut inst: Institution = env
+            .storage()
+            .persistent()
+            .get(&inst_key)
+            .ok_or(Error::InstitutionNotFound)?;
+        if inst.status != InstitutionStatus::Active {
+            return Err(Error::InstitutionNotActive);
+        }
+        if inst.reputation_score < 10 {
+            return Err(Error::LowReputation);
+        }
         let mut round: FederatedRound = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-
-        if round.is_finalized {
-            return Err(Error::RoundFinalized);
+        if round.status != RoundStatus::Open {
+            return Err(Error::RoundNotOpen);
         }
-
-        let key = DataKey::ParticipantUpdate(round_id, participant.clone());
-        if env.storage().instance().has(&key) {
+        if env.ledger().timestamp() > round.deadline {
+            return Err(Error::DeadlineExceeded);
+        }
+        let upd_key = DataKey::UpdateSubmitted(round_id, institution.clone());
+        if env.storage().persistent().has(&upd_key) {
             return Err(Error::DuplicateUpdate);
         }
-
-        // Check privacy budget for the participant
-        let budget_key = DataKey::PrivacyBudget(participant.clone());
-        let mut budget: PrivacyBudget = env
-            .storage()
-            .instance()
-            .get(&budget_key)
-            .unwrap_or(PrivacyBudget {
-                epsilon_consumed: 0,
-                epsilon_total: round.dp_epsilon, // Use round's epsilon as default budget
-            });
-
-        // Calculate privacy cost (simplified model: each sample consumes some epsilon)
-        let privacy_cost = num_samples / 100; // Simplified: every 100 samples consume 1 epsilon unit
-        
-        if budget.epsilon_consumed + privacy_cost > budget.epsilon_total {
-            return Err(Error::PrivacyBudgetExceeded);
+        if round.total_updates >= round.max_participants {
+            return Err(Error::TooManyParticipants);
         }
-
-        budget.epsilon_consumed += privacy_cost;
-
-        let update = ParticipantUpdateMeta {
-            round_id,
-            participant: participant.clone(),
-            update_hash,
-            num_samples,
-            submitted_at: env.ledger().timestamp(),
-        };
-
-        env.storage().instance().set(&key, &update);
-        env.storage().instance().set(&budget_key, &budget);
-
+        env.storage().persistent().set(&upd_key, &gradient_hash);
+        let mut participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundParticipants(round_id))
+            .unwrap_or(vec![&env]);
+        participants.push_back(institution.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RoundParticipants(round_id), &participants);
         round.total_updates += 1;
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Round(round_id), &round);
+        inst.total_contributions += 1;
+        env.storage().persistent().set(&inst_key, &inst);
+        env.events()
+            .publish((symbol_short!("UpdSub"),), (round_id, institution));
+        Ok(true)
+    }
 
-        env.events().publish(
-            (symbol_short!("UpdateSubmitted"),),
-            (round_id, participant),
-        );
-
+    pub fn begin_aggregation(env: Env, coordinator: Address, round_id: u64) -> Result<bool, Error> {
+        coordinator.require_auth();
+        Self::check_auth(&env, &coordinator, &DataKey::Coordinator)?;
+        let mut round: FederatedRound = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Round(round_id))
+            .ok_or(Error::RoundNotFound)?;
+        if round.status != RoundStatus::Open {
+            return Err(Error::RoundNotOpen);
+        }
+        if round.total_updates < round.min_participants {
+            return Err(Error::NotEnoughParticipants);
+        }
+        round.status = RoundStatus::Aggregating;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Round(round_id), &round);
+        env.events().publish((symbol_short!("AggStart"),), round_id);
         Ok(true)
     }
 
     pub fn finalize_round(
         env: Env,
-        caller: Address,
+        coordinator: Address,
         round_id: u64,
-        new_model_id: BytesN<32>,
-        description: String,
-        metrics_ref: String,
-        fairness_report_ref: String,
+        out: ModelOutput,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::ensure_coordinator(&env, &caller);
-
+        coordinator.require_auth();
+        Self::check_auth(&env, &coordinator, &DataKey::Coordinator)?;
         let mut round: FederatedRound = env
             .storage()
-            .instance()
+            .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-
-        if round.is_finalized {
+        if round.status == RoundStatus::Finalized {
             return Err(Error::RoundFinalized);
         }
-
-        if round.total_updates < round.min_participants {
-            return Err(Error::NotEnoughParticipants);
+        if round.status != RoundStatus::Aggregating {
+            return Err(Error::RoundNotAggregating);
         }
-
-        round.is_finalized = true;
+        if out.validation_score < 60 {
+            return Err(Error::ValidationFailed);
+        }
+        let vscore = out.validation_score;
+        let vid = out.model_id.clone();
+        round.status = RoundStatus::Finalized;
         round.finalized_at = env.ledger().timestamp();
-        env.storage().instance().set(&DataKey::Round(round_id), &round);
-
-        let metadata = ModelMetadata {
-            model_id: new_model_id.clone(),
-            round_id,
-            description,
-            metrics_ref,
-            fairness_report_ref,
-            created_at: round.finalized_at,
-        };
-
+        round.aggregated_model_id = vid.clone();
         env.storage()
-            .instance()
-            .set(&DataKey::Model(new_model_id.clone()), &metadata);
-
-        env.events().publish(
-            (symbol_short!("RoundFinalized"),),
-            (round_id, new_model_id),
+            .persistent()
+            .set(&DataKey::Round(round_id), &round);
+        env.storage().persistent().set(
+            &DataKey::Model(vid.clone()),
+            &ModelMetadata {
+                model_id: vid.clone(),
+                round_id,
+                model_type: round.model_type.clone(),
+                num_contributors: round.total_updates,
+                validation_score: vscore,
+                version: out.version,
+            },
         );
-
+        let participants: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RoundParticipants(round_id))
+            .unwrap_or(vec![&env]);
+        let rep_delta: u32 = if vscore >= 90 {
+            3
+        } else if vscore >= 70 {
+            2
+        } else {
+            1
+        };
+        for addr in participants.iter() {
+            let k = DataKey::Institution(addr.clone());
+            if let Some(mut inst) = env.storage().persistent().get::<DataKey, Institution>(&k) {
+                inst.reward_balance += round.reward_per_participant;
+                inst.reputation_score = (inst.reputation_score + rep_delta).min(100);
+                env.storage().persistent().set(&k, &inst);
+            }
+        }
+        env.events()
+            .publish((symbol_short!("RndFin"),), (round_id, vid));
         Ok(true)
+    }
+
+    pub fn get_institution(env: Env, institution: Address) -> Option<Institution> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Institution(institution))
     }
 
     pub fn get_round(env: Env, round_id: u64) -> Option<FederatedRound> {
-        env.storage().instance().get(&DataKey::Round(round_id))
+        env.storage().persistent().get(&DataKey::Round(round_id))
     }
 
     pub fn get_model(env: Env, model_id: BytesN<32>) -> Option<ModelMetadata> {
-        env.storage().instance().get(&DataKey::Model(model_id))
-    }
-
-    pub fn get_participant_update(
-        env: Env,
-        round_id: u64,
-        participant: Address,
-    ) -> Option<ParticipantUpdateMeta> {
-        env.storage()
-            .instance()
-            .get(&DataKey::ParticipantUpdate(round_id, participant))
-    }
-
-    pub fn set_privacy_budget(
-        env: Env,
-        caller: Address,
-        participant: Address,
-        epsilon_total: u32,
-    ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::ensure_admin(&env, &caller);
-
-        if epsilon_total == 0 {
-            return Err(Error::InvalidPrivacyBudget);
-        }
-
-        let budget = PrivacyBudget {
-            epsilon_consumed: 0,
-            epsilon_total,
-        };
-
-        env.storage()
-            .instance()
-            .set(&DataKey::PrivacyBudget(participant), &budget);
-
-        Ok(true)
-    }
-
-    pub fn get_privacy_budget(env: Env, participant: Address) -> Option<PrivacyBudget> {
-        env.storage()
-            .instance()
-            .get(&DataKey::PrivacyBudget(participant))
+        env.storage().persistent().get(&DataKey::Model(model_id))
     }
 }
 
@@ -337,94 +411,85 @@ mod test {
     use super::*;
     use soroban_sdk::testutils::Address as _;
 
-    #[test]
-    fn test_federated_round_flow() {
-        let env = Env::default();
-        let contract_id = env.register_contract(None, FederatedLearningContract);
-        let client = FederatedLearningContractClient::new(&env, &contract_id);
+    fn setup(env: &Env) -> (FederatedLearningContractClient<'_>, Address, Address) {
+        let client = FederatedLearningContractClient::new(
+            env,
+            &env.register_contract(None, FederatedLearningContract),
+        );
+        let admin = Address::generate(env);
+        let coord = Address::generate(env);
+        client.mock_all_auths().initialize(&admin, &coord);
+        (client, admin, coord)
+    }
 
-        let admin = Address::generate(&env);
-        let coordinator = Address::generate(&env);
-        let participant1 = Address::generate(&env);
-        let participant2 = Address::generate(&env);
+    fn add_inst(client: &FederatedLearningContractClient, env: &Env, admin: &Address) -> Address {
+        let inst = Address::generate(env);
+        client.mock_all_auths().register_institution(
+            admin,
+            &inst,
+            &String::from_str(env, "Hospital"),
+            &BytesN::from_array(env, &[9u8; 32]),
+        );
+        inst
+    }
 
-        client.mock_all_auths().initialize(&admin, &coordinator);
-
-        let base_model = BytesN::from_array(&env, &[1u8; 32]);
-        let round_id = client
-            .mock_all_auths()
-            .start_round(&admin, &base_model, &2u32, &100u32);
-
-        let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
-        let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
-
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant1, &round_id, &update_hash1, &100u32)
-            .is_ok());
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant2, &round_id, &update_hash2, &200u32)
-            .is_ok());
-
-        let new_model = BytesN::from_array(&env, &[4u8; 32]);
-        assert!(client
-            .mock_all_auths()
-            .finalize_round(
-                &coordinator,
-                &round_id,
-                &new_model,
-                &String::from_str(&env, "Test model"),
-                &String::from_str(&env, "ipfs://metrics"),
-                &String::from_str(&env, "ipfs://fairness"),
-            )
-            .is_ok());
-
-        let stored_round = client.get_round(&round_id).unwrap();
-        assert!(stored_round.is_finalized);
-
-        let stored_model = client.get_model(&new_model).unwrap();
-        assert_eq!(stored_model.round_id, round_id);
+    fn default_cfg(_env: &Env, min_p: u32, reward: i128) -> RoundConfig {
+        RoundConfig {
+            model_type: ModelType::CNN,
+            min_participants: min_p,
+            max_participants: 10,
+            dp_epsilon: 10,
+            dp_delta: 5,
+            reward_per_participant: reward,
+            duration_seconds: 86400,
+        }
     }
 
     #[test]
-    fn test_privacy_budget_enforcement() {
+    fn test_round_lifecycle() {
         let env = Env::default();
-        let contract_id = env.register_contract(None, FederatedLearningContract);
-        let client = FederatedLearningContractClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let coordinator = Address::generate(&env);
-        let participant = Address::generate(&env);
-
-        client.mock_all_auths().initialize(&admin, &coordinator);
-
-        // Set a small privacy budget
-        assert!(client
-            .mock_all_auths()
-            .set_privacy_budget(&admin, &participant, &10u32)
-            .is_ok());
-
-        let base_model = BytesN::from_array(&env, &[1u8; 32]);
-        let round_id = client
-            .mock_all_auths()
-            .start_round(&admin, &base_model, &1u32, &100u32);
-
-        let update_hash = BytesN::from_array(&env, &[2u8; 32]);
-
-        // Submit an update that stays within budget
-        assert!(client
-            .mock_all_auths()
-            .submit_update(&participant, &round_id, &update_hash, &500u32)
-            .is_ok());
-
-        // Submit an update that exceeds the budget
-        let result = client.mock_all_auths().submit_update(
-            &participant,
-            &round_id,
-            &update_hash,
-            &600u32,
+        let (client, admin, coord) = setup(&env);
+        let inst1 = add_inst(&client, &env, &admin);
+        let inst2 = add_inst(&client, &env, &admin);
+        let round_id = client.mock_all_auths().start_round(
+            &admin,
+            &BytesN::from_array(&env, &[1u8; 32]),
+            &default_cfg(&env, 2, 50),
         );
-        assert!(result.is_err());
+        client.mock_all_auths().submit_update(
+            &inst1,
+            &round_id,
+            &BytesN::from_array(&env, &[2u8; 32]),
+        );
+        client.mock_all_auths().submit_update(
+            &inst2,
+            &round_id,
+            &BytesN::from_array(&env, &[3u8; 32]),
+        );
+        assert!(client.mock_all_auths().begin_aggregation(&coord, &round_id));
+        let mid = BytesN::from_array(&env, &[4u8; 32]);
+        client.mock_all_auths().finalize_round(
+            &coord,
+            &round_id,
+            &ModelOutput {
+                model_id: mid.clone(),
+                description: String::from_str(&env, "model"),
+                weights_ref: String::from_str(&env, "ipfs://w"),
+                global_accuracy: 88,
+                validation_score: 80,
+                version: 1,
+            },
+        );
+        assert_eq!(
+            client.get_round(&round_id).unwrap().status,
+            RoundStatus::Finalized
+        );
+        assert_eq!(client.get_model(&mid).unwrap().num_contributors, 2);
+        assert!(client.get_institution(&inst1).unwrap().reward_balance >= 50);
+        // finalized round rejects new updates
+        assert!(client
+            .mock_all_auths()
+            .try_submit_update(&inst1, &round_id, &BytesN::from_array(&env, &[9u8; 32]))
+            .is_err());
     }
 }

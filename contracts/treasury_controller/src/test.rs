@@ -11,7 +11,6 @@ mod tests {
         // Simple test to verify error types are defined correctly
         let _error = Error::NotInitialized;
         let _error = Error::TransferFailed;
-        assert!(true);
     }
 
     #[test]
@@ -19,7 +18,6 @@ mod tests {
         // Test that our proposal types are properly defined
         let _withdrawal = ProposalType::Withdrawal;
         let _config_change = ProposalType::ConfigChange;
-        assert!(true);
     }
 
     #[test]
@@ -29,7 +27,6 @@ mod tests {
         let _approved = ProposalStatus::Approved;
         let _executed = ProposalStatus::Executed;
         let _rejected = ProposalStatus::Rejected;
-        assert!(true);
     }
 
     // Note: Integration tests that require Env and testutils are commented out

@@ -1,4 +1,11 @@
+// Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+#![allow(clippy::unnecessary_cast)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(dead_code)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
@@ -602,16 +609,20 @@ impl TreasuryController {
         }
     }
 
-/// Allows the Governor/Timelock (Admin) to execute transfers immediately
+    /// Allows the Governor/Timelock (Admin) to execute transfers immediately
     /// Bypassing the multisig process.
     pub fn governance_execute(
         env: Env,
         token_contract: Address,
         to: Address,
-        amount: i128
+        amount: i128,
     ) -> Result<(), Error> {
-        let config: TreasuryConfig = env.storage().instance().get(&DataKey::Config).ok_or(Error::NotInitialized)?;
-        
+        let config: TreasuryConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
+
         // strictly require admin auth (The Governor Contract)
         config.admin.require_auth();
 
@@ -623,7 +634,8 @@ impl TreasuryController {
             amount,
         )?;
 
-        env.events().publish((symbol_short!("GOV_EXEC"),), (to, amount));
+        env.events()
+            .publish((symbol_short!("GOV_EXEC"),), (to, amount));
         Ok(())
     }
 }

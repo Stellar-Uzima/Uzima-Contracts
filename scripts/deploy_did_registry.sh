@@ -103,7 +103,7 @@ esac
 # Configure network
 print_step "Configuring network..."
 stellar network add \
-    --global $NETWORK \
+    --global "$NETWORK" \
     --rpc-url "$RPC_URL" \
     --network-passphrase "$NETWORK_PASSPHRASE" \
     2>/dev/null || true
@@ -111,13 +111,13 @@ print_success "Network configured"
 
 # Check identity
 print_step "Checking identity: $IDENTITY"
-if ! stellar keys address $IDENTITY &>/dev/null; then
+if ! stellar keys address "$IDENTITY" &>/dev/null; then
     print_warning "Identity '$IDENTITY' not found, generating new identity..."
-    stellar keys generate --global $IDENTITY --network $NETWORK
+    stellar keys generate --global "$IDENTITY" --network "$NETWORK"
     print_success "Generated new identity"
 fi
 
-DEPLOYER_ADDRESS=$(stellar keys address $IDENTITY)
+DEPLOYER_ADDRESS=$(stellar keys address "$IDENTITY")
 print_success "Using deployer address: $DEPLOYER_ADDRESS"
 
 # Build the contract
@@ -138,20 +138,20 @@ print_success "WASM optimized"
 print_step "Deploying contract to $NETWORK..."
 CONTRACT_ID=$(stellar contract deploy \
     --wasm target/wasm32-unknown-unknown/release/identity_registry.optimized.wasm \
-    --source $IDENTITY \
-    --network $NETWORK)
+    --source "$IDENTITY" \
+    --network "$NETWORK")
 print_success "Contract deployed: $CONTRACT_ID"
 
 # Initialize the contract
 print_step "Initializing contract with DID support..."
 stellar contract invoke \
-    --id $CONTRACT_ID \
-    --source $IDENTITY \
-    --network $NETWORK \
+    --id "$CONTRACT_ID" \
+    --source "$IDENTITY" \
+    --network "$NETWORK" \
     -- \
     initialize \
-    --owner $DEPLOYER_ADDRESS \
-    --network_id $NETWORK_ID
+    --owner "$DEPLOYER_ADDRESS" \
+    --network_id "$NETWORK_ID"
 print_success "Contract initialized"
 
 # Output deployment info
@@ -184,7 +184,7 @@ echo ""
 # Save deployment info
 DEPLOY_INFO_FILE="deployments/${NETWORK}_identity_registry.json"
 mkdir -p deployments
-cat > $DEPLOY_INFO_FILE << EOF
+cat > "$DEPLOY_INFO_FILE" << EOF
 {
     "contract_id": "$CONTRACT_ID",
     "network": "$NETWORK",

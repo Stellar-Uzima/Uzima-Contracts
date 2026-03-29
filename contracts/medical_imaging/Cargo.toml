@@ -1,0 +1,20 @@
+[package]
+name = "medical_imaging"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/soroban-project"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = "21.7.7"
+
+[dev-dependencies]
+soroban-sdk = { version = "21.7.7", features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

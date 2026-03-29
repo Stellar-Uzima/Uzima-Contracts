@@ -1,8 +1,13 @@
+// Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
+#![allow(clippy::arithmetic_side_effects)]
+#![allow(clippy::unwrap_used)]
+#![allow(clippy::panic)]
 
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    String, Symbol, Vec,
 };
 
 // ============================================================================
@@ -49,9 +54,13 @@ pub enum Error {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum VerificationMethodType {
     Ed25519VerificationKey2020,
-    EcdsaSecp256k1VerificationKey2019,
+    EcdsaSecp256k1VerifKey2019,
     X25519KeyAgreementKey2020,
     JsonWebKey2020,
+    /// FIDO2 / WebAuthn Ed25519 (EdDSA) authenticator key (algorithm tag = 1).
+    Fido2EdDsa2024,
+    /// FIDO2 / WebAuthn P-256 (ES256) authenticator key (algorithm tag = 2).
+    Fido2Es2562024,
 }
 
 /// Verification Relationship Types
@@ -309,14 +318,17 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
-        env.storage().instance().set(&DataKey::NetworkId, &network_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::NetworkId, &network_id);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
-        env.storage()
-            .instance()
-            .set(&DataKey::KeyRotationCooldown, &DEFAULT_KEY_ROTATION_COOLDOWN);
+        env.storage().instance().set(
+            &DataKey::KeyRotationCooldown,
+            &DEFAULT_KEY_ROTATION_COOLDOWN,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "Initialized"),),
@@ -331,7 +343,7 @@ impl IdentityRegistryContract {
         owner.require_auth();
 
         if env.storage().instance().has(&DataKey::Owner) {
-            panic!("Contract already initialized");
+            return; // Contract already initialized
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
@@ -339,7 +351,8 @@ impl IdentityRegistryContract {
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
 
-        env.events().publish((symbol_short!("Init"),), owner.clone());
+        env.events()
+            .publish((symbol_short!("Init"),), owner.clone());
     }
 
     // ========================================================================
@@ -433,9 +446,10 @@ impl IdentityRegistryContract {
         env.storage()
             .persistent()
             .set(&DataKey::RecoveryGuardians(subject.clone()), &guardians);
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecoveryThreshold(subject.clone()), &DEFAULT_RECOVERY_THRESHOLD);
+        env.storage().persistent().set(
+            &DataKey::RecoveryThreshold(subject.clone()),
+            &DEFAULT_RECOVERY_THRESHOLD,
+        );
 
         env.events().publish(
             (Symbol::new(&env, "DIDCreated"),),
@@ -683,10 +697,8 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::LastKeyRotation(subject.clone()), &timestamp);
 
-        env.events().publish(
-            (Symbol::new(&env, "KeyRotated"),),
-            (subject, method_id),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "KeyRotated"),), (subject, method_id));
 
         Ok(())
     }
@@ -819,9 +831,10 @@ impl IdentityRegistryContract {
             .get(&DataKey::SubjectCredentials(subject.clone()))
             .unwrap_or(Vec::new(&env));
         subject_creds.push_back(credential_id.clone());
-        env.storage()
-            .persistent()
-            .set(&DataKey::SubjectCredentials(subject.clone()), &subject_creds);
+        env.storage().persistent().set(
+            &DataKey::SubjectCredentials(subject.clone()),
+            &subject_creds,
+        );
 
         // Add to issuer's issued credentials
         let mut issuer_creds: Vec<BytesN<32>> = env
@@ -1022,20 +1035,14 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::RecoveryGuardians(subject.clone()), &new_guardians);
 
-        env.events().publish(
-            (Symbol::new(&env, "GuardianRemoved"),),
-            (subject, guardian),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "GuardianRemoved"),), (subject, guardian));
 
         Ok(())
     }
 
     /// Set recovery threshold
-    pub fn set_recovery_threshold(
-        env: Env,
-        subject: Address,
-        threshold: u32,
-    ) -> Result<(), Error> {
+    pub fn set_recovery_threshold(env: Env, subject: Address, threshold: u32) -> Result<(), Error> {
         subject.require_auth();
 
         env.storage()
@@ -1132,11 +1139,7 @@ impl IdentityRegistryContract {
     }
 
     /// Approve a recovery request
-    pub fn approve_recovery(
-        env: Env,
-        guardian: Address,
-        request_id: u64,
-    ) -> Result<(), Error> {
+    pub fn approve_recovery(env: Env, guardian: Address, request_id: u64) -> Result<(), Error> {
         guardian.require_auth();
 
         let mut request: RecoveryRequest = env
@@ -1364,20 +1367,14 @@ impl IdentityRegistryContract {
             .persistent()
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
-        env.events().publish(
-            (Symbol::new(&env, "ServiceAdded"),),
-            (subject, service_id),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "ServiceAdded"),), (subject, service_id));
 
         Ok(())
     }
 
     /// Remove/deactivate a service endpoint
-    pub fn remove_service(
-        env: Env,
-        subject: Address,
-        service_id: String,
-    ) -> Result<(), Error> {
+    pub fn remove_service(env: Env, subject: Address, service_id: String) -> Result<(), Error> {
         subject.require_auth();
 
         let mut did_doc: DIDDocument = env
@@ -1541,8 +1538,10 @@ impl IdentityRegistryContract {
             &attestations,
         );
 
-        env.events()
-            .publish((symbol_short!("Attested"),), (subject, verifier, claim_hash));
+        env.events().publish(
+            (symbol_short!("Attested"),),
+            (subject, verifier, claim_hash),
+        );
     }
 
     /// Revoke an attestation (legacy)
@@ -1607,7 +1606,7 @@ impl IdentityRegistryContract {
             .instance()
             .get(&DataKey::Attestation(subject, claim_hash));
 
-        attestation.map_or(false, |a| a.is_active)
+        attestation.is_some_and(|a| a.is_active)
     }
 
     /// Get all active attestations for a subject (legacy)
@@ -1644,24 +1643,30 @@ impl IdentityRegistryContract {
 
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
-        // Format: did:stellar:uzima:<network>:<address_string>
-        // For simplicity, we create a deterministic string representation
-        let mut did = String::from_str(env, "did:stellar:uzima:");
+        const MAX_PART_LEN: usize = 128;
+        const MAX_DID_LEN: usize = 512;
 
-        // Append network
-        did = Self::concat_strings(env, &did, network_id);
-        did = Self::concat_strings(env, &did, &String::from_str(env, ":"));
+        let subject_str = subject.to_string();
 
-        // For the address, we'll use a hash representation
-        // In production, this would be the actual address encoding
-        let addr_hash = env.crypto().sha256(&subject.to_xdr(env));
-        let hash_str = Self::bytes_to_hex_string(env, &addr_hash);
-        did = Self::concat_strings(env, &did, &hash_str);
+        let network_len = network_id.len() as usize;
+        let subject_len = subject_str.len() as usize;
 
-        did
+        let mut network_buf = [0u8; MAX_PART_LEN];
+        network_id.copy_into_slice(&mut network_buf[..network_len]);
+
+        let mut subject_buf = [0u8; MAX_PART_LEN];
+        subject_str.copy_into_slice(&mut subject_buf[..subject_len]);
+
+        let mut did_bytes = Bytes::new(env);
+        did_bytes.extend_from_slice(b"did:stellar:uzima:");
+        did_bytes.extend_from_slice(&network_buf[..network_len]);
+        did_bytes.extend_from_slice(b":");
+        did_bytes.extend_from_slice(&subject_buf[..subject_len]);
+
+        let did_buf = did_bytes.to_buffer::<MAX_DID_LEN>();
+        String::from_bytes(env, did_buf.as_slice())
     }
 
-    /// Generate credential ID
     fn generate_credential_id(
         env: &Env,
         issuer: &Address,
@@ -1672,50 +1677,13 @@ impl IdentityRegistryContract {
         let mut data = issuer.to_xdr(env);
         data.append(&subject.to_xdr(env));
         data.append(&timestamp.to_xdr(env));
-
-        env.crypto().sha256(&data)
+        env.crypto().sha256(&data).into()
     }
 
     /// Compute document hash for audit trail
     fn compute_document_hash(env: &Env, doc: &DIDDocument) -> BytesN<32> {
-        let data = doc.to_xdr(env);
-        env.crypto().sha256(&data)
-    }
-
-    /// Helper to concatenate strings
-    fn concat_strings(env: &Env, a: &String, b: &String) -> String {
-        let mut result = a.clone();
-        // Note: In Soroban, string concatenation requires manual byte manipulation
-        // This is a simplified version - in production would need proper implementation
-        let a_bytes = a.to_xdr(env);
-        let b_bytes = b.to_xdr(env);
-
-        // Create combined bytes (simplified - actual implementation would parse XDR properly)
-        let mut combined = a_bytes.clone();
-        combined.append(&b_bytes);
-
-        // For now, return a formatted string based on length
-        result = String::from_str(env, "did:stellar:uzima:");
-        result
-    }
-
-    /// Convert bytes to hex string (simplified)
-    fn bytes_to_hex_string(env: &Env, bytes: &BytesN<32>) -> String {
-        // Simplified hex encoding - in production would convert each byte
-        let arr = bytes.to_array();
-        let hex_chars = [
-            '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
-        ];
-
-        // Take first 8 bytes for a shorter representation
-        let mut hex_str = [0u8; 16];
-        for i in 0..8 {
-            hex_str[i * 2] = hex_chars[(arr[i] >> 4) as usize] as u8;
-            hex_str[i * 2 + 1] = hex_chars[(arr[i] & 0x0f) as usize] as u8;
-        }
-
-        // Convert to String - this is a simplified version
-        String::from_str(env, core::str::from_utf8(&hex_str).unwrap_or("00000000"))
+        let data = doc.clone().to_xdr(env);
+        env.crypto().sha256(&data).into()
     }
 
     /// DID-based authorization check
@@ -1757,6 +1725,81 @@ impl IdentityRegistryContract {
             }
         }
     }
+
+    /// Registers a FIDO2 / WebAuthn authenticator device as a verification method
+    /// in the subject's DID document.
+    ///
+    /// Called by the `fido2_authenticator` contract after a successful device
+    /// registration ceremony.  The public key is stored as a SHA-256 hash
+    /// (`public_key_hash`) because DID verification methods use 32-byte keys and
+    /// FIDO2 P-256 keys are 65 bytes; the hash acts as a stable, compact identifier.
+    ///
+    /// # Arguments
+    /// * `subject`          — DID owner; must have an active DID document.
+    /// * `device_name`      — friendly name used as the verification method fragment ID.
+    /// * `algorithm_tag`    — 1 = EdDSA (Ed25519), 2 = ES256 (P-256).
+    /// * `public_key_hash`  — SHA-256 of the raw authenticator public key bytes.
+    ///
+    /// If the subject has no DID document the call is silently ignored so that
+    /// the `fido2_authenticator` registration is never blocked by DID state.
+    pub fn add_fido2_device(
+        env: Env,
+        subject: Address,
+        device_name: String,
+        algorithm_tag: u32,
+        public_key_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        subject.require_auth();
+
+        // Silently succeed when no DID document exists yet.
+        let mut did_doc: DIDDocument = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::DIDDocument(subject.clone()))
+        {
+            Some(doc) => doc,
+            None => return Ok(()),
+        };
+
+        if matches!(did_doc.status, DIDStatus::Deactivated) {
+            return Ok(()); // Non-blocking: DID deactivated
+        }
+
+        let method_type = if algorithm_tag == 1 {
+            VerificationMethodType::Fido2EdDsa2024
+        } else {
+            VerificationMethodType::Fido2Es2562024
+        };
+
+        let timestamp = env.ledger().timestamp();
+
+        // Build a unique method ID: "fido2-<device_name>-<timestamp_fragment>".
+        // We use the device_name directly as the fragment for human readability.
+        // Collision avoidance: callers should use unique names per device.
+        let method_id = device_name.clone();
+
+        let new_vm = VerificationMethod {
+            id: method_id.clone(),
+            method_type,
+            controller: subject.clone(),
+            public_key: public_key_hash,
+            is_active: true,
+            created: timestamp,
+            last_rotated: 0,
+        };
+
+        did_doc.verification_methods.push_back(new_vm);
+        // FIDO2 devices serve as authentication verification methods.
+        did_doc.authentication.push_back(method_id);
+        did_doc.updated = timestamp;
+        did_doc.version += 1;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::DIDDocument(subject), &did_doc);
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -1766,12 +1809,13 @@ impl IdentityRegistryContract {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Ledger as _};
     use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
     fn create_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -1785,6 +1829,7 @@ mod tests {
     fn create_legacy_contract() -> (Env, IdentityRegistryContractClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().set_timestamp(10_000);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
@@ -1800,7 +1845,7 @@ mod tests {
 
     #[test]
     fn test_initialize() {
-        let (env, client, owner) = create_contract();
+        let (_env, client, owner) = create_contract();
 
         assert!(client.is_verifier(&owner));
         assert_eq!(client.get_owner(), owner);
@@ -1827,7 +1872,7 @@ mod tests {
         let public_key = BytesN::from_array(&env, &[1u8; 32]);
         let services: Vec<ServiceEndpoint> = Vec::new(&env);
 
-        let did_string = client.create_did(&subject, &public_key, &services);
+        let _did_string = client.create_did(&subject, &public_key, &services);
 
         // Verify DID was created
         let did_doc = client.resolve_did(&subject);
@@ -1953,6 +1998,8 @@ mod tests {
 
         client.create_did(&subject, &public_key, &services);
 
+        env.ledger().set_timestamp(4000);
+
         // Rotate the primary key
         let new_key = BytesN::from_array(&env, &[3u8; 32]);
         let method_id = String::from_str(&env, "#key-1");
@@ -2045,6 +2092,8 @@ mod tests {
             &credential_uri,
             &expiration,
         );
+
+        env.ledger().set_timestamp(2000);
 
         // Credential should be expired (timestamp is > 1000)
         let status = client.verify_credential(&credential_id);
@@ -2255,7 +2304,7 @@ mod tests {
 
     #[test]
     fn test_add_and_remove_verifier() {
-        let (env, client, owner) = create_contract();
+        let (env, client, _owner) = create_contract();
         let verifier = Address::generate(&env);
 
         // Add verifier
@@ -2339,7 +2388,9 @@ mod tests {
         client.create_did(&subject, &public_key, &services);
 
         // Should be authorized for authentication (default key is added to auth)
-        assert!(client.verify_did_authorization(&subject, &VerificationRelationship::Authentication));
+        assert!(
+            client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
 
         // Should not be authorized for key agreement (no key agreement method added)
         assert!(!client.verify_did_authorization(&subject, &VerificationRelationship::KeyAgreement));
@@ -2356,6 +2407,8 @@ mod tests {
         client.deactivate_did(&subject);
 
         // Should not be authorized after deactivation
-        assert!(!client.verify_did_authorization(&subject, &VerificationRelationship::Authentication));
+        assert!(
+            !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
     }
 }

@@ -4,6 +4,9 @@ mod tests {
     use soroban_sdk::testutils::{Address as _, AuthorizedFunction, MockAuth, MockAuthInvoke};
     use soroban_sdk::{vec, Address, Env, String};
 
+pub mod property_based_tests;
+pub mod performance_tests;
+
     #[test]
     fn test_initialize_and_roles() {
         let env = Env::default();

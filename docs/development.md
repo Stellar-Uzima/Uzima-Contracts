@@ -8,7 +8,7 @@ This document describes the pinned Soroban CLI setup and how to upgrade it safel
 
 We pin `soroban-cli` to a known-good version to ensure consistency between local development and CI.
 
-- **Pinned version:** compatible with `soroban-sdk = "22.0.0"`
+- **Pinned version:** compatible with `soroban-sdk = "21.7.7"`
 
 The pin is applied in two places:
 
