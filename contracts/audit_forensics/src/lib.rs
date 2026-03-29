@@ -242,11 +242,11 @@ impl AuditForensicsContract {
         let mut passed = true;
 
         for rule_id in rule_ids.iter() {
-            let rule: AuditRule = env
-                .storage()
-                .persistent()
-                .get(&DataKey::Rule(rule_id))
-                .unwrap_or_else(|| panic!("rule not found"));
+            let Some(rule): Option<AuditRule> =
+                env.storage().persistent().get(&DataKey::Rule(rule_id))
+            else {
+                continue;
+            };
             if !rule.enabled || rule.applies_to_language != language {
                 continue;
             }
