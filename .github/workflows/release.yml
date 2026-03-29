@@ -7,7 +7,6 @@ on:
 
 env:
   RUST_VERSION: "1.92.0"
-  SOROBAN_VERSION: "21.7.7"
 
 jobs:
   release:
@@ -25,10 +24,6 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
           components: rustfmt, clippy
-
-      - name: Install Soroban CLI
-        run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
 
       - name: Build optimized contracts
         run: |
