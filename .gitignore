@@ -1,5 +1,6 @@
 # Rust
 /target/
+**/target/
 **/*.rs.bk
 *.pdb
 Cargo.lock
@@ -93,4 +94,3 @@ soroban
 deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
-
