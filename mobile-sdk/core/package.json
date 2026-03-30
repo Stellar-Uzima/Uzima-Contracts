@@ -1,0 +1,41 @@
+{
+  "name": "@uzima/sdk-core",
+  "version": "1.0.0",
+  "description": "Core SDK for Stellar Uzima mobile health applications",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint src/**/*.ts",
+    "format": "prettier --write src/**/*.ts"
+  },
+  "keywords": [
+    "stellar",
+    "uzima",
+    "medical-records",
+    "blockchain",
+    "healthcare"
+  ],
+  "author": "Uzima Team",
+  "license": "MIT",
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.4.3",
+    "tweetnacl": "^1.0.3",
+    "qrcode": "^1.5.3",
+    "axios": "^1.6.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/tweetnacl": "^1.0.3",
+    "@types/node": "^20.0.0",
+    "jest": "^29.5.0",
+    "typescript": "^5.0.0",
+    "eslint": "^8.40.0",
+    "@typescript-eslint/parser": "^5.59.0",
+    "@typescript-eslint/eslint-plugin": "^5.59.0",
+    "prettier": "^2.8.8",
+    "ts-jest": "^29.1.0"
+  }
+}

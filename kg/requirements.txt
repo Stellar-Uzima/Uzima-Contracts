@@ -1,0 +1,11 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+neo4j==5.23.1
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0.post1
+numpy==1.26.4
+pandas==2.2.2
+requests==2.32.3
+pydantic==2.8.2
+python-dotenv==1.0.1
+orjson==3.10.7

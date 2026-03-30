@@ -14,7 +14,7 @@ on:
 
 env:
   RUST_VERSION: "1.92.0"
-  SOROBAN_VERSION: "23.1.4"
+  SOROBAN_VERSION: "21.7.7"
   NETWORK: "mainnet"
 
 jobs:
@@ -260,4 +260,3 @@ jobs:
           echo "- Verify all contracts are functioning correctly" >> $GITHUB_STEP_SUMMARY
           echo "- Monitor contract health: \`./scripts/monitor_deployments.sh mainnet\`" >> $GITHUB_STEP_SUMMARY
           echo "- Keep deployment logs for audit purposes" >> $GITHUB_STEP_SUMMARY
-

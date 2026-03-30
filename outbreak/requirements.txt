@@ -1,0 +1,14 @@
+pandas==2.2.2
+numpy==1.26.4
+scikit-learn==1.4.2
+statsmodels==0.14.2
+xgboost==2.0.3
+prophet==1.1.5
+uvicorn[standard]==0.30.6
+fastapi==0.115.0
+orjson==3.10.7
+geopandas==0.14.4
+shapely==2.0.4
+networkx==3.3
+python-dotenv==1.0.1
+requests==2.32.3

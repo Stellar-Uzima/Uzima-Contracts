@@ -9,7 +9,6 @@ on:
 
 env:
   RUST_VERSION: "1.92.0"
-  SOROBAN_VERSION: "23.1.4"
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -114,10 +113,6 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
 
-      - name: Install Soroban CLI
-        run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -152,10 +147,6 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           targets: wasm32-unknown-unknown
 
-      - name: Install Soroban CLI
-        run: |
-          cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
-
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -171,15 +162,29 @@ jobs:
 
       - name: Build optimized contracts
         run: |
+          set -euo pipefail
+
+          BUILD_RESULT="success"
           for contract in contracts/*/; do
-            if [ -d "$contract" ]; then
-              contract_name=$(basename "$contract")
-              echo "Building contract: $contract_name"
-              cd "$contract"
-              cargo build --target wasm32-unknown-unknown --release
-              cd - > /dev/null
+            [ -d "$contract" ] || continue
+            contract_name=$(basename "$contract")
+            echo "Building contract: $contract_name"
+
+            pushd "$contract" > /dev/null
+            if cargo build --target wasm32-unknown-unknown --release; then
+              echo "  ✅ $contract_name build succeeded"
+            else
+              echo "  ❌ $contract_name build failed"
+              BUILD_RESULT="failure"
             fi
+            popd > /dev/null
           done
+
+          echo "Build summary: $BUILD_RESULT"
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "One or more contracts failed to build."
+            exit 1
+          fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4

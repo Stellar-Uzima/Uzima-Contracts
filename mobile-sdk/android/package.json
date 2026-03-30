@@ -1,0 +1,16 @@
+{
+  "name": "@uzima/sdk-android",
+  "version": "1.0.0",
+  "description": "Android native SDK for Stellar Uzima",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "gradle build",
+    "test": "gradle test",
+    "assembleDebug": "gradle assembleDebug",
+    "assembleRelease": "gradle assembleRelease"
+  },
+  "keywords": ["android", "stellar", "uzima", "medical-records"],
+  "author": "Uzima Team",
+  "license": "MIT"
+}
