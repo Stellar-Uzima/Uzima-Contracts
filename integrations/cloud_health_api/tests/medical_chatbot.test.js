@@ -23,6 +23,8 @@ describe('MedicalChatbot', () => {
     expect(result.triage).toBe('emergency');
     expect(result.escalation.emergencyDetected).toBe(true);
     expect(result.escalation.protocol).toMatch(/emergency/i);
+    expect(result.escalation.hotline).toBeTruthy();
+    expect(result.escalation.nextActions.length).toBeGreaterThan(0);
   });
 
   test('supports multilingual interactions', async () => {
@@ -40,6 +42,18 @@ describe('MedicalChatbot', () => {
     expect(frenchResult.response).toMatch(/urgence|evaluation/i);
   });
 
+  test('supports preferred-language routing for additional languages', async () => {
+    const chatbot = new MedicalChatbot();
+    const result = await chatbot.respond({
+      message: 'Necesito educacion sobre diabetes',
+      preferredLanguage: 'es'
+    });
+
+    expect(result.language).toBe('es');
+    expect(result.intent).toBe('health_education');
+    expect(result.response).toMatch(/diabetes|glucosa|orientacion/i);
+  });
+
   test('creates personalized education using profile hints', async () => {
     const chatbot = new MedicalChatbot();
     const result = await chatbot.respond({
@@ -49,6 +63,7 @@ describe('MedicalChatbot', () => {
 
     expect(result.conditions).toContain('pregnancy');
     expect(result.response).toMatch(/pregnant|midwife/i);
+    expect(result.education.personalized).toMatch(/hypertension|care plan/i);
   });
 
   test('integrates with an external knowledge base search hook', async () => {
@@ -76,6 +91,7 @@ describe('MedicalChatbot', () => {
 
     expect(result.metadata.responseTimeMs).toBeLessThan(2000);
     expect(elapsed).toBeLessThan(2000);
+    expect(result.metadata.confidence).toBeGreaterThan(0.5);
   });
 
   test('maintains conversation accuracy above 90 percent on a curated validation set', async () => {
