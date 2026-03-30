@@ -435,6 +435,8 @@ pub enum DataKey {
     RecordMeta(u64),
     RecordCommitment(u64),
     PatientRecords(Address),
+    PatientRecordCount(Address),
+    PatientRecord(Address, u64),
     TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
 
     // Logs
@@ -1762,43 +1764,88 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        let ids: Vec<u64> = env
+        let total_records: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientRecords(patient.clone()))
-            .unwrap_or(Vec::new(&env));
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
 
-        // IMPORTANT: pagination is applied before access filtering (tests depend on this).
+        // Fallback to legacy vector path when index is missing.
+        if total_records == 0 {
+            let ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::PatientRecords(patient.clone()))
+                .unwrap_or(Vec::new(&env));
+
+            let start = page.saturating_mul(page_size);
+            if start >= ids.len() {
+                return Ok(Vec::new(&env));
+            }
+            let mut end = start.saturating_add(page_size);
+            if end > ids.len() {
+                end = ids.len();
+            }
+
+            let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
+            let mut i = start;
+            while i < end {
+                if let Some(id) = ids.get(i) {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    {
+                        if Self::can_view_record(&env, &caller, &r, id) {
+                            if let Some(meta) = env
+                                .storage()
+                                .persistent()
+                                .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            {
+                                out.push_back((id, meta));
+                            }
+                        }
+                    }
+                }
+                i = i.saturating_add(1);
+            }
+            return Ok(out);
+        }
+
         let start = page.saturating_mul(page_size);
-        if start >= ids.len() {
+        if start >= total_records {
             return Ok(Vec::new(&env));
         }
         let mut end = start.saturating_add(page_size);
-        if end > ids.len() {
-            end = ids.len();
+        if end > total_records {
+            end = total_records;
         }
 
         let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
-        let mut i = start;
-        while i < end {
-            if let Some(id) = ids.get(i) {
+        let mut idx = start;
+        while idx < end {
+            if let Some(record_id) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PatientRecord(patient.clone(), idx))
+            {
                 if let Some(r) = env
                     .storage()
                     .persistent()
-                    .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    .get::<_, MedicalRecord>(&DataKey::Record(record_id))
                 {
-                    if Self::can_view_record(&env, &caller, &r, id) {
+                    if Self::can_view_record(&env, &caller, &r, record_id) {
                         if let Some(meta) = env
                             .storage()
                             .persistent()
-                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(record_id))
                         {
-                            out.push_back((id, meta));
+                            out.push_back((record_id, meta));
                         }
                     }
                 }
             }
-            i = i.saturating_add(1);
+            idx = idx.saturating_add(1);
         }
 
         Ok(out)
@@ -1809,6 +1856,19 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_count(env: Env, patient: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient))
+            .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_id(env: Env, patient: Address, index: u64) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecord(patient, index))
     }
 
     pub fn set_zk_verifier_contract(
@@ -4462,6 +4522,21 @@ impl MedicalRecordsContract {
     }
 
     fn append_patient_record(env: &Env, patient: &Address, record_id: u64) {
+        // Optimized storage: store by per-patient index instead of bulky vector.
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecord(patient.clone(), count), &record_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecordCount(patient.clone()), &(count + 1));
+
+        // Backward compatibility: keep PatientRecords vector only for legacy paths.
         let mut ids: Vec<u64> = env
             .storage()
             .persistent()

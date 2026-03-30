@@ -131,6 +131,29 @@ await server.invokeContract({
 
 ---
 
+## 5.1 Performance-Driven Storage Optimizations
+
+- Replace monolithic `Vec` append patterns with indexed record storage.
+- New contract keys:
+  - `PatientRecordCount(Address)`
+  - `PatientRecord(Address, u64)`
+- This avoids a full vector repush in `append_patient_record`.
+- `get_history` now reads range via index rather than entire patient record list.
+
+### 5.1.1 Cost comparison (rough)
+
+| Operation | Before | After | Notes |
+| --- | --- | --- | --- |
+| Append record to patient list | O(n) per append | O(1) | avoids retrieving/rewriting full `Vec` |
+| get_history page | O(n) storage load | O(page_size) | reads only requested indexes |
+
+### 5.1.2 Quick benchmark
+
+- Added test: `test_patient_record_index_lookup_efficiency` in `contracts/medical_records/src/test.rs`
+- Measures Soroban CPU instruction cost via `env.budget().cpu_instruction_cost()` for batch retrieval.
+
+---
+
 ## 6. Diagrams & Visual Aids
 
 ### 6.1 Contract call flow (Mermaid)
