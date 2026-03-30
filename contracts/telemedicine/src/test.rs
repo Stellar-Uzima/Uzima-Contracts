@@ -2,8 +2,8 @@ use soroban_sdk::testutils::{Address as TestAddress, Ledger as TestLedger};
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::{
-    ConsentType, ConsultationStatus, TelemedicineContract, TelemedicineContractClient,
-    TelemedicineError,
+    ChatIntent, ConsentType, ConsultationStatus, EmergencyLevel, TelemedicineContract,
+    TelemedicineContractClient, TelemedicineError,
 };
 
 fn generate_test_address(env: &Env) -> Address {
@@ -87,6 +87,22 @@ impl TestContext {
         );
     }
 
+    fn setup_patient_with_language(
+        &self,
+        patient_id: &BytesN<32>,
+        patient: &Address,
+        language: &str,
+    ) {
+        self.client.register_patient(
+            patient_id,
+            patient,
+            &self.provider_id,
+            &String::from_str(&self.env, "KE"),
+            &String::from_str(&self.env, "+254700000099"),
+            &String::from_str(&self.env, language),
+        );
+    }
+
     /// Grant consent and return the consent_id used so callers can revoke it
     fn setup_consent(&self, consent_type: ConsentType) -> BytesN<32> {
         let consent_id = BytesN::from_array(&self.env, &[100u8; 32]);
@@ -99,6 +115,47 @@ impl TestContext {
         );
         consent_id
     }
+}
+
+fn seed_chatbot_knowledge(ctx: &TestContext) {
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[120u8; 32]),
+        &String::from_str(&ctx.env, "symptom"),
+        &String::from_str(&ctx.env, "English"),
+        &String::from_str(&ctx.env, "Fever care"),
+        &String::from_str(&ctx.env, "fever cough home care"),
+        &String::from_str(
+            &ctx.env,
+            "Drink fluids, rest, and seek urgent care if breathing becomes difficult.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/fever"),
+    );
+
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[121u8; 32]),
+        &String::from_str(&ctx.env, "emergency"),
+        &String::from_str(&ctx.env, "English"),
+        &String::from_str(&ctx.env, "Chest pain emergency"),
+        &String::from_str(&ctx.env, "chest pain emergency breathing"),
+        &String::from_str(
+            &ctx.env,
+            "Call emergency services immediately and do not drive yourself if symptoms are severe.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/chest-pain"),
+    );
+
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[122u8; 32]),
+        &String::from_str(&ctx.env, "symptom"),
+        &String::from_str(&ctx.env, "Swahili"),
+        &String::from_str(&ctx.env, "Huduma ya homa"),
+        &String::from_str(&ctx.env, "homa kikohozi pumzika"),
+        &String::from_str(
+            &ctx.env,
+            "Pumzika, kunywa maji mengi, na tafuta huduma ya haraka ukipata shida ya kupumua.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/homa"),
+    );
 }
 
 // ============================================================
@@ -573,4 +630,164 @@ fn test_contract_pause() {
         &String::from_str(&ctx.env, "+254700000001"),
         &String::from_str(&ctx.env, "English"),
     );
+}
+
+// ============================================================
+// CHATBOT TESTS
+// ============================================================
+
+#[test]
+fn test_chatbot_symptom_triage_and_education() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &BytesN::from_array(&ctx.env, &[130u8; 32]),
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(
+            &ctx.env,
+            "I have had fever and cough since yesterday. What should I do?",
+        ),
+    );
+
+    assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
+    assert!(matches!(
+        inquiry.triage_level,
+        EmergencyLevel::Medium | EmergencyLevel::High
+    ));
+    assert!(inquiry.confidence_bps >= 9000);
+    assert!(inquiry.response_time_ms < 2_000);
+    assert!(!inquiry.emergency_detected);
+    assert!(inquiry.health_education.len() > 20);
+    assert_eq!(
+        inquiry.knowledge_source_ref,
+        String::from_str(&ctx.env, "medical_records://kb/fever")
+    );
+
+    let latest = ctx.client.get_latest_patient_inquiry(&ctx.patient_id);
+    assert_eq!(
+        latest.inquiry_id,
+        BytesN::from_array(&ctx.env, &[130u8; 32])
+    );
+}
+
+#[test]
+fn test_chatbot_multilingual_support() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    let sw_patient = generate_test_address(&ctx.env);
+    let sw_patient_id = BytesN::from_array(&ctx.env, &[131u8; 32]);
+    ctx.setup_patient_with_language(&sw_patient_id, &sw_patient, "Swahili");
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &BytesN::from_array(&ctx.env, &[132u8; 32]),
+        &sw_patient_id,
+        &sw_patient,
+        &String::from_str(&ctx.env, "Nina homa na kikohozi, nifanye nini?"),
+    );
+
+    assert_eq!(
+        inquiry.detected_language,
+        String::from_str(&ctx.env, "Swahili")
+    );
+    assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
+    assert_eq!(
+        inquiry.knowledge_source_ref,
+        String::from_str(&ctx.env, "medical_records://kb/homa")
+    );
+    assert!(inquiry.health_education.to_string().contains("Pumzika"));
+}
+
+#[test]
+fn test_chatbot_emergency_detection_and_escalation() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    ctx.client.configure_emergency_protocol(
+        &BytesN::from_array(&ctx.env, &[133u8; 32]),
+        &String::from_str(&ctx.env, "911"),
+        &String::from_str(
+            &ctx.env,
+            "Emergency warning: call 911 immediately and proceed to the nearest hospital.",
+        ),
+        &String::from_str(
+            &ctx.env,
+            "Onyo la dharura: piga 911 mara moja na uende hospitali iliyo karibu.",
+        ),
+        &String::from_str(
+            &ctx.env,
+            "Urgence medicale: appelez le 911 immediatement et rendez-vous a l'hopital le plus proche.",
+        ),
+        &String::from_str(&ctx.env, "regional-ambulance-network"),
+    );
+
+    let inquiry_id = BytesN::from_array(&ctx.env, &[134u8; 32]);
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &inquiry_id,
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(
+            &ctx.env,
+            "I have chest pain and difficulty breathing right now.",
+        ),
+    );
+
+    assert!(matches!(inquiry.intent, ChatIntent::EmergencySupport));
+    assert!(matches!(inquiry.triage_level, EmergencyLevel::Critical));
+    assert!(inquiry.emergency_detected);
+    assert!(inquiry.escalation_required);
+    assert_eq!(inquiry.emergency_case_id, inquiry_id);
+    assert!(inquiry.recommended_action.to_string().contains("911"));
+    assert!(inquiry.confidence_bps >= 9000);
+    assert!(inquiry.response_time_ms < 2_000);
+
+    let emergency = ctx.client.get_emergency_case(&inquiry_id);
+    assert_eq!(emergency.patient_id, ctx.patient_id);
+    assert!(matches!(
+        emergency.emergency_level,
+        EmergencyLevel::Critical
+    ));
+    assert!(emergency.escalated_to_physical);
+
+    let active = ctx.client.get_active_emergencies();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active.get(0).unwrap(), inquiry_id);
+
+    let (_, _, _, _, _, emergencies) = ctx.client.get_platform_stats();
+    assert_eq!(emergencies, 1);
+
+    let resolved = ctx.client.resolve_emergency_case(&inquiry_id);
+    assert!(resolved.is_resolved);
+    assert_eq!(ctx.client.get_active_emergencies().len(), 0);
+}
+
+#[test]
+fn test_chatbot_accuracy_and_response_time_guarantee() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry_id = BytesN::from_array(&ctx.env, &[135u8; 32]);
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &inquiry_id,
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(&ctx.env, "I have fever and headache, have I got COVID-19?"),
+    );
+
+    assert!(ctx.client.is_chatbot_inquiry_accurate(&inquiry_id).unwrap());
+    assert!(
+        ctx.client
+            .get_chatbot_response_time_ms(&inquiry_id)
+            .unwrap()
+            < 2000
+    );
+    assert!(inquiry.confidence_bps >= 9000);
 }
