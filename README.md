@@ -21,6 +21,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
 - [Developer Guide](#developer-guide)
+- [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
 - [License](#license)
@@ -157,6 +158,11 @@ make stop-local
 ---
 
 ## ✨ Features
+
+## CLI Guide
+
+See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for advanced transaction management commands and examples.
+
 
 - 📁 Encrypted on-chain medical records storage
 - 🔐 Role-based access control (patients, doctors, admins)
