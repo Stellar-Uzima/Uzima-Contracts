@@ -47,6 +47,9 @@ pub const MAX_TREATMENT_TYPE_LENGTH: u32 = 100;
 pub const MIN_DATA_REF_LENGTH: u32 = 10;
 /// Maximum length for data reference
 pub const MAX_DATA_REF_LENGTH: u32 = 200;
+pub const MAX_POLICY_REF_LENGTH: u32 = 200;
+pub const MAX_ATTRIBUTE_NAMESPACE_LENGTH: u32 = 64;
+pub const MAX_ATTRIBUTE_VALUE_LENGTH: u32 = 128;
 
 /// Minimum length for tags
 pub const MIN_TAG_LENGTH: u32 = 1;
@@ -265,6 +268,37 @@ pub fn validate_data_ref(env: &Env, data_ref: &String) -> Result<(), Error> {
     validate_string_charset(env, data_ref)?;
 
     Ok(())
+}
+
+pub fn validate_policy_ref(env: &Env, policy_ref: &String) -> Result<(), Error> {
+    validate_string_length(
+        policy_ref,
+        MIN_DATA_REF_LENGTH,
+        MAX_POLICY_REF_LENGTH,
+        Error::EmptyDataRef,
+        Error::InvalidDataRefLength,
+    )?;
+    validate_string_charset(env, policy_ref)
+}
+
+pub fn validate_attribute_namespace(namespace: &String) -> Result<(), Error> {
+    validate_string_length(
+        namespace,
+        1,
+        MAX_ATTRIBUTE_NAMESPACE_LENGTH,
+        Error::InvalidInput,
+        Error::InvalidInput,
+    )
+}
+
+pub fn validate_attribute_value(value: &String) -> Result<(), Error> {
+    validate_string_length(
+        value,
+        1,
+        MAX_ATTRIBUTE_VALUE_LENGTH,
+        Error::InvalidInput,
+        Error::InvalidInput,
+    )
 }
 
 /// Validates a single tag

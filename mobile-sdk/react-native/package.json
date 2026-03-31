@@ -1,0 +1,27 @@
+{
+  "name": "@uzima/sdk-react-native",
+  "version": "1.0.0",
+  "description": "React Native plugin for Stellar Uzima mobile SDK",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts src/**/*.tsx"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-native": ">=0.60.0"
+  },
+  "dependencies": {
+    "@uzima/sdk-core": "^1.0.0",
+    "react-native-keychain": "^8.0.0",
+    "react-native-push-notification": "^8.1.0",
+    "react-native-fingerprint-scanner": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "@types/react-native": "^0.72.0",
+    "typescript": "^5.0.0"
+  }
+}

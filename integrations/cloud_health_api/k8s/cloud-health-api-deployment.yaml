@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: uzima-cloud-health-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: uzima-cloud-health-api
+  template:
+    metadata:
+      labels:
+        app: uzima-cloud-health-api
+    spec:
+      containers:
+        - name: uzima-cloud-health-api
+          image: uzima-cloud-health-api:latest
+          env:
+            - name: UZIMA_USE_GOOGLE_REAL
+              value: "0"
+          ports:
+            - containerPort: 3000

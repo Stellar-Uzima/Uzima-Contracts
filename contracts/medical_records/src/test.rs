@@ -733,6 +733,50 @@ fn test_get_record_count_getter() {
     assert_eq!(client.get_record_count(), 2u64);
 }
 
+#[test]
+fn test_patient_record_index_lookup_efficiency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let count = 30u64;
+    for i in 0..count {
+        let _ = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Diag"),
+            &String::from_str(&env, "Treat"),
+            &false,
+            &vec![&env, String::from_str(&env, "tag")],
+            &String::from_str(&env, "Modern"),
+            &String::from_str(&env, "General"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        );
+    }
+
+    assert_eq!(client.get_patient_record_count(&patient), count);
+
+    for i in 0..count {
+        let record_id = client.get_patient_record_id(&patient, i);
+        assert!(record_id.is_some());
+    }
+
+    let start_budget = env.budget().cpu_instruction_cost();
+    let history = client
+        .get_history(&doctor, &patient, &0u32, &(count as u32))
+        .unwrap();
+    let elapsed = env.budget().cpu_instruction_cost() - start_budget;
+
+    assert_eq!(history.len(), count as u32);
+    // Expected gas threshold is higher than no-op but should be bounded in this environment.
+    assert!(elapsed < 2_000_000);
+}
+
 // ============================================================================
 // Rate Limiting Tests
 // ============================================================================

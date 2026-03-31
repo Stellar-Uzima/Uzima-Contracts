@@ -1,0 +1,21 @@
+{
+  "name": "uzima-cloud-health-api",
+  "version": "0.1.0",
+  "description": "Cloud healthcare integration scaffold for Uzima - mock connectors for Google, Azure, AWS with FHIR/DICOM transformers and orchestrator.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "jest --runInBand"
+  },
+  "keywords": ["uzima","health","fhir","dicom","cloud"],
+  "author": "Uzima Contributors",
+  "license": "MIT",
+  "dependencies": {
+    "googleapis": "^121.0.0",
+    "ajv": "^8.12.0",
+    "dicom-parser": "^1.8.6"
+  },
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
