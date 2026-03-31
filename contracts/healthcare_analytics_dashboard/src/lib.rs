@@ -106,6 +106,61 @@ pub struct ExportRecord {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct DataLakeConnection {
+    pub id: u64,
+    pub provider: String,
+    pub bucket_uri: String,
+    pub query_engine: String,
+    pub supports_parquet: bool,
+    pub supports_orc: bool,
+    pub partitioning_enabled: bool,
+    pub lineage_enabled: bool,
+    pub encryption_at_rest: bool,
+    pub encryption_in_transit: bool,
+    pub max_dataset_size_tb: u64,
+    pub active: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DataLakePartition {
+    pub id: u64,
+    pub connection_id: u64,
+    pub export_id: u64,
+    pub dataset_name: String,
+    pub file_format: String,
+    pub partition_key: String,
+    pub index_ref: String,
+    pub estimated_size_tb: u64,
+    pub created_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct LineageRecord {
+    pub export_id: u64,
+    pub connection_id: u64,
+    pub dataset_name: String,
+    pub upstream_ref: String,
+    pub governance_tag: String,
+    pub query_engine: String,
+    pub file_format: String,
+    pub recorded_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct QueryOptimizationProfile {
+    pub connection_id: u64,
+    pub dataset_name: String,
+    pub projected_scan_mb: u64,
+    pub partition_pruning_bps: u32,
+    pub performance_score_bps: u32,
+    pub optimized_at: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct AiRoundInsight {
     pub round_id: u64,
     pub min_participants: u32,
@@ -151,6 +206,12 @@ pub enum DataKey {
     Compliance(u64),
     ExportCounter,
     Export(u64),
+    DataLakeConnectionCounter,
+    DataLakeConnection(u64),
+    DataLakePartitionCounter,
+    DataLakePartition(u64),
+    LineageRecord(u64),
+    QueryOptimization(u64, String),
     AiContract,
     AiInsight(u64),
 }
@@ -170,6 +231,9 @@ pub enum Error {
     ComplianceNotFound = 9,
     AiAnalyticsNotConfigured = 10,
     AiRoundNotFound = 11,
+    DataLakeNotFound = 12,
+    ExportNotFound = 13,
+    UnsupportedDataLakeProvider = 14,
 }
 
 #[contract]
@@ -234,6 +298,12 @@ impl HealthcareAnalyticsDashboardContract {
             .instance()
             .set(&DataKey::ScheduleCounter, &0u64);
         env.storage().instance().set(&DataKey::ExportCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::DataLakeConnectionCounter, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::DataLakePartitionCounter, &0u64);
 
         env.events().publish((symbol_short!("DashInit"),), true);
         Ok(true)
@@ -324,6 +394,16 @@ impl HealthcareAnalyticsDashboardContract {
         }
     }
 
+    fn validate_data_lake_provider(env: &Env, provider: &String, query_engine: &String) -> bool {
+        let aws = String::from_str(env, "aws_s3");
+        let azure = String::from_str(env, "azure_data_lake");
+        let gcs = String::from_str(env, "google_cloud_storage");
+        let spark = String::from_str(env, "spark");
+        let presto = String::from_str(env, "presto");
+        (provider == &aws || provider == &azure || provider == &gcs)
+            && (query_engine == &spark || query_engine == &presto)
+    }
+
     pub fn set_collector(
         env: Env,
         caller: Address,
@@ -355,6 +435,201 @@ impl HealthcareAnalyticsDashboardContract {
         env.events()
             .publish((symbol_short!("AiConfig"),), ai_analytics_contract);
         Ok(true)
+    }
+
+    pub fn register_data_lake_connection(
+        env: Env,
+        caller: Address,
+        provider: String,
+        bucket_uri: String,
+        query_engine: String,
+        supports_parquet: bool,
+        supports_orc: bool,
+        max_dataset_size_tb: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        if bucket_uri.is_empty()
+            || max_dataset_size_tb == 0
+            || !Self::validate_data_lake_provider(&env, &provider, &query_engine)
+            || (!supports_parquet && !supports_orc)
+        {
+            return Err(Error::UnsupportedDataLakeProvider);
+        }
+
+        let connection_id = Self::next_counter(&env, &DataKey::DataLakeConnectionCounter);
+        let connection = DataLakeConnection {
+            id: connection_id,
+            provider,
+            bucket_uri,
+            query_engine,
+            supports_parquet,
+            supports_orc,
+            partitioning_enabled: true,
+            lineage_enabled: true,
+            encryption_at_rest: true,
+            encryption_in_transit: true,
+            max_dataset_size_tb,
+            active: true,
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DataLakeConnection(connection_id), &connection);
+        env.events().publish(
+            (symbol_short!("LakeCfg"),),
+            (connection_id, connection.max_dataset_size_tb),
+        );
+
+        Ok(connection_id)
+    }
+
+    pub fn sync_export_to_data_lake(
+        env: Env,
+        caller: Address,
+        export_id: u64,
+        connection_id: u64,
+        dataset_name: String,
+        file_format: String,
+        partition_key: String,
+        index_ref: String,
+        governance_tag: String,
+        upstream_ref: String,
+        estimated_size_tb: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let connection: DataLakeConnection = env
+            .storage()
+            .instance()
+            .get(&DataKey::DataLakeConnection(connection_id))
+            .ok_or(Error::DataLakeNotFound)?;
+        let export: ExportRecord = env
+            .storage()
+            .instance()
+            .get(&DataKey::Export(export_id))
+            .ok_or(Error::ExportNotFound)?;
+
+        if dataset_name.is_empty()
+            || partition_key.is_empty()
+            || index_ref.is_empty()
+            || governance_tag.is_empty()
+            || upstream_ref.is_empty()
+            || estimated_size_tb == 0
+        {
+            return Err(Error::InvalidInput);
+        }
+
+        let parquet = String::from_str(&env, "parquet");
+        let orc = String::from_str(&env, "orc");
+        let format_supported = (file_format == parquet && connection.supports_parquet)
+            || (file_format == orc && connection.supports_orc);
+        if !format_supported {
+            return Err(Error::UnsupportedDataLakeProvider);
+        }
+
+        let partition_id = Self::next_counter(&env, &DataKey::DataLakePartitionCounter);
+        let partition = DataLakePartition {
+            id: partition_id,
+            connection_id,
+            export_id,
+            dataset_name: dataset_name.clone(),
+            file_format: file_format.clone(),
+            partition_key,
+            index_ref,
+            estimated_size_tb,
+            created_at: export.generated_at,
+        };
+        let lineage = LineageRecord {
+            export_id,
+            connection_id,
+            dataset_name,
+            upstream_ref,
+            governance_tag,
+            query_engine: connection.query_engine,
+            file_format,
+            recorded_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DataLakePartition(partition_id), &partition);
+        env.storage()
+            .instance()
+            .set(&DataKey::LineageRecord(export_id), &lineage);
+
+        env.events().publish(
+            (symbol_short!("LakeSync"),),
+            (export_id, connection_id, partition_id),
+        );
+
+        Ok(partition_id)
+    }
+
+    pub fn optimize_query_profile(
+        env: Env,
+        caller: Address,
+        connection_id: u64,
+        dataset_name: String,
+        projected_scan_mb: u64,
+        partition_pruning_bps: u32,
+    ) -> Result<QueryOptimizationProfile, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let connection: DataLakeConnection = env
+            .storage()
+            .instance()
+            .get(&DataKey::DataLakeConnection(connection_id))
+            .ok_or(Error::DataLakeNotFound)?;
+        if dataset_name.is_empty() || projected_scan_mb == 0 || partition_pruning_bps > 10_000 {
+            return Err(Error::InvalidInput);
+        }
+
+        let engine_bonus = if connection.query_engine == String::from_str(&env, "spark") {
+            1200u32
+        } else {
+            1000u32
+        };
+        let scan_efficiency = if projected_scan_mb < 1024 {
+            10_000u32
+        } else if projected_scan_mb < 10_240 {
+            8500u32
+        } else {
+            7000u32
+        };
+        let performance_score_bps = partition_pruning_bps
+            .saturating_add(scan_efficiency)
+            .checked_div(2)
+            .unwrap_or(0)
+            .saturating_add(engine_bonus.checked_div(4).unwrap_or(0))
+            .min(10_000);
+
+        let profile = QueryOptimizationProfile {
+            connection_id,
+            dataset_name: dataset_name.clone(),
+            projected_scan_mb,
+            partition_pruning_bps,
+            performance_score_bps,
+            optimized_at: env.ledger().timestamp(),
+        };
+
+        env.storage().instance().set(
+            &DataKey::QueryOptimization(connection_id, dataset_name),
+            &profile,
+        );
+        env.events().publish(
+            (symbol_short!("LakeOpt"),),
+            (
+                connection_id,
+                profile.projected_scan_mb,
+                profile.performance_score_bps,
+            ),
+        );
+
+        Ok(profile)
     }
 
     pub fn record_medical_metric(
@@ -758,6 +1033,34 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage().instance().get(&DataKey::Export(export_id))
     }
 
+    pub fn get_data_lake_connection(env: Env, connection_id: u64) -> Option<DataLakeConnection> {
+        env.storage()
+            .instance()
+            .get(&DataKey::DataLakeConnection(connection_id))
+    }
+
+    pub fn get_data_lake_partition(env: Env, partition_id: u64) -> Option<DataLakePartition> {
+        env.storage()
+            .instance()
+            .get(&DataKey::DataLakePartition(partition_id))
+    }
+
+    pub fn get_lineage_record(env: Env, export_id: u64) -> Option<LineageRecord> {
+        env.storage()
+            .instance()
+            .get(&DataKey::LineageRecord(export_id))
+    }
+
+    pub fn get_query_optimization(
+        env: Env,
+        connection_id: u64,
+        dataset_name: String,
+    ) -> Option<QueryOptimizationProfile> {
+        env.storage()
+            .instance()
+            .get(&DataKey::QueryOptimization(connection_id, dataset_name))
+    }
+
     pub fn get_ai_round_insight(env: Env, round_id: u64) -> Option<AiRoundInsight> {
         env.storage().instance().get(&DataKey::AiInsight(round_id))
     }
@@ -909,6 +1212,77 @@ mod test {
         );
         let export = client.get_export_record(&export_id).unwrap();
         assert_eq!(export.template_id, template_id);
+    }
+
+    #[test]
+    fn test_data_lake_sync_lineage_and_query_optimization() {
+        let env = Env::default();
+        let id = env.register_contract(None, HealthcareAnalyticsDashboardContract);
+        let client = HealthcareAnalyticsDashboardContractClient::new(&env, &id);
+
+        let admin = Address::generate(&env);
+        client.mock_all_auths().initialize(&admin, &3u32, &100u32);
+
+        let template_id = client.mock_all_auths().create_report_template(
+            &admin,
+            &String::from_str(&env, "Data Lake Export"),
+            &vec![&env, String::from_str(&env, "claims_latency")],
+            &true,
+            &true,
+            &String::from_str(&env, "parquet"),
+        );
+        let schedule_id =
+            client
+                .mock_all_auths()
+                .schedule_report(&admin, &template_id, &3600u64, &120u64);
+        let export_id = client.mock_all_auths().run_scheduled_report(
+            &admin,
+            &schedule_id,
+            &String::from_str(&env, "ipfs://exports/claims.parquet"),
+            &BytesN::from_array(&env, &[7u8; 32]),
+        );
+
+        let connection_id = client.mock_all_auths().register_data_lake_connection(
+            &admin,
+            &String::from_str(&env, "aws_s3"),
+            &String::from_str(&env, "s3://uzima-analytics-prod"),
+            &String::from_str(&env, "spark"),
+            &true,
+            &true,
+            &2048u64,
+        );
+
+        let partition_id = client.mock_all_auths().sync_export_to_data_lake(
+            &admin,
+            &export_id,
+            &connection_id,
+            &String::from_str(&env, "claims_curated"),
+            &String::from_str(&env, "parquet"),
+            &String::from_str(&env, "region=ke/year=2026/month=03"),
+            &String::from_str(&env, "glue://claims_curated"),
+            &String::from_str(&env, "phi-restricted"),
+            &String::from_str(&env, "dashboard://weekly-claims"),
+            &128u64,
+        );
+        let partition = client.get_data_lake_partition(&partition_id).unwrap();
+        assert_eq!(partition.export_id, export_id);
+
+        let lineage = client.get_lineage_record(&export_id).unwrap();
+        assert_eq!(lineage.query_engine, String::from_str(&env, "spark"));
+        assert_eq!(lineage.file_format, String::from_str(&env, "parquet"));
+
+        let optimization = client.mock_all_auths().optimize_query_profile(
+            &admin,
+            &connection_id,
+            &String::from_str(&env, "claims_curated"),
+            &512u64,
+            &9000u32,
+        );
+        assert!(optimization.performance_score_bps >= 9000u32);
+        let stored = client
+            .get_query_optimization(&connection_id, &String::from_str(&env, "claims_curated"))
+            .unwrap();
+        assert_eq!(stored.projected_scan_mb, 512u64);
     }
 
     #[test]

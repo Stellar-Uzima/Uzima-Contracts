@@ -112,3 +112,48 @@ fn test_permission_delegation() {
     let res = client.try_grant_permission(&user, &patient, &Permission::ReadRecord, &0, &false);
     assert!(res.is_err());
 }
+
+#[test]
+fn test_access_attribute_issue_revoke_and_epoch_rotation() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let doctor = Address::generate(&env);
+
+    let contract_id = env.register_contract(None, MedicalRecordsContract);
+    let client = MedicalRecordsContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin);
+    client.manage_user(&admin, &doctor, &crate::Role::Doctor);
+
+    assert!(client.issue_access_attribute(
+        &admin,
+        &doctor,
+        &String::from_str(&env, "region"),
+        &String::from_str(&env, "KE"),
+        &0,
+        &true,
+    ));
+
+    let attrs = client.get_user_access_attributes(&doctor);
+    assert_eq!(attrs.len(), 1);
+    assert!(attrs.get(0).unwrap().is_active);
+    assert_eq!(attrs.get(0).unwrap().epoch, 1);
+
+    assert!(client.revoke_access_attribute(
+        &admin,
+        &doctor,
+        &String::from_str(&env, "region"),
+        &String::from_str(&env, "KE"),
+    ));
+
+    let attrs = client.get_user_access_attributes(&doctor);
+    assert!(!attrs.get(0).unwrap().is_active);
+
+    let epoch = client.get_access_attribute_epoch(
+        &String::from_str(&env, "region"),
+        &String::from_str(&env, "KE"),
+    );
+    assert_eq!(epoch, 2);
+}

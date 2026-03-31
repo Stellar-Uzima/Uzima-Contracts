@@ -1,0 +1,10 @@
+[package]
+name = "abe_sdk"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+rand = "0.8"
+rabe = { version = "0.4.2", default-features = false }
+thiserror = "1"

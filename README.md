@@ -20,6 +20,8 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
+- [Developer Guide](#developer-guide)
+- [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
 - [License](#license)
@@ -53,7 +55,7 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 Before you begin, ensure you have the following installed:
 
 - **Rust 1.78.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
-- **Soroban CLI v23.1.4+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
+- **Soroban CLI v21.7.7+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
 - **Git** - For version control
 - **Make** - For using the provided Makefile (optional but recommended)
 
@@ -86,7 +88,7 @@ The `setup.sh` script handles everything automatically:
 
 This script will:
 - Install Rust 1.78.0 and required targets
-- Install Soroban CLI v23.1.4
+- Install Soroban CLI v21.7.7
 - Set up project structure
 - Configure Soroban networks (local, testnet, futurenet)
 - Build the project and run tests
@@ -100,7 +102,7 @@ rustup target add wasm32-unknown-unknown
 rustup component add rustfmt clippy rust-src
 
 # Install Soroban CLI
-cargo install --locked soroban-cli
+cargo install --locked --version 21.7.7 soroban-cli
 
 # Configure Soroban
 soroban config identity generate default
@@ -156,6 +158,11 @@ make stop-local
 ---
 
 ## ✨ Features
+
+## CLI Guide
+
+See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for advanced transaction management commands and examples.
+
 
 - 📁 Encrypted on-chain medical records storage
 - 🔐 Role-based access control (patients, doctors, admins)

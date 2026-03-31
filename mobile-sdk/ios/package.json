@@ -1,0 +1,15 @@
+{
+  "name": "@uzima/sdk-ios",
+  "version": "1.0.0",
+  "description": "iOS native SDK for Stellar Uzima",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "xcodebuild -workspace Uzima.xcworkspace -scheme Uzima build",
+    "test": "xcodebuild test -workspace Uzima.xcworkspace -scheme UzimaTests",
+    "archive": "xcodebuild -workspace Uzima.xcworkspace -scheme Uzima archive"
+  },
+  "keywords": ["ios", "stellar", "uzima", "medical-records"],
+  "author": "Uzima Team",
+  "license": "MIT"
+}

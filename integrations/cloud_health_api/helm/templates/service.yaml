@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "uzima-cloud-health-api.fullname" . | default .Chart.Name }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app: {{ include "uzima-cloud-health-api.fullname" . | default .Chart.Name }}
+  ports:
+    - protocol: TCP
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.port }}
