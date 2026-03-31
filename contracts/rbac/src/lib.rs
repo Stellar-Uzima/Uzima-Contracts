@@ -1,18 +1,16 @@
 #![no_std]
 
-pub mod types;
-pub mod storage;
 pub mod queries;
+pub mod storage;
+pub mod types;
 
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Env, Vec,
-};
-use types::{Role, RBACConfig, RoleAssignment, DataKey};
-use storage::Storage;
 use queries::Queries;
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Vec};
+use storage::Storage;
+use types::{DataKey, RBACConfig, Role, RoleAssignment};
 
 #[contract]
 pub struct RBAC;
@@ -39,10 +37,8 @@ impl RBAC {
         Storage::set_config(&env, &config);
         Storage::set_initialized(&env);
 
-        env.events().publish(
-            (symbol_short!("INIT"), symbol_short!("RBAC")),
-            &admin,
-        );
+        env.events()
+            .publish((symbol_short!("INIT"), symbol_short!("RBAC")), &admin);
     }
 
     /// Assign a role to an address (admin only)
@@ -57,11 +53,7 @@ impl RBAC {
     ///
     /// # Panics
     /// Panics if caller is not admin or contract not initialized
-    pub fn assign_role(
-        env: Env,
-        address: Address,
-        role: Role,
-    ) -> bool {
+    pub fn assign_role(env: Env, address: Address, role: Role) -> bool {
         if !Storage::is_initialized(&env) {
             panic!("Contract not initialized");
         }
@@ -108,11 +100,7 @@ impl RBAC {
     ///
     /// # Panics
     /// Panics if caller is not admin or contract not initialized
-    pub fn remove_role(
-        env: Env,
-        address: Address,
-        role: Role,
-    ) -> bool {
+    pub fn remove_role(env: Env, address: Address, role: Role) -> bool {
         if !Storage::is_initialized(&env) {
             panic!("Contract not initialized");
         }
@@ -332,10 +320,8 @@ impl RBAC {
 
         Storage::set_config(&env, &config);
 
-        env.events().publish(
-            (symbol_short!("CONFIG"), symbol_short!("UPDATE")),
-            config,
-        );
+        env.events()
+            .publish((symbol_short!("CONFIG"), symbol_short!("UPDATE")), config);
     }
 
     /// Get current RBAC configuration

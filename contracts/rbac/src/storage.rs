@@ -1,5 +1,5 @@
+use crate::types::{AddressRoles, DataKey, RBACConfig, Role, RoleAssignment};
 use soroban_sdk::{Address, Env, Vec};
-use crate::types::{Role, DataKey, RoleAssignment, AddressRoles, RBACConfig};
 
 /// Storage operations for RBAC contract
 pub struct Storage;
@@ -35,7 +35,7 @@ impl Storage {
     /// Add a role to an address
     pub fn add_role(env: &Env, address: &Address, role: Role) -> bool {
         let mut roles = Self::get_address_roles(env, address);
-        
+
         // Check if role already exists
         if roles.iter().any(|r| r == role) {
             return false;
@@ -63,7 +63,7 @@ impl Storage {
             .get(&DataKey::RoleMembers(role as u32))
             .unwrap_or_else(|| Vec::new(env));
 
-        if !members.iter().any(|a| a == address) {
+        if !members.iter().any(|a| a == *address) {
             members.push_back(address.clone());
             env.storage()
                 .persistent()
@@ -76,10 +76,10 @@ impl Storage {
     /// Remove a role from an address
     pub fn remove_role(env: &Env, address: &Address, role: Role) -> bool {
         let mut roles = Self::get_address_roles(env, address);
-        
+
         // Find and remove the role
         let mut index_to_remove: Option<u32> = None;
-        for (i, &r) in roles.iter().enumerate() {
+        for (i, r) in roles.iter().enumerate() {
             if r == role {
                 index_to_remove = Some(i as u32);
                 break;
@@ -88,13 +88,13 @@ impl Storage {
 
         if let Some(index) = index_to_remove {
             // Create new vec without the removed role
-            let mut new_roles: Vec<Role> = Vec::with_capacity(env, (roles.len() - 1) as usize);
+            let mut new_roles: Vec<Role> = Vec::new(env);
             for (i, r) in roles.iter().enumerate() {
                 if i as u32 != index {
                     new_roles.push_back(r);
                 }
             }
-            
+
             env.storage()
                 .persistent()
                 .set(&DataKey::AddressRoles(address.clone()), &new_roles);
@@ -108,14 +108,14 @@ impl Storage {
 
             let mut member_index_to_remove: Option<u32> = None;
             for (i, m) in members.iter().enumerate() {
-                if m == address {
+                if m == *address {
                     member_index_to_remove = Some(i as u32);
                     break;
                 }
             }
 
             if let Some(idx) = member_index_to_remove {
-                let mut new_members: Vec<Address> = Vec::with_capacity(env, (members.len() - 1) as usize);
+                let mut new_members: Vec<Address> = Vec::new(env);
                 for (i, m) in members.iter().enumerate() {
                     if i as u32 != idx {
                         new_members.push_back(m);
@@ -155,9 +155,7 @@ impl Storage {
 
     /// Get a role assignment record
     pub fn get_assignment(env: &Env, id: u64) -> Option<RoleAssignment> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Assignment(id))
+        env.storage().persistent().get(&DataKey::Assignment(id))
     }
 
     /// Get admin address
