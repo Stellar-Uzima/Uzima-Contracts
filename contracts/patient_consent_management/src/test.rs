@@ -1,8 +1,8 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{PatientConsentManagement, PatientConsentManagementClient, Error};
-    use soroban_sdk::{Env, Address};
+    use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
+    use soroban_sdk::{Address, Env};
 
     fn setup() -> (Env, PatientConsentManagementClient, Address) {
         let env = Env::default();
