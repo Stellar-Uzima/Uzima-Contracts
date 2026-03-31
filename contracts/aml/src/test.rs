@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
+use crate::types::RiskLevel;
 use soroban_sdk::testutils::{Address as _, Ledger};
-use crate::types::{RiskLevel};
 
 #[test]
 fn test_aml_lifecycle() {
@@ -23,7 +23,7 @@ fn test_aml_lifecycle() {
         &String::from_str(&env, "Velocity Check"),
         &String::from_str(&env, "High single transaction volume"),
         &100000000i128, // 10000 XLM threshold
-        &1000u32, // 1000 bps risk (10%)
+        &1000u32,       // 1000 bps risk (10%)
     );
 
     // 3. Monitor Transaction (Under threshold)

@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, BytesN};
 use crate::types::{AuditRecord, DataKey};
+use soroban_sdk::{Address, BytesN, Env};
 
 pub struct ImmutableStorage;
 
@@ -9,7 +9,9 @@ impl ImmutableStorage {
         if env.storage().persistent().has(&DataKey::Record(id)) {
             panic!("Record already exists and cannot be modified.");
         }
-        env.storage().persistent().set(&DataKey::Record(id), &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Record(id), &record);
     }
 
     /// Retrieves an immutable record by its unique ID.

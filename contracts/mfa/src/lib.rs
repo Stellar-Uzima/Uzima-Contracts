@@ -1,19 +1,19 @@
 #![no_std]
 
-pub mod types;
-pub mod interfaces;
-pub mod libraries;
 pub mod factors;
-pub mod verification;
 pub mod recovery;
+pub mod types;
+pub mod verification;
 
 #[cfg(test)]
 mod test;
 
+use crate::types::{
+    AuthFactor, AuthSession, AuthStatus, DataKey, FactorType, MFAConfig, RecoveryVault,
+};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
-use crate::types::{FactorType, AuthStatus, AuthFactor, AuthSession, RecoveryVault, DataKey, MFAConfig};
 
 #[contract]
 pub struct MultiFactorAuth;
@@ -26,7 +26,9 @@ impl MultiFactorAuth {
             panic!("Already initialized");
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::GlobalConfig, &config);
+        env.storage()
+            .instance()
+            .set(&DataKey::GlobalConfig, &config);
         env.storage().instance().set(&DataKey::NextFactorId, &0u64);
         env.storage().instance().set(&DataKey::NextSessionId, &0u64);
         env.storage().instance().set(&DataKey::AuditLogCount, &0u64);
@@ -53,13 +55,16 @@ impl MultiFactorAuth {
             is_active: true,
         };
 
-        let mut user_factors: Vec<AuthFactor> = env.storage()
+        let mut user_factors: Vec<AuthFactor> = env
+            .storage()
             .persistent()
             .get(&DataKey::UserFactors(user.clone()))
             .unwrap_or(Vec::new(&env));
-        
+
         user_factors.push_back(auth_factor);
-        env.storage().persistent().set(&DataKey::UserFactors(user), &user_factors);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserFactors(user), &user_factors);
 
         Self::log_auth_event(&env, factor_id, symbol_short!("FACTOR_A"));
         factor_id
@@ -69,7 +74,8 @@ impl MultiFactorAuth {
     pub fn start_session(env: Env, user: Address, required: Vec<FactorType>) -> u64 {
         user.require_auth();
 
-        let cfg: MFAConfig = env.storage()
+        let cfg: MFAConfig = env
+            .storage()
             .instance()
             .get(&DataKey::GlobalConfig)
             .expect("Not configured");
@@ -84,29 +90,29 @@ impl MultiFactorAuth {
             status: AuthStatus::Pending,
         };
 
-        env.storage().persistent().set(&DataKey::UserSession(user), &session);
-        
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserSession(user), &session);
+
         Self::log_auth_event(&env, session_id, symbol_short!("SES_START"));
         session_id
     }
 
     /// Verify a specific factor for an existing session
-    pub fn verify_mfa_factor(
-        env: Env,
-        user: Address,
-        factor: FactorType,
-        proof: Bytes,
-    ) -> bool {
+    pub fn verify_mfa_factor(env: Env, user: Address, factor: FactorType, proof: Bytes) -> bool {
         user.require_auth();
 
-        let mut session: AuthSession = env.storage()
+        let mut session: AuthSession = env
+            .storage()
             .persistent()
             .get(&DataKey::UserSession(user.clone()))
             .expect("Session not found");
 
         if env.ledger().timestamp() > session.expires_at {
             session.status = AuthStatus::Expired;
-            env.storage().persistent().set(&DataKey::UserSession(user), &session);
+            env.storage()
+                .persistent()
+                .set(&DataKey::UserSession(user), &session);
             return false;
         }
 
@@ -118,22 +124,26 @@ impl MultiFactorAuth {
                 break;
             }
         }
-        if !found { return false; }
+        if !found {
+            return false;
+        }
 
         // Perform verification (simplification: we accept any non-empty bytes proof for now)
         // In reality, we'd check against provider address or metadata hash.
         if !proof.is_empty() {
             session.verified_factors.push_back(factor);
-            
+
             // Check if all required factors are verified
             if session.verified_factors.len() >= session.required_factors.len() {
                 session.status = AuthStatus::Verified;
             } else {
                 session.status = AuthStatus::Partial;
             }
-            
-            env.storage().persistent().set(&DataKey::UserSession(user), &session);
-            
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::UserSession(user), &session);
+
             Self::log_auth_event(&env, session.session_id, symbol_short!("F_VERIFY"));
             return true;
         }
@@ -143,10 +153,9 @@ impl MultiFactorAuth {
 
     /// Check if the user has a valid verified MFA session
     pub fn is_authenticated(env: Env, user: Address) -> bool {
-        let session: Option<AuthSession> = env.storage()
-            .persistent()
-            .get(&DataKey::UserSession(user));
-        
+        let session: Option<AuthSession> =
+            env.storage().persistent().get(&DataKey::UserSession(user));
+
         match session {
             Some(s) => s.status == AuthStatus::Verified && env.ledger().timestamp() <= s.expires_at,
             None => false,
@@ -157,7 +166,8 @@ impl MultiFactorAuth {
     pub fn initiate_recovery(env: Env, user: Address, secret_hash: BytesN<32>) {
         user.require_auth();
 
-        let cfg: MFAConfig = env.storage()
+        let cfg: MFAConfig = env
+            .storage()
             .instance()
             .get(&DataKey::GlobalConfig)
             .expect("Not configured");
@@ -169,7 +179,9 @@ impl MultiFactorAuth {
             unlock_at: env.ledger().timestamp().saturating_add(cfg.recovery_delay),
         };
 
-        env.storage().persistent().set(&DataKey::Recovery(user), &recovery);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Recovery(user), &recovery);
         Self::log_auth_event(&env, 0, symbol_short!("RECOVERY_I"));
     }
 
@@ -178,21 +190,28 @@ impl MultiFactorAuth {
         admin.require_auth();
         Self::require_admin(&env, &admin);
 
-        let mut session: AuthSession = env.storage()
+        let mut session: AuthSession = env
+            .storage()
             .persistent()
             .get(&DataKey::UserSession(target_user.clone()))
             .expect("No session to override");
-        
+
         session.status = AuthStatus::Verified;
-        env.storage().persistent().set(&DataKey::UserSession(target_user), &session);
-        
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserSession(target_user), &session);
+
         Self::log_auth_event(&env, session.session_id, symbol_short!("OVERRIDE"));
         true
     }
 
     /// Private helpers
     fn require_admin(env: &Env, actor: &Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Not initialized");
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
         if admin != *actor {
             panic!("Unauthorized");
         }

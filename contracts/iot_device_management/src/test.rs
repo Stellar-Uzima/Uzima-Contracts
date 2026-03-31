@@ -1,10 +1,8 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{vec, Address, BytesN, Env, String};
+use soroban_sdk::{Address, BytesN, Env, String};
 
-fn setup(env: &Env) -> (IoTDeviceManagementClient, Address) {
+fn setup(env: &Env) -> (IoTDeviceManagementClient<'_>, Address) {
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, IoTDeviceManagement);
     let client = IoTDeviceManagementClient::new(env, &contract_id);
@@ -67,7 +65,7 @@ fn test_set_role() {
 
 fn register_manufacturer(
     env: &Env,
-    client: &IoTDeviceManagementClient,
+    client: &IoTDeviceManagementClient<'_>,
     admin: &Address,
     id_byte: u8,
 ) -> BytesN<32> {
@@ -85,7 +83,7 @@ fn test_register_manufacturer() {
     client.initialize(&admin);
     let mfr_id = register_manufacturer(&env, &client, &admin, 1);
     let mfr = client.get_manufacturer(&mfr_id);
-    assert_eq!(mfr.is_active, true);
+    assert!(mfr.is_active);
     assert_eq!(mfr.device_count, 0);
 }
 
@@ -109,12 +107,12 @@ fn test_deactivate_manufacturer() {
     let mfr_id = register_manufacturer(&env, &client, &admin, 1);
     client.deactivate_manufacturer(&admin, &mfr_id);
     let mfr = client.get_manufacturer(&mfr_id);
-    assert_eq!(mfr.is_active, false);
+    assert!(!mfr.is_active);
 }
 
 fn register_device(
     env: &Env,
-    client: &IoTDeviceManagementClient,
+    client: &IoTDeviceManagementClient<'_>,
     operator: &Address,
     mfr_id: &BytesN<32>,
     device_byte: u8,

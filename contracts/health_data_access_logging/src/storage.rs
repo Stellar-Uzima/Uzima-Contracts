@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, BytesN, Env, Map, String, Vec};
 use crate::types::{AccessLogEntry, DataKey};
+use soroban_sdk::{Address, BytesN, Env, Map, String, Vec};
 
 /// Storage operations for health data access logging
 pub struct Storage;
@@ -27,9 +27,7 @@ impl Storage {
 
     /// Get an access log entry by ID
     pub fn get_access_log(env: &Env, log_id: u64) -> Option<AccessLogEntry> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::AccessLog(log_id))
+        env.storage().persistent().get(&DataKey::AccessLog(log_id))
     }
 
     /// Add log ID to patient's access logs index
@@ -93,9 +91,10 @@ impl Storage {
                 .persistent()
                 .get(&DataKey::UniqueAccessorsCount(patient_id.clone()))
                 .unwrap_or(0);
-            env.storage()
-                .persistent()
-                .set(&DataKey::UniqueAccessorsCount(patient_id.clone()), &(count + 1));
+            env.storage().persistent().set(
+                &DataKey::UniqueAccessorsCount(patient_id.clone()),
+                &(count + 1),
+            );
         }
     }
 

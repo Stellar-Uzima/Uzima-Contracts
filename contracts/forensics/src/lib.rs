@@ -1,19 +1,21 @@
 #![no_std]
 
-pub mod types;
-pub mod interfaces;
-pub mod libraries;
 pub mod analysis;
 pub mod detection;
 pub mod evidence;
+pub mod interfaces;
+pub mod libraries;
+pub mod types;
 
 #[cfg(test)]
 mod test;
 
+use crate::types::{
+    ActivityType, DataKey, ForensicEvidence, InvestigationReport, PatternAnalysis, ThreatLevel,
+};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
-use crate::types::{ActivityType, ForensicEvidence, ThreatLevel, PatternAnalysis, InvestigationReport, DataKey};
 
 #[contract]
 pub struct OnChainForensics;
@@ -63,7 +65,12 @@ impl OnChainForensics {
         // Emit events for off-chain indexing
         env.events().publish(
             (symbol_short!("FORENSIC"), symbol_short!("COLLECT")),
-            (evidence_id, evidence.actor, evidence.activity_type, evidence.threat_level),
+            (
+                evidence_id,
+                evidence.actor,
+                evidence.activity_type,
+                evidence.threat_level,
+            ),
         );
 
         evidence_id
@@ -86,7 +93,7 @@ impl OnChainForensics {
     pub fn detect_suspicious(env: Env, actor: Address, threshold: u32) -> bool {
         let pattern_id = String::from_str(&env, "suspicious_volume");
         let analysis = Self::analyze_pattern(env.clone(), pattern_id);
-        
+
         // High risk score or too many occurrences trigger detection
         analysis.risk_score >= threshold || analysis.occurrences > 100
     }
@@ -126,20 +133,16 @@ impl OnChainForensics {
     }
 
     /// Update an investigation status
-    pub fn update_investigation(
-        env: Env,
-        admin: Address,
-        report_id: u64,
-        status: String,
-    ) -> bool {
+    pub fn update_investigation(env: Env, admin: Address, report_id: u64, status: String) -> bool {
         admin.require_auth();
         Self::require_admin(&env, &admin);
 
-        let mut report: InvestigationReport = env.storage()
+        let mut report: InvestigationReport = env
+            .storage()
             .persistent()
             .get(&DataKey::Report(report_id))
             .expect("Report not found");
-        
+
         report.status = status;
         env.storage()
             .persistent()
@@ -164,9 +167,15 @@ impl OnChainForensics {
     }
 
     /// Internal helper to update pattern analysis
-    fn update_patterns_internal(env: &Env, actor: Address, activity: ActivityType, threat: ThreatLevel) {
+    fn update_patterns_internal(
+        env: &Env,
+        actor: Address,
+        activity: ActivityType,
+        threat: ThreatLevel,
+    ) {
         let key = String::from_str(env, "general_monitoring");
-        let mut pattern: PatternAnalysis = env.storage()
+        let mut pattern: PatternAnalysis = env
+            .storage()
             .persistent()
             .get(&DataKey::Pattern(key.clone()))
             .unwrap_or(PatternAnalysis {
@@ -178,7 +187,7 @@ impl OnChainForensics {
 
         pattern.occurrences = pattern.occurrences.saturating_add(1);
         pattern.last_seen = env.ledger().timestamp();
-        
+
         // Dynamic risk scoring logic
         let mut added_risk = match threat {
             ThreatLevel::None => 0,
@@ -194,12 +203,18 @@ impl OnChainForensics {
 
         pattern.risk_score = pattern.risk_score.saturating_add(added_risk).min(10000);
 
-        env.storage().persistent().set(&DataKey::Pattern(key), &pattern);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Pattern(key), &pattern);
     }
 
     /// Private helper to get the administrator
     fn require_admin(env: &Env, actor: &Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Not initialized");
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
         if admin != *actor {
             panic!("Unauthorized: Admin access required");
         }

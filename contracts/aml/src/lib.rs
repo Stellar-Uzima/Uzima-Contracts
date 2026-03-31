@@ -1,19 +1,17 @@
 #![no_std]
 
-pub mod types;
-pub mod interfaces;
-pub mod libraries;
-pub mod monitoring;
 pub mod detection;
 pub mod enforcement;
+pub mod monitoring;
+pub mod types;
 
 #[cfg(test)]
 mod test;
 
+use crate::types::{AMLReport, AMLRule, DataKey, GlobalAMLStats, RiskLevel, RiskProfile};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
 };
-use crate::types::{RiskLevel, RiskProfile, AMLRule, AMLReport, DataKey, GlobalAMLStats};
 
 #[contract]
 pub struct AntiMoneyLaundering;
@@ -27,11 +25,14 @@ impl AntiMoneyLaundering {
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextReportId, &0u64);
-        env.storage().instance().set(&DataKey::GlobalStats, &GlobalAMLStats {
-            total_monitored: 0,
-            active_violations: 0,
-            blacklisted_count: 0,
-        });
+        env.storage().instance().set(
+            &DataKey::GlobalStats,
+            &GlobalAMLStats {
+                total_monitored: 0,
+                active_violations: 0,
+                blacklisted_count: 0,
+            },
+        );
     }
 
     /// Configure an AML rule
@@ -67,27 +68,36 @@ impl AntiMoneyLaundering {
     ) -> RiskLevel {
         // Only monitored calls allowed (or system calls)
         // For simplicity, we assume internal platform calls trigger this
-        
+
         let mut profile = Self::get_or_create_profile(&env, &user);
-        
+
         // Example monitoring logic: velocity check (simplified)
         // If amount > threshold of any active rule, increase risk
         // Let's check rule #1 for demo
-        if let Some(rule1) = env.storage().instance().get::<DataKey, AMLRule>(&DataKey::Rule(1)) {
+        if let Some(rule1) = env
+            .storage()
+            .instance()
+            .get::<DataKey, AMLRule>(&DataKey::Rule(1))
+        {
             if rule1.is_enabled && amount >= rule1.threshold {
-                profile.risk_score = profile.risk_score.saturating_add(rule1.risk_contribution).min(10000);
+                profile.risk_score = profile
+                    .risk_score
+                    .saturating_add(rule1.risk_contribution)
+                    .min(10000);
                 profile.violation_count += 1;
             }
         }
 
         profile.last_checked = env.ledger().timestamp();
         profile.last_risk_level = Self::compute_risk_level(profile.risk_score);
-        
+
         if profile.risk_score >= 9000 {
             profile.is_blacklisted = true;
         }
 
-        env.storage().persistent().set(&DataKey::UserRisk(user), &profile);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserRisk(user), &profile);
         profile.last_risk_level
     }
 
@@ -111,9 +121,11 @@ impl AntiMoneyLaundering {
             profile.risk_score = 0;
             profile.last_risk_level = RiskLevel::Safe;
         }
-        
-        env.storage().persistent().set(&DataKey::UserRisk(user.clone()), &profile);
-        
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserRisk(user.clone()), &profile);
+
         env.events().publish(
             (symbol_short!("AML"), symbol_short!("STATUS")),
             (user, is_blacklisted),
@@ -144,35 +156,53 @@ impl AntiMoneyLaundering {
             evidence_ref: evidence,
         };
 
-        env.storage().persistent().set(&DataKey::Report(report_id), &report);
-        
-        env.events().publish((symbol_short!("AML"), symbol_short!("REPORT")), report_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Report(report_id), &report);
+
+        env.events()
+            .publish((symbol_short!("AML"), symbol_short!("REPORT")), report_id);
         report_id
     }
 
     /// Helper to retrieve profile or create default
     fn get_or_create_profile(env: &Env, user: &Address) -> RiskProfile {
-        env.storage().persistent().get(&DataKey::UserRisk(user.clone())).unwrap_or(RiskProfile {
-            user: user.clone(),
-            risk_score: 0,
-            last_checked: 0,
-            last_risk_level: RiskLevel::Safe,
-            violation_count: 0,
-            is_blacklisted: false,
-        })
+        env.storage()
+            .persistent()
+            .get(&DataKey::UserRisk(user.clone()))
+            .unwrap_or(RiskProfile {
+                user: user.clone(),
+                risk_score: 0,
+                last_checked: 0,
+                last_risk_level: RiskLevel::Safe,
+                violation_count: 0,
+                is_blacklisted: false,
+            })
     }
 
     fn compute_risk_level(score: u32) -> RiskLevel {
-        if score >= 9000 { RiskLevel::Sanctioned }
-        else if score >= 7000 { RiskLevel::High }
-        else if score >= 4000 { RiskLevel::Elevated }
-        else if score >= 1000 { RiskLevel::Low }
-        else { RiskLevel::Safe }
+        if score >= 9000 {
+            RiskLevel::Sanctioned
+        } else if score >= 7000 {
+            RiskLevel::High
+        } else if score >= 4000 {
+            RiskLevel::Elevated
+        } else if score >= 1000 {
+            RiskLevel::Low
+        } else {
+            RiskLevel::Safe
+        }
     }
 
     fn require_admin(env: &Env, actor: &Address) {
-        let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Not initialized");
-        if admin != *actor { panic!("Unauthorized"); }
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Not initialized");
+        if admin != *actor {
+            panic!("Unauthorized");
+        }
     }
 
     fn next_id(env: &Env, key: &DataKey) -> u64 {

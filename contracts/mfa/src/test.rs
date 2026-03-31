@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
+use crate::types::{AuthStatus, FactorType, MFAConfig};
 use soroban_sdk::testutils::{Address as _, Ledger};
-use crate::types::{FactorType, AuthStatus, MFAConfig};
 
 #[test]
 fn test_mfa_lifecycle() {
@@ -24,8 +24,18 @@ fn test_mfa_lifecycle() {
 
     // 2. Add Factors
     let user = Address::generate(&env);
-    let _f1 = client.add_factor(&user, &FactorType::Password, &None, &String::from_str(&env, "Main Pass"));
-    let _f2 = client.add_factor(&user, &FactorType::HardwareKey, &None, &String::from_str(&env, "YubiKey"));
+    let _f1 = client.add_factor(
+        &user,
+        &FactorType::Password,
+        &None,
+        &String::from_str(&env, "Main Pass"),
+    );
+    let _f2 = client.add_factor(
+        &user,
+        &FactorType::HardwareKey,
+        &None,
+        &String::from_str(&env, "YubiKey"),
+    );
 
     // 3. Start Session
     let mut req = Vec::new(&env);
@@ -34,8 +44,16 @@ fn test_mfa_lifecycle() {
     client.start_session(&user, &req);
 
     // 4. Verify Factors
-    client.verify_mfa_factor(&user, &FactorType::Password, &Bytes::from_slice(&env, b"1234"));
-    client.verify_mfa_factor(&user, &FactorType::HardwareKey, &Bytes::from_slice(&env, b"sig"));
+    client.verify_mfa_factor(
+        &user,
+        &FactorType::Password,
+        &Bytes::from_slice(&env, b"1234"),
+    );
+    client.verify_mfa_factor(
+        &user,
+        &FactorType::HardwareKey,
+        &Bytes::from_slice(&env, b"sig"),
+    );
 
     // 5. Authenticate
     assert!(client.is_authenticated(&user));

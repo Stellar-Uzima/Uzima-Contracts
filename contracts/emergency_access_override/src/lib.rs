@@ -9,9 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Vec};
 
 // ==================== Data Types ====================
 
@@ -32,7 +30,7 @@ pub enum DataKey {
     Initialized,
     Admin,
     ApprovalThreshold,
-    TrustedApprover(Address), // approver -> bool (exists)
+    TrustedApprover(Address),          // approver -> bool (exists)
     EmergencyAccess(Address, Address), // (patient, provider)
 }
 
@@ -59,7 +57,9 @@ impl EmergencyAccessOverride {
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().instance().set(&DataKey::ApprovalThreshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::ApprovalThreshold, &threshold);
 
         for approver in approvers.iter() {
             env.storage()
@@ -97,19 +97,19 @@ impl EmergencyAccessOverride {
         let now = env.ledger().timestamp();
 
         let key = DataKey::EmergencyAccess(patient.clone(), provider.clone());
-        let mut record: EmergencyAccessRecord = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(EmergencyAccessRecord {
-                patient: patient.clone(),
-                provider: provider.clone(),
-                requested_duration: duration_seconds,
-                granted_at: 0,
-                expiry_at: 0,
-                approved: false,
-                approvers: Vec::new(&env),
-            });
+        let mut record: EmergencyAccessRecord =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(EmergencyAccessRecord {
+                    patient: patient.clone(),
+                    provider: provider.clone(),
+                    requested_duration: duration_seconds,
+                    granted_at: 0,
+                    expiry_at: 0,
+                    approved: false,
+                    approvers: Vec::new(&env),
+                });
 
         if record.approved && now < record.expiry_at {
             // Already granted and still valid
@@ -128,7 +128,11 @@ impl EmergencyAccessOverride {
         record.approvers.push_back(approver.clone());
 
         // Determine if approval threshold reached
-        let threshold: u32 = env.storage().instance().get(&DataKey::ApprovalThreshold).unwrap();
+        let threshold: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ApprovalThreshold)
+            .unwrap();
         let current = record.approvers.len();
 
         if current as u32 >= threshold {
@@ -136,7 +140,13 @@ impl EmergencyAccessOverride {
             record.granted_at = now;
             record.expiry_at = now.saturating_add(duration_seconds);
             env.storage().persistent().set(&key, &record);
-            events::publish_emergency_access_granted(&env, &patient, &provider, record.expiry_at, now);
+            events::publish_emergency_access_granted(
+                &env,
+                &patient,
+                &provider,
+                record.expiry_at,
+                now,
+            );
             return Ok(true);
         }
 
@@ -155,7 +165,11 @@ impl EmergencyAccessOverride {
         let now = env.ledger().timestamp();
         let key = DataKey::EmergencyAccess(patient.clone(), provider.clone());
 
-        if let Some(record) = env.storage().persistent().get::<_, EmergencyAccessRecord>(&key) {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, EmergencyAccessRecord>(&key)
+        {
             if record.approved && record.expiry_at > now {
                 events::publish_emergency_access_checked(&env, &patient, &provider, true, now);
                 return Ok(true);
@@ -194,7 +208,12 @@ impl EmergencyAccessOverride {
 
         env.storage().persistent().set(&key, &record);
 
-        events::publish_emergency_access_revoked(&env, &patient, &provider, env.ledger().timestamp());
+        events::publish_emergency_access_revoked(
+            &env,
+            &patient,
+            &provider,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 

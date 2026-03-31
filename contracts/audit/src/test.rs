@@ -1,8 +1,8 @@
 #![cfg(test)]
 
 use super::*;
+use crate::types::{AuditConfig, AuditType};
 use soroban_sdk::testutils::{Address as _, Ledger};
-use crate::types::{AuditType, AuditConfig};
 
 #[test]
 fn test_audit_lifecycle() {

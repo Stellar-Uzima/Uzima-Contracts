@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, Vec};
-use crate::types::{RiskProfile, DataKey};
+use crate::types::{DataKey, RiskProfile};
+use soroban_sdk::{Address, Env, Vec};
 
 pub struct PatternDetector;
 

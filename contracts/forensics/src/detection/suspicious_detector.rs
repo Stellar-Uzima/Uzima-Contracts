@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, String};
-use crate::types::{ThreatLevel, DataKey};
+use crate::types::{DataKey, ThreatLevel};
+use soroban_sdk::{Address, Env, String};
 
 pub struct SuspiciousDetector;
 
@@ -7,7 +7,10 @@ impl SuspiciousDetector {
     /// Detects activity that deviates from baseline behavior
     /// High accuracy simulated by scoring multiple factors.
     pub fn assess_threat_level(env: &Env, actor: &Address, current_score: u32) -> ThreatLevel {
-        let is_blacklisted: bool = env.storage().instance().has(&DataKey::Blacklist(actor.clone()));
+        let is_blacklisted: bool = env
+            .storage()
+            .instance()
+            .has(&DataKey::Blacklist(actor.clone()));
         if is_blacklisted {
             return ThreatLevel::Critical;
         }
@@ -26,6 +29,8 @@ impl SuspiciousDetector {
     /// Checks if activity is within authorized guardrails
     pub fn validate_activity_scope(env: &Env, caller: &Address) -> bool {
         // Contract-specific scope validation
-        !env.storage().instance().has(&DataKey::Blacklist(caller.clone()))
+        !env.storage()
+            .instance()
+            .has(&DataKey::Blacklist(caller.clone()))
     }
 }

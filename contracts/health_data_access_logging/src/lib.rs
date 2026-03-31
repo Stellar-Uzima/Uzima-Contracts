@@ -1,18 +1,16 @@
 #![no_std]
 
-pub mod types;
-pub mod storage;
 pub mod queries;
+pub mod storage;
+pub mod types;
 
 #[cfg(test)]
 mod test;
 
-use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Env, Map, String, Symbol, Vec,
-};
-use types::{AccessLogEntry, LoggingConfig, DataKey};
-use storage::Storage;
 use queries::Queries;
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Map, String, Symbol, Vec};
+use storage::Storage;
+use types::{AccessLogEntry, DataKey, LoggingConfig};
 
 #[contract]
 pub struct HealthDataAccessLogging;
@@ -20,7 +18,7 @@ pub struct HealthDataAccessLogging;
 #[contractimpl]
 impl HealthDataAccessLogging {
     /// Initialize the health data access logging contract
-    /// 
+    ///
     /// # Arguments
     /// * `env` - The contract environment
     /// * `admin` - The admin address (usually the contract deployer)
@@ -39,10 +37,8 @@ impl HealthDataAccessLogging {
         Storage::set_config(&env, &config);
         Storage::set_initialized(&env);
 
-        env.events().publish(
-            (symbol_short!("INIT"), symbol_short!("HDL")),
-            &admin,
-        );
+        env.events()
+            .publish((symbol_short!("INIT"), symbol_short!("HDL")), &admin);
     }
 
     /// Log an access to patient health data
@@ -229,10 +225,7 @@ impl HealthDataAccessLogging {
     ///
     /// # Returns
     /// AccessLogSummary with statistics and integrity hash
-    pub fn get_access_log_summary(
-        env: Env,
-        patient_id: Address,
-    ) -> types::AccessLogSummary {
+    pub fn get_access_log_summary(env: Env, patient_id: Address) -> types::AccessLogSummary {
         if !Storage::is_initialized(&env) {
             panic!("Contract not initialized");
         }
@@ -311,10 +304,8 @@ impl HealthDataAccessLogging {
 
         Storage::set_config(&env, &config);
 
-        env.events().publish(
-            (symbol_short!("CONFIG"), symbol_short!("UPDATE")),
-            config,
-        );
+        env.events()
+            .publish((symbol_short!("CONFIG"), symbol_short!("UPDATE")), config);
     }
 
     /// Get the current logging configuration

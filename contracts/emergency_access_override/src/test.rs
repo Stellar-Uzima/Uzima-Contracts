@@ -2,22 +2,35 @@
 mod tests {
     use super::*;
     use crate::{EmergencyAccessOverride, EmergencyAccessOverrideClient, Error};
-    use soroban_sdk::{Env, Address, Vec};
+    use soroban_sdk::{Address, Env, Vec};
 
-    fn setup() -> (Env, EmergencyAccessOverrideClient, Address, Address, Address, Address, Address) {
+    fn setup() -> (
+        Env,
+        EmergencyAccessOverrideClient,
+        Address,
+        Address,
+        Address,
+        Address,
+        Address,
+    ) {
         let env = Env::default();
         let admin = Address::random(&env);
         let approver1 = Address::random(&env);
         let approver2 = Address::random(&env);
         let approver3 = Address::random(&env);
-        let client = EmergencyAccessOverrideClient::new(&env, &env.register_contract(None, EmergencyAccessOverride));
+        let client = EmergencyAccessOverrideClient::new(
+            &env,
+            &env.register_contract(None, EmergencyAccessOverride),
+        );
 
         let approvers = Vec::new(&env);
         let approvers = approvers.push_back(approver1.clone());
         let approvers = approvers.push_back(approver2.clone());
         let approvers = approvers.push_back(approver3.clone());
 
-        (env, client, admin, approver1, approver2, approver3, approvers)
+        (
+            env, client, admin, approver1, approver2, approver3, approvers,
+        )
     }
 
     #[test]
@@ -85,15 +98,21 @@ mod tests {
         let patient = Address::random(&env);
         let provider = Address::random(&env);
 
-        client.grant_emergency_access(&approver1, &patient, &provider, &1).unwrap();
-        client.grant_emergency_access(&approver2, &patient, &provider, &1).unwrap();
+        client
+            .grant_emergency_access(&approver1, &patient, &provider, &1)
+            .unwrap();
+        client
+            .grant_emergency_access(&approver2, &patient, &provider, &1)
+            .unwrap();
 
         // Immediately valid
         assert!(client.check_emergency_access(&patient, &provider).unwrap());
 
         // simulate time passing, no direct API to fast-forward in this environment
         // We'll assume expiry behavior is correct based on stored expiry value.
-        let record = client.get_emergency_access_record(&patient, &provider).unwrap();
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
         assert!(record.expiry_at > record.granted_at);
     }
 
@@ -105,13 +124,19 @@ mod tests {
         let patient = Address::random(&env);
         let provider = Address::random(&env);
 
-        client.grant_emergency_access(&approver1, &patient, &provider, &600).unwrap();
-        client.grant_emergency_access(&approver2, &patient, &provider, &600).unwrap();
+        client
+            .grant_emergency_access(&approver1, &patient, &provider, &600)
+            .unwrap();
+        client
+            .grant_emergency_access(&approver2, &patient, &provider, &600)
+            .unwrap();
 
         // Should have access now
         assert!(client.check_emergency_access(&patient, &provider).unwrap());
 
-        client.revoke_emergency_access(&admin, &patient, &provider).unwrap();
+        client
+            .revoke_emergency_access(&admin, &patient, &provider)
+            .unwrap();
 
         assert!(!client.check_emergency_access(&patient, &provider).unwrap());
     }
@@ -137,10 +162,16 @@ mod tests {
         let patient = Address::random(&env);
         let provider = Address::random(&env);
 
-        client.grant_emergency_access(&approver1, &patient, &provider, &600).unwrap();
-        client.grant_emergency_access(&approver2, &patient, &provider, &600).unwrap();
+        client
+            .grant_emergency_access(&approver1, &patient, &provider, &600)
+            .unwrap();
+        client
+            .grant_emergency_access(&approver2, &patient, &provider, &600)
+            .unwrap();
 
-        let record = client.get_emergency_access_record(&patient, &provider).unwrap();
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
         assert!(record.approved);
         assert_eq!(record.patient, patient);
         assert_eq!(record.provider, provider);

@@ -28,7 +28,7 @@ pub struct ForensicEvidence {
     pub actor: Address,
     pub activity_type: ActivityType,
     pub location_hash: BytesN<32>, // Hash of where the event occurred
-    pub evidence_data: Bytes,     // Serialized evidence details
+    pub evidence_data: Bytes,      // Serialized evidence details
     pub threat_level: ThreatLevel,
     pub is_preserved: bool,
 }

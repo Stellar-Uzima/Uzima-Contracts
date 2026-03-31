@@ -2,9 +2,9 @@
 
 mod errors;
 mod events;
-mod nlp_engine;
-mod medical_terms;
 mod icd_cpt_codes;
+mod medical_terms;
+mod nlp_engine;
 mod sentiment;
 
 #[cfg(test)]
@@ -13,10 +13,8 @@ mod test;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 pub use errors::Error;
-pub use events::{EventMetadata, EventType, OperationCategory, NLPProcessingEventData};
-pub use nlp_engine::{
-    ClinicalConcept, ExtractedEntity, Language, NLPConfig, NLPEngine, NLPResult,
-};
+pub use events::{EventMetadata, EventType, NLPProcessingEventData, OperationCategory};
+pub use nlp_engine::{ClinicalConcept, ExtractedEntity, Language, NLPConfig, NLPEngine, NLPResult};
 pub use sentiment::{SentimentLabel, SentimentResult};
 
 #[contract]
@@ -261,10 +259,15 @@ impl ClinicalNLP {
                         patient_id: Some(patient_id.clone()),
                         record_id: Some(record_id.clone()),
                         language: String::from_str(&env, "en"),
-                        entities_count: results.get(results.len() - 1).unwrap().entities.len() as u32,
-                        concepts_count: results.get(results.len() - 1).unwrap().concepts.len() as u32,
+                        entities_count: results.get(results.len() - 1).unwrap().entities.len()
+                            as u32,
+                        concepts_count: results.get(results.len() - 1).unwrap().concepts.len()
+                            as u32,
                         processing_time_ms: 0,
-                        accuracy_score_bps: results.get(results.len() - 1).unwrap().accuracy_score_bps,
+                        accuracy_score_bps: results
+                            .get(results.len() - 1)
+                            .unwrap()
+                            .accuracy_score_bps,
                     };
 
                     events::emit_nlp_processing_event(&env, metadata, event_data);
@@ -288,7 +291,10 @@ impl ClinicalNLP {
             event_type: EventType::BatchProcessingCompleted,
             category: OperationCategory::NLPProcessing,
             timestamp: env.ledger().timestamp(),
-            user_id: Address::from_str(&env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF"),
+            user_id: Address::from_str(
+                &env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            ),
             session_id: None,
             processing_time_ms: Some(total_processing_time_ms),
             block_height: env.ledger().sequence(),

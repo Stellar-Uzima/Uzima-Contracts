@@ -9,9 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Vec};
 
 // ==================== Data Types ====================
 
@@ -36,7 +34,7 @@ pub struct ConsentLog {
 pub enum DataKey {
     Initialized,
     Admin,
-    ConsentStorage(Address), // patient -> ConsentLog
+    ConsentStorage(Address),         // patient -> ConsentLog
     ProviderIndex(Address, Address), // (patient, provider) -> ConsentRecord
 }
 
@@ -64,11 +62,7 @@ impl PatientConsentManagement {
 
     /// Grant consent for a provider to access patient data
     /// Only the patient can grant consent to a provider
-    pub fn grant_consent(
-        env: Env,
-        patient: Address,
-        provider: Address,
-    ) -> Result<(), Error> {
+    pub fn grant_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
 
@@ -81,7 +75,11 @@ impl PatientConsentManagement {
 
         // Check if consent already exists
         let provider_key = DataKey::ProviderIndex(patient.clone(), provider.clone());
-        if let Some(existing) = env.storage().persistent().get::<_, ConsentRecord>(&provider_key) {
+        if let Some(existing) = env
+            .storage()
+            .persistent()
+            .get::<_, ConsentRecord>(&provider_key)
+        {
             if existing.active {
                 return Err(Error::ConsentAlreadyExists);
             }
@@ -126,11 +124,7 @@ impl PatientConsentManagement {
 
     /// Revoke consent for a provider to access patient data
     /// Only the patient who granted the consent can revoke it
-    pub fn revoke_consent(
-        env: Env,
-        patient: Address,
-        provider: Address,
-    ) -> Result<(), Error> {
+    pub fn revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
 
@@ -189,7 +183,11 @@ impl PatientConsentManagement {
         Self::require_initialized(&env)?;
 
         let provider_key = DataKey::ProviderIndex(patient.clone(), provider.clone());
-        let result = match env.storage().persistent().get::<_, ConsentRecord>(&provider_key) {
+        let result = match env
+            .storage()
+            .persistent()
+            .get::<_, ConsentRecord>(&provider_key)
+        {
             Some(consent) => consent.active,
             None => false,
         };
@@ -208,7 +206,11 @@ impl PatientConsentManagement {
 
     /// Get count of active consents for a patient
     pub fn get_active_consent_count(env: Env, patient: Address) -> u32 {
-        match env.storage().persistent().get::<_, ConsentLog>(&DataKey::ConsentStorage(patient)) {
+        match env
+            .storage()
+            .persistent()
+            .get::<_, ConsentLog>(&DataKey::ConsentStorage(patient))
+        {
             Some(log) => {
                 let mut count = 0;
                 for record in log.records.iter() {
@@ -232,7 +234,11 @@ impl PatientConsentManagement {
         Self::require_initialized(&env)?;
 
         let provider_key = DataKey::ProviderIndex(patient, provider);
-        match env.storage().persistent().get::<_, ConsentRecord>(&provider_key) {
+        match env
+            .storage()
+            .persistent()
+            .get::<_, ConsentRecord>(&provider_key)
+        {
             Some(consent) => Ok((consent.active, consent.granted_at, consent.revoked_at)),
             None => Err(Error::ConsentNotFound),
         }
