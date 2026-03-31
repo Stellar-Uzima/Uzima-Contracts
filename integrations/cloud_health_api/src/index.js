@@ -3,6 +3,7 @@ const { GoogleConnector } = require('./connectors/google');
 const { AzureConnector } = require('./connectors/azure');
 const { AwsConnector } = require('./connectors/aws');
 const { FhirTransformer } = require('./transform/fhir');
+const { MedicalChatbot } = require('./chatbot/medical_chatbot');
 
 async function main(){
   // basic in-memory config - replace with environment/config integration in production
@@ -18,6 +19,7 @@ async function main(){
 
   const transformer = new FhirTransformer();
   const orch = new Orchestrator({ google, azure, aws, transformer });
+  const chatbot = new MedicalChatbot();
 
   console.log('Starting Uzima Cloud Health API orchestrator (mock)');
 
@@ -28,6 +30,11 @@ async function main(){
   const sample = { id: 'patient-1', name: 'Jane Doe', dob: '1990-01-01' };
   await orch.crossCloudSync('google', 'azure', sample);
   console.log('Initial cross-cloud sync completed (mock)');
+
+  const chatbotDemo = await chatbot.respond({
+    message: 'I have fever and cough, what should I do?'
+  });
+  console.log('Medical chatbot demo:', chatbotDemo.response);
 }
 
 if (require.main === module){
@@ -37,4 +44,4 @@ if (require.main === module){
   });
 }
 
-module.exports = { main };
+module.exports = { main, MedicalChatbot };

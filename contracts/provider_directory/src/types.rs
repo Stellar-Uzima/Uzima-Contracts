@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String, Symbol, Vec};
+use soroban_sdk::{contracterror, contracttype, Address, Error as SdkError, String, Symbol, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -13,6 +13,14 @@ pub enum Error {
     InvalidAvailability = 7,
     NotVerified = 8,
     ContractPaused = 9,
+}
+
+impl From<SdkError> for Error {
+    fn from(_: SdkError) -> Self {
+        // Map Soroban SDK errors to a generic contract error.
+        // Adjust this mapping if your business logic needs more explicit handling.
+        Error::NotAuthorized
+    }
 }
 
 #[contracttype]
