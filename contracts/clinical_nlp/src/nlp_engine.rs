@@ -181,7 +181,10 @@ impl NLPEngine {
             for syn in term.synonyms.iter() {
                 if Self::contains_substring(text, &syn) {
                     let entity = ExtractedEntity {
-                        entity_type: Self::category_to_string(&self.medical_terms.env, term.category),
+                        entity_type: Self::category_to_string(
+                            &self.medical_terms.env,
+                            term.category,
+                        ),
                         value: syn.clone(),
                         normalized_value: term.normalized_form.clone(),
                         confidence_bps: 8500,
@@ -195,7 +198,10 @@ impl NLPEngine {
             for abbr in term.abbreviations.iter() {
                 if Self::contains_substring(text, &abbr) {
                     let entity = ExtractedEntity {
-                        entity_type: Self::category_to_string(&self.medical_terms.env, term.category),
+                        entity_type: Self::category_to_string(
+                            &self.medical_terms.env,
+                            term.category,
+                        ),
                         value: abbr.clone(),
                         normalized_value: term.normalized_form.clone(),
                         confidence_bps: 8000,
@@ -272,8 +278,16 @@ impl NLPEngine {
         }
 
         let phi_patterns = [
-            "ssn", "social security", "date of birth", "dob", "address",
-            "phone", "email", "medical record", "mrn", "patient id",
+            "ssn",
+            "social security",
+            "date of birth",
+            "dob",
+            "address",
+            "phone",
+            "email",
+            "medical record",
+            "mrn",
+            "patient id",
         ];
 
         for pattern in phi_patterns {
@@ -407,43 +421,61 @@ impl NLPEngine {
     pub fn detect_language(&self, text: &String) -> u32 {
         // Simple language detection based on common words
         let text_lower = Self::to_lowercase(text);
-        
+
         // Spanish indicators
-        let spanish_words = ["el", "la", "los", "las", "un", "una", "es", "son", "está", "están", "paciente", "doctor", "hospital"];
+        let spanish_words = [
+            "el", "la", "los", "las", "un", "una", "es", "son", "está", "están", "paciente",
+            "doctor", "hospital",
+        ];
         for word in spanish_words {
             let word_string = String::from_str(&self.medical_terms.env, word);
             if Self::contains_substring(&text_lower, &word_string) {
                 return 1; // Spanish
             }
         }
-        
+
         // French indicators
-        let french_words = ["le", "la", "les", "un", "une", "est", "sont", "patient", "médecin", "hôpital"];
+        let french_words = [
+            "le", "la", "les", "un", "une", "est", "sont", "patient", "médecin", "hôpital",
+        ];
         for word in french_words {
             let word_string = String::from_str(&self.medical_terms.env, word);
             if Self::contains_substring(&text_lower, &word_string) {
                 return 2; // French
             }
         }
-        
+
         // German indicators
-        let german_words = ["der", "die", "das", "ein", "eine", "ist", "sind", "patient", "arzt", "krankenhaus"];
+        let german_words = [
+            "der",
+            "die",
+            "das",
+            "ein",
+            "eine",
+            "ist",
+            "sind",
+            "patient",
+            "arzt",
+            "krankenhaus",
+        ];
         for word in german_words {
             let word_string = String::from_str(&self.medical_terms.env, word);
             if Self::contains_substring(&text_lower, &word_string) {
                 return 3; // German
             }
         }
-        
+
         // Portuguese indicators
-        let portuguese_words = ["o", "a", "os", "as", "um", "uma", "é", "são", "paciente", "médico", "hospital"];
+        let portuguese_words = [
+            "o", "a", "os", "as", "um", "uma", "é", "são", "paciente", "médico", "hospital",
+        ];
         for word in portuguese_words {
             let word_string = String::from_str(&self.medical_terms.env, word);
             if Self::contains_substring(&text_lower, &word_string) {
                 return 4; // Portuguese
             }
         }
-        
+
         // Default to English
         0
     }

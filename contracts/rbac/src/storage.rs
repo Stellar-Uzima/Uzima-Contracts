@@ -1,5 +1,5 @@
+use crate::types::{AddressRoles, DataKey, RBACConfig, Role, RoleAssignment};
 use soroban_sdk::{Address, Env, Vec};
-use crate::types::{Role, DataKey, RoleAssignment, AddressRoles, RBACConfig};
 
 /// Storage operations for RBAC contract
 pub struct Storage;
@@ -35,7 +35,7 @@ impl Storage {
     /// Add a role to an address
     pub fn add_role(env: &Env, address: &Address, role: Role) -> bool {
         let mut roles = Self::get_address_roles(env, address);
-        
+
         // Check if role already exists
         if roles.iter().any(|r| r == role) {
             return false;
@@ -76,7 +76,7 @@ impl Storage {
     /// Remove a role from an address
     pub fn remove_role(env: &Env, address: &Address, role: Role) -> bool {
         let mut roles = Self::get_address_roles(env, address);
-        
+
         // Find and remove the role
         let mut index_to_remove: Option<u32> = None;
         for (i, &r) in roles.iter().enumerate() {
@@ -94,7 +94,7 @@ impl Storage {
                     new_roles.push_back(r);
                 }
             }
-            
+
             env.storage()
                 .persistent()
                 .set(&DataKey::AddressRoles(address.clone()), &new_roles);
@@ -115,7 +115,8 @@ impl Storage {
             }
 
             if let Some(idx) = member_index_to_remove {
-                let mut new_members: Vec<Address> = Vec::with_capacity(env, (members.len() - 1) as usize);
+                let mut new_members: Vec<Address> =
+                    Vec::with_capacity(env, (members.len() - 1) as usize);
                 for (i, m) in members.iter().enumerate() {
                     if i as u32 != idx {
                         new_members.push_back(m);
@@ -155,9 +156,7 @@ impl Storage {
 
     /// Get a role assignment record
     pub fn get_assignment(env: &Env, id: u64) -> Option<RoleAssignment> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Assignment(id))
+        env.storage().persistent().get(&DataKey::Assignment(id))
     }
 
     /// Get admin address

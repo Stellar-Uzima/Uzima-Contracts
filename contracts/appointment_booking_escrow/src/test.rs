@@ -1,8 +1,10 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppointmentBookingEscrow, AppointmentBookingEscrowClient, Error, AppointmentStatus};
-    use soroban_sdk::{Env, Address};
+    use crate::{
+        AppointmentBookingEscrow, AppointmentBookingEscrowClient, AppointmentStatus, Error,
+    };
+    use soroban_sdk::{Address, Env};
 
     fn setup() -> (Env, AppointmentBookingEscrowClient, Address, Address) {
         let env = Env::default();
@@ -84,8 +86,12 @@ mod tests {
         let provider2 = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appt1 = client.book_appointment(&patient, &provider1, &amount, &token).unwrap();
-        let appt2 = client.book_appointment(&patient, &provider2, &amount, &token).unwrap();
+        let appt1 = client
+            .book_appointment(&patient, &provider1, &amount, &token)
+            .unwrap();
+        let appt2 = client
+            .book_appointment(&patient, &provider2, &amount, &token)
+            .unwrap();
 
         assert_eq!(appt1, 1);
         assert_eq!(appt2, 2);
@@ -100,7 +106,9 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         let result = client.confirm_appointment(&provider, &appointment_id);
         assert!(result.is_ok());
@@ -116,7 +124,9 @@ mod tests {
         let wrong_provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Try to confirm as wrong provider
         let result = client.confirm_appointment(&wrong_provider, &appointment_id);
@@ -132,9 +142,13 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
-        client.confirm_appointment(&provider, &appointment_id).unwrap();
+        client
+            .confirm_appointment(&provider, &appointment_id)
+            .unwrap();
 
         // Try to confirm again
         let result = client.confirm_appointment(&provider, &appointment_id);
@@ -150,7 +164,9 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         let result = client.refund_appointment(&patient, &appointment_id);
         assert!(result.is_ok());
@@ -166,7 +182,9 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Try to refund as wrong patient
         let result = client.refund_appointment(&wrong_patient, &appointment_id);
@@ -182,10 +200,14 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Confirm appointment
-        client.confirm_appointment(&provider, &appointment_id).unwrap();
+        client
+            .confirm_appointment(&provider, &appointment_id)
+            .unwrap();
 
         // Try to refund confirmed appointment
         let result = client.refund_appointment(&patient, &appointment_id);
@@ -201,10 +223,14 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Refund once
-        client.refund_appointment(&patient, &appointment_id).unwrap();
+        client
+            .refund_appointment(&patient, &appointment_id)
+            .unwrap();
 
         // Try to refund again
         let result = client.refund_appointment(&patient, &appointment_id);
@@ -220,10 +246,14 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Confirm appointment (funds_released becomes true)
-        client.confirm_appointment(&provider, &appointment_id).unwrap();
+        client
+            .confirm_appointment(&provider, &appointment_id)
+            .unwrap();
 
         // Try to refund after confirmation (should fail because funds_released is true)
         let result = client.refund_appointment(&patient, &appointment_id);
@@ -239,7 +269,9 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         let result = client.get_appointment(&appointment_id);
         assert!(result.is_some());
@@ -260,13 +292,17 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         let status = client.get_appointment_status(&appointment_id).unwrap();
         assert_eq!(status, AppointmentStatus::Booked);
 
         // Confirm appointment
-        client.confirm_appointment(&provider, &appointment_id).unwrap();
+        client
+            .confirm_appointment(&provider, &appointment_id)
+            .unwrap();
 
         let status = client.get_appointment_status(&appointment_id).unwrap();
         assert_eq!(status, AppointmentStatus::Completed);
@@ -282,8 +318,12 @@ mod tests {
         let provider2 = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appt1 = client.book_appointment(&patient, &provider1, &amount, &token).unwrap();
-        let appt2 = client.book_appointment(&patient, &provider2, &amount, &token).unwrap();
+        let appt1 = client
+            .book_appointment(&patient, &provider1, &amount, &token)
+            .unwrap();
+        let appt2 = client
+            .book_appointment(&patient, &provider2, &amount, &token)
+            .unwrap();
 
         let appointments = client.get_patient_appointments(&patient);
         assert_eq!(appointments.len(), 2);
@@ -301,8 +341,12 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appt1 = client.book_appointment(&patient1, &provider, &amount, &token).unwrap();
-        let appt2 = client.book_appointment(&patient2, &provider, &amount, &token).unwrap();
+        let appt1 = client
+            .book_appointment(&patient1, &provider, &amount, &token)
+            .unwrap();
+        let appt2 = client
+            .book_appointment(&patient2, &provider, &amount, &token)
+            .unwrap();
 
         let appointments = client.get_provider_appointments(&provider);
         assert_eq!(appointments.len(), 2);
@@ -328,7 +372,9 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Check Booked state
         let appt = client.get_appointment(&appointment_id).unwrap();
@@ -336,7 +382,9 @@ mod tests {
         assert!(!appt.funds_released);
 
         // Transition to Confirmed
-        client.confirm_appointment(&provider, &appointment_id).unwrap();
+        client
+            .confirm_appointment(&provider, &appointment_id)
+            .unwrap();
         let appt = client.get_appointment(&appointment_id).unwrap();
         assert_eq!(appt.status, AppointmentStatus::Completed);
         assert!(appt.funds_released);
@@ -352,10 +400,14 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token).unwrap();
+        let appointment_id = client
+            .book_appointment(&patient, &provider, &amount, &token)
+            .unwrap();
 
         // Transition to Refunded
-        client.refund_appointment(&patient, &appointment_id).unwrap();
+        client
+            .refund_appointment(&patient, &appointment_id)
+            .unwrap();
         let appt = client.get_appointment(&appointment_id).unwrap();
         assert_eq!(appt.status, AppointmentStatus::Refunded);
         assert!(appt.funds_released);
@@ -375,8 +427,12 @@ mod tests {
         let amount2: i128 = 2000;
 
         // Book appointments
-        let appt1 = client.book_appointment(&patient1, &provider1, &amount1, &token).unwrap();
-        let appt2 = client.book_appointment(&patient2, &provider2, &amount2, &token).unwrap();
+        let appt1 = client
+            .book_appointment(&patient1, &provider1, &amount1, &token)
+            .unwrap();
+        let appt2 = client
+            .book_appointment(&patient2, &provider2, &amount2, &token)
+            .unwrap();
 
         // Check escrow balance (should include both)
         let balance = client.get_escrow_balance();
@@ -400,8 +456,12 @@ mod tests {
         let provider = Address::random(&env);
         let amount: i128 = 1000;
 
-        let appt1 = client.book_appointment(&patient1, &provider, &amount, &token).unwrap();
-        let appt2 = client.book_appointment(&patient2, &provider, &amount, &token).unwrap();
+        let appt1 = client
+            .book_appointment(&patient1, &provider, &amount, &token)
+            .unwrap();
+        let appt2 = client
+            .book_appointment(&patient2, &provider, &amount, &token)
+            .unwrap();
 
         // Confirm both
         client.confirm_appointment(&provider, &appt1).unwrap();
@@ -426,17 +486,36 @@ mod tests {
         let amount: i128 = 1000;
 
         // Booked appointment
-        let appt_booked = client.book_appointment(&patient1, &provider1, &amount, &token).unwrap();
-        assert_eq!(client.get_appointment_status(&appt_booked).unwrap(), AppointmentStatus::Booked);
+        let appt_booked = client
+            .book_appointment(&patient1, &provider1, &amount, &token)
+            .unwrap();
+        assert_eq!(
+            client.get_appointment_status(&appt_booked).unwrap(),
+            AppointmentStatus::Booked
+        );
 
         // Completed appointment
-        let appt_completed = client.book_appointment(&patient1, &provider2, &amount, &token).unwrap();
-        client.confirm_appointment(&provider2, &appt_completed).unwrap();
-        assert_eq!(client.get_appointment_status(&appt_completed).unwrap(), AppointmentStatus::Completed);
+        let appt_completed = client
+            .book_appointment(&patient1, &provider2, &amount, &token)
+            .unwrap();
+        client
+            .confirm_appointment(&provider2, &appt_completed)
+            .unwrap();
+        assert_eq!(
+            client.get_appointment_status(&appt_completed).unwrap(),
+            AppointmentStatus::Completed
+        );
 
         // Refunded appointment
-        let appt_refunded = client.book_appointment(&patient2, &provider1, &amount, &token).unwrap();
-        client.refund_appointment(&patient2, &appt_refunded).unwrap();
-        assert_eq!(client.get_appointment_status(&appt_refunded).unwrap(), AppointmentStatus::Refunded);
+        let appt_refunded = client
+            .book_appointment(&patient2, &provider1, &amount, &token)
+            .unwrap();
+        client
+            .refund_appointment(&patient2, &appt_refunded)
+            .unwrap();
+        assert_eq!(
+            client.get_appointment_status(&appt_refunded).unwrap(),
+            AppointmentStatus::Refunded
+        );
     }
 }

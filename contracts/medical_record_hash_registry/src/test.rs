@@ -1,13 +1,16 @@
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{MedicalRecordHashRegistry, MedicalRecordHashRegistryClient, Error};
-    use soroban_sdk::{Env, Address, BytesN};
+    use crate::{Error, MedicalRecordHashRegistry, MedicalRecordHashRegistryClient};
+    use soroban_sdk::{Address, BytesN, Env};
 
     fn setup() -> (Env, MedicalRecordHashRegistryClient, Address) {
         let env = Env::default();
         let admin = Address::random(&env);
-        let client = MedicalRecordHashRegistryClient::new(&env, &env.register_contract(None, MedicalRecordHashRegistry));
+        let client = MedicalRecordHashRegistryClient::new(
+            &env,
+            &env.register_contract(None, MedicalRecordHashRegistry),
+        );
         (env, client, admin)
     }
 
@@ -47,7 +50,9 @@ mod tests {
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
 
         // Store first record
-        client.store_record(&admin, &patient_id, &record_hash).unwrap();
+        client
+            .store_record(&admin, &patient_id, &record_hash)
+            .unwrap();
 
         // Try to store duplicate
         let result = client.store_record(&admin, &patient_id, &record_hash);
@@ -63,7 +68,9 @@ mod tests {
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
 
         // Store record
-        client.store_record(&admin, &patient_id, &record_hash).unwrap();
+        client
+            .store_record(&admin, &patient_id, &record_hash)
+            .unwrap();
 
         // Verify record
         let result = client.verify_record(&patient_id, &record_hash);
@@ -114,7 +121,9 @@ mod tests {
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
 
         // Store record
-        client.store_record(&admin, &patient_id, &record_hash).unwrap();
+        client
+            .store_record(&admin, &patient_id, &record_hash)
+            .unwrap();
 
         // Get patient by hash
         let result = client.get_patient_by_hash(&record_hash);
@@ -147,7 +156,9 @@ mod tests {
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
 
         // Store record
-        client.store_record(&admin, &patient_id, &record_hash).unwrap();
+        client
+            .store_record(&admin, &patient_id, &record_hash)
+            .unwrap();
 
         // Verify it's immutable (can't store duplicate)
         let result = client.store_record(&admin, &patient_id, &record_hash);

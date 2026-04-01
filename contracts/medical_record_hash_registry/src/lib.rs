@@ -108,9 +108,10 @@ impl MedicalRecordHashRegistry {
         patient_records.record_count += 1;
 
         // Store updated records
-        env.storage()
-            .persistent()
-            .set(&DataKey::RecordStorage(patient_id.clone()), &patient_records);
+        env.storage().persistent().set(
+            &DataKey::RecordStorage(patient_id.clone()),
+            &patient_records,
+        );
 
         // Store hash index for global lookup
         env.storage()

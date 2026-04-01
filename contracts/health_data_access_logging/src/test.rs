@@ -18,11 +18,7 @@ mod tests {
             retention_period: 0,
         };
 
-        HealthDataAccessLogging::initialize(
-            env.clone(),
-            admin.clone(),
-            config,
-        );
+        HealthDataAccessLogging::initialize(env.clone(), admin.clone(), config);
 
         (admin, admin)
     }
@@ -63,7 +59,7 @@ mod tests {
     fn test_log_access() {
         let env = create_test_env();
         let (admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor = Address::random(&env);
 
@@ -95,7 +91,7 @@ mod tests {
     fn test_get_access_logs() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor1 = Address::random(&env);
         let accessor2 = Address::random(&env);
@@ -134,7 +130,7 @@ mod tests {
     fn test_logs_immutability() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor = Address::random(&env);
 
@@ -176,7 +172,7 @@ mod tests {
     fn test_get_latest_access_logs() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor = Address::random(&env);
 
@@ -197,11 +193,8 @@ mod tests {
         env.mock_auths(&[Signature::Invoker]);
 
         // Get latest 3 logs
-        let latest_logs = HealthDataAccessLogging::get_latest_access_logs(
-            env.clone(),
-            patient.clone(),
-            3,
-        );
+        let latest_logs =
+            HealthDataAccessLogging::get_latest_access_logs(env.clone(), patient.clone(), 3);
 
         // Should return exactly 3 logs
         assert_eq!(latest_logs.len(), 3);
@@ -211,7 +204,7 @@ mod tests {
     fn test_get_logs_by_accessor() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor1 = Address::random(&env);
         let accessor2 = Address::random(&env);
@@ -272,7 +265,7 @@ mod tests {
     fn test_get_unique_accessors_count() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor1 = Address::random(&env);
         let accessor2 = Address::random(&env);
@@ -308,7 +301,8 @@ mod tests {
         env.mock_auths(&[Signature::Invoker]);
 
         // Get unique accessor count
-        let count = HealthDataAccessLogging::get_unique_accessors_count(env.clone(), patient.clone());
+        let count =
+            HealthDataAccessLogging::get_unique_accessors_count(env.clone(), patient.clone());
 
         // Should be 3 unique accessors
         assert_eq!(count, 3);
@@ -318,7 +312,7 @@ mod tests {
     fn test_get_access_log_summary() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor1 = Address::random(&env);
         let accessor2 = Address::random(&env);
@@ -358,7 +352,7 @@ mod tests {
     fn test_verify_logs_integrity() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor = Address::random(&env);
 
@@ -387,7 +381,7 @@ mod tests {
     fn test_update_config() {
         let env = create_test_env();
         let (admin, _) = setup_contract(&env);
-        
+
         let new_config = LoggingConfig {
             max_logs_per_patient: 500,
             allow_public_queries: true,
@@ -410,7 +404,7 @@ mod tests {
     fn test_get_unique_accessors() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor1 = Address::random(&env);
         let accessor2 = Address::random(&env);
@@ -447,7 +441,7 @@ mod tests {
     fn test_get_access_logs_in_range() {
         let env = create_test_env();
         let (_admin, _) = setup_contract(&env);
-        
+
         let patient = Address::random(&env);
         let accessor = Address::random(&env);
 

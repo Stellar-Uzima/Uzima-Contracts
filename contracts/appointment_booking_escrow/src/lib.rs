@@ -35,7 +35,7 @@ pub struct AppointmentEscrow {
     pub token: Address,
     pub booked_at: u64,
     pub confirmed_at: u64, // 0 if not confirmed
-    pub refunded_at: u64,   // 0 if not refunded
+    pub refunded_at: u64,  // 0 if not refunded
     pub status: AppointmentStatus,
     pub funds_released: bool, // Prevents double withdrawal
 }
@@ -45,8 +45,8 @@ pub enum DataKey {
     Initialized,
     Admin,
     AppointmentCounter,
-    Appointment(u64), // appointment_id -> AppointmentEscrow
-    PatientAppointments(Address), // patient -> Vec<u64>
+    Appointment(u64),              // appointment_id -> AppointmentEscrow
+    PatientAppointments(Address),  // patient -> Vec<u64>
     ProviderAppointments(Address), // provider -> Vec<u64>
 }
 
@@ -156,14 +156,25 @@ impl AppointmentBookingEscrow {
             .persistent()
             .set(&DataKey::ProviderAppointments(provider), &provider_appts);
 
-        events::publish_appointment_booked(&env, appointment_id, &patient, &provider, amount, timestamp);
+        events::publish_appointment_booked(
+            &env,
+            appointment_id,
+            &patient,
+            &provider,
+            amount,
+            timestamp,
+        );
 
         Ok(appointment_id)
     }
 
     /// Confirm appointment completion and release funds to provider
     /// Only the provider can confirm the appointment
-    pub fn confirm_appointment(env: Env, provider: Address, appointment_id: u64) -> Result<(), Error> {
+    pub fn confirm_appointment(
+        env: Env,
+        provider: Address,
+        appointment_id: u64,
+    ) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
 
@@ -197,7 +208,11 @@ impl AppointmentBookingEscrow {
 
         // Transfer funds from contract to provider
         let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(&env.current_contract_address(), &provider, &appointment.amount);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &provider,
+            &appointment.amount,
+        );
 
         // Update appointment status
         appointment.confirmed_at = timestamp;
@@ -210,7 +225,13 @@ impl AppointmentBookingEscrow {
             .set(&appointment_key, &appointment);
 
         events::publish_appointment_confirmed(&env, appointment_id, &provider, timestamp);
-        events::publish_funds_released(&env, appointment_id, &provider, appointment.amount, timestamp);
+        events::publish_funds_released(
+            &env,
+            appointment_id,
+            &provider,
+            appointment.amount,
+            timestamp,
+        );
 
         Ok(())
     }
@@ -218,7 +239,11 @@ impl AppointmentBookingEscrow {
     /// Refund appointment if canceled
     /// Only the patient can request a refund
     /// Can only be done if appointment is still in Booked state (not Confirmed/Refunded)
-    pub fn refund_appointment(env: Env, patient: Address, appointment_id: u64) -> Result<(), Error> {
+    pub fn refund_appointment(
+        env: Env,
+        patient: Address,
+        appointment_id: u64,
+    ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
 
@@ -241,7 +266,9 @@ impl AppointmentBookingEscrow {
         }
 
         // Check if already confirmed (can't refund confirmed appointment)
-        if appointment.status == AppointmentStatus::Confirmed || appointment.status == AppointmentStatus::Completed {
+        if appointment.status == AppointmentStatus::Confirmed
+            || appointment.status == AppointmentStatus::Completed
+        {
             return Err(Error::InvalidState);
         }
 
@@ -254,7 +281,11 @@ impl AppointmentBookingEscrow {
 
         // Transfer funds from contract back to patient
         let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(&env.current_contract_address(), &patient, &appointment.amount);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &patient,
+            &appointment.amount,
+        );
 
         // Update appointment status
         appointment.refunded_at = timestamp;
@@ -266,7 +297,13 @@ impl AppointmentBookingEscrow {
             .persistent()
             .set(&appointment_key, &appointment);
 
-        events::publish_appointment_refunded(&env, appointment_id, &patient, appointment.amount, timestamp);
+        events::publish_appointment_refunded(
+            &env,
+            appointment_id,
+            &patient,
+            appointment.amount,
+            timestamp,
+        );
 
         Ok(())
     }
@@ -295,7 +332,10 @@ impl AppointmentBookingEscrow {
     }
 
     /// Get appointment status
-    pub fn get_appointment_status(env: Env, appointment_id: u64) -> Result<AppointmentStatus, Error> {
+    pub fn get_appointment_status(
+        env: Env,
+        appointment_id: u64,
+    ) -> Result<AppointmentStatus, Error> {
         env.storage()
             .persistent()
             .get::<_, AppointmentEscrow>(&DataKey::Appointment(appointment_id))

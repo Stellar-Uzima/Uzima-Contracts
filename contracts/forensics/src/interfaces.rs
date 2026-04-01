@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, Bytes, BytesN, String, Vec};
-use crate::types::{ActivityType, ThreatLevel, PatternAnalysis, InvestigationReport};
+use crate::types::{ActivityType, InvestigationReport, PatternAnalysis, ThreatLevel};
+use soroban_sdk::{Address, Bytes, BytesN, Env, String, Vec};
 
 pub trait IOnChainForensics {
     fn initialize(env: Env, admin: Address);

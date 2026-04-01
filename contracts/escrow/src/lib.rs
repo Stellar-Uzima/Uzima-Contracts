@@ -124,33 +124,59 @@ fn add_credit(env: &Env, addr: &Address, delta: i128) {
     env.storage().persistent().set(&CREDITS, &credits);
 }
 
-fn update_stats(env: &Env, volume: i128, is_new: bool, settled: bool, refunded: bool, disputed: bool, active_delta: i32) {
-    let mut stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or(PlatformStats {
-        total_volume: 0,
-        total_escrows: 0,
-        settled_count: 0,
-        refunded_count: 0,
-        disputed_count: 0,
-        active_count: 0,
-    });
+fn update_stats(
+    env: &Env,
+    volume: i128,
+    is_new: bool,
+    settled: bool,
+    refunded: bool,
+    disputed: bool,
+    active_delta: i32,
+) {
+    let mut stats: PlatformStats = env
+        .storage()
+        .instance()
+        .get(&STATS)
+        .unwrap_or(PlatformStats {
+            total_volume: 0,
+            total_escrows: 0,
+            settled_count: 0,
+            refunded_count: 0,
+            disputed_count: 0,
+            active_count: 0,
+        });
 
     if is_new {
         stats.total_escrows += 1;
         stats.total_volume = stats.total_volume.saturating_add(volume);
-        
+
         // Time-bucketed daily stats
         let day_id = env.ledger().timestamp() / 86400;
-        let mut daily_map: Map<u64, DailyStats> = env.storage().persistent().get(&DAILY_STATS).unwrap_or(Map::new(env));
-        let mut daily = daily_map.get(day_id).unwrap_or(DailyStats { day_id, volume: 0, count: 0 });
+        let mut daily_map: Map<u64, DailyStats> = env
+            .storage()
+            .persistent()
+            .get(&DAILY_STATS)
+            .unwrap_or(Map::new(env));
+        let mut daily = daily_map.get(day_id).unwrap_or(DailyStats {
+            day_id,
+            volume: 0,
+            count: 0,
+        });
         daily.volume = daily.volume.saturating_add(volume);
         daily.count += 1;
         daily_map.set(day_id, daily);
         env.storage().persistent().set(&DAILY_STATS, &daily_map);
     }
-    if settled { stats.settled_count += 1; }
-    if refunded { stats.refunded_count += 1; }
-    if disputed { stats.disputed_count += 1; }
-    
+    if settled {
+        stats.settled_count += 1;
+    }
+    if refunded {
+        stats.refunded_count += 1;
+    }
+    if disputed {
+        stats.disputed_count += 1;
+    }
+
     if active_delta > 0 {
         stats.active_count = stats.active_count.saturating_add(active_delta as u64);
     } else if active_delta < 0 {
@@ -177,8 +203,14 @@ impl EscrowContract {
         platform_fee_bps: u32,
     ) -> Result<(), Error> {
         caller.require_auth();
-        let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotAdmin)?;
-        if caller != admin { return Err(Error::NotAdmin); }
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&ADMIN)
+            .ok_or(Error::NotAdmin)?;
+        if caller != admin {
+            return Err(Error::NotAdmin);
+        }
         // basic bounds: <= 10000 bps
         if platform_fee_bps > 10_000 {
             return Err(Error::InvalidFeeBps);
@@ -246,17 +278,17 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
-        
+
         if e.status == EscrowStatus::Settled || e.status == EscrowStatus::Refunded {
             return Err(Error::AlreadySettled);
         }
-        
+
         e.status = EscrowStatus::Disputed;
         escrows.set(order_id, e.clone());
         env.storage().persistent().set(&ESCROWS, &escrows);
-        
+
         update_stats(&env, 0, false, false, false, true, 0);
-        
+
         env.events()
             .publish((symbol_short!("EscDisput"), order_id), ());
         Ok(())
@@ -270,7 +302,7 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
-        
+
         if e.status == EscrowStatus::Settled || e.status == EscrowStatus::Refunded {
             return Err(Error::AlreadySettled);
         }
@@ -280,7 +312,7 @@ impl EscrowContract {
             approvals.push_back(approver);
         }
         e.approvals = approvals;
-        
+
         // Transition to Active if at least 1 approval exists (e.g., from payer)
         if e.status == EscrowStatus::Pending && e.approvals.len() > 0 {
             e.status = EscrowStatus::Active;
@@ -307,7 +339,7 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
-        
+
         if e.status == EscrowStatus::Settled || e.status == EscrowStatus::Refunded {
             return Err(Error::AlreadySettled);
         }
@@ -331,9 +363,9 @@ impl EscrowContract {
         let provider_amount = e.amount.saturating_sub(fee);
         add_credit(&env, &e.payee, provider_amount);
         add_credit(&env, &fee_conf.fee_receiver, fee);
-        
+
         update_stats(&env, 0, false, true, false, false, -1);
-        
+
         env.events().publish(
             (symbol_short!("EscRel"), order_id),
             (
@@ -357,7 +389,7 @@ impl EscrowContract {
             .get(&ESCROWS)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
-        
+
         if e.status == EscrowStatus::Settled || e.status == EscrowStatus::Refunded {
             return Err(Error::AlreadySettled);
         }
@@ -374,8 +406,16 @@ impl EscrowContract {
 
         // credit payer for refund
         add_credit(&env, &e.payer, e.amount);
-        
-        update_stats(&env, 0, false, false, true, false, if was_active { -1 } else { 0 });
+
+        update_stats(
+            &env,
+            0,
+            false,
+            false,
+            true,
+            false,
+            if was_active { -1 } else { 0 },
+        );
 
         // #283: Refunded event with session_id, amount, mentee_id (payer), reason
         env.events().publish(
@@ -406,7 +446,9 @@ impl EscrowContract {
 
     pub fn withdraw(env: Env, caller: Address, token: Address, to: Address) -> Result<i128, Error> {
         caller.require_auth();
-        if caller != to { return Err(Error::Unauthorized); }
+        if caller != to {
+            return Err(Error::Unauthorized);
+        }
         require_not_reentrant(&env)?;
         let mut credits: Map<Address, i128> = env
             .storage()
@@ -427,45 +469,101 @@ impl EscrowContract {
 
     // #284: Analytics Query Functions (10 functions)
     pub fn get_total_volume(env: Env) -> i128 {
-        env.storage().instance().get(&STATS).map(|s: PlatformStats| s.total_volume).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&STATS)
+            .map(|s: PlatformStats| s.total_volume)
+            .unwrap_or(0)
     }
 
     pub fn get_total_escrows(env: Env) -> u64 {
-        env.storage().instance().get(&STATS).map(|s: PlatformStats| s.total_escrows).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&STATS)
+            .map(|s: PlatformStats| s.total_escrows)
+            .unwrap_or(0)
     }
 
     pub fn get_settled_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| return PlatformStats { total_volume: 0, total_escrows: 0, settled_count: 0, refunded_count: 0, disputed_count: 0, active_count: 0 });
-        if stats.total_escrows == 0 { return 0; }
+        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
+            return PlatformStats {
+                total_volume: 0,
+                total_escrows: 0,
+                settled_count: 0,
+                refunded_count: 0,
+                disputed_count: 0,
+                active_count: 0,
+            };
+        });
+        if stats.total_escrows == 0 {
+            return 0;
+        }
         ((stats.settled_count as u64 * 10000) / stats.total_escrows) as u32
     }
 
     pub fn get_refund_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| return PlatformStats { total_volume: 0, total_escrows: 0, settled_count: 0, refunded_count: 0, disputed_count: 0, active_count: 0 });
-        if stats.total_escrows == 0 { return 0; }
+        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
+            return PlatformStats {
+                total_volume: 0,
+                total_escrows: 0,
+                settled_count: 0,
+                refunded_count: 0,
+                disputed_count: 0,
+                active_count: 0,
+            };
+        });
+        if stats.total_escrows == 0 {
+            return 0;
+        }
         ((stats.refunded_count as u64 * 10000) / stats.total_escrows) as u32
     }
 
     pub fn get_dispute_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| return PlatformStats { total_volume: 0, total_escrows: 0, settled_count: 0, refunded_count: 0, disputed_count: 0, active_count: 0 });
-        if stats.total_escrows == 0 { return 0; }
+        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
+            return PlatformStats {
+                total_volume: 0,
+                total_escrows: 0,
+                settled_count: 0,
+                refunded_count: 0,
+                disputed_count: 0,
+                active_count: 0,
+            };
+        });
+        if stats.total_escrows == 0 {
+            return 0;
+        }
         ((stats.disputed_count as u64 * 10000) / stats.total_escrows) as u32
     }
 
     pub fn get_active_escrows_count(env: Env) -> u64 {
-        env.storage().instance().get(&STATS).map(|s: PlatformStats| s.active_count).unwrap_or(0)
+        env.storage()
+            .instance()
+            .get(&STATS)
+            .map(|s: PlatformStats| s.active_count)
+            .unwrap_or(0)
     }
 
     pub fn get_stats_summary(env: Env) -> PlatformStats {
-        env.storage().instance().get(&STATS).unwrap_or(PlatformStats {
-            total_volume: 0, total_escrows: 0, settled_count: 0, refunded_count: 0, disputed_count: 0, active_count: 0
-        })
+        env.storage()
+            .instance()
+            .get(&STATS)
+            .unwrap_or(PlatformStats {
+                total_volume: 0,
+                total_escrows: 0,
+                settled_count: 0,
+                refunded_count: 0,
+                disputed_count: 0,
+                active_count: 0,
+            })
     }
 
     pub fn get_platform_health_score(env: Env) -> u32 {
         let stats = Self::get_stats_summary(env);
-        if stats.total_escrows == 0 { return 10000; }
-        let failure_rate = (stats.disputed_count + stats.refunded_count) as u64 * 10000 / stats.total_escrows;
+        if stats.total_escrows == 0 {
+            return 10000;
+        }
+        let failure_rate =
+            (stats.disputed_count + stats.refunded_count) as u64 * 10000 / stats.total_escrows;
         10000u32.saturating_sub(failure_rate as u32)
     }
 
@@ -478,12 +576,18 @@ impl EscrowContract {
     pub fn get_donor_reputation(env: Env, donor: Address) -> u32 {
         // Simulated reputation based on successful settlements
         let stats = Self::get_stats_summary(env);
-        if stats.total_escrows == 0 { return 5000; }
+        if stats.total_escrows == 0 {
+            return 5000;
+        }
         5000 + (Self::get_settled_rate(env) / 2)
     }
 
     pub fn get_daily_stats(env: Env, day_id: u64) -> Option<DailyStats> {
-        let daily_map: Map<u64, DailyStats> = env.storage().persistent().get(&DAILY_STATS).unwrap_or(Map::new(&env));
+        let daily_map: Map<u64, DailyStats> = env
+            .storage()
+            .persistent()
+            .get(&DAILY_STATS)
+            .unwrap_or(Map::new(&env));
         daily_map.get(day_id)
     }
 
@@ -518,28 +622,34 @@ mod test {
         let token = Address::generate(&env);
 
         client.mock_all_auths().initialize(&admin);
-        client.mock_all_auths().set_fee_config(&admin, &Address::generate(&env), &250u32); // 2.5%
+        client
+            .mock_all_auths()
+            .set_fee_config(&admin, &Address::generate(&env), &250u32); // 2.5%
 
-        assert!(client.mock_all_auths().create_escrow(&1u64, &payer, &payee, &1000i128, &token));
-        
+        assert!(client
+            .mock_all_auths()
+            .create_escrow(&1u64, &payer, &payee, &1000i128, &token));
+
         let e_pending = client.get_escrow(&1u64).unwrap();
         assert_eq!(e_pending.status, EscrowStatus::Pending);
 
         client.mock_all_auths().approve_release(&1u64, &payer);
-        
+
         let e_active = client.get_escrow(&1u64).unwrap();
         assert_eq!(e_active.status, EscrowStatus::Active);
 
-        client.mock_all_auths().approve_release(&1u64, &Address::generate(&env));
+        client
+            .mock_all_auths()
+            .approve_release(&1u64, &Address::generate(&env));
         assert!(client.release_escrow(&1u64));
-        
+
         let e = client.get_escrow(&1u64).unwrap();
         assert_eq!(e.status, EscrowStatus::Settled);
-        
+
         // credits: payee 975, fee 25
         let payee_credit = client.get_credit(&payee);
         assert_eq!(payee_credit, 975);
-        
+
         // analytics
         assert_eq!(client.get_total_volume(), 1000);
         assert_eq!(client.get_total_escrows(), 1);
@@ -556,20 +666,27 @@ mod test {
         let payer = Address::generate(&env);
         let payee = Address::generate(&env);
         let token = Address::generate(&env);
-        
-        client.mock_all_auths().initialize(&admin);
-        client.mock_all_auths().set_fee_config(&admin, &Address::generate(&env), &500u32);
 
-        assert!(client.mock_all_auths().create_escrow(&2u64, &payer, &payee, &1000i128, &token));
+        client.mock_all_auths().initialize(&admin);
+        client
+            .mock_all_auths()
+            .set_fee_config(&admin, &Address::generate(&env), &500u32);
+
+        assert!(client
+            .mock_all_auths()
+            .create_escrow(&2u64, &payer, &payee, &1000i128, &token));
         client.mock_all_auths().mark_disputed(&payer, &2u64);
-        
+
         let e_disputed = client.get_escrow(&2u64).unwrap();
         assert_eq!(e_disputed.status, EscrowStatus::Disputed);
 
         assert!(client.refund_escrow(&2u64, &String::from_str(&env, "Dispute resolved by refund")));
         let e = client.get_escrow(&2u64).unwrap();
         assert_eq!(e.status, EscrowStatus::Refunded);
-        assert_eq!(e.reason, String::from_str(&env, "Dispute resolved by refund"));
+        assert_eq!(
+            e.reason,
+            String::from_str(&env, "Dispute resolved by refund")
+        );
 
         // payer credited
         let payer_credit = client.get_credit(&payer);
@@ -588,7 +705,9 @@ mod test {
         let token = Address::generate(&env);
 
         client.mock_all_auths().initialize(&admin);
-        client.mock_all_auths().create_escrow(&3u64, &payer, &payee, &1000i128, &token);
+        client
+            .mock_all_auths()
+            .create_escrow(&3u64, &payer, &payee, &1000i128, &token);
 
         // Try to release while Pending (should fail)
         let res = client.try_release_escrow(&3u64);

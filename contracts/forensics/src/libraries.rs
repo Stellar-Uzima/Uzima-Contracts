@@ -1,5 +1,5 @@
-use soroban_sdk::{Env, Address, Bytes, BytesN};
-use crate::types::{ThreatLevel, ForensicEvidence};
+use crate::types::{ForensicEvidence, ThreatLevel};
+use soroban_sdk::{Address, Bytes, BytesN, Env};
 
 pub struct ForensicsLib;
 
@@ -18,7 +18,7 @@ impl ForensicsLib {
         buffer.append(&actor.to_xdr(env));
         buffer.append(&location.to_xdr(env));
         buffer.append(&data);
-        
+
         env.crypto().sha256(&buffer).into()
     }
 

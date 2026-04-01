@@ -3,7 +3,7 @@ mod tests {
     use soroban_sdk::testutils::{Address as AddressTestUtils, Signature};
     use soroban_sdk::{Address, Env, Vec};
 
-    use crate::types::{Role, RBACConfig};
+    use crate::types::{RBACConfig, Role};
     use crate::RBAC;
 
     fn create_test_env() -> Env {
@@ -101,7 +101,10 @@ mod tests {
         RBAC::assign_role(env.clone(), user.clone(), Role::Doctor);
 
         // Verify role exists
-        assert_eq!(RBAC::has_role(env.clone(), user.clone(), Role::Doctor), true);
+        assert_eq!(
+            RBAC::has_role(env.clone(), user.clone(), Role::Doctor),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
@@ -110,7 +113,10 @@ mod tests {
         assert_eq!(success, true);
 
         // Verify role no longer exists
-        assert_eq!(RBAC::has_role(env.clone(), user.clone(), Role::Doctor), false);
+        assert_eq!(
+            RBAC::has_role(env.clone(), user.clone(), Role::Doctor),
+            false
+        );
     }
 
     #[test]
@@ -411,7 +417,7 @@ mod tests {
     fn test_max_roles_per_address() {
         let env = create_test_env();
         let admin = Address::random(&env);
-        
+
         let config = RBACConfig {
             emit_events: true,
             max_roles_per_address: 2,
@@ -424,13 +430,22 @@ mod tests {
         env.mock_auths(&[Signature::Invoker]);
 
         // Assign first role
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Doctor), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Doctor),
+            true
+        );
 
         // Assign second role
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Patient), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Patient),
+            true
+        );
 
         // Try to assign third role (should fail due to max limit)
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Staff), false);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Staff),
+            false
+        );
 
         // Verify only 2 roles assigned
         assert_eq!(RBAC::get_roles(env.clone(), user.clone()).len(), 2);
@@ -446,35 +461,59 @@ mod tests {
         env.mock_auths(&[Signature::Invoker]);
 
         // Test all role types can be assigned
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Admin), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Admin),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Doctor), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Doctor),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Patient), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Patient),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Staff), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Staff),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Insurer), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Insurer),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Researcher), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Researcher),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Auditor), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Auditor),
+            true
+        );
 
         env.mock_auths(&[Signature::Invoker]);
 
-        assert_eq!(RBAC::assign_role(env.clone(), user.clone(), Role::Service), true);
+        assert_eq!(
+            RBAC::assign_role(env.clone(), user.clone(), Role::Service),
+            true
+        );
 
         // Verify all roles assigned
         assert_eq!(RBAC::get_roles(env.clone(), user.clone()).len(), 8);

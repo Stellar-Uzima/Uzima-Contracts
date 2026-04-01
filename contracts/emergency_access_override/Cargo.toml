@@ -1,5 +1,5 @@
 [package]
-name = "clinical_decision_support"
+name = "emergency_access_override"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, Env, Vec};
-use crate::types::{Role, AddressRoles};
 use crate::storage::Storage;
+use crate::types::{AddressRoles, Role};
+use soroban_sdk::{Address, Env, Vec};
 
 /// Query operations for RBAC contract
 pub struct Queries;

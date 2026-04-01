@@ -11,22 +11,22 @@ pub enum EventType {
     ConceptExtractionCompleted,
     SentimentAnalysisCompleted,
     CodingSuggestionGenerated,
-    
+
     // Configuration Events
     NLPConfigUpdated,
     MedicalTermsLoaded,
     CodingDatabaseUpdated,
-    
+
     // Integration Events
     MedicalRecordLinked,
     BatchProcessingStarted,
     BatchProcessingCompleted,
-    
+
     // System Events
     ContractInitialized,
     ContractPaused,
     ContractUnpaused,
-    
+
     // Performance Events
     ProcessingTimeRecorded,
     AccuracyMetricsUpdated,
@@ -116,11 +116,7 @@ pub struct BatchProcessingEventData {
 
 // ==================== Event Emission Functions ====================
 
-pub fn emit_nlp_processing_event(
-    env: &Env,
-    metadata: EventMetadata,
-    data: NLPProcessingEventData,
-) {
+pub fn emit_nlp_processing_event(env: &Env, metadata: EventMetadata, data: NLPProcessingEventData) {
     let topics = (symbol_short!("NLP_PROC"), metadata.event_type);
     env.events().publish(topics, (metadata, data));
 }

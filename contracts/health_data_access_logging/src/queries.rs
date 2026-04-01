@@ -1,6 +1,6 @@
-use soroban_sdk::{Address, BytesN, Env, Vec};
-use crate::types::{AccessLogEntry, AccessLogSummary, DataKey};
 use crate::storage::Storage;
+use crate::types::{AccessLogEntry, AccessLogSummary, DataKey};
+use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Query operations for health data access logging
 pub struct Queries;
@@ -58,7 +58,11 @@ impl Queries {
     }
 
     /// Retrieve the most recent N access logs for a patient
-    pub fn get_latest_access_logs(env: &Env, patient_id: &Address, limit: u32) -> Vec<AccessLogEntry> {
+    pub fn get_latest_access_logs(
+        env: &Env,
+        patient_id: &Address,
+        limit: u32,
+    ) -> Vec<AccessLogEntry> {
         let log_ids = Storage::get_patient_access_log_ids(env, patient_id);
         let mut logs = Vec::with_capacity(env, limit as usize);
 
