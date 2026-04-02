@@ -19,7 +19,7 @@ on:
 
 env:
   RUST_VERSION: "1.92.0"
-  SOROBAN_VERSION: "23.1.4"
+  SOROBAN_VERSION: "21.7.7"
   NETWORK: "testnet"
 
 jobs:
@@ -277,4 +277,3 @@ jobs:
               done
             fi
           done
-

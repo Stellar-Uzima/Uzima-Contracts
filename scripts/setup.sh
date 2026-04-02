@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Soroban CLI pinned version
-SOROBAN_VERSION="23.1.4"
+SOROBAN_VERSION="21.7.7"
 
 echo "Checking for soroban-cli $SOROBAN_VERSION..."
 

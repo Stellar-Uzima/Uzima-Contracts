@@ -317,6 +317,58 @@ pub struct EncryptedRecordHeader {
     pub doctor_did: Option<String>,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct UserAccessAttribute {
+    pub namespace: String,
+    pub value: String,
+    pub issued_by: Address,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub revoked_at: u64,
+    pub epoch: u32,
+    pub is_active: bool,
+    pub is_verified: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AbePolicyMetadata {
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub compiled_at: u64,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedAccessState {
+    pub record_policies: Map<u64, AbePolicyMetadata>,
+    pub user_attributes: Map<Address, Vec<UserAccessAttribute>>,
+    pub attribute_epochs: Map<BytesN<32>, u32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedEncryptedRecordInput {
+    pub ciphertext_ref: String,
+    pub ciphertext_hash: BytesN<32>,
+    pub envelopes: Vec<KeyEnvelope>,
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CryptoAuditAction {
@@ -383,6 +435,8 @@ pub enum DataKey {
     RecordMeta(u64),
     RecordCommitment(u64),
     PatientRecords(Address),
+    PatientRecordCount(Address),
+    PatientRecord(Address, u64),
     TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
 
     // Logs
@@ -563,6 +617,91 @@ pub struct FieldCompleteness {
     pub has_doctor_did: bool,
     pub total_fields: u32,
     pub completed_fields: u32,
+}
+
+// ==================== Correction Workflow Types ====================
+
+/// Priority level for a correction item, derived from issue severity.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionPriority {
+    /// Blocks record acceptance; requires immediate attention (maps to Critical severity).
+    Critical,
+    /// Required for record validity; must be resolved (maps to ValidationErr severity).
+    High,
+    /// Recommended fix that improves quality (maps to Warning severity).
+    Medium,
+    /// Optional enhancement (maps to Info severity).
+    Low,
+}
+
+/// The type of corrective action recommended for a validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionAction {
+    /// A required field is absent and must be provided.
+    AddMissingField,
+    /// A field value is present but fails format or length constraints.
+    FixFormat,
+    /// A field value can be auto-normalized (e.g., category casing).
+    NormalizeValue,
+    /// Two or more fields have an inconsistent relationship.
+    CheckConsistency,
+    /// The field does not satisfy a FHIR R4 structural requirement.
+    ReviewFhirRequirement,
+}
+
+/// A single actionable correction derived from a validation issue.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionItem {
+    /// The name of the field that needs correction.
+    pub field_name: String,
+    /// The recommended type of corrective action.
+    pub action: CorrectionAction,
+    /// Human-readable description of the issue.
+    pub description: String,
+    /// Concrete suggested value or fix, when deterministic.
+    pub suggested_value: Option<String>,
+    /// Priority ordering for the correction.
+    pub priority: CorrectionPriority,
+}
+
+/// Complete correction workflow for a medical record, grouping all issues
+/// into prioritised, actionable correction items.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionWorkflow {
+    /// The record this workflow applies to.
+    pub record_id: u64,
+    /// Total number of validation issues found.
+    pub total_issues: u32,
+    /// Number of Critical-priority issues.
+    pub critical_count: u32,
+    /// Number of High-priority (ValidationErr) issues.
+    pub error_count: u32,
+    /// Number of Medium-priority (Warning) issues.
+    pub warning_count: u32,
+    /// Number of Low-priority (Info) issues.
+    pub info_count: u32,
+    /// Ordered list of corrections (Critical first, then High, Medium, Low).
+    pub corrections: Vec<CorrectionItem>,
+    /// True when no Critical/High issues exist (only auto-fixable minor issues remain).
+    pub can_auto_fix: bool,
+    /// Ledger timestamp when this workflow was generated.
+    pub workflow_created_at: u64,
+}
+
+/// Result returned by the on-chain record cleansing operation.
+#[derive(Clone)]
+#[contracttype]
+pub struct CleanseResult {
+    /// The (potentially modified) medical record after auto-normalization.
+    pub record: MedicalRecord,
+    /// Human-readable descriptions of each change applied.
+    pub changes_made: Vec<String>,
+    /// True if at least one field was modified during cleansing.
+    pub was_modified: bool,
 }
 
 // ==================== Constants ====================
@@ -831,6 +970,7 @@ impl MedicalRecordsContract {
         };
 
         if let Some(profile) = existing {
+            let previous_role = profile.role;
             let prev_str = match profile.role {
                 Role::Admin => "Admin",
                 Role::Doctor => "Doctor",
@@ -861,6 +1001,16 @@ impl MedicalRecordsContract {
                 None,
                 "User role updated",
             );
+            if previous_role != role {
+                Self::bump_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, previous_role),
+                );
+                Self::ensure_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, role),
+                );
+            }
         } else {
             users.set(
                 user.clone(),
@@ -879,6 +1029,10 @@ impl MedicalRecordsContract {
                 Some(&user),
                 None,
                 "User created",
+            );
+            Self::ensure_access_attribute_epoch(
+                &env,
+                &Self::role_attribute_key_from_role(&env, role),
             );
         }
 
@@ -1086,6 +1240,10 @@ impl MedicalRecordsContract {
         }
 
         env.storage().persistent().set(&key, &new_grants);
+        Self::ensure_access_attribute_epoch(
+            &env,
+            &Self::permission_attribute_key(&env, permission),
+        );
         events::emit_permission_granted(
             &env,
             granter.clone(),
@@ -1148,6 +1306,10 @@ impl MedicalRecordsContract {
 
         if removed {
             env.storage().persistent().set(&key, &new_grants);
+            Self::bump_access_attribute_epoch(
+                &env,
+                &Self::permission_attribute_key(&env, permission),
+            );
             events::emit_permission_revoked(
                 &env,
                 revoker.clone(),
@@ -1174,6 +1336,166 @@ impl MedicalRecordsContract {
         }
 
         Ok(removed)
+    }
+
+    pub fn issue_access_attribute(
+        env: Env,
+        issuer: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+        expires_at: u64,
+        is_verified: bool,
+    ) -> Result<bool, Error> {
+        issuer.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &issuer)
+            && !Self::check_permission(&env, &issuer, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Self::require_active_user(&env, &user)?;
+
+        let attr_key = Self::attribute_epoch_key(&env, &namespace, &value);
+        let epoch = Self::read_access_attribute_epoch(&env, &attr_key);
+        let now = env.ledger().timestamp();
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
+            .unwrap_or(Vec::new(&env));
+
+        let mut replaced = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value {
+                updated.push_back(UserAccessAttribute {
+                    namespace: namespace.clone(),
+                    value: value.clone(),
+                    issued_by: issuer.clone(),
+                    issued_at: now,
+                    expires_at,
+                    revoked_at: 0,
+                    epoch,
+                    is_active: true,
+                    is_verified,
+                });
+                replaced = true;
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if !replaced {
+            updated.push_back(UserAccessAttribute {
+                namespace,
+                value,
+                issued_by: issuer,
+                issued_at: now,
+                expires_at,
+                revoked_at: 0,
+                epoch,
+                is_active: true,
+                is_verified,
+            });
+        }
+
+        state.user_attributes.set(user, updated);
+        Self::write_advanced_access_state(&env, &state);
+        Ok(true)
+    }
+
+    pub fn revoke_access_attribute(
+        env: Env,
+        revoker: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+    ) -> Result<bool, Error> {
+        revoker.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &revoker)
+            && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
+            .unwrap_or(Vec::new(&env));
+        let now = env.ledger().timestamp();
+
+        let mut revoked = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value && attr.is_active {
+                revoked = true;
+                updated.push_back(UserAccessAttribute {
+                    namespace: attr.namespace,
+                    value: attr.value,
+                    issued_by: attr.issued_by,
+                    issued_at: attr.issued_at,
+                    expires_at: attr.expires_at,
+                    revoked_at: now,
+                    epoch: attr.epoch,
+                    is_active: false,
+                    is_verified: attr.is_verified,
+                });
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if revoked {
+            state.user_attributes.set(user, updated);
+            let epoch_key = Self::attribute_epoch_key(&env, &namespace, &value);
+            let next_epoch = Self::read_access_attribute_epoch(&env, &epoch_key).saturating_add(1);
+            state.attribute_epochs.set(epoch_key, next_epoch);
+            Self::write_advanced_access_state(&env, &state);
+        }
+
+        Ok(revoked)
+    }
+
+    pub fn get_user_access_attributes(
+        env: Env,
+        user: Address,
+    ) -> Result<Vec<UserAccessAttribute>, Error> {
+        user.require_auth();
+        Self::require_initialized(&env)?;
+
+        Ok(env
+            .storage()
+            .instance()
+            .get::<_, AdvancedAccessState>(&Symbol::new(&env, "adv_access"))
+            .map(|state| state.user_attributes.get(user).unwrap_or(Vec::new(&env)))
+            .unwrap_or(Vec::new(&env)))
+    }
+
+    pub fn get_access_attribute_epoch(
+        env: Env,
+        namespace: String,
+        value: String,
+    ) -> Result<u32, Error> {
+        Self::require_initialized(&env)?;
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Ok(Self::read_access_attribute_epoch(
+            &env,
+            &Self::attribute_epoch_key(&env, &namespace, &value),
+        ))
     }
 
     // ---------------------------------------------------------------------
@@ -1527,43 +1849,88 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        let ids: Vec<u64> = env
+        let total_records: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientRecords(patient.clone()))
-            .unwrap_or(Vec::new(&env));
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
 
-        // IMPORTANT: pagination is applied before access filtering (tests depend on this).
+        // Fallback to legacy vector path when index is missing.
+        if total_records == 0 {
+            let ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::PatientRecords(patient.clone()))
+                .unwrap_or(Vec::new(&env));
+
+            let start = page.saturating_mul(page_size);
+            if start >= ids.len() {
+                return Ok(Vec::new(&env));
+            }
+            let mut end = start.saturating_add(page_size);
+            if end > ids.len() {
+                end = ids.len();
+            }
+
+            let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
+            let mut i = start;
+            while i < end {
+                if let Some(id) = ids.get(i) {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    {
+                        if Self::can_view_record(&env, &caller, &r, id) {
+                            if let Some(meta) = env
+                                .storage()
+                                .persistent()
+                                .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            {
+                                out.push_back((id, meta));
+                            }
+                        }
+                    }
+                }
+                i = i.saturating_add(1);
+            }
+            return Ok(out);
+        }
+
         let start = page.saturating_mul(page_size);
-        if start >= ids.len() {
+        if start >= total_records {
             return Ok(Vec::new(&env));
         }
         let mut end = start.saturating_add(page_size);
-        if end > ids.len() {
-            end = ids.len();
+        if end > total_records {
+            end = total_records;
         }
 
         let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
-        let mut i = start;
-        while i < end {
-            if let Some(id) = ids.get(i) {
+        let mut idx = start;
+        while idx < end {
+            if let Some(record_id) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PatientRecord(patient.clone(), idx))
+            {
                 if let Some(r) = env
                     .storage()
                     .persistent()
-                    .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    .get::<_, MedicalRecord>(&DataKey::Record(record_id))
                 {
-                    if Self::can_view_record(&env, &caller, &r, id) {
+                    if Self::can_view_record(&env, &caller, &r, record_id) {
                         if let Some(meta) = env
                             .storage()
                             .persistent()
-                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(record_id))
                         {
-                            out.push_back((id, meta));
+                            out.push_back((record_id, meta));
                         }
                     }
                 }
             }
-            i = i.saturating_add(1);
+            idx = idx.saturating_add(1);
         }
 
         Ok(out)
@@ -1574,6 +1941,19 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_count(env: Env, patient: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient))
+            .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_id(env: Env, patient: Address, index: u64) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecord(patient, index))
     }
 
     pub fn set_zk_verifier_contract(
@@ -2657,6 +3037,46 @@ impl MedicalRecordsContract {
     // Encrypted records (E2E-ready)
     // ---------------------------------------------------------------------
 
+    pub fn add_advanced_encrypted_record(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        advanced: AdvancedEncryptedRecordInput,
+    ) -> Result<u64, Error> {
+        let record_id = Self::add_encrypted_record(
+            env.clone(),
+            caller.clone(),
+            patient,
+            is_confidential,
+            tags,
+            category,
+            treatment_type,
+            advanced.ciphertext_ref,
+            advanced.ciphertext_hash,
+            advanced.envelopes,
+        )?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            advanced.policy_ref,
+            advanced.policy_hash,
+            advanced.access_ciphertext_ref,
+            advanced.access_ciphertext_hash,
+            advanced.required_permission,
+            advanced.attribute_count,
+            advanced.valid_until,
+            advanced.revocation_epoch,
+        )?;
+
+        Ok(record_id)
+    }
+
     pub fn add_encrypted_record(
         env: Env,
         caller: Address,
@@ -2790,6 +3210,40 @@ impl MedicalRecordsContract {
         );
 
         Ok(record_id)
+    }
+
+    pub fn bind_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            valid_until,
+            revocation_epoch,
+        )?;
+
+        Ok(true)
     }
 
     pub fn get_encrypted_record_header(
@@ -2938,6 +3392,34 @@ impl MedicalRecordsContract {
         );
 
         Ok(true)
+    }
+
+    pub fn get_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<Option<AbePolicyMetadata>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: EncryptedRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+        {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
+            return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            return Err(Error::InvalidCredential);
+        }
+
+        let state = Self::read_advanced_access_state(&env);
+        Ok(state.record_policies.get(record_id))
     }
 
     pub fn get_crypto_audit_logs(
@@ -3993,6 +4475,14 @@ impl MedicalRecordsContract {
         }
     }
 
+    fn require_active_user(env: &Env, user: &Address) -> Result<(), Error> {
+        let users = Self::read_users(env);
+        match users.get(user.clone()) {
+            Some(profile) if profile.active => Ok(()),
+            _ => Err(Error::NotAuthorized),
+        }
+    }
+
     fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
         if Self::is_active_patient(env, patient) {
             Ok(())
@@ -4117,6 +4607,21 @@ impl MedicalRecordsContract {
     }
 
     fn append_patient_record(env: &Env, patient: &Address, record_id: u64) {
+        // Optimized storage: store by per-patient index instead of bulky vector.
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecord(patient.clone(), count), &record_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecordCount(patient.clone()), &(count + 1));
+
+        // Backward compatibility: keep PatientRecords vector only for legacy paths.
         let mut ids: Vec<u64> = env
             .storage()
             .persistent()
@@ -4385,6 +4890,134 @@ impl MedicalRecordsContract {
             &record.envelopes.len().to_be_bytes(),
         ));
         env.crypto().sha256(&payload).into()
+    }
+
+    fn bind_encrypted_record_abe_policy_internal(
+        env: &Env,
+        caller: &Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<(), Error> {
+        validation::validate_policy_ref(env, &policy_ref)?;
+        validation::validate_policy_ref(env, &access_ciphertext_ref)?;
+        if attribute_count == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let record: EncryptedRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if *caller != record.patient_id
+            && *caller != record.doctor_id
+            && !Self::is_admin(env, caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let policy = AbePolicyMetadata {
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            compiled_at: env.ledger().timestamp(),
+            valid_until,
+            revocation_epoch,
+        };
+
+        let mut state = Self::read_advanced_access_state(env);
+        state.record_policies.set(record_id, policy);
+        Self::write_advanced_access_state(env, &state);
+
+        Ok(())
+    }
+
+    fn role_attribute_key_from_role(env: &Env, role: Role) -> BytesN<32> {
+        let (namespace, value) = match role {
+            Role::Admin => ("role", "admin"),
+            Role::Doctor => ("role", "doctor"),
+            Role::Patient => ("role", "patient"),
+            Role::None => ("role", "none"),
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, namespace),
+            &String::from_str(env, value),
+        )
+    }
+
+    fn permission_attribute_key(env: &Env, permission: Permission) -> BytesN<32> {
+        let value = match permission {
+            Permission::ManageUsers => "manage_users",
+            Permission::ManageSystem => "manage_system",
+            Permission::CreateRecord => "create_record",
+            Permission::ReadRecord => "read_record",
+            Permission::UpdateRecord => "update_record",
+            Permission::DeleteRecord => "delete_record",
+            Permission::ReadConfidential => "read_confidential",
+            Permission::DelegatePermission => "delegate_permission",
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, "permission"),
+            &String::from_str(env, value),
+        )
+    }
+
+    fn read_access_attribute_epoch(env: &Env, key: &BytesN<32>) -> u32 {
+        let state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.get(key.clone()).unwrap_or(1)
+    }
+
+    fn ensure_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
+        let mut state = Self::read_advanced_access_state(env);
+        if state.attribute_epochs.contains_key(key.clone()) {
+            return;
+        }
+        state.attribute_epochs.set(key.clone(), 1u32);
+        Self::write_advanced_access_state(env, &state);
+    }
+
+    fn bump_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
+        let next = Self::read_access_attribute_epoch(env, key).saturating_add(1);
+        let mut state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.set(key.clone(), next);
+        Self::write_advanced_access_state(env, &state);
+    }
+
+    fn attribute_epoch_key(env: &Env, namespace: &String, value: &String) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&namespace.clone().to_xdr(env));
+        payload.append(&value.clone().to_xdr(env));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn read_advanced_access_state(env: &Env) -> AdvancedAccessState {
+        env.storage()
+            .instance()
+            .get(&Symbol::new(env, "adv_access"))
+            .unwrap_or(AdvancedAccessState {
+                record_policies: Map::new(env),
+                user_attributes: Map::new(env),
+                attribute_epochs: Map::new(env),
+            })
+    }
+
+    fn write_advanced_access_state(env: &Env, state: &AdvancedAccessState) {
+        env.storage()
+            .instance()
+            .set(&Symbol::new(env, "adv_access"), state);
     }
 
     fn can_view_record(
@@ -4830,6 +5463,92 @@ impl MedicalRecordsContract {
 
         validation::validate_record_by_type(&env, &record, record_type)?;
         Ok(true)
+    }
+
+    /// Returns a prioritised `CorrectionWorkflow` for a stored medical record.
+    ///
+    /// The workflow maps every validation issue into an actionable `CorrectionItem`
+    /// (with severity-based priority and suggested fix), counts issues by category,
+    /// and sets `can_auto_fix` when only minor, non-blocking issues remain.
+    ///
+    /// Callers with `ReadRecord` permission may invoke this function to build a
+    /// step-by-step remediation plan without modifying the stored record.
+    pub fn get_correction_workflow(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CorrectionWorkflow, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+        let workflow = validation::build_correction_workflow(&env, record_id, &report);
+
+        Ok(workflow)
+    }
+
+    /// Auto-cleanses a stored medical record using deterministic normalization rules.
+    ///
+    /// Applies safe, non-clinical transformations:
+    /// - Normalises category casing to the canonical allowed value.
+    /// - Removes empty `doctor_did` strings (replaces `Some("")` with `None`).
+    ///
+    /// If any changes were made, the updated record is persisted and a
+    /// `DataQualityValidated` event is emitted with the post-cleanse quality score.
+    /// Returns a `CleanseResult` describing what (if anything) changed.
+    ///
+    /// Requires `UpdateRecord` permission.
+    pub fn cleanse_record_data(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CleanseResult, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let result = validation::auto_cleanse_record(&env, &record);
+
+        if result.was_modified {
+            env.storage()
+                .persistent()
+                .set(&DataKey::Record(record_id), &result.record);
+
+            let post_report =
+                validation::validate_record_with_report(&env, record_id, &result.record);
+
+            events::emit_data_quality_validated(
+                &env,
+                caller,
+                record_id,
+                post_report.quality_score.overall_score,
+                post_report.is_fhir_compliant,
+                post_report.quality_score.issue_count,
+            );
+        }
+
+        Ok(result)
     }
 }
 

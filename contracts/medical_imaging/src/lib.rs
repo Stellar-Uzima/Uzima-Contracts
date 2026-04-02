@@ -24,6 +24,8 @@ const NEXT_ANN: Symbol = symbol_short!("NANN");
 const NEXT_DGN: Symbol = symbol_short!("NDIAG");
 const NEXT_DSE: Symbol = symbol_short!("NDOSE");
 const SAFE_DSE: Symbol = symbol_short!("SAFE_DSE");
+const NEXT_STD: Symbol = symbol_short!("NSTD");
+const NEXT_RPT: Symbol = symbol_short!("NRPT");
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -219,6 +221,47 @@ pub struct DoseSummary {
     pub safety_alerts: u32,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum StudyStatus {
+    Pending,
+    Assigned,
+    InReview,
+    PreliminaryReport,
+    DiscrepancyReview,
+    FinalReport,
+    Amended,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct ImagingStudy {
+    pub study_id: u64,
+    pub patient: Address,
+    pub created_by: Address,
+    pub modality: ImagingModality,
+    pub image_ids: Vec<u64>,
+    pub ai_result_ids: Vec<u64>,
+    pub required_readers: u32,
+    pub status: StudyStatus,
+    pub created_at: u64,
+    pub finalized_at: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct ReaderReport {
+    pub report_id: u64,
+    pub study_id: u64,
+    pub reader: Address,
+    pub diagnosis_hash: BytesN<32>,
+    pub findings_hash: BytesN<32>,
+    pub findings_ref: String,
+    pub agrees_with_ai: bool,
+    pub ai_accuracy_feedback_bps: u32,
+    pub submitted_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -240,6 +283,14 @@ pub enum DataKey {
     Link(u64),
     DoseEntry(u64),
     DoseSummary(Address),
+    Study(u64),
+    ReaderReportEntry(u64),
+    StudyReports(u64),
+    StudyReaders(u64),
+    ReaderStudies(Address),
+    StatusStudies(u32),
+    PatientStudies(Address),
+    StudyArbitrator(u64),
 }
 
 #[contracterror]
@@ -259,6 +310,16 @@ pub enum Error {
     LinkNotFound = 11,
     DuplicateDicomSop = 12,
     IntegrityMismatch = 13,
+    StudyNotFound = 14,
+    StudyNotInExpectedStatus = 15,
+    ReaderNotAssigned = 16,
+    ReaderAlreadySubmitted = 17,
+    TooManyReaders = 18,
+    TooManyImages = 19,
+    AllReadersNotSubmitted = 20,
+    ArbitratorNotAssigned = 21,
+    InvalidStatusTransition = 22,
+    ReportsNotYetAvailable = 23,
 }
 
 #[contract]
@@ -284,6 +345,8 @@ impl MedicalImagingContract {
         env.storage()
             .instance()
             .set(&SAFE_DSE, &safety_threshold_mgy);
+        env.storage().instance().set(&NEXT_STD, &1u64);
+        env.storage().instance().set(&NEXT_RPT, &1u64);
         env.storage()
             .persistent()
             .set(&DataKey::ImageIds, &Vec::<u64>::new(&env));
@@ -1055,6 +1118,495 @@ impl MedicalImagingContract {
             .get(&DataKey::DoseSummary(patient))
     }
 
+    // ── Study Creation & Reader Assignment ──
+
+    pub fn create_study(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        modality: ImagingModality,
+        image_ids: Vec<u64>,
+        required_readers: u32,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        if required_readers == 0 || required_readers > 5 {
+            return Err(Error::TooManyReaders);
+        }
+        if image_ids.is_empty() || image_ids.len() > 500 {
+            return Err(Error::TooManyImages);
+        }
+        for img_id in image_ids.iter() {
+            Self::require_image_exists(&env, img_id)?;
+        }
+
+        let study_id = Self::next_counter(&env, &NEXT_STD);
+        let now = env.ledger().timestamp();
+
+        let study = ImagingStudy {
+            study_id,
+            patient: patient.clone(),
+            created_by: caller.clone(),
+            modality,
+            image_ids,
+            ai_result_ids: Vec::new(&env),
+            required_readers,
+            status: StudyStatus::Pending,
+            created_at: now,
+            finalized_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Self::append_u64(&env, DataKey::PatientStudies(patient), study_id);
+        Self::append_u64(
+            &env,
+            DataKey::StatusStudies(Self::status_to_u32(&StudyStatus::Pending)),
+            study_id,
+        );
+
+        env.events()
+            .publish((symbol_short!("STDY_NEW"),), (study_id, caller));
+        Ok(study_id)
+    }
+
+    pub fn assign_reader(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        reader: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+        Self::require_role_or_admin(&env, &reader, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::Pending && study.status != StudyStatus::Assigned {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let readers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReaders(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        if readers.iter().any(|r| r == reader) {
+            return Err(Error::InvalidInput);
+        }
+        if readers.len() >= study.required_readers {
+            return Err(Error::TooManyReaders);
+        }
+
+        let mut new_readers = readers;
+        new_readers.push_back(reader.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::StudyReaders(study_id), &new_readers);
+
+        Self::append_u64(&env, DataKey::ReaderStudies(reader.clone()), study_id);
+
+        if study.status == StudyStatus::Pending {
+            let old_status = study.status;
+            study.status = StudyStatus::Assigned;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &StudyStatus::Assigned);
+        }
+
+        env.events()
+            .publish((symbol_short!("STDY_ASG"),), (study_id, reader));
+        Ok(true)
+    }
+
+    pub fn assign_arbitrator(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        arbitrator: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        let study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::DiscrepancyReview {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::StudyArbitrator(study_id), &arbitrator);
+        Ok(true)
+    }
+
+    pub fn link_ai_results(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        result_ids: Vec<u64>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_PHYSICIAN)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        for rid in result_ids.iter() {
+            study.ai_result_ids.push_back(rid);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Ok(true)
+    }
+
+    pub fn get_study(env: Env, study_id: u64) -> Option<ImagingStudy> {
+        env.storage().persistent().get(&DataKey::Study(study_id))
+    }
+
+    pub fn get_studies_by_reader(env: Env, reader: Address) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ReaderStudies(reader))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_studies_by_status(env: Env, status: StudyStatus) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::StatusStudies(Self::status_to_u32(&status)))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    pub fn get_studies_by_patient(env: Env, patient: Address) -> Vec<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientStudies(patient))
+            .unwrap_or(Vec::new(&env))
+    }
+
+    // ── Reader Report Submission ──
+
+    pub fn submit_reader_report(
+        env: Env,
+        reader: Address,
+        study_id: u64,
+        diagnosis_hash: BytesN<32>,
+        findings_hash: BytesN<32>,
+        findings_ref: String,
+        agrees_with_ai: bool,
+        ai_accuracy_feedback_bps: u32,
+    ) -> Result<u64, Error> {
+        reader.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::Assigned
+            && study.status != StudyStatus::InReview
+            && study.status != StudyStatus::DiscrepancyReview
+        {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        // Check reader is assigned or is the arbitrator
+        let readers: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReaders(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        let is_reader = readers.iter().any(|r| r == reader);
+        let is_arbitrator = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::StudyArbitrator(study_id))
+            .map(|a| a == reader)
+            .unwrap_or(false);
+
+        if !is_reader && !is_arbitrator {
+            return Err(Error::ReaderNotAssigned);
+        }
+
+        // Check for duplicate submission
+        let existing_report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        for rid in existing_report_ids.iter() {
+            let existing: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if existing.reader == reader {
+                return Err(Error::ReaderAlreadySubmitted);
+            }
+        }
+
+        if ai_accuracy_feedback_bps > 10_000 {
+            return Err(Error::InvalidInput);
+        }
+
+        let report_id = Self::next_counter(&env, &NEXT_RPT);
+        let report = ReaderReport {
+            report_id,
+            study_id,
+            reader: reader.clone(),
+            diagnosis_hash: diagnosis_hash.clone(),
+            findings_hash,
+            findings_ref,
+            agrees_with_ai,
+            ai_accuracy_feedback_bps,
+            submitted_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ReaderReportEntry(report_id), &report);
+        Self::append_u64(&env, DataKey::StudyReports(study_id), report_id);
+
+        // Auto-transition logic
+        let old_status = study.status;
+
+        if old_status == StudyStatus::Assigned {
+            study.status = StudyStatus::InReview;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &study.status);
+        }
+
+        // Check if arbitrator submitted in DiscrepancyReview
+        if is_arbitrator && old_status == StudyStatus::DiscrepancyReview {
+            study.status = StudyStatus::PreliminaryReport;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Study(study_id), &study);
+            Self::update_status_index(&env, study_id, &old_status, &study.status);
+        }
+
+        // Check if all required readers have submitted
+        let updated_report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        // Count only reports from assigned readers (not arbitrator)
+        let mut reader_report_count = 0u32;
+        let mut all_diagnosis_hashes: Vec<BytesN<32>> = Vec::new(&env);
+        for rid in updated_report_ids.iter() {
+            let rpt: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if readers.iter().any(|r| r == rpt.reader) {
+                reader_report_count = reader_report_count.saturating_add(1);
+                all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+            }
+        }
+
+        if reader_report_count >= study.required_readers
+            && study.status != StudyStatus::PreliminaryReport
+        {
+            // Reload study in case it was updated
+            let mut study: ImagingStudy = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Study(study_id))
+                .unwrap();
+            let current_status = study.status;
+
+            // Check if all hashes match
+            let first_hash = all_diagnosis_hashes.get(0).unwrap();
+            let all_match = all_diagnosis_hashes.iter().all(|h| h == first_hash);
+
+            if all_match {
+                study.status = StudyStatus::PreliminaryReport;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Study(study_id), &study);
+                Self::update_status_index(
+                    &env,
+                    study_id,
+                    &current_status,
+                    &StudyStatus::PreliminaryReport,
+                );
+            } else {
+                study.status = StudyStatus::DiscrepancyReview;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Study(study_id), &study);
+                Self::update_status_index(
+                    &env,
+                    study_id,
+                    &current_status,
+                    &StudyStatus::DiscrepancyReview,
+                );
+                env.events().publish((symbol_short!("DISCREP"),), study_id);
+            }
+        }
+
+        env.events()
+            .publish((symbol_short!("RPT_SUB"),), (study_id, report_id, reader));
+        Ok(report_id)
+    }
+
+    pub fn get_reader_reports(env: Env, caller: Address, study_id: u64) -> Vec<ReaderReport> {
+        let study: Option<ImagingStudy> = env.storage().persistent().get(&DataKey::Study(study_id));
+
+        let can_view = match &study {
+            Some(s) => {
+                matches!(
+                    s.status,
+                    StudyStatus::PreliminaryReport
+                        | StudyStatus::DiscrepancyReview
+                        | StudyStatus::FinalReport
+                        | StudyStatus::Amended
+                ) || Self::require_admin(&env, &caller).is_ok()
+            }
+            None => false,
+        };
+
+        if !can_view {
+            return Vec::new(&env);
+        }
+
+        let report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut out = Vec::new(&env);
+        for rid in report_ids.iter() {
+            if let Some(rpt) = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+            {
+                out.push_back(rpt);
+            }
+        }
+        out
+    }
+
+    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> ReaderReport {
+        reader.require_auth();
+        let report_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StudyReports(study_id))
+            .unwrap_or(Vec::new(&env));
+
+        for rid in report_ids.iter() {
+            let rpt: ReaderReport = env
+                .storage()
+                .persistent()
+                .get(&DataKey::ReaderReportEntry(rid))
+                .unwrap();
+            if rpt.reader == reader {
+                return rpt;
+            }
+        }
+        panic!("report not found");
+    }
+
+    // ── Study Finalization & Amendment ──
+
+    pub fn finalize_study(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        _final_report_ref: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::PreliminaryReport {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let old_status = study.status;
+        study.status = StudyStatus::FinalReport;
+        study.finalized_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+        Self::update_status_index(&env, study_id, &old_status, &StudyStatus::FinalReport);
+
+        env.events()
+            .publish((symbol_short!("STDY_FIN"),), (study_id, caller));
+        Ok(true)
+    }
+
+    pub fn amend_study(
+        env: Env,
+        caller: Address,
+        study_id: u64,
+        _amendment_ref: String,
+        _reason_hash: BytesN<32>,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_role_or_admin(&env, &caller, ROLE_RADIOLOGIST)?;
+
+        let mut study: ImagingStudy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Study(study_id))
+            .ok_or(Error::StudyNotFound)?;
+
+        if study.status != StudyStatus::FinalReport && study.status != StudyStatus::Amended {
+            return Err(Error::StudyNotInExpectedStatus);
+        }
+
+        let old_status = study.status;
+        study.status = StudyStatus::Amended;
+        env.storage()
+            .persistent()
+            .set(&DataKey::Study(study_id), &study);
+
+        if old_status == StudyStatus::FinalReport {
+            Self::update_status_index(&env, study_id, &old_status, &StudyStatus::Amended);
+        }
+
+        env.events()
+            .publish((symbol_short!("STDY_AMD"),), (study_id, caller));
+        Ok(true)
+    }
+
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1115,5 +1667,45 @@ impl MedicalImagingContract {
             values.push_back(value);
             env.storage().persistent().set(&key, &values);
         }
+    }
+
+    fn status_to_u32(status: &StudyStatus) -> u32 {
+        match status {
+            StudyStatus::Pending => 0,
+            StudyStatus::Assigned => 1,
+            StudyStatus::InReview => 2,
+            StudyStatus::PreliminaryReport => 3,
+            StudyStatus::DiscrepancyReview => 4,
+            StudyStatus::FinalReport => 5,
+            StudyStatus::Amended => 6,
+        }
+    }
+
+    fn update_status_index(
+        env: &Env,
+        study_id: u64,
+        old_status: &StudyStatus,
+        new_status: &StudyStatus,
+    ) {
+        // Remove from old status index
+        let old_key = DataKey::StatusStudies(Self::status_to_u32(old_status));
+        let old_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&old_key)
+            .unwrap_or(Vec::new(env));
+        let mut new_vec = Vec::new(env);
+        for id in old_ids.iter() {
+            if id != study_id {
+                new_vec.push_back(id);
+            }
+        }
+        env.storage().persistent().set(&old_key, &new_vec);
+        // Add to new status index
+        Self::append_u64(
+            env,
+            DataKey::StatusStudies(Self::status_to_u32(new_status)),
+            study_id,
+        );
     }
 }

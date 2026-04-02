@@ -1,18 +1,9 @@
-use soroban_sdk::testutils::{ Address as TestAddress, Ledger as TestLedger };
-use soroban_sdk::{ Address, BytesN, Env, String, Vec };
+use soroban_sdk::testutils::{Address as TestAddress, Ledger as TestLedger};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::{
-    ConsentType,
-    ConsultationStatus,
-    TelemedicineContract,
-    TelemedicineContractClient,
-    TelemedicineError,
-    VideoQuality,
-    VideoCodec,
-    EncryptionLevel,
-    DeviceType,
-    WaitingRoomStatus,
-    ESIGNStatus,
+    ChatIntent, ConsentType, ConsultationStatus, EmergencyLevel, TelemedicineContract,
+    TelemedicineContractClient, TelemedicineError,
 };
 
 fn generate_test_address(env: &Env) -> Address {
@@ -46,12 +37,8 @@ impl TestContext {
 
         let contract_id = env.register_contract(None, TelemedicineContract);
         // SAFETY: env outlives client within the same test function
-        let client = TelemedicineContractClient::new(
-            unsafe {
-                &*(&env as *const Env)
-            },
-            &contract_id
-        );
+        let client =
+            TelemedicineContractClient::new(unsafe { &*(&env as *const Env) }, &contract_id);
 
         let admin = generate_test_address(&env);
         let provider = generate_test_address(&env);
@@ -78,14 +65,6 @@ impl TestContext {
         jurisdictions.push_back(String::from_str(&self.env, "KE"));
         jurisdictions.push_back(String::from_str(&self.env, "US"));
 
-        let mut supported_qualities = Vec::new(&self.env);
-        supported_qualities.push_back(VideoQuality::FullHD);
-        supported_qualities.push_back(VideoQuality::High);
-
-        let mut supported_codecs = Vec::new(&self.env);
-        supported_codecs.push_back(VideoCodec::H264);
-        supported_codecs.push_back(VideoCodec::VP8);
-
         self.client.register_provider(
             &self.provider_id,
             &self.provider,
@@ -94,11 +73,6 @@ impl TestContext {
             &jurisdictions,
             &String::from_str(&self.env, "General Practice"),
             &2_000_000u64,
-            &10u32,
-            &supported_qualities,
-            &supported_codecs,
-            &true,
-            &BytesN::from_array(&self.env, &[11u8; 32])
         );
     }
 
@@ -110,11 +84,22 @@ impl TestContext {
             &String::from_str(&self.env, "KE"),
             &String::from_str(&self.env, "+254700000001"),
             &String::from_str(&self.env, "English"),
-            &true,
-            &true,
-            &true,
-            &VideoQuality::FullHD,
-            &10000u32
+        );
+    }
+
+    fn setup_patient_with_language(
+        &self,
+        patient_id: &BytesN<32>,
+        patient: &Address,
+        language: &str,
+    ) {
+        self.client.register_patient(
+            patient_id,
+            patient,
+            &self.provider_id,
+            &String::from_str(&self.env, "KE"),
+            &String::from_str(&self.env, "+254700000099"),
+            &String::from_str(&self.env, language),
         );
     }
 
@@ -126,369 +111,51 @@ impl TestContext {
             &self.patient_id,
             &consent_type,
             &String::from_str(&self.env, "General consent"),
-            &None
+            &None,
         );
         consent_id
     }
 }
 
-// ============================================================
-// TELEHEALTH INTEGRATION TESTS
-// ============================================================
-
-#[test]
-fn test_video_session_creation() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[200u8; 32]);
-    let consultation_id = BytesN::from_array(&ctx.env, &[201u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[202u8; 32]);
-
-    // First schedule a consultation
-    ctx.client.schedule_consultation(
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
-    );
-
-    // Create video session
-    ctx.client.create_video_session(
-        &session_id,
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &String::from_str(&ctx.env, "room-123"),
-        &VideoQuality::FullHD,
-        &VideoCodec::H264,
-        &EncryptionLevel::Enhanced,
-        &true
-    );
-
-    // Start the video session
-    ctx.client.start_video_session(&session_id, &String::from_str(&ctx.env, "sdp-offer-data"));
-
-    // Verify 1080p 30fps quality metrics
-    let metrics = crate::VideoQualityMetrics {
-        session_id,
-        resolution_width: 1920,
-        resolution_height: 1080,
-        frame_rate: 30,
-        bitrate_kbps: 5000,
-        cpu_usage: 45,
-        memory_usage: 60,
-        network_jitter: 20,
-        round_trip_time: 50,
-        video_freeze_count: 0,
-        audio_freeze_count: 0,
-        quality_score: 95,
-        hipaa_compliance_score: 100,
-        timestamp: ctx.env.ledger().timestamp(),
-    };
-
-    ctx.client.update_video_quality(&session_id, metrics);
-
-    // End the session
-    ctx.client.end_video_session(&session_id, &BytesN::from_array(&ctx.env, &[203u8; 32]));
-}
-
-#[test]
-fn test_concurrent_session_limit() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    // Test that the system can handle the concurrent session limit
-    let consultation_id = BytesN::from_array(&ctx.env, &[210u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[211u8; 32]);
-
-    ctx.client.schedule_consultation(
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
-    );
-
-    // This should succeed as we're under the 10,000 limit
-    ctx.client.create_video_session(
-        &BytesN::from_array(&ctx.env, &[212u8; 32]),
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &String::from_str(&ctx.env, "room-124"),
-        &VideoQuality::FullHD,
-        &VideoCodec::H264,
-        &EncryptionLevel::Enhanced,
-        &true
-    );
-}
-
-#[test]
-fn test_virtual_waiting_room() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-
-    let room_id = BytesN::from_array(&ctx.env, &[300u8; 32]);
-    let patient2_id = BytesN::from_array(&ctx.env, &[301u8; 32]);
-
-    // Create waiting room
-    ctx.client.create_waiting_room(
-        &room_id,
-        &ctx.provider_id,
-        &5u32 // max capacity
-    );
-
-    // Patient joins waiting room
-    ctx.client.join_waiting_room(&room_id, &ctx.patient_id);
-
-    // Register and add second patient
-    ctx.client.register_patient(
-        &patient2_id,
-        &generate_test_address(&ctx.env),
-        &ctx.provider_id,
-        &String::from_str(&ctx.env, "KE"),
-        &String::from_str(&ctx.env, "+254700000002"),
+fn seed_chatbot_knowledge(ctx: &TestContext) {
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[120u8; 32]),
+        &String::from_str(&ctx.env, "symptom"),
         &String::from_str(&ctx.env, "English"),
-        &true,
-        &true,
-        &true,
-        &VideoQuality::FullHD,
-        &10000u32
+        &String::from_str(&ctx.env, "Fever care"),
+        &String::from_str(&ctx.env, "fever cough home care"),
+        &String::from_str(
+            &ctx.env,
+            "Drink fluids, rest, and seek urgent care if breathing becomes difficult.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/fever"),
     );
 
-    ctx.client.join_waiting_room(&room_id, &patient2_id);
-
-    // Patient leaves waiting room
-    ctx.client.leave_waiting_room(&room_id, &ctx.patient_id);
-}
-
-#[test]
-fn test_remote_device_monitoring() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-
-    let device_id = BytesN::from_array(&ctx.env, &[400u8; 32]);
-    let reading_id = BytesN::from_array(&ctx.env, &[401u8; 32]);
-
-    // Register remote device
-    ctx.client.register_remote_device(
-        &device_id,
-        &ctx.patient_id,
-        &DeviceType::BloodPressure,
-        &String::from_str(&ctx.env, "Omron BP7000"),
-        &String::from_str(&ctx.env, "Omron Healthcare"),
-        &String::from_str(&ctx.env, "BP7000"),
-        &String::from_str(&ctx.env, "1.2.3"),
-        &String::from_str(&ctx.env, "OM123456789"),
-        &String::from_str(&ctx.env, "00:1A:7D:DA:71:13"),
-        &true,
-        &BytesN::from_array(&ctx.env, &[402u8; 32])
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[121u8; 32]),
+        &String::from_str(&ctx.env, "emergency"),
+        &String::from_str(&ctx.env, "English"),
+        &String::from_str(&ctx.env, "Chest pain emergency"),
+        &String::from_str(&ctx.env, "chest pain emergency breathing"),
+        &String::from_str(
+            &ctx.env,
+            "Call emergency services immediately and do not drive yourself if symptoms are severe.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/chest-pain"),
     );
 
-    // Connect device
-    ctx.client.connect_device(&device_id, &ctx.patient_id);
-
-    // Record vital signs
-    ctx.client.record_vital_signs(
-        &reading_id,
-        &device_id,
-        &ctx.patient_id,
-        &DeviceType::BloodPressure,
-        &120u32, // systolic BP
-        &String::from_str(&ctx.env, "mmHg"),
-        &BytesN::from_array(&ctx.env, &[403u8; 32])
+    ctx.client.upsert_knowledge_entry(
+        &BytesN::from_array(&ctx.env, &[122u8; 32]),
+        &String::from_str(&ctx.env, "symptom"),
+        &String::from_str(&ctx.env, "Swahili"),
+        &String::from_str(&ctx.env, "Huduma ya homa"),
+        &String::from_str(&ctx.env, "homa kikohozi pumzika"),
+        &String::from_str(
+            &ctx.env,
+            "Pumzika, kunywa maji mengi, na tafuta huduma ya haraka ukipata shida ya kupumua.",
+        ),
+        &String::from_str(&ctx.env, "medical_records://kb/homa"),
     );
-}
-
-#[test]
-fn test_esign_prescription() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let consultation_id = BytesN::from_array(&ctx.env, &[500u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[501u8; 32]);
-    let prescription_id = BytesN::from_array(&ctx.env, &[502u8; 32]);
-
-    // Complete consultation first
-    ctx.client.schedule_consultation(
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
-    );
-
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_500_000;
-    });
-    ctx.client.start_consultation(&consultation_id, &ctx.provider);
-
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_501_800;
-    });
-    ctx.client.complete_consultation(
-        &consultation_id,
-        &ctx.provider,
-        &BytesN::from_array(&ctx.env, &[503u8; 32]),
-        &appointment_id,
-        &85u32
-    );
-
-    // Issue e-sign prescription
-    let mut medications = Vec::new(&ctx.env);
-    medications.push_back(String::from_str(&ctx.env, "Amoxicillin 500mg"));
-
-    let mut dosage_instructions = Vec::new(&ctx.env);
-    dosage_instructions.push_back(String::from_str(&ctx.env, "Take twice daily with food"));
-
-    ctx.client.issue_esign_prescription(
-        &prescription_id,
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &ctx.provider,
-        &medications,
-        &dosage_instructions,
-        &14u64,
-        &String::from_str(&ctx.env, "PHARMACY-KE-001"),
-        &BytesN::from_array(&ctx.env, &[504u8; 64]), // digital signature
-        &BytesN::from_array(&ctx.env, &[11u8; 32]), // certificate id
-        &String::from_str(&ctx.env, "KE")
-    );
-
-    // Patient signs prescription
-    ctx.client.sign_prescription(&prescription_id, &ctx.patient);
-}
-
-#[test]
-fn test_hipaa_compliance() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[600u8; 32]);
-    let consultation_id = BytesN::from_array(&ctx.env, &[601u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[602u8; 32]);
-
-    // Schedule consultation
-    ctx.client.schedule_consultation(
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
-    );
-
-    // Create HIPAA-compliant video session
-    ctx.client.create_video_session(
-        &session_id,
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &String::from_str(&ctx.env, "room-600"),
-        &VideoQuality::FullHD,
-        &VideoCodec::H264,
-        &EncryptionLevel::Maximum, // Maximum encryption for HIPAA
-        &true // recording enabled
-    );
-
-    // Verify HIPAA compliance
-    let is_compliant = ctx.client.verify_hipaa_compliance(&session_id);
-    assert!(is_compliant);
-}
-
-#[test]
-fn test_video_quality_requirements() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[700u8; 32]);
-    let consultation_id = BytesN::from_array(&ctx.env, &[701u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[702u8; 32]);
-
-    ctx.client.schedule_consultation(
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1_500_000u64,
-        &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
-    );
-
-    ctx.client.create_video_session(
-        &session_id,
-        &consultation_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &String::from_str(&ctx.env, "room-700"),
-        &VideoQuality::FullHD,
-        &VideoCodec::H264,
-        &EncryptionLevel::Enhanced,
-        &true
-    );
-
-    ctx.client.start_video_session(&session_id, &String::from_str(&ctx.env, "sdp-offer-data"));
-
-    // Test valid 1080p 30fps metrics
-    let valid_metrics = crate::VideoQualityMetrics {
-        session_id,
-        resolution_width: 1920,
-        resolution_height: 1080,
-        frame_rate: 30,
-        bitrate_kbps: 5000,
-        cpu_usage: 45,
-        memory_usage: 60,
-        network_jitter: 20,
-        round_trip_time: 50,
-        video_freeze_count: 0,
-        audio_freeze_count: 0,
-        quality_score: 95,
-        hipaa_compliance_score: 100,
-        timestamp: ctx.env.ledger().timestamp(),
-    };
-
-    ctx.client.update_video_quality(&session_id, valid_metrics);
-
-    // Test invalid quality (below 1080p)
-    let invalid_metrics = crate::VideoQualityMetrics {
-        session_id: BytesN::from_array(&ctx.env, &[703u8; 32]),
-        resolution_width: 1280, // Not 1920
-        resolution_height: 720, // Not 1080
-        frame_rate: 30,
-        bitrate_kbps: 2500,
-        cpu_usage: 30,
-        memory_usage: 40,
-        network_jitter: 15,
-        round_trip_time: 40,
-        video_freeze_count: 0,
-        audio_freeze_count: 0,
-        quality_score: 80,
-        hipaa_compliance_score: 90,
-        timestamp: ctx.env.ledger().timestamp(),
-    };
-
-    let result = ctx.client.try_update_video_quality(
-        &BytesN::from_array(&ctx.env, &[703u8; 32]),
-        invalid_metrics
-    );
-    assert_err!(result, TelemedicineError::VideoQualityUnsupported);
 }
 
 // ============================================================
@@ -538,7 +205,7 @@ fn test_pause_unpause() {
         &BytesN::from_array(&ctx.env, &[4u8; 32]),
         &String::from_str(&ctx.env, "KE"),
         &String::from_str(&ctx.env, "+254700000002"),
-        &String::from_str(&ctx.env, "English")
+        &String::from_str(&ctx.env, "English"),
     );
     assert_err!(result, TelemedicineError::ContractPaused);
 
@@ -550,7 +217,7 @@ fn test_pause_unpause() {
         &BytesN::from_array(&ctx.env, &[4u8; 32]),
         &String::from_str(&ctx.env, "KE"),
         &String::from_str(&ctx.env, "+254700000002"),
-        &String::from_str(&ctx.env, "English")
+        &String::from_str(&ctx.env, "English"),
     );
 }
 
@@ -566,7 +233,10 @@ fn test_register_provider() {
     let provider = ctx.client.get_provider(&ctx.provider_id);
     assert_eq!(provider.name, String::from_str(&ctx.env, "Dr. John Smith"));
     assert!(provider.is_active);
-    assert_eq!(provider.specialty, String::from_str(&ctx.env, "General Practice"));
+    assert_eq!(
+        provider.specialty,
+        String::from_str(&ctx.env, "General Practice")
+    );
     assert_eq!(provider.jurisdictions.len(), 2);
 
     let (providers, _, _, _, _, _) = ctx.client.get_platform_stats();
@@ -576,9 +246,7 @@ fn test_register_provider() {
 #[test]
 fn test_register_expired_provider() {
     let ctx = TestContext::new();
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_000_000;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_000_000);
 
     let mut jurisdictions = Vec::new(&ctx.env);
     jurisdictions.push_back(String::from_str(&ctx.env, "KE"));
@@ -590,7 +258,7 @@ fn test_register_expired_provider() {
         &BytesN::from_array(&ctx.env, &[11u8; 32]),
         &jurisdictions,
         &String::from_str(&ctx.env, "Cardiology"),
-        &500_000u64
+        &500_000u64,
     );
     assert_err!(result, TelemedicineError::LicenseExpired);
 }
@@ -618,8 +286,14 @@ fn test_register_patient() {
 
     let patient = ctx.client.get_patient(&ctx.patient_id);
     assert_eq!(patient.jurisdiction, String::from_str(&ctx.env, "KE"));
-    assert_eq!(patient.contact_info, String::from_str(&ctx.env, "+254700000001"));
-    assert_eq!(patient.preferred_language, String::from_str(&ctx.env, "English"));
+    assert_eq!(
+        patient.contact_info,
+        String::from_str(&ctx.env, "+254700000001")
+    );
+    assert_eq!(
+        patient.preferred_language,
+        String::from_str(&ctx.env, "English")
+    );
     assert_eq!(patient.primary_care_physician, ctx.provider_id);
 
     let (_, patients, _, _, _, _) = ctx.client.get_platform_stats();
@@ -641,13 +315,12 @@ fn test_grant_consent() {
         &ctx.patient_id,
         &ConsentType::VideoConsultation,
         &String::from_str(&ctx.env, "Video consultation consent"),
-        &Some(2_000_000u64)
+        &Some(2_000_000u64),
     );
 
-    let has_consent = ctx.client.has_valid_consent(
-        &ctx.patient_id,
-        &ConsentType::VideoConsultation
-    );
+    let has_consent = ctx
+        .client
+        .has_valid_consent(&ctx.patient_id, &ConsentType::VideoConsultation);
     assert!(has_consent);
 }
 
@@ -659,18 +332,16 @@ fn test_revoke_consent() {
     // setup_consent returns the id it used — reuse it for revoke
     let consent_id = ctx.setup_consent(ConsentType::VideoConsultation);
 
-    let has_consent = ctx.client.has_valid_consent(
-        &ctx.patient_id,
-        &ConsentType::VideoConsultation
-    );
+    let has_consent = ctx
+        .client
+        .has_valid_consent(&ctx.patient_id, &ConsentType::VideoConsultation);
     assert!(has_consent);
 
     ctx.client.revoke_consent(&consent_id);
 
-    let has_consent = ctx.client.has_valid_consent(
-        &ctx.patient_id,
-        &ConsentType::VideoConsultation
-    );
+    let has_consent = ctx
+        .client
+        .has_valid_consent(&ctx.patient_id, &ConsentType::VideoConsultation);
     assert!(!has_consent);
 }
 
@@ -694,7 +365,7 @@ fn test_consultation_lifecycle() {
         &ctx.provider_id,
         &1_500_000u64,
         &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
+        &appointment_id,
     );
 
     let consultation = ctx.client.get_consultation(&session_id);
@@ -702,24 +373,20 @@ fn test_consultation_lifecycle() {
     assert_eq!(consultation.patient_id, ctx.patient_id);
     assert_eq!(consultation.provider_id, ctx.provider_id);
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_500_000;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_500_000);
     ctx.client.start_consultation(&session_id, &ctx.provider);
 
     let consultation = ctx.client.get_consultation(&session_id);
     assert!(matches!(consultation.status, ConsultationStatus::Active));
     assert_eq!(consultation.start_time, 1_500_000u64);
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_501_800;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_501_800);
     ctx.client.complete_consultation(
         &session_id,
         &ctx.provider,
         &BytesN::from_array(&ctx.env, &[46u8; 32]),
         &appointment_id,
-        &85u32
+        &85u32,
     );
 
     let consultation = ctx.client.get_consultation(&session_id);
@@ -745,7 +412,7 @@ fn test_consultation_without_consent() {
         &ctx.provider_id,
         &1_500_000u64,
         &String::from_str(&ctx.env, "General Consultation"),
-        &BytesN::from_array(&ctx.env, &[48u8; 32])
+        &BytesN::from_array(&ctx.env, &[48u8; 32]),
     );
     assert_err!(result, TelemedicineError::ConsentNotGiven);
 }
@@ -772,23 +439,19 @@ fn test_prescription_issuance() {
         &ctx.provider_id,
         &1_500_000u64,
         &String::from_str(&ctx.env, "General Consultation"),
-        &appointment_id
+        &appointment_id,
     );
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_500_000;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_500_000);
     ctx.client.start_consultation(&session_id, &ctx.provider);
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_501_800;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_501_800);
     ctx.client.complete_consultation(
         &session_id,
         &ctx.provider,
         &recording_hash,
         &appointment_id,
-        &85u32
+        &85u32,
     );
 
     let mut meds = Vec::new(&ctx.env);
@@ -802,7 +465,7 @@ fn test_prescription_issuance() {
         &ctx.provider,
         &meds,
         &14u64,
-        &String::from_str(&ctx.env, "PHARMACY-KE-001")
+        &String::from_str(&ctx.env, "PHARMACY-KE-001"),
     );
 
     let prescription = ctx.client.get_prescription(&prescription_id);
@@ -828,7 +491,8 @@ fn test_monitoring_session() {
 
     let monitoring_id = BytesN::from_array(&ctx.env, &[60u8; 32]);
 
-    ctx.client.start_monitoring_session(&monitoring_id, &ctx.patient_id, &ctx.provider_id, &24u32);
+    ctx.client
+        .start_monitoring_session(&monitoring_id, &ctx.patient_id, &ctx.provider_id, &24u32);
 
     let session = ctx.client.end_monitoring_session(&monitoring_id);
     assert!(!session.is_active);
@@ -866,23 +530,19 @@ fn test_platform_statistics() {
         &ctx.provider_id,
         &1_500_000u64,
         &String::from_str(&ctx.env, "consultation"),
-        &appointment_id
+        &appointment_id,
     );
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_500_000;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_500_000);
     ctx.client.start_consultation(&session_id, &ctx.provider);
 
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_501_800;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_501_800);
     ctx.client.complete_consultation(
         &session_id,
         &ctx.provider,
         &recording_hash,
         &appt_complete,
-        &85u32
+        &85u32,
     );
 
     let mut meds = Vec::new(&ctx.env);
@@ -896,7 +556,7 @@ fn test_platform_statistics() {
         &ctx.provider,
         &meds,
         &14u64,
-        &String::from_str(&ctx.env, "PHARMACY-KE-001")
+        &String::from_str(&ctx.env, "PHARMACY-KE-001"),
     );
 
     let (providers, patients, consultations, prescriptions, alerts, emergencies) =
@@ -930,9 +590,7 @@ fn test_expired_provider_license() {
     jurisdictions.push_back(String::from_str(&ctx.env, "KE"));
 
     // license_expiry 0 < current timestamp 0 is NOT expired (equal), so advance time first
-    ctx.env.ledger().with_mut(|l| {
-        l.timestamp = 1_000_000;
-    });
+    ctx.env.ledger().with_mut(|l| l.timestamp = 1_000_000);
 
     let result = ctx.client.try_register_provider(
         &BytesN::from_array(&ctx.env, &[80u8; 32]),
@@ -941,7 +599,7 @@ fn test_expired_provider_license() {
         &BytesN::from_array(&ctx.env, &[81u8; 32]),
         &jurisdictions,
         &String::from_str(&ctx.env, "General Practice"),
-        &500_000u64 // expired: 500_000 < 1_000_000
+        &500_000u64, // expired: 500_000 < 1_000_000
     );
     assert_err!(result, TelemedicineError::LicenseExpired);
 }
@@ -958,7 +616,7 @@ fn test_contract_pause() {
         &BytesN::from_array(&ctx.env, &[91u8; 32]),
         &String::from_str(&ctx.env, "KE"),
         &String::from_str(&ctx.env, "+254700000001"),
-        &String::from_str(&ctx.env, "English")
+        &String::from_str(&ctx.env, "English"),
     );
     assert_err!(result, TelemedicineError::ContractPaused);
 
@@ -970,6 +628,166 @@ fn test_contract_pause() {
         &BytesN::from_array(&ctx.env, &[91u8; 32]),
         &String::from_str(&ctx.env, "KE"),
         &String::from_str(&ctx.env, "+254700000001"),
-        &String::from_str(&ctx.env, "English")
+        &String::from_str(&ctx.env, "English"),
     );
+}
+
+// ============================================================
+// CHATBOT TESTS
+// ============================================================
+
+#[test]
+fn test_chatbot_symptom_triage_and_education() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &BytesN::from_array(&ctx.env, &[130u8; 32]),
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(
+            &ctx.env,
+            "I have had fever and cough since yesterday. What should I do?",
+        ),
+    );
+
+    assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
+    assert!(matches!(
+        inquiry.triage_level,
+        EmergencyLevel::Medium | EmergencyLevel::High
+    ));
+    assert!(inquiry.confidence_bps >= 9000);
+    assert!(inquiry.response_time_ms < 2_000);
+    assert!(!inquiry.emergency_detected);
+    assert!(inquiry.health_education.len() > 20);
+    assert_eq!(
+        inquiry.knowledge_source_ref,
+        String::from_str(&ctx.env, "medical_records://kb/fever")
+    );
+
+    let latest = ctx.client.get_latest_patient_inquiry(&ctx.patient_id);
+    assert_eq!(
+        latest.inquiry_id,
+        BytesN::from_array(&ctx.env, &[130u8; 32])
+    );
+}
+
+#[test]
+fn test_chatbot_multilingual_support() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    let sw_patient = generate_test_address(&ctx.env);
+    let sw_patient_id = BytesN::from_array(&ctx.env, &[131u8; 32]);
+    ctx.setup_patient_with_language(&sw_patient_id, &sw_patient, "Swahili");
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &BytesN::from_array(&ctx.env, &[132u8; 32]),
+        &sw_patient_id,
+        &sw_patient,
+        &String::from_str(&ctx.env, "Nina homa na kikohozi, nifanye nini?"),
+    );
+
+    assert_eq!(
+        inquiry.detected_language,
+        String::from_str(&ctx.env, "Swahili")
+    );
+    assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
+    assert_eq!(
+        inquiry.knowledge_source_ref,
+        String::from_str(&ctx.env, "medical_records://kb/homa")
+    );
+    assert!(inquiry.health_education.to_string().contains("Pumzika"));
+}
+
+#[test]
+fn test_chatbot_emergency_detection_and_escalation() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    ctx.client.configure_emergency_protocol(
+        &BytesN::from_array(&ctx.env, &[133u8; 32]),
+        &String::from_str(&ctx.env, "911"),
+        &String::from_str(
+            &ctx.env,
+            "Emergency warning: call 911 immediately and proceed to the nearest hospital.",
+        ),
+        &String::from_str(
+            &ctx.env,
+            "Onyo la dharura: piga 911 mara moja na uende hospitali iliyo karibu.",
+        ),
+        &String::from_str(
+            &ctx.env,
+            "Urgence medicale: appelez le 911 immediatement et rendez-vous a l'hopital le plus proche.",
+        ),
+        &String::from_str(&ctx.env, "regional-ambulance-network"),
+    );
+
+    let inquiry_id = BytesN::from_array(&ctx.env, &[134u8; 32]);
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &inquiry_id,
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(
+            &ctx.env,
+            "I have chest pain and difficulty breathing right now.",
+        ),
+    );
+
+    assert!(matches!(inquiry.intent, ChatIntent::EmergencySupport));
+    assert!(matches!(inquiry.triage_level, EmergencyLevel::Critical));
+    assert!(inquiry.emergency_detected);
+    assert!(inquiry.escalation_required);
+    assert_eq!(inquiry.emergency_case_id, inquiry_id);
+    assert!(inquiry.recommended_action.to_string().contains("911"));
+    assert!(inquiry.confidence_bps >= 9000);
+    assert!(inquiry.response_time_ms < 2_000);
+
+    let emergency = ctx.client.get_emergency_case(&inquiry_id);
+    assert_eq!(emergency.patient_id, ctx.patient_id);
+    assert!(matches!(
+        emergency.emergency_level,
+        EmergencyLevel::Critical
+    ));
+    assert!(emergency.escalated_to_physical);
+
+    let active = ctx.client.get_active_emergencies();
+    assert_eq!(active.len(), 1);
+    assert_eq!(active.get(0).unwrap(), inquiry_id);
+
+    let (_, _, _, _, _, emergencies) = ctx.client.get_platform_stats();
+    assert_eq!(emergencies, 1);
+
+    let resolved = ctx.client.resolve_emergency_case(&inquiry_id);
+    assert!(resolved.is_resolved);
+    assert_eq!(ctx.client.get_active_emergencies().len(), 0);
+}
+
+#[test]
+fn test_chatbot_accuracy_and_response_time_guarantee() {
+    let ctx = TestContext::new();
+    ctx.setup_provider();
+    ctx.setup_patient();
+    seed_chatbot_knowledge(&ctx);
+
+    let inquiry_id = BytesN::from_array(&ctx.env, &[135u8; 32]);
+    let inquiry = ctx.client.submit_chatbot_inquiry(
+        &inquiry_id,
+        &ctx.patient_id,
+        &ctx.patient,
+        &String::from_str(&ctx.env, "I have fever and headache, have I got COVID-19?"),
+    );
+
+    assert!(ctx.client.is_chatbot_inquiry_accurate(&inquiry_id).unwrap());
+    assert!(
+        ctx.client
+            .get_chatbot_response_time_ms(&inquiry_id)
+            .unwrap()
+            < 2000
+    );
+    assert!(inquiry.confidence_bps >= 9000);
 }

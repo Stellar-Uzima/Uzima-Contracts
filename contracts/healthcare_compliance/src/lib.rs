@@ -197,6 +197,17 @@ pub struct ViolationReport {
     pub penalty_amount: i128,
 }
 
+/// On-chain Compliance Report Record (evidence hash + metadata)
+#[derive(Clone)]
+#[contracttype]
+pub struct ReportRecord {
+    pub report_id: String,
+    pub reporter: Address,
+    pub timestamp: u64,
+    pub report_hash: BytesN<32>,
+    pub uri: String,
+}
+
 /// Compliance Dashboard Metrics
 #[derive(Clone)]
 #[contracttype]
@@ -236,6 +247,7 @@ const CONSENTS: Symbol = symbol_short!("CONSENTS");
 const AUDIT_LOGS: Symbol = symbol_short!("AUDITS");
 const BREACH_REPORTS: Symbol = symbol_short!("BREACHES");
 const VIOLATION_REPORTS: Symbol = symbol_short!("VIOLATE");
+const REPORTS: Symbol = symbol_short!("REPORTS");
 #[allow(dead_code)]
 const RETENTION_POLICIES: Symbol = symbol_short!("RETENTION");
 const COMPLIANCE_SCORE: Symbol = symbol_short!("SCORE");
@@ -265,6 +277,8 @@ pub enum Error {
     DataPurgeFailed = 18,
     NotificationFailed = 19,
     InvalidPatientAddress = 20,
+    ReportAlreadyExists = 21,
+    ReportNotFound = 22,
 }
 
 #[contract]
@@ -367,6 +381,12 @@ impl HealthcareComplianceContract {
             1, // Consent
         )?;
 
+        // Emit consent granted event for monitoring
+        env.events().publish(("consent_granted",), (
+            consent.consent_id.clone(),
+            patient.clone(),
+        ));
+
         Ok(())
     }
 
@@ -422,6 +442,12 @@ impl HealthcareComplianceContract {
             0, // None
             1, // Consent
         )?;
+
+        // Emit consent revoked event for monitoring
+        env.events().publish(("consent_revoked",), (
+            consent_id,
+            patient, // patient who revoked consent
+        ));
 
         Ok(())
     }
@@ -512,6 +538,15 @@ impl HealthcareComplianceContract {
 
         env.storage().persistent().set(&AUDIT_LOGS, &logs);
 
+        // Emit an audit event for off-chain watchers and monitoring
+        env.events().publish(("audit_event",), (
+            audit_entry.log_id.clone(),
+            audit_entry.timestamp,
+            audit_entry.resource_id.clone(),
+            audit_entry.patient_id.clone(),
+            audit_entry.details.clone(),
+        ));
+
         // Update compliance score based on audit activity
         Self::update_compliance_score(&env, true)?;
 
@@ -574,6 +609,21 @@ impl HealthcareComplianceContract {
 
         reports.set(breach.report_id.clone(), breach.clone());
         env.storage().persistent().set(&BREACH_REPORTS, &reports);
+
+        // Emit breach event for off-chain monitoring
+        let severity_u32 = match breach.severity {
+            BreachSeverity::Low => 0u32,
+            BreachSeverity::Moderate => 1u32,
+            BreachSeverity::High => 2u32,
+            BreachSeverity::Critical => 3u32,
+        };
+
+        env.events().publish(("breach_reported",), (
+            breach.report_id.clone(),
+            breach.timestamp,
+            severity_u32,
+            breach.affected_records,
+        ));
 
         // Log audit event
         Self::log_audit_event(
@@ -776,5 +826,60 @@ impl HealthcareComplianceContract {
             }
         }
         count
+    }
+
+    /// Submit a compliance report (on-chain evidence stamping)
+    pub fn submit_compliance_report(
+        env: Env,
+        reporter: Address,
+        report_id: String,
+        report_hash: BytesN<32>,
+        uri: String,
+    ) -> Result<(), Error> {
+        #[cfg(not(test))]
+        reporter.require_auth();
+        Self::check_paused(&env)?;
+
+        let mut reports: Map<String, ReportRecord> = env
+            .storage()
+            .persistent()
+            .get(&REPORTS)
+            .unwrap_or(Map::new(&env));
+
+        if reports.contains_key(report_id.clone()) {
+            return Err(Error::ReportAlreadyExists);
+        }
+
+        let rec = ReportRecord {
+            report_id: report_id.clone(),
+            reporter: reporter.clone(),
+            timestamp: env.ledger().timestamp(),
+            report_hash: report_hash.clone(),
+            uri: uri.clone(),
+        };
+
+        reports.set(report_id.clone(), rec);
+        env.storage().persistent().set(&REPORTS, &reports);
+
+        // Emit event for off-chain indexing
+        env.events().publish(("compliance_report_submitted",), (
+            report_id,
+            reporter,
+            env.ledger().timestamp(),
+        ));
+
+        Ok(())
+    }
+
+    /// Retrieve a stamped compliance report
+    pub fn get_compliance_report(env: Env, report_id: String) -> Result<ReportRecord, Error> {
+        let reports: Map<String, ReportRecord> = env
+            .storage()
+            .persistent()
+            .get(&REPORTS)
+            .unwrap_or(Map::new(&env));
+
+        let rec = reports.get(report_id.clone()).ok_or(Error::ReportNotFound)?;
+        Ok(rec)
     }
 }

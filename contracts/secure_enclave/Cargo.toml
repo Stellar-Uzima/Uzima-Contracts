@@ -1,0 +1,22 @@
+[package]
+name = "secure_enclave"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+mpc_manager = { path = "../mpc_manager" }
+zk_verifier = { path = "../zk_verifier" }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
