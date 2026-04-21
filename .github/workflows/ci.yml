@@ -76,11 +76,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run unit tests
-        run: cargo test --lib --all
-
-      - name: Run integration tests
-        run: cargo test --test '*' --all
+      - name: Run all tests
+        run: cargo test --all
 
   # Node.js Integration Tests
   test-nodejs:
