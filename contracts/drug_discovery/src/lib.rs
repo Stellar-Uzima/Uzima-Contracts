@@ -336,10 +336,11 @@ impl DrugDiscoveryPlatform {
         let synthetic_accessibility_bps = 9_500u32
             .saturating_sub(molecule.rotatable_bonds.saturating_mul(150))
             .max(1_000);
-        let novelty_score_bps = (molecule.fingerprint.len() as u32)
+        let novelty_score_bps = molecule
+            .fingerprint
+            .len()
             .saturating_mul(120)
-            .min(10_000)
-            .max(2_000);
+            .clamp(2_000, 10_000);
 
         let analysis = StructureAnalysis {
             molecule_id,
@@ -551,7 +552,7 @@ impl DrugDiscoveryPlatform {
             return Err(Error::InvalidInput);
         }
 
-        let total = candidate_molecule_ids.len() as u32;
+        let total = candidate_molecule_ids.len();
         let mut identified: u32 = 0;
 
         for id in candidate_molecule_ids.iter() {

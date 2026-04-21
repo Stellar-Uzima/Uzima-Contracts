@@ -1,6 +1,8 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String, Vec, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol, Vec,
+};
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const SUPPORTED: Symbol = symbol_short!("SUPPORTED");
@@ -24,14 +26,17 @@ impl HealthcareComplianceAutomation {
         env.storage().instance().set(&SUPPORTED, &list);
     }
 
+    #[allow(unused_variables)]
     pub fn add_framework(env: Env, admin: Address, framework: String) {
         #[cfg(not(test))]
         admin.require_auth();
-        let mut list: FrameworkList = env
-            .storage()
-            .instance()
-            .get(&SUPPORTED)
-            .unwrap_or(FrameworkList { frameworks: Vec::new(&env) });
+        let mut list: FrameworkList =
+            env.storage()
+                .instance()
+                .get(&SUPPORTED)
+                .unwrap_or(FrameworkList {
+                    frameworks: Vec::new(&env),
+                });
         list.frameworks.push_back(framework);
         env.storage().instance().set(&SUPPORTED, &list);
     }
@@ -40,6 +45,8 @@ impl HealthcareComplianceAutomation {
         env.storage()
             .instance()
             .get(&SUPPORTED)
-            .unwrap_or(FrameworkList { frameworks: Vec::new(&env) })
+            .unwrap_or(FrameworkList {
+                frameworks: Vec::new(&env),
+            })
     }
 }

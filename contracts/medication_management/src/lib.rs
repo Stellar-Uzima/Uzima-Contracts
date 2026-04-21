@@ -2,8 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
 };
 
 #[contracterror]
@@ -268,7 +267,9 @@ impl MedicationManagement {
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.storage().instance().set(&DataKey::MedicationCount, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::MedicationCount, &0u64);
         env.storage().instance().set(&DataKey::ScheduleCount, &0u64);
         Ok(())
     }
@@ -301,8 +302,7 @@ impl MedicationManagement {
             synced = synced.saturating_add(1);
         }
 
-        env.events()
-            .publish((symbol_short!("CAT_SYNC"),), synced);
+        env.events().publish((symbol_short!("CAT_SYNC"),), synced);
         Ok(synced)
     }
 
@@ -350,13 +350,16 @@ impl MedicationManagement {
         env.storage()
             .persistent()
             .set(&DataKey::Schedule(schedule_id), &schedule_record);
-        env.storage().instance().set(&DataKey::ScheduleCount, &schedule_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::ScheduleCount, &schedule_id);
 
         let mut patient_schedules = Self::load_patient_schedules(&env, patient.clone());
         patient_schedules.push_back(schedule_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::PatientSchedules(patient.clone()), &patient_schedules);
+        env.storage().persistent().set(
+            &DataKey::PatientSchedules(patient.clone()),
+            &patient_schedules,
+        );
 
         let reminder =
             Self::build_refill_reminder(&env, schedule_id, patient.clone(), &request.refill);
@@ -389,7 +392,10 @@ impl MedicationManagement {
     ) -> Result<(), Error> {
         actor.require_auth();
         let mut schedule = Self::get_schedule_internal(&env, schedule_id)?;
-        if actor != schedule.provider && actor != schedule.patient && actor != Self::get_config(&env)?.admin {
+        if actor != schedule.provider
+            && actor != schedule.patient
+            && actor != Self::get_config(&env)?.admin
+        {
             return Err(Error::Unauthorized);
         }
 
@@ -408,14 +414,17 @@ impl MedicationManagement {
     ) -> Result<(), Error> {
         operator.require_auth();
         let config = Self::get_config(&env)?;
-        if operator != config.admin && operator != config.fda_oracle && operator != config.pharmacist {
+        if operator != config.admin
+            && operator != config.fda_oracle
+            && operator != config.pharmacist
+        {
             return Err(Error::Unauthorized);
         }
 
         if interaction.medication_a == interaction.medication_b
-            || interaction.medication_a.len() == 0
-            || interaction.medication_b.len() == 0
-            || interaction.advisory.len() == 0
+            || interaction.medication_a.is_empty()
+            || interaction.medication_b.is_empty()
+            || interaction.advisory.is_empty()
         {
             return Err(Error::InvalidData);
         }
@@ -500,11 +509,19 @@ impl MedicationManagement {
         Ok(())
     }
 
-    pub fn process_refill(env: Env, actor: Address, schedule_id: u64) -> Result<RefillReminder, Error> {
+    pub fn process_refill(
+        env: Env,
+        actor: Address,
+        schedule_id: u64,
+    ) -> Result<RefillReminder, Error> {
         actor.require_auth();
         let mut schedule = Self::get_schedule_internal(&env, schedule_id)?;
         let config = Self::get_config(&env)?;
-        if actor != schedule.patient && actor != schedule.provider && actor != config.pharmacist && actor != config.admin {
+        if actor != schedule.patient
+            && actor != schedule.provider
+            && actor != config.pharmacist
+            && actor != config.admin
+        {
             return Err(Error::Unauthorized);
         }
         if !schedule.refill.enabled {
@@ -528,8 +545,10 @@ impl MedicationManagement {
             .low_supply_threshold
             .saturating_mul(4)
             .max(schedule.refill.low_supply_threshold.saturating_add(1));
-        schedule.refill.doses_remaining =
-            schedule.refill.doses_remaining.saturating_add(replenish_amount);
+        schedule.refill.doses_remaining = schedule
+            .refill
+            .doses_remaining
+            .saturating_add(replenish_amount);
         schedule.updated_at = now;
 
         reminder.status = RefillStatus::Fulfilled;
@@ -578,7 +597,10 @@ impl MedicationManagement {
         Self::get_schedule_internal(&env, schedule_id)
     }
 
-    pub fn get_medication(env: Env, medication_code: String) -> Result<MedicationDefinition, Error> {
+    pub fn get_medication(
+        env: Env,
+        medication_code: String,
+    ) -> Result<MedicationDefinition, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Medication(medication_code))
@@ -592,7 +614,10 @@ impl MedicationManagement {
             .ok_or(Error::RefillNotFound)
     }
 
-    pub fn get_interaction_alerts(env: Env, schedule_id: u64) -> Result<Vec<InteractionAlert>, Error> {
+    pub fn get_interaction_alerts(
+        env: Env,
+        schedule_id: u64,
+    ) -> Result<Vec<InteractionAlert>, Error> {
         Ok(env
             .storage()
             .persistent()
@@ -604,10 +629,7 @@ impl MedicationManagement {
         Self::load_patient_schedules(&env, patient)
     }
 
-    pub fn generate_adherence_report(
-        env: Env,
-        schedule_id: u64,
-    ) -> Result<AdherenceReport, Error> {
+    pub fn generate_adherence_report(env: Env, schedule_id: u64) -> Result<AdherenceReport, Error> {
         let schedule = Self::get_schedule_internal(&env, schedule_id)?;
         let now = env.ledger().timestamp();
         let events: Vec<DoseEvent> = env
@@ -695,11 +717,11 @@ impl MedicationManagement {
     }
 
     fn validate_medication_definition(medication: &MedicationDefinition) -> Result<(), Error> {
-        if medication.code.len() == 0
-            || medication.ndc_code.len() == 0
-            || medication.name.len() == 0
-            || medication.generic_name.len() == 0
-            || medication.strength.len() == 0
+        if medication.code.is_empty()
+            || medication.ndc_code.is_empty()
+            || medication.name.is_empty()
+            || medication.generic_name.is_empty()
+            || medication.strength.is_empty()
         {
             return Err(Error::InvalidData);
         }
@@ -728,7 +750,9 @@ impl MedicationManagement {
 
         if !existed {
             let count = Self::medication_count(env).saturating_add(1);
-            env.storage().instance().set(&DataKey::MedicationCount, &count);
+            env.storage()
+                .instance()
+                .set(&DataKey::MedicationCount, &count);
         }
 
         if emit_event {
@@ -751,7 +775,7 @@ impl MedicationManagement {
         refill: &RefillPolicy,
         adherence_baseline_bps: u32,
     ) -> Result<(), Error> {
-        if medication_code.len() == 0 || dosage_amount.len() == 0 || start_time == 0 {
+        if medication_code.is_empty() || dosage_amount.is_empty() || start_time == 0 {
             return Err(Error::InvalidData);
         }
         if adherence_baseline_bps > 10_000 {
@@ -785,7 +809,8 @@ impl MedicationManagement {
         patient: Address,
         refill: &RefillPolicy,
     ) -> RefillReminder {
-        let due_status = if refill.enabled && refill.doses_remaining <= refill.low_supply_threshold {
+        let due_status = if refill.enabled && refill.doses_remaining <= refill.low_supply_threshold
+        {
             RefillStatus::ReminderDue
         } else {
             RefillStatus::Monitoring
@@ -810,9 +835,8 @@ impl MedicationManagement {
         let now = env.ledger().timestamp();
         let mut reminder = Self::build_refill_reminder(env, schedule_id, patient, refill);
         if refill.enabled {
-            reminder.reminder_due_at = now.saturating_add(
-                u64::from(refill.reminder_window_days).saturating_mul(86_400),
-            );
+            reminder.reminder_due_at =
+                now.saturating_add(u64::from(refill.reminder_window_days).saturating_mul(86_400));
         }
         reminder
     }
@@ -835,8 +859,7 @@ impl MedicationManagement {
             if existing.status != ScheduleStatus::Active {
                 continue;
             }
-            let (left, right) =
-                Self::normalized_pair(&medication_code, &existing.medication_code);
+            let (left, right) = Self::normalized_pair(&medication_code, &existing.medication_code);
             let interaction: Option<DrugInteraction> = env
                 .storage()
                 .persistent()
@@ -911,10 +934,10 @@ impl MedicationManagement {
                     0
                 } else {
                     let days_u64 = u64::from(*days);
-                    ((elapsed_days + days_u64 - 1) / days_u64) as u32
+                    elapsed_days.div_ceil(days_u64) as u32
                 }
             }
-            DosingSchedule::Weekly => ((elapsed_days + 6) / 7) as u32,
+            DosingSchedule::Weekly => elapsed_days.div_ceil(7) as u32,
             _ => (elapsed_days as u32).saturating_mul(Self::doses_per_day(&schedule.schedule)),
         }
     }
@@ -924,8 +947,7 @@ impl MedicationManagement {
             return start_time;
         }
 
-        let days_left =
-            (u64::from(refill.doses_remaining) + u64::from(doses_per_day) - 1) / u64::from(doses_per_day);
+        let days_left = u64::from(refill.doses_remaining).div_ceil(u64::from(doses_per_day));
         start_time.saturating_add(days_left.saturating_mul(86_400))
     }
 }
@@ -935,9 +957,20 @@ mod test {
     extern crate std;
 
     use super::*;
-    use soroban_sdk::{testutils::{Address as _, EnvTestConfig, Ledger}, Address};
+    use soroban_sdk::{
+        testutils::{Address as _, EnvTestConfig, Ledger},
+        Address,
+    };
 
-    fn setup() -> (Env, MedicationManagementClient<'static>, Address, Address, Address, Address, Address) {
+    fn setup() -> (
+        Env,
+        MedicationManagementClient<'static>,
+        Address,
+        Address,
+        Address,
+        Address,
+        Address,
+    ) {
         let mut env = Env::default();
         env.set_config(EnvTestConfig {
             capture_snapshot_at_drop: false,
@@ -976,13 +1009,7 @@ mod test {
         )
     }
 
-    fn med(
-        env: &Env,
-        code: &str,
-        ndc: &str,
-        name: &str,
-        synced_at: u64,
-    ) -> MedicationDefinition {
+    fn med(env: &Env, code: &str, ndc: &str, name: &str, synced_at: u64) -> MedicationDefinition {
         MedicationDefinition {
             code: String::from_str(env, code),
             ndc_code: String::from_str(env, ndc),
@@ -1012,11 +1039,15 @@ mod test {
 
     #[test]
     fn manages_schedule_and_links_to_external_healthcare_refs() {
-        let (env, client, admin, pharmacist, _fda_oracle, _records_contract, _payments_contract) = setup();
+        let (env, client, admin, pharmacist, _fda_oracle, _records_contract, _payments_contract) =
+            setup();
         let provider = Address::generate(&env);
         let patient = Address::generate(&env);
 
-        client.upsert_fda_medication(&admin, &med(&env, "RX-001", "0001-0001", "Lisinopril", 1_700_000_000));
+        client.upsert_fda_medication(
+            &admin,
+            &med(&env, "RX-001", "0001-0001", "Lisinopril", 1_700_000_000),
+        );
 
         let schedule_id = client.create_schedule(
             &patient,
@@ -1042,7 +1073,10 @@ mod test {
         assert_eq!(schedule.patient, patient);
         assert_eq!(schedule.linked_record_id, Some(42));
         assert_eq!(schedule.linked_claim_id, Some(7));
-        assert_eq!(schedule.prescription_ref, Some(String::from_str(&env, "telemed-rx-99")));
+        assert_eq!(
+            schedule.prescription_ref,
+            Some(String::from_str(&env, "telemed-rx-99"))
+        );
 
         let refill = client.get_refill_status(&schedule_id);
         assert_eq!(refill.status, RefillStatus::Monitoring);
@@ -1056,7 +1090,8 @@ mod test {
 
     #[test]
     fn creates_interaction_alerts_for_active_medications() {
-        let (env, client, admin, pharmacist, _fda_oracle, _records_contract, _payments_contract) = setup();
+        let (env, client, admin, pharmacist, _fda_oracle, _records_contract, _payments_contract) =
+            setup();
         let provider = Address::generate(&env);
         let patient = Address::generate(&env);
 
@@ -1125,7 +1160,8 @@ mod test {
 
     #[test]
     fn tracks_adherence_and_reports_improvement_target() {
-        let (env, client, admin, _pharmacist, _fda_oracle, _records_contract, _payments_contract) = setup();
+        let (env, client, admin, _pharmacist, _fda_oracle, _records_contract, _payments_contract) =
+            setup();
         let provider = Address::generate(&env);
         let patient = Address::generate(&env);
 

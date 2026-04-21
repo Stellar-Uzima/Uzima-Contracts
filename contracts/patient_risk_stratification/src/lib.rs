@@ -1,7 +1,9 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    String, Symbol, Vec, Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
+    String, Symbol, Vec,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -67,7 +69,7 @@ pub struct PatientRiskProfile {
     pub patient: Address,
     pub latest_assessment_id: u64,
     pub current_risk_level: String, // "low", "medium", "high", "critical"
-    pub risk_trend: String, // "improving", "stable", "worsening"
+    pub risk_trend: String,         // "improving", "stable", "worsening"
     pub last_updated: u64,
     pub total_assessments: u32,
     pub specialty_profiles: Map<String, SpecialtyRiskSummary>,
@@ -142,7 +144,11 @@ impl PatientRiskStratificationContract {
     }
 
     fn next_assessment_id(env: &Env) -> u64 {
-        let current: u64 = env.storage().instance().get(&ASSESSMENT_COUNTER).unwrap_or(0);
+        let current: u64 = env
+            .storage()
+            .instance()
+            .get(&ASSESSMENT_COUNTER)
+            .unwrap_or(0);
         let next = current + 1;
         env.storage().instance().set(&ASSESSMENT_COUNTER, &next);
         next
@@ -160,7 +166,11 @@ impl PatientRiskStratificationContract {
     ) -> Result<bool, Error> {
         Self::ensure_admin(&env, &caller)?;
 
-        if env.storage().instance().has(&DataKey::RiskModel(model_id.clone())) {
+        if env
+            .storage()
+            .instance()
+            .has(&DataKey::RiskModel(model_id.clone()))
+        {
             return Err(Error::DuplicateModel);
         }
 
@@ -178,7 +188,9 @@ impl PatientRiskStratificationContract {
             description,
         };
 
-        env.storage().instance().set(&DataKey::RiskModel(model_id.clone()), &model);
+        env.storage()
+            .instance()
+            .set(&DataKey::RiskModel(model_id.clone()), &model);
 
         env.events().publish((symbol_short!("ModelReg"),), model_id);
 
@@ -234,10 +246,19 @@ impl PatientRiskStratificationContract {
             auc_score_bps,
         };
 
-        env.storage().instance().set(&DataKey::Assessment(assessment_id), &assessment);
+        env.storage()
+            .instance()
+            .set(&DataKey::Assessment(assessment_id), &assessment);
 
         // Update patient risk profile
-        Self::update_patient_profile(&env, &patient, assessment_id, risk_score_bps, &model.specialty, timestamp);
+        Self::update_patient_profile(
+            &env,
+            &patient,
+            assessment_id,
+            risk_score_bps,
+            &model.specialty,
+            timestamp,
+        );
 
         env.events().publish(
             (symbol_short!("RiskAsses"),),
@@ -297,7 +318,9 @@ impl PatientRiskStratificationContract {
             });
 
         // Update average risk score
-        let total = specialty_summary.avg_risk_score_bps as u64 * (profile.total_assessments as u64 - 1) + risk_score_bps as u64;
+        let total = specialty_summary.avg_risk_score_bps as u64
+            * (profile.total_assessments as u64 - 1)
+            + risk_score_bps as u64;
         specialty_summary.avg_risk_score_bps = (total / profile.total_assessments as u64) as u32;
 
         if risk_score_bps >= 5000 {
@@ -305,31 +328,49 @@ impl PatientRiskStratificationContract {
         }
         specialty_summary.last_assessment_date = timestamp;
 
-        profile.specialty_profiles.set(specialty_key, specialty_summary);
+        profile
+            .specialty_profiles
+            .set(specialty_key, specialty_summary);
 
-        env.storage().instance().set(&DataKey::PatientProfile(patient.clone()), &profile);
+        env.storage()
+            .instance()
+            .set(&DataKey::PatientProfile(patient.clone()), &profile);
     }
 
     pub fn get_risk_assessment(env: Env, assessment_id: u64) -> Option<RiskAssessment> {
-        env.storage().instance().get(&DataKey::Assessment(assessment_id))
+        env.storage()
+            .instance()
+            .get(&DataKey::Assessment(assessment_id))
     }
 
     pub fn get_patient_risk_profile(env: Env, patient: Address) -> Option<PatientRiskProfile> {
-        env.storage().instance().get(&DataKey::PatientProfile(patient))
+        env.storage()
+            .instance()
+            .get(&DataKey::PatientProfile(patient))
     }
 
     pub fn get_risk_model(env: Env, model_id: BytesN<32>) -> Option<RiskModel> {
         env.storage().instance().get(&DataKey::RiskModel(model_id))
     }
 
-    pub fn get_patient_risk_factors(env: Env, patient: Address, specialty: String) -> Vec<RiskFactor> {
-        let profile: Option<PatientRiskProfile> = env.storage().instance().get(&DataKey::PatientProfile(patient));
+    pub fn get_patient_risk_factors(
+        env: Env,
+        patient: Address,
+        specialty: String,
+    ) -> Vec<RiskFactor> {
+        let profile: Option<PatientRiskProfile> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PatientProfile(patient));
         let profile = match profile {
             Some(p) => p,
             None => return Vec::new(&env),
         };
 
-        let assessment: Option<RiskAssessment> = env.storage().instance().get(&DataKey::Assessment(profile.latest_assessment_id));
+        let assessment: Option<RiskAssessment> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Assessment(profile.latest_assessment_id));
         let assessment = match assessment {
             Some(a) => a,
             None => return Vec::new(&env),
@@ -342,14 +383,23 @@ impl PatientRiskStratificationContract {
         assessment.risk_factors
     }
 
-    pub fn get_intervention_recommendations(env: Env, patient: Address) -> Vec<InterventionRecommendation> {
-        let profile: Option<PatientRiskProfile> = env.storage().instance().get(&DataKey::PatientProfile(patient));
+    pub fn get_intervention_recommendations(
+        env: Env,
+        patient: Address,
+    ) -> Vec<InterventionRecommendation> {
+        let profile: Option<PatientRiskProfile> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PatientProfile(patient));
         let profile = match profile {
             Some(p) => p,
             None => return Vec::new(&env),
         };
 
-        let assessment: Option<RiskAssessment> = env.storage().instance().get(&DataKey::Assessment(profile.latest_assessment_id));
+        let assessment: Option<RiskAssessment> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Assessment(profile.latest_assessment_id));
         let assessment = match assessment {
             Some(a) => a,
             None => return Vec::new(&env),
@@ -373,9 +423,12 @@ impl PatientRiskStratificationContract {
             .ok_or(Error::ModelNotFound)?;
 
         model.enabled = enabled;
-        env.storage().instance().set(&DataKey::RiskModel(model_id.clone()), &model);
+        env.storage()
+            .instance()
+            .set(&DataKey::RiskModel(model_id.clone()), &model);
 
-        env.events().publish((symbol_short!("ModelUpd"),), (model_id, enabled));
+        env.events()
+            .publish((symbol_short!("ModelUpd"),), (model_id, enabled));
 
         Ok(true)
     }
@@ -422,7 +475,7 @@ mod test {
                 importance_bps: 800,
                 category: String::from_str(&env, "demographic"),
                 explanation: String::from_str(&env, "Age over 65 increases risk"),
-            }
+            },
         ];
 
         // Create interventions
@@ -435,23 +488,21 @@ mod test {
                 expected_impact_bps: 300,
                 timeframe_days: 7,
                 resources_needed: vec![&env, String::from_str(&env, "nurse")],
-            }
+            },
         ];
 
         // Perform risk assessment
-        let assessment_id = client
-            .mock_all_auths()
-            .perform_risk_assessment(
-                &assessor,
-                &patient,
-                &model_id,
-                &6500, // 65% risk score
-                &8500, // 85% confidence
-                &30,   // 30 days horizon
-                &risk_factors,
-                &interventions,
-                &8700  // 87% AUC
-            );
+        let assessment_id = client.mock_all_auths().perform_risk_assessment(
+            &assessor,
+            &patient,
+            &model_id,
+            &6500, // 65% risk score
+            &8500, // 85% confidence
+            &30,   // 30 days horizon
+            &risk_factors,
+            &interventions,
+            &8700, // 87% AUC
+        );
 
         assert_eq!(assessment_id, 1);
 
@@ -474,8 +525,8 @@ mod test {
         let client = PatientRiskStratificationContractClient::new(&env, &contract_id);
 
         let admin = Address::generate(&env);
-        let assessor = Address::generate(&env);
-        let patient = Address::generate(&env);
+        let _assessor = Address::generate(&env);
+        let _patient = Address::generate(&env);
 
         // Initialize
         client.mock_all_auths().initialize(&admin);
