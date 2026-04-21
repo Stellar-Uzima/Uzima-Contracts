@@ -134,31 +134,31 @@ jobs:
       - name: Build optimized contracts
         run: |
           set -euo pipefail
-          BUILD_RESULT="success"
-          for contract in contracts/*/; do
-            [ -d "$contract" ] || continue
-            contract_name=$(basename "$contract")
-            echo "Building contract: $contract_name"
-            pushd "$contract" > /dev/null
-            if cargo build --target wasm32-unknown-unknown --release; then
-              echo "  ✅ $contract_name build succeeded"
-            else
-              echo "  ❌ $contract_name build failed"
-              BUILD_RESULT="failure"
-            fi
-            popd > /dev/null
-          done
-          if [ "$BUILD_RESULT" != "success" ]; then
-            echo "One or more contracts failed to build."
+          
+          # Build all workspace contracts from root (respects workspace dependencies)
+          echo "Building all workspace contracts..."
+          if cargo build --target wasm32-unknown-unknown --release --workspace; then
+            echo "✅ All workspace contracts built successfully"
+          else
+            echo "❌ Workspace build failed"
             exit 1
+          fi
+          
+          # Copy WASM files from root target directory
+          mkdir -p dist
+          if ls target/wasm32-unknown-unknown/release/*.wasm 1> /dev/null 2>&1; then
+            cp target/wasm32-unknown-unknown/release/*.wasm dist/
+            echo "Copied $(ls dist/*.wasm | wc -l | tr -d ' ') WASM files to dist/"
+            ls -lh dist/
+          else
+            echo "⚠️ No WASM files found in target directory"
           fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-contracts
-          path: |
-            contracts/*/target/wasm32-unknown-unknown/release/*.wasm
+          path: dist/*.wasm
           retention-days: 7
 
   # Security Scan (lightweight - only on PRs and main branch)
