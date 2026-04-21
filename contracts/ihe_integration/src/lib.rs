@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
 mod test;
@@ -390,36 +391,36 @@ pub enum DataKey {
     NextValueSetId,
     NextTestResultId,
     // XDS
-    XDSDocument(String),         // document_id -> XDSDocumentEntry
-    XDSSubmissionSet(String),    // submission_set_id -> XDSSubmissionSet
-    PatientDocuments(String),    // patient_id -> Vec<String> document IDs
+    XDSDocument(String),      // document_id -> XDSDocumentEntry
+    XDSSubmissionSet(String), // submission_set_id -> XDSSubmissionSet
+    PatientDocuments(String), // patient_id -> Vec<String> document IDs
     // PIX
-    PIXCrossRef(u64),            // reference_id -> PIXCrossReference
-    PIXPatientRefs(String),      // patient_id -> Vec<u64> reference IDs
+    PIXCrossRef(u64),       // reference_id -> PIXCrossReference
+    PIXPatientRefs(String), // patient_id -> Vec<u64> reference IDs
     // PDQ
     PatientDemographics(String), // patient_id -> PatientDemographics
     PDQQuery(u64),               // query_id -> PDQQuery
     // ATNA
-    ATNAEvent(u64),              // event_id -> ATNAAuditEvent
+    ATNAEvent(u64), // event_id -> ATNAAuditEvent
     // XCA
-    XCAGateway(String),          // gateway_id -> XCAGateway
+    XCAGateway(String), // gateway_id -> XCAGateway
     // MPI
-    MPIMasterPatient(u64),       // master_id -> MPIMasterPatient
-    MPIGlobalIndex(String),      // global_patient_id -> master_id
+    MPIMasterPatient(u64),  // master_id -> MPIMasterPatient
+    MPIGlobalIndex(String), // global_patient_id -> master_id
     // BPPC
-    BPPCConsent(u64),            // consent_id -> BPPCConsent
-    PatientConsents(String),     // patient_id -> Vec<u64> consent IDs
+    BPPCConsent(u64),        // consent_id -> BPPCConsent
+    PatientConsents(String), // patient_id -> Vec<u64> consent IDs
     // DSG
-    DSGSignature(u64),           // signature_id -> DSGSignature
-    DocumentSignatures(String),  // document_id -> Vec<u64> signature IDs
+    DSGSignature(u64),          // signature_id -> DSGSignature
+    DocumentSignatures(String), // document_id -> Vec<u64> signature IDs
     // HPD
-    HPDProvider(u64),            // provider_id -> HPDProvider
+    HPDProvider(u64), // provider_id -> HPDProvider
     // SVS
-    SVSValueSet(u64),            // value_set_id -> SVSValueSet
-    SVSValueSetByOid(String),    // oid -> value_set_id
+    SVSValueSet(u64),         // value_set_id -> SVSValueSet
+    SVSValueSetByOid(String), // oid -> value_set_id
     // Connectathon
-    ConnectathonResult(u64),     // test_id -> ConnectathonTestResult
-    ProfileTestIds(IHEProfile),  // profile -> Vec<u64> test IDs
+    ConnectathonResult(u64),    // test_id -> ConnectathonTestResult
+    ProfileTestIds(IHEProfile), // profile -> Vec<u64> test IDs
 }
 
 // ==================== Errors ====================
@@ -471,9 +472,7 @@ impl IHEIntegrationContract {
         env.storage()
             .instance()
             .set(&DataKey::NextDocumentId, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextPixRefId, &0u64);
+        env.storage().instance().set(&DataKey::NextPixRefId, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::NextPdqQueryId, &0u64);
@@ -483,9 +482,7 @@ impl IHEIntegrationContract {
         env.storage()
             .instance()
             .set(&DataKey::NextMasterPatientId, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextConsentId, &0u64);
+        env.storage().instance().set(&DataKey::NextConsentId, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::NextSignatureId, &0u64);
@@ -499,10 +496,8 @@ impl IHEIntegrationContract {
             .instance()
             .set(&DataKey::NextTestResultId, &0u64);
 
-        env.events().publish(
-            (symbol_short!("IHE"), symbol_short!("INIT")),
-            admin,
-        );
+        env.events()
+            .publish((symbol_short!("IHE"), symbol_short!("INIT")), admin);
 
         Ok(())
     }
@@ -520,7 +515,11 @@ impl IHEIntegrationContract {
         Self::xds_store_document(&env, &author, &entry)
     }
 
-    fn xds_store_document(env: &Env, author: &Address, entry: &XDSDocumentEntry) -> Result<(), Error> {
+    fn xds_store_document(
+        env: &Env,
+        author: &Address,
+        entry: &XDSDocumentEntry,
+    ) -> Result<(), Error> {
         let doc_id = entry.document_id.clone();
 
         if env
@@ -875,10 +874,8 @@ impl IHEIntegrationContract {
             IHEProfile::PDQ,
         );
 
-        env.events().publish(
-            (symbol_short!("PDQ"), symbol_short!("REG")),
-            (pid, actor),
-        );
+        env.events()
+            .publish((symbol_short!("PDQ"), symbol_short!("REG")), (pid, actor));
 
         Ok(())
     }
@@ -1082,10 +1079,8 @@ impl IHEIntegrationContract {
             .persistent()
             .set(&DataKey::XCAGateway(gw_id.clone()), &gateway);
 
-        env.events().publish(
-            (symbol_short!("XCA"), symbol_short!("REG")),
-            (gw_id, admin),
-        );
+        env.events()
+            .publish((symbol_short!("XCA"), symbol_short!("REG")), (gw_id, admin));
 
         Ok(())
     }
@@ -1117,10 +1112,8 @@ impl IHEIntegrationContract {
             IHEProfile::XCA,
         );
 
-        env.events().publish(
-            (symbol_short!("XCA"), symbol_short!("QUERY")),
-            patient_id,
-        );
+        env.events()
+            .publish((symbol_short!("XCA"), symbol_short!("QUERY")), patient_id);
 
         Ok(gateway)
     }
@@ -1153,9 +1146,10 @@ impl IHEIntegrationContract {
         env.storage()
             .persistent()
             .set(&DataKey::MPIMasterPatient(master_id), &master);
-        env.storage()
-            .persistent()
-            .set(&DataKey::MPIGlobalIndex(global_patient_id.clone()), &master_id);
+        env.storage().persistent().set(
+            &DataKey::MPIGlobalIndex(global_patient_id.clone()),
+            &master_id,
+        );
 
         env.events().publish(
             (symbol_short!("MPI"), symbol_short!("REG")),
@@ -1337,11 +1331,7 @@ impl IHEIntegrationContract {
     }
 
     /// Revoke a privacy consent
-    pub fn bppc_revoke_consent(
-        env: Env,
-        author: Address,
-        consent_id: u64,
-    ) -> Result<(), Error> {
+    pub fn bppc_revoke_consent(env: Env, author: Address, consent_id: u64) -> Result<(), Error> {
         Self::require_initialized(&env)?;
         author.require_auth();
 
@@ -1364,10 +1354,7 @@ impl IHEIntegrationContract {
     }
 
     /// Verify consent is active and not expired
-    pub fn bppc_verify_consent(
-        env: Env,
-        consent_id: u64,
-    ) -> Result<BPPCConsent, Error> {
+    pub fn bppc_verify_consent(env: Env, consent_id: u64) -> Result<BPPCConsent, Error> {
         Self::require_initialized(&env)?;
 
         let consent: BPPCConsent = env
@@ -1451,10 +1438,7 @@ impl IHEIntegrationContract {
     }
 
     /// Verify a document signature by signature ID
-    pub fn dsg_verify_signature(
-        env: Env,
-        signature_id: u64,
-    ) -> Result<DSGSignature, Error> {
+    pub fn dsg_verify_signature(env: Env, signature_id: u64) -> Result<DSGSignature, Error> {
         Self::require_initialized(&env)?;
 
         let sig: DSGSignature = env
@@ -1527,10 +1511,7 @@ impl IHEIntegrationContract {
     }
 
     /// Query a provider by ID
-    pub fn hpd_get_provider(
-        env: Env,
-        provider_id: u64,
-    ) -> Result<HPDProvider, Error> {
+    pub fn hpd_get_provider(env: Env, provider_id: u64) -> Result<HPDProvider, Error> {
         Self::require_initialized(&env)?;
 
         env.storage()
@@ -1581,10 +1562,7 @@ impl IHEIntegrationContract {
     }
 
     /// Retrieve a value set by OID
-    pub fn svs_get_value_set_by_oid(
-        env: Env,
-        oid: String,
-    ) -> Result<SVSValueSet, Error> {
+    pub fn svs_get_value_set_by_oid(env: Env, oid: String) -> Result<SVSValueSet, Error> {
         Self::require_initialized(&env)?;
 
         let vs_id: u64 = env
@@ -1710,9 +1688,7 @@ impl IHEIntegrationContract {
 
     fn next_id(env: &Env, key: DataKey) -> u64 {
         let id: u64 = env.storage().instance().get(&key).unwrap_or(0u64);
-        env.storage()
-            .instance()
-            .set(&key, &id.saturating_add(1));
+        env.storage().instance().set(&key, &id.saturating_add(1));
         id
     }
 

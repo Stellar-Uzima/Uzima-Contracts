@@ -1,8 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, IntoVal,
-    String, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, IntoVal, Vec,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -178,10 +177,8 @@ impl SecureEnclaveContract {
         let task_key = DataKey::Task(task_id.clone());
         let mut task: ProcessingTask = env.storage().persistent().get(&task_key).unwrap();
 
-        if task.require_zk_proof {
-            if zk_proof.is_none() {
-                panic!("zk proof required");
-            }
+        if task.require_zk_proof && zk_proof.is_none() {
+            panic!("zk proof required");
         }
 
         task.status = TaskStatus::Completed;

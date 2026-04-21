@@ -1,7 +1,5 @@
-#![cfg(test)]
-
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env};
 
 #[test]
 fn test_registration_and_attestation() {

@@ -1,4 +1,4 @@
-name: CI
+name: CI - Test and Build
 
 on:
   push:
@@ -12,9 +12,32 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Code Quality
-  lint:
-    name: Lint & Format
+  cloud-health-api:
+    name: Cloud Health API Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: integrations/cloud_health_api
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: integrations/cloud_health_api/package-lock.json
+
+      - name: Install package dependencies
+        run: npm ci
+
+      - name: Run Cloud Health API tests
+        run: npm test -- --runInBand
+
+  # Format check
+  fmt:
+    name: Code Formatting
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -24,7 +47,27 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
-          components: rustfmt, clippy
+          components: rustfmt
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  # Linting
+  clippy:
+    name: Linting (Clippy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: clippy
           targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry
@@ -40,15 +83,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-
       - name: Run Clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-  # Tests
-  test:
-    name: Tests
+  # Unit tests
+  test-unit:
+    name: Unit Tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -79,41 +119,50 @@ jobs:
       - name: Run unit tests
         run: cargo test --lib --all
 
+  # Integration tests
+  test-integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Run integration tests
         run: cargo test --test '*' --all
 
-  # Node.js Integration Tests
-  test-nodejs:
-    name: Cloud Health API Tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: integrations/cloud_health_api
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: integrations/cloud_health_api/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Run tests
-        run: npm test -- --runInBand
-
-  # Build WASM contracts
+  # Build contracts
   build:
     name: Build Contracts
     runs-on: ubuntu-latest
-    needs: [lint, test]
+    needs: [fmt, clippy]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -137,11 +186,13 @@ jobs:
       - name: Build optimized contracts
         run: |
           set -euo pipefail
+
           BUILD_RESULT="success"
           for contract in contracts/*/; do
             [ -d "$contract" ] || continue
             contract_name=$(basename "$contract")
             echo "Building contract: $contract_name"
+
             pushd "$contract" > /dev/null
             if cargo build --target wasm32-unknown-unknown --release; then
               echo "  ✅ $contract_name build succeeded"
@@ -151,6 +202,8 @@ jobs:
             fi
             popd > /dev/null
           done
+
+          echo "Build summary: $BUILD_RESULT"
           if [ "$BUILD_RESULT" != "success" ]; then
             echo "One or more contracts failed to build."
             exit 1
@@ -164,69 +217,51 @@ jobs:
             contracts/*/target/wasm32-unknown-unknown/release/*.wasm
           retention-days: 7
 
-  # Security Scan (lightweight - only on PRs and main branch)
-  security:
-    name: Security Scan
+  # Shell script linting
+  shellcheck:
+    name: Shell Script Linting
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Run ShellCheck on scripts directory
+        uses: ludeeus/action-shellcheck@master
         with:
-          fetch-depth: 0
+          scandir: './scripts'
+          severity: warning
+          ignore_paths: 'node_modules'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - name: Run ShellCheck on root scripts
+        uses: ludeeus/action-shellcheck@master
         with:
-          toolchain: ${{ env.RUST_VERSION }}
+          scandir: '.'
+          check_together: 'yes'
+          severity: warning
+          additional_files: 'setup.sh'
+        env:
+          SHELLCHECK_OPTS: -e SC1091 -e SC2155 -e SC2016
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
-      - name: Run cargo audit
-        run: |
-          cargo install cargo-audit --features=fix || true
-          cargo audit || echo "⚠️ Audit completed with warnings"
-
-      - name: Install Gitleaks
-        run: |
-          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
-          tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
-          chmod +x gitleaks
-          sudo mv gitleaks /usr/local/bin/
-
-      - name: Run secret scan
-        run: gitleaks detect --source . --verbose --redact || echo "⚠️ Secret scan completed with warnings"
-
-  # Summary
-  summary:
-    name: CI Summary
+  # Test summary
+  test-summary:
+    name: Test Summary
     runs-on: ubuntu-latest
-    needs: [lint, test, test-nodejs, build]
+    needs: [cloud-health-api, test-unit, test-integration, build]
     if: always()
     steps:
-      - name: Generate summary
+      - name: Check test results
         run: |
-          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- Lint & Format: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Node.js Tests: ${{ needs.test-nodejs.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "## Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Cloud Health API Tests: ${{ needs.cloud-health-api.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit Tests: ${{ needs.test-unit.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration Tests: ${{ needs.test-integration.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ needs.lint.result }}" != "success" ] || \
-             [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.test-nodejs.result }}" != "success" ] || \
+          if [ "${{ needs.cloud-health-api.result }}" != "success" ] || \
+             [ "${{ needs.test-unit.result }}" != "success" ] || \
+             [ "${{ needs.test-integration.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ]; then
-            echo "❌ CI checks failed"
             exit 1
           fi
-          echo "✅ All CI checks passed!" >> $GITHUB_STEP_SUMMARY
