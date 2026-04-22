@@ -154,12 +154,28 @@ jobs:
             echo "⚠️ No WASM files found in target directory"
           fi
 
+      - name: Install monitoring dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq bc
+
+      - name: Monitor WASM sizes
+        run: |
+          echo "=== WASM Size Monitoring ==="
+          ./scripts/wasm_size_monitor.sh
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: wasm-contracts
           path: dist/*.wasm
           retention-days: 7
+
+      - name: Upload size trends
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-size-trends
+          path: .wasm_size_trends.json
+          retention-days: 30
 
   # Security Scan (lightweight - only on PRs and main branch)
   security:
