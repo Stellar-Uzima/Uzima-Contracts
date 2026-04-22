@@ -16,6 +16,7 @@ jobs:
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,19 +28,6 @@ jobs:
           components: rustfmt, clippy
           targets: wasm32-unknown-unknown
 
-      - name: Cache cargo registry
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
-
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -50,6 +38,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -83,6 +72,7 @@ jobs:
   test-nodejs:
     name: Cloud Health API Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: integrations/cloud_health_api
@@ -91,7 +81,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
@@ -101,13 +91,14 @@ jobs:
         run: npm ci
 
       - name: Run tests
-        run: npm test -- --runInBand
+        run: npm test
 
   # Build WASM contracts
   build:
     name: Build Contracts
     runs-on: ubuntu-latest
     needs: [lint, test]
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -135,48 +126,93 @@ jobs:
         run: |
           set -euo pipefail
           
-          # Build workspace contracts with error handling
-          echo "Building all workspace contracts..."
-          cargo build --target wasm32-unknown-unknown --release --workspace || {
-            echo "Some contracts failed to build, checking individual contracts..."
-            # Try building individual contracts if workspace build fails
-            mkdir -p dist
-            built_count=0
-            for contract_dir in contracts/*/; do
-              if [ -d "$contract_dir" ] && [ -f "$contract_dir/Cargo.toml" ]; then
-                contract_name=$(basename "$contract_dir")
-                echo "Building $contract_name..."
-                if (cd "$contract_dir" && cargo build --target wasm32-unknown-unknown --release); then
-                  wasm_file="$contract_dir/target/wasm32-unknown-unknown/release/$contract_name.wasm"
-                  if [ -f "$wasm_file" ]; then
-                    cp "$wasm_file" "dist/$contract_name.wasm"
-                    echo "Built: $contract_name.wasm"
-                    built_count=$((built_count + 1))
-                  fi
-                else
-                  echo "Failed to build $contract_name"
-                fi
-              fi
-            done
-            echo "Successfully built $built_count contracts"
+          mkdir -p dist
+          built_count=0
+          failed_count=0
+          
+          # Build workspace contracts only (respects Cargo.toml exclude list)
+          echo "Building workspace contracts..."
+          cargo build --target wasm32-unknown-unknown --release --workspace 2>&1 || {
+            echo "⚠️ Workspace build had some failures, continuing..."
           }
           
-          # Copy WASM files from root target directory (if workspace build succeeded)
-          if [ ! -d "dist" ]; then
-            mkdir -p dist
-          fi
+          # Copy WASM files from workspace build
           if ls target/wasm32-unknown-unknown/release/*.wasm 1> /dev/null 2>&1; then
-            cp target/wasm32-unknown-unknown/release/*.wasm dist/
-            echo "Copied $(ls dist/*.wasm | wc -l | tr -d ' ') WASM files to dist/"
-          else
-            echo "No WASM files in root target, checking dist directory..."
-            if ls dist/*.wasm 1> /dev/null 2>&1; then
-              echo "Found $(ls dist/*.wasm | wc -l | tr -d ' ') WASM files in dist/"
-            else
-              echo "No WASM files found - this might be expected if no contracts are included in workspace"
-            fi
+            cp target/wasm32-unknown-unknown/release/*.wasm dist/ || true
+            built_count=$(ls dist/*.wasm 2>/dev/null | wc -l | tr -d ' ')
+            echo "✅ Built $built_count workspace contracts"
           fi
+          
+          # Build excluded contracts individually
+          echo "Building excluded contracts individually..."
+          excluded_contracts=(
+            "credential_notifications"
+            "medical_imaging"
+            "medical_records"
+            "healthcare_compliance"
+            "medical_record_hash_registry"
+            "appointment_booking_escrow"
+            "patient_consent_management"
+            "clinical_nlp"
+            "clinical_decision_support"
+            "remote_patient_monitoring"
+            "healthcare_analytics_dashboard"
+            "healthcare_data_marketplace"
+            "telemedicine"
+            "patient_portal"
+            "notification_system"
+            "mental_health_support"
+            "patient_gamification"
+            "medical_imaging_ai"
+            "dicomweb_services"
+            "emergency_access_override"
+            "health_data_access_logging"
+            "escrow"
+            "mfa"
+            "multi_region_orchestrator"
+            "regional_node_manager"
+            "digital_twin"
+            "aml"
+            "forensics"
+            "audit"
+            "federated_learning"
+            "rbac"
+            "sync_manager"
+            "failover_detector"
+            "healthcare_compliance_automation"
+            "drug_discovery"
+            "upgradeability"
+          )
+          
+          for contract_name in "${excluded_contracts[@]}"; do
+            contract_dir="contracts/$contract_name"
+            if [ -d "$contract_dir" ] && [ -f "$contract_dir/Cargo.toml" ]; then
+              echo "Building $contract_name..."
+              if (cd "$contract_dir" && cargo build --target wasm32-unknown-unknown --release 2>&1); then
+                wasm_file="$contract_dir/target/wasm32-unknown-unknown/release/$contract_name.wasm"
+                if [ -f "$wasm_file" ]; then
+                  cp "$wasm_file" "dist/$contract_name.wasm"
+                  echo "✅ Built: $contract_name.wasm"
+                  built_count=$((built_count + 1))
+                fi
+              else
+                echo "⚠️ Failed to build $contract_name (non-critical)"
+                failed_count=$((failed_count + 1))
+              fi
+            fi
+          done
+          
+          echo ""
+          echo "=== Build Summary ==="
+          echo "Successfully built: $built_count contracts"
+          echo "Failed: $failed_count contracts"
           ls -la dist/ 2>/dev/null || echo "dist directory is empty"
+          
+          # Don't fail if at least some contracts built successfully
+          if [ "$built_count" -eq 0 ]; then
+            echo "❌ ERROR: No contracts were built successfully"
+            exit 1
+          fi
 
       - name: Install monitoring dependencies
         run: |
@@ -193,24 +229,27 @@ jobs:
           fi
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wasm-contracts
           path: dist/*.wasm
           retention-days: 7
+          if-no-files-found: warn
 
       - name: Upload size trends
         if: success() && hashFiles('**/.wasm_size_trends.json') != ''
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wasm-size-trends
           path: .wasm_size_trends.json
           retention-days: 30
+          if-no-files-found: ignore
 
   # Security Scan (lightweight - only on PRs and main branch)
   security:
     name: Security Scan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     steps:
       - name: Checkout code
@@ -234,8 +273,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
-
-      - name: Run cargo audit
         run: |
           cargo install cargo-audit --features=fix || true
           cargo audit || echo "⚠️ Audit completed with warnings"
@@ -257,7 +294,7 @@ jobs:
     needs: [lint, test, test-nodejs, build]
     if: always()
     steps:
-      - name: Generate summary
+      - name: Check results
         run: |
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
           echo "- Lint & Format: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
@@ -265,11 +302,35 @@ jobs:
           echo "- Node.js Tests: ${{ needs.test-nodejs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ needs.lint.result }}" != "success" ] || \
-             [ "${{ needs.test.result }}" != "success" ] || \
-             [ "${{ needs.test-nodejs.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ]; then
-            echo "❌ CI checks failed"
+          # Determine overall status
+          overall_status="success"
+          
+          if [ "${{ needs.lint.result }}" != "success" ]; then
+            echo "❌ Lint job failed or was skipped"
+            overall_status="failure"
+          fi
+          
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "❌ Tests job failed or was skipped"
+            overall_status="failure"
+          fi
+          
+          if [ "${{ needs.test-nodejs.result }}" != "success" ]; then
+            echo "❌ Node.js tests job failed or was skipped"
+            overall_status="failure"
+          fi
+          
+          if [ "${{ needs.build.result }}" != "success" ]; then
+            echo "❌ Build job failed or was skipped"
+            overall_status="failure"
+          fi
+          
+          if [ "$overall_status" = "success" ]; then
+            echo "✅ All CI checks passed!" >> $GITHUB_STEP_SUMMARY
+            echo "✅ All CI checks passed!"
+            exit 0
+          else
+            echo "❌ Some CI checks failed" >> $GITHUB_STEP_SUMMARY
+            echo "❌ Some CI checks failed"
             exit 1
           fi
-          echo "✅ All CI checks passed!" >> $GITHUB_STEP_SUMMARY

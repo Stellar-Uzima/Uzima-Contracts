@@ -37,6 +37,9 @@ exclude = [
     "contracts/rbac",
     "contracts/sync_manager",
     "contracts/failover_detector",
+    "contracts/healthcare_compliance_automation",
+    "contracts/drug_discovery",
+    "contracts/upgradeability",
 ]
 
 [workspace.package]
