@@ -1,8 +1,13 @@
 #![no_std]
 
-use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec,
+};
 
 pub mod migration;
+
+#[cfg(all(test, feature = "testutils"))]
+mod test;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -16,6 +21,7 @@ pub enum UpgradeError {
     ContractPaused = 105,
     HistoryNotFound = 106,
     IntegrityCheckFailed = 107,
+    DeprecatedFunctionNotTracked = 108,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -28,6 +34,17 @@ pub struct UpgradeHistory {
     pub state_hash: BytesN<32>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct DeprecatedFunction {
+    pub function: Symbol,
+    pub since: String,
+    pub replacement: Option<Symbol>,
+    pub removed_in: Option<String>,
+    pub note: String,
+    pub migration_guide: Option<String>,
+}
+
 pub mod storage {
     use super::*;
 
@@ -35,6 +52,7 @@ pub mod storage {
     pub const ADMIN: Symbol = symbol_short!("UP_ADMIN");
     pub const HISTORY: Symbol = symbol_short!("HISTORY");
     pub const IS_FROZEN: Symbol = symbol_short!("FROZEN");
+    pub const DEPRECATED_FUNCTIONS: Symbol = symbol_short!("DEPRLIST");
 
     pub fn get_version(env: &Env) -> u32 {
         env.storage().instance().get(&VERSION).unwrap_or(0)
@@ -76,6 +94,19 @@ pub mod storage {
             .get(&HISTORY)
             .unwrap_or(Vec::new(env))
     }
+
+    pub fn set_deprecated_functions(env: &Env, deprecations: &Vec<DeprecatedFunction>) {
+        env.storage()
+            .instance()
+            .set(&DEPRECATED_FUNCTIONS, deprecations);
+    }
+
+    pub fn get_deprecated_functions(env: &Env) -> Vec<DeprecatedFunction> {
+        env.storage()
+            .instance()
+            .get(&DEPRECATED_FUNCTIONS)
+            .unwrap_or(Vec::new(env))
+    }
 }
 
 pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
@@ -92,6 +123,22 @@ pub fn execute_upgrade<T: migration::Migratable>(
     new_wasm_hash: BytesN<32>,
     new_version: u32,
     description: Symbol,
+) -> Result<(), UpgradeError> {
+    execute_upgrade_with_deprecations(
+        env,
+        new_wasm_hash,
+        new_version,
+        description,
+        Vec::new(env),
+    )
+}
+
+pub fn execute_upgrade_with_deprecations<T: migration::Migratable>(
+    env: &Env,
+    new_wasm_hash: BytesN<32>,
+    new_version: u32,
+    description: Symbol,
+    deprecations: Vec<DeprecatedFunction>,
 ) -> Result<(), UpgradeError> {
     authorize_upgrade(env)?;
 
@@ -120,6 +167,7 @@ pub fn execute_upgrade<T: migration::Migratable>(
         },
     );
 
+    storage::set_deprecated_functions(env, &deprecations);
     storage::set_version(env, new_version);
     env.deployer().update_current_contract_wasm(new_wasm_hash);
 
@@ -150,6 +198,51 @@ pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
     storage::set_version(env, next_version);
     env.deployer()
         .update_current_contract_wasm(target_version.wasm_hash);
+
+    Ok(())
+}
+
+pub fn set_deprecated_functions(
+    env: &Env,
+    deprecations: Vec<DeprecatedFunction>,
+) -> Result<(), UpgradeError> {
+    authorize_upgrade(env)?;
+    storage::set_deprecated_functions(env, &deprecations);
+
+    env.events().publish(
+        (Symbol::new(env, "DeprecationsUpdated"),),
+        deprecations.len(),
+    );
+
+    Ok(())
+}
+
+pub fn get_deprecated_functions(env: &Env) -> Vec<DeprecatedFunction> {
+    storage::get_deprecated_functions(env)
+}
+
+pub fn get_deprecated_function(env: &Env, function: Symbol) -> Option<DeprecatedFunction> {
+    let deprecations = storage::get_deprecated_functions(env);
+    let mut index = 0;
+    while index < deprecations.len() {
+        let deprecation = deprecations.get(index).unwrap();
+        if deprecation.function == function {
+            return Some(deprecation);
+        }
+        index += 1;
+    }
+
+    None
+}
+
+pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), UpgradeError> {
+    let deprecation = get_deprecated_function(env, function.clone())
+        .ok_or(UpgradeError::DeprecatedFunctionNotTracked)?;
+
+    env.events().publish(
+        (Symbol::new(env, "Deprecated"), function),
+        deprecation.note,
+    );
 
     Ok(())
 }
