@@ -54,7 +54,7 @@ fi
 echo "Running custom security lint rules..."
 {
   echo "Potential hardcoded secrets and weak patterns"
-  grep -RInE --exclude-dir=.git --exclude-dir=target \
+  grep -RInE --exclude-dir=.git --exclude-dir=target --exclude-dir=security-reports \
     "(api[_-]?key|secret[_-]?key|private[_-]?key|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|password[[:space:]]*=[[:space:]]*['\\\"][^'\\\"]+['\\\"]|http://)" \
     . || true
 } > "$CUSTOM_OUT"

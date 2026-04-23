@@ -210,7 +210,7 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             echo "Scanning only PR commit range for secrets..."
-            gitleaks git \
+            gitleaks detect \
               --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.sha }}" \
               --redact
           else
