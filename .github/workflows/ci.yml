@@ -199,10 +199,24 @@ jobs:
         id: security_scan
         run: bash ./scripts/security-scan.sh security-reports
 
+      - name: Install Gitleaks
+        run: |
+          wget -q https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          tar -xzf gitleaks_8.18.4_linux_x64.tar.gz
+          chmod +x gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
       - name: Secret detection in commits
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Scanning only PR commit range for secrets..."
+            gitleaks git \
+              --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.sha }}" \
+              --redact
+          else
+            echo "Scanning repository for secrets..."
+            gitleaks detect --source . --redact
+          fi
 
       - name: Upload security reports
         if: always()
