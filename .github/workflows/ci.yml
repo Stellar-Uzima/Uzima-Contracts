@@ -192,7 +192,8 @@ jobs:
 
       - name: Install security tools
         run: |
-          cargo install cargo-audit cargo-geiger
+          cargo install --locked --force cargo-audit
+          cargo install --locked --force cargo-geiger
 
       - name: Run dependency + unsafe + custom scans
         id: security_scan
