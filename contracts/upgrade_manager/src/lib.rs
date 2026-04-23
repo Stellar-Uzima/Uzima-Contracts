@@ -3,6 +3,7 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol, Vec,
 };
+use upgradeability::UpgradeValidation;
 
 #[cfg(test)]
 mod test;
@@ -58,6 +59,7 @@ pub struct Config {
 #[soroban_sdk::contractclient(name = "TargetContractClient")]
 pub trait TargetContract {
     fn upgrade(env: Env, new_wasm_hash: BytesN<32>);
+    fn validate_upgrade(env: Env, new_wasm_hash: BytesN<32>) -> UpgradeValidation;
 }
 
 #[contractimpl]
@@ -250,5 +252,20 @@ impl UpgradeManager {
         env.events()
             .publish((symbol_short!("emergency"), proposal_id), ());
         Ok(())
+    }
+
+    pub fn validate_proposal(env: Env, proposal_id: u64) -> Result<UpgradeValidation, UpgradeManagerError> {
+        let proposals: Map<u64, UpgradeProposal> =
+            env.storage()
+                .persistent()
+                .get(&PROPOSALS)
+                .ok_or(UpgradeManagerError::ProposalNotFound)?;
+
+        let proposal = proposals
+            .get(proposal_id)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+
+        let target_client = TargetContractClient::new(&env, &proposal.target);
+        Ok(target_client.validate_upgrade(&proposal.new_wasm_hash))
     }
 }
