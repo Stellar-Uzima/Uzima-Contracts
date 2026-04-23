@@ -42,6 +42,10 @@ exclude = [
     "contracts/upgradeability",
 ]
 
+[workspace.dependencies]
+soroban-sdk = { version = "21.7.7" }
+soroban-cli = "21.7.7"
+
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
@@ -49,13 +53,8 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 repository = "https://github.com/yourusername/soroban-project"
 
-[workspace.dependencies]
-soroban-sdk = { version = "21.7.7" }
-soroban-cli = "21.7.7"
-
 # Force compatible versions to fix stellar-xdr dependency conflicts
-arbitrary = "1.3.2"
-derive_arbitrary = "1.3.2"
+# Note: arbitrary dependencies removed to fix workspace inheritance issues
 
 [profile.release]
 opt-level = "z"
