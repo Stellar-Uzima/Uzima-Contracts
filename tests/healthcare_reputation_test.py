@@ -54,10 +54,11 @@ class HealthcareReputationTester:
         # In a real implementation, you'd deploy the contracts
         # For demonstration, we'll use placeholder addresses
         
-        self.healthcare_reputation_contract = "CD3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5"
-        self.credential_notifications_contract = "CA3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5"
-        self.reputation_access_control_contract = "CB3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5"
-        self.reputation_integration_contract = "CC3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5"
+        import os
+        self.healthcare_reputation_contract = os.getenv("HEALTHCARE_REPUTATION_CONTRACT", "CD3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5")
+        self.credential_notifications_contract = os.getenv("CREDENTIAL_NOTIFICATIONS_CONTRACT", "CA3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5")
+        self.reputation_access_control_contract = os.getenv("REPUTATION_ACCESS_CONTROL_CONTRACT", "CB3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5")
+        self.reputation_integration_contract = os.getenv("REPUTATION_INTEGRATION_CONTRACT", "CC3S5A2J7LX5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5Z5")
         
         print("✓ Contracts deployed")
         
