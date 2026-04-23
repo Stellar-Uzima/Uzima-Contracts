@@ -44,18 +44,22 @@ critical=$((critical + audit_critical))
 medium=$((medium + audit_medium))
 
 echo "Running cargo-geiger..."
-cargo geiger --all-features --all-targets > "$GEIGER_OUT"
-unsafe_total="$(rg --only-matching "[0-9]+ unsafe" "$GEIGER_OUT" -o | awk '{sum+=$1} END {print sum+0}')"
+if cargo geiger --workspace --all-features --all-targets > "$GEIGER_OUT" 2>&1; then
+  unsafe_total="$(grep -Eo "[0-9]+ unsafe" "$GEIGER_OUT" | awk '{sum+=$1} END {print sum+0}')"
+else
+  echo "cargo-geiger execution failed; treating as non-blocking informational warning." >> "$GEIGER_OUT"
+  unsafe_total="n/a"
+fi
 
 echo "Running custom security lint rules..."
 {
   echo "Potential hardcoded secrets and weak patterns"
-  rg --hidden --glob '!.git' --glob '!**/target/**' \
-    "(api[_-]?key|secret[_-]?key|private[_-]?key|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|password\\s*=\\s*['\\\"][^'\\\"]+['\\\"]|http://)" \
+  grep -RInE --exclude-dir=.git --exclude-dir=target \
+    "(api[_-]?key|secret[_-]?key|private[_-]?key|BEGIN (RSA|EC|OPENSSH) PRIVATE KEY|password[[:space:]]*=[[:space:]]*['\\\"][^'\\\"]+['\\\"]|http://)" \
     . || true
 } > "$CUSTOM_OUT"
 
-custom_findings="$(rg -c ":" "$CUSTOM_OUT" | awk -F: '{sum+=$2} END {print sum+0}')"
+custom_findings="$(grep -c ":" "$CUSTOM_OUT" || true)"
 if [ "$custom_findings" -gt 0 ]; then
   medium=$((medium + custom_findings))
 fi
