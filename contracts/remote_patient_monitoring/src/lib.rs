@@ -2,6 +2,9 @@
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
 
+#[cfg(test)]
+mod test;
+
 const MAX_DEVICE_TYPES: u32 = 64;
 const MAX_BATTERY_LEVEL: u32 = 100;
 const LOW_BATTERY_THRESHOLD: u32 = 20;
