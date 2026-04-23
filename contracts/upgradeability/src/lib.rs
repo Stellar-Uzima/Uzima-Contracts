@@ -17,6 +17,12 @@ pub enum UpgradeError {
     ContractPaused = 105,
     HistoryNotFound = 106,
     IntegrityCheckFailed = 107,
+    InsufficientFunds = 110,
+    DeadlineExceeded = 111,
+    InvalidSignature = 112,
+    UnauthorizedCaller = 113,
+    StorageFull = 115,
+    CrossChainTimeout = 116,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
