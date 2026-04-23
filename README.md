@@ -17,6 +17,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
   - [Network Configuration](#network-configuration)
 - [Features](#features)
 - [Architecture](#architecture)
+- [Visual Documentation](#visual-documentation)
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
@@ -157,21 +158,61 @@ make stop-local
 
 ---
 
-## ✨ Features
+## Visual Documentation
+
+### Comprehensive System Diagrams
+
+We've created extensive visual documentation using Mermaid.js to help you understand the complex interactions between contracts and system components.
+
+#### **Key Diagrams Available:**
+
+1. **[System Architecture Overview](docs/SYSTEM_ARCHITECTURE.md)** - Complete system architecture with all contracts and their interactions
+2. **[Payment Flow Diagrams](docs/PAYMENT_FLOW_DIAGRAMS.md)** - Healthcare payment processing, escrow, and settlement flows
+3. **[Identity Verification Flow](docs/IDENTITY_VERIFICATION_FLOW.md)** - W3C DID-based identity management and verification
+4. **[Cross-Chain Interaction Flow](docs/CROSS_CHAIN_INTERACTION_FLOW.md)** - Multi-chain data synchronization and access patterns
+5. **[Data Access Patterns](docs/DATA_ACCESS_PATTERNS.md)** - Secure data access control and privacy protection flows
+
+#### **Quick Example:**
+```mermaid
+graph TD
+    A[Patient] -->|Consent| B[Consent Contract]
+    B -->|Access Grant| C[Medical Records]
+    C -->|Log Access| D[Audit Contract]
+```
+
+#### **Viewing Diagrams:**
+- **GitHub**: Automatic rendering in README files
+- **VS Code**: Install "Markdown Preview Mermaid Support" extension
+- **Web**: Add Mermaid.js to your HTML pages
+- **Documentation**: See [docs/DIAGRAMS_INDEX.md](docs/DIAGRAMS_INDEX.md) for complete guide
+
+These diagrams provide essential context for understanding:
+- How contracts interact with each other
+- Data flow and access patterns
+- Cross-chain synchronization processes
+- Payment and settlement mechanisms
+- Identity verification workflows
+
+---
+
+## Features
+
+### Key Features
+
+- Encrypted on-chain medical records storage
+- Role-based access control (patients, doctors, admins)
+- Immutable timestamping and full history tracking
+- Integration of traditional healing metadata
+- Public key-based identity verification
+- Fully testable, modular, and CI-enabled
+- Gas-efficient contract design
+- Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+
+---
 
 ## CLI Guide
 
 See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for advanced transaction management commands and examples.
-
-
-- 📁 Encrypted on-chain medical records storage
-- 🔐 Role-based access control (patients, doctors, admins)
-- ⏱ Immutable timestamping and full history tracking
-- 📜 Integration of traditional healing metadata
-- 🔑 Public key-based identity verification
-- ⚙️ Fully testable, modular, and CI-enabled
-- 📦 Gas-efficient contract design
-- 🗳️ Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
 
 ---
 
