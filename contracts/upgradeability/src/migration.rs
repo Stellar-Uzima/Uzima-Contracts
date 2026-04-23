@@ -1,5 +1,5 @@
 use super::UpgradeError;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, BytesN, Env, Symbol, Vec};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -20,7 +20,10 @@ pub trait Migratable {
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, UpgradeError>;
 
     /// Function called to validate the upgrade safety before execution
-    fn validate(_env: &Env, _new_wasm_hash: &BytesN<32>) -> Result<UpgradeValidation, UpgradeError> {
+    fn validate(
+        _env: &Env,
+        _new_wasm_hash: &BytesN<32>,
+    ) -> Result<UpgradeValidation, UpgradeError> {
         Ok(UpgradeValidation {
             state_compatible: true,
             api_compatible: true,

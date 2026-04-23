@@ -254,12 +254,15 @@ impl UpgradeManager {
         Ok(())
     }
 
-    pub fn validate_proposal(env: Env, proposal_id: u64) -> Result<UpgradeValidation, UpgradeManagerError> {
-        let proposals: Map<u64, UpgradeProposal> =
-            env.storage()
-                .persistent()
-                .get(&PROPOSALS)
-                .ok_or(UpgradeManagerError::ProposalNotFound)?;
+    pub fn validate_proposal(
+        env: Env,
+        proposal_id: u64,
+    ) -> Result<UpgradeValidation, UpgradeManagerError> {
+        let proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
 
         let proposal = proposals
             .get(proposal_id)
