@@ -207,7 +207,10 @@ bench:
 	@echo "Running benchmarks..."
 	cargo bench
 
-# Profile build times
+# Profile contract performance metrics
 profile:
-	@echo "Profiling build times..."
-	cargo build --timings
+	@if [ -z "$(CONTRACT)" ]; then \
+		echo "Usage: make profile CONTRACT=<contract_name>"; \
+		exit 1; \
+	fi
+	@bash scripts/profile.sh $(CONTRACT)

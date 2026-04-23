@@ -3,42 +3,7 @@ resolver = "2"
 members = [
     "contracts/*",
 ]
-exclude = [
-    "contracts/credential_notifications",
-    "contracts/medical_imaging",
-    "contracts/medical_records",
-    "contracts/healthcare_compliance",
-    "contracts/medical_record_hash_registry",
-    "contracts/appointment_booking_escrow",
-    "contracts/patient_consent_management",
-    "contracts/clinical_nlp",
-    "contracts/clinical_decision_support",
-    "contracts/remote_patient_monitoring",
-    "contracts/healthcare_analytics_dashboard",
-    "contracts/healthcare_data_marketplace",
-    "contracts/telemedicine",
-    "contracts/patient_portal",
-    "contracts/notification_system",
-    "contracts/mental_health_support",
-    "contracts/patient_gamification",
-    "contracts/medical_imaging_ai",
-    "contracts/dicomweb_services",
-    "contracts/emergency_access_override",
-    "contracts/health_data_access_logging",
-    "contracts/escrow",
-    "contracts/mfa",
-    "contracts/multi_region_orchestrator",
-    "contracts/regional_node_manager",
-    "contracts/digital_twin",
-    "contracts/aml",
-    "contracts/forensics",
-    "contracts/audit",
-    "contracts/federated_learning",
-    "contracts/rbac",
-    "contracts/sync_manager",
-    "contracts/failover_detector",
-    "contracts/health_check",
-]
+
 
 [workspace.package]
 version = "0.1.0"
