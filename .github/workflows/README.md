@@ -2,7 +2,7 @@
 
 This directory contains the streamlined CI/CD pipelines for Uzima Contracts.
 
-## Active Workflows (3)
+## Active Workflows (4)
 
 ### 1. CI (`ci.yml`)
 **Triggers:** Push/PR to `main` or `develop` branches
@@ -59,6 +59,20 @@ This directory contains the streamlined CI/CD pipelines for Uzima Contracts.
 
 ---
 
+### 4. Weekly Security Report (`weekly-security-report.yml`)
+**Triggers:**
+- Auto: Every Monday at 06:00 UTC
+- Manual: Workflow dispatch
+
+**What it does:**
+- 🔒 Runs `cargo-audit` for dependency vulnerabilities
+- 🔒 Runs `cargo-geiger` for unsafe code usage visibility
+- 🔒 Runs custom security linting rules (`scripts/security-scan.sh`)
+- 🔒 Runs secret scanning against git history using Gitleaks
+- 🔒 Publishes a weekly security summary and uploads report artifacts
+
+---
+
 ## Archived Workflows
 
 The following workflows have been consolidated and archived in the `archived/` directory:
@@ -79,13 +93,14 @@ The following workflows have been consolidated and archived in the `archived/` d
 
 ## Workflow Triggers Summary
 
-| Event | CI | Deploy | Release |
-|-------|----|--------|---------|
-| Push to `main` | ✅ | ❌ | ❌ |
-| Push to `develop` | ✅ | ✅ (testnet) | ❌ |
-| PR to `main`/`develop` | ✅ | ❌ | ❌ |
-| Push tag `v*.*.*` | ❌ | ✅ (testnet) | ✅ |
-| Manual dispatch | ✅ | ✅ (choose network) | ❌ |
+| Event | CI | Deploy | Release | Weekly Security |
+|-------|----|--------|---------|-----------------|
+| Push to `main` | ✅ | ❌ | ❌ | ❌ |
+| Push to `develop` | ✅ | ✅ (testnet) | ❌ | ❌ |
+| PR to `main`/`develop` | ✅ | ❌ | ❌ | ❌ |
+| Push tag `v*.*.*` | ❌ | ✅ (testnet) | ✅ | ❌ |
+| Manual dispatch | ✅ | ✅ (choose network) | ❌ | ✅ |
+| Weekly schedule | ❌ | ❌ | ❌ | ✅ |
 
 ---
 
