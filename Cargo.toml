@@ -40,6 +40,7 @@ exclude = [
     "contracts/healthcare_compliance_automation",
     "contracts/drug_discovery",
     "contracts/upgradeability",
+    "contracts/health_check",
 ]
 
 [workspace.dependencies]
