@@ -274,6 +274,11 @@ jobs:
                  "deployer": "deployer",
                  "source": "${{ needs.validate.outputs.source }}"
                }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
+
+            # Verify deployment
+            echo "Verifying $contract_name..."
+            chmod +x scripts/verify_deployment.sh
+            ./scripts/verify_deployment.sh "$contract_id" "$NETWORK" "deployer" "$contract_name"
           done
           
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
