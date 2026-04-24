@@ -40,6 +40,7 @@ jobs:
   validate:
     name: Validate Deployment
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Determine network
         id: network
@@ -68,8 +69,9 @@ jobs:
   pre-deploy-tests:
     name: Pre-deployment Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [validate]
-    if: ${{ !inputs.skip_tests }}
+    if: github.event_name != 'workflow_dispatch' || (github.event_name == 'workflow_dispatch' && inputs.skip_tests != true)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -100,6 +102,7 @@ jobs:
   build:
     name: Build Contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [validate, pre-deploy-tests]
     if: always() && (needs.pre-deploy-tests.result == 'success' || needs.pre-deploy-tests.result == 'skipped')
     steps:
@@ -154,11 +157,13 @@ jobs:
           name: wasm-contracts-${{ needs.validate.outputs.network }}
           path: dist/*.wasm
           retention-days: 30
+          if-no-files-found: warn
 
   # Deploy to network
   deploy:
     name: Deploy to ${{ needs.validate.outputs.network }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [validate, build]
     environment:
       name: ${{ needs.validate.outputs.network }}
@@ -290,6 +295,7 @@ jobs:
           name: deployment-info-${{ needs.validate.outputs.network }}
           path: deployments/*.json
           retention-days: ${{ needs.validate.outputs.network == 'mainnet' && '365' || '90' }}
+          if-no-files-found: warn
 
       - name: Create deployment summary
         run: |
