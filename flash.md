@@ -5,3 +5,17 @@ pub enum DrugDiscoveryEvent {
     ResultPublished { research_id: BytesN<32>, timestamp: u64 },
 }
 
+/// Register a new healthcare provider
+/// 
+/// # Arguments
+/// * `provider` - Address of the provider
+/// * `credentials` - Verified credentials
+/// 
+/// # Errors
+/// Returns `Error::AlreadyRegistered` if provider exists
+/// 
+/// # Example
+/// ```
+/// // Add example
+/// ```
+
