@@ -21,3 +21,9 @@ pub enum DrugDiscoveryEvent {
 
 warning: unused import: `String`
  --> contracts/secure_enclave/src/lib.rs:5:5
+
+
+ //Tools
+Use cargo-fuzz for Rust fuzzing
+Integrate with CI pipeline
+Target 100+ hours of fuzzing per function
