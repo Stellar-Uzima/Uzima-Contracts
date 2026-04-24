@@ -41,9 +41,12 @@ jobs:
     name: Validate Deployment
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      network: ${{ steps.determine_network.outputs.network }}
+      source: ${{ steps.determine_network.outputs.source }}
     steps:
       - name: Determine network
-        id: network
+        id: determine_network
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "network=${{ inputs.network }}" >> $GITHUB_OUTPUT
@@ -57,7 +60,7 @@ jobs:
           fi
 
       - name: Mainnet safety check
-        if: steps.network.outputs.network == 'mainnet'
+        if: steps.determine_network.outputs.network == 'mainnet'
         run: |
           if [ "${{ inputs.confirm_mainnet }}" != "DEPLOY" ]; then
             echo "❌ Mainnet deployment not confirmed. Type 'DEPLOY' in the confirm field."

@@ -1,9 +1,9 @@
 import { Contract, TransactionBuilder, Networks, rpc, Account, scValToNative } from '@stellar/stellar-sdk';
 
 // CONFIGURATION
-// Replace with your actual Contract ID from the deployment step
-const CONTRACT_ID = "CD7O5HYNHXGWLKWAUS7NVTCDQJFOTHFFHJRTHNVS6VH2UIO4NKLUW3H7"; 
-const RPC_URL = "https://soroban-testnet.stellar.org";
+// Read from environment variables with fallbacks
+const CONTRACT_ID = process.env.MONITORING_CONTRACT_ID || "CD7O5HYNHXGWLKWAUS7NVTCDQJFOTHFFHJRTHNVS6VH2UIO4NKLUW3H7"; 
+const RPC_URL = process.env.MONITORING_RPC_URL || "https://soroban-testnet.stellar.org";
 const NETWORK_PASSPHRASE = Networks.TESTNET;
 
 async function checkHealth() {
