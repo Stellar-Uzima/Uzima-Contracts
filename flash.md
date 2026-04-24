@@ -19,3 +19,5 @@ pub enum DrugDiscoveryEvent {
 /// // Add example
 /// ```
 
+warning: unused import: `String`
+ --> contracts/secure_enclave/src/lib.rs:5:5
