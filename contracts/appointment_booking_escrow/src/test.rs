@@ -518,4 +518,30 @@ mod tests {
             AppointmentStatus::Refunded
         );
     }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::OnlyPatientCanRefund as u32, 110);
+        assert_eq!(Error::OnlyProviderCanConfirm as u32, 111);
+        assert_eq!(Error::InvalidAmount as u32, 205);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::InvalidState as u32, 304);
+        assert_eq!(Error::AppointmentNotFound as u32, 410);
+        assert_eq!(Error::InsufficientFunds as u32, 500);
+        assert_eq!(Error::TokenTransferFailed as u32, 501);
+        assert_eq!(Error::DoubleWithdrawal as u32, 505);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use crate::errors::get_suggestion;
+        use soroban_sdk::symbol_short;
+        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(get_suggestion(Error::AppointmentNotFound), symbol_short!("CHK_ID"));
+        assert_eq!(get_suggestion(Error::InsufficientFunds), symbol_short!("ADD_FUND"));
+    }
 }

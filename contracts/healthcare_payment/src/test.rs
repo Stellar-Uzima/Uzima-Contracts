@@ -303,3 +303,25 @@ fn test_insurance_claim_requires_matching_policy() {
     );
     assert_eq!(result, Err(Ok(Error::PolicyMismatch)));
 }
+
+#[test]
+fn test_error_codes_are_stable() {
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::InvalidAmount as u32, 205);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::ClaimNotFound as u32, 480);
+    assert_eq!(Error::InsufficientFunds as u32, 500);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use soroban_sdk::symbol_short;
+    assert_eq!(super::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(super::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(super::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(super::errors::get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
+    assert_eq!(super::errors::get_suggestion(Error::InsufficientFunds), symbol_short!("ADD_FUND"));
+    assert_eq!(super::errors::get_suggestion(Error::ClaimNotFound), symbol_short!("CHK_ID"));
+}

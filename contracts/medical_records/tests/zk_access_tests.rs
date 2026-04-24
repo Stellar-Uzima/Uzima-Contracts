@@ -522,7 +522,7 @@ fn test_acl_and_zk_gate_interplay() {
         &intruder_proof,
     ));
     let intruder_read = t.client.try_get_record(&intruder, &record_id);
-    assert!(matches!(intruder_read, Err(Ok(Error::NotAuthorized))));
+    assert!(matches!(intruder_read, Err(Ok(Error::Unauthorized))));
 
     // Patient with valid proof succeeds.
     let public_inputs_patient = build_public_inputs(

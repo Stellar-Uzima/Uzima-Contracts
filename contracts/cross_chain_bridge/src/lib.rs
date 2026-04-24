@@ -5,11 +5,14 @@
 #![allow(clippy::enum_variant_names)]
 #![allow(dead_code)]
 
+pub mod errors;
+pub use errors::Error;
+
 #[cfg(test)]
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Existing Core Types ====================
@@ -295,44 +298,6 @@ const ATOMIC_TX_TIMEOUT: u64 = 3_600; // 1 hour
 const MIN_ORACLE_REPORTS: u32 = 3; // Minimum oracle reports for consensus
 const DEFAULT_ORACLE_REPUTATION: u32 = 50;
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    // Existing errors
-    NotAuthorized = 1,
-    ContractPaused = 2,
-    InvalidChain = 3,
-    InvalidMessage = 4,
-    MessageNotFound = 5,
-    MessageExpired = 6,
-    MessageAlreadyProcessed = 7,
-    InvalidSignature = 8,
-    InsufficientConfirmations = 9,
-    ValidatorNotFound = 10,
-    ValidatorNotActive = 11,
-    DuplicateConfirmation = 12,
-    AtomicTxNotFound = 13,
-    AtomicTxExpired = 14,
-    AtomicTxAlreadyProcessed = 15,
-    InvalidNonce = 16,
-    ChainNotSupported = 17,
-    RecordRefNotFound = 18,
-    AlreadyInitialized = 19,
-    InvalidPayload = 20,
-    Overflow = 21,
-    // New errors
-    OracleNotFound = 22,
-    OracleNotActive = 23,
-    ProofNotFound = 24,
-    ProofAlreadyVerified = 25,
-    RollbackNotFound = 26,
-    RollbackAlreadyProcessed = 27,
-    EventNotFound = 28,
-    InvalidAddress = 29,
-    InsufficientOracleReports = 30,
-    DuplicateOracleReport = 31,
-}
 
 #[contract]
 pub struct CrossChainBridgeContract;
@@ -1289,7 +1254,7 @@ impl CrossChainBridgeContract {
         let is_admin = Self::is_admin(&env, &caller);
         let is_validator = Self::check_active_validator(&env, &caller);
         if !is_admin && !is_validator {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let now = env.ledger().timestamp();
@@ -1520,10 +1485,10 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&DataKey::Admin)
-            .ok_or(Error::NotAuthorized)?;
+            .ok_or(Error::Unauthorized)?;
 
         if caller != &admin {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(())
     }

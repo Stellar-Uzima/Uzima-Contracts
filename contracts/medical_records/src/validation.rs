@@ -382,7 +382,7 @@ pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
 /// * `address` - The address to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 ///
 /// # Note
 /// In Soroban, we validate addresses by ensuring they're provided and authorized
@@ -403,7 +403,7 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
 /// * `addr2` - Second address
 ///
 /// # Returns
-/// `Ok(())` if addresses are different, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if addresses are different, otherwise returns `Error::Unauthorized`
 pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<(), Error> {
     if addr1 == addr2 {
         return Err(Error::SameAddress);
@@ -535,7 +535,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 /// * `amount` - The amount to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NumberOutOfBounds);
@@ -554,7 +554,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 /// * `page_size` - The page size
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {

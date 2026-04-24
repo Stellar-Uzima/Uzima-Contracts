@@ -57,3 +57,22 @@ fn test_audit_lifecycle() {
     let summary = client.generate_summary(&0, &env.ledger().timestamp() + 100);
     assert_eq!(summary.total_records, 1);
 }
+
+#[test]
+fn test_error_codes_are_stable() {
+    use crate::errors::Error;
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::RecordNotFound as u32, 403);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::{get_suggestion, Error};
+    use soroban_sdk::symbol_short;
+    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(get_suggestion(Error::RecordNotFound), symbol_short!("CHK_ID"));
+}

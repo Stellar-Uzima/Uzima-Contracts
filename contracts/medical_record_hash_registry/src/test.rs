@@ -164,4 +164,33 @@ mod tests {
         let result = client.store_record(&admin, &patient_id, &record_hash);
         assert_eq!(result, Err(Error::DuplicateRecord));
     }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::InvalidId as u32, 206);
+        assert_eq!(Error::InvalidSignature as u32, 207);
+        assert_eq!(Error::InvalidRecordHash as u32, 251);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::ContractPaused as u32, 302);
+        assert_eq!(Error::DeadlineExceeded as u32, 306);
+        assert_eq!(Error::DuplicateRecord as u32, 402);
+        assert_eq!(Error::RecordNotFound as u32, 403);
+        assert_eq!(Error::InsufficientFunds as u32, 500);
+        assert_eq!(Error::StorageFull as u32, 502);
+        assert_eq!(Error::CrossChainTimeout as u32, 702);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use crate::errors::get_suggestion;
+        use soroban_sdk::symbol_short;
+        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(get_suggestion(Error::RecordNotFound), symbol_short!("CHK_ID"));
+        assert_eq!(get_suggestion(Error::InsufficientFunds), symbol_short!("ADD_FUND"));
+        assert_eq!(get_suggestion(Error::StorageFull), symbol_short!("CLN_OLD"));
+    }
 }

@@ -24,7 +24,7 @@ fn test_initialize() {
     client.initialize(&admin);
     // Calling initialize again should fail
     let result = client.try_initialize(&admin);
-    assert_eq!(result, Err(Ok(IoTError::AlreadyInitialized)));
+    assert_eq!(result, Err(Ok(Error::AlreadyInitialized)));
 }
 
 #[test]
@@ -36,7 +36,7 @@ fn test_pause_unpause() {
     // set_role should fail when paused
     let user = Address::generate(&env);
     let result = client.try_set_role(&admin, &user, &Role::Operator);
-    assert_eq!(result, Err(Ok(IoTError::ContractPaused)));
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
     client.unpause(&admin);
     // Should work after unpause
     client.set_role(&admin, &user, &Role::Operator);
@@ -49,7 +49,7 @@ fn test_pause_not_admin() {
     client.initialize(&admin);
     let non_admin = Address::generate(&env);
     let result = client.try_pause(&non_admin);
-    assert_eq!(result, Err(Ok(IoTError::NotAdmin)));
+    assert_eq!(result, Err(Ok(Error::NotAdmin)));
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn test_register_manufacturer_duplicate() {
     let cert = make_bytes32(&env, 200);
     let name = String::from_str(&env, "Dup");
     let result = client.try_register_manufacturer(&admin, &mfr_id, &name, &cert);
-    assert_eq!(result, Err(Ok(IoTError::ManufacturerAlreadyRegistered)));
+    assert_eq!(result, Err(Ok(Error::ManufacturerAlreadyRegistered)));
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn test_register_device_duplicate() {
         &enc,
         &meta,
     );
-    assert_eq!(result, Err(Ok(IoTError::DeviceAlreadyRegistered)));
+    assert_eq!(result, Err(Ok(Error::DeviceAlreadyRegistered)));
 }
 
 #[test]
@@ -370,7 +370,7 @@ fn test_firmware_downgrade_not_allowed() {
 
     // Try to downgrade to v1
     let result = client.try_update_device_firmware(&operator, &device_id, &1u32);
-    assert_eq!(result, Err(Ok(IoTError::DowngradeNotAllowed)));
+    assert_eq!(result, Err(Ok(Error::DowngradeNotAllowed)));
 }
 
 #[test]
@@ -437,7 +437,7 @@ fn test_heartbeat_too_frequent() {
         &0u32,
         &metrics_ref,
     );
-    assert_eq!(result, Err(Ok(IoTError::HeartbeatTooFrequent)));
+    assert_eq!(result, Err(Ok(Error::HeartbeatTooFrequent)));
 }
 
 #[test]
@@ -552,7 +552,7 @@ fn test_rotate_key_too_frequent() {
     env.ledger().with_mut(|li| li.timestamp = 5100);
     let key3 = make_bytes32(&env, 33);
     let result = client.try_rotate_encryption_key(&operator, &channel_id, &key3);
-    assert_eq!(result, Err(Ok(IoTError::KeyRotationTooFrequent)));
+    assert_eq!(result, Err(Ok(Error::KeyRotationTooFrequent)));
 }
 
 #[test]
@@ -628,4 +628,32 @@ fn test_get_manufacturer_count() {
     register_manufacturer(&env, &client, &admin, 1);
     register_manufacturer(&env, &client, &admin, 2);
     assert_eq!(client.get_manufacturer_count(), 2);
+}
+
+#[test]
+fn test_error_codes_are_stable() {
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::NotAdmin as u32, 102);
+    assert_eq!(Error::InputTooLong as u32, 201);
+    assert_eq!(Error::InputTooShort as u32, 202);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::DeviceNotFound as u32, 405);
+    assert_eq!(Error::InvalidEncryptionKey as u32, 602);
+    assert_eq!(Error::DeviceDecommissioned as u32, 820);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::get_suggestion;
+    use soroban_sdk::{symbol_short, Env};
+    let env = Env::default();
+    let _ = env;
+    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(get_suggestion(Error::InputTooLong), symbol_short!("CHK_LEN"));
+    assert_eq!(get_suggestion(Error::DeviceNotFound), symbol_short!("CHK_ID"));
+    assert_eq!(get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
 }

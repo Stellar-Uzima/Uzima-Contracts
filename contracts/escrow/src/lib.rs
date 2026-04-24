@@ -3,29 +3,13 @@
 #![allow(clippy::unnecessary_cast)]
 #![allow(dead_code)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol,
     Vec,
 };
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    InvalidFeeBps = 1,
-    FeeNotSet = 2,
-    InvalidAmount = 3,
-    EscrowExists = 4,
-    EscrowNotFound = 5,
-    AlreadySettled = 6,
-    InsufficientApprovals = 7,
-    NoBasisToRefund = 8,
-    NoCredit = 9,
-    ReentrancyGuard = 10,
-    InvalidStateTransition = 11,
-    Unauthorized = 12,
-    NotAdmin = 13,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -573,9 +557,9 @@ impl EscrowContract {
         Self::get_total_volume(env)
     }
 
-    pub fn get_donor_reputation(env: Env, donor: Address) -> u32 {
+    pub fn get_donor_reputation(env: Env, _donor: Address) -> u32 {
         // Simulated reputation based on successful settlements
-        let stats = Self::get_stats_summary(env);
+        let stats = Self::get_stats_summary(env.clone());
         if stats.total_escrows == 0 {
             return 5000;
         }
@@ -729,5 +713,23 @@ mod test {
         // Note: try_... functions return Result<Result<...>, ...> or similar depending on toolchain
         // In modern SDK, it returns Result<Val, Error>
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotAdmin as u32, 102);
+        assert_eq!(Error::InvalidAmount as u32, 205);
+        assert_eq!(Error::EscrowNotFound as u32, 481);
+        assert_eq!(Error::AlreadySettled as u32, 482);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(crate::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+        assert_eq!(crate::errors::get_suggestion(Error::InvalidAmount), symbol_short!("CHK_LEN"));
+        assert_eq!(crate::errors::get_suggestion(Error::EscrowNotFound), symbol_short!("CHK_ID"));
+        assert_eq!(crate::errors::get_suggestion(Error::AlreadySettled), symbol_short!("ALREADY"));
     }
 }

@@ -91,7 +91,7 @@ impl EmergencyAccessOverride {
             .get(&DataKey::TrustedApprover(approver.clone()));
 
         if is_trusted != Some(true) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let now = env.ledger().timestamp();
@@ -191,7 +191,7 @@ impl EmergencyAccessOverride {
 
         let is_admin = env.storage().instance().get(&DataKey::Admin);
         if is_admin != Some(admin.clone()) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let key = DataKey::EmergencyAccess(patient.clone(), provider.clone());

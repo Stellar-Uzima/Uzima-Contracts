@@ -350,7 +350,7 @@ fn test_deactivate_user() {
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
 
-    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 #[test]
@@ -1340,4 +1340,35 @@ fn test_quantum_performance_benchmark() {
     // Output stats for "pro" visibility
     // In real Soroban tests, we might use logger or just assert reasonable bounds.
     assert!(pq_cost > classical_cost); // Logic check: larger data = more instructions
+}
+
+#[test]
+fn test_error_codes_are_stable() {
+    use crate::errors::Error;
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::NotAICoordinator as u32, 150);
+    assert_eq!(Error::InvalidInput as u32, 200);
+    assert_eq!(Error::InputTooLong as u32, 201);
+    assert_eq!(Error::BatchTooLarge as u32, 208);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::DeadlineExceeded as u32, 306);
+    assert_eq!(Error::RateLimitExceeded as u32, 307);
+    assert_eq!(Error::RecordNotFound as u32, 403);
+    assert_eq!(Error::InsufficientFunds as u32, 500);
+    assert_eq!(Error::StorageFull as u32, 502);
+    assert_eq!(Error::CrossChainAccessDenied as u32, 700);
+    assert_eq!(Error::AIConfigNotSet as u32, 830);
+    assert_eq!(Error::InvalidAIScore as u32, 831);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::{get_suggestion, Error};
+    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(get_suggestion(Error::RecordNotFound), symbol_short!("CHK_ID"));
+    assert_eq!(get_suggestion(Error::InsufficientFunds), symbol_short!("ADD_FUND"));
+    assert_eq!(get_suggestion(Error::StorageFull), symbol_short!("CLN_OLD"));
+    assert_eq!(get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
 }

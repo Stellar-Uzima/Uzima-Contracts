@@ -147,7 +147,7 @@ fn test_non_admin_cannot_add_sender() {
     env.mock_all_auths();
     assert!(matches!(
         client.try_add_authorized_sender(&Address::generate(&env), &Address::generate(&env)),
-        Err(Ok(Error::NotAuthorized))
+        Err(Ok(Error::Unauthorized))
     ));
 }
 
@@ -405,7 +405,7 @@ fn test_get_notification_by_non_recipient_fails() {
     );
     assert!(matches!(
         client.try_get_notification(&stranger, &id),
-        Err(Ok(Error::NotAuthorized))
+        Err(Ok(Error::Unauthorized))
     ));
 }
 
@@ -648,7 +648,7 @@ fn test_non_recipient_cannot_archive() {
     );
     assert!(matches!(
         client.try_archive_notification(&stranger, &id),
-        Err(Ok(Error::NotAuthorized))
+        Err(Ok(Error::Unauthorized))
     ));
 }
 
@@ -1112,7 +1112,7 @@ fn test_non_admin_cannot_get_analytics() {
     env.mock_all_auths();
     assert!(matches!(
         client.try_get_analytics(&Address::generate(&env)),
-        Err(Ok(Error::NotAuthorized))
+        Err(Ok(Error::Unauthorized))
     ));
 }
 
@@ -1223,4 +1223,31 @@ fn test_all_major_operations_emit_events() {
     let new_events = env.events().all().len() - count_before;
     // SNDR_ADD, PREF_UPD, NOTIF_NEW, NOTIF_RD, ALRT_NEW, TMPL_SET = 6 minimum
     assert!(new_events >= 6, "Expected ≥6 events, got {}", new_events);
+}
+
+#[test]
+fn test_error_codes_are_stable() {
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::SenderNotAuthorized as u32, 120);
+    assert_eq!(Error::BatchTooLarge as u32, 208);
+    assert_eq!(Error::RecipientsEmpty as u32, 209);
+    assert_eq!(Error::TitleTooLong as u32, 221);
+    assert_eq!(Error::MessageTooLong as u32, 222);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::RateLimitExceeded as u32, 307);
+    assert_eq!(Error::AlreadyRead as u32, 330);
+    assert_eq!(Error::NotificationNotFound as u32, 450);
+    assert_eq!(Error::MaxSendersReached as u32, 510);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::get_suggestion;
+    use soroban_sdk::symbol_short;
+    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(get_suggestion(Error::NotificationNotFound), symbol_short!("CHK_ID"));
+    assert_eq!(get_suggestion(Error::RateLimitExceeded), symbol_short!("RE_TRY_L"));
 }

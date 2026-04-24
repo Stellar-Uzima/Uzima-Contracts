@@ -1,40 +1,12 @@
 #![no_std]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short,
+    contract, contractimpl, contracttype, symbol_short,
     token::Client as TokenClient, Address, Env, IntoVal, String, Symbol, Vec,
 };
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    ClaimNotFound = 4,
-    InvalidStatus = 5,
-    PreAuthNotFound = 6,
-    PaymentPlanNotFound = 7,
-    InsufficientFunds = 8,
-    FraudDetected = 9,
-    EscrowFailed = 10,
-    InvalidAmount = 11,
-    InsuranceProviderNotFound = 12,
-    CoveragePolicyNotFound = 13,
-    EligibilityCheckNotFound = 14,
-    ClaimSubmissionNotFound = 15,
-    EobNotFound = 16,
-    InvalidCoverage = 17,
-    UnsupportedTransaction = 18,
-    PolicyMismatch = 19,
-    DeadlineExceeded = 32,
-    InvalidSignature = 33,
-    UnauthorizedCaller = 34,
-    ContractPaused = 35,
-    StorageFull = 36,
-    CrossChainTimeout = 37,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]

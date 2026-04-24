@@ -30,7 +30,7 @@ fn test_permission_grant_revoke_check() {
         &String::from_str(&env, "Standard"),
         &String::from_str(&env, "QmHash12345"),
     );
-    assert!(res.is_err()); // access denied (Error::NotAuthorized)
+    assert!(res.is_err()); // access denied (Error::Unauthorized)
 
     // Test: Admin grants CreateRecord permission to user
     client.grant_permission(&admin, &user, &Permission::CreateRecord, &0, &false);

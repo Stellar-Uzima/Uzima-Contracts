@@ -1,7 +1,10 @@
 #![no_std]
 
+pub mod errors;
+pub use errors::Error;
+
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -44,17 +47,6 @@ pub enum DataKey {
     VerifyingKey(u32),
     Attestation(BytesN<32>),
     Nullifier(BytesN<32>),
-}
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    InvalidInput = 4,
-    VersionNotFound = 5,
 }
 
 const MAX_DEFAULT_TTL: u64 = 86_400;
@@ -205,7 +197,7 @@ impl ZkVerifierContract {
 
         let key = Self::read_vk(&env, vk_version)?;
         if !key.active || key.attestor != attestor {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let effective_ttl = if ttl == 0 {
@@ -335,7 +327,7 @@ impl ZkVerifierContract {
         if admin == *caller {
             Ok(())
         } else {
-            Err(Error::NotAuthorized)
+            Err(Error::Unauthorized)
         }
     }
 
@@ -405,5 +397,27 @@ mod tests {
         let public_inputs_hash_2 = BytesN::from_array(&env, &[5u8; 32]);
         let proof_2 = Bytes::from_slice(&env, b"proof-v2");
         assert!(!client.verify_proof(&1, &public_inputs_hash_2, &proof_2));
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::InvalidInput as u32, 200);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::VersionNotFound as u32, 430);
+        assert_eq!(Error::InvalidProof as u32, 600);
+        assert_eq!(Error::VerificationFailed as u32, 601);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use crate::errors::get_suggestion;
+        use soroban_sdk::symbol_short;
+        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(get_suggestion(Error::InvalidProof), symbol_short!("CONTACT"));
+        assert_eq!(get_suggestion(Error::VerificationFailed), symbol_short!("CONTACT"));
     }
 }

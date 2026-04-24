@@ -4,9 +4,11 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     String, Symbol, Vec,
 };
 
@@ -17,35 +19,6 @@ use soroban_sdk::{
 // DID Method: did:stellar:uzima:<network>:<address>
 // ============================================================================
 
-// === Error Definitions ===
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    NotVerifier = 4,
-    CannotRemoveOwner = 5,
-    DIDNotFound = 6,
-    DIDAlreadyExists = 7,
-    DIDDeactivated = 8,
-    InvalidVerificationMethod = 9,
-    VerificationMethodNotFound = 10,
-    CredentialNotFound = 11,
-    CredentialRevoked = 12,
-    CredentialExpired = 13,
-    InvalidCredentialType = 14,
-    AttestationNotFound = 15,
-    RecoveryNotInitiated = 16,
-    RecoveryAlreadyPending = 17,
-    RecoveryTimelockNotElapsed = 18,
-    InvalidRecoveryGuardian = 19,
-    InsufficientGuardianApprovals = 20,
-    ServiceNotFound = 21,
-    InvalidServiceEndpoint = 22,
-    KeyRotationCooldown = 23,
-}
 
 // === DID Document Structures (W3C Compliant) ===
 
@@ -908,7 +881,7 @@ impl IdentityRegistryContract {
             .ok_or(Error::CredentialNotFound)?;
 
         if credential.issuer != issuer {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         if credential.is_revoked {
@@ -2410,5 +2383,26 @@ mod tests {
         assert!(
             !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
         );
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotVerifier as u32, 110);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::DIDNotFound as u32, 470);
+        assert_eq!(Error::DIDAlreadyExists as u32, 471);
+        assert_eq!(Error::CredentialExpired as u32, 605);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(crate::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+        assert_eq!(crate::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+        assert_eq!(crate::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(crate::errors::get_suggestion(Error::DIDNotFound), symbol_short!("CHK_ID"));
+        assert_eq!(crate::errors::get_suggestion(Error::KeyRotationCooldown), symbol_short!("RE_TRY_L"));
     }
 }

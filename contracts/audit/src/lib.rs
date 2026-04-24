@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod errors;
 pub mod querying;
 pub mod storage;
 pub mod types;
@@ -8,6 +9,7 @@ pub mod verification;
 #[cfg(test)]
 mod test;
 
+use crate::errors::Error;
 use crate::types::{AuditConfig, AuditRecord, AuditSummary, AuditType, DataKey};
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
@@ -18,10 +20,9 @@ pub struct AuditTrail;
 
 #[contractimpl]
 impl AuditTrail {
-    /// Initialize with global audit configuration
-    pub fn initialize(env: Env, admin: Address, config: AuditConfig) {
+    pub fn initialize(env: Env, admin: Address, config: AuditConfig) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Config, &config);
@@ -29,9 +30,9 @@ impl AuditTrail {
         env.storage()
             .instance()
             .set(&DataKey::RollingHash, &BytesN::from_array(&env, &[0u8; 32]));
+        Ok(())
     }
 
-    /// Record a generic audit event
     pub fn record_event(
         env: Env,
         actor: Address,
@@ -41,7 +42,10 @@ impl AuditTrail {
         previous_hash: Option<BytesN<32>>,
         current_hash: BytesN<32>,
         metadata: Map<String, String>,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
+        if !env.storage().instance().has(&DataKey::Admin) {
+            return Err(Error::NotInitialized);
+        }
         actor.require_auth();
 
         let id = Self::next_id(&env, &DataKey::RecordCount);
@@ -59,35 +63,28 @@ impl AuditTrail {
             metadata,
         };
 
-        // Store immutably in persistent storage
         env.storage()
             .persistent()
             .set(&DataKey::Record(id), &record);
 
-        // Update rolling hash for tamper-evidence
         Self::update_rolling_hash(&env, &record);
-
-        // Map to user/contract history
         Self::save_index(&env, &actor, target, id);
 
-        // Emit events
         env.events().publish(
             (symbol_short!("AUDIT"), symbol_short!("LOG")),
             (id, record.audit_type, record.actor),
         );
 
-        id
+        Ok(id)
     }
 
-    /// Optimized query interface for audit records
-    pub fn get_record(env: Env, id: u64) -> AuditRecord {
+    pub fn get_record(env: Env, id: u64) -> Result<AuditRecord, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Record(id))
-            .expect("Audit record not found")
+            .ok_or(Error::RecordNotFound)
     }
 
-    /// Verifies the integrity of the audit trail using the rolling hash
     pub fn verify_integrity(env: Env) -> BytesN<32> {
         env.storage()
             .instance()
@@ -95,7 +92,6 @@ impl AuditTrail {
             .unwrap_or(BytesN::from_array(&env, &[0u8; 32]))
     }
 
-    /// Provides compliance analytics summary
     pub fn generate_summary(env: Env, start: u64, end: u64) -> AuditSummary {
         let count = env
             .storage()
@@ -133,24 +129,22 @@ impl AuditTrail {
         }
     }
 
-    /// Private internal logic
     fn update_rolling_hash(env: &Env, record: &AuditRecord) {
         let mut current_rolling: BytesN<32> =
             env.storage().instance().get(&DataKey::RollingHash).unwrap();
 
         let mut buffer = soroban_sdk::Bytes::new(env);
-        buffer.append(&current_rolling.to_xdr(env));
-        buffer.append(&record.id.to_xdr(env));
-        buffer.append(&record.action_hash.to_xdr(env));
+        buffer.append(&soroban_sdk::Bytes::from_slice(env, &current_rolling.to_array()));
+        buffer.append(&soroban_sdk::Bytes::from_slice(env, &record.id.to_be_bytes()));
+        buffer.append(&soroban_sdk::Bytes::from_slice(env, &record.action_hash.to_array()));
 
-        let new_hash = env.crypto().sha256(&buffer).into();
+        let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
         env.storage()
             .instance()
             .set(&DataKey::RollingHash, &new_hash);
     }
 
     fn save_index(env: &Env, user: &Address, contract: Option<Address>, id: u64) {
-        // Index by user
         let mut user_list: Vec<u64> = env
             .storage()
             .persistent()
@@ -161,7 +155,6 @@ impl AuditTrail {
             .persistent()
             .set(&DataKey::UserAudits(user.clone()), &user_list);
 
-        // Index by contract
         if let Some(c) = contract {
             let mut contract_list: Vec<u64> = env
                 .storage()

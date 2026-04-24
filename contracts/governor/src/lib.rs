@@ -4,8 +4,10 @@
 #![allow(clippy::needless_return)]
 #![allow(dead_code)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env,
     IntoVal, Map, Symbol,
 };
 
@@ -39,25 +41,6 @@ pub struct Proposal {
     pub exec_data: Bytes,
 }
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    ProposalNotFound = 3,
-    ProposalThresholdNotMet = 4,
-    VotingClosed = 5,
-    InvalidState = 6,
-    AlreadyVoted = 7,
-    NoVotingPower = 8,
-    InvalidVoteType = 9,
-    ProposalNotSuccessful = 10,
-    NotQueued = 11,
-    AlreadyExecuted = 12,
-    ProposalDisputed = 13,
-    Overflow = 14,
-}
 
 const CFG: Symbol = symbol_short!("cfg");
 const PROPS: Symbol = symbol_short!("props");
@@ -429,5 +412,23 @@ mod test {
 
         gov_client.execute(&prop_id);
         assert_eq!(gov_client.state(&prop_id), 5); // 5 = Executed
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::InvalidState as u32, 304);
+        assert_eq!(Error::ProposalNotFound as u32, 450);
+        assert_eq!(Error::NoVotingPower as u32, 531);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(crate::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+        assert_eq!(crate::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(crate::errors::get_suggestion(Error::ProposalNotFound), symbol_short!("CHK_ID"));
+        assert_eq!(crate::errors::get_suggestion(Error::VotingClosed), symbol_short!("RE_TRY_L"));
     }
 }

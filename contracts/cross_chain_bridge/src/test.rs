@@ -141,7 +141,7 @@ fn test_add_validator_not_admin() {
 
     env.mock_all_auths();
     let result = client.try_add_validator(&non_admin, &validator, &public_key, &1000);
-    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 // ==================== Chain Support Tests ====================
@@ -1136,4 +1136,24 @@ fn test_nonce_replay_protection() {
     );
 
     assert_eq!(result, Err(Ok(Error::InvalidNonce)));
+}
+
+#[test]
+fn test_error_codes_are_stable() {
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::InsufficientConfirmations as u32, 120);
+    assert_eq!(Error::InvalidSignature as u32, 207);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::MessageNotFound as u32, 480);
+    assert_eq!(Error::InvalidChain as u32, 703);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use soroban_sdk::symbol_short;
+    assert_eq!(crate::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(crate::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(crate::errors::get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
+    assert_eq!(crate::errors::get_suggestion(Error::MessageNotFound), symbol_short!("CHK_ID"));
 }
