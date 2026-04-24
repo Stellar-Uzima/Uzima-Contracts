@@ -682,11 +682,9 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
 }
 
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
-    let test_address = std::env::var("SECURITY_TEST_ADDRESS")
-        .unwrap_or_else(|_| "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM".to_string());
     let _dummy_user = Address::from_string(&String::from_str(
         env,
-        &test_address,
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
     ));
 
     // WORKAROUND: In tests this address might work as a mock if strict auth isn't checked for events.

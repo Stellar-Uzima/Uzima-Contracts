@@ -84,7 +84,7 @@ if ! soroban contract invoke \
 fi
 
 # Add USDC as supported payment token (Testnet USDC)
-USDC_ADDRESS="${USDC_ADDRESS:-CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGBGQVNV3NPHQZPQXB}"
+USDC_ADDRESS="CAQCFVLOBK5GIULPNZRGATJJMIZL5BSP7X5YJVMGBGQVNV3NPHQZPQXB"
 echo "💳 Adding USDC as supported payment token..."
 if ! soroban contract invoke \
     --id "$TOKEN_SALE_ID" \
