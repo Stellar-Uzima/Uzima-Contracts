@@ -1,23 +1,35 @@
 #[cfg(test)]
 mod tests {
-    use crate::{CrossChainBridgeContract, OperationType, OperationStatus, VERIFICATION_TIMEOUT, MESSAGE_PASSING_TIMEOUT, TOKEN_TRANSFER_TIMEOUT};
-    use soroban_sdk::{BytesN, Env};
+    use crate::{
+        CrossChainBridgeContract, OperationStatus, OperationType, MESSAGE_PASSING_TIMEOUT,
+        TOKEN_TRANSFER_TIMEOUT, VERIFICATION_TIMEOUT,
+    };
+    use soroban_sdk::Env;
 
     #[test]
     fn test_default_timeouts() {
         let env = Env::default();
-        
+
         // Test different operation types have correct default timeouts
         assert_eq!(
-            CrossChainBridgeContract::get_default_timeout_internal(env.clone(), OperationType::TokenTransfer),
+            CrossChainBridgeContract::get_default_timeout_internal(
+                env.clone(),
+                OperationType::TokenTransfer
+            ),
             TOKEN_TRANSFER_TIMEOUT
         );
         assert_eq!(
-            CrossChainBridgeContract::get_default_timeout_internal(env.clone(), OperationType::MessagePassing),
+            CrossChainBridgeContract::get_default_timeout_internal(
+                env.clone(),
+                OperationType::MessagePassing
+            ),
             MESSAGE_PASSING_TIMEOUT
         );
         assert_eq!(
-            CrossChainBridgeContract::get_default_timeout_internal(env.clone(), OperationType::Verification),
+            CrossChainBridgeContract::get_default_timeout_internal(
+                env.clone(),
+                OperationType::Verification
+            ),
             VERIFICATION_TIMEOUT
         );
     }

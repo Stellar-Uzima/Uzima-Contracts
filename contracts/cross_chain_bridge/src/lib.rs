@@ -1365,8 +1365,10 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::OpCount, &(count.saturating_add(1)));
 
-        env.events()
-            .publish((Symbol::new(&env, "OperationCreated"),), (op_id.clone(), op_type, deadline));
+        env.events().publish(
+            (Symbol::new(&env, "OperationCreated"),),
+            (op_id.clone(), op_type, deadline),
+        );
 
         Ok(op_id)
     }
@@ -1394,8 +1396,10 @@ impl CrossChainBridgeContract {
             Self::refund(&env, &mut operation)?;
             env.storage().persistent().set(&op_key, &operation);
 
-            env.events()
-                .publish((Symbol::new(&env, "OperationRefunded"),), (op_id, operation.refund_address));
+            env.events().publish(
+                (Symbol::new(&env, "OperationRefunded"),),
+                (op_id, operation.refund_address),
+            );
         }
 
         Ok(())
@@ -1435,14 +1439,19 @@ impl CrossChainBridgeContract {
         }
 
         // Extend the deadline
-        operation.deadline = operation.deadline.checked_add(additional_time).ok_or(Error::Overflow)?;
+        operation.deadline = operation
+            .deadline
+            .checked_add(additional_time)
+            .ok_or(Error::Overflow)?;
         operation.extended_count += 1;
         operation.status = OperationStatus::Extended;
 
         env.storage().persistent().set(&op_key, &operation);
 
-        env.events()
-            .publish((Symbol::new(&env, "TimeoutExtended"),), (op_id, operation.deadline));
+        env.events().publish(
+            (Symbol::new(&env, "TimeoutExtended"),),
+            (op_id, operation.deadline),
+        );
 
         Ok(true)
     }
@@ -1472,8 +1481,10 @@ impl CrossChainBridgeContract {
         operation.status = status;
         env.storage().persistent().set(&op_key, &operation);
 
-        env.events()
-            .publish((Symbol::new(&env, "OperationStatusUpdated"),), (op_id, status));
+        env.events().publish(
+            (Symbol::new(&env, "OperationStatusUpdated"),),
+            (op_id, status),
+        );
 
         Ok(true)
     }
@@ -1840,18 +1851,23 @@ impl CrossChainBridgeContract {
     fn refund(env: &Env, operation: &mut CrossChainOp) -> Result<(), Error> {
         // Mark operation as refunded
         operation.status = OperationStatus::Refunded;
-        
+
         // In a real implementation, this would trigger actual token transfer
         // For now, we just emit an event and update status
-        env.events()
-            .publish((Symbol::new(&env, "RefundProcessed"),), 
-                    (operation.id.clone(), operation.refund_address.clone(), operation.op_type));
+        env.events().publish(
+            (Symbol::new(&env, "RefundProcessed"),),
+            (
+                operation.id.clone(),
+                operation.refund_address.clone(),
+                operation.op_type,
+            ),
+        );
 
         Ok(())
     }
 
     /// Expose get_default_timeout for testing
-    pub fn get_default_timeout_internal(env: Env, op_type: OperationType) -> u64 {
+    pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
         Self::get_default_timeout(&op_type)
     }
 }
