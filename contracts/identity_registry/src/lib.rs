@@ -338,6 +338,24 @@ impl IdentityRegistryContract {
         Ok(())
     }
 
+    /// Perform a health check on the contract
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        let initialized = env.storage().instance().has(&DataKey::Initialized);
+        let status = if initialized {
+            symbol_short!("OK")
+        } else {
+            symbol_short!("NOT_INIT")
+        };
+
+        // Emit health check event
+        env.events().publish(
+            (Symbol::new(&env, "HealthCheck"),),
+            (status.clone(), env.ledger().timestamp()),
+        );
+
+        (status, 1, env.ledger().timestamp())
+    }
+
     /// Legacy initialize for backward compatibility
     pub fn initialize_legacy(env: Env, owner: Address) {
         owner.require_auth();
