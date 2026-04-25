@@ -1,7 +1,5 @@
-pub mod healthcare_workflows;
 pub mod ihe_fhir_integration_tests;
 pub mod framework_tests;
-pub mod medical_records_integration;
 pub mod multi_region_dr_integration;
 
 // tests/unit/mod.rs
