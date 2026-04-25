@@ -650,10 +650,28 @@ fn test_get_suggestion_returns_expected_hint() {
     use soroban_sdk::{symbol_short, Env};
     let env = Env::default();
     let _ = env;
-    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-    assert_eq!(get_suggestion(Error::InputTooLong), symbol_short!("CHK_LEN"));
-    assert_eq!(get_suggestion(Error::DeviceNotFound), symbol_short!("CHK_ID"));
-    assert_eq!(get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
+    assert_eq!(
+        get_suggestion(Error::Unauthorized),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        get_suggestion(Error::NotInitialized),
+        symbol_short!("INIT_CTR")
+    );
+    assert_eq!(
+        get_suggestion(Error::AlreadyInitialized),
+        symbol_short!("ALREADY")
+    );
+    assert_eq!(
+        get_suggestion(Error::InputTooLong),
+        symbol_short!("CHK_LEN")
+    );
+    assert_eq!(
+        get_suggestion(Error::DeviceNotFound),
+        symbol_short!("CHK_ID")
+    );
+    assert_eq!(
+        get_suggestion(Error::ContractPaused),
+        symbol_short!("RE_TRY_L")
+    );
 }

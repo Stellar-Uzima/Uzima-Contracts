@@ -3,10 +3,9 @@
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short,
-    token::Client as TokenClient, Address, Env, IntoVal, String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, Env,
+    IntoVal, String, Symbol, Vec,
 };
-
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]

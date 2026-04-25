@@ -10,7 +10,6 @@ use soroban_sdk::{
     Vec,
 };
 
-
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum EscrowStatus {
@@ -727,9 +726,21 @@ mod test {
     #[test]
     fn test_get_suggestion_returns_expected_hint() {
         use soroban_sdk::symbol_short;
-        assert_eq!(crate::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-        assert_eq!(crate::errors::get_suggestion(Error::InvalidAmount), symbol_short!("CHK_LEN"));
-        assert_eq!(crate::errors::get_suggestion(Error::EscrowNotFound), symbol_short!("CHK_ID"));
-        assert_eq!(crate::errors::get_suggestion(Error::AlreadySettled), symbol_short!("ALREADY"));
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::InvalidAmount),
+            symbol_short!("CHK_LEN")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::EscrowNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadySettled),
+            symbol_short!("ALREADY")
+        );
     }
 }

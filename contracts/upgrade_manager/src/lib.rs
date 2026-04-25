@@ -26,7 +26,6 @@ pub struct UpgradeProposal {
     pub is_emergency: bool,
 }
 
-
 #[contract]
 pub struct UpgradeManager;
 
@@ -53,11 +52,7 @@ pub trait TargetContract {
 
 #[contractimpl]
 impl UpgradeManager {
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        validators: Vec<Address>,
-    ) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address, validators: Vec<Address>) -> Result<(), Error> {
         if env.storage().instance().has(&CONFIG) {
             return Err(Error::AlreadyInitialized);
         }
@@ -126,11 +121,7 @@ impl UpgradeManager {
         Ok(id)
     }
 
-    pub fn approve(
-        env: Env,
-        validator: Address,
-        proposal_id: u64,
-    ) -> Result<(), Error> {
+    pub fn approve(env: Env, validator: Address, proposal_id: u64) -> Result<(), Error> {
         validator.require_auth();
         let config: Config = env
             .storage()
@@ -142,15 +133,13 @@ impl UpgradeManager {
             return Err(Error::NotAValidator);
         }
 
-        let mut proposals: Map<u64, UpgradeProposal> =
-            env.storage()
-                .persistent()
-                .get(&PROPOSALS)
-                .ok_or(Error::ProposalNotFound)?;
-
-        let mut proposal = proposals
-            .get(proposal_id)
+        let mut proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
             .ok_or(Error::ProposalNotFound)?;
+
+        let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
 
         if proposal.approvals.contains(&validator) {
             return Err(Error::AlreadyApproved);
@@ -163,15 +152,13 @@ impl UpgradeManager {
     }
 
     pub fn execute(env: Env, proposal_id: u64) -> Result<(), Error> {
-        let mut proposals: Map<u64, UpgradeProposal> =
-            env.storage()
-                .persistent()
-                .get(&PROPOSALS)
-                .ok_or(Error::ProposalNotFound)?;
-
-        let mut proposal = proposals
-            .get(proposal_id)
+        let mut proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
             .ok_or(Error::ProposalNotFound)?;
+
+        let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
         let config: Config = env
             .storage()
             .instance()
@@ -204,15 +191,13 @@ impl UpgradeManager {
     }
 
     pub fn execute_emergency(env: Env, proposal_id: u64) -> Result<(), Error> {
-        let mut proposals: Map<u64, UpgradeProposal> =
-            env.storage()
-                .persistent()
-                .get(&PROPOSALS)
-                .ok_or(Error::ProposalNotFound)?;
-
-        let mut proposal = proposals
-            .get(proposal_id)
+        let mut proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
             .ok_or(Error::ProposalNotFound)?;
+
+        let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
         let config: Config = env
             .storage()
             .instance()
@@ -243,19 +228,14 @@ impl UpgradeManager {
         Ok(())
     }
 
-    pub fn validate_proposal(
-        env: Env,
-        proposal_id: u64,
-    ) -> Result<UpgradeValidation, Error> {
+    pub fn validate_proposal(env: Env, proposal_id: u64) -> Result<UpgradeValidation, Error> {
         let proposals: Map<u64, UpgradeProposal> = env
             .storage()
             .persistent()
             .get(&PROPOSALS)
             .ok_or(Error::ProposalNotFound)?;
 
-        let proposal = proposals
-            .get(proposal_id)
-            .ok_or(Error::ProposalNotFound)?;
+        let proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
 
         let target_client = TargetContractClient::new(&env, &proposal.target);
         Ok(target_client.validate_upgrade(&proposal.new_wasm_hash))

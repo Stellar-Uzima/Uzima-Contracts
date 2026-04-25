@@ -8,8 +8,8 @@ pub mod errors;
 pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
+    Symbol, Vec,
 };
 
 // ============================================================================
@@ -18,7 +18,6 @@ use soroban_sdk::{
 // Implements W3C DID Core Specification (https://www.w3.org/TR/did-core/)
 // DID Method: did:stellar:uzima:<network>:<address>
 // ============================================================================
-
 
 // === DID Document Structures (W3C Compliant) ===
 
@@ -1825,7 +1824,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #301)")]
     fn test_double_initialization() {
         let (env, client, _owner) = create_contract();
         let owner2 = Address::generate(&env);
@@ -1876,7 +1875,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
+    #[should_panic(expected = "Error(Contract, #471)")]
     fn test_create_duplicate_did() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
@@ -2290,7 +2289,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
+    #[should_panic(expected = "Error(Contract, #111)")]
     fn test_cannot_remove_owner_as_verifier() {
         let (_env, client, owner) = create_contract();
         client.remove_verifier(&owner);
@@ -2399,10 +2398,25 @@ mod tests {
     #[test]
     fn test_get_suggestion_returns_expected_hint() {
         use soroban_sdk::symbol_short;
-        assert_eq!(crate::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-        assert_eq!(crate::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-        assert_eq!(crate::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-        assert_eq!(crate::errors::get_suggestion(Error::DIDNotFound), symbol_short!("CHK_ID"));
-        assert_eq!(crate::errors::get_suggestion(Error::KeyRotationCooldown), symbol_short!("RE_TRY_L"));
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::DIDNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::KeyRotationCooldown),
+            symbol_short!("RE_TRY_L")
+        );
     }
 }

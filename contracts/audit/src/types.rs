@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Bytes, BytesN, Map, String, Vec};
+use soroban_sdk::{contracttype, Address, BytesN, Map, String, Vec};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -12,6 +12,13 @@ pub enum AuditType {
 
 #[derive(Clone)]
 #[contracttype]
+pub enum MaybeHash {
+    None,
+    Some(BytesN<32>),
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct AuditRecord {
     pub id: u64,
     pub timestamp: u64,
@@ -19,7 +26,7 @@ pub struct AuditRecord {
     pub audit_type: AuditType,
     pub target_contract: Option<Address>,
     pub action_hash: BytesN<32>,
-    pub previous_state_hash: Option<BytesN<32>>,
+    pub previous_state_hash: MaybeHash,
     pub current_state_hash: BytesN<32>,
     pub metadata: Map<String, String>,
 }

@@ -298,7 +298,6 @@ const ATOMIC_TX_TIMEOUT: u64 = 3_600; // 1 hour
 const MIN_ORACLE_REPORTS: u32 = 3; // Minimum oracle reports for consensus
 const DEFAULT_ORACLE_REPUTATION: u32 = 50;
 
-
 #[contract]
 pub struct CrossChainBridgeContract;
 

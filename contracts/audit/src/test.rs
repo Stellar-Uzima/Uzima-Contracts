@@ -2,7 +2,7 @@
 
 use super::*;
 use crate::types::{AuditConfig, AuditType};
-use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 
 #[test]
 fn test_audit_lifecycle() {
@@ -54,7 +54,8 @@ fn test_audit_lifecycle() {
     assert_ne!(rolling, BytesN::from_array(&env, &[0u8; 32]));
 
     // 5. Generate Summary
-    let summary = client.generate_summary(&0, &env.ledger().timestamp() + 100);
+    let end_time = env.ledger().timestamp() + 100;
+    let summary = client.generate_summary(&0, &end_time);
     assert_eq!(summary.total_records, 1);
 }
 
@@ -71,8 +72,20 @@ fn test_error_codes_are_stable() {
 fn test_get_suggestion_returns_expected_hint() {
     use crate::errors::{get_suggestion, Error};
     use soroban_sdk::symbol_short;
-    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-    assert_eq!(get_suggestion(Error::RecordNotFound), symbol_short!("CHK_ID"));
+    assert_eq!(
+        get_suggestion(Error::Unauthorized),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        get_suggestion(Error::NotInitialized),
+        symbol_short!("INIT_CTR")
+    );
+    assert_eq!(
+        get_suggestion(Error::AlreadyInitialized),
+        symbol_short!("ALREADY")
+    );
+    assert_eq!(
+        get_suggestion(Error::RecordNotFound),
+        symbol_short!("CHK_ID")
+    );
 }

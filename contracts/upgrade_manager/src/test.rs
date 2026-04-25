@@ -70,8 +70,20 @@ fn test_error_codes_are_stable() {
 #[test]
 fn test_get_suggestion_returns_expected_hint() {
     use crate::errors::{get_suggestion, Error};
-    assert_eq!(get_suggestion(Error::NotAValidator), symbol_short!("CHK_AUTH"));
-    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-    assert_eq!(get_suggestion(Error::ProposalNotFound), symbol_short!("CHK_ID"));
-    assert_eq!(get_suggestion(Error::TimelockNotExpired), symbol_short!("RE_TRY_L"));
+    assert_eq!(
+        get_suggestion(Error::NotAValidator),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        get_suggestion(Error::AlreadyInitialized),
+        symbol_short!("ALREADY")
+    );
+    assert_eq!(
+        get_suggestion(Error::ProposalNotFound),
+        symbol_short!("CHK_ID")
+    );
+    assert_eq!(
+        get_suggestion(Error::TimelockNotExpired),
+        symbol_short!("RE_TRY_L")
+    );
 }

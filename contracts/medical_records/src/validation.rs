@@ -1053,7 +1053,7 @@ pub fn compute_quality_score(
 pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<ValidationIssue>) {
     let mut issues: Vec<ValidationIssue> = Vec::new(env);
     let mut checks_passed = 0u32;
-    let total_checks = 7u32;
+    let total_checks = 5u32;
 
     // FHIR: subject (patient) reference is mandatory
     // Validates that a real patient address is present and differs from the doctor.
@@ -1366,7 +1366,7 @@ fn try_normalize_category(env: &Env, input: &String) -> Option<String> {
     let variants: [(&str, &str); 12] = [
         ("modern", "Modern"),
         ("MODERN", "Modern"),
-        ("Modern ", "Modern"),  // trailing space variant
+        ("Modern ", "Modern"), // trailing space variant
         ("traditional", "Traditional"),
         ("TRADITIONAL", "Traditional"),
         ("Traditional ", "Traditional"),

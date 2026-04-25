@@ -318,10 +318,28 @@ fn test_error_codes_are_stable() {
 #[test]
 fn test_get_suggestion_returns_expected_hint() {
     use soroban_sdk::symbol_short;
-    assert_eq!(super::errors::get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-    assert_eq!(super::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-    assert_eq!(super::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-    assert_eq!(super::errors::get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
-    assert_eq!(super::errors::get_suggestion(Error::InsufficientFunds), symbol_short!("ADD_FUND"));
-    assert_eq!(super::errors::get_suggestion(Error::ClaimNotFound), symbol_short!("CHK_ID"));
+    assert_eq!(
+        super::errors::get_suggestion(Error::Unauthorized),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        super::errors::get_suggestion(Error::NotInitialized),
+        symbol_short!("INIT_CTR")
+    );
+    assert_eq!(
+        super::errors::get_suggestion(Error::AlreadyInitialized),
+        symbol_short!("ALREADY")
+    );
+    assert_eq!(
+        super::errors::get_suggestion(Error::ContractPaused),
+        symbol_short!("RE_TRY_L")
+    );
+    assert_eq!(
+        super::errors::get_suggestion(Error::InsufficientFunds),
+        symbol_short!("ADD_FUND")
+    );
+    assert_eq!(
+        super::errors::get_suggestion(Error::ClaimNotFound),
+        symbol_short!("CHK_ID")
+    );
 }

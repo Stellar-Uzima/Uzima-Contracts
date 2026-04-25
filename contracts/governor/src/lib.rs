@@ -7,8 +7,8 @@
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env,
-    IntoVal, Map, Symbol,
+    contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env, IntoVal, Map,
+    Symbol,
 };
 
 #[derive(Clone)]
@@ -40,7 +40,6 @@ pub struct Proposal {
     pub executed: bool,
     pub exec_data: Bytes,
 }
-
 
 const CFG: Symbol = symbol_short!("cfg");
 const PROPS: Symbol = symbol_short!("props");
@@ -426,9 +425,21 @@ mod test {
     #[test]
     fn test_get_suggestion_returns_expected_hint() {
         use soroban_sdk::symbol_short;
-        assert_eq!(crate::errors::get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-        assert_eq!(crate::errors::get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-        assert_eq!(crate::errors::get_suggestion(Error::ProposalNotFound), symbol_short!("CHK_ID"));
-        assert_eq!(crate::errors::get_suggestion(Error::VotingClosed), symbol_short!("RE_TRY_L"));
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::ProposalNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::VotingClosed),
+            symbol_short!("RE_TRY_L")
+        );
     }
 }

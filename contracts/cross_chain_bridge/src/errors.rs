@@ -50,7 +50,9 @@ pub enum Error {
 
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
-        Error::Unauthorized | Error::InsufficientConfirmations | Error::InsufficientOracleReports => {
+        Error::Unauthorized
+        | Error::InsufficientConfirmations
+        | Error::InsufficientOracleReports => {
             symbol_short!("CHK_AUTH")
         }
         Error::AlreadyInitialized

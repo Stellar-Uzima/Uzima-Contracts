@@ -391,10 +391,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_manufacturer(
-        env: Env,
-        manufacturer_id: BytesN<32>,
-    ) -> Result<Manufacturer, Error> {
+    pub fn get_manufacturer(env: Env, manufacturer_id: BytesN<32>) -> Result<Manufacturer, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id))
@@ -554,11 +551,7 @@ impl IoTDeviceManagement {
             .unwrap_or(Vec::new(&env))
     }
 
-    pub fn activate_device(
-        env: Env,
-        caller: Address,
-        device_id: BytesN<32>,
-    ) -> Result<(), Error> {
+    pub fn activate_device(env: Env, caller: Address, device_id: BytesN<32>) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -599,11 +592,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn suspend_device(
-        env: Env,
-        caller: Address,
-        device_id: BytesN<32>,
-    ) -> Result<(), Error> {
+    pub fn suspend_device(env: Env, caller: Address, device_id: BytesN<32>) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -1008,10 +997,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_device_heartbeats(
-        env: Env,
-        device_id: BytesN<32>,
-    ) -> Result<Vec<Heartbeat>, Error> {
+    pub fn get_device_heartbeats(env: Env, device_id: BytesN<32>) -> Result<Vec<Heartbeat>, Error> {
         if !env
             .storage()
             .persistent()

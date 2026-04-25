@@ -1,248 +1,197 @@
 #[cfg(test)]
 mod tests {
-    use soroban_sdk::testutils::{Address as AddressTestUtils, Signature};
-    use soroban_sdk::{Address, Env, Vec};
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{vec, Address, Env};
 
     use crate::types::{RBACConfig, Role};
-    use crate::RBAC;
+    use crate::{RBACClient, RBAC};
 
-    fn create_test_env() -> Env {
-        Env::default()
-    }
-
-    fn setup_contract(env: &Env) -> Address {
-        let admin = Address::random(env);
+    fn setup_contract(env: &Env) -> (RBACClient<'_>, Address) {
+        let contract_id = env.register_contract(None, RBAC);
+        let client = RBACClient::new(env, &contract_id);
+        let admin = Address::generate(env);
         let config = RBACConfig {
             emit_events: true,
             max_roles_per_address: 10,
         };
-
-        RBAC::initialize(env.clone(), admin.clone(), config).unwrap();
-        admin
+        env.mock_all_auths();
+        client.initialize(&admin, &config);
+        (client, admin)
     }
 
     #[test]
     fn test_initialize() {
-        let env = create_test_env();
-        let admin = Address::random(&env);
+        let env = Env::default();
+        let contract_id = env.register_contract(None, RBAC);
+        let client = RBACClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
         let config = RBACConfig {
             emit_events: true,
             max_roles_per_address: 10,
         };
 
-        RBAC::initialize(env.clone(), admin.clone(), config.clone()).unwrap();
+        env.mock_all_auths();
+        client.initialize(&admin, &config);
 
-        let stored_config = RBAC::get_config(env.clone()).unwrap();
+        let stored_config = client.get_config();
         assert_eq!(stored_config.emit_events, true);
         assert_eq!(stored_config.max_roles_per_address, 10);
     }
 
     #[test]
+    #[should_panic]
     fn test_initialize_twice_fails() {
-        let env = create_test_env();
-        let admin = Address::random(&env);
+        let env = Env::default();
+        let (client, admin) = setup_contract(&env);
         let config = RBACConfig {
             emit_events: true,
             max_roles_per_address: 10,
         };
-
-        RBAC::initialize(env.clone(), admin.clone(), config.clone()).unwrap();
-        assert_eq!(
-            RBAC::initialize(env.clone(), admin.clone(), config.clone()),
-            Err(crate::errors::Error::AlreadyInitialized)
-        ).unwrap();
+        client.initialize(&admin, &config);
     }
 
     #[test]
     fn test_assign_role() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
-
-        let success = RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
+        let success = client.assign_role(&user, &Role::Doctor);
         assert_eq!(success, true);
 
-        // Verify role was assigned
-        let has_role = RBAC::has_role(env.clone(), user.clone(), Role::Doctor).unwrap();
+        let has_role = client.has_role(&user, &Role::Doctor);
         assert_eq!(has_role, true);
     }
 
     #[test]
     fn test_assign_same_role_twice() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
-
-        // Assign role first time
-        let success1 = RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
+        let success1 = client.assign_role(&user, &Role::Doctor);
         assert_eq!(success1, true);
 
-        env.mock_auths(&[Signature::Invoker]);
-
-        // Try to assign same role again
-        let success2 = RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        assert_eq!(success2, false); // Should fail
+        let success2 = client.assign_role(&user, &Role::Doctor);
+        assert_eq!(success2, false);
     }
 
     #[test]
     fn test_remove_role() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        assert_eq!(client.has_role(&user, &Role::Doctor), true);
 
-        // Assign role
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-
-        // Verify role exists
-        assert_eq!(
-            RBAC::has_role(env.clone(), user.clone(), Role::Doctor),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        // Remove role
-        let success = RBAC::remove_role(env.clone(), user.clone(), Role::Doctor).unwrap();
+        let success = client.remove_role(&user, &Role::Doctor);
         assert_eq!(success, true);
 
-        // Verify role no longer exists
-        assert_eq!(
-            RBAC::has_role(env.clone(), user.clone(), Role::Doctor),
-            false
-        ).unwrap();
+        assert_eq!(client.has_role(&user, &Role::Doctor), false);
     }
 
     #[test]
     fn test_remove_nonexistent_role() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
-
-        // Try to remove role that was never assigned
-        let success = RBAC::remove_role(env.clone(), user.clone(), Role::Doctor).unwrap();
+        let success = client.remove_role(&user, &Role::Doctor);
         assert_eq!(success, false);
     }
 
     #[test]
     fn test_get_roles() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        client.assign_role(&user, &Role::Patient);
+        client.assign_role(&user, &Role::Staff);
 
-        // Assign multiple roles
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Patient).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Staff).unwrap();
-
-        // Get all roles
-        let roles = RBAC::get_roles(env.clone(), user.clone()).unwrap();
+        let roles = client.get_roles(&user);
 
         assert_eq!(roles.len(), 3);
-        assert!(roles.iter().any(|r| *r == Role::Doctor));
-        assert!(roles.iter().any(|r| *r == Role::Patient));
-        assert!(roles.iter().any(|r| *r == Role::Staff));
+        assert!(roles.iter().any(|r| r == Role::Doctor));
+        assert!(roles.iter().any(|r| r == Role::Patient));
+        assert!(roles.iter().any(|r| r == Role::Staff));
     }
 
     #[test]
     fn test_get_roles_empty() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        let roles = RBAC::get_roles(env.clone(), user.clone()).unwrap();
+        let roles = client.get_roles(&user);
         assert_eq!(roles.len(), 0);
     }
 
     #[test]
     fn test_has_any_role() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        client.assign_role(&user, &Role::Patient);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Patient).unwrap();
-
-        // Create vector with roles to check
-        let mut roles_to_check = Vec::with_capacity(&env, 2);
-        roles_to_check.push_back(Role::Admin);
-        roles_to_check.push_back(Role::Doctor);
-
-        // Should return true because user has Doctor role
-        let has_any = RBAC::has_any_role(env.clone(), user.clone(), roles_to_check).unwrap();
+        let roles_to_check = vec![&env, Role::Admin, Role::Doctor];
+        let has_any = client.has_any_role(&user, &roles_to_check);
         assert_eq!(has_any, true);
 
-        // Create vector with only Admin role
-        let mut admin_only = Vec::with_capacity(&env, 1);
-        admin_only.push_back(Role::Admin);
-
-        // Should return false because user doesn't have Admin role
-        let has_admin = RBAC::has_any_role(env.clone(), user.clone(), admin_only).unwrap();
+        let admin_only = vec![&env, Role::Admin];
+        let has_admin = client.has_any_role(&user, &admin_only);
         assert_eq!(has_admin, false);
     }
 
     #[test]
     fn test_has_all_roles() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        client.assign_role(&user, &Role::Patient);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Patient).unwrap();
-
-        // Create vector with roles user has
-        let mut roles_user_has = Vec::with_capacity(&env, 2);
-        roles_user_has.push_back(Role::Doctor);
-        roles_user_has.push_back(Role::Patient);
-
-        // Should return true
-        let has_all = RBAC::has_all_roles(env.clone(), user.clone(), roles_user_has.clone()).unwrap();
+        let roles_user_has = vec![&env, Role::Doctor, Role::Patient];
+        let has_all = client.has_all_roles(&user, &roles_user_has);
         assert_eq!(has_all, true);
 
-        // Create vector with one role user has and one they don't
-        let mut mixed_roles = Vec::with_capacity(&env, 2);
-        mixed_roles.push_back(Role::Doctor);
-        mixed_roles.push_back(Role::Admin);
-
-        // Should return false
-        let has_all_mixed = RBAC::has_all_roles(env.clone(), user.clone(), mixed_roles).unwrap();
+        let mixed_roles = vec![&env, Role::Doctor, Role::Admin];
+        let has_all_mixed = client.has_all_roles(&user, &mixed_roles);
         assert_eq!(has_all_mixed, false);
     }
 
     #[test]
     fn test_get_address_roles() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        client.assign_role(&user, &Role::Researcher);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Researcher).unwrap();
-
-        let address_roles = RBAC::get_address_roles(env.clone(), user.clone()).unwrap();
+        let address_roles = client.get_address_roles(&user);
 
         assert_eq!(address_roles.address, user);
         assert_eq!(address_roles.role_count, 2);
@@ -251,274 +200,190 @@ mod tests {
 
     #[test]
     fn test_get_role_members() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user1 = Address::random(&env);
-        let user2 = Address::random(&env);
-        let user3 = Address::random(&env);
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
+        let user3 = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user1, &Role::Doctor);
+        client.assign_role(&user2, &Role::Doctor);
+        client.assign_role(&user3, &Role::Patient);
 
-        // Assign Doctor role to multiple users
-        RBAC::assign_role(env.clone(), user1.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user2.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user3.clone(), Role::Patient).unwrap();
-
-        // Get doctors
-        let doctors = RBAC::get_role_members(env.clone(), Role::Doctor).unwrap();
+        let doctors = client.get_role_members(&Role::Doctor);
         assert_eq!(doctors.len(), 2);
 
-        // Get patients
-        let patients = RBAC::get_role_members(env.clone(), Role::Patient).unwrap();
+        let patients = client.get_role_members(&Role::Patient);
         assert_eq!(patients.len(), 1);
     }
 
     #[test]
     fn test_get_role_member_count() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user1 = Address::random(&env);
-        let user2 = Address::random(&env);
+        let user1 = Address::generate(&env);
+        let user2 = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user1, &Role::Doctor);
+        client.assign_role(&user2, &Role::Doctor);
 
-        RBAC::assign_role(env.clone(), user1.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user2.clone(), Role::Doctor).unwrap();
-
-        let count = RBAC::get_role_member_count(env.clone(), Role::Doctor).unwrap();
+        let count = client.get_role_member_count(&Role::Doctor);
         assert_eq!(count, 2);
 
-        let patient_count = RBAC::get_role_member_count(env.clone(), Role::Patient).unwrap();
+        let patient_count = client.get_role_member_count(&Role::Patient);
         assert_eq!(patient_count, 0);
     }
 
     #[test]
     fn test_is_doctor() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        assert_eq!(client.is_doctor(&user), false);
 
-        assert_eq!(RBAC::is_doctor(env.clone().unwrap(), user.clone()), false).unwrap();
+        client.assign_role(&user, &Role::Doctor);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-
-        assert_eq!(RBAC::is_doctor(env.clone().unwrap(), user.clone()), true).unwrap();
+        assert_eq!(client.is_doctor(&user), true);
     }
 
     #[test]
     fn test_is_patient() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        assert_eq!(client.is_patient(&user), false);
 
-        assert_eq!(RBAC::is_patient(env.clone().unwrap(), user.clone()), false).unwrap();
+        client.assign_role(&user, &Role::Patient);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Patient).unwrap();
-
-        assert_eq!(RBAC::is_patient(env.clone().unwrap(), user.clone()), true).unwrap();
+        assert_eq!(client.is_patient(&user), true);
     }
 
     #[test]
     fn test_is_admin() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        // Admin shouldn't have Admin role yet (different address)
-        assert_eq!(RBAC::is_admin(env.clone().unwrap(), user.clone()), false).unwrap();
+        assert_eq!(client.is_admin(&user), false);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Admin);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Admin).unwrap();
-
-        assert_eq!(RBAC::is_admin(env.clone().unwrap(), user.clone()), true).unwrap();
+        assert_eq!(client.is_admin(&user), true);
     }
 
     #[test]
     fn test_is_staff() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        assert_eq!(client.is_staff(&user), false);
 
-        assert_eq!(RBAC::is_staff(env.clone().unwrap(), user.clone()), false).unwrap();
+        client.assign_role(&user, &Role::Staff);
 
-        RBAC::assign_role(env.clone(), user.clone(), Role::Staff).unwrap();
-
-        assert_eq!(RBAC::is_staff(env.clone().unwrap(), user.clone()), true).unwrap();
+        assert_eq!(client.is_staff(&user), true);
     }
 
     #[test]
     fn test_multiple_roles_and_removals() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.assign_role(&user, &Role::Doctor);
+        client.assign_role(&user, &Role::Patient);
+        client.assign_role(&user, &Role::Researcher);
 
-        // Assign multiple roles
-        RBAC::assign_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Patient).unwrap();
-        RBAC::assign_role(env.clone(), user.clone(), Role::Researcher).unwrap();
+        assert_eq!(client.get_roles(&user).len(), 3);
 
-        // Verify all roles exist
-        assert_eq!(RBAC::get_roles(env.clone().unwrap(), user.clone()).len(), 3).unwrap();
+        client.remove_role(&user, &Role::Patient);
 
-        env.mock_auths(&[Signature::Invoker]);
-
-        // Remove one role
-        RBAC::remove_role(env.clone(), user.clone(), Role::Patient).unwrap();
-
-        // Verify 2 roles remain
-        let remaining = RBAC::get_roles(env.clone(), user.clone()).unwrap();
+        let remaining = client.get_roles(&user);
         assert_eq!(remaining.len(), 2);
-        assert!(!remaining.iter().any(|r| *r == Role::Patient));
+        assert!(!remaining.iter().any(|r| r == Role::Patient));
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.remove_role(&user, &Role::Doctor);
 
-        // Remove another
-        RBAC::remove_role(env.clone(), user.clone(), Role::Doctor).unwrap();
-
-        let final_roles = RBAC::get_roles(env.clone(), user.clone()).unwrap();
+        let final_roles = client.get_roles(&user);
         assert_eq!(final_roles.len(), 1);
         assert_eq!(final_roles.get_unchecked(0), Role::Researcher);
     }
 
     #[test]
     fn test_update_config() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
         let new_config = RBACConfig {
             emit_events: false,
             max_roles_per_address: 5,
         };
 
-        env.mock_auths(&[Signature::Invoker]);
+        client.update_config(&new_config);
 
-        RBAC::update_config(env.clone(), new_config.clone()).unwrap();
-
-        let stored_config = RBAC::get_config(env.clone()).unwrap();
+        let stored_config = client.get_config();
         assert_eq!(stored_config.emit_events, false);
         assert_eq!(stored_config.max_roles_per_address, 5);
     }
 
     #[test]
     fn test_max_roles_per_address() {
-        let env = create_test_env();
-        let admin = Address::random(&env);
-
+        let env = Env::default();
+        let contract_id = env.register_contract(None, RBAC);
+        let client = RBACClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
         let config = RBACConfig {
             emit_events: true,
             max_roles_per_address: 2,
         };
 
-        RBAC::initialize(env.clone(), admin.clone(), config).unwrap();
+        env.mock_all_auths();
+        client.initialize(&admin, &config);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        assert_eq!(client.assign_role(&user, &Role::Doctor), true);
+        assert_eq!(client.assign_role(&user, &Role::Patient), true);
+        assert_eq!(client.assign_role(&user, &Role::Staff), false);
 
-        // Assign first role
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Doctor),
-            true
-        ).unwrap();
-
-        // Assign second role
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Patient),
-            true
-        ).unwrap();
-
-        // Try to assign third role (should fail due to max limit)
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Staff),
-            false
-        ).unwrap();
-
-        // Verify only 2 roles assigned
-        assert_eq!(RBAC::get_roles(env.clone().unwrap(), user.clone()).len(), 2).unwrap();
+        assert_eq!(client.get_roles(&user).len(), 2);
     }
 
     #[test]
     fn test_all_role_types() {
-        let env = create_test_env();
-        let admin = setup_contract(&env);
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _admin) = setup_contract(&env);
 
-        let user = Address::random(&env);
+        let user = Address::generate(&env);
 
-        env.mock_auths(&[Signature::Invoker]);
+        assert_eq!(client.assign_role(&user, &Role::Admin), true);
+        assert_eq!(client.assign_role(&user, &Role::Doctor), true);
+        assert_eq!(client.assign_role(&user, &Role::Patient), true);
+        assert_eq!(client.assign_role(&user, &Role::Staff), true);
+        assert_eq!(client.assign_role(&user, &Role::Insurer), true);
+        assert_eq!(client.assign_role(&user, &Role::Researcher), true);
+        assert_eq!(client.assign_role(&user, &Role::Auditor), true);
+        assert_eq!(client.assign_role(&user, &Role::Service), true);
 
-        // Test all role types can be assigned
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Admin),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Doctor),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Patient),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Staff),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Insurer),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Researcher),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Auditor),
-            true
-        ).unwrap();
-
-        env.mock_auths(&[Signature::Invoker]);
-
-        assert_eq!(
-            RBAC::assign_role(env.clone(), user.clone(), Role::Service),
-            true
-        ).unwrap();
-
-        // Verify all roles assigned
-        assert_eq!(RBAC::get_roles(env.clone().unwrap(), user.clone()).len(), 8).unwrap();
+        assert_eq!(client.get_roles(&user).len(), 8);
     }
 
     #[test]
@@ -532,8 +397,17 @@ mod tests {
     fn test_get_suggestion_returns_expected_hint() {
         use crate::errors::{get_suggestion, Error};
         use soroban_sdk::symbol_short;
-        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+        assert_eq!(
+            get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
     }
 }

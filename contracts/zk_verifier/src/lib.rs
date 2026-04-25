@@ -414,10 +414,25 @@ mod tests {
     fn test_get_suggestion_returns_expected_hint() {
         use crate::errors::get_suggestion;
         use soroban_sdk::symbol_short;
-        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-        assert_eq!(get_suggestion(Error::InvalidProof), symbol_short!("CONTACT"));
-        assert_eq!(get_suggestion(Error::VerificationFailed), symbol_short!("CONTACT"));
+        assert_eq!(
+            get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            get_suggestion(Error::InvalidProof),
+            symbol_short!("CONTACT")
+        );
+        assert_eq!(
+            get_suggestion(Error::VerificationFailed),
+            symbol_short!("CONTACT")
+        );
     }
 }

@@ -10,9 +10,9 @@ pub mod verification;
 mod test;
 
 use crate::errors::Error;
-use crate::types::{AuditConfig, AuditRecord, AuditSummary, AuditType, DataKey};
+use crate::types::{AuditConfig, AuditRecord, AuditSummary, AuditType, DataKey, MaybeHash};
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
+    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
 
 #[contract]
@@ -58,7 +58,10 @@ impl AuditTrail {
             audit_type,
             target_contract: target.clone(),
             action_hash,
-            previous_state_hash: previous_hash,
+            previous_state_hash: match previous_hash {
+                None => MaybeHash::None,
+                Some(h) => MaybeHash::Some(h),
+            },
             current_state_hash: current_hash,
             metadata,
         };
@@ -102,7 +105,7 @@ impl AuditTrail {
         let mut events = 0u32;
         let mut admins = 0u32;
 
-        for i in 0..count {
+        for i in 1..=count {
             if let Some(record) = env
                 .storage()
                 .persistent()
@@ -130,13 +133,22 @@ impl AuditTrail {
     }
 
     fn update_rolling_hash(env: &Env, record: &AuditRecord) {
-        let mut current_rolling: BytesN<32> =
+        let current_rolling: BytesN<32> =
             env.storage().instance().get(&DataKey::RollingHash).unwrap();
 
         let mut buffer = soroban_sdk::Bytes::new(env);
-        buffer.append(&soroban_sdk::Bytes::from_slice(env, &current_rolling.to_array()));
-        buffer.append(&soroban_sdk::Bytes::from_slice(env, &record.id.to_be_bytes()));
-        buffer.append(&soroban_sdk::Bytes::from_slice(env, &record.action_hash.to_array()));
+        buffer.append(&soroban_sdk::Bytes::from_slice(
+            env,
+            &current_rolling.to_array(),
+        ));
+        buffer.append(&soroban_sdk::Bytes::from_slice(
+            env,
+            &record.id.to_be_bytes(),
+        ));
+        buffer.append(&soroban_sdk::Bytes::from_slice(
+            env,
+            &record.action_hash.to_array(),
+        ));
 
         let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
         env.storage()

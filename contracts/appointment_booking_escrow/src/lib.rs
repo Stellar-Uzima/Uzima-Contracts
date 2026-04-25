@@ -141,9 +141,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::PatientAppointments(patient.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         patient_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::PatientAppointments(patient.clone()), &patient_appts);
+        env.storage().persistent().set(
+            &DataKey::PatientAppointments(patient.clone()),
+            &patient_appts,
+        );
 
         // Add to provider's appointments list
         let mut provider_appts: Vec<u64> = env
@@ -152,9 +153,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::ProviderAppointments(provider.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         provider_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderAppointments(provider.clone()), &provider_appts);
+        env.storage().persistent().set(
+            &DataKey::ProviderAppointments(provider.clone()),
+            &provider_appts,
+        );
 
         events::publish_appointment_booked(
             &env,
@@ -192,7 +194,7 @@ impl AppointmentBookingEscrow {
         }
 
         // Check if already confirmed or refunded
-        if appointment.status == AppointmentStatus::Confirmed {
+        if appointment.status == AppointmentStatus::Completed {
             return Err(Error::AppointmentAlreadyConfirmed);
         }
         if appointment.status == AppointmentStatus::Refunded {
