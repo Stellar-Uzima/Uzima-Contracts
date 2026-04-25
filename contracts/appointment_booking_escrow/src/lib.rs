@@ -9,9 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, token, Address, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Vec};
 
 // ==================== Data Types ====================
 
