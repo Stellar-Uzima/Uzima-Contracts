@@ -1366,7 +1366,7 @@ fn try_normalize_category(env: &Env, input: &String) -> Option<String> {
     let variants: [(&str, &str); 12] = [
         ("modern", "Modern"),
         ("MODERN", "Modern"),
-        ("Modern ", "Modern"),  // trailing space variant
+        ("Modern ", "Modern"), // trailing space variant
         ("traditional", "Traditional"),
         ("TRADITIONAL", "Traditional"),
         ("Traditional ", "Traditional"),

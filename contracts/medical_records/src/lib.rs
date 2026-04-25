@@ -4429,7 +4429,8 @@ impl MedicalRecordsContract {
         env: Env,
         new_wasm_hash: BytesN<32>,
     ) -> Result<upgradeability::UpgradeValidation, Error> {
-        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash).map_err(|_| Error::InvalidInput)
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash)
+            .map_err(|_| Error::InvalidInput)
     }
 
     fn migrate_data(_env: &Env, from_version: u32) {
@@ -5615,9 +5616,12 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
         Ok(BytesN::from_array(env, &hash_bytes.to_array()))
     }
 
-    fn validate(env: &Env, _new_wasm_hash: &BytesN<32>) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+    fn validate(
+        env: &Env,
+        _new_wasm_hash: &BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
         let mut report = soroban_sdk::Vec::new(env);
-        
+
         // Example check: ensure we are initialized
         let initialized = env.storage().instance().has(&UPGRADE_ADMIN);
         if !initialized {
