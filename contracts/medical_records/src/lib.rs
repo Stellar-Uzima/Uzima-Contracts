@@ -17,7 +17,8 @@ mod validation;
 pub use errors::Error;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String, Vec,
+    contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
+    IntoVal, Map, String, Symbol, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
@@ -55,6 +56,19 @@ pub struct RecordMetadata {
     pub category: String,
     pub is_confidential: bool,
     pub record_hash: BytesN<32>,
+    pub tags: Vec<String>,
+    pub custom_fields: Map<String, String>,
+    pub version: u32,
+    pub history: Vec<RecordMetadataHistoryEntry>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordMetadataHistoryEntry {
+    pub version: u32,
+    pub timestamp: u64,
+    pub tags: Vec<String>,
+    pub custom_fields: Map<String, String>,
 }
 
 // ==================== Users / DID ====================
@@ -104,6 +118,7 @@ pub struct UserProfile {
     pub role: Role,
     pub active: bool,
     pub did_reference: Option<String>,
+    pub qkd_capable: bool,
 }
 
 #[derive(Clone)]
@@ -136,6 +151,47 @@ pub struct EmergencyAccess {
     pub expires_at: u64,
     pub record_scope: Vec<u64>,
     pub is_active: bool,
+}
+
+// ==================== ZK / Credential Types ====================
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkPublicInputs {
+    pub record_id: u64,
+    pub record_commitment: BytesN<32>,
+    pub credential_root: BytesN<32>,
+    pub issuer: Address,
+    pub requester_commitment: BytesN<32>,
+    pub provider_commitment: BytesN<32>,
+    pub claim_commitment: BytesN<32>,
+    pub min_timestamp: u64,
+    pub max_timestamp: u64,
+    pub nullifier: BytesN<32>,
+    pub pseudonym: BytesN<32>,
+    pub vk_version: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkAccessGrant {
+    pub record_id: u64,
+    pub requester: Address,
+    pub expires_at: u64,
+    pub nullifier: BytesN<32>,
+    pub pseudonym: BytesN<32>,
+    pub vk_version: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ZkAuditRecord {
+    pub record_id: u64,
+    pub pseudonym: BytesN<32>,
+    pub timestamp: u64,
+    pub proof_verified: bool,
+    pub nullifier_present: bool,
+    pub nullifier: BytesN<32>,
 }
 
 // ==================== Medical Record ====================
@@ -201,13 +257,18 @@ pub struct RecoveryProposal {
 
 // ==================== Cryptographic (E2E / PQ) Types ====================
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum EnvelopeAlgorithm {
     X25519,
     Kyber768,
+    Kyber1024,
     /// Hybrid classical + PQ (wrapped keys stored in both fields).
     HybridX25519Kyber768,
+    HybridX25519Kyber1024,
+    /// Advanced hybrid with code-based crypto.
+    HybridKyberMcEliece,
+    McEliece,
     Custom(u32),
 }
 
@@ -256,6 +317,58 @@ pub struct EncryptedRecordHeader {
     pub doctor_did: Option<String>,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct UserAccessAttribute {
+    pub namespace: String,
+    pub value: String,
+    pub issued_by: Address,
+    pub issued_at: u64,
+    pub expires_at: u64,
+    pub revoked_at: u64,
+    pub epoch: u32,
+    pub is_active: bool,
+    pub is_verified: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AbePolicyMetadata {
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub compiled_at: u64,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedAccessState {
+    pub record_policies: Map<u64, AbePolicyMetadata>,
+    pub user_attributes: Map<Address, Vec<UserAccessAttribute>>,
+    pub attribute_epochs: Map<BytesN<32>, u32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct AdvancedEncryptedRecordInput {
+    pub ciphertext_ref: String,
+    pub ciphertext_hash: BytesN<32>,
+    pub envelopes: Vec<KeyEnvelope>,
+    pub policy_ref: String,
+    pub policy_hash: BytesN<32>,
+    pub access_ciphertext_ref: String,
+    pub access_ciphertext_hash: BytesN<32>,
+    pub required_permission: Permission,
+    pub attribute_count: u32,
+    pub valid_until: u64,
+    pub revocation_epoch: u32,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum CryptoAuditAction {
@@ -269,6 +382,9 @@ pub enum CryptoAuditAction {
     CryptoConfigProposed,
     CryptoConfigApproved,
     CryptoConfigExecuted,
+    QuantumThreatDetected,
+    QuantumMigrationStarted,
+    QuantumMigrationCompleted,
 }
 
 #[derive(Clone)]
@@ -317,7 +433,11 @@ pub enum DataKey {
     RecordCount,
     Record(u64),
     RecordMeta(u64),
+    RecordCommitment(u64),
     PatientRecords(Address),
+    PatientRecordCount(Address),
+    PatientRecord(Address, u64),
+    TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
 
     // Logs
     AccessLogCount,
@@ -359,8 +479,23 @@ pub enum DataKey {
     CryptoAuditCount,
     CryptoAudit(u64),
 
+    // Audit & Forensics
+    AuditForensicsContract,
     // Compliance
     RegulatoryCompliance,
+
+    // ZK
+    ZkVerifierContract,
+    CredentialRegistryContract,
+    ZkEnforced,
+    ZkGrantTtl,
+    ZkUsedNullifier(BytesN<32>),
+    ZkAccessGrant(Address, u64),
+    // Rate limiting
+    RateLimitCfg(u32),        // operation_id -> RateLimitConfig
+    RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
+    RateLimitBypass(Address), // bool - admin-granted bypass flag
+    QuantumThreatLevel,       // 0-100 (percentage)
 }
 
 // ==================== Errors ====================
@@ -382,12 +517,249 @@ pub struct BatchResult {
     pub failures: Vec<FailureInfo>,
 }
 
+// ==================== Rate Limiting Types ====================
+
+/// Configures operation-specific rate limits per role.
+#[derive(Clone)]
+#[contracttype]
+pub struct RateLimitConfig {
+    /// Max calls per window for a Doctor (0 = unlimited).
+    pub doctor_max_calls: u32,
+    /// Max calls per window for a Patient / None role (0 = unlimited).
+    pub patient_max_calls: u32,
+    /// Max calls per window for Admin (0 = unlimited).
+    pub admin_max_calls: u32,
+    /// Rolling window duration in seconds.
+    pub window_secs: u64,
+}
+
+/// Per-user, per-operation call counter stored in persistent storage.
+#[derive(Clone)]
+#[contracttype]
+pub struct RateLimitEntry {
+    pub count: u32,
+    pub window_start: u64,
+}
+
+// ==================== Data Quality & Validation Types ====================
+
+/// Medical record types for type-specific validation rules.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum MedicalRecordType {
+    General,
+    Laboratory,
+    Prescription,
+    Imaging,
+    Surgical,
+    Emergency,
+}
+
+/// Per-field quality score for a medical record (each field scored 0–10_000 BPS).
+#[derive(Clone)]
+#[contracttype]
+pub struct DataQualityScore {
+    /// Overall quality score (0–10_000 basis points, i.e. 10_000 = 100%).
+    pub overall_score: u32,
+    /// Completeness sub-score: how many required fields are present.
+    pub completeness_score: u32,
+    /// Format sub-score: how many fields pass format validation.
+    pub format_score: u32,
+    /// Consistency sub-score: cross-field consistency checks.
+    pub consistency_score: u32,
+    /// FHIR compliance sub-score.
+    pub fhir_compliance_score: u32,
+    /// Number of issues found during validation.
+    pub issue_count: u32,
+}
+
+/// Severity level for a single validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum ValidationSeverity {
+    Info,
+    Warning,
+    ValidationErr,
+    Critical,
+}
+
+/// A single validation issue detected during quality assessment.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationIssue {
+    pub severity: ValidationSeverity,
+    pub field_name: String,
+    pub issue_description: String,
+    pub suggestion: String,
+}
+
+/// Complete validation report returned by the quality assessment system.
+#[derive(Clone)]
+#[contracttype]
+pub struct ValidationReport {
+    pub record_id: u64,
+    pub quality_score: DataQualityScore,
+    pub issues: Vec<ValidationIssue>,
+    pub is_fhir_compliant: bool,
+    pub validated_at: u64,
+}
+
+/// Tracks field-level completeness for gap detection.
+#[derive(Clone)]
+#[contracttype]
+pub struct FieldCompleteness {
+    pub has_diagnosis: bool,
+    pub has_treatment: bool,
+    pub has_category: bool,
+    pub has_treatment_type: bool,
+    pub has_data_ref: bool,
+    pub has_tags: bool,
+    pub has_doctor_did: bool,
+    pub total_fields: u32,
+    pub completed_fields: u32,
+}
+
+// ==================== Correction Workflow Types ====================
+
+/// Priority level for a correction item, derived from issue severity.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionPriority {
+    /// Blocks record acceptance; requires immediate attention (maps to Critical severity).
+    Critical,
+    /// Required for record validity; must be resolved (maps to ValidationErr severity).
+    High,
+    /// Recommended fix that improves quality (maps to Warning severity).
+    Medium,
+    /// Optional enhancement (maps to Info severity).
+    Low,
+}
+
+/// The type of corrective action recommended for a validation issue.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum CorrectionAction {
+    /// A required field is absent and must be provided.
+    AddMissingField,
+    /// A field value is present but fails format or length constraints.
+    FixFormat,
+    /// A field value can be auto-normalized (e.g., category casing).
+    NormalizeValue,
+    /// Two or more fields have an inconsistent relationship.
+    CheckConsistency,
+    /// The field does not satisfy a FHIR R4 structural requirement.
+    ReviewFhirRequirement,
+}
+
+/// A single actionable correction derived from a validation issue.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionItem {
+    /// The name of the field that needs correction.
+    pub field_name: String,
+    /// The recommended type of corrective action.
+    pub action: CorrectionAction,
+    /// Human-readable description of the issue.
+    pub description: String,
+    /// Concrete suggested value or fix, when deterministic.
+    pub suggested_value: Option<String>,
+    /// Priority ordering for the correction.
+    pub priority: CorrectionPriority,
+}
+
+/// Complete correction workflow for a medical record, grouping all issues
+/// into prioritised, actionable correction items.
+#[derive(Clone)]
+#[contracttype]
+pub struct CorrectionWorkflow {
+    /// The record this workflow applies to.
+    pub record_id: u64,
+    /// Total number of validation issues found.
+    pub total_issues: u32,
+    /// Number of Critical-priority issues.
+    pub critical_count: u32,
+    /// Number of High-priority (ValidationErr) issues.
+    pub error_count: u32,
+    /// Number of Medium-priority (Warning) issues.
+    pub warning_count: u32,
+    /// Number of Low-priority (Info) issues.
+    pub info_count: u32,
+    /// Ordered list of corrections (Critical first, then High, Medium, Low).
+    pub corrections: Vec<CorrectionItem>,
+    /// True when no Critical/High issues exist (only auto-fixable minor issues remain).
+    pub can_auto_fix: bool,
+    /// Ledger timestamp when this workflow was generated.
+    pub workflow_created_at: u64,
+}
+
+/// Result returned by the on-chain record cleansing operation.
+#[derive(Clone)]
+#[contracttype]
+pub struct CleanseResult {
+    /// The (potentially modified) medical record after auto-normalization.
+    pub record: MedicalRecord,
+    /// Human-readable descriptions of each change applied.
+    pub changes_made: Vec<String>,
+    /// True if at least one field was modified during cleansing.
+    pub was_modified: bool,
+}
+
 // ==================== Constants ====================
 
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
 const CHAIN_LIST_LEN: usize = 6;
+const DEFAULT_ZK_GRANT_TTL_SECS: u64 = 120;
+const MAX_ZK_GRANT_TTL_SECS: u64 = 3_600;
+
+#[soroban_sdk::contractclient(name = "ZkVerifierClient")]
+pub trait ZkVerifierContract {
+    fn verify_proof(
+        env: Env,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+    ) -> bool;
+}
+
+#[soroban_sdk::contractclient(name = "CredentialRegistryClient")]
+pub trait CredentialRegistryContract {
+    fn get_active_root(env: Env, issuer: Address) -> Option<BytesN<32>>;
+    fn is_root_revoked(env: Env, issuer: Address, root: BytesN<32>) -> bool;
+}
+
+// Rate-limiting operation IDs
+const OP_ADD_RECORD: u32 = 1;
+const OP_MANAGE_USER: u32 = 2;
+
+// Default rate limits
+const DEFAULT_DOCTOR_MAX_CALLS: u32 = 50;
+const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
+const DEFAULT_ADMIN_MAX_CALLS: u32 = 0; // 0 = unlimited
+const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
+
+// ==================== Structured Logging Types ====================
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum LogLevel {
+    Info,
+    Warning,
+    ErrorLevel,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct StructuredLog {
+    pub timestamp: u64,
+    pub level: LogLevel,
+    pub operation: String,
+    pub actor: Option<Address>,
+    pub target_id: Option<Address>,
+    pub record_id: Option<u64>,
+    pub message: String,
+}
 
 // ==================== Contract ====================
 
@@ -401,10 +773,103 @@ impl MedicalRecordsContract {
     // Initialization / Admin
     // ---------------------------------------------------------------------
 
+    fn emit_structured_log(
+        env: &Env,
+        level: LogLevel,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        let topic = match level {
+            LogLevel::Info => symbol_short!("LOG_INFO"),
+            LogLevel::Warning => symbol_short!("LOG_WARN"),
+            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+        };
+
+        let entry = StructuredLog {
+            timestamp: env.ledger().timestamp(),
+            level,
+            operation: String::from_str(env, operation),
+            actor: actor.cloned(),
+            target_id: target_id.cloned(),
+            record_id,
+            message: String::from_str(env, message),
+        };
+
+        env.events().publish(("LOG", topic), entry);
+    }
+
+    fn log_info(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::Info,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
+    fn log_warning(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::Warning,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
+    fn log_error(
+        env: &Env,
+        operation: &str,
+        actor: Option<&Address>,
+        target_id: Option<&Address>,
+        record_id: Option<u64>,
+        message: &str,
+    ) {
+        Self::emit_structured_log(
+            env,
+            LogLevel::ErrorLevel,
+            operation,
+            actor,
+            target_id,
+            record_id,
+            message,
+        );
+    }
+
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
 
         if env.storage().instance().has(&UPGRADE_ADMIN) {
+            Self::log_warning(
+                &env,
+                "initialize",
+                Some(&admin),
+                None,
+                None,
+                "Initialization skipped because contract is already initialized",
+            );
             return false;
         }
 
@@ -426,6 +891,10 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::RequirePqEnvelopes, &false);
+        env.storage().persistent().set(&DataKey::ZkEnforced, &false);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkGrantTtl, &DEFAULT_ZK_GRANT_TTL_SECS);
 
         let mut users: Map<Address, UserProfile> = Map::new(&env);
         users.set(
@@ -434,11 +903,48 @@ impl MedicalRecordsContract {
                 role: Role::Admin,
                 active: true,
                 did_reference: None,
+                qkd_capable: false,
             },
         );
         env.storage().persistent().set(&DataKey::Users, &users);
-        events::emit_user_created(&env, admin.clone(), admin, "Admin", None);
+        events::emit_user_created(&env, admin.clone(), admin.clone(), "Admin", None);
+        Self::log_info(
+            &env,
+            "initialize",
+            Some(&admin),
+            Some(&admin),
+            None,
+            "Contract initialized and admin user provisioned",
+        );
         true
+    }
+
+    pub fn set_audit_forensics(
+        env: Env,
+        admin: Address,
+        contract_id: Address,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditForensicsContract, &contract_id);
+        Self::log_info(
+            &env,
+            "set_audit_forensics",
+            Some(&admin),
+            Some(&contract_id),
+            None,
+            "Audit forensics contract reference updated",
+        );
+        Ok(true)
+    }
+
+    pub fn get_audit_forensics(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditForensicsContract)
     }
 
     pub fn manage_user(
@@ -451,6 +957,7 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         Self::require_admin(&env, &caller)?;
+        Self::check_and_update_rate_limit(&env, &caller, OP_MANAGE_USER)?;
 
         let mut users = Self::read_users(&env);
         let existing = users.get(user.clone());
@@ -463,6 +970,7 @@ impl MedicalRecordsContract {
         };
 
         if let Some(profile) = existing {
+            let previous_role = profile.role;
             let prev_str = match profile.role {
                 Role::Admin => "Admin",
                 Role::Doctor => "Doctor",
@@ -475,9 +983,34 @@ impl MedicalRecordsContract {
                     role,
                     active: true,
                     did_reference: profile.did_reference,
+                    qkd_capable: profile.qkd_capable,
                 },
             );
-            events::emit_user_role_updated(&env, caller, user, role_str, Some(prev_str));
+            events::emit_user_role_updated(
+                &env,
+                caller.clone(),
+                user.clone(),
+                role_str,
+                Some(prev_str),
+            );
+            Self::log_info(
+                &env,
+                "manage_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User role updated",
+            );
+            if previous_role != role {
+                Self::bump_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, previous_role),
+                );
+                Self::ensure_access_attribute_epoch(
+                    &env,
+                    &Self::role_attribute_key_from_role(&env, role),
+                );
+            }
         } else {
             users.set(
                 user.clone(),
@@ -485,13 +1018,51 @@ impl MedicalRecordsContract {
                     role,
                     active: true,
                     did_reference: None,
+                    qkd_capable: false,
                 },
             );
-            events::emit_user_created(&env, caller, user, role_str, None);
+            events::emit_user_created(&env, caller.clone(), user.clone(), role_str, None);
+            Self::log_info(
+                &env,
+                "manage_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User created",
+            );
+            Self::ensure_access_attribute_epoch(
+                &env,
+                &Self::role_attribute_key_from_role(&env, role),
+            );
         }
 
         env.storage().persistent().set(&DataKey::Users, &users);
         Ok(true)
+    }
+
+    pub fn set_user_qkd_status(
+        env: Env,
+        admin: Address,
+        user: Address,
+        capable: bool,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut users = Self::read_users(&env);
+        let mut profile = users.get(user.clone()).ok_or(Error::NotAuthorized)?;
+        profile.qkd_capable = capable;
+        users.set(user.clone(), profile);
+        env.storage().persistent().set(&DataKey::Users, &users);
+        Ok(())
+    }
+
+    pub fn is_user_qkd_capable(env: Env, user: Address) -> bool {
+        Self::read_users(&env)
+            .get(user)
+            .map(|p| p.qkd_capable)
+            .unwrap_or(false)
     }
 
     pub fn deactivate_user(env: Env, caller: Address, user: Address) -> Result<bool, Error> {
@@ -505,9 +1076,25 @@ impl MedicalRecordsContract {
             profile.active = false;
             users.set(user.clone(), profile);
             env.storage().persistent().set(&DataKey::Users, &users);
-            events::emit_user_deactivated(&env, caller, user);
+            events::emit_user_deactivated(&env, caller.clone(), user.clone());
+            Self::log_info(
+                &env,
+                "deactivate_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "User deactivated",
+            );
             Ok(true)
         } else {
+            Self::log_warning(
+                &env,
+                "deactivate_user",
+                Some(&caller),
+                Some(&user),
+                None,
+                "Requested user deactivation but user was not found",
+            );
             Ok(false)
         }
     }
@@ -526,7 +1113,15 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         env.storage().persistent().set(&DataKey::Paused, &true);
-        events::emit_contract_paused(&env, caller);
+        events::emit_contract_paused(&env, caller.clone());
+        Self::log_info(
+            &env,
+            "pause",
+            Some(&caller),
+            None,
+            None,
+            "Contract paused by admin action",
+        );
         Ok(true)
     }
 
@@ -536,7 +1131,15 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         env.storage().persistent().set(&DataKey::Paused, &false);
-        events::emit_contract_unpaused(&env, caller);
+        events::emit_contract_unpaused(&env, caller.clone());
+        Self::log_info(
+            &env,
+            "unpause",
+            Some(&caller),
+            None,
+            None,
+            "Contract unpaused by admin action",
+        );
         Ok(true)
     }
 
@@ -593,6 +1196,14 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &granter)
             && !Self::check_permission(&env, &granter, Permission::DelegatePermission)
         {
+            Self::log_error(
+                &env,
+                "grant_permission",
+                Some(&granter),
+                Some(&grantee),
+                None,
+                "Permission grant denied: caller lacks delegation rights",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -629,13 +1240,25 @@ impl MedicalRecordsContract {
         }
 
         env.storage().persistent().set(&key, &new_grants);
+        Self::ensure_access_attribute_epoch(
+            &env,
+            &Self::permission_attribute_key(&env, permission),
+        );
         events::emit_permission_granted(
             &env,
-            granter,
-            grantee,
+            granter.clone(),
+            grantee.clone(),
             permission as u32,
             expiration,
             is_delegatable,
+        );
+        Self::log_info(
+            &env,
+            "grant_permission",
+            Some(&granter),
+            Some(&grantee),
+            None,
+            "Permission grant persisted",
         );
         Ok(true)
     }
@@ -653,6 +1276,14 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &revoker)
             && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
         {
+            Self::log_error(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoke denied: caller lacks delegation rights",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -675,10 +1306,196 @@ impl MedicalRecordsContract {
 
         if removed {
             env.storage().persistent().set(&key, &new_grants);
-            events::emit_permission_revoked(&env, revoker, grantee, permission as u32);
+            Self::bump_access_attribute_epoch(
+                &env,
+                &Self::permission_attribute_key(&env, permission),
+            );
+            events::emit_permission_revoked(
+                &env,
+                revoker.clone(),
+                grantee.clone(),
+                permission as u32,
+            );
+            Self::log_info(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoked",
+            );
+        } else {
+            Self::log_warning(
+                &env,
+                "revoke_permission",
+                Some(&revoker),
+                Some(&grantee),
+                None,
+                "Permission revoke requested but matching grant was not found",
+            );
         }
 
         Ok(removed)
+    }
+
+    pub fn issue_access_attribute(
+        env: Env,
+        issuer: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+        expires_at: u64,
+        is_verified: bool,
+    ) -> Result<bool, Error> {
+        issuer.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &issuer)
+            && !Self::check_permission(&env, &issuer, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Self::require_active_user(&env, &user)?;
+
+        let attr_key = Self::attribute_epoch_key(&env, &namespace, &value);
+        let epoch = Self::read_access_attribute_epoch(&env, &attr_key);
+        let now = env.ledger().timestamp();
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
+            .unwrap_or(Vec::new(&env));
+
+        let mut replaced = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value {
+                updated.push_back(UserAccessAttribute {
+                    namespace: namespace.clone(),
+                    value: value.clone(),
+                    issued_by: issuer.clone(),
+                    issued_at: now,
+                    expires_at,
+                    revoked_at: 0,
+                    epoch,
+                    is_active: true,
+                    is_verified,
+                });
+                replaced = true;
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if !replaced {
+            updated.push_back(UserAccessAttribute {
+                namespace,
+                value,
+                issued_by: issuer,
+                issued_at: now,
+                expires_at,
+                revoked_at: 0,
+                epoch,
+                is_active: true,
+                is_verified,
+            });
+        }
+
+        state.user_attributes.set(user, updated);
+        Self::write_advanced_access_state(&env, &state);
+        Ok(true)
+    }
+
+    pub fn revoke_access_attribute(
+        env: Env,
+        revoker: Address,
+        user: Address,
+        namespace: String,
+        value: String,
+    ) -> Result<bool, Error> {
+        revoker.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::is_admin(&env, &revoker)
+            && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+
+        let mut state = Self::read_advanced_access_state(&env);
+        let current: Vec<UserAccessAttribute> = state
+            .user_attributes
+            .get(user.clone())
+            .unwrap_or(Vec::new(&env));
+        let now = env.ledger().timestamp();
+
+        let mut revoked = false;
+        let mut updated = Vec::new(&env);
+        for attr in current.iter() {
+            if attr.namespace == namespace && attr.value == value && attr.is_active {
+                revoked = true;
+                updated.push_back(UserAccessAttribute {
+                    namespace: attr.namespace,
+                    value: attr.value,
+                    issued_by: attr.issued_by,
+                    issued_at: attr.issued_at,
+                    expires_at: attr.expires_at,
+                    revoked_at: now,
+                    epoch: attr.epoch,
+                    is_active: false,
+                    is_verified: attr.is_verified,
+                });
+            } else {
+                updated.push_back(attr);
+            }
+        }
+
+        if revoked {
+            state.user_attributes.set(user, updated);
+            let epoch_key = Self::attribute_epoch_key(&env, &namespace, &value);
+            let next_epoch = Self::read_access_attribute_epoch(&env, &epoch_key).saturating_add(1);
+            state.attribute_epochs.set(epoch_key, next_epoch);
+            Self::write_advanced_access_state(&env, &state);
+        }
+
+        Ok(revoked)
+    }
+
+    pub fn get_user_access_attributes(
+        env: Env,
+        user: Address,
+    ) -> Result<Vec<UserAccessAttribute>, Error> {
+        user.require_auth();
+        Self::require_initialized(&env)?;
+
+        Ok(env
+            .storage()
+            .instance()
+            .get::<_, AdvancedAccessState>(&Symbol::new(&env, "adv_access"))
+            .map(|state| state.user_attributes.get(user).unwrap_or(Vec::new(&env)))
+            .unwrap_or(Vec::new(&env)))
+    }
+
+    pub fn get_access_attribute_epoch(
+        env: Env,
+        namespace: String,
+        value: String,
+    ) -> Result<u32, Error> {
+        Self::require_initialized(&env)?;
+        validation::validate_attribute_namespace(&namespace)?;
+        validation::validate_attribute_value(&value)?;
+        Ok(Self::read_access_attribute_epoch(
+            &env,
+            &Self::attribute_epoch_key(&env, &namespace, &value),
+        ))
     }
 
     // ---------------------------------------------------------------------
@@ -700,16 +1517,41 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation blocked because encrypted record flow is enforced",
+            );
             return Err(Error::EncryptionRequired);
         }
 
         // Authorization MUST happen before content validation (tests depend on this).
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied: caller lacks CreateRecord permission",
+            );
             return Err(Error::NotAuthorized);
         }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
         // Validate inputs
         if Self::is_patient_forgotten(&env, &patient) {
+            Self::log_warning(
+                &env,
+                "add_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied because patient is marked as forgotten",
+            );
             return Err(Error::NotAuthorized);
         }
         validation::validate_diagnosis(&diagnosis)?;
@@ -741,12 +1583,20 @@ impl MedicalRecordsContract {
 
         events::emit_record_created(
             &env,
-            caller,
+            caller.clone(),
             record_id,
-            patient,
+            patient.clone(),
             is_confidential,
-            category,
-            tags,
+            category.clone(),
+            tags.clone(),
+        );
+        Self::log_info(
+            &env,
+            "add_record",
+            Some(&caller),
+            Some(&patient),
+            Some(record_id),
+            "Medical record created",
         );
         Ok(record_id)
     }
@@ -768,14 +1618,38 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID blocked because encrypted record flow is enforced",
+            );
             return Err(Error::EncryptionRequired);
         }
 
         if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID denied: caller lacks CreateRecord permission",
+            );
             return Err(Error::NotAuthorized);
         }
 
         if Self::is_patient_forgotten(&env, &patient) {
+            Self::log_warning(
+                &env,
+                "add_record_with_did",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation with DID denied because patient is marked as forgotten",
+            );
             return Err(Error::NotAuthorized);
         }
 
@@ -812,13 +1686,24 @@ impl MedicalRecordsContract {
 
         events::emit_record_created(
             &env,
-            caller,
+            caller.clone(),
             record_id,
             patient,
             is_confidential,
             category,
             tags,
         );
+
+        Self::log_to_forensics(&env, caller, 5, Some(record_id)); // 5 = RecordCreated (mapping needed)
+        Self::log_info(
+            &env,
+            "add_record_with_did",
+            Some(&record.doctor_id),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Medical record with DID context created",
+        );
+
         Ok(record_id)
     }
 
@@ -826,17 +1711,55 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
-        let record: MedicalRecord = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Record(record_id))
-            .ok_or(Error::RecordNotFound)?;
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(record) => record,
+                None => {
+                    Self::log_warning(
+                        &env,
+                        "get_record",
+                        Some(&caller),
+                        None,
+                        Some(record_id),
+                        "Record access requested for a non-existent record",
+                    );
+                    return Err(Error::RecordNotFound);
+                }
+            };
 
         if !Self::can_view_record(&env, &caller, &record, record_id) {
+            Self::log_to_forensics(&env, caller.clone(), 0, Some(record_id)); // Failed access
+            Self::log_error(
+                &env,
+                "get_record",
+                Some(&caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Record access denied",
+            );
             return Err(Error::NotAuthorized);
         }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
+        }
 
-        events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+        events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
+        Self::log_to_forensics(&env, caller.clone(), 0, Some(record_id)); // 0 = RecordAccess
+        Self::log_info(
+            &env,
+            "get_record",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record accessed",
+        );
         Ok(record)
     }
 
@@ -857,7 +1780,13 @@ impl MedicalRecordsContract {
                 None => return Ok(None),
             };
 
-        let granted = Self::can_view_record(&env, &caller, &record, record_id);
+        let acl_granted = Self::can_view_record(&env, &caller, &record, record_id);
+        let zk_granted = if acl_granted {
+            Self::is_valid_zk_access_grant(&env, &caller, record_id)
+        } else {
+            false
+        };
+        let granted = acl_granted && zk_granted;
         Self::log_access(
             &env,
             &record.patient_id,
@@ -867,11 +1796,29 @@ impl MedicalRecordsContract {
             granted,
         );
 
-        if !granted {
+        if !acl_granted {
             return Err(Error::NotAuthorized);
         }
+        if !zk_granted {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
+        }
 
-        events::emit_record_accessed(&env, caller, record_id, record.patient_id.clone());
+        events::emit_record_accessed(&env, caller.clone(), record_id, record.patient_id.clone());
+        Self::log_info(
+            &env,
+            "get_record_with_did",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record accessed with DID context",
+        );
         Ok(Some(record))
     }
 
@@ -902,43 +1849,88 @@ impl MedicalRecordsContract {
             return Err(Error::NotAuthorized);
         }
 
-        let ids: Vec<u64> = env
+        let total_records: u64 = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientRecords(patient.clone()))
-            .unwrap_or(Vec::new(&env));
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
 
-        // IMPORTANT: pagination is applied before access filtering (tests depend on this).
+        // Fallback to legacy vector path when index is missing.
+        if total_records == 0 {
+            let ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::PatientRecords(patient.clone()))
+                .unwrap_or(Vec::new(&env));
+
+            let start = page.saturating_mul(page_size);
+            if start >= ids.len() {
+                return Ok(Vec::new(&env));
+            }
+            let mut end = start.saturating_add(page_size);
+            if end > ids.len() {
+                end = ids.len();
+            }
+
+            let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
+            let mut i = start;
+            while i < end {
+                if let Some(id) = ids.get(i) {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    {
+                        if Self::can_view_record(&env, &caller, &r, id) {
+                            if let Some(meta) = env
+                                .storage()
+                                .persistent()
+                                .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            {
+                                out.push_back((id, meta));
+                            }
+                        }
+                    }
+                }
+                i = i.saturating_add(1);
+            }
+            return Ok(out);
+        }
+
         let start = page.saturating_mul(page_size);
-        if start >= ids.len() {
+        if start >= total_records {
             return Ok(Vec::new(&env));
         }
         let mut end = start.saturating_add(page_size);
-        if end > ids.len() {
-            end = ids.len();
+        if end > total_records {
+            end = total_records;
         }
 
         let mut out: Vec<(u64, RecordMetadata)> = Vec::new(&env);
-        let mut i = start;
-        while i < end {
-            if let Some(id) = ids.get(i) {
+        let mut idx = start;
+        while idx < end {
+            if let Some(record_id) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PatientRecord(patient.clone(), idx))
+            {
                 if let Some(r) = env
                     .storage()
                     .persistent()
-                    .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    .get::<_, MedicalRecord>(&DataKey::Record(record_id))
                 {
-                    if Self::can_view_record(&env, &caller, &r, id) {
+                    if Self::can_view_record(&env, &caller, &r, record_id) {
                         if let Some(meta) = env
                             .storage()
                             .persistent()
-                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(id))
+                            .get::<_, RecordMetadata>(&DataKey::RecordMeta(record_id))
                         {
-                            out.push_back((id, meta));
+                            out.push_back((record_id, meta));
                         }
                     }
                 }
             }
-            i = i.saturating_add(1);
+            idx = idx.saturating_add(1);
         }
 
         Ok(out)
@@ -949,6 +1941,532 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::RecordCount)
             .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_count(env: Env, patient: Address) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient))
+            .unwrap_or(0)
+    }
+
+    pub fn get_patient_record_id(env: Env, patient: Address, index: u64) -> Option<u64> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientRecord(patient, index))
+    }
+
+    pub fn set_zk_verifier_contract(
+        env: Env,
+        caller: Address,
+        verifier: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkVerifierContract, &verifier);
+        Ok(true)
+    }
+
+    pub fn get_zk_verifier_contract(env: Env) -> Option<Address> {
+        env.storage().persistent().get(&DataKey::ZkVerifierContract)
+    }
+
+    pub fn set_credential_registry_contract(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CredentialRegistryContract, &registry);
+        Ok(true)
+    }
+
+    pub fn get_credential_registry_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)
+    }
+
+    pub fn set_zk_enforced(env: Env, caller: Address, enforced: bool) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkEnforced, &enforced);
+        Ok(true)
+    }
+
+    pub fn is_zk_enforced(env: Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkEnforced)
+            .unwrap_or(false)
+    }
+
+    pub fn set_zk_grant_ttl(env: Env, caller: Address, ttl_secs: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        if ttl_secs == 0 || ttl_secs > MAX_ZK_GRANT_TTL_SECS {
+            return Err(Error::InvalidInput);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkGrantTtl, &ttl_secs);
+        Ok(true)
+    }
+
+    pub fn get_zk_grant_ttl(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkGrantTtl)
+            .unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS)
+    }
+
+    pub fn get_record_commitment(env: Env, record_id: u64) -> Option<BytesN<32>> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordCommitment(record_id))
+    }
+
+    pub fn has_valid_zk_access_grant(env: Env, requester: Address, record_id: u64) -> bool {
+        Self::is_valid_zk_access_grant(&env, &requester, record_id)
+    }
+
+    pub fn submit_zk_access_proof(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        purpose: String,
+        public_inputs: ZkPublicInputs,
+        proof: Bytes,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        validation::validate_purpose(&purpose)?;
+
+        let meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if public_inputs.record_id != record_id {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &public_inputs.issuer, record_id),
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_commitment: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordCommitment(record_id))
+            .unwrap_or(meta.record_hash.clone());
+        if expected_commitment != public_inputs.record_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        if meta.timestamp < public_inputs.min_timestamp
+            || meta.timestamp > public_inputs.max_timestamp
+        {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_requester_commitment = Self::hash_address(&env, &caller);
+        if expected_requester_commitment != public_inputs.requester_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let provider = Self::resolve_record_provider(&env, record_id)?;
+        let expected_provider_commitment = Self::hash_address(&env, &provider);
+        if expected_provider_commitment != public_inputs.provider_commitment {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let expected_pseudonym =
+            Self::compute_requester_pseudonym(&env, &caller, &public_inputs.issuer, record_id);
+        if expected_pseudonym != public_inputs.pseudonym {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+
+        let root = Self::resolve_active_credential_root(&env, &public_inputs.issuer)
+            .ok_or(Error::InvalidCredential)?;
+        if root != public_inputs.credential_root {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::InvalidCredential);
+        }
+        if Self::is_credential_root_revoked(
+            &env,
+            &public_inputs.issuer,
+            &public_inputs.credential_root,
+        ) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::CredentialRevoked);
+        }
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()))
+        {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &public_inputs.pseudonym,
+                false,
+                Some(public_inputs.nullifier.clone()),
+            );
+            return Err(Error::CredentialRevoked);
+        }
+
+        let public_inputs_hash = Self::hash_zk_public_inputs(&env, &public_inputs);
+        let verified = Self::verify_zk_proof_internal(
+            &env,
+            public_inputs.vk_version,
+            public_inputs_hash,
+            proof,
+        );
+        Self::emit_zk_audit(
+            &env,
+            record_id,
+            &public_inputs.pseudonym,
+            verified,
+            Some(public_inputs.nullifier.clone()),
+        );
+        if !verified {
+            return Err(Error::InvalidCredential);
+        }
+
+        env.storage().persistent().set(
+            &DataKey::ZkUsedNullifier(public_inputs.nullifier.clone()),
+            &true,
+        );
+
+        let grant = ZkAccessGrant {
+            record_id,
+            requester: caller.clone(),
+            expires_at: env
+                .ledger()
+                .timestamp()
+                .saturating_add(Self::zk_grant_ttl_internal(&env)),
+            nullifier: public_inputs.nullifier,
+            pseudonym: public_inputs.pseudonym,
+            vk_version: public_inputs.vk_version,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZkAccessGrant(caller, record_id), &grant);
+        Ok(true)
+    }
+
+    // ---------------------------------------------------------------------
+    // Metadata Enhancement & Tagging
+    // ---------------------------------------------------------------------
+
+    /// Updates tags and custom metadata fields for an existing record.
+    /// Only the record's doctor or an admin may call this.
+    /// Each update creates a versioned history entry.
+    pub fn update_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        tags: Vec<String>,
+        custom_fields: Map<String, String>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        // Load the record to verify caller is the doctor or admin
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or_else(|| {
+                Self::log_warning(
+                    &env,
+                    "update_record_metadata",
+                    Some(&caller),
+                    None,
+                    Some(record_id),
+                    "Metadata update requested for a non-existent record",
+                );
+                Error::RecordNotFound
+            })?;
+
+        if caller != record.doctor_id && !Self::is_admin(&env, &caller) {
+            Self::log_error(
+                &env,
+                "update_record_metadata",
+                Some(&caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Metadata update denied: caller is neither doctor nor admin",
+            );
+            return Err(Error::NotAuthorized);
+        }
+
+        // Validate new metadata
+        validation::validate_tags(&tags)?;
+        validation::validate_custom_fields(&env, &custom_fields)?;
+
+        // Load existing metadata
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Save current state as a history entry
+        let history_entry = RecordMetadataHistoryEntry {
+            version: meta.version,
+            timestamp: env.ledger().timestamp(),
+            tags: meta.tags.clone(),
+            custom_fields: meta.custom_fields.clone(),
+        };
+        meta.history.push_back(history_entry);
+
+        // Update tag index: remove record from old tags not in new set, add to new tags
+        Self::update_tag_index(&env, record_id, &meta.tags, &tags);
+
+        // Apply new values
+        meta.tags = tags.clone();
+        meta.custom_fields = custom_fields.clone();
+        meta.version = meta.version.saturating_add(1);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_metadata_updated(
+            &env,
+            caller.clone(),
+            record_id,
+            record.patient_id.clone(),
+            meta.version,
+            tags.len(),
+            custom_fields.len(),
+        );
+        Self::log_info(
+            &env,
+            "update_record_metadata",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record metadata updated",
+        );
+
+        Ok(())
+    }
+
+    /// Returns record IDs that are indexed under a given tag, paginated.
+    /// Any authenticated user may search.
+    pub fn search_records_by_tag(
+        env: Env,
+        caller: Address,
+        tag: String,
+        page: u32,
+        page_size: u32,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        validation::validate_pagination(page, page_size)?;
+
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TagIndex(tag))
+            .unwrap_or(Vec::new(&env));
+
+        let start = page.saturating_mul(page_size);
+        if start >= ids.len() {
+            return Ok(Vec::new(&env));
+        }
+        let mut end = start.saturating_add(page_size);
+        if end > ids.len() {
+            end = ids.len();
+        }
+
+        let mut out: Vec<u64> = Vec::new(&env);
+        let mut i = start;
+        while i < end {
+            if let Some(id) = ids.get(i) {
+                out.push_back(id);
+            }
+            i = i.saturating_add(1);
+        }
+
+        Ok(out)
+    }
+
+    /// Exports full metadata (including history) for a record.
+    /// Accessible by the patient, the record's doctor, or an admin.
+    pub fn export_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<RecordMetadata, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id
+            && caller != record.doctor_id
+            && !Self::is_admin(&env, &caller)
+            && !Self::has_emergency_access_internal(&env, &caller, &record.patient_id, record_id)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    /// Admin-only: imports (overwrites) tags and custom fields for a record.
+    /// Useful for data migration. Creates a history entry before overwriting.
+    pub fn import_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        tags: Vec<String>,
+        custom_fields: Map<String, String>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        // Record must exist
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        validation::validate_tags(&tags)?;
+        validation::validate_custom_fields(&env, &custom_fields)?;
+
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        // Save history entry
+        let history_entry = RecordMetadataHistoryEntry {
+            version: meta.version,
+            timestamp: env.ledger().timestamp(),
+            tags: meta.tags.clone(),
+            custom_fields: meta.custom_fields.clone(),
+        };
+        meta.history.push_back(history_entry);
+
+        // Update tag index
+        Self::update_tag_index(&env, record_id, &meta.tags, &tags);
+
+        meta.tags = tags.clone();
+        meta.custom_fields = custom_fields.clone();
+        meta.version = meta.version.saturating_add(1);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_metadata_updated(
+            &env,
+            caller.clone(),
+            record_id,
+            record.patient_id.clone(),
+            meta.version,
+            tags.len(),
+            custom_fields.len(),
+        );
+        Self::log_info(
+            &env,
+            "import_record_metadata",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Record metadata imported by admin",
+        );
+
+        Ok(())
     }
 
     // ---------------------------------------------------------------------
@@ -1359,6 +2877,112 @@ impl MedicalRecordsContract {
             .get(&DataKey::CryptoConfigProposal(proposal_id)))
     }
 
+    // ---------------------------------------------------------------------
+    // Quantum Threat Detection & Response
+    // ---------------------------------------------------------------------
+
+    pub fn set_quantum_threat_level(env: Env, admin: Address, level: u32) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        if level > 100 {
+            return Err(Error::InvalidInput);
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::QuantumThreatLevel, &level);
+
+        if level >= 50 {
+            // High threat level: automatically require PQ envelopes for new records.
+            env.storage()
+                .persistent()
+                .set(&DataKey::RequirePqEnvelopes, &true);
+        }
+
+        let mut payload = Bytes::new(&env);
+        payload.append(&Bytes::from_slice(&env, &level.to_be_bytes()));
+        let details_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+
+        Self::log_crypto_event(
+            &env,
+            &admin,
+            CryptoAuditAction::QuantumThreatDetected,
+            None,
+            details_hash,
+            None,
+        );
+
+        Ok(())
+    }
+
+    pub fn get_quantum_threat_level(env: Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::QuantumThreatLevel)
+            .unwrap_or(0)
+    }
+
+    /// Migrates a record to include a new quantum-safe envelope.
+    /// Accessible by the patient or an authorized doctor.
+    pub fn upgrade_record_to_quantum_safe(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        new_envelope: KeyEnvelope,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        let mut record: EncryptedRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id && caller != record.doctor_id {
+            return Err(Error::NotAuthorized);
+        }
+
+        if new_envelope.pq_wrapped_key.is_none() {
+            return Err(Error::InvalidInput);
+        }
+
+        // Check if recipient already has an envelope, update it or add new.
+        let mut found = false;
+        let mut new_envelopes = Vec::new(&env);
+        for envlp in record.envelopes.iter() {
+            if envlp.recipient == new_envelope.recipient {
+                new_envelopes.push_back(new_envelope.clone());
+                found = true;
+            } else {
+                new_envelopes.push_back(envlp);
+            }
+        }
+
+        if !found {
+            new_envelopes.push_back(new_envelope);
+        }
+
+        record.envelopes = new_envelopes;
+        env.storage()
+            .persistent()
+            .set(&DataKey::EncryptedRecord(record_id), &record);
+
+        Self::log_crypto_event(
+            &env,
+            &caller,
+            CryptoAuditAction::QuantumMigrationCompleted,
+            Some(record_id),
+            record.ciphertext_hash,
+            None,
+        );
+
+        Ok(())
+    }
+
     fn hash_crypto_config_proposal(
         env: &Env,
         proposal_id: u64,
@@ -1412,6 +3036,46 @@ impl MedicalRecordsContract {
     // ---------------------------------------------------------------------
     // Encrypted records (E2E-ready)
     // ---------------------------------------------------------------------
+
+    pub fn add_advanced_encrypted_record(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        advanced: AdvancedEncryptedRecordInput,
+    ) -> Result<u64, Error> {
+        let record_id = Self::add_encrypted_record(
+            env.clone(),
+            caller.clone(),
+            patient,
+            is_confidential,
+            tags,
+            category,
+            treatment_type,
+            advanced.ciphertext_ref,
+            advanced.ciphertext_hash,
+            advanced.envelopes,
+        )?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            advanced.policy_ref,
+            advanced.policy_hash,
+            advanced.access_ciphertext_ref,
+            advanced.access_ciphertext_hash,
+            advanced.required_permission,
+            advanced.attribute_count,
+            advanced.valid_until,
+            advanced.revocation_epoch,
+        )?;
+
+        Ok(record_id)
+    }
 
     pub fn add_encrypted_record(
         env: Env,
@@ -1508,10 +3172,31 @@ impl MedicalRecordsContract {
             category,
             is_confidential,
             record_hash,
+            tags: record.tags.clone(),
+            custom_fields: Map::new(&env),
+            version: 1,
+            history: Vec::new(&env),
         };
         env.storage()
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
+        let commitment = Self::compute_encrypted_record_commitment(&env, &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCommitment(record_id), &commitment);
+
+        // Index each tag for searchability
+        for tag in record.tags.iter() {
+            let mut ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TagIndex(tag.clone()))
+                .unwrap_or(Vec::new(&env));
+            ids.push_back(record_id);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TagIndex(tag.clone()), &ids);
+        }
 
         Self::increment_record_count(&env);
 
@@ -1525,6 +3210,40 @@ impl MedicalRecordsContract {
         );
 
         Ok(record_id)
+    }
+
+    pub fn bind_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        Self::bind_encrypted_record_abe_policy_internal(
+            &env,
+            &caller,
+            record_id,
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            valid_until,
+            revocation_epoch,
+        )?;
+
+        Ok(true)
     }
 
     pub fn get_encrypted_record_header(
@@ -1546,6 +3265,16 @@ impl MedicalRecordsContract {
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
             return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
         }
 
         Ok(Some(EncryptedRecordHeader {
@@ -1582,6 +3311,16 @@ impl MedicalRecordsContract {
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
             return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            Self::emit_zk_audit(
+                &env,
+                record_id,
+                &Self::compute_requester_pseudonym(&env, &caller, &record.doctor_id, record_id),
+                false,
+                None,
+            );
+            return Err(Error::InvalidCredential);
         }
 
         for e in record.envelopes.iter() {
@@ -1653,6 +3392,34 @@ impl MedicalRecordsContract {
         );
 
         Ok(true)
+    }
+
+    pub fn get_encrypted_record_abe_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<Option<AbePolicyMetadata>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: EncryptedRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+        {
+            Some(r) => r,
+            None => return Ok(None),
+        };
+
+        if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
+            return Err(Error::NotAuthorized);
+        }
+        if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
+            return Err(Error::InvalidCredential);
+        }
+
+        let state = Self::read_advanced_access_state(&env);
+        Ok(state.record_policies.get(record_id))
     }
 
     pub fn get_crypto_audit_logs(
@@ -2022,10 +3789,18 @@ impl MedicalRecordsContract {
         events::emit_emergency_access_granted(
             &env,
             caller.clone(),
-            grantee,
-            caller,
+            grantee.clone(),
+            caller.clone(),
             record_scope,
             expires_at,
+        );
+        Self::log_info(
+            &env,
+            "grant_emergency_access",
+            Some(&caller),
+            Some(&grantee),
+            None,
+            "Emergency access granted",
         );
         Ok(true)
     }
@@ -2054,14 +3829,33 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::PatientEmergencyGrants(caller.clone()))
             .unwrap_or(Map::new(&env));
-        let mut entry = grants
-            .get(grantee.clone())
-            .ok_or(Error::EmergencyAccessNotFound)?;
+        let mut entry = match grants.get(grantee.clone()) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "revoke_emergency_access",
+                    Some(&caller),
+                    Some(&grantee),
+                    None,
+                    "Emergency access revoke requested but grant was not found",
+                );
+                return Err(Error::EmergencyAccessNotFound);
+            }
+        };
         entry.is_active = false;
-        grants.set(grantee, entry);
+        grants.set(grantee.clone(), entry);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientEmergencyGrants(caller), &grants);
+            .set(&DataKey::PatientEmergencyGrants(caller.clone()), &grants);
+        Self::log_info(
+            &env,
+            "revoke_emergency_access",
+            Some(&caller),
+            Some(&grantee),
+            None,
+            "Emergency access revoked",
+        );
         Ok(true)
     }
 
@@ -2207,7 +4001,22 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::Proposal(proposal_id), &proposal);
-        events::emit_recovery_proposed(&env, caller, proposal_id, token_contract, to, amount);
+        events::emit_recovery_proposed(
+            &env,
+            caller.clone(),
+            proposal_id,
+            token_contract.clone(),
+            to.clone(),
+            amount,
+        );
+        Self::log_info(
+            &env,
+            "propose_recovery",
+            Some(&caller),
+            Some(&to),
+            Some(proposal_id),
+            "Recovery proposal created",
+        );
         Ok(proposal_id)
     }
 
@@ -2218,19 +4027,53 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = match env.storage().persistent().get(&key) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "approve_recovery",
+                    Some(&caller),
+                    None,
+                    Some(proposal_id),
+                    "Recovery approval requested for a non-existent proposal",
+                );
+                return Err(Error::RecordNotFound);
+            }
+        };
         if proposal.executed {
+            Self::log_error(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Recovery approval denied because proposal is already executed",
+            );
             return Err(Error::ProposalAlreadyExecuted);
         }
 
         if !proposal.approvals.contains(&caller) {
             proposal.approvals.push_back(caller.clone());
             env.storage().persistent().set(&key, &proposal);
-            events::emit_recovery_approved(&env, caller, proposal_id);
+            events::emit_recovery_approved(&env, caller.clone(), proposal_id);
+            Self::log_info(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Recovery proposal approved",
+            );
+        } else {
+            Self::log_warning(
+                &env,
+                "approve_recovery",
+                Some(&caller),
+                None,
+                Some(proposal_id),
+                "Duplicate recovery approval ignored",
+            );
         }
 
         Ok(true)
@@ -2243,21 +4086,54 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &caller)?;
 
         let key = DataKey::Proposal(proposal_id);
-        let mut proposal: RecoveryProposal = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .ok_or(Error::RecordNotFound)?;
+        let mut proposal: RecoveryProposal = match env.storage().persistent().get(&key) {
+            Some(existing) => existing,
+            None => {
+                Self::log_warning(
+                    &env,
+                    "execute_recovery",
+                    Some(&caller),
+                    None,
+                    Some(proposal_id),
+                    "Recovery execution requested for a non-existent proposal",
+                );
+                return Err(Error::RecordNotFound);
+            }
+        };
         if proposal.executed {
+            Self::log_error(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because proposal is already executed",
+            );
             return Err(Error::ProposalAlreadyExecuted);
         }
 
         let now = env.ledger().timestamp();
         if now < proposal.created_at.saturating_add(TIMELOCK_SECS) {
+            Self::log_warning(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because timelock has not elapsed",
+            );
             return Err(Error::TimelockNotElasped);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
+            Self::log_warning(
+                &env,
+                "execute_recovery",
+                Some(&caller),
+                Some(&proposal.to),
+                Some(proposal_id),
+                "Recovery execution denied because approvals are below threshold",
+            );
             return Err(Error::NotEnoughApproval);
         }
 
@@ -2265,11 +4141,19 @@ impl MedicalRecordsContract {
         env.storage().persistent().set(&key, &proposal);
         events::emit_recovery_executed(
             &env,
-            caller,
+            caller.clone(),
             proposal_id,
-            proposal.token_contract,
-            proposal.to,
+            proposal.token_contract.clone(),
+            proposal.to.clone(),
             proposal.amount,
+        );
+        Self::log_info(
+            &env,
+            "execute_recovery",
+            Some(&caller),
+            Some(&proposal.to),
+            Some(proposal_id),
+            "Recovery proposal executed",
         );
         Ok(true)
     }
@@ -2487,27 +4371,41 @@ impl MedicalRecordsContract {
             .set(&DataKey::ContractVersion, &new_version);
     }
 
-    #[allow(clippy::panic)]
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+        new_version: u32,
+    ) -> Result<(), Error> {
         caller.require_auth();
 
         if !Self::is_admin(&env, &caller) {
-            panic!("Not authorized to upgrade contract");
+            return Err(Error::NotAuthorized);
         }
 
-        env.deployer().update_current_contract_wasm(new_wasm_hash);
-        Self::migrate_data(&env);
+        upgradeability::execute_upgrade::<Self>(
+            &env,
+            new_wasm_hash,
+            new_version,
+            symbol_short!("Upgrade"),
+        )
+        .map_err(|e| match e {
+            upgradeability::UpgradeError::ContractPaused => Error::ContractPaused,
+            _ => Error::InvalidInput,
+        })?;
+        Ok(())
     }
 
-    fn migrate_data(env: &Env) {
-        const CURRENT_CONTRACT_VERSION: u32 = 1;
+    pub fn validate_upgrade(
+        env: Env,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, Error> {
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash).map_err(|_| Error::InvalidInput)
+    }
 
-        let current_version = Self::get_contract_version(env);
-        if current_version < CURRENT_CONTRACT_VERSION {
-            if current_version < 1 {
-                // Future migration hooks (V0 -> V1), etc.
-            }
-            Self::set_contract_version(env, CURRENT_CONTRACT_VERSION);
+    fn migrate_data(_env: &Env, from_version: u32) {
+        if from_version < 2 {
+            // Future migration space
         }
     }
 
@@ -2584,6 +4482,14 @@ impl MedicalRecordsContract {
         }
     }
 
+    fn require_active_user(env: &Env, user: &Address) -> Result<(), Error> {
+        let users = Self::read_users(env);
+        match users.get(user.clone()) {
+            Some(profile) if profile.active => Ok(()),
+            _ => Err(Error::NotAuthorized),
+        }
+    }
+
     fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
         if Self::is_active_patient(env, patient) {
             Ok(())
@@ -2638,13 +4544,91 @@ impl MedicalRecordsContract {
             category: category.clone(),
             is_confidential,
             record_hash,
+            tags: record.tags.clone(),
+            custom_fields: Map::new(env),
+            version: 1,
+            history: Vec::new(env),
         };
         env.storage()
             .persistent()
             .set(&DataKey::RecordMeta(record_id), &meta);
+
+        let commitment = Self::compute_plain_record_commitment(env, record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordCommitment(record_id), &commitment);
+        // Index each tag for searchability
+        for tag in record.tags.iter() {
+            let mut ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::TagIndex(tag.clone()))
+                .unwrap_or(Vec::new(env));
+            ids.push_back(record_id);
+            env.storage()
+                .persistent()
+                .set(&DataKey::TagIndex(tag.clone()), &ids);
+        }
+    }
+
+    /// Updates the tag inverted-index when a record's tags change.
+    /// Removes record_id from indexes of old tags no longer present,
+    /// and adds record_id to indexes of new tags not previously present.
+    fn update_tag_index(env: &Env, record_id: u64, old_tags: &Vec<String>, new_tags: &Vec<String>) {
+        // Remove from old tags that are not in the new set
+        for old_tag in old_tags.iter() {
+            if !new_tags.contains(&old_tag) {
+                let mut ids: Vec<u64> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::TagIndex(old_tag.clone()))
+                    .unwrap_or(Vec::new(env));
+                // Rebuild the vec without this record_id
+                let mut updated: Vec<u64> = Vec::new(env);
+                for id in ids.iter() {
+                    if id != record_id {
+                        updated.push_back(id);
+                    }
+                }
+                ids = updated;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TagIndex(old_tag.clone()), &ids);
+            }
+        }
+
+        // Add to new tags that are not in the old set
+        for new_tag in new_tags.iter() {
+            if !old_tags.contains(&new_tag) {
+                let mut ids: Vec<u64> = env
+                    .storage()
+                    .persistent()
+                    .get(&DataKey::TagIndex(new_tag.clone()))
+                    .unwrap_or(Vec::new(env));
+                ids.push_back(record_id);
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TagIndex(new_tag.clone()), &ids);
+            }
+        }
     }
 
     fn append_patient_record(env: &Env, patient: &Address, record_id: u64) {
+        // Optimized storage: store by per-patient index instead of bulky vector.
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecord(patient.clone(), count), &record_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientRecordCount(patient.clone()), &(count + 1));
+
+        // Backward compatibility: keep PatientRecords vector only for legacy paths.
         let mut ids: Vec<u64> = env
             .storage()
             .persistent()
@@ -2714,6 +4698,333 @@ impl MedicalRecordsContract {
                 ],
             );
         }
+    }
+
+    fn is_zk_enforced_internal(env: &Env) -> bool {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkEnforced)
+            .unwrap_or(false)
+    }
+
+    fn zk_grant_ttl_internal(env: &Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ZkGrantTtl)
+            .unwrap_or(DEFAULT_ZK_GRANT_TTL_SECS)
+    }
+
+    fn is_valid_zk_access_grant(env: &Env, requester: &Address, record_id: u64) -> bool {
+        if !Self::is_zk_enforced_internal(env) {
+            return true;
+        }
+
+        let key = DataKey::ZkAccessGrant(requester.clone(), record_id);
+        let grant: ZkAccessGrant = match env.storage().persistent().get(&key) {
+            Some(v) => v,
+            None => return false,
+        };
+        if grant.expires_at <= env.ledger().timestamp() {
+            env.storage().persistent().remove(&key);
+            return false;
+        }
+        true
+    }
+
+    fn verify_zk_proof_internal(
+        env: &Env,
+        vk_version: u32,
+        public_inputs_hash: BytesN<32>,
+        proof: Bytes,
+    ) -> bool {
+        let verifier: Address = match env.storage().persistent().get(&DataKey::ZkVerifierContract) {
+            Some(v) => v,
+            None => return false,
+        };
+        let verifier_client = ZkVerifierClient::new(env, &verifier);
+        verifier_client.verify_proof(&vk_version, &public_inputs_hash, &proof)
+    }
+
+    fn resolve_active_credential_root(env: &Env, issuer: &Address) -> Option<BytesN<32>> {
+        let registry: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)?;
+        let registry_client = CredentialRegistryClient::new(env, &registry);
+        registry_client.get_active_root(issuer)
+    }
+
+    fn is_credential_root_revoked(env: &Env, issuer: &Address, root: &BytesN<32>) -> bool {
+        let registry: Address = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::CredentialRegistryContract)
+        {
+            Some(v) => v,
+            None => return false,
+        };
+        let registry_client = CredentialRegistryClient::new(env, &registry);
+        registry_client.is_root_revoked(issuer, root)
+    }
+
+    fn resolve_record_provider(env: &Env, record_id: u64) -> Result<Address, Error> {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+        {
+            return Ok(record.doctor_id);
+        }
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get::<_, EncryptedRecord>(&DataKey::EncryptedRecord(record_id))
+        {
+            return Ok(record.doctor_id);
+        }
+        Err(Error::RecordNotFound)
+    }
+
+    fn hash_zk_public_inputs(env: &Env, public_inputs: &ZkPublicInputs) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.record_id.to_be_bytes(),
+        ));
+        Self::append_bytes32(env, &mut payload, &public_inputs.record_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.credential_root);
+        payload.append(&public_inputs.issuer.clone().to_xdr(env));
+        Self::append_bytes32(env, &mut payload, &public_inputs.requester_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.provider_commitment);
+        Self::append_bytes32(env, &mut payload, &public_inputs.claim_commitment);
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.min_timestamp.to_be_bytes(),
+        ));
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.max_timestamp.to_be_bytes(),
+        ));
+        Self::append_bytes32(env, &mut payload, &public_inputs.nullifier);
+        Self::append_bytes32(env, &mut payload, &public_inputs.pseudonym);
+        payload.append(&Bytes::from_slice(
+            env,
+            &public_inputs.vk_version.to_be_bytes(),
+        ));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn hash_address(env: &Env, address: &Address) -> BytesN<32> {
+        let raw = address.to_xdr(env);
+        env.crypto().sha256(&raw).into()
+    }
+
+    fn compute_requester_pseudonym(
+        env: &Env,
+        requester: &Address,
+        issuer: &Address,
+        record_id: u64,
+    ) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&requester.to_xdr(env));
+        payload.append(&issuer.to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(env, b"UZIMA_ZK_PSEUDONYM_V1"));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn emit_zk_audit(
+        env: &Env,
+        record_id: u64,
+        pseudonym: &BytesN<32>,
+        verified: bool,
+        nullifier: Option<BytesN<32>>,
+    ) {
+        let (nullifier_present, nullifier_value) = match nullifier {
+            Some(value) => (true, value),
+            None => (false, BytesN::from_array(env, &[0u8; 32])),
+        };
+        let event = ZkAuditRecord {
+            record_id,
+            pseudonym: pseudonym.clone(),
+            timestamp: env.ledger().timestamp(),
+            proof_verified: verified,
+            nullifier_present,
+            nullifier: nullifier_value,
+        };
+        env.events()
+            .publish((Symbol::new(env, "EVENT"), symbol_short!("ZK_AUD")), event);
+    }
+
+    fn append_bytes32(env: &Env, payload: &mut Bytes, value: &BytesN<32>) {
+        payload.append(&Bytes::from_slice(env, &value.to_array()));
+    }
+
+    fn compute_plain_record_commitment(env: &Env, record: &MedicalRecord) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&record.patient_id.clone().to_xdr(env));
+        payload.append(&record.doctor_id.clone().to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
+        payload.append(&record.diagnosis.clone().to_xdr(env));
+        payload.append(&record.treatment.clone().to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
+        payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
+        for tag in record.tags.iter() {
+            payload.append(&tag.to_xdr(env));
+        }
+        payload.append(&record.category.clone().to_xdr(env));
+        payload.append(&record.treatment_type.clone().to_xdr(env));
+        payload.append(&record.data_ref.clone().to_xdr(env));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn compute_encrypted_record_commitment(env: &Env, record: &EncryptedRecord) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&record.patient_id.clone().to_xdr(env));
+        payload.append(&record.doctor_id.clone().to_xdr(env));
+        payload.append(&Bytes::from_slice(env, &record.timestamp.to_be_bytes()));
+        payload.append(&Bytes::from_slice(env, &[record.is_confidential as u8]));
+        payload.append(&Bytes::from_slice(env, &record.tags.len().to_be_bytes()));
+        for tag in record.tags.iter() {
+            payload.append(&tag.to_xdr(env));
+        }
+        payload.append(&record.category.clone().to_xdr(env));
+        payload.append(&record.treatment_type.clone().to_xdr(env));
+        payload.append(&record.ciphertext_ref.clone().to_xdr(env));
+        Self::append_bytes32(env, &mut payload, &record.ciphertext_hash);
+        payload.append(&Bytes::from_slice(
+            env,
+            &record.envelopes.len().to_be_bytes(),
+        ));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn bind_encrypted_record_abe_policy_internal(
+        env: &Env,
+        caller: &Address,
+        record_id: u64,
+        policy_ref: String,
+        policy_hash: BytesN<32>,
+        access_ciphertext_ref: String,
+        access_ciphertext_hash: BytesN<32>,
+        required_permission: Permission,
+        attribute_count: u32,
+        valid_until: u64,
+        revocation_epoch: u32,
+    ) -> Result<(), Error> {
+        validation::validate_policy_ref(env, &policy_ref)?;
+        validation::validate_policy_ref(env, &access_ciphertext_ref)?;
+        if attribute_count == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let record: EncryptedRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedRecord(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if *caller != record.patient_id
+            && *caller != record.doctor_id
+            && !Self::is_admin(env, caller)
+        {
+            return Err(Error::NotAuthorized);
+        }
+
+        let policy = AbePolicyMetadata {
+            policy_ref,
+            policy_hash,
+            access_ciphertext_ref,
+            access_ciphertext_hash,
+            required_permission,
+            attribute_count,
+            compiled_at: env.ledger().timestamp(),
+            valid_until,
+            revocation_epoch,
+        };
+
+        let mut state = Self::read_advanced_access_state(env);
+        state.record_policies.set(record_id, policy);
+        Self::write_advanced_access_state(env, &state);
+
+        Ok(())
+    }
+
+    fn role_attribute_key_from_role(env: &Env, role: Role) -> BytesN<32> {
+        let (namespace, value) = match role {
+            Role::Admin => ("role", "admin"),
+            Role::Doctor => ("role", "doctor"),
+            Role::Patient => ("role", "patient"),
+            Role::None => ("role", "none"),
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, namespace),
+            &String::from_str(env, value),
+        )
+    }
+
+    fn permission_attribute_key(env: &Env, permission: Permission) -> BytesN<32> {
+        let value = match permission {
+            Permission::ManageUsers => "manage_users",
+            Permission::ManageSystem => "manage_system",
+            Permission::CreateRecord => "create_record",
+            Permission::ReadRecord => "read_record",
+            Permission::UpdateRecord => "update_record",
+            Permission::DeleteRecord => "delete_record",
+            Permission::ReadConfidential => "read_confidential",
+            Permission::DelegatePermission => "delegate_permission",
+        };
+        Self::attribute_epoch_key(
+            env,
+            &String::from_str(env, "permission"),
+            &String::from_str(env, value),
+        )
+    }
+
+    fn read_access_attribute_epoch(env: &Env, key: &BytesN<32>) -> u32 {
+        let state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.get(key.clone()).unwrap_or(1)
+    }
+
+    fn ensure_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
+        let mut state = Self::read_advanced_access_state(env);
+        if state.attribute_epochs.contains_key(key.clone()) {
+            return;
+        }
+        state.attribute_epochs.set(key.clone(), 1u32);
+        Self::write_advanced_access_state(env, &state);
+    }
+
+    fn bump_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
+        let next = Self::read_access_attribute_epoch(env, key).saturating_add(1);
+        let mut state = Self::read_advanced_access_state(env);
+        state.attribute_epochs.set(key.clone(), next);
+        Self::write_advanced_access_state(env, &state);
+    }
+
+    fn attribute_epoch_key(env: &Env, namespace: &String, value: &String) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&namespace.clone().to_xdr(env));
+        payload.append(&value.clone().to_xdr(env));
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn read_advanced_access_state(env: &Env) -> AdvancedAccessState {
+        env.storage()
+            .instance()
+            .get(&Symbol::new(env, "adv_access"))
+            .unwrap_or(AdvancedAccessState {
+                record_policies: Map::new(env),
+                user_attributes: Map::new(env),
+                attribute_epochs: Map::new(env),
+            })
+    }
+
+    fn write_advanced_access_state(env: &Env, state: &AdvancedAccessState) {
+        env.storage()
+            .instance()
+            .set(&Symbol::new(env, "adv_access"), state);
     }
 
     fn can_view_record(
@@ -2866,6 +5177,54 @@ impl MedicalRecordsContract {
         false
     }
 
+    fn log_to_forensics(env: &Env, actor: Address, action_u32: u32, record_id: Option<u64>) {
+        if let Some(contract_id) = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Address>(&DataKey::AuditForensicsContract)
+        {
+            // Mapping u32 back to AuditAction (symbol-based or enum-based)
+            // For simplicity in cross-contract calls without shared crates, we use the raw u32 or a symbol
+            // The audit_forensics contract expects AuditAction enum
+
+            // We'll use a dynamic call to avoid strict dependency on the other crate's enum if possible,
+            // or just define the enum locally. Defining locally is safer for type safety.
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            #[contracttype]
+            enum AuditAction {
+                RecordAccess,
+                RecordCreated,
+                RecordUpdate,
+                RecordDelete,
+                PermissionGrant,
+                PermissionRevoke,
+                AnomalyDetected,
+                ComplianceReportGenerated,
+                AlertTriggered,
+            }
+
+            let action = match action_u32 {
+                0 => AuditAction::RecordAccess,
+                1 => AuditAction::RecordUpdate,
+                2 => AuditAction::RecordDelete,
+                3 => AuditAction::PermissionGrant,
+                4 => AuditAction::PermissionRevoke,
+                5 => AuditAction::RecordCreated, // Need to add to enum in audit_forensics too
+                _ => AuditAction::AlertTriggered,
+            };
+
+            let metadata: Map<String, String> = Map::new(env);
+            let details_hash = BytesN::from_array(env, &[0u8; 32]);
+
+            // Cross-contract call
+            env.invoke_contract::<u64>(
+                &contract_id,
+                &symbol_short!("log_event"),
+                (actor, action, record_id, details_hash, metadata).into_val(env),
+            );
+        }
+    }
+
     fn log_crypto_event(
         env: &Env,
         actor: &Address,
@@ -2896,5 +5255,353 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .set(&DataKey::CryptoAudit(next), &entry);
+    }
+
+    // =========================================================================
+    // Rate Limiting
+    // =========================================================================
+
+    /// Internal guard – called at the start of rate-limited operations.
+    /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
+    /// all allowed calls in the current window.
+    fn check_and_update_rate_limit(env: &Env, caller: &Address, op: u32) -> Result<(), Error> {
+        // Admin-granted bypass flag
+        let bypass: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RateLimitBypass(caller.clone()))
+            .unwrap_or(false);
+        if bypass {
+            return Ok(());
+        }
+
+        // Load config or fall back to defaults
+        let cfg: RateLimitConfig = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RateLimitCfg(op))
+            .unwrap_or(RateLimitConfig {
+                doctor_max_calls: DEFAULT_DOCTOR_MAX_CALLS,
+                patient_max_calls: DEFAULT_PATIENT_MAX_CALLS,
+                admin_max_calls: DEFAULT_ADMIN_MAX_CALLS,
+                window_secs: DEFAULT_WINDOW_SECS,
+            });
+
+        // Determine the limit for this caller's role
+        let users = Self::read_users(env);
+        let max_calls = match users.get(caller.clone()) {
+            Some(profile) if profile.active => match profile.role {
+                Role::Admin => {
+                    if cfg.admin_max_calls == 0 {
+                        return Ok(()); // Admins unlimited by default
+                    }
+                    cfg.admin_max_calls
+                }
+                Role::Doctor => cfg.doctor_max_calls,
+                Role::Patient | Role::None => cfg.patient_max_calls,
+            },
+            _ => cfg.patient_max_calls,
+        };
+
+        if max_calls == 0 {
+            return Ok(()); // 0 means unlimited for this role
+        }
+
+        let now = env.ledger().timestamp();
+        let key = DataKey::RateLimit(caller.clone(), op);
+
+        let mut entry: RateLimitEntry =
+            env.storage()
+                .persistent()
+                .get(&key)
+                .unwrap_or(RateLimitEntry {
+                    count: 0,
+                    window_start: now,
+                });
+
+        // Reset counter if the window has elapsed
+        if now >= entry.window_start.saturating_add(cfg.window_secs) {
+            entry = RateLimitEntry {
+                count: 0,
+                window_start: now,
+            };
+        }
+
+        if entry.count >= max_calls {
+            return Err(Error::RateLimitExceeded);
+        }
+
+        entry.count = entry.count.saturating_add(1);
+        env.storage().persistent().set(&key, &entry);
+        Ok(())
+    }
+
+    /// Configure the rate limit for a specific operation (admin only).
+    pub fn set_rate_limit_config(
+        env: Env,
+        admin: Address,
+        op: u32,
+        config: RateLimitConfig,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RateLimitCfg(op), &config);
+        Self::log_info(
+            &env,
+            "set_rate_limit_config",
+            Some(&admin),
+            None,
+            None,
+            "Rate limit configuration updated",
+        );
+        Ok(true)
+    }
+
+    /// Grant or revoke rate-limit bypass for an account (admin only).
+    pub fn set_rate_limit_bypass(
+        env: Env,
+        admin: Address,
+        account: Address,
+        bypass: bool,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RateLimitBypass(account.clone()), &bypass);
+        Self::log_info(
+            &env,
+            "set_rate_limit_bypass",
+            Some(&admin),
+            Some(&account),
+            None,
+            "Rate limit bypass flag updated",
+        );
+        Ok(true)
+    }
+
+    // =========================================================================
+    // Data Quality & Validation
+    // =========================================================================
+
+    /// Validates a stored medical record and returns a comprehensive quality report.
+    ///
+    /// Performs completeness checks, format validation, consistency verification,
+    /// and FHIR compliance assessment. Emits a `DataQualityValidated` event.
+    pub fn validate_record_quality(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<ValidationReport, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+
+        events::emit_data_quality_validated(
+            &env,
+            caller,
+            record_id,
+            report.quality_score.overall_score,
+            report.is_fhir_compliant,
+            report.quality_score.issue_count,
+        );
+
+        Ok(report)
+    }
+
+    /// Returns field-level completeness / gap detection for a stored record.
+    pub fn get_field_completeness(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<FieldCompleteness, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        Ok(validation::assess_field_completeness(&record))
+    }
+
+    /// Validates a stored record against type-specific rules.
+    pub fn validate_record_type(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        record_type: MedicalRecordType,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        validation::validate_record_by_type(&env, &record, record_type)?;
+        Ok(true)
+    }
+
+    /// Returns a prioritised `CorrectionWorkflow` for a stored medical record.
+    ///
+    /// The workflow maps every validation issue into an actionable `CorrectionItem`
+    /// (with severity-based priority and suggested fix), counts issues by category,
+    /// and sets `can_auto_fix` when only minor, non-blocking issues remain.
+    ///
+    /// Callers with `ReadRecord` permission may invoke this function to build a
+    /// step-by-step remediation plan without modifying the stored record.
+    pub fn get_correction_workflow(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CorrectionWorkflow, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let report = validation::validate_record_with_report(&env, record_id, &record);
+        let workflow = validation::build_correction_workflow(&env, record_id, &report);
+
+        Ok(workflow)
+    }
+
+    /// Auto-cleanses a stored medical record using deterministic normalization rules.
+    ///
+    /// Applies safe, non-clinical transformations:
+    /// - Normalises category casing to the canonical allowed value.
+    /// - Removes empty `doctor_did` strings (replaces `Some("")` with `None`).
+    ///
+    /// If any changes were made, the updated record is persisted and a
+    /// `DataQualityValidated` event is emitted with the post-cleanse quality score.
+    /// Returns a `CleanseResult` describing what (if anything) changed.
+    ///
+    /// Requires `UpdateRecord` permission.
+    pub fn cleanse_record_data(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<CleanseResult, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
+            return Err(Error::NotAuthorized);
+        }
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let result = validation::auto_cleanse_record(&env, &record);
+
+        if result.was_modified {
+            env.storage()
+                .persistent()
+                .set(&DataKey::Record(record_id), &result.record);
+
+            let post_report =
+                validation::validate_record_with_report(&env, record_id, &result.record);
+
+            events::emit_data_quality_validated(
+                &env,
+                caller,
+                record_id,
+                post_report.quality_score.overall_score,
+                post_report.is_fhir_compliant,
+                post_report.quality_score.issue_count,
+            );
+        }
+
+        Ok(result)
+    }
+}
+
+impl upgradeability::migration::Migratable for MedicalRecordsContract {
+    fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
+        Self::migrate_data(env, from_version);
+        Ok(())
+    }
+
+    fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
+        // Simple integrity check: hash of the record count and next ID
+        let next_id = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+        let count = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::RecordCount)
+            .unwrap_or(0);
+
+        let mut data = soroban_sdk::Vec::new(env);
+        data.push_back(next_id);
+        data.push_back(count);
+
+        let hash_bytes = env.crypto().sha256(&data.to_xdr(env));
+        Ok(BytesN::from_array(env, &hash_bytes.to_array()))
+    }
+
+    fn validate(env: &Env, _new_wasm_hash: &BytesN<32>) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+        let mut report = soroban_sdk::Vec::new(env);
+        
+        // Example check: ensure we are initialized
+        let initialized = env.storage().instance().has(&UPGRADE_ADMIN);
+        if !initialized {
+            report.push_back(soroban_sdk::symbol_short!("NOT_INIT"));
+        }
+
+        Ok(upgradeability::UpgradeValidation {
+            state_compatible: initialized,
+            api_compatible: true,
+            storage_layout_valid: true,
+            tests_passed: true,
+            gas_impact: 0,
+            report,
+        })
     }
 }

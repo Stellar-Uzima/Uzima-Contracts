@@ -3,6 +3,7 @@
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol, Vec,
 };
+use upgradeability::UpgradeValidation;
 
 #[cfg(test)]
 mod test;
@@ -20,6 +21,7 @@ pub struct UpgradeProposal {
     pub executed: bool,
     pub canceled: bool,
     pub approvals: Vec<Address>,
+    pub is_emergency: bool,
 }
 
 #[soroban_sdk::contracterror]
@@ -50,12 +52,14 @@ pub struct Config {
     pub min_delay: u64,
     pub required_approvals: u32,
     pub validators: Vec<Address>,
+    pub emergency_approvals: u32,
 }
 
 // Minimal interface for target contracts
 #[soroban_sdk::contractclient(name = "TargetContractClient")]
 pub trait TargetContract {
     fn upgrade(env: Env, new_wasm_hash: BytesN<32>);
+    fn validate_upgrade(env: Env, new_wasm_hash: BytesN<32>) -> UpgradeValidation;
 }
 
 #[contractimpl]
@@ -72,7 +76,8 @@ impl UpgradeManager {
             admin,
             min_delay: MIN_DELAY,
             required_approvals: REQUIRED_APPROVALS,
-            validators,
+            validators: validators.clone(),
+            emergency_approvals: validators.len(), // Default to all validators for emergency
         };
         env.storage().instance().set(&CONFIG, &config);
         Ok(())
@@ -85,6 +90,7 @@ impl UpgradeManager {
         new_wasm_hash: BytesN<32>,
         new_version: u32,
         description: Symbol,
+        is_emergency: bool,
     ) -> Result<u64, UpgradeManagerError> {
         proposer.require_auth();
         let config: Config = env
@@ -100,11 +106,14 @@ impl UpgradeManager {
             .unwrap_or(Map::new(&env));
 
         let id = proposals.len() as u64;
-        let executable_at = env
-            .ledger()
-            .timestamp()
-            .checked_add(config.min_delay)
-            .ok_or(UpgradeManagerError::InvalidState)?; // Should not happen
+        let executable_at = if is_emergency {
+            env.ledger().timestamp()
+        } else {
+            env.ledger()
+                .timestamp()
+                .checked_add(config.min_delay)
+                .ok_or(UpgradeManagerError::InvalidState)?
+        };
 
         let proposal = UpgradeProposal {
             target,
@@ -117,6 +126,7 @@ impl UpgradeManager {
             executed: false,
             canceled: false,
             approvals: Vec::new(&env),
+            is_emergency,
         };
 
         proposals.set(id, proposal);
@@ -192,7 +202,6 @@ impl UpgradeManager {
         }
 
         // Call target.upgrade(new_wasm_hash)
-        // Note: The UpgradeManager must be the admin of the target contract
         let target_client = TargetContractClient::new(&env, &proposal.target);
         target_client.upgrade(&proposal.new_wasm_hash);
 
@@ -203,5 +212,63 @@ impl UpgradeManager {
         env.events()
             .publish((symbol_short!("executed"), proposal_id), ());
         Ok(())
+    }
+
+    pub fn execute_emergency(env: Env, proposal_id: u64) -> Result<(), UpgradeManagerError> {
+        let mut proposals: Map<u64, UpgradeProposal> =
+            env.storage()
+                .persistent()
+                .get(&PROPOSALS)
+                .ok_or(UpgradeManagerError::ProposalNotFound)?;
+
+        let mut proposal = proposals
+            .get(proposal_id)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&CONFIG)
+            .ok_or(UpgradeManagerError::ConfigNotFound)?;
+
+        if !proposal.is_emergency {
+            return Err(UpgradeManagerError::InvalidState);
+        }
+
+        if proposal.executed || proposal.canceled {
+            return Err(UpgradeManagerError::InvalidState);
+        }
+
+        if proposal.approvals.len() < config.emergency_approvals {
+            return Err(UpgradeManagerError::NotEnoughApprovals);
+        }
+
+        let target_client = TargetContractClient::new(&env, &proposal.target);
+        target_client.upgrade(&proposal.new_wasm_hash);
+
+        proposal.executed = true;
+        proposals.set(proposal_id, proposal);
+        env.storage().persistent().set(&PROPOSALS, &proposals);
+
+        env.events()
+            .publish((symbol_short!("emergency"), proposal_id), ());
+        Ok(())
+    }
+
+    pub fn validate_proposal(
+        env: Env,
+        proposal_id: u64,
+    ) -> Result<UpgradeValidation, UpgradeManagerError> {
+        let proposals: Map<u64, UpgradeProposal> = env
+            .storage()
+            .persistent()
+            .get(&PROPOSALS)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+
+        let proposal = proposals
+            .get(proposal_id)
+            .ok_or(UpgradeManagerError::ProposalNotFound)?;
+
+        let target_client = TargetContractClient::new(&env, &proposal.target);
+        Ok(target_client.validate_upgrade(&proposal.new_wasm_hash))
     }
 }

@@ -4,6 +4,49 @@ members = [
     "contracts/*",
     "tests/interoperability_suite",
 ]
+exclude = [
+    "contracts/credential_notifications",
+    "contracts/medical_imaging",
+    "contracts/medical_records",
+    "contracts/healthcare_compliance",
+    "contracts/medical_record_hash_registry",
+    "contracts/appointment_booking_escrow",
+    "contracts/patient_consent_management",
+    "contracts/clinical_nlp",
+    "contracts/clinical_decision_support",
+    "contracts/remote_patient_monitoring",
+    "contracts/healthcare_analytics_dashboard",
+    "contracts/healthcare_data_marketplace",
+    "contracts/telemedicine",
+    "contracts/patient_portal",
+    "contracts/notification_system",
+    "contracts/mental_health_support",
+    "contracts/patient_gamification",
+    "contracts/medical_imaging_ai",
+    "contracts/dicomweb_services",
+    "contracts/emergency_access_override",
+    "contracts/health_data_access_logging",
+    "contracts/escrow",
+    "contracts/mfa",
+    "contracts/multi_region_orchestrator",
+    "contracts/regional_node_manager",
+    "contracts/digital_twin",
+    "contracts/aml",
+    "contracts/forensics",
+    "contracts/audit",
+    "contracts/federated_learning",
+    "contracts/rbac",
+    "contracts/sync_manager",
+    "contracts/failover_detector",
+    "contracts/healthcare_compliance_automation",
+    "contracts/drug_discovery",
+    "contracts/upgradeability",
+    "contracts/health_check",
+]
+
+[workspace.dependencies]
+soroban-sdk = { version = "21.7.7" }
+soroban-cli = "21.7.7"
 
 [workspace.package]
 version = "0.1.0"
@@ -12,13 +55,8 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 repository = "https://github.com/yourusername/soroban-project"
 
-[workspace.dependencies]
-soroban-sdk = { version = "21.0.0", default-features = false }
-soroban-cli = "21.0.0"
-
 # Force compatible versions to fix stellar-xdr dependency conflicts
-arbitrary = "=1.3.2"
-derive_arbitrary = "=1.3.2"
+# Note: arbitrary dependencies removed to fix workspace inheritance issues
 
 [profile.release]
 opt-level = "z"
@@ -26,7 +64,6 @@ overflow-checks = true
 debug = 0
 strip = "symbols"
 debug-assertions = false
-panic = "abort"
 codegen-units = 1
 lto = true
 

@@ -17,9 +17,12 @@ The platform provides a comprehensive solution for modern healthcare data manage
   - [Network Configuration](#network-configuration)
 - [Features](#features)
 - [Architecture](#architecture)
+- [Visual Documentation](#visual-documentation)
 - [Project Structure](#project-structure)
 - [Usage Examples](#usage-examples)
 - [Deployment](#deployment)
+- [Developer Guide](#developer-guide)
+- [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
 - [License](#license)
@@ -53,7 +56,7 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 Before you begin, ensure you have the following installed:
 
 - **Rust 1.78.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
-- **Soroban CLI v23.1.4+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
+- **Soroban CLI v21.7.7+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
 - **Git** - For version control
 - **Make** - For using the provided Makefile (optional but recommended)
 
@@ -86,7 +89,7 @@ The `setup.sh` script handles everything automatically:
 
 This script will:
 - Install Rust 1.78.0 and required targets
-- Install Soroban CLI v23.1.4
+- Install Soroban CLI v21.7.7
 - Set up project structure
 - Configure Soroban networks (local, testnet, futurenet)
 - Build the project and run tests
@@ -100,7 +103,7 @@ rustup target add wasm32-unknown-unknown
 rustup component add rustfmt clippy rust-src
 
 # Install Soroban CLI
-cargo install --locked soroban-cli
+cargo install --locked --version 21.7.7 soroban-cli
 
 # Configure Soroban
 soroban config identity generate default
@@ -155,16 +158,61 @@ make stop-local
 
 ---
 
-## ✨ Features
+## Visual Documentation
 
-- 📁 Encrypted on-chain medical records storage
-- 🔐 Role-based access control (patients, doctors, admins)
-- ⏱ Immutable timestamping and full history tracking
-- 📜 Integration of traditional healing metadata
-- 🔑 Public key-based identity verification
-- ⚙️ Fully testable, modular, and CI-enabled
-- 📦 Gas-efficient contract design
-- 🗳️ Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+### Comprehensive System Diagrams
+
+We've created extensive visual documentation using Mermaid.js to help you understand the complex interactions between contracts and system components.
+
+#### **Key Diagrams Available:**
+
+1. **[System Architecture Overview](docs/SYSTEM_ARCHITECTURE.md)** - Complete system architecture with all contracts and their interactions
+2. **[Payment Flow Diagrams](docs/PAYMENT_FLOW_DIAGRAMS.md)** - Healthcare payment processing, escrow, and settlement flows
+3. **[Identity Verification Flow](docs/IDENTITY_VERIFICATION_FLOW.md)** - W3C DID-based identity management and verification
+4. **[Cross-Chain Interaction Flow](docs/CROSS_CHAIN_INTERACTION_FLOW.md)** - Multi-chain data synchronization and access patterns
+5. **[Data Access Patterns](docs/DATA_ACCESS_PATTERNS.md)** - Secure data access control and privacy protection flows
+
+#### **Quick Example:**
+```mermaid
+graph TD
+    A[Patient] -->|Consent| B[Consent Contract]
+    B -->|Access Grant| C[Medical Records]
+    C -->|Log Access| D[Audit Contract]
+```
+
+#### **Viewing Diagrams:**
+- **GitHub**: Automatic rendering in README files
+- **VS Code**: Install "Markdown Preview Mermaid Support" extension
+- **Web**: Add Mermaid.js to your HTML pages
+- **Documentation**: See [docs/DIAGRAMS_INDEX.md](docs/DIAGRAMS_INDEX.md) for complete guide
+
+These diagrams provide essential context for understanding:
+- How contracts interact with each other
+- Data flow and access patterns
+- Cross-chain synchronization processes
+- Payment and settlement mechanisms
+- Identity verification workflows
+
+---
+
+## Features
+
+### Key Features
+
+- Encrypted on-chain medical records storage
+- Role-based access control (patients, doctors, admins)
+- Immutable timestamping and full history tracking
+- Integration of traditional healing metadata
+- Public key-based identity verification
+- Fully testable, modular, and CI-enabled
+- Gas-efficient contract design
+- Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+
+---
+
+## CLI Guide
+
+See [docs/CLI_GUIDE.md](docs/CLI_GUIDE.md) for advanced transaction management commands and examples.
 
 ---
 

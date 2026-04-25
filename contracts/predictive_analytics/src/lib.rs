@@ -80,6 +80,7 @@ pub enum Error {
     RecordNotFound = 6,
     LowConfidence = 7,
     InvalidHorizon = 8,
+    EmptyInput = 9,
 }
 
 #[contract]
@@ -97,11 +98,11 @@ impl PredictiveAnalyticsContract {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            panic!("Already initialized");
+            return false; // Already initialized
         }
 
         if min_confidence_bps > 10_000 {
-            panic!("min_confidence_bps must be <= 10000");
+            return false; // Invalid confidence value
         }
 
         let config = PredictionConfig {
@@ -223,7 +224,7 @@ impl PredictiveAnalyticsContract {
         }
 
         if explanation_ref.is_empty() {
-            panic!("explanation_ref cannot be empty");
+            return Err(Error::EmptyInput);
         }
 
         let timestamp = env.ledger().timestamp();
@@ -267,8 +268,8 @@ impl PredictiveAnalyticsContract {
         summary.latest_prediction_id = prediction_id;
         summary.total_predictions += 1;
 
-        // Count high-risk predictions (values > 7500 bps)
-        if predicted_value > 7500 {
+        // Count high-risk predictions (values >= 7500 bps)
+        if predicted_value >= 7500 {
             summary.high_risk_predictions += 1;
         }
 
@@ -452,7 +453,7 @@ mod test {
         let summary = client.get_patient_summary(&patient).unwrap();
         assert_eq!(summary.latest_prediction_id, 1u64);
         assert_eq!(summary.total_predictions, 1u32);
-        assert_eq!(summary.high_risk_predictions, 1u32); // Since 7500 > 7500 threshold
+        assert_eq!(summary.high_risk_predictions, 1u32); // Since 7500 >= 7500 threshold
         assert_eq!(summary.avg_confidence_bps, 8000u32);
     }
 
@@ -490,8 +491,7 @@ mod test {
             &risk_factors,
         );
 
-        assert!(result.is_ok());
-        assert!(result.unwrap().is_err());
+        assert!(result.is_err());
     }
 
     #[test]

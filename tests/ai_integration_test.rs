@@ -5,6 +5,8 @@ use anomaly_detection::{AnomalyDetectionContract, AnomalyDetectionContractClient
 use predictive_analytics::{PredictiveAnalyticsContract, PredictiveAnalyticsContractClient};
 use explainable_ai::{ExplainableAiContract, ExplainableAiContractClient, FeatureImportance};
 
+#[allow(clippy::unwrap_used)]
+
 pub mod ai_integration_tests {
     use super::*;
 

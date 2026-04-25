@@ -3,6 +3,8 @@
 mod tests {
     use soroban_sdk::Address;
 
+    #[allow(clippy::unwrap_used)]
+
     /// Property: Record IDs should be unique
     #[test]
     fn prop_record_ids_are_unique() {

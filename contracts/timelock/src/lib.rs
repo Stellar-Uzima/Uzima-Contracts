@@ -29,6 +29,13 @@ pub enum Error {
     AlreadyQueued = 3,
     NotQueued = 4,
     NotReady = 5,
+    InsufficientFunds = 10,
+    DeadlineExceeded = 11,
+    InvalidSignature = 12,
+    UnauthorizedCaller = 13,
+    ContractPaused = 14,
+    StorageFull = 15,
+    CrossChainTimeout = 16,
 }
 
 const CFG: Symbol = symbol_short!("cfg");
@@ -109,46 +116,52 @@ mod test {
     fn queue_and_execute_success() {
         let env = Env::default();
         env.mock_all_auths();
-        let admin = Address::generate(&env);
-        Timelock::initialize(env.clone(), admin, 10).unwrap();
-        let target = Address::generate(&env);
-        let call = BytesN::from_array(&env, &[0u8; 32]);
-        Timelock::queue(env.clone(), 1, target.clone(), call.clone()).unwrap();
+        let contract_id = env.register_contract(None, Timelock);
+        env.as_contract(&contract_id, || {
+            let admin = Address::generate(&env);
+            Timelock::initialize(env.clone(), admin, 10).unwrap();
+            let target = Address::generate(&env);
+            let call = BytesN::from_array(&env, &[0u8; 32]);
+            Timelock::queue(env.clone(), 1, target.clone(), call.clone()).unwrap();
 
-        // Advance time past eta
-        env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 15,
-            ..Default::default()
+            // Advance time past eta
+            env.ledger().set(LedgerInfo {
+                timestamp: env.ledger().timestamp() + 15,
+                ..Default::default()
+            });
+            Timelock::execute(env.clone(), 1).unwrap();
+
+            // ensure queue cleared
+            let q: Map<u64, QueuedTx> = env
+                .storage()
+                .persistent()
+                .get(&QUEUE)
+                .unwrap_or(Map::new(&env));
+            assert!(!q.contains_key(1));
         });
-        Timelock::execute(env.clone(), 1).unwrap();
-
-        // ensure queue cleared
-        let q: Map<u64, QueuedTx> = env
-            .storage()
-            .persistent()
-            .get(&QUEUE)
-            .unwrap_or(Map::new(&env));
-        assert!(!q.contains_key(1));
     }
 
     #[test]
-    #[should_panic(expected = "Error(NotReady)")]
+    #[should_panic(expected = "NotReady")]
     fn execution_too_early_panics() {
         let env = Env::default();
         env.mock_all_auths();
-        let admin = Address::generate(&env);
-        Timelock::initialize(env.clone(), admin, 10).unwrap();
-        let target = Address::generate(&env);
-        let call = BytesN::from_array(&env, &[0u8; 32]);
-        Timelock::queue(env.clone(), 1, target.clone(), call.clone()).unwrap();
+        let contract_id = env.register_contract(None, Timelock);
+        env.as_contract(&contract_id, || {
+            let admin = Address::generate(&env);
+            Timelock::initialize(env.clone(), admin, 10).unwrap();
+            let target = Address::generate(&env);
+            let call = BytesN::from_array(&env, &[0u8; 32]);
+            Timelock::queue(env.clone(), 1, target.clone(), call.clone()).unwrap();
 
-        // Advance time below eta
-        env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 5,
-            ..Default::default()
+            // Advance time below eta
+            env.ledger().set(LedgerInfo {
+                timestamp: env.ledger().timestamp() + 5,
+                ..Default::default()
+            });
+            // This returns Err, but in tests unhandled Result can panic?
+            // Or rather we should unwrap it to force panic for should_panic test
+            Timelock::execute(env.clone(), 1).unwrap();
         });
-        // This returns Err, but in tests unhandled Result can panic?
-        // Or rather we should unwrap it to force panic for should_panic test
-        Timelock::execute(env.clone(), 1).unwrap();
     }
 }

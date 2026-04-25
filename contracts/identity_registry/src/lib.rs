@@ -57,6 +57,10 @@ pub enum VerificationMethodType {
     EcdsaSecp256k1VerifKey2019,
     X25519KeyAgreementKey2020,
     JsonWebKey2020,
+    /// FIDO2 / WebAuthn Ed25519 (EdDSA) authenticator key (algorithm tag = 1).
+    Fido2EdDsa2024,
+    /// FIDO2 / WebAuthn P-256 (ES256) authenticator key (algorithm tag = 2).
+    Fido2Es2562024,
 }
 
 /// Verification Relationship Types
@@ -339,7 +343,7 @@ impl IdentityRegistryContract {
         owner.require_auth();
 
         if env.storage().instance().has(&DataKey::Owner) {
-            panic!("Contract already initialized");
+            return; // Contract already initialized
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
@@ -1720,6 +1724,81 @@ impl IdentityRegistryContract {
                 false
             }
         }
+    }
+
+    /// Registers a FIDO2 / WebAuthn authenticator device as a verification method
+    /// in the subject's DID document.
+    ///
+    /// Called by the `fido2_authenticator` contract after a successful device
+    /// registration ceremony.  The public key is stored as a SHA-256 hash
+    /// (`public_key_hash`) because DID verification methods use 32-byte keys and
+    /// FIDO2 P-256 keys are 65 bytes; the hash acts as a stable, compact identifier.
+    ///
+    /// # Arguments
+    /// * `subject`          — DID owner; must have an active DID document.
+    /// * `device_name`      — friendly name used as the verification method fragment ID.
+    /// * `algorithm_tag`    — 1 = EdDSA (Ed25519), 2 = ES256 (P-256).
+    /// * `public_key_hash`  — SHA-256 of the raw authenticator public key bytes.
+    ///
+    /// If the subject has no DID document the call is silently ignored so that
+    /// the `fido2_authenticator` registration is never blocked by DID state.
+    pub fn add_fido2_device(
+        env: Env,
+        subject: Address,
+        device_name: String,
+        algorithm_tag: u32,
+        public_key_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        subject.require_auth();
+
+        // Silently succeed when no DID document exists yet.
+        let mut did_doc: DIDDocument = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::DIDDocument(subject.clone()))
+        {
+            Some(doc) => doc,
+            None => return Ok(()),
+        };
+
+        if matches!(did_doc.status, DIDStatus::Deactivated) {
+            return Ok(()); // Non-blocking: DID deactivated
+        }
+
+        let method_type = if algorithm_tag == 1 {
+            VerificationMethodType::Fido2EdDsa2024
+        } else {
+            VerificationMethodType::Fido2Es2562024
+        };
+
+        let timestamp = env.ledger().timestamp();
+
+        // Build a unique method ID: "fido2-<device_name>-<timestamp_fragment>".
+        // We use the device_name directly as the fragment for human readability.
+        // Collision avoidance: callers should use unique names per device.
+        let method_id = device_name.clone();
+
+        let new_vm = VerificationMethod {
+            id: method_id.clone(),
+            method_type,
+            controller: subject.clone(),
+            public_key: public_key_hash,
+            is_active: true,
+            created: timestamp,
+            last_rotated: 0,
+        };
+
+        did_doc.verification_methods.push_back(new_vm);
+        // FIDO2 devices serve as authentication verification methods.
+        did_doc.authentication.push_back(method_id);
+        did_doc.updated = timestamp;
+        did_doc.version += 1;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::DIDDocument(subject), &did_doc);
+
+        Ok(())
     }
 }
 

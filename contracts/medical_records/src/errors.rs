@@ -9,10 +9,10 @@ pub enum Error {
     ProposalAlreadyExecuted = 6,
     TimelockNotElasped = 7,
     NotEnoughApproval = 8,
-    Overflow = 47,
     NotInitialized = 48,
     CryptoRegistryNotSet = 49,
     EncryptionRequired = 50,
+    RateLimitExceeded = 51,
 
     // --- Access & Auth Errors (10-19) ---
     NotAuthorized = 2,
@@ -67,6 +67,12 @@ pub enum Error {
     BatchTooLarge = 43,
     InvalidBatch = 44,
     NumberOutOfBounds = 46,
+    InsufficientFunds = 71,
+    DeadlineExceeded = 72,
+    InvalidSignature = 73,
+    UnauthorizedCaller = 74,
+    StorageFull = 75,
+    CrossChainTimeout = 76,
 }
 
 /// AC: Recovery suggestions to help users fix issues
@@ -77,6 +83,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),
         Error::InvalidCategory => symbol_short!("FIX_CAT"),
+        Error::InvalidBatch => symbol_short!("CHK_DATA"),
         _ => symbol_short!("CONTACT"),
     }
 }

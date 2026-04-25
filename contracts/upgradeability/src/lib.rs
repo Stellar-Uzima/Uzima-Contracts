@@ -3,6 +3,7 @@
 use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 pub mod migration;
+pub use migration::UpgradeValidation;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -15,6 +16,13 @@ pub enum UpgradeError {
     IncompatibleVersion = 104,
     ContractPaused = 105,
     HistoryNotFound = 106,
+    IntegrityCheckFailed = 107,
+    InsufficientFunds = 110,
+    DeadlineExceeded = 111,
+    InvalidSignature = 112,
+    UnauthorizedCaller = 113,
+    StorageFull = 115,
+    CrossChainTimeout = 116,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -24,6 +32,7 @@ pub struct UpgradeHistory {
     pub version: u32,
     pub upgraded_at: u64,
     pub description: Symbol,
+    pub state_hash: BytesN<32>,
 }
 
 pub mod storage {
@@ -85,7 +94,7 @@ pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
     Ok(admin)
 }
 
-pub fn execute_upgrade(
+pub fn execute_upgrade<T: migration::Migratable>(
     env: &Env,
     new_wasm_hash: BytesN<32>,
     new_version: u32,
@@ -98,6 +107,15 @@ pub fn execute_upgrade(
         return Err(UpgradeError::IncompatibleVersion);
     }
 
+    // Optional pre-migration integrity check
+    T::verify_integrity(env).map_err(|_| UpgradeError::IntegrityCheckFailed)?;
+
+    // Perform migration
+    T::migrate(env, current_version)?;
+
+    // Post-migration integrity check
+    let state_hash = T::verify_integrity(env).map_err(|_| UpgradeError::IntegrityCheckFailed)?;
+
     storage::add_history(
         env,
         UpgradeHistory {
@@ -105,6 +123,7 @@ pub fn execute_upgrade(
             version: new_version,
             upgraded_at: env.ledger().timestamp(),
             description,
+            state_hash,
         },
     );
 
@@ -112,6 +131,30 @@ pub fn execute_upgrade(
     env.deployer().update_current_contract_wasm(new_wasm_hash);
 
     Ok(())
+}
+
+pub fn validate_upgrade<T: migration::Migratable>(
+    env: &Env,
+    new_wasm_hash: BytesN<32>,
+) -> Result<UpgradeValidation, UpgradeError> {
+    authorize_upgrade(env)?;
+
+    // Check if new WASM hash is provided
+    if new_wasm_hash.is_empty() {
+        return Err(UpgradeError::InvalidWasmHash);
+    }
+
+    // Call the target contract's validation logic
+    let mut validation = T::validate(env, &new_wasm_hash)?;
+
+    // Perform standard integrity checks
+    let integrity_check = T::verify_integrity(env).is_ok();
+    if !integrity_check {
+        validation.state_compatible = false;
+        validation.report.push_back(symbol_short!("INTEG_ERR"));
+    }
+
+    Ok(validation)
 }
 
 pub fn rollback(env: &Env) -> Result<(), UpgradeError> {

@@ -326,3 +326,334 @@ This contract is designed to integrate with:
 - Compliance monitoring systems
 - Audit and reporting tools
 
+## Advanced Features
+
+The contract now includes advanced consent management features for enhanced control, security, and compliance:
+
+### 1. Dynamic Consent Updates and Versioning
+
+The contract supports dynamic consent updates with full version history tracking.
+
+#### `enable_dynamic_updates(token_id: u64)`
+Enables dynamic updates for a consent token. Only the patient can enable this feature.
+
+#### `update_consent_dynamic(token_id: u64, new_metadata_uri: String, change_summary: String)`
+Updates consent with version tracking. Creates a new version entry in the version history.
+
+#### `get_version_history(token_id: u64) -> Vec<VersionHistoryEntry>`
+Returns the complete version history for a consent token.
+
+**Example:**
+```javascript
+// Enable dynamic updates
+await contract.enable_dynamic_updates(tokenId);
+
+// Update consent with change summary
+await contract.update_consent_dynamic(
+    tokenId,
+    newMetadataUri,
+    "Updated treatment plan based on new diagnosis"
+);
+
+// Get version history
+const history = await contract.get_version_history(tokenId);
+console.log('Version history:', history);
+```
+
+### 2. Granular Permission System
+
+Fine-grained permissions for different data types within a consent.
+
+#### Data Types
+- `Demographics`: Basic patient information
+- `MedicalHistory`: Medical history records
+- `LabResults`: Laboratory test results
+- `Imaging`: Medical imaging data
+- `Medications`: Medication records
+- `Procedures`: Medical procedures
+- `Allergies`: Allergy information
+- `Research`: Research data
+- `Financial`: Financial/insurance information
+
+#### Permission Levels
+- `None`: No access
+- `Read`: Read-only access
+- `Write`: Read and write access
+- `Full`: Full access including deletion
+
+#### `set_granular_permissions(token_id: u64, permissions: GranularPermissions)`
+Sets granular permissions for different data types. Can be called by patient or issuer.
+
+#### `get_granular_permissions(token_id: u64) -> GranularPermissions`
+Retrieves the granular permissions for a consent token.
+
+#### `has_permission(token_id: u64, requester: Address, data_type: DataType, required_level: PermissionLevel) -> bool`
+Checks if a requester has the required permission level for a specific data type.
+
+**Example:**
+```javascript
+// Set permissions
+const permissions = {
+    permissions: new Map([
+        [DataType.LabResults, PermissionLevel.Read],
+        [DataType.MedicalHistory, PermissionLevel.Write],
+        [DataType.Financial, PermissionLevel.None]
+    ])
+};
+await contract.set_granular_permissions(tokenId, permissions);
+
+// Check permission
+const hasAccess = await contract.has_permission(
+    tokenId,
+    doctorAddress,
+    DataType.LabResults,
+    PermissionLevel.Read
+);
+```
+
+### 3. Time-Based and Condition-Based Access Controls
+
+Advanced access controls with time windows, day restrictions, and usage limits.
+
+#### Access Condition Types
+- `TimeWindow`: Access allowed only within a specific time range
+- `DayOfWeek`: Access restricted to specific days of the week
+- `TimeOfDay`: Access restricted to specific hours of the day
+- `LocationBased`: Location-based access restrictions
+- `PurposeBased`: Purpose-based access restrictions
+- `EmergencyOnly`: Access only through emergency override
+
+#### `set_access_controls(token_id: u64, access_control: AccessControl)`
+Sets access controls for a consent token. Only the patient can set access controls.
+
+#### `check_access_allowed(token_id: u64, requester: Address) -> bool`
+Checks if access is currently allowed based on all access control conditions.
+
+#### `record_access(token_id: u64, requester: Address)`
+Records an access attempt and updates access count.
+
+**Example:**
+```javascript
+// Set time-based access control
+const accessControl = {
+    conditions: [
+        {
+            type: AccessCondition.TimeWindow,
+            start: currentTimestamp,
+            end: currentTimestamp + 86400 // 1 day
+        },
+        {
+            type: AccessCondition.DayOfWeek,
+            days: [1, 2, 3, 4, 5] // Monday to Friday
+        }
+    ],
+    max_access_count: 10,
+    current_access_count: 0,
+    last_access_timestamp: 0
+};
+await contract.set_access_controls(tokenId, accessControl);
+
+// Check if access is allowed
+const allowed = await contract.check_access_allowed(tokenId, requester);
+if (allowed) {
+    await contract.record_access(tokenId, requester);
+}
+```
+
+### 4. Consent Inheritance and Delegation
+
+Support for delegating consent to other parties and creating consent hierarchies.
+
+#### `delegate_consent(token_id: u64, delegate: Address, permissions: GranularPermissions, expiry_timestamp: u64)`
+Delegates consent to another address with specific permissions. Only the patient can delegate.
+
+#### `revoke_delegation(token_id: u64, delegate: Address)`
+Revokes a delegation. Only the patient can revoke delegations.
+
+#### `get_delegations(token_id: u64) -> Vec<Delegation>`
+Returns all active delegations for a consent token.
+
+#### `set_inheritance(child_token_id: u64, parent_token_id: u64, inherited_permissions: GranularPermissions)`
+Sets up consent inheritance where a child consent inherits permissions from a parent. Includes cycle detection.
+
+**Example:**
+```javascript
+// Delegate consent to a specialist
+const delegatePermissions = {
+    permissions: new Map([
+        [DataType.LabResults, PermissionLevel.Read],
+        [DataType.Imaging, PermissionLevel.Read]
+    ])
+};
+await contract.delegate_consent(
+    tokenId,
+    specialistAddress,
+    delegatePermissions,
+    currentTimestamp + 2592000 // 30 days
+);
+
+// Get active delegations
+const delegations = await contract.get_delegations(tokenId);
+
+// Set up inheritance (child consent inherits from parent)
+await contract.set_inheritance(childTokenId, parentTokenId, inheritedPermissions);
+```
+
+### 5. Emergency Override Mechanisms
+
+Emergency access with full audit trails for life-threatening situations.
+
+#### `add_emergency_authority(authority: Address)`
+Adds an authorized emergency override authority. Only admin can add authorities.
+
+#### `emergency_override(token_id: u64, reason: String, duration: u64) -> u64`
+Creates an emergency override with full audit trail. Returns override ID.
+
+**Example:**
+```javascript
+// Add emergency authority (admin only)
+await contract.add_emergency_authority(hospitalEmergencyDept);
+
+// Create emergency override
+const overrideId = await contract.emergency_override(
+    tokenId,
+    "Life-threatening emergency - patient unconscious",
+    3600 // 1 hour override
+);
+```
+
+### 6. Consent Marketplace for Research
+
+Marketplace functionality for patients to share their data for research purposes.
+
+#### `set_marketplace_enabled(enabled: bool)`
+Enables or disables the marketplace feature. Admin only.
+
+#### `list_on_marketplace(token_id: u64, price: i128, data_types: Vec<DataType>, research_purpose: String, duration: u64)`
+Lists a consent token on the marketplace for research purposes. Only the patient can list.
+
+#### `get_marketplace_listing(token_id: u64) -> MarketplaceListing`
+Retrieves marketplace listing information.
+
+#### `purchase_marketplace_listing(token_id: u64, buyer: Address)`
+Purchases access to a marketplace listing. Creates a delegation for the buyer.
+
+**Example:**
+```javascript
+// Enable marketplace (admin)
+await contract.set_marketplace_enabled(true);
+
+// List consent for research
+await contract.list_on_marketplace(
+    tokenId,
+    1000, // Price in tokens
+    [DataType.LabResults, DataType.MedicalHistory],
+    "Diabetes research study",
+    2592000 // 30 days access
+);
+
+// Purchase listing
+await contract.purchase_marketplace_listing(tokenId, researcherAddress);
+```
+
+### 7. Consent Analytics and Reporting
+
+Comprehensive analytics and reporting capabilities.
+
+#### `get_analytics() -> AnalyticsData`
+Returns aggregated analytics data including:
+- Total consents issued
+- Active consents
+- Revoked consents
+- Total delegations
+- Total emergency overrides
+- Marketplace listings
+- Total access count
+
+#### `generate_consent_report(patient: Address) -> Vec<u64>`
+Generates a report of all consent tokens for a patient.
+
+**Example:**
+```javascript
+// Get analytics
+const analytics = await contract.get_analytics();
+console.log('Total consents:', analytics.total_consents);
+console.log('Active consents:', analytics.active_consents);
+console.log('Total delegations:', analytics.total_delegations);
+
+// Generate patient report
+const report = await contract.generate_consent_report(patientAddress);
+console.log('Patient has', report.length, 'consent tokens');
+```
+
+## Enhanced Data Structures
+
+### ConsentMetadata (Enhanced)
+```rust
+pub struct ConsentMetadata {
+    pub metadata_uri: String,
+    pub consent_type: String,
+    pub issued_timestamp: u64,
+    pub expiry_timestamp: u64,
+    pub issuer: Address,
+    pub patient: Address,
+    pub version: u32,
+    pub dynamic_updates_enabled: bool, // New field
+}
+```
+
+### ConsentHistoryEntry (Enhanced)
+```rust
+pub struct ConsentHistoryEntry {
+    pub action: String, // Now includes: "issued", "updated", "revoked", "delegated", "inherited", "emergency_override", "marketplace_listed", etc.
+    pub timestamp: u64,
+    pub actor: Address,
+    pub metadata_uri: String,
+    pub details: String, // New field for additional details
+}
+```
+
+## Security Considerations
+
+### Advanced Security Features
+
+1. **Granular Access Control**: Fine-grained permissions prevent unauthorized access to specific data types
+2. **Time-Based Restrictions**: Access can be restricted to specific time windows
+3. **Emergency Protocols**: Controlled emergency access with full audit trails
+4. **Delegation Management**: Secure delegation with expiry and revocation
+5. **Inheritance Protection**: Cycle detection prevents infinite inheritance loops
+6. **Marketplace Security**: Controlled marketplace with patient-only listing
+
+### Compliance Features
+
+- **Complete Audit Trail**: Every action is recorded with timestamp, actor, and details
+- **Version History**: Full version history for dynamic consent updates
+- **Access Logging**: All access attempts are logged
+- **Emergency Documentation**: Emergency overrides include reason and duration
+- **Analytics**: Comprehensive analytics for compliance reporting
+
+## Best Practices
+
+1. **Enable Dynamic Updates**: Only enable dynamic updates when necessary for flexibility
+2. **Set Granular Permissions**: Use granular permissions to minimize data exposure
+3. **Use Access Controls**: Implement time-based and condition-based access controls for sensitive data
+4. **Monitor Analytics**: Regularly review analytics for compliance and security
+5. **Emergency Protocols**: Establish clear emergency override procedures
+6. **Marketplace Guidelines**: Only list data for legitimate research purposes
+
+## Testing
+
+The test suite now includes tests for all advanced features:
+
+```bash
+cargo test
+```
+
+Test coverage includes:
+- Granular permissions
+- Access controls
+- Delegation and inheritance
+- Emergency overrides
+- Marketplace functionality
+- Dynamic updates
+- Analytics and reporting

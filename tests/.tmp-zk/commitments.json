@@ -1,0 +1,8 @@
+{
+  "schema": "uzima.zk.commitments.v1",
+  "generated_at": "2026-02-21T15:23:57.689Z",
+  "record_commitment": "0x83d26fe51f2cae8bdcd09cca62fefef4f17d3be5089689f4a5a02231906588a1",
+  "credential_commitment": "0xc977dbae93929e22c2fd69f1b331eecd45b263f060f3186fc105dcf2f75f1bce",
+  "requester_commitment": "0x377225ad7905826b6e7d59a5bb84fd6557604949b4d85d242958d43c5a0022f9",
+  "provider_commitment": "0x921a228d7ef7a13fd553816440accc736b1b2d49a76137591269a5992b1ae2a9"
+}

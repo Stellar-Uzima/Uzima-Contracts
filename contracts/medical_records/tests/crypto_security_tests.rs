@@ -1,9 +1,13 @@
 #![cfg(test)]
+#![allow(clippy::unwrap_used)]
 
 mod common;
 
 use common::setup_uzima;
-use medical_records::{CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope};
+use medical_records::{
+    AdvancedEncryptedRecordInput, CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope,
+    Permission,
+};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Bytes, BytesN, String, Vec};
 
@@ -192,6 +196,50 @@ fn test_envelope_update_and_crypto_audit_log() {
 }
 
 #[test]
+fn test_advanced_encrypted_record_persists_abe_policy_metadata() {
+    let env = soroban_sdk::Env::default();
+    let t = setup_uzima(&env);
+
+    let registry = soroban_sdk::Address::generate(&env);
+    assert!(t.client.set_crypto_registry(&t.admin1, &registry));
+
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "oncology"));
+
+    let record_id = t.client.add_advanced_encrypted_record(
+        &t.doctor,
+        &t.patient,
+        &true,
+        &tags,
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &AdvancedEncryptedRecordInput {
+            ciphertext_ref: String::from_str(&env, "ipfs://ciphertextcid-advanced"),
+            ciphertext_hash: BytesN::from_array(&env, &[8u8; 32]),
+            envelopes: make_envelopes(&env, &t.patient, &t.doctor),
+            policy_ref: String::from_str(&env, "ipfs://abe-policy-001"),
+            policy_hash: BytesN::from_array(&env, &[4u8; 32]),
+            access_ciphertext_ref: String::from_str(&env, "ipfs://abe-access-ct-001"),
+            access_ciphertext_hash: BytesN::from_array(&env, &[6u8; 32]),
+            required_permission: Permission::ReadConfidential,
+            attribute_count: 101u32,
+            valid_until: 1_900_000_000u64,
+            revocation_epoch: 3u32,
+        },
+    );
+
+    let policy = t
+        .client
+        .get_encrypted_record_abe_policy(&t.patient, &record_id);
+    assert!(policy.is_some(), "policy metadata should be present");
+    if let Some(policy) = policy {
+        assert_eq!(policy.attribute_count, 101);
+        assert_eq!(policy.required_permission, Permission::ReadConfidential);
+        assert_eq!(policy.revocation_epoch, 3);
+    }
+}
+
+#[test]
 fn test_crypto_config_threshold_proposal_flow() {
     let env = soroban_sdk::Env::default();
     let t = setup_uzima(&env);
@@ -298,4 +346,68 @@ fn test_require_pq_envelopes_gates_encrypted_records() {
         &pq_envs,
     );
     assert!(record_id > 0);
+}
+#[test]
+fn test_quantum_threat_level_and_migration() {
+    let env = soroban_sdk::Env::default();
+    let t = setup_uzima(&env);
+
+    let registry = soroban_sdk::Address::generate(&env);
+    assert!(t.client.set_crypto_registry(&t.admin1, &registry));
+
+    // Initially threat level is 0.
+    assert_eq!(t.client.get_quantum_threat_level(), 0);
+    assert!(!t.client.is_require_pq_envelopes());
+
+    // Create a classical record.
+    let mut tags = Vec::new(&env);
+    tags.push_back(String::from_str(&env, "tag"));
+    let ciphertext_ref = String::from_str(&env, "ipfs://ciphertextcid005");
+    let ciphertext_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let envelopes = make_envelopes(&env, &t.patient, &t.doctor);
+
+    let record_id = t.client.add_encrypted_record(
+        &t.doctor,
+        &t.patient,
+        &true,
+        &tags,
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &ciphertext_ref,
+        &ciphertext_hash,
+        &envelopes,
+    );
+
+    // Increase threat level.
+    t.client.set_quantum_threat_level(&t.admin1, &60);
+    assert_eq!(t.client.get_quantum_threat_level(), 60);
+    // Setting threat level >= 50 should automatically require PQ envelopes.
+    assert!(t.client.is_require_pq_envelopes());
+
+    // Upgrade existing record to quantum-safe.
+    let pq_envelope = KeyEnvelope {
+        recipient: t.patient.clone(),
+        key_version: 1,
+        algorithm: EnvelopeAlgorithm::HybridX25519Kyber1024,
+        wrapped_key: Bytes::from_slice(&env, &[1, 2, 3, 4]),
+        pq_wrapped_key: Some(Bytes::from_slice(&env, &[8; 1568])),
+    };
+
+    t.client
+        .upgrade_record_to_quantum_safe(&t.patient, &record_id, &pq_envelope);
+
+    let fetched = t
+        .client
+        .get_encrypted_record_envelope(&t.patient, &record_id)
+        .unwrap();
+    assert!(fetched.pq_wrapped_key.is_some());
+    assert_eq!(fetched.algorithm, EnvelopeAlgorithm::HybridX25519Kyber1024);
+
+    let logs = t.client.get_crypto_audit_logs(&t.admin1, &0u32, &50u32);
+    assert!(logs
+        .iter()
+        .any(|e| e.action == CryptoAuditAction::QuantumThreatDetected));
+    assert!(logs
+        .iter()
+        .any(|e| e.action == CryptoAuditAction::QuantumMigrationCompleted));
 }
