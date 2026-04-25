@@ -5,9 +5,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{
-    contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Vec,
-};
+use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Vec};
 use upgradeability::{
     migration::{Migratable, UpgradeValidation},
     storage, UpgradeError, UpgradeHistory,
@@ -211,7 +209,10 @@ fn test_rollback_to_previous_version() {
         )
         .expect("v1→v2");
 
-        assert!(upgradeability::rollback(&env).is_ok(), "Rollback must succeed when history exists");
+        assert!(
+            upgradeability::rollback(&env).is_ok(),
+            "Rollback must succeed when history exists"
+        );
     });
 }
 
