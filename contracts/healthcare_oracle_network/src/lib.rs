@@ -54,7 +54,11 @@ impl HealthcareOracleNetwork {
         oracles::verify_oracle(env, admin, operator, verified, active)
     }
 
-    pub fn update_oracle_endpoint(env: Env, operator: Address, endpoint: String) -> Result<(), Error> {
+    pub fn update_oracle_endpoint(
+        env: Env,
+        operator: Address,
+        endpoint: String,
+    ) -> Result<(), Error> {
         oracles::update_oracle_endpoint(env, operator, endpoint)
     }
 
