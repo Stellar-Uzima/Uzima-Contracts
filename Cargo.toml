@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contracts/*",
+    "contract_optimizer",
 ]
 exclude = [
     "contracts/credential_notifications",
