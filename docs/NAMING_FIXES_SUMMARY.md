@@ -6,7 +6,7 @@ This document summarizes the naming inconsistency fixes applied to the Uzima Con
 ## Issues Found and Fixed
 
 ### 1. **Error Enum Naming**
-- **Issue**: `ErrorLevel` enum variant in `LogLevel` enum
+- **Issue**: `ErrorLevel` enum variant in `LogLevel` enum (inconsistent with PascalCase)
 - **Fix**: Changed `ErrorLevel` to `Error` to follow PascalCase convention
 - **Files Updated**:
   - `contracts/medical_records/src/lib.rs` - Updated enum definition and references

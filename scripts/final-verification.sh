@@ -8,12 +8,12 @@ ALL_PASS=true
 
 echo ""
 echo "1. Checking for remaining ErrorLevel issues..."
-# ErrorLevel is now the correct name (to avoid compilation conflicts with Error associated type)
-# So we should check that it exists where expected
-if grep -q "ErrorLevel" contracts/medical_records/src/lib.rs && grep -q "ErrorLevel" contracts/genomic_data/src/lib.rs; then
-    echo "✅ PASS: ErrorLevel correctly exists in both contracts (avoids compilation conflict)"
+# LogLevel::Error is the correct PascalCase variant name (ErrorLevel was changed to Error)
+# We should check that Error variant exists in LogLevel enum
+if grep -q "LogLevel::Error" contracts/medical_records/src/lib.rs && grep -q "LogLevel::Error" contracts/genomic_data/src/lib.rs; then
+    echo "✅ PASS: LogLevel::Error correctly exists in both contracts (PascalCase naming)"
 else
-    echo "❌ FAIL: ErrorLevel missing where expected"
+    echo "❌ FAIL: LogLevel::Error missing where expected"
     ALL_PASS=false
 fi
 
@@ -28,19 +28,19 @@ fi
 
 echo ""
 echo "3. Checking that fixes are applied correctly..."
-echo "   a) medical_records LogLevel::ErrorLevel..."
-if grep -q "LogLevel::ErrorLevel" contracts/medical_records/src/lib.rs; then
-    echo "      ✅ PASS: LogLevel::ErrorLevel exists in medical_records"
+echo "   a) medical_records LogLevel::Error..."
+if grep -q "LogLevel::Error" contracts/medical_records/src/lib.rs; then
+    echo "      ✅ PASS: LogLevel::Error exists in medical_records"
 else
-    echo "      ❌ FAIL: LogLevel::ErrorLevel missing in medical_records"
+    echo "      ❌ FAIL: LogLevel::Error missing in medical_records"
     ALL_PASS=false
 fi
 
-echo "   b) genomic_data LogLevel::ErrorLevel..."
-if grep -q "LogLevel::ErrorLevel" contracts/genomic_data/src/lib.rs; then
-    echo "      ✅ PASS: LogLevel::ErrorLevel exists in genomic_data"
+echo "   b) genomic_data LogLevel::Error..."
+if grep -q "LogLevel::Error" contracts/genomic_data/src/lib.rs; then
+    echo "      ✅ PASS: LogLevel::Error exists in genomic_data"
 else
-    echo "      ❌ FAIL: LogLevel::ErrorLevel missing in genomic_data"
+    echo "      ❌ FAIL: LogLevel::Error missing in genomic_data"
     ALL_PASS=false
 fi
 
