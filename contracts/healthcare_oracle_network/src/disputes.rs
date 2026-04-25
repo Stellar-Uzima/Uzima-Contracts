@@ -1,6 +1,8 @@
 use soroban_sdk::{symbol_short, Address, Env, String};
 
-use crate::types::{Config, ConsensusRecord, DataKey, Dispute, DisputeStatus, Error, FeedKey, FeedKind};
+use crate::types::{
+    Config, ConsensusRecord, DataKey, Dispute, DisputeStatus, Error, FeedKey, FeedKind,
+};
 use crate::utils;
 
 pub fn raise_dispute(

@@ -125,7 +125,7 @@ pub fn execute_upgrade<T: migration::Migratable>(
     new_version: u32,
     description: Symbol,
 ) -> Result<(), UpgradeError> {
-    execute_upgrade_with_deprecations(
+    execute_upgrade_with_deprecations::<T>(
         env,
         new_wasm_hash,
         new_version,
