@@ -33,6 +33,44 @@ jobs:
       - name: Validate event schemas
         run: npm run events:validate
 
+  # Testing Pyramid Metrics + Enforcement
+  testing-pyramid:
+    name: Testing Pyramid Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate + validate testing pyramid report
+        run: npm run test:pyramid:report
+
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          if [ -f reports/testing/pyramid.md ]; then
+            cat reports/testing/pyramid.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload pyramid report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testing-pyramid-report
+          path: |
+            reports/testing/pyramid.json
+            reports/testing/pyramid.md
+          retention-days: 14
+
   # Code Quality
   lint:
     name: Lint & Format
