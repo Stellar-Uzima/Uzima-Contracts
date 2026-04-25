@@ -12,7 +12,7 @@ use crate::errors::Error;
 use queries::Queries;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Vec};
 use storage::Storage;
-use types::{DataKey, RBACConfig, Role, RoleAssignment};
+use types::{RBACConfig, Role, RoleAssignment};
 
 #[contract]
 pub struct RBAC;

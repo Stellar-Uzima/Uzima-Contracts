@@ -34,7 +34,7 @@ mod tests {
         client.initialize(&admin, &config);
 
         let stored_config = client.get_config();
-        assert_eq!(stored_config.emit_events, true);
+        assert!(stored_config.emit_events);
         assert_eq!(stored_config.max_roles_per_address, 10);
     }
 
@@ -59,10 +59,10 @@ mod tests {
         let user = Address::generate(&env);
 
         let success = client.assign_role(&user, &Role::Doctor);
-        assert_eq!(success, true);
+        assert!(success);
 
         let has_role = client.has_role(&user, &Role::Doctor);
-        assert_eq!(has_role, true);
+        assert!(has_role);
     }
 
     #[test]
@@ -74,10 +74,10 @@ mod tests {
         let user = Address::generate(&env);
 
         let success1 = client.assign_role(&user, &Role::Doctor);
-        assert_eq!(success1, true);
+        assert!(success1);
 
         let success2 = client.assign_role(&user, &Role::Doctor);
-        assert_eq!(success2, false);
+        assert!(!success2);
     }
 
     #[test]
@@ -89,12 +89,12 @@ mod tests {
         let user = Address::generate(&env);
 
         client.assign_role(&user, &Role::Doctor);
-        assert_eq!(client.has_role(&user, &Role::Doctor), true);
+        assert!(client.has_role(&user, &Role::Doctor));
 
         let success = client.remove_role(&user, &Role::Doctor);
-        assert_eq!(success, true);
+        assert!(success);
 
-        assert_eq!(client.has_role(&user, &Role::Doctor), false);
+        assert!(!client.has_role(&user, &Role::Doctor));
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         let user = Address::generate(&env);
 
         let success = client.remove_role(&user, &Role::Doctor);
-        assert_eq!(success, false);
+        assert!(!success);
     }
 
     #[test]
@@ -153,11 +153,11 @@ mod tests {
 
         let roles_to_check = vec![&env, Role::Admin, Role::Doctor];
         let has_any = client.has_any_role(&user, &roles_to_check);
-        assert_eq!(has_any, true);
+        assert!(has_any);
 
         let admin_only = vec![&env, Role::Admin];
         let has_admin = client.has_any_role(&user, &admin_only);
-        assert_eq!(has_admin, false);
+        assert!(!has_admin);
     }
 
     #[test]
@@ -173,11 +173,11 @@ mod tests {
 
         let roles_user_has = vec![&env, Role::Doctor, Role::Patient];
         let has_all = client.has_all_roles(&user, &roles_user_has);
-        assert_eq!(has_all, true);
+        assert!(has_all);
 
         let mixed_roles = vec![&env, Role::Doctor, Role::Admin];
         let has_all_mixed = client.has_all_roles(&user, &mixed_roles);
-        assert_eq!(has_all_mixed, false);
+        assert!(!has_all_mixed);
     }
 
     #[test]
@@ -246,11 +246,11 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.is_doctor(&user), false);
+        assert!(!client.is_doctor(&user));
 
         client.assign_role(&user, &Role::Doctor);
 
-        assert_eq!(client.is_doctor(&user), true);
+        assert!(client.is_doctor(&user));
     }
 
     #[test]
@@ -261,11 +261,11 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.is_patient(&user), false);
+        assert!(!client.is_patient(&user));
 
         client.assign_role(&user, &Role::Patient);
 
-        assert_eq!(client.is_patient(&user), true);
+        assert!(client.is_patient(&user));
     }
 
     #[test]
@@ -276,11 +276,11 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.is_admin(&user), false);
+        assert!(!client.is_admin(&user));
 
         client.assign_role(&user, &Role::Admin);
 
-        assert_eq!(client.is_admin(&user), true);
+        assert!(client.is_admin(&user));
     }
 
     #[test]
@@ -291,11 +291,11 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.is_staff(&user), false);
+        assert!(!client.is_staff(&user));
 
         client.assign_role(&user, &Role::Staff);
 
-        assert_eq!(client.is_staff(&user), true);
+        assert!(client.is_staff(&user));
     }
 
     #[test]
@@ -339,7 +339,7 @@ mod tests {
         client.update_config(&new_config);
 
         let stored_config = client.get_config();
-        assert_eq!(stored_config.emit_events, false);
+        assert!(!stored_config.emit_events);
         assert_eq!(stored_config.max_roles_per_address, 5);
     }
 
@@ -359,9 +359,9 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.assign_role(&user, &Role::Doctor), true);
-        assert_eq!(client.assign_role(&user, &Role::Patient), true);
-        assert_eq!(client.assign_role(&user, &Role::Staff), false);
+        assert!(client.assign_role(&user, &Role::Doctor));
+        assert!(client.assign_role(&user, &Role::Patient));
+        assert!(!client.assign_role(&user, &Role::Staff));
 
         assert_eq!(client.get_roles(&user).len(), 2);
     }
@@ -374,14 +374,14 @@ mod tests {
 
         let user = Address::generate(&env);
 
-        assert_eq!(client.assign_role(&user, &Role::Admin), true);
-        assert_eq!(client.assign_role(&user, &Role::Doctor), true);
-        assert_eq!(client.assign_role(&user, &Role::Patient), true);
-        assert_eq!(client.assign_role(&user, &Role::Staff), true);
-        assert_eq!(client.assign_role(&user, &Role::Insurer), true);
-        assert_eq!(client.assign_role(&user, &Role::Researcher), true);
-        assert_eq!(client.assign_role(&user, &Role::Auditor), true);
-        assert_eq!(client.assign_role(&user, &Role::Service), true);
+        assert!(client.assign_role(&user, &Role::Admin));
+        assert!(client.assign_role(&user, &Role::Doctor));
+        assert!(client.assign_role(&user, &Role::Patient));
+        assert!(client.assign_role(&user, &Role::Staff));
+        assert!(client.assign_role(&user, &Role::Insurer));
+        assert!(client.assign_role(&user, &Role::Researcher));
+        assert!(client.assign_role(&user, &Role::Auditor));
+        assert!(client.assign_role(&user, &Role::Service));
 
         assert_eq!(client.get_roles(&user).len(), 8);
     }

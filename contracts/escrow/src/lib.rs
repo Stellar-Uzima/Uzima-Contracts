@@ -163,7 +163,9 @@ fn update_stats(
     if active_delta > 0 {
         stats.active_count = stats.active_count.saturating_add(active_delta as u64);
     } else if active_delta < 0 {
-        stats.active_count = stats.active_count.saturating_sub(active_delta.abs() as u64);
+        stats.active_count = stats
+            .active_count
+            .saturating_sub(active_delta.unsigned_abs().into());
     }
 
     env.storage().instance().set(&STATS, &stats);
@@ -297,7 +299,7 @@ impl EscrowContract {
         e.approvals = approvals;
 
         // Transition to Active if at least 1 approval exists (e.g., from payer)
-        if e.status == EscrowStatus::Pending && e.approvals.len() > 0 {
+        if e.status == EscrowStatus::Pending && !e.approvals.is_empty() {
             e.status = EscrowStatus::Active;
             update_stats(&env, 0, false, false, false, false, 1);
         }
@@ -468,16 +470,18 @@ impl EscrowContract {
     }
 
     pub fn get_settled_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
-            return PlatformStats {
+        let stats: PlatformStats = env
+            .storage()
+            .instance()
+            .get(&STATS)
+            .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
                 settled_count: 0,
                 refunded_count: 0,
                 disputed_count: 0,
                 active_count: 0,
-            };
-        });
+            });
         if stats.total_escrows == 0 {
             return 0;
         }
@@ -485,16 +489,18 @@ impl EscrowContract {
     }
 
     pub fn get_refund_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
-            return PlatformStats {
+        let stats: PlatformStats = env
+            .storage()
+            .instance()
+            .get(&STATS)
+            .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
                 settled_count: 0,
                 refunded_count: 0,
                 disputed_count: 0,
                 active_count: 0,
-            };
-        });
+            });
         if stats.total_escrows == 0 {
             return 0;
         }
@@ -502,16 +508,18 @@ impl EscrowContract {
     }
 
     pub fn get_dispute_rate(env: Env) -> u32 {
-        let stats: PlatformStats = env.storage().instance().get(&STATS).unwrap_or_else(|| {
-            return PlatformStats {
+        let stats: PlatformStats = env
+            .storage()
+            .instance()
+            .get(&STATS)
+            .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
                 settled_count: 0,
                 refunded_count: 0,
                 disputed_count: 0,
                 active_count: 0,
-            };
-        });
+            });
         if stats.total_escrows == 0 {
             return 0;
         }
@@ -550,7 +558,7 @@ impl EscrowContract {
         10000u32.saturating_sub(failure_rate as u32)
     }
 
-    pub fn get_token_volume(env: Env, token: Address) -> i128 {
+    pub fn get_token_volume(env: Env, _token: Address) -> i128 {
         // In a real system, you'd index this. For now, we simulate with a subset or global.
         // We'll return global volume if token matches a tracked one (simplified).
         Self::get_total_volume(env)
@@ -584,8 +592,6 @@ impl EscrowContract {
     }
 }
 
-#[cfg(all(test, feature = "testutils"))]
-#[allow(clippy::unwrap_used)]
 #[cfg(all(test, feature = "testutils"))]
 #[allow(clippy::unwrap_used)]
 mod test {

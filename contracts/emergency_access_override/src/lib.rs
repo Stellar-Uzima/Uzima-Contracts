@@ -9,7 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
 
 // ==================== Data Types ====================
 
@@ -51,7 +51,7 @@ impl EmergencyAccessOverride {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
-        if threshold == 0 || threshold > approvers.len() as u32 {
+        if threshold == 0 || threshold > approvers.len() {
             return Err(Error::InvalidThreshold);
         }
 
@@ -135,7 +135,7 @@ impl EmergencyAccessOverride {
             .unwrap();
         let current = record.approvers.len();
 
-        if current as u32 >= threshold {
+        if current >= threshold {
             record.approved = true;
             record.granted_at = now;
             record.expiry_at = now.saturating_add(duration_seconds);

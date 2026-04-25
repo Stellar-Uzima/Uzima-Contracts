@@ -1,4 +1,4 @@
-use crate::types::{AddressRoles, DataKey, RBACConfig, Role, RoleAssignment};
+use crate::types::{DataKey, RBACConfig, Role, RoleAssignment};
 use soroban_sdk::{Address, Env, Vec};
 
 /// Storage operations for RBAC contract
@@ -47,7 +47,7 @@ impl Storage {
             .unwrap_or(10);
 
         // Check if we've reached the limit
-        if roles.len() as u32 >= max_roles {
+        if roles.len() >= max_roles {
             return false;
         }
 
@@ -75,7 +75,7 @@ impl Storage {
 
     /// Remove a role from an address
     pub fn remove_role(env: &Env, address: &Address, role: Role) -> bool {
-        let mut roles = Self::get_address_roles(env, address);
+        let roles = Self::get_address_roles(env, address);
 
         // Find and remove the role
         let mut index_to_remove: Option<u32> = None;
@@ -100,7 +100,7 @@ impl Storage {
                 .set(&DataKey::AddressRoles(address.clone()), &new_roles);
 
             // Remove address from role members list
-            let mut members: Vec<Address> = env
+            let members: Vec<Address> = env
                 .storage()
                 .persistent()
                 .get(&DataKey::RoleMembers(role as u32))
@@ -142,7 +142,7 @@ impl Storage {
 
     /// Get count of members with a role
     pub fn get_role_member_count(env: &Env, role: Role) -> u32 {
-        Self::get_role_members(env, role).len() as u32
+        Self::get_role_members(env, role).len()
     }
 
     /// Save a role assignment record

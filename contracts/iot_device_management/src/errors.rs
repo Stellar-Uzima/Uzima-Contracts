@@ -47,6 +47,7 @@ pub enum Error {
     DeviceOffline = 826,
 }
 
+#[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized
