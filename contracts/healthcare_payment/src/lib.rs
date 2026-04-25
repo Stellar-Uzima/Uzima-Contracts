@@ -1311,11 +1311,7 @@ impl HealthcarePayment {
     }
 
     /// Grant an address the ability to trigger an emergency pause. Admin only.
-    pub fn add_authorized_pauser(
-        env: Env,
-        caller: Address,
-        pauser: Address,
-    ) -> Result<(), Error> {
+    pub fn add_authorized_pauser(env: Env, caller: Address, pauser: Address) -> Result<(), Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
@@ -1421,11 +1417,7 @@ impl HealthcarePayment {
     }
 
     /// Set the failure threshold for automatic circuit tripping. Admin only.
-    pub fn set_failure_threshold(
-        env: Env,
-        caller: Address,
-        threshold: u32,
-    ) -> Result<(), Error> {
+    pub fn set_failure_threshold(env: Env, caller: Address, threshold: u32) -> Result<(), Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         if threshold == 0 {
@@ -1464,9 +1456,7 @@ impl HealthcarePayment {
 
     /// Returns the full circuit breaker record.
     pub fn get_circuit_breaker(env: Env) -> Option<CircuitBreaker> {
-        env.storage()
-            .instance()
-            .get(&DataKey::CircuitBreakerState)
+        env.storage().instance().get(&DataKey::CircuitBreakerState)
     }
 }
 
