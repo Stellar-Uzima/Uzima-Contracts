@@ -33,7 +33,6 @@ exclude = [
     "contracts/aml",
     "contracts/forensics",
     "contracts/audit",
-    "contracts/federated_learning",
     "contracts/rbac",
     "contracts/sync_manager",
     "contracts/failover_detector",
