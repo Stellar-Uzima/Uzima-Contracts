@@ -120,7 +120,7 @@ pub fn negotiate_version(env: &Env, client_version: u32) -> VersionNegotiation {
 
 /// Checks whether a given API version is still supported.
 pub fn is_version_supported(_env: &Env, version: u32) -> bool {
-    version >= MIN_SUPPORTED_API_VERSION && version <= API_VERSION
+    (MIN_SUPPORTED_API_VERSION..=API_VERSION).contains(&version)
 }
 
 /// Returns a list of all supported API versions.
