@@ -113,14 +113,47 @@ pub enum ViolationType {
     ProcessingViolation,
 }
 
+/// Data classes covered by retention policies
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum DataType {
+    MedicalRecords,
+    AuditLogs,
+    TemporaryData,
+    UserPreferences,
+}
+
 /// Data Retention Policy
 #[derive(Clone)]
 #[contracttype]
 pub struct RetentionPolicy {
-    pub retention_period_days: u32,
-    pub auto_delete_enabled: bool,
-    pub notify_before_deletion_days: u32,
-    pub legal_hold_enabled: bool,
+    pub data_type: DataType,
+    pub retention_period: u64, // seconds; 0 indicates indefinite retention
+    pub auto_delete: bool,
+}
+
+/// Tracked data record subject to retention enforcement
+#[derive(Clone)]
+#[contracttype]
+pub struct RetentionRecord {
+    pub record_id: String,
+    pub data_type: DataType,
+    pub owner: Address,
+    pub created_at: u64,
+    pub legal_hold: bool,
+    pub deleted: bool,
+    pub deleted_at: u64,
+}
+
+/// Immutable audit trail entry for deletions
+#[derive(Clone)]
+#[contracttype]
+pub struct DeletionAuditEntry {
+    pub record_id: String,
+    pub data_type: DataType,
+    pub deleted_at: u64,
+    pub deleted_by: Address,
+    pub reason: String,
 }
 
 /// Consent Record
@@ -248,8 +281,9 @@ const AUDIT_LOGS: Symbol = symbol_short!("AUDITS");
 const BREACH_REPORTS: Symbol = symbol_short!("BREACHES");
 const VIOLATION_REPORTS: Symbol = symbol_short!("VIOLATE");
 const REPORTS: Symbol = symbol_short!("REPORTS");
-#[allow(dead_code)]
 const RETENTION_POLICIES: Symbol = symbol_short!("RETENTION");
+const RETENTION_RECORDS: Symbol = symbol_short!("RETREC");
+const DEL_AUDIT: Symbol = symbol_short!("DELAUDIT");
 const COMPLIANCE_SCORE: Symbol = symbol_short!("SCORE");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
@@ -279,6 +313,10 @@ pub enum Error {
     InvalidPatientAddress = 20,
     ReportAlreadyExists = 21,
     ReportNotFound = 22,
+    RecordAlreadyExists = 23,
+    RetentionRecordNotFound = 24,
+    RecordNotDeletable = 25,
+    LegalHoldActive = 26,
 }
 
 #[contract]
@@ -313,6 +351,7 @@ impl HealthcareComplianceContract {
 
         env.storage().instance().set(&CONFIG, &default_config);
         env.storage().instance().set(&COMPLIANCE_SCORE, &100u32);
+        Self::set_default_retention_policies(&env);
 
         Ok(())
     }
@@ -679,6 +718,175 @@ impl HealthcareComplianceContract {
         Ok(metrics)
     }
 
+    /// Register a data record for policy-based retention tracking.
+    pub fn register_retention_record(
+        env: Env,
+        actor: Address,
+        record_id: String,
+        data_type: DataType,
+        owner: Address,
+    ) -> Result<(), Error> {
+        #[cfg(not(test))]
+        actor.require_auth();
+        Self::check_paused(&env)?;
+
+        let mut records: Map<String, RetentionRecord> = env
+            .storage()
+            .persistent()
+            .get(&RETENTION_RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        if records.contains_key(record_id.clone()) {
+            return Err(Error::RecordAlreadyExists);
+        }
+
+        let record = RetentionRecord {
+            record_id: record_id.clone(),
+            data_type,
+            owner,
+            created_at: env.ledger().timestamp(),
+            legal_hold: false,
+            deleted: false,
+            deleted_at: 0,
+        };
+
+        records.set(record_id, record);
+        env.storage().persistent().set(&RETENTION_RECORDS, &records);
+        Ok(())
+    }
+
+    /// Set or update a retention policy for a specific data type.
+    pub fn set_retention_policy(
+        env: Env,
+        admin: Address,
+        policy: RetentionPolicy,
+    ) -> Result<(), Error> {
+        #[cfg(not(test))]
+        admin.require_auth();
+        Self::check_admin(&env, &admin)?;
+        Self::check_paused(&env)?;
+
+        let mut policies: Map<u32, RetentionPolicy> = env
+            .storage()
+            .persistent()
+            .get(&RETENTION_POLICIES)
+            .unwrap_or(Map::new(&env));
+        policies.set(Self::data_type_to_key(policy.data_type), policy);
+        env.storage().persistent().set(&RETENTION_POLICIES, &policies);
+        Ok(())
+    }
+
+    /// Retrieve retention policy for a data class.
+    pub fn get_retention_policy(env: Env, data_type: DataType) -> Result<RetentionPolicy, Error> {
+        let policies: Map<u32, RetentionPolicy> = env
+            .storage()
+            .persistent()
+            .get(&RETENTION_POLICIES)
+            .unwrap_or(Map::new(&env));
+        policies
+            .get(Self::data_type_to_key(data_type))
+            .ok_or(Error::RetentionPolicyNotFound)
+    }
+
+    /// GDPR "right to be forgotten" handler.
+    pub fn request_data_deletion(
+        env: Env,
+        requester: Address,
+        record_id: String,
+    ) -> Result<(), Error> {
+        #[cfg(not(test))]
+        requester.require_auth();
+        Self::check_paused(&env)?;
+
+        let mut records: Map<String, RetentionRecord> = env
+            .storage()
+            .persistent()
+            .get(&RETENTION_RECORDS)
+            .unwrap_or(Map::new(&env));
+        let mut record = records
+            .get(record_id.clone())
+            .ok_or(Error::RetentionRecordNotFound)?;
+
+        if record.owner != requester {
+            return Err(Error::NotAuthorized);
+        }
+        if record.legal_hold {
+            return Err(Error::LegalHoldActive);
+        }
+        if record.deleted {
+            return Ok(());
+        }
+
+        match record.data_type {
+            DataType::MedicalRecords | DataType::AuditLogs => return Err(Error::RecordNotDeletable),
+            DataType::TemporaryData | DataType::UserPreferences => {}
+        }
+
+        record.deleted = true;
+        record.deleted_at = env.ledger().timestamp();
+        records.set(record_id.clone(), record.clone());
+        env.storage().persistent().set(&RETENTION_RECORDS, &records);
+        Self::append_deletion_audit(
+            &env,
+            &record_id,
+            record.data_type,
+            &requester,
+            String::from_str(&env, "user_deletion_request"),
+        );
+        Ok(())
+    }
+
+    /// Automated retention sweep that deletes all expired records.
+    pub fn enforce_retention(env: Env) -> Result<u32, Error> {
+        Self::check_paused(&env)?;
+        let now = env.ledger().timestamp();
+        let mut records: Map<String, RetentionRecord> = env
+            .storage()
+            .persistent()
+            .get(&RETENTION_RECORDS)
+            .unwrap_or(Map::new(&env));
+
+        let mut deleted_count = 0u32;
+        let mut to_delete: Vec<String> = Vec::new(&env);
+        for (record_id, record) in records.iter() {
+            if record.deleted || record.legal_hold {
+                continue;
+            }
+            if Self::should_auto_delete(&env, &record, now)? {
+                to_delete.push_back(record_id);
+            }
+        }
+
+        let sweeper = Self::system_actor(&env);
+        for record_id in to_delete.iter() {
+            let mut record = records
+                .get(record_id.clone())
+                .ok_or(Error::RetentionRecordNotFound)?;
+            record.deleted = true;
+            record.deleted_at = now;
+            records.set(record_id.clone(), record.clone());
+            Self::append_deletion_audit(
+                &env,
+                &record_id,
+                record.data_type,
+                &sweeper,
+                String::from_str(&env, "retention_expired"),
+            );
+            deleted_count = deleted_count.saturating_add(1);
+        }
+
+        env.storage().persistent().set(&RETENTION_RECORDS, &records);
+        Ok(deleted_count)
+    }
+
+    /// Get all deletion audit entries.
+    pub fn get_deletion_audit(env: Env) -> Vec<DeletionAuditEntry> {
+        env.storage()
+            .persistent()
+            .get(&DEL_AUDIT)
+            .unwrap_or(Vec::new(&env))
+    }
+
     /// Pause contract operations (emergency)
     pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
         #[cfg(not(test))]
@@ -826,6 +1034,93 @@ impl HealthcareComplianceContract {
             }
         }
         count
+    }
+
+    fn set_default_retention_policies(env: &Env) {
+        let mut policies: Map<u32, RetentionPolicy> = Map::new(env);
+        // Medical records are retained indefinitely on-chain as hashed evidence.
+        policies.set(
+            Self::data_type_to_key(DataType::MedicalRecords),
+            RetentionPolicy {
+                data_type: DataType::MedicalRecords,
+                retention_period: 0,
+                auto_delete: false,
+            },
+        );
+        // HIPAA minimum retention period for audit logs: 6 years.
+        policies.set(
+            Self::data_type_to_key(DataType::AuditLogs),
+            RetentionPolicy {
+                data_type: DataType::AuditLogs,
+                retention_period: 6 * 365 * 24 * 60 * 60,
+                auto_delete: true,
+            },
+        );
+        // Temporary operational data retention: 90 days.
+        policies.set(
+            Self::data_type_to_key(DataType::TemporaryData),
+            RetentionPolicy {
+                data_type: DataType::TemporaryData,
+                retention_period: 90 * 24 * 60 * 60,
+                auto_delete: true,
+            },
+        );
+        // User preferences remain until an explicit deletion request.
+        policies.set(
+            Self::data_type_to_key(DataType::UserPreferences),
+            RetentionPolicy {
+                data_type: DataType::UserPreferences,
+                retention_period: 0,
+                auto_delete: false,
+            },
+        );
+        env.storage().persistent().set(&RETENTION_POLICIES, &policies);
+    }
+
+    fn data_type_to_key(data_type: DataType) -> u32 {
+        match data_type {
+            DataType::MedicalRecords => 1,
+            DataType::AuditLogs => 2,
+            DataType::TemporaryData => 3,
+            DataType::UserPreferences => 4,
+        }
+    }
+
+    fn should_auto_delete(env: &Env, record: &RetentionRecord, now: u64) -> Result<bool, Error> {
+        let policy = Self::get_retention_policy(env.clone(), record.data_type)?;
+        if !policy.auto_delete || policy.retention_period == 0 {
+            return Ok(false);
+        }
+        Ok(now >= record.created_at.saturating_add(policy.retention_period))
+    }
+
+    fn system_actor(env: &Env) -> Address {
+        env.storage()
+            .instance()
+            .get(&ADMIN)
+            .unwrap_or_else(|| env.current_contract_address())
+    }
+
+    fn append_deletion_audit(
+        env: &Env,
+        record_id: &String,
+        data_type: DataType,
+        deleted_by: &Address,
+        reason: String,
+    ) {
+        let mut entries: Vec<DeletionAuditEntry> = env
+            .storage()
+            .persistent()
+            .get(&DEL_AUDIT)
+            .unwrap_or(Vec::new(env));
+        entries.push_back(DeletionAuditEntry {
+            record_id: record_id.clone(),
+            data_type,
+            deleted_at: env.ledger().timestamp(),
+            deleted_by: deleted_by.clone(),
+            reason,
+        });
+        env.storage().persistent().set(&DEL_AUDIT, &entries);
     }
 
     /// Submit a compliance report (on-chain evidence stamping)

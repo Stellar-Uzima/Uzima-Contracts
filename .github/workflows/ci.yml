@@ -12,6 +12,65 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Contract Event Schema Validation
+  event-schemas:
+    name: Event Schema Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate event schemas
+        run: npm run events:validate
+
+  # Testing Pyramid Metrics + Enforcement
+  testing-pyramid:
+    name: Testing Pyramid Report
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate + validate testing pyramid report
+        run: npm run test:pyramid:report
+
+      - name: Publish report to job summary
+        if: always()
+        run: |
+          if [ -f reports/testing/pyramid.md ]; then
+            cat reports/testing/pyramid.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload pyramid report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testing-pyramid-report
+          path: |
+            reports/testing/pyramid.json
+            reports/testing/pyramid.md
+          retention-days: 14
+
   # Code Quality
   lint:
     name: Lint & Format
@@ -176,6 +235,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -189,10 +249,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Run cargo audit
+      - name: Install security tools
         run: |
-          cargo install cargo-audit --features=fix || true
-          cargo audit || echo "⚠️ Audit completed with warnings"
+          cargo install --locked --force cargo-audit
+          cargo install --locked --force cargo-geiger
+
+      - name: Run dependency + unsafe + custom scans
+        id: security_scan
+        run: bash ./scripts/security-scan.sh security-reports
 
       - name: Install Gitleaks
         run: |
@@ -201,14 +265,38 @@ jobs:
           chmod +x gitleaks
           sudo mv gitleaks /usr/local/bin/
 
-      - name: Run secret scan
-        run: gitleaks detect --source . --verbose --redact || echo "⚠️ Secret scan completed with warnings"
+      - name: Secret detection in commits
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "Scanning only PR commit range for secrets..."
+            gitleaks detect \
+              --log-opts="${{ github.event.pull_request.base.sha }}..${{ github.sha }}" \
+              --redact
+          else
+            echo "Scanning repository for secrets..."
+            gitleaks detect --source . --redact
+          fi
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: security-reports/
+          retention-days: 14
+
+      - name: Publish security summary
+        if: always()
+        run: |
+          if [ -f security-reports/security-summary.md ]; then
+            cat security-reports/security-summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   # Summary
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, test, test-nodejs, build]
+    needs: [lint, test, test-nodejs, build, security]
     if: always()
     steps:
       - name: Generate summary
@@ -218,11 +306,13 @@ jobs:
           echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Node.js Tests: ${{ needs.test-nodejs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Security: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
              [ "${{ needs.test-nodejs.result }}" != "success" ] || \
-             [ "${{ needs.build.result }}" != "success" ]; then
+             [ "${{ needs.build.result }}" != "success" ] || \
+             [ "${{ needs.security.result }}" = "failure" ]; then
             echo "❌ CI checks failed"
             exit 1
           fi

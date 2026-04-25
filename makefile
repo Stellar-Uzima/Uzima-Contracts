@@ -1,6 +1,6 @@
 # Makefile for Soroban Smart Contract Development
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size
 
 # Default target
 help:
@@ -22,6 +22,8 @@ help:
 	@echo "  deploy-local   - Deploy contracts to local network"
 	@echo "  dist           - Build .wasm files into dist/ folder"
 	@echo "  dev-deploy     - Full dev workflow: clean, build-opt, dist, start-local, deploy-local"
+	@echo "  monitor-wasm   - Monitor WASM contract sizes and trends"
+	@echo "  check-wasm-size- Quick WASM size check without trend analysis"
 	@echo "  setup          - Complete setup for new developers"
 
 # Install required dependencies
@@ -211,3 +213,40 @@ bench:
 profile:
 	@echo "Profiling build times..."
 	cargo build --timings
+
+# WASM size monitoring
+monitor-wasm: dist
+	@echo "Monitoring WASM contract sizes..."
+	@if command -v jq >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then \
+		./scripts/wasm_size_monitor.sh; \
+	else \
+		echo "Installing monitoring dependencies..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y jq bc; \
+		elif command -v brew >/dev/null 2>&1; then \
+			brew install jq bc; \
+		else \
+			echo "Please install jq and bc manually"; \
+			exit 1; \
+		fi; \
+		./scripts/wasm_size_monitor.sh; \
+	fi
+
+# Quick WASM size check
+check-wasm-size: dist
+	@echo "Quick WASM size check..."
+	@for wasm_file in dist/*.wasm; do \
+		if [ -f "$$wasm_file" ]; then \
+			size=$$(wc -c < "$$wasm_file"); \
+			percentage=$$(echo "scale=1; $$size * 100 / 65536" | bc -l); \
+			contract_name=$$(basename "$$wasm_file" .wasm); \
+			printf "%-25s %8s %6s%% " "$$contract_name" "$$(($$size/1024))KB" "$$percentage"; \
+			if [ $$size -gt 51200 ]; then \
+				echo "WARNING"; \
+			elif [ $$size -gt 62464 ]; then \
+				echo "CRITICAL"; \
+			else \
+				echo "OK"; \
+			fi; \
+		fi; \
+	done

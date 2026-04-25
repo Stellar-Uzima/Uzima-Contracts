@@ -2,6 +2,7 @@
 use soroban_sdk::{vec, Address, Env, String};
 
 pub mod healthcare_workflows;
+pub mod ihe_fhir_integration_tests;
 
 pub mod medical_records_tests {
     use super::*;

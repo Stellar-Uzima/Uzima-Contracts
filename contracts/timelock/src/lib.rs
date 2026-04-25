@@ -29,6 +29,13 @@ pub enum Error {
     AlreadyQueued = 3,
     NotQueued = 4,
     NotReady = 5,
+    InsufficientFunds = 10,
+    DeadlineExceeded = 11,
+    InvalidSignature = 12,
+    UnauthorizedCaller = 13,
+    ContractPaused = 14,
+    StorageFull = 15,
+    CrossChainTimeout = 16,
 }
 
 const CFG: Symbol = symbol_short!("cfg");

@@ -5,6 +5,7 @@ use soroban_sdk::{
 };
 
 pub mod migration;
+pub use migration::UpgradeValidation;
 
 #[cfg(all(test, feature = "testutils"))]
 mod test;
@@ -172,6 +173,30 @@ pub fn execute_upgrade_with_deprecations<T: migration::Migratable>(
     env.deployer().update_current_contract_wasm(new_wasm_hash);
 
     Ok(())
+}
+
+pub fn validate_upgrade<T: migration::Migratable>(
+    env: &Env,
+    new_wasm_hash: BytesN<32>,
+) -> Result<UpgradeValidation, UpgradeError> {
+    authorize_upgrade(env)?;
+
+    // Check if new WASM hash is provided
+    if new_wasm_hash.is_empty() {
+        return Err(UpgradeError::InvalidWasmHash);
+    }
+
+    // Call the target contract's validation logic
+    let mut validation = T::validate(env, &new_wasm_hash)?;
+
+    // Perform standard integrity checks
+    let integrity_check = T::verify_integrity(env).is_ok();
+    if !integrity_check {
+        validation.state_compatible = false;
+        validation.report.push_back(symbol_short!("INTEG_ERR"));
+    }
+
+    Ok(validation)
 }
 
 pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
