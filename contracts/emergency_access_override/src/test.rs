@@ -26,7 +26,9 @@ mod tests {
         approvers.push_back(approver2.clone());
         approvers.push_back(approver3.clone());
 
-        (env, client, admin, approver1, approver2, approver3, approvers)
+        (
+            env, client, admin, approver1, approver2, approver3, approvers,
+        )
     }
 
     #[test]

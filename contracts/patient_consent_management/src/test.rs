@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
-    use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Env,
+    };
 
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
         let env = Env::default();
@@ -228,10 +231,25 @@ mod tests {
     fn test_get_suggestion_returns_expected_hint() {
         use crate::errors::get_suggestion;
         use soroban_sdk::symbol_short;
-        assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
-        assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
-        assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
-        assert_eq!(get_suggestion(Error::ConsentNotFound), symbol_short!("CHK_ID"));
-        assert_eq!(get_suggestion(Error::InvalidPatient), symbol_short!("CHK_ID"));
+        assert_eq!(
+            get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            get_suggestion(Error::ConsentNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            get_suggestion(Error::InvalidPatient),
+            symbol_short!("CHK_ID")
+        );
     }
 }

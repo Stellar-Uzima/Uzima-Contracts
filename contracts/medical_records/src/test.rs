@@ -767,8 +767,7 @@ fn test_patient_record_index_lookup_efficiency() {
     }
 
     let start_budget = env.budget().cpu_instruction_cost();
-    let history = client
-        .get_history(&doctor, &patient, &0u32, &(count as u32));
+    let history = client.get_history(&doctor, &patient, &0u32, &(count as u32));
     let elapsed = env.budget().cpu_instruction_cost() - start_budget;
 
     assert_eq!(history.len(), count as u32);
