@@ -6,7 +6,7 @@ pub fn verify_groth16_proof(
     proof: ZkProof,
     public_inputs: BytesN<32>,
 ) -> Result<bool, ZkError> {
-    if proof.a.len() == 0 || proof.b.len() == 0 || proof.c.len() == 0 {
+    if proof.a.is_empty() || proof.b.is_empty() || proof.c.is_empty() {
         return Err(ZkError::InvalidProof);
     }
 

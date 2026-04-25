@@ -156,9 +156,9 @@ impl SentimentLexicon {
         for i in 0..len {
             let ch = text.get(i).unwrap_or(0);
 
-            if (ch >= 48 && ch <= 57)
-                || (ch >= 65 && ch <= 90)
-                || (ch >= 97 && ch <= 122)
+            if (48u32..=57).contains(&ch)
+                || (65u32..=90).contains(&ch)
+                || (97u32..=122).contains(&ch)
                 || ch == 39
             {
                 current_word.push_back(ch);
@@ -193,7 +193,7 @@ impl SentimentLexicon {
 
         for i in 0..len {
             let ch = s.get(i).unwrap_or(0);
-            if ch >= 65 && ch <= 90 {
+            if (65u32..=90).contains(&ch) {
                 lower_bytes.push_back(ch + 32);
             } else {
                 lower_bytes.push_back(ch);

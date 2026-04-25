@@ -47,16 +47,16 @@ fn test_process_clinical_note() {
     let nlp_result = result.unwrap();
 
     // Verify entities were extracted
-    assert!(nlp_result.entities.len() > 0);
+    assert!(!nlp_result.entities.is_empty());
 
     // Verify concepts were extracted
-    assert!(nlp_result.concepts.len() > 0);
+    assert!(!nlp_result.concepts.is_empty());
 
     // Verify sentiment was analyzed
     assert!(nlp_result.sentiment.is_some());
 
     // Verify coding suggestions were generated
-    assert!(nlp_result.coding_suggestions.len() > 0);
+    assert!(!nlp_result.coding_suggestions.is_empty());
 
     // Verify processing time is reasonable
     assert!(nlp_result.processing_time_ms < 2000);
@@ -87,7 +87,7 @@ fn test_extract_entities() {
     assert!(result.is_ok());
 
     let entities = result.unwrap();
-    assert!(entities.len() > 0);
+    assert!(!entities.is_empty());
 
     // Verify entity types
     let mut found_diagnosis = false;
@@ -172,12 +172,12 @@ fn test_generate_coding_suggestions() {
     assert!(result.is_ok());
 
     let suggestions = result.unwrap();
-    assert!(suggestions.len() > 0);
+    assert!(!suggestions.is_empty());
 
     // Verify suggestions have required fields
     for suggestion in suggestions.iter() {
-        assert!(suggestion.code.len() > 0);
-        assert!(suggestion.description.len() > 0);
+        assert!(!suggestion.code.is_empty());
+        assert!(!suggestion.description.is_empty());
         assert!(suggestion.confidence_bps > 0);
     }
 }

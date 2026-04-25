@@ -436,7 +436,7 @@ impl AuditForensicsContract {
                 .persistent()
                 .get::<DataKey, AuditEntry>(&DataKey::AuditEntry(i))
             {
-                if entry.timestamp >= start_time && entry.timestamp <= end_time {
+                if (start_time..=end_time).contains(&entry.timestamp) {
                     let count: u32 = report.get(entry.action).unwrap_or(0);
                     report.set(entry.action, count.saturating_add(1));
                 }

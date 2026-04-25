@@ -574,7 +574,7 @@ impl MedicalImagingContract {
 
         let mut in_segment = 0u32;
         for value in bins.iter() {
-            if value >= lower_bound && value <= upper_bound {
+            if (lower_bound..=upper_bound).contains(&value) {
                 in_segment = in_segment.saturating_add(1);
             }
         }

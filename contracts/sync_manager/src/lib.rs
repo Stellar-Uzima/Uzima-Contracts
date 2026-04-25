@@ -196,7 +196,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_region_ids.len() == 0 {
+        if target_region_ids.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -392,7 +392,7 @@ impl SyncManager {
             .get(&LAGS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if lags.len() == 0 {
+        if lags.is_empty() {
             return None;
         }
 
@@ -417,7 +417,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if conflicting_regions.len() == 0 {
+        if conflicting_regions.is_empty() {
             return Err(Error::InvalidInput);
         }
 

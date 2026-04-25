@@ -401,7 +401,7 @@ impl MultiRegionOrchestrator {
         Self::check_paused(&env)?;
         Self::require_operator(&env, &caller)?;
 
-        if target_region_ids.len() == 0 {
+        if target_region_ids.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -454,7 +454,7 @@ impl MultiRegionOrchestrator {
             .get(&REGIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if regions.len() == 0 {
+        if regions.is_empty() {
             return Err(Error::AllRegionsUnavailable);
         }
 
@@ -526,7 +526,7 @@ impl MultiRegionOrchestrator {
             .get(&UPTIME_METRICS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if metrics.len() == 0 {
+        if metrics.is_empty() {
             return 10000; // Default to 100%
         }
 

@@ -94,7 +94,7 @@ impl NLPEngine {
     ) -> Result<NLPResult, Error> {
         let start_time = env.ledger().timestamp();
 
-        if note_text.len() == 0 {
+        if note_text.is_empty() {
             return Err(Error::EmptyClinicalNote);
         }
 

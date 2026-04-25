@@ -314,7 +314,7 @@ impl EscrowContract {
         e.approvals = approvals;
 
         // Transition to Active if at least 1 approval exists (e.g., from payer)
-        if e.status == EscrowStatus::Pending && e.approvals.len() > 0 {
+        if !e.status == EscrowStatus::Pending && e.approvals.is_empty() {
             e.status = EscrowStatus::Active;
             update_stats(&env, 0, false, false, false, false, 1);
         }

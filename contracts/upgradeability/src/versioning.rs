@@ -224,7 +224,7 @@ mod tests {
     fn test_get_supported_versions() {
         let env = Env::default();
         let versions = get_supported_versions(&env);
-        assert!(versions.len() >= 1);
+        assert!(!versions.is_empty());
         // Must include current version
         let mut found = false;
         for i in 0..versions.len() {

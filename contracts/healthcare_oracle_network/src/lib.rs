@@ -265,7 +265,7 @@ impl HealthcareOracleNetwork {
         operator.require_auth();
         Self::require_initialized(&env)?;
 
-        if endpoint.len() == 0 {
+        if endpoint.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -328,7 +328,7 @@ impl HealthcareOracleNetwork {
         endpoint: String,
     ) -> Result<(), Error> {
         operator.require_auth();
-        if endpoint.len() == 0 {
+        if endpoint.is_empty() {
             return Err(Error::InvalidData);
         }
         let mut node = Self::read_oracle(&env, operator.clone())?;
@@ -399,7 +399,7 @@ impl HealthcareOracleNetwork {
         operator.require_auth();
         let cfg = Self::require_verified_oracle(&env, operator.clone())?;
 
-        if feed_id.len() == 0 || ndc_code.len() == 0 || currency.len() == 0 {
+        if feed_id.is_empty() || ndc_code.is_empty() || currency.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -435,7 +435,7 @@ impl HealthcareOracleNetwork {
         operator.require_auth();
         let cfg = Self::require_verified_oracle(&env, operator.clone())?;
 
-        if trial_id.len() == 0 || result_hash.len() == 0 {
+        if trial_id.is_empty() || result_hash.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -481,7 +481,7 @@ impl HealthcareOracleNetwork {
         operator.require_auth();
         let cfg = Self::require_verified_oracle(&env, operator.clone())?;
 
-        if regulation_id.len() == 0 || title.len() == 0 || details_hash.len() == 0 {
+        if regulation_id.is_empty() || title.is_empty() || details_hash.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -519,7 +519,7 @@ impl HealthcareOracleNetwork {
         operator.require_auth();
         let cfg = Self::require_verified_oracle(&env, operator.clone())?;
 
-        if outcome_id.len() == 0 || condition_code.len() == 0 || treatment_code.len() == 0 {
+        if outcome_id.is_empty() || condition_code.is_empty() || treatment_code.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -558,7 +558,7 @@ impl HealthcareOracleNetwork {
         feed_id: String,
     ) -> Result<ConsensusRecord, Error> {
         Self::require_initialized(&env)?;
-        if feed_id.len() == 0 {
+        if feed_id.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -577,7 +577,7 @@ impl HealthcareOracleNetwork {
         challenger.require_auth();
         Self::require_initialized(&env)?;
 
-        if reason.len() == 0 || feed_id.len() == 0 {
+        if reason.is_empty() || feed_id.is_empty() {
             return Err(Error::InvalidData);
         }
 
@@ -878,7 +878,7 @@ impl HealthcareOracleNetwork {
                     let w = weights.get(i).unwrap_or(1);
                     match payloads.get(i).unwrap() {
                         FeedPayload::DrugPrice(v) => {
-                            if ndc.len() == 0 {
+                            if ndc.is_empty() {
                                 ndc = v.ndc_code.clone();
                                 ccy = v.currency.clone();
                             }
@@ -984,7 +984,7 @@ impl HealthcareOracleNetwork {
                     let w = weights.get(i).unwrap_or(1);
                     match payloads.get(i).unwrap() {
                         FeedPayload::TreatmentOutcome(v) => {
-                            if condition_code.len() == 0 {
+                            if condition_code.is_empty() {
                                 condition_code = v.condition_code.clone();
                                 treatment_code = v.treatment_code.clone();
                             }

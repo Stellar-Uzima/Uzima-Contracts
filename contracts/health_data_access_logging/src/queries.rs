@@ -31,7 +31,7 @@ impl Queries {
         let mut filtered = Vec::with_capacity(env, logs.len());
 
         for log in logs.iter() {
-            if log.timestamp >= start_timestamp && log.timestamp <= end_timestamp {
+            if (start_timestamp..=end_timestamp).contains(&log.timestamp) {
                 filtered.push_back(log);
             }
         }

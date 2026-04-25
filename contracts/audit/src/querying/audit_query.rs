@@ -39,7 +39,7 @@ impl AuditQuery {
                 .persistent()
                 .get::<DataKey, AuditRecord>(&DataKey::Record(i))
             {
-                if record.timestamp >= start && record.timestamp <= end {
+                if (start..=end).contains(&record.timestamp) {
                     results.push_back(record);
                 }
             }

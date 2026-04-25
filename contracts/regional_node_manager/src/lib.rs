@@ -345,7 +345,7 @@ impl RegionalNodeManager {
             .get(&HEALTH_CHECKS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if checks.len() == 0 {
+        if checks.is_empty() {
             return None;
         }
 

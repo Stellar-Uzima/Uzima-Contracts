@@ -112,7 +112,7 @@ impl AuditTrail {
                 .persistent()
                 .get::<DataKey, AuditRecord>(&DataKey::Record(i))
             {
-                if record.timestamp >= start && record.timestamp <= end {
+                if (start..=end).contains(&record.timestamp) {
                     total += 1;
                     match record.audit_type {
                         AuditType::Event => events += 1,

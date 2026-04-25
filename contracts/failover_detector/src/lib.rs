@@ -297,7 +297,7 @@ impl FailoverDetector {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_nodes.len() == 0 {
+        if target_nodes.is_empty() {
             return Err(Error::NoAvailableTargets);
         }
 
