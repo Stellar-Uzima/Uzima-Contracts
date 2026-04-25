@@ -16,9 +16,9 @@ mod utils;
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 pub use types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute,
-    DisputeStatus, DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode,
-    RegulatoryAuthority, RegulatoryStatus, RegulatoryUpdateData, SourceType, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute, DisputeStatus,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryAuthority,
+    RegulatoryStatus, RegulatoryUpdateData, SourceType, TreatmentOutcomeData,
 };
 
 #[contract]

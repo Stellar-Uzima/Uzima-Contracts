@@ -79,7 +79,9 @@ pub fn get_config(env: Env) -> Option<PredictionConfig> {
 }
 
 pub fn get_model_metrics(env: Env, model_id: BytesN<32>) -> Option<PredictionMetrics> {
-    env.storage().instance().get(&DataKey::ModelMetrics(model_id))
+    env.storage()
+        .instance()
+        .get(&DataKey::ModelMetrics(model_id))
 }
 
 pub fn update_model_metrics(
@@ -100,7 +102,8 @@ pub fn update_model_metrics(
         .instance()
         .set(&DataKey::ModelMetrics(model_id.clone()), &metrics);
 
-    env.events().publish((symbol_short!("MdlMetric"),), model_id);
+    env.events()
+        .publish((symbol_short!("MdlMetric"),), model_id);
 
     Ok(true)
 }

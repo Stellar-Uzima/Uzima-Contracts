@@ -125,7 +125,7 @@ pub fn execute_upgrade<T: migration::Migratable>(
     new_version: u32,
     description: Symbol,
 ) -> Result<(), UpgradeError> {
-    execute_upgrade_with_deprecations(
+    execute_upgrade_with_deprecations::<T>(
         env,
         new_wasm_hash,
         new_version,
@@ -264,10 +264,8 @@ pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), Upgra
     let deprecation = get_deprecated_function(env, function.clone())
         .ok_or(UpgradeError::DeprecatedFunctionNotTracked)?;
 
-    env.events().publish(
-        (Symbol::new(env, "Deprecated"), function),
-        deprecation.note,
-    );
+    env.events()
+        .publish((Symbol::new(env, "Deprecated"), function), deprecation.note);
 
     Ok(())
 }

@@ -1,6 +1,8 @@
 use soroban_sdk::{symbol_short, Address, Env, String};
 
-use crate::types::{Config, ConsensusRecord, DataKey, Dispute, DisputeStatus, Error, FeedKey, FeedKind};
+use crate::types::{
+    Config, ConsensusRecord, DataKey, Dispute, DisputeStatus, Error, FeedKey, FeedKind,
+};
 use crate::utils;
 
 pub fn raise_dispute(
@@ -130,5 +132,7 @@ pub fn resolve_dispute(
 }
 
 pub fn get_dispute(env: Env, dispute_id: u64) -> Option<Dispute> {
-    env.storage().persistent().get(&DataKey::Dispute(dispute_id))
+    env.storage()
+        .persistent()
+        .get(&DataKey::Dispute(dispute_id))
 }
