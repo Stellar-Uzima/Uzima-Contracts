@@ -1,5 +1,6 @@
 #![no_std]
 
+pub mod events;
 pub mod queries;
 pub mod storage;
 pub mod types;
@@ -7,8 +8,9 @@ pub mod types;
 #[cfg(test)]
 mod test;
 
+use events::{emit_initialized, emit_role_assigned, emit_role_removed};
 use queries::Queries;
-use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
 use storage::Storage;
 use types::{DataKey, RBACConfig, Role, RoleAssignment};
 
@@ -37,8 +39,7 @@ impl RBAC {
         Storage::set_config(&env, &config);
         Storage::set_initialized(&env);
 
-        env.events()
-            .publish((symbol_short!("INIT"), symbol_short!("RBAC")), &admin);
+        emit_initialized(&env, admin);
     }
 
     /// Assign a role to an address (admin only)
@@ -65,24 +66,19 @@ impl RBAC {
         let success = Storage::add_role(&env, &address, role);
 
         if success {
-            // Save assignment record
-            let assignment = RoleAssignment {
-                address: address.clone(),
-                role,
-                assigned_at: env.ledger().timestamp(),
-                assigned_by: admin,
+            let role_str = match role {
+                Role::Admin => String::from_str(&env, "Admin"),
+                Role::Doctor => String::from_str(&env, "Doctor"),
+                Role::Patient => String::from_str(&env, "Patient"),
+                Role::Staff => String::from_str(&env, "Staff"),
+                Role::Insurer => String::from_str(&env, "Insurer"),
+                Role::Researcher => String::from_str(&env, "Researcher"),
+                Role::Auditor => String::from_str(&env, "Auditor"),
+                Role::Service => String::from_str(&env, "Service"),
             };
             Storage::save_assignment(&env, &assignment);
 
-            // Emit event
-            if let Some(config) = Storage::get_config(&env) {
-                if config.emit_events {
-                    env.events().publish(
-                        (symbol_short!("ROLE"), symbol_short!("ASSIGN")),
-                        (address, role),
-                    );
-                }
-            }
+            emit_role_assigned(&env, admin, address, role_str, success);
         }
 
         success
@@ -112,15 +108,17 @@ impl RBAC {
         let success = Storage::remove_role(&env, &address, role);
 
         if success {
-            // Emit event
-            if let Some(config) = Storage::get_config(&env) {
-                if config.emit_events {
-                    env.events().publish(
-                        (symbol_short!("ROLE"), symbol_short!("REMOVE")),
-                        (address, role),
-                    );
-                }
-            }
+            let role_str = match role {
+                Role::Admin => String::from_str(&env, "Admin"),
+                Role::Doctor => String::from_str(&env, "Doctor"),
+                Role::Patient => String::from_str(&env, "Patient"),
+                Role::Staff => String::from_str(&env, "Staff"),
+                Role::Insurer => String::from_str(&env, "Insurer"),
+                Role::Researcher => String::from_str(&env, "Researcher"),
+                Role::Auditor => String::from_str(&env, "Auditor"),
+                Role::Service => String::from_str(&env, "Service"),
+            };
+            emit_role_removed(&env, admin, address, role_str, success);
         }
 
         success
