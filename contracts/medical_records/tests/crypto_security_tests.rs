@@ -257,7 +257,7 @@ fn test_crypto_config_threshold_proposal_flow() {
     let early = t
         .client
         .try_execute_crypto_config_update(&t.admin1, &proposal_id);
-    assert_eq!(early, Err(Ok(Error::TimelockNotElasped)));
+    assert_eq!(early, Err(Ok(Error::TimelockNotElapsed)));
 
     // Fast forward past timelock.
     env.ledger()

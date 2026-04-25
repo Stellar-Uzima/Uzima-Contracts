@@ -2765,7 +2765,7 @@ impl MedicalRecordsContract {
 
         let now = env.ledger().timestamp();
         if now < proposal.created_at.saturating_add(TIMELOCK_SECS) {
-            return Err(Error::TimelockNotElasped);
+            return Err(Error::TimelockNotElapsed);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
@@ -4122,7 +4122,7 @@ impl MedicalRecordsContract {
                 Some(proposal_id),
                 "Recovery execution denied because timelock has not elapsed",
             );
-            return Err(Error::TimelockNotElasped);
+            return Err(Error::TimelockNotElapsed);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
