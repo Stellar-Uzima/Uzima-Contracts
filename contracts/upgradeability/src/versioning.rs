@@ -154,7 +154,12 @@ pub fn get_compatibility(env: &Env, client_version: u32) -> Option<bool> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::Env;
+    use soroban_sdk::{contract, contractimpl, Env};
+
+    #[contract]
+    struct DummyContract;
+    #[contractimpl]
+    impl DummyContract {}
 
     #[test]
     fn test_get_api_version_returns_current() {
@@ -165,8 +170,11 @@ mod tests {
     #[test]
     fn test_initialize_and_retrieve_stored_version() {
         let env = Env::default();
-        initialize_api_version(&env);
-        assert_eq!(get_stored_api_version(&env), API_VERSION);
+        let id = env.register_contract(None, DummyContract);
+        env.as_contract(&id, || {
+            initialize_api_version(&env);
+            assert_eq!(get_stored_api_version(&env), API_VERSION);
+        });
     }
 
     #[test]
@@ -231,9 +239,12 @@ mod tests {
     #[test]
     fn test_record_and_get_compatibility() {
         let env = Env::default();
-        record_compatibility(&env, 1, true);
-        assert_eq!(get_compatibility(&env, 1), Some(true));
-        record_compatibility(&env, 0, false);
-        assert_eq!(get_compatibility(&env, 0), Some(false));
+        let id = env.register_contract(None, DummyContract);
+        env.as_contract(&id, || {
+            record_compatibility(&env, 1, true);
+            assert_eq!(get_compatibility(&env, 1), Some(true));
+            record_compatibility(&env, 0, false);
+            assert_eq!(get_compatibility(&env, 0), Some(false));
+        });
     }
 }

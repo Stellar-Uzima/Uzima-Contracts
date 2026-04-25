@@ -40,10 +40,7 @@ impl Migratable for TestContract {
         Ok(BytesN::from_array(env, &bytes))
     }
 
-    fn validate(
-        env: &Env,
-        new_wasm_hash: &BytesN<32>,
-    ) -> Result<UpgradeValidation, UpgradeError> {
+    fn validate(env: &Env, new_wasm_hash: &BytesN<32>) -> Result<UpgradeValidation, UpgradeError> {
         let zero = BytesN::from_array(env, &[0u8; 32]);
         if *new_wasm_hash == zero {
             return Err(UpgradeError::InvalidWasmHash);
