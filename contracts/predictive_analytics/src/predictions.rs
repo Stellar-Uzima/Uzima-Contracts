@@ -90,11 +90,15 @@ pub fn make_prediction(
 }
 
 pub fn get_prediction(env: Env, prediction_id: u64) -> Option<HealthPrediction> {
-    env.storage().instance().get(&DataKey::Prediction(prediction_id))
+    env.storage()
+        .instance()
+        .get(&DataKey::Prediction(prediction_id))
 }
 
 pub fn get_patient_summary(env: Env, patient: Address) -> Option<PatientPredictionsSummary> {
-    env.storage().instance().get(&DataKey::PatientSummary(patient))
+    env.storage()
+        .instance()
+        .get(&DataKey::PatientSummary(patient))
 }
 
 pub fn has_high_risk_prediction(env: Env, patient: Address) -> bool {

@@ -2,8 +2,7 @@ use soroban_sdk::{Address, Env, String};
 
 use crate::types::{
     ClinicalTrialData, ConsensusRecord, DataKey, DrugPriceData, Error, FeedKey, FeedKind,
-    FeedPayload, RegulatoryAuthority, RegulatoryStatus, RegulatoryUpdateData,
-    TreatmentOutcomeData,
+    FeedPayload, RegulatoryAuthority, RegulatoryStatus, RegulatoryUpdateData, TreatmentOutcomeData,
 };
 use crate::utils;
 
@@ -39,7 +38,14 @@ pub fn submit_drug_price(
         observed_at,
     });
 
-    utils::submit_payload(env, operator, FeedKind::DrugPricing, feed_id, payload, config)
+    utils::submit_payload(
+        env,
+        operator,
+        FeedKind::DrugPricing,
+        feed_id,
+        payload,
+        config,
+    )
 }
 
 pub fn submit_clinical_trial(
@@ -80,7 +86,14 @@ pub fn submit_clinical_trial(
     });
 
     let feed_id = utils::payload_feed_id_from_trial(&payload);
-    utils::submit_payload(env, operator, FeedKind::ClinicalTrial, feed_id, payload, config)
+    utils::submit_payload(
+        env,
+        operator,
+        FeedKind::ClinicalTrial,
+        feed_id,
+        payload,
+        config,
+    )
 }
 
 pub fn submit_regulatory_update(

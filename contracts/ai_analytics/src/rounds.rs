@@ -70,7 +70,9 @@ pub fn submit_update(
     env.storage().instance().set(&key, &update);
 
     round.total_updates = round.total_updates.saturating_add(1);
-    env.storage().instance().set(&DataKey::Round(round_id), &round);
+    env.storage()
+        .instance()
+        .set(&DataKey::Round(round_id), &round);
 
     env.events()
         .publish((symbol_short!("UpdSubmit"),), (round_id, participant));
@@ -106,7 +108,9 @@ pub fn finalize_round(
 
     round.is_finalized = true;
     round.finalized_at = env.ledger().timestamp();
-    env.storage().instance().set(&DataKey::Round(round_id), &round);
+    env.storage()
+        .instance()
+        .set(&DataKey::Round(round_id), &round);
 
     let metadata = ModelMetadata {
         model_id: new_model_id.clone(),
