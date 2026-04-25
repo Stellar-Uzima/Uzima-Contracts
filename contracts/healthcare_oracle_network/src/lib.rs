@@ -16,9 +16,9 @@ mod utils;
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 pub use types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute,
-    DisputeStatus, DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode,
-    RegulatoryAuthority, RegulatoryStatus, RegulatoryUpdateData, SourceType, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute, DisputeStatus,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryAuthority,
+    RegulatoryStatus, RegulatoryUpdateData, SourceType, TreatmentOutcomeData,
 };
 
 #[contract]
@@ -54,7 +54,11 @@ impl HealthcareOracleNetwork {
         oracles::verify_oracle(env, admin, operator, verified, active)
     }
 
-    pub fn update_oracle_endpoint(env: Env, operator: Address, endpoint: String) -> Result<(), Error> {
+    pub fn update_oracle_endpoint(
+        env: Env,
+        operator: Address,
+        endpoint: String,
+    ) -> Result<(), Error> {
         oracles::update_oracle_endpoint(env, operator, endpoint)
     }
 

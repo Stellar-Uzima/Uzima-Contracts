@@ -150,7 +150,11 @@ pub fn finalize_round(env: Env, key: FeedKey, round_id: u64) -> Result<Consensus
                     .ok_or(Error::InvalidData)?;
                 submitters.push_back(oracle);
                 payloads.push_back(payload);
-                weights.push_back(if node.reputation > 0 { node.reputation } else { 1 });
+                weights.push_back(if node.reputation > 0 {
+                    node.reputation
+                } else {
+                    1
+                });
             }
         }
         i += 1;
@@ -231,8 +235,8 @@ pub fn aggregate_payload(
                             ndc_code = value.ndc_code.clone();
                             currency = value.currency.clone();
                         }
-                        price_weighted = price_weighted
-                            .saturating_add(value.price_minor.saturating_mul(weight));
+                        price_weighted =
+                            price_weighted.saturating_add(value.price_minor.saturating_mul(weight));
                         availability_weighted = availability_weighted.saturating_add(
                             (value.availability_units as i128).saturating_mul(weight),
                         );
@@ -406,12 +410,13 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
                     .saturating_sub(payload_data.price_minor)
             };
             let bps = diff.saturating_mul(10_000) / consensus_data.price_minor;
-            if bps <= 500 { 5 } else { -3 }
+            if bps <= 500 {
+                5
+            } else {
+                -3
+            }
         }
-        (
-            FeedPayload::ClinicalTrial(consensus_data),
-            FeedPayload::ClinicalTrial(payload_data),
-        ) => {
+        (FeedPayload::ClinicalTrial(consensus_data), FeedPayload::ClinicalTrial(payload_data)) => {
             let diff = if payload_data.success_rate_bps > consensus_data.success_rate_bps {
                 payload_data
                     .success_rate_bps
@@ -421,7 +426,11 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
                     .success_rate_bps
                     .saturating_sub(payload_data.success_rate_bps)
             };
-            if diff <= 700 { 4 } else { -2 }
+            if diff <= 700 {
+                4
+            } else {
+                -2
+            }
         }
         (
             FeedPayload::RegulatoryUpdate(consensus_data),
@@ -446,7 +455,11 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
                     .improvement_rate_bps
                     .saturating_sub(payload_data.improvement_rate_bps)
             };
-            if diff <= 700 { 4 } else { -2 }
+            if diff <= 700 {
+                4
+            } else {
+                -2
+            }
         }
         _ => -5,
     }

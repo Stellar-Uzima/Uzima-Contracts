@@ -24,18 +24,12 @@ fn test_federated_round_flow() {
     let update_hash1 = BytesN::from_array(&env, &[2u8; 32]);
     let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
-    assert!(client.mock_all_auths().submit_update(
-        &participant1,
-        &round_id,
-        &update_hash1,
-        &10u32
-    ));
-    assert!(client.mock_all_auths().submit_update(
-        &participant2,
-        &round_id,
-        &update_hash2,
-        &20u32
-    ));
+    assert!(client
+        .mock_all_auths()
+        .submit_update(&participant1, &round_id, &update_hash1, &10u32));
+    assert!(client
+        .mock_all_auths()
+        .submit_update(&participant2, &round_id, &update_hash2, &20u32));
 
     let new_model = BytesN::from_array(&env, &[4u8; 32]);
     assert!(client.mock_all_auths().finalize_round(

@@ -132,5 +132,7 @@ pub fn resolve_dispute(
 }
 
 pub fn get_dispute(env: Env, dispute_id: u64) -> Option<Dispute> {
-    env.storage().persistent().get(&DataKey::Dispute(dispute_id))
+    env.storage()
+        .persistent()
+        .get(&DataKey::Dispute(dispute_id))
 }

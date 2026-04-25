@@ -264,10 +264,8 @@ pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), Upgra
     let deprecation = get_deprecated_function(env, function.clone())
         .ok_or(UpgradeError::DeprecatedFunctionNotTracked)?;
 
-    env.events().publish(
-        (Symbol::new(env, "Deprecated"), function),
-        deprecation.note,
-    );
+    env.events()
+        .publish((Symbol::new(env, "Deprecated"), function), deprecation.note);
 
     Ok(())
 }
