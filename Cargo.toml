@@ -39,7 +39,6 @@ exclude = [
     "contracts/failover_detector",
     "contracts/healthcare_compliance_automation",
     "contracts/drug_discovery",
-    "contracts/upgradeability",
     "contracts/health_check",
 ]
 

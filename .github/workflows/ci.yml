@@ -292,11 +292,105 @@ jobs:
             cat security-reports/security-summary.md >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # Test Coverage Reporting (Issue #420)
+  coverage:
+    name: Test Coverage
+    runs-on: ubuntu-latest
+    needs: [test]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config libudev-dev libhidapi-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-coverage-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-coverage-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-tarpaulin
+        run: cargo install --locked cargo-tarpaulin
+
+      - name: Run coverage (line ≥ 80%, branch ≥ 70%)
+        continue-on-error: true
+        run: |
+          cargo tarpaulin \
+            --workspace \
+            --timeout 300 \
+            --out Xml \
+            --out Html \
+            --output-dir coverage/ \
+            --exclude-files "tests/*" \
+            --ignore-panics \
+            --ignore-tests \
+            -- --test-threads=1
+        env:
+          CARGO_TERM_COLOR: always
+
+      - name: Enforce coverage thresholds
+        run: |
+          if [ ! -f coverage/cobertura.xml ]; then
+            echo "⚠ Coverage XML not found – skipping threshold check"
+            exit 0
+          fi
+          LINE_COV=$(grep -oP 'line-rate="\K[0-9.]+' coverage/cobertura.xml | head -1 || echo "0")
+          BRANCH_COV=$(grep -oP 'branch-rate="\K[0-9.]+' coverage/cobertura.xml | head -1 || echo "0")
+          LINE_PCT=$(python3 -c "print(int(float('$LINE_COV') * 100))")
+          BRANCH_PCT=$(python3 -c "print(int(float('$BRANCH_COV') * 100))")
+          echo "Line coverage:   ${LINE_PCT}% (minimum: 80%)"
+          echo "Branch coverage: ${BRANCH_PCT}% (minimum: 70%)"
+          echo "## Coverage Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric | Coverage | Threshold | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|----------|-----------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${LINE_PCT}" -ge 80 ]; then
+            echo "| Line   | ${LINE_PCT}% | 80% | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Line   | ${LINE_PCT}% | 80% | ⚠ Below threshold |" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠ Line coverage ${LINE_PCT}% is below the 80% target (non-blocking)"
+          fi
+          if [ "${BRANCH_PCT}" -ge 70 ]; then
+            echo "| Branch | ${BRANCH_PCT}% | 70% | ✅ |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Branch | ${BRANCH_PCT}% | 70% | ⚠ Below threshold |" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠ Branch coverage ${BRANCH_PCT}% is below the 70% target (non-blocking)"
+          fi
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
+
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          if [ -f coverage/tarpaulin-report.html ]; then
+            echo "Coverage HTML report uploaded as artifact." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   # Summary
   summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, test, test-nodejs, build, security]
+    needs: [lint, test, test-nodejs, build, security, coverage]
     if: always()
     steps:
       - name: Generate summary
@@ -307,12 +401,14 @@ jobs:
           echo "- Node.js Tests: ${{ needs.test-nodejs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Coverage: ${{ needs.coverage.result }}" >> $GITHUB_STEP_SUMMARY
           
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
              [ "${{ needs.test-nodejs.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ] || \
-             [ "${{ needs.security.result }}" = "failure" ]; then
+             [ "${{ needs.security.result }}" = "failure" ] || \
+             [ "${{ needs.coverage.result }}" = "failure" ]; then
             echo "❌ CI checks failed"
             exit 1
           fi

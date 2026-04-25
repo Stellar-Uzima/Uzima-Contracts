@@ -3,7 +3,13 @@
 use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 pub mod migration;
+pub mod versioning;
 pub use migration::UpgradeValidation;
+pub use versioning::{
+    get_api_version, get_supported_versions, is_version_supported, negotiate_version,
+    CompatibilityStatus, SemanticVersion, VersionNegotiation, API_VERSION,
+    MIN_SUPPORTED_API_VERSION,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]

@@ -1,10 +1,16 @@
 [package]
 name = "upgradeability"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-soroban-sdk = { version = "21.7.7" }
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
