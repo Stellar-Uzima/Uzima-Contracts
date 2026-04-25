@@ -2,11 +2,11 @@
 resolver = "2"
 members = [
     "contracts/*",
+    "tests",
 ]
 exclude = [
     "contracts/credential_notifications",
     "contracts/medical_imaging",
-    "contracts/medical_records",
     "contracts/healthcare_compliance",
     "contracts/medical_record_hash_registry",
     "contracts/appointment_booking_escrow",
@@ -39,7 +39,6 @@ exclude = [
     "contracts/failover_detector",
     "contracts/healthcare_compliance_automation",
     "contracts/drug_discovery",
-    "contracts/upgradeability",
     "contracts/health_check",
 ]
 
