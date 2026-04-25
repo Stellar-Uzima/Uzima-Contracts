@@ -6,6 +6,8 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 pub enum Error {
     // --- Access Control (100–199) ---
     Unauthorized = 100,
+    UnauthorizedCaller = 101,
+    NotAuthorizedPauser = 102,
 
     // --- Input Validation (200–299) ---
     InvalidAmount = 205,
@@ -17,7 +19,9 @@ pub enum Error {
     NotInitialized = 300,
     AlreadyInitialized = 301,
     ContractPaused = 302,
+    CircuitOpen = 303,
     InvalidStatus = 304,
+    AlreadyInState = 305,
     DeadlineExceeded = 306,
 
     // --- Entity Existence (400–499) ---
