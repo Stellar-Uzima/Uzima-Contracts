@@ -94,3 +94,5 @@ soroban
 deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
+contracts/contract_behavior_fuzzing/test_snapshots/
+contracts/contract_behavior_fuzzing/tests/*.proptest-regressions
