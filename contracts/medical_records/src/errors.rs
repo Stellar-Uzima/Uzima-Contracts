@@ -7,7 +7,7 @@ pub enum Error {
     // --- System & State Errors (1-9) ---
     ContractPaused = 1,
     ProposalAlreadyExecuted = 6,
-    TimelockNotElasped = 7,
+    TimelockNotElapsed = 7,
     NotEnoughApproval = 8,
     NotInitialized = 48,
     CryptoRegistryNotSet = 49,
