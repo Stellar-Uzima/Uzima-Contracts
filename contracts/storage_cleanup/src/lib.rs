@@ -1,13 +1,15 @@
 #![no_std]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec,
+};
 
 // ── Retention periods (seconds) ──────────────────────────────────────────────
-const CREDENTIAL_RETENTION: u64 = 365 * 24 * 3600;   // 1 year
-const AUDIT_LOG_RETENTION: u64  = 7 * 365 * 24 * 3600; // 7 years
-const ESCROW_RETENTION: u64     = 90 * 24 * 3600;    // 90 days after settlement
-const CONSENT_RETENTION: u64    = 2 * 365 * 24 * 3600; // 2 years after revocation
-const SCHEDULE_RETENTION: u64   = 30 * 24 * 3600;    // 30 days past end date
+const CREDENTIAL_RETENTION: u64 = 365 * 24 * 3600; // 1 year
+const AUDIT_LOG_RETENTION: u64 = 7 * 365 * 24 * 3600; // 7 years
+const ESCROW_RETENTION: u64 = 90 * 24 * 3600; // 90 days after settlement
+const CONSENT_RETENTION: u64 = 2 * 365 * 24 * 3600; // 2 years after revocation
+const SCHEDULE_RETENTION: u64 = 30 * 24 * 3600; // 30 days past end date
 
 // Safety margin: never delete items newer than this (seconds)
 const SAFETY_MARGIN: u64 = 24 * 3600; // 1 day
@@ -91,53 +93,86 @@ impl StorageCleanup {
         Ok(())
     }
 
-    pub fn set_retention_config(env: Env, caller: Address, config: RetentionConfig) -> Result<(), Error> {
+    pub fn set_retention_config(
+        env: Env,
+        caller: Address,
+        config: RetentionConfig,
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
-        env.storage().instance().set(&DataKey::RetentionConfig, &config);
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionConfig, &config);
         Ok(())
     }
 
     // ── Registration helpers (called by other contracts or admin) ─────────────
 
     pub fn register_credential(env: Env, id: u64, expires_at: u64) {
-        let mut ids: Vec<u64> = env.storage().persistent()
-            .get(&DataKey::CredentialIds).unwrap_or(Vec::new(&env));
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CredentialIds)
+            .unwrap_or(Vec::new(&env));
         ids.push_back(id);
-        env.storage().persistent().set(&DataKey::CredentialIds, &ids);
-        env.storage().persistent().set(&DataKey::CredentialExpiry(id), &expires_at);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CredentialIds, &ids);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CredentialExpiry(id), &expires_at);
     }
 
     pub fn register_audit_log(env: Env, id: u64, logged_at: u64) {
-        let mut ids: Vec<u64> = env.storage().persistent()
-            .get(&DataKey::AuditLogIds).unwrap_or(Vec::new(&env));
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuditLogIds)
+            .unwrap_or(Vec::new(&env));
         ids.push_back(id);
         env.storage().persistent().set(&DataKey::AuditLogIds, &ids);
-        env.storage().persistent().set(&DataKey::AuditLogExpiry(id), &logged_at);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditLogExpiry(id), &logged_at);
     }
 
     pub fn register_escrow(env: Env, id: u64, settled_at: u64) {
-        let mut ids: Vec<u64> = env.storage().persistent()
-            .get(&DataKey::EscrowIds).unwrap_or(Vec::new(&env));
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EscrowIds)
+            .unwrap_or(Vec::new(&env));
         ids.push_back(id);
         env.storage().persistent().set(&DataKey::EscrowIds, &ids);
-        env.storage().persistent().set(&DataKey::EscrowSettledAt(id), &settled_at);
+        env.storage()
+            .persistent()
+            .set(&DataKey::EscrowSettledAt(id), &settled_at);
     }
 
     pub fn register_consent(env: Env, id: u64, revoked_at: u64) {
-        let mut ids: Vec<u64> = env.storage().persistent()
-            .get(&DataKey::ConsentIds).unwrap_or(Vec::new(&env));
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ConsentIds)
+            .unwrap_or(Vec::new(&env));
         ids.push_back(id);
         env.storage().persistent().set(&DataKey::ConsentIds, &ids);
-        env.storage().persistent().set(&DataKey::ConsentRevokedAt(id), &revoked_at);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentRevokedAt(id), &revoked_at);
     }
 
     pub fn register_schedule(env: Env, id: u64, end_at: u64) {
-        let mut ids: Vec<u64> = env.storage().persistent()
-            .get(&DataKey::ScheduleIds).unwrap_or(Vec::new(&env));
+        let mut ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ScheduleIds)
+            .unwrap_or(Vec::new(&env));
         ids.push_back(id);
         env.storage().persistent().set(&DataKey::ScheduleIds, &ids);
-        env.storage().persistent().set(&DataKey::ScheduleEndAt(id), &end_at);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ScheduleEndAt(id), &end_at);
     }
 
     // ── Core cleanup ──────────────────────────────────────────────────────────
@@ -182,29 +217,69 @@ impl StorageCleanup {
         let per_cat = (max_items / 5).max(1);
 
         let c = Self::count_expired_in_list(
-            &env, &DataKey::CredentialIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::CredentialExpiry(id)).unwrap_or(0),
-            cfg.credential_secs, now, per_cat,
+            &env,
+            &DataKey::CredentialIds,
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::CredentialExpiry(id))
+                    .unwrap_or(0)
+            },
+            cfg.credential_secs,
+            now,
+            per_cat,
         );
         let a = Self::count_expired_in_list(
-            &env, &DataKey::AuditLogIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::AuditLogExpiry(id)).unwrap_or(0),
-            cfg.audit_log_secs, now, per_cat,
+            &env,
+            &DataKey::AuditLogIds,
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::AuditLogExpiry(id))
+                    .unwrap_or(0)
+            },
+            cfg.audit_log_secs,
+            now,
+            per_cat,
         );
         let e = Self::count_expired_in_list(
-            &env, &DataKey::EscrowIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::EscrowSettledAt(id)).unwrap_or(0),
-            cfg.escrow_secs, now, per_cat,
+            &env,
+            &DataKey::EscrowIds,
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::EscrowSettledAt(id))
+                    .unwrap_or(0)
+            },
+            cfg.escrow_secs,
+            now,
+            per_cat,
         );
         let co = Self::count_expired_in_list(
-            &env, &DataKey::ConsentIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::ConsentRevokedAt(id)).unwrap_or(0),
-            cfg.consent_secs, now, per_cat,
+            &env,
+            &DataKey::ConsentIds,
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::ConsentRevokedAt(id))
+                    .unwrap_or(0)
+            },
+            cfg.consent_secs,
+            now,
+            per_cat,
         );
         let s = Self::count_expired_in_list(
-            &env, &DataKey::ScheduleIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::ScheduleEndAt(id)).unwrap_or(0),
-            cfg.schedule_secs, now, per_cat,
+            &env,
+            &DataKey::ScheduleIds,
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::ScheduleEndAt(id))
+                    .unwrap_or(0)
+            },
+            cfg.schedule_secs,
+            now,
+            per_cat,
         );
 
         Ok(c + a + e + co + s)
@@ -260,13 +335,17 @@ impl StorageCleanup {
     // ── Queries ───────────────────────────────────────────────────────────────
 
     pub fn get_cleanup_log(env: Env) -> Vec<CleanupEntry> {
-        env.storage().persistent()
+        env.storage()
+            .persistent()
             .get(&DataKey::CleanupLog)
             .unwrap_or(Vec::new(&env))
     }
 
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 }
 
@@ -278,8 +357,17 @@ impl StorageCleanup {
         Self::remove_expired(
             env,
             &DataKey::CredentialIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::CredentialExpiry(id)).unwrap_or(0),
-            |id| { env.storage().persistent().remove(&DataKey::CredentialExpiry(id)); },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::CredentialExpiry(id))
+                    .unwrap_or(0)
+            },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::CredentialExpiry(id));
+            },
             cfg.credential_secs,
             max_items,
         )
@@ -290,8 +378,17 @@ impl StorageCleanup {
         Self::remove_expired(
             env,
             &DataKey::AuditLogIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::AuditLogExpiry(id)).unwrap_or(0),
-            |id| { env.storage().persistent().remove(&DataKey::AuditLogExpiry(id)); },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::AuditLogExpiry(id))
+                    .unwrap_or(0)
+            },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::AuditLogExpiry(id));
+            },
             cfg.audit_log_secs,
             max_items,
         )
@@ -302,8 +399,17 @@ impl StorageCleanup {
         Self::remove_expired(
             env,
             &DataKey::EscrowIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::EscrowSettledAt(id)).unwrap_or(0),
-            |id| { env.storage().persistent().remove(&DataKey::EscrowSettledAt(id)); },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::EscrowSettledAt(id))
+                    .unwrap_or(0)
+            },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::EscrowSettledAt(id));
+            },
             cfg.escrow_secs,
             max_items,
         )
@@ -314,8 +420,17 @@ impl StorageCleanup {
         Self::remove_expired(
             env,
             &DataKey::ConsentIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::ConsentRevokedAt(id)).unwrap_or(0),
-            |id| { env.storage().persistent().remove(&DataKey::ConsentRevokedAt(id)); },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::ConsentRevokedAt(id))
+                    .unwrap_or(0)
+            },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::ConsentRevokedAt(id));
+            },
             cfg.consent_secs,
             max_items,
         )
@@ -326,8 +441,17 @@ impl StorageCleanup {
         Self::remove_expired(
             env,
             &DataKey::ScheduleIds,
-            |id| env.storage().persistent().get::<_, u64>(&DataKey::ScheduleEndAt(id)).unwrap_or(0),
-            |id| { env.storage().persistent().remove(&DataKey::ScheduleEndAt(id)); },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::ScheduleEndAt(id))
+                    .unwrap_or(0)
+            },
+            |id| {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::ScheduleEndAt(id));
+            },
             cfg.schedule_secs,
             max_items,
         )
@@ -349,8 +473,11 @@ impl StorageCleanup {
         let now = env.ledger().timestamp();
         let cutoff = now.saturating_sub(retention).saturating_sub(SAFETY_MARGIN);
 
-        let ids: Vec<u64> = env.storage().persistent()
-            .get(list_key).unwrap_or(Vec::new(env));
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(list_key)
+            .unwrap_or(Vec::new(env));
 
         let mut kept = Vec::new(env);
         let mut cleaned = 0u32;
@@ -385,11 +512,16 @@ impl StorageCleanup {
         FGet: Fn(u64) -> u64,
     {
         let cutoff = now.saturating_sub(retention).saturating_sub(SAFETY_MARGIN);
-        let ids: Vec<u64> = env.storage().persistent()
-            .get(list_key).unwrap_or(Vec::new(env));
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(list_key)
+            .unwrap_or(Vec::new(env));
         let mut count = 0u32;
         for id in ids.iter() {
-            if count >= max_items { break; }
+            if count >= max_items {
+                break;
+            }
             let ts = get_ts(id);
             if ts > 0 && ts < cutoff {
                 count += 1;
@@ -399,28 +531,34 @@ impl StorageCleanup {
     }
 
     fn record_cleanup(env: &Env, caller: &Address, category: u32, count: u32) {
-        if count == 0 { return; }
+        if count == 0 {
+            return;
+        }
         let entry = CleanupEntry {
             timestamp: env.ledger().timestamp(),
             caller: caller.clone(),
             category,
             count,
         };
-        let mut log: Vec<CleanupEntry> = env.storage().persistent()
-            .get(&DataKey::CleanupLog).unwrap_or(Vec::new(env));
+        let mut log: Vec<CleanupEntry> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CleanupLog)
+            .unwrap_or(Vec::new(env));
         log.push_back(entry);
         env.storage().persistent().set(&DataKey::CleanupLog, &log);
     }
 
     fn get_config(env: &Env) -> RetentionConfig {
-        env.storage().instance()
+        env.storage()
+            .instance()
             .get(&DataKey::RetentionConfig)
             .unwrap_or(RetentionConfig {
                 credential_secs: CREDENTIAL_RETENTION,
-                audit_log_secs:  AUDIT_LOG_RETENTION,
-                escrow_secs:     ESCROW_RETENTION,
-                consent_secs:    CONSENT_RETENTION,
-                schedule_secs:   SCHEDULE_RETENTION,
+                audit_log_secs: AUDIT_LOG_RETENTION,
+                escrow_secs: ESCROW_RETENTION,
+                consent_secs: CONSENT_RETENTION,
+                schedule_secs: SCHEDULE_RETENTION,
             })
     }
 
@@ -433,13 +571,25 @@ impl StorageCleanup {
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance()
-            .get(&DataKey::Admin).ok_or(Error::NotInitialized)?;
-        if admin == *caller { Ok(()) } else { Err(Error::NotAuthorized) }
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin == *caller {
+            Ok(())
+        } else {
+            Err(Error::NotAuthorized)
+        }
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
             Err(Error::Paused)
         } else {
             Ok(())
@@ -450,17 +600,24 @@ impl StorageCleanup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Env};
 
     fn setup() -> (Env, Address, Address) {
         let env = Env::default();
         env.mock_all_auths();
+        // Set ledger time well past all retention periods so ts=1 items are expired.
+        // Longest retention is AUDIT_LOG_RETENTION (7 years) + SAFETY_MARGIN (1 day).
+        env.ledger().set_timestamp(10 * 365 * 24 * 3600); // 10 years
         let admin = Address::generate(&env);
         let contract_id = env.register_contract(None, StorageCleanup);
         (env, admin, contract_id)
     }
 
-    fn init(env: &Env, admin: &Address, contract_id: &Address) -> StorageCleanupClient {
+    fn init<'a>(
+        env: &'a Env,
+        admin: &Address,
+        contract_id: &'a Address,
+    ) -> StorageCleanupClient<'a> {
         let client = StorageCleanupClient::new(env, contract_id);
         client.initialize(admin);
         client
@@ -479,7 +636,10 @@ mod tests {
     fn test_double_initialize_fails() {
         let (env, admin, contract_id) = setup();
         let client = init(&env, &admin, &contract_id);
-        assert_eq!(client.try_initialize(&admin), Err(Ok(Error::AlreadyInitialized)));
+        assert_eq!(
+            client.try_initialize(&admin),
+            Err(Ok(Error::AlreadyInitialized))
+        );
     }
 
     #[test]
@@ -509,12 +669,30 @@ mod tests {
         let (env, admin, contract_id) = setup();
         let client = init(&env, &admin, &contract_id);
         client.set_paused(&admin, &true);
-        assert_eq!(client.try_cleanup_expired(&admin, &10u32),     Err(Ok(Error::Paused)));
-        assert_eq!(client.try_cleanup_credentials(&admin, &10u32), Err(Ok(Error::Paused)));
-        assert_eq!(client.try_cleanup_audit_logs(&admin, &10u32),  Err(Ok(Error::Paused)));
-        assert_eq!(client.try_cleanup_escrows(&admin, &10u32),     Err(Ok(Error::Paused)));
-        assert_eq!(client.try_cleanup_consents(&admin, &10u32),    Err(Ok(Error::Paused)));
-        assert_eq!(client.try_cleanup_schedules(&admin, &10u32),   Err(Ok(Error::Paused)));
+        assert_eq!(
+            client.try_cleanup_expired(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
+        assert_eq!(
+            client.try_cleanup_credentials(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
+        assert_eq!(
+            client.try_cleanup_audit_logs(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
+        assert_eq!(
+            client.try_cleanup_escrows(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
+        assert_eq!(
+            client.try_cleanup_consents(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
+        assert_eq!(
+            client.try_cleanup_schedules(&admin, &10u32),
+            Err(Ok(Error::Paused))
+        );
     }
 
     // ── Batch limits ──────────────────────────────────────────────────────────
