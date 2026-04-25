@@ -5,7 +5,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, Bytes, BytesN, Env, Vec};
 use upgradeability::{
     migration::{Migratable, UpgradeValidation},
     storage, UpgradeError, UpgradeHistory,
@@ -79,11 +79,12 @@ fn setup_env() -> (Env, Address, Address) {
     (env, admin, contract_id)
 }
 
-fn make_wasm_hash(env: &Env, seed: u8) -> BytesN<32> {
-    let mut bytes = [0u8; 32];
-    bytes[0] = seed;
-    bytes[31] = seed;
-    BytesN::from_array(env, &bytes)
+fn make_wasm_hash(env: &Env, _seed: u8) -> BytesN<32> {
+    // Upload a minimal valid WASM module so update_current_contract_wasm succeeds.
+    // The 8-byte magic+version header is the smallest valid WASM binary.
+    let minimal_wasm: &[u8] = &[0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
+    env.deployer()
+        .upload_contract_wasm(soroban_sdk::Bytes::from_slice(env, minimal_wasm))
 }
 
 // ---------------------------------------------------------------------------

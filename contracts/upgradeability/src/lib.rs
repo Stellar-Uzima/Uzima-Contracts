@@ -134,7 +134,6 @@ pub fn execute_upgrade<T: migration::Migratable>(
     );
 
     storage::set_version(env, new_version);
-    #[cfg(not(test))]
     env.deployer().update_current_contract_wasm(new_wasm_hash);
 
     Ok(())
@@ -186,7 +185,6 @@ pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
         .checked_add(1)
         .ok_or(UpgradeError::IncompatibleVersion)?;
     storage::set_version(env, next_version);
-    #[cfg(not(test))]
     env.deployer()
         .update_current_contract_wasm(target_version.wasm_hash);
 
