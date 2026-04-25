@@ -619,6 +619,7 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 ### Documentation
 - [API Reference](./docs/api.md) - Complete contract API documentation
 - [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Contract Resource Limits](./docs/CONTRACT_RESOURCE_LIMITS.md) - Storage, execution, and batch constraints for all contracts
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
 - [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem
 
