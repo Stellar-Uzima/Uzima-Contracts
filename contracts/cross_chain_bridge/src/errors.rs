@@ -46,6 +46,13 @@ pub enum Error {
     ChainNotSupported = 720,
     OracleNotFound = 721,
     OracleNotActive = 722,
+
+    // --- Timeout / Operation (800–899) ---
+    OperationNotFound = 800,
+    OperationExpired = 801,
+    OperationAlreadyCompleted = 802,
+    MaxExtensionsReached = 803,
+    RefundFailed = 804,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {

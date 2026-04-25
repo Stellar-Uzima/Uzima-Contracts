@@ -5,6 +5,16 @@ This document provides a comprehensive index of all visual documentation diagram
 
 ## Available Diagrams
 
+### 0. [Contract Interaction Diagrams](./CONTRACT_INTERACTIONS.md)
+**Purpose**: Contract-to-contract interaction diagrams (data flow, call sequences, state machines, permission inheritance, and message flow).
+
+**Key Features**:
+- Focused on on-chain contract wiring rather than UI/system overview
+- Cross-contract call and dependency visualization
+- Standard patterns for consent gating, audit logging, governance execution, and ZK gating
+
+---
+
 ### 1. [System Architecture Overview](./SYSTEM_ARCHITECTURE.md)
 **Purpose**: High-level system architecture showing all major components and their interactions.
 

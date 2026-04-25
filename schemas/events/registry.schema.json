@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stellar-uzima.dev/schemas/events/registry.schema.json",
+  "title": "Uzima Contracts Event Schema Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["registry_version", "generated_at", "generator", "contracts"],
+  "properties": {
+    "registry_version": {
+      "description": "Semver of the registry format (not contract versioning).",
+      "type": "string",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+    },
+    "generated_at": { "type": "string" },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "source_glob"],
+      "properties": {
+        "name": { "type": "string" },
+        "source_glob": { "type": "string" }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "events"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z0-9_\\-]+$" },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "contract",
+                "topics",
+                "payload",
+                "source"
+              ],
+              "properties": {
+                "id": { "type": "string" },
+                "contract": { "type": "string" },
+                "topics": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 8,
+                  "items": { "type": "string", "minLength": 1 }
+                },
+                "payload": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["shape", "arity"],
+                  "properties": {
+                    "shape": { "type": "string", "enum": ["single", "tuple", "unknown"] },
+                    "arity": { "type": "integer", "minimum": 0 }
+                  }
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["file", "line"],
+                  "properties": {
+                    "file": { "type": "string" },
+                    "line": { "type": "integer", "minimum": 1 }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

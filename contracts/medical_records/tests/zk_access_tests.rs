@@ -94,6 +94,8 @@ fn setup_zk_gate<'a>(
         &issuer,
         &credential_root,
         &BytesN::from_array(env, &[0x11; 32]),
+        &2_000_000_000u64,
+        &BytesN::from_array(env, &[0xAA; 64]),
     );
 
     let vk_version = zk_verifier.register_verifying_key(
