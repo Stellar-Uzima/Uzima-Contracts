@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contracts/*",
+    "tests/interoperability_suite",
 ]
 
 [workspace.package]
