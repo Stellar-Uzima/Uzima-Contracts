@@ -1,5 +1,5 @@
 /// Test fixtures for different user roles and scenarios
-use soroban_sdk::{Address, Env, String as SorobanString};
+use soroban_sdk::{Address, Env};
 
 /// User role fixture
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -252,13 +252,7 @@ mod tests {
     fn test_user_fixture_creation() {
         let env = soroban_sdk::Env::default();
         let addr = Address::generate(&env);
-        let user = UserFixture::new(
-            &env,
-            addr.clone(),
-            UserRole::Doctor,
-            "Test",
-            "test@test.com",
-        );
+        let user = UserFixture::new(&env, addr.clone(), UserRole::Doctor, "Test", "test@test.com");
         assert_eq!(user.role, UserRole::Doctor);
         assert!(!user.verified);
     }
@@ -267,14 +261,7 @@ mod tests {
     fn test_user_fixture_verified() {
         let env = soroban_sdk::Env::default();
         let addr = Address::generate(&env);
-        let user = UserFixture::new(
-            &env,
-            addr,
-            UserRole::Patient,
-            "Test",
-            "test@test.com",
-        )
-        .verified();
+        let user = UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
         assert!(user.verified);
     }
 

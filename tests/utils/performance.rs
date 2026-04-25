@@ -201,7 +201,7 @@ impl MemoryTracker {
 
     /// Calculate memory delta
     pub fn delta(&self) -> Option<usize> {
-        self.initial.map(|initial| {
+        self.initial.map(|_initial| {
             // Simplified: return a placeholder value
             0
         })
