@@ -142,6 +142,57 @@ pub fn emit_<action>(
 }
 ```
 
+## Log Retention Policies
+
+### Retention Periods by Category
+
+| Category | Retention Period | Rationale |
+|----------|-----------------|-----------|
+| Administrative | 7 years | Audit compliance, regulatory requirements |
+| AccessControl | 7 years | HIPAA compliance for healthcare |
+| EmergencyAccess | 7 years | Emergency access audit trail |
+| RecordOperations | 5 years | Medical record retention |
+| UserManagement | 5 years | User lifecycle tracking |
+| System | 1 year | Operational metrics |
+| AIIntegration | 3 years | Model performance tracking |
+| CrossChain | 3 years | Cross-chain reconciliation |
+| DataQuality | 3 years | Quality assurance |
+
+### Implementation
+
+Event retention is managed through:
+1. **Event indexing**: Store events with timestamp for time-based queries
+2. **Filtering by age**: Use `filter_events` with time range
+3. **Archival policy**: Offload old events to long-term storage
+
+### Query Pattern for Retention
+
+```rust
+fn get_retainable_events(
+    events: &Vec<BaseEvent>,
+    max_age_seconds: u64,
+    current_time: u64,
+) -> Vec<BaseEvent> {
+    let cutoff = current_time.saturating_sub(max_age_seconds);
+    let filter = EventFilter {
+        event_types: None,
+        categories: None,
+        user_id: None,
+        start_time: Some(cutoff),
+        end_time: None,
+        limit: None,
+    };
+    filter_events(events, &filter)
+}
+```
+
+### Off-Chain Retention
+
+Off-chain systems should:
+- Export events older than retention period to cold storage
+- Maintain searchable index for compliance queries
+- Implement data minimization (remove non-essential fields after X years)
+
 ## Log Aggregation Configuration
 
 ### Event Collection
@@ -166,6 +217,67 @@ The MonitoringDashboard structure supports:
 ```rust
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent>
 pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats
+```
+
+### Aggregation Scripts
+
+Off-chain log aggregation can be configured using the provided scripts:
+
+```bash
+# Aggregate events by type
+cargo run --bin aggregate-events -- --type user_management
+
+# Generate compliance report
+cargo run --bin compliance-report -- --start-date 2026-01-01 --end-date 2026-04-25
+```
+
+## Example Contract Implementation
+
+The RBAC contract (`contracts/rbac/`) demonstrates the standardized logging pattern:
+
+```rust
+// events.rs - Define event types and emit functions
+pub mod events {
+    use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
+    
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[contracttype]
+    pub enum EventType {
+        Initialized,
+        RoleAssigned,
+        RoleRemoved,
+    }
+    
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    #[contracttype]
+    pub enum OperationCategory {
+        UserManagement,
+        Administrative,
+    }
+    
+    // Standardized event structure with all required metadata
+    pub struct RBACEvent {
+        pub event_type: EventType,
+        pub category: OperationCategory,
+        pub timestamp: u64,
+        pub user_id: Address,
+        pub block_height: u64,
+        pub data: RBACEventData,
+    }
+    
+    // Emit functions follow naming convention: emit_<action>
+    pub fn emit_role_assigned(env: &Env, admin: Address, target: Address, role: String, success: bool) {
+        let event = RBACEvent {
+            event_type: EventType::RoleAssigned,
+            category: OperationCategory::UserManagement,
+            timestamp: env.ledger().timestamp(),
+            user_id: admin,
+            block_height: env.ledger().sequence() as u64,
+            data: RBACEventData { target_address: target, role: Some(role), success },
+        };
+        env.events().publish(("EVENT", symbol_short!("ROLE_ADD")), event);
+    }
+}
 ```
 
 ## Implementation Requirements
