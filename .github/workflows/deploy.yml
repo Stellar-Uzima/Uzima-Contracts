@@ -40,6 +40,7 @@ jobs:
   validate:
     name: Validate Deployment
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Determine network
         id: network
@@ -68,8 +69,9 @@ jobs:
   pre-deploy-tests:
     name: Pre-deployment Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [validate]
-    if: ${{ !inputs.skip_tests }}
+    if: github.event_name != 'workflow_dispatch' || (github.event_name == 'workflow_dispatch' && inputs.skip_tests != true)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -100,6 +102,7 @@ jobs:
   build:
     name: Build Contracts
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     needs: [validate, pre-deploy-tests]
     if: always() && (needs.pre-deploy-tests.result == 'success' || needs.pre-deploy-tests.result == 'skipped')
     steps:
@@ -151,17 +154,19 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: wasm-contracts-${{ needs.validate.outputs.network }}
+          name: wasm-contracts-${{ needs.validate.outputs.network || 'testnet' }}
           path: dist/*.wasm
           retention-days: 30
+          if-no-files-found: warn
 
   # Deploy to network
   deploy:
-    name: Deploy to ${{ needs.validate.outputs.network }}
+    name: Deploy to ${{ needs.validate.outputs.network || 'testnet' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [validate, build]
     environment:
-      name: ${{ needs.validate.outputs.network }}
+      name: ${{ needs.validate.outputs.network || 'testnet' }}
       url: ${{ needs.validate.outputs.network == 'mainnet' && 'https://soroban-rpc.stellar.org' || 'https://soroban-testnet.stellar.org' }}
     steps:
       - name: Checkout code
@@ -174,12 +179,12 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          name: wasm-contracts-${{ needs.validate.outputs.network }}
+          name: wasm-contracts-${{ needs.validate.outputs.network || 'testnet' }}
           path: dist/
 
       - name: Configure Soroban network
         run: |
-          NETWORK="${{ needs.validate.outputs.network }}"
+          NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
           if [ "$NETWORK" = "mainnet" ]; then
             soroban config network add mainnet \
               --rpc-url https://soroban-rpc.stellar.org:443 \
@@ -195,7 +200,7 @@ jobs:
           MAINNET_KEY: ${{ secrets.MAINNET_DEPLOYER_SECRET_KEY }}
           TESTNET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
         run: |
-          NETWORK="${{ needs.validate.outputs.network }}"
+          NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
           if [ "$NETWORK" = "mainnet" ]; then
             if [ -z "$MAINNET_KEY" ]; then
               echo "❌ MAINNET_DEPLOYER_SECRET_KEY secret is required"
@@ -220,7 +225,7 @@ jobs:
       - name: Deploy contracts
         id: deploy
         run: |
-          NETWORK="${{ needs.validate.outputs.network }}"
+          NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
           mkdir -p deployments
           deployment_log="deployments/${NETWORK}_$(date +%Y%m%d_%H%M%S).json"
           echo "[]" > "$deployment_log"
@@ -272,8 +277,13 @@ jobs:
                  "deployed_at": $timestamp,
                  "commit_sha": $commit,
                  "deployer": "deployer",
-                 "source": "${{ needs.validate.outputs.source }}"
+                 "source": "${{ needs.validate.outputs.source || 'branch' }}"
                }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
+
+            # Verify deployment
+            echo "Verifying $contract_name..."
+            chmod +x scripts/verify_deployment.sh
+            ./scripts/verify_deployment.sh "$contract_id" "$NETWORK" "deployer" "$contract_name"
           done
           
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
@@ -282,13 +292,14 @@ jobs:
       - name: Upload deployment artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deployment-info-${{ needs.validate.outputs.network }}
+          name: deployment-info-${{ needs.validate.outputs.network || 'testnet' }}
           path: deployments/*.json
           retention-days: ${{ needs.validate.outputs.network == 'mainnet' && '365' || '90' }}
+          if-no-files-found: warn
 
       - name: Create deployment summary
         run: |
-          NETWORK="${{ needs.validate.outputs.network }}"
+          NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
           if [ "$NETWORK" = "mainnet" ]; then
             echo "## 🚀 Mainnet Deployment Summary" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -299,7 +310,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Deployed at:** $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Source:** ${{ needs.validate.outputs.source }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Source:** ${{ needs.validate.outputs.source || 'branch' }}" >> $GITHUB_STEP_SUMMARY
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "**Deployed by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
           else

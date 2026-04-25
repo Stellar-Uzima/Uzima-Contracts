@@ -67,6 +67,12 @@ pub enum Error {
     BatchTooLarge = 43,
     InvalidBatch = 44,
     NumberOutOfBounds = 46,
+    InsufficientFunds = 71,
+    DeadlineExceeded = 72,
+    InvalidSignature = 73,
+    UnauthorizedCaller = 74,
+    StorageFull = 75,
+    CrossChainTimeout = 76,
 }
 
 /// AC: Recovery suggestions to help users fix issues

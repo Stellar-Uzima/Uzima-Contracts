@@ -28,6 +28,12 @@ pub enum Error {
     InvalidCoverage = 17,
     UnsupportedTransaction = 18,
     PolicyMismatch = 19,
+    DeadlineExceeded = 32,
+    InvalidSignature = 33,
+    UnauthorizedCaller = 34,
+    ContractPaused = 35,
+    StorageFull = 36,
+    CrossChainTimeout = 37,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
