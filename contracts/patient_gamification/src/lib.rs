@@ -3,8 +3,12 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address,
-    Env, String, Vec,
+    Bytes, BytesN, Env, String, Vec,
 };
+use soroban_sdk::xdr::ToXdr;
+
+const MIN_RANDOMNESS_LEDGER_DELAY: u32 = 2;
+const RANDOMNESS_REVEAL_WINDOW: u32 = 20;
 
 // ============================================================================
 // DATA STRUCTURES
@@ -86,6 +90,27 @@ pub struct RewardPoints {
     pub last_updated: u64,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct RandomBonusCommitment {
+    pub patient_id: Address,
+    pub reveal_hash: BytesN<32>,
+    pub target_ledger: u32,
+    pub expires_at_ledger: u32,
+    pub max_bonus_points: u32,
+    pub committed_at: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct RandomBonusOutcome {
+    pub patient_id: Address,
+    pub random_value: u64,
+    pub bonus_points: u32,
+    pub target_ledger: u32,
+    pub revealed_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct LeaderboardEntry {
@@ -147,6 +172,7 @@ pub enum DataKey {
     ChallengeParticipant(u64, Address),
     ChallengeParticipants(u64),
     RewardPoints(Address),
+    RandomBonusCommitment(Address),
     Leaderboard,
     SocialProfile(Address),
     HealthMetric(Address, String, u64),
@@ -173,6 +199,11 @@ pub enum Error {
     PrivacyThresholdNotMet = 12,
     InvalidTimeRange = 13,
     AlreadyCompleted = 14,
+    RandomnessAlreadyCommitted = 15,
+    RandomnessCommitNotFound = 16,
+    RandomnessRevealTooEarly = 17,
+    RandomnessRevealMismatch = 18,
+    RandomnessCommitExpired = 19,
 }
 
 // ============================================================================
@@ -677,6 +708,115 @@ impl PatientGamificationContract {
         Ok(true)
     }
 
+    pub fn commit_random_bonus(
+        env: Env,
+        patient_id: Address,
+        reveal_hash: BytesN<32>,
+        target_ledger: u32,
+        max_bonus_points: u32,
+    ) -> Result<bool, Error> {
+        patient_id.require_auth();
+
+        if max_bonus_points == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let current_ledger = env.ledger().sequence();
+        if target_ledger < current_ledger.saturating_add(MIN_RANDOMNESS_LEDGER_DELAY) {
+            return Err(Error::InvalidInput);
+        }
+
+        let key = DataKey::RandomBonusCommitment(patient_id.clone());
+        if let Some(existing) = env
+            .storage()
+            .instance()
+            .get::<DataKey, RandomBonusCommitment>(&key)
+        {
+            if current_ledger <= existing.expires_at_ledger {
+                return Err(Error::RandomnessAlreadyCommitted);
+            }
+        }
+
+        let commitment = RandomBonusCommitment {
+            patient_id: patient_id.clone(),
+            reveal_hash,
+            target_ledger,
+            expires_at_ledger: target_ledger.saturating_add(RANDOMNESS_REVEAL_WINDOW),
+            max_bonus_points,
+            committed_at: env.ledger().timestamp(),
+        };
+
+        env.storage().instance().set(&key, &commitment);
+        env.events().publish(
+            (symbol_short!("RndCmt"),),
+            (patient_id, target_ledger, max_bonus_points),
+        );
+
+        Ok(true)
+    }
+
+    pub fn reveal_random_bonus(
+        env: Env,
+        patient_id: Address,
+        reveal: BytesN<32>,
+    ) -> Result<RandomBonusOutcome, Error> {
+        patient_id.require_auth();
+
+        let key = DataKey::RandomBonusCommitment(patient_id.clone());
+        let commitment: RandomBonusCommitment = env
+            .storage()
+            .instance()
+            .get(&key)
+            .ok_or(Error::RandomnessCommitNotFound)?;
+
+        let current_ledger = env.ledger().sequence();
+        if current_ledger < commitment.target_ledger {
+            return Err(Error::RandomnessRevealTooEarly);
+        }
+
+        if current_ledger > commitment.expires_at_ledger {
+            env.storage().instance().remove(&key);
+            return Err(Error::RandomnessCommitExpired);
+        }
+
+        let expected_reveal_hash = Self::hash_random_bonus_reveal(&env, &patient_id, &reveal);
+        if expected_reveal_hash != commitment.reveal_hash {
+            return Err(Error::RandomnessRevealMismatch);
+        }
+
+        let random_value = Self::derive_random_bonus_value(&env, &commitment, &reveal);
+        let bonus_points = (random_value % u64::from(commitment.max_bonus_points))
+            .saturating_add(1) as u32;
+
+        Self::award_points_internal(&env, &patient_id, bonus_points)?;
+        env.storage().instance().remove(&key);
+
+        let outcome = RandomBonusOutcome {
+            patient_id: patient_id.clone(),
+            random_value,
+            bonus_points,
+            target_ledger: commitment.target_ledger,
+            revealed_at: env.ledger().timestamp(),
+        };
+
+        env.events().publish(
+            (symbol_short!("RndRvl"),),
+            (patient_id, bonus_points, commitment.target_ledger),
+        );
+
+        Ok(outcome)
+    }
+
+    pub fn get_random_bonus_commitment(
+        env: Env,
+        patient_id: Address,
+    ) -> Result<RandomBonusCommitment, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::RandomBonusCommitment(patient_id))
+            .ok_or(Error::RandomnessCommitNotFound)
+    }
+
     // -------------------------------------------------------------------------
     // SOCIAL FEATURES AND LEADERBOARDS
     // -------------------------------------------------------------------------
@@ -1178,5 +1318,170 @@ impl PatientGamificationContract {
             .instance()
             .get(&DataKey::ChallengeCounter)
             .unwrap_or(0))
+    }
+
+    fn hash_random_bonus_reveal(
+        env: &Env,
+        patient_id: &Address,
+        reveal: &BytesN<32>,
+    ) -> BytesN<32> {
+        let mut payload = patient_id.clone().to_xdr(env);
+        Self::append_bytes32(env, &mut payload, reveal);
+        env.crypto().sha256(&payload).into()
+    }
+
+    fn derive_random_bonus_value(
+        env: &Env,
+        commitment: &RandomBonusCommitment,
+        reveal: &BytesN<32>,
+    ) -> u64 {
+        let mut payload = commitment.patient_id.clone().to_xdr(env);
+        payload.append(&commitment.target_ledger.to_xdr(env));
+        payload.append(&commitment.max_bonus_points.to_xdr(env));
+        payload.append(&env.current_contract_address().to_xdr(env));
+        Self::append_bytes32(env, &mut payload, &commitment.reveal_hash);
+        Self::append_bytes32(env, &mut payload, reveal);
+
+        let digest: BytesN<32> = env.crypto().sha256(&payload).into();
+        let digest_bytes = digest.to_array();
+        let mut prefix = [0u8; 8];
+        prefix.copy_from_slice(&digest_bytes[..8]);
+        u64::from_be_bytes(prefix)
+    }
+
+    fn append_bytes32(env: &Env, payload: &mut Bytes, value: &BytesN<32>) {
+        payload.append(&Bytes::from_slice(env, &value.to_array()));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, BytesN, Env,
+    };
+
+    #[test]
+    fn random_bonus_commit_and_reveal() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().with_mut(|l| {
+            l.timestamp = 1_000;
+            l.sequence_number = 10;
+        });
+
+        let contract_id = env.register_contract(None, PatientGamificationContract);
+        let client = PatientGamificationContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        assert!(client.initialize(&admin, &100u32, &50u32, &10u32, &1000u32, &5u32));
+
+        let reveal = BytesN::from_array(&env, &[7u8; 32]);
+        let reveal_hash =
+            PatientGamificationContract::hash_random_bonus_reveal(&env, &patient, &reveal);
+
+        assert!(client.commit_random_bonus(&patient, &reveal_hash, &12u32, &25u32));
+
+        let pending = client.get_random_bonus_commitment(&patient);
+        assert_eq!(pending.target_ledger, 12);
+        assert_eq!(pending.max_bonus_points, 25);
+
+        let early = client.try_reveal_random_bonus(&patient, &reveal);
+        assert_eq!(early, Err(Ok(Error::RandomnessRevealTooEarly)));
+
+        env.ledger().with_mut(|l| {
+            l.timestamp = 1_200;
+            l.sequence_number = 12;
+        });
+
+        let outcome = client.reveal_random_bonus(&patient, &reveal);
+        assert_eq!(outcome.patient_id, patient);
+        assert_eq!(outcome.target_ledger, 12);
+        assert!(outcome.bonus_points >= 1);
+        assert!(outcome.bonus_points <= 25);
+
+        let points = client.get_reward_points(&patient);
+        assert_eq!(points.total_points, u64::from(outcome.bonus_points));
+        assert_eq!(points.available_points, u64::from(outcome.bonus_points));
+
+        let missing = client.try_get_random_bonus_commitment(&patient);
+        assert_eq!(missing, Err(Ok(Error::RandomnessCommitNotFound)));
+    }
+
+    #[test]
+    fn random_bonus_rejects_mismatched_reveal_and_duplicate_commit() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().with_mut(|l| {
+            l.timestamp = 2_000;
+            l.sequence_number = 20;
+        });
+
+        let contract_id = env.register_contract(None, PatientGamificationContract);
+        let client = PatientGamificationContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        assert!(client.initialize(&admin, &100u32, &50u32, &10u32, &1000u32, &5u32));
+
+        let reveal = BytesN::from_array(&env, &[9u8; 32]);
+        let reveal_hash =
+            PatientGamificationContract::hash_random_bonus_reveal(&env, &patient, &reveal);
+
+        assert!(client.commit_random_bonus(&patient, &reveal_hash, &22u32, &10u32));
+
+        let duplicate = client.try_commit_random_bonus(&patient, &reveal_hash, &23u32, &10u32);
+        assert_eq!(duplicate, Err(Ok(Error::RandomnessAlreadyCommitted)));
+
+        env.ledger().with_mut(|l| {
+            l.timestamp = 2_200;
+            l.sequence_number = 22;
+        });
+
+        let wrong_reveal = BytesN::from_array(&env, &[10u8; 32]);
+        let mismatch = client.try_reveal_random_bonus(&patient, &wrong_reveal);
+        assert_eq!(mismatch, Err(Ok(Error::RandomnessRevealMismatch)));
+    }
+
+    #[test]
+    fn random_bonus_commit_expires() {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().with_mut(|l| {
+            l.timestamp = 3_000;
+            l.sequence_number = 30;
+        });
+
+        let contract_id = env.register_contract(None, PatientGamificationContract);
+        let client = PatientGamificationContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+
+        assert!(client.initialize(&admin, &100u32, &50u32, &10u32, &1000u32, &5u32));
+
+        let reveal = BytesN::from_array(&env, &[11u8; 32]);
+        let reveal_hash =
+            PatientGamificationContract::hash_random_bonus_reveal(&env, &patient, &reveal);
+
+        assert!(client.commit_random_bonus(&patient, &reveal_hash, &32u32, &15u32));
+
+        env.ledger().with_mut(|l| {
+            l.timestamp = 3_400;
+            l.sequence_number = 53;
+        });
+
+        let expired = client.try_reveal_random_bonus(&patient, &reveal);
+        assert_eq!(expired, Err(Ok(Error::RandomnessCommitExpired)));
+
+        let next_reveal = BytesN::from_array(&env, &[12u8; 32]);
+        let next_hash =
+            PatientGamificationContract::hash_random_bonus_reveal(&env, &patient, &next_reveal);
+        let recommit = client.commit_random_bonus(&patient, &next_hash, &56u32, &20u32);
+        assert!(recommit);
     }
 }

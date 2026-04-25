@@ -3,6 +3,7 @@
 use soroban_sdk::{contracterror, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 pub mod migration;
+pub use migration::UpgradeValidation;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -16,6 +17,12 @@ pub enum UpgradeError {
     ContractPaused = 105,
     HistoryNotFound = 106,
     IntegrityCheckFailed = 107,
+    InsufficientFunds = 110,
+    DeadlineExceeded = 111,
+    InvalidSignature = 112,
+    UnauthorizedCaller = 113,
+    StorageFull = 115,
+    CrossChainTimeout = 116,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -124,6 +131,30 @@ pub fn execute_upgrade<T: migration::Migratable>(
     env.deployer().update_current_contract_wasm(new_wasm_hash);
 
     Ok(())
+}
+
+pub fn validate_upgrade<T: migration::Migratable>(
+    env: &Env,
+    new_wasm_hash: BytesN<32>,
+) -> Result<UpgradeValidation, UpgradeError> {
+    authorize_upgrade(env)?;
+
+    // Check if new WASM hash is provided
+    if new_wasm_hash.is_empty() {
+        return Err(UpgradeError::InvalidWasmHash);
+    }
+
+    // Call the target contract's validation logic
+    let mut validation = T::validate(env, &new_wasm_hash)?;
+
+    // Perform standard integrity checks
+    let integrity_check = T::verify_integrity(env).is_ok();
+    if !integrity_check {
+        validation.state_compatible = false;
+        validation.report.push_back(symbol_short!("INTEG_ERR"));
+    }
+
+    Ok(validation)
 }
 
 pub fn rollback(env: &Env) -> Result<(), UpgradeError> {

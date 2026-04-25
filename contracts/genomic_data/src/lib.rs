@@ -5,6 +5,7 @@
 #[cfg(test)]
 mod test;
 
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
     Symbol, Vec,
@@ -788,5 +789,49 @@ impl GenomicDataContract {
             }
         }
         false
+    }
+
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+        new_version: u32,
+    ) -> Result<(), upgradeability::UpgradeError> {
+        caller.require_auth();
+        if !Self::require_admin(&env, &caller) {
+            return Err(upgradeability::UpgradeError::NotAuthorized);
+        }
+
+        upgradeability::execute_upgrade::<Self>(
+            &env,
+            new_wasm_hash,
+            new_version,
+            symbol_short!("Upgrade"),
+        )
+    }
+
+    pub fn validate_upgrade(
+        env: Env,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash)
+    }
+}
+
+impl upgradeability::migration::Migratable for GenomicDataContract {
+    fn migrate(_env: &Env, _from_version: u32) -> Result<(), upgradeability::UpgradeError> {
+        Ok(())
+    }
+
+    fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
+        let next_id = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+        let mut data = Vec::new(env);
+        data.push_back(next_id);
+        let hash_bytes = env.crypto().sha256(&data.to_xdr(env));
+        Ok(BytesN::from_array(env, &hash_bytes.to_array()))
     }
 }
