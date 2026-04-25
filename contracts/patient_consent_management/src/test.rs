@@ -49,7 +49,7 @@ mod tests {
         let provider = Address::generate(&env);
         client.grant_consent(&patient, &provider);
         let result = client.check_consent(&patient, &provider);
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -59,7 +59,7 @@ mod tests {
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
         let result = client.check_consent(&patient, &provider);
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -69,9 +69,9 @@ mod tests {
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
         client.grant_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), true);
+        assert!(client.check_consent(&patient, &provider));
         client.revoke_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), false);
+        assert!(!client.check_consent(&patient, &provider));
     }
 
     #[test]
@@ -113,8 +113,8 @@ mod tests {
         let provider2 = Address::generate(&env);
         client.grant_consent(&patient, &provider1);
         client.grant_consent(&patient, &provider2);
-        assert_eq!(client.check_consent(&patient, &provider1), true);
-        assert_eq!(client.check_consent(&patient, &provider2), true);
+        assert!(client.check_consent(&patient, &provider1));
+        assert!(client.check_consent(&patient, &provider2));
         let count = client.get_active_consent_count(&patient);
         assert_eq!(count, 2);
     }
@@ -126,11 +126,11 @@ mod tests {
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
         client.grant_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), true);
+        assert!(client.check_consent(&patient, &provider));
         client.revoke_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), false);
+        assert!(!client.check_consent(&patient, &provider));
         client.grant_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), true);
+        assert!(client.check_consent(&patient, &provider));
     }
 
     #[test]
@@ -156,7 +156,7 @@ mod tests {
         client.grant_consent(&patient, &provider);
         let (has_consent, granted_at, revoked_at) =
             client.verify_consent_with_audit(&patient, &provider);
-        assert_eq!(has_consent, true);
+        assert!(has_consent);
         assert!(granted_at > 0);
         assert_eq!(revoked_at, 0);
     }
@@ -171,7 +171,7 @@ mod tests {
         client.revoke_consent(&patient, &provider);
         let (has_consent, granted_at, revoked_at) =
             client.verify_consent_with_audit(&patient, &provider);
-        assert_eq!(has_consent, false);
+        assert!(!has_consent);
         assert!(granted_at > 0);
         assert!(revoked_at > 0);
         assert!(revoked_at >= granted_at);
@@ -212,8 +212,8 @@ mod tests {
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
         client.grant_consent(&patient, &provider);
-        assert_eq!(client.check_consent(&patient, &provider), true);
-        assert_eq!(client.check_consent(&patient, &provider), true);
+        assert!(client.check_consent(&patient, &provider));
+        assert!(client.check_consent(&patient, &provider));
     }
 
     #[test]
