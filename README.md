@@ -617,7 +617,7 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 ## 🔗 Helpful Links
 
 ### Documentation
-- [API Reference](./docs/api.md) - Complete contract API documentation
+- [API Reference](./docs/api.md) - Complete contract API documentation and stability guarantees
 - [Architecture Guide](./docs/architecture.md) - System design and patterns
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
 - [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem
