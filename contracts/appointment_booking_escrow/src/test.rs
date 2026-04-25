@@ -324,7 +324,7 @@ mod tests {
         mint(&env, &token_id, &patient1, 10000);
         mint(&env, &token_id, &patient2, 10000);
         let appt1 = client.book_appointment(&patient1, &provider1, &amount1, &token_id);
-        let appt2 = client.book_appointment(&patient2, &provider2, &amount2, &token_id);
+        let _appt2 = client.book_appointment(&patient2, &provider2, &amount2, &token_id);
         let balance = client.get_escrow_balance();
         assert_eq!(balance, amount1 + amount2);
         client.confirm_appointment(&provider1, &appt1);

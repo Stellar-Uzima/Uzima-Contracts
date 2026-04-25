@@ -745,7 +745,7 @@ fn test_patient_record_index_lookup_efficiency() {
     client.manage_user(&admin, &patient, &Role::Patient);
 
     let count = 30u64;
-    for i in 0..count {
+    for _i in 0..count {
         let _ = client.add_record(
             &doctor,
             &patient,

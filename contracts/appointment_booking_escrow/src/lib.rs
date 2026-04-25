@@ -10,7 +10,7 @@ mod events;
 pub use errors::Error;
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String, Vec,
+    contract, contractimpl, contracttype, token, Address, Env, Vec,
 };
 
 // ==================== Data Types ====================
@@ -58,7 +58,7 @@ pub struct AppointmentBookingEscrow;
 #[contractimpl]
 impl AppointmentBookingEscrow {
     /// Initialize the contract with an admin and token address
-    pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address, _token: Address) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Initialized) {

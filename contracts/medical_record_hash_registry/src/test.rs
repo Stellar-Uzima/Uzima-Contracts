@@ -54,7 +54,7 @@ mod tests {
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
         client.store_record(&admin, &patient_id, &record_hash);
         let result = client.verify_record(&patient_id, &record_hash);
-        assert_eq!(result, true);
+        assert!(result);
     }
 
     #[test]
@@ -64,7 +64,7 @@ mod tests {
         let patient_id = Address::generate(&env);
         let record_hash: BytesN<32> = BytesN::from_array(&env, &[1u8; 32]);
         let result = client.verify_record(&patient_id, &record_hash);
-        assert_eq!(result, false);
+        assert!(!result);
     }
 
     #[test]
@@ -76,8 +76,8 @@ mod tests {
         let hash2: BytesN<32> = BytesN::from_array(&env, &[2u8; 32]);
         client.store_record(&admin, &patient_id, &hash1);
         client.store_record(&admin, &patient_id, &hash2);
-        assert_eq!(client.verify_record(&patient_id, &hash1), true);
-        assert_eq!(client.verify_record(&patient_id, &hash2), true);
+        assert!(client.verify_record(&patient_id, &hash1));
+        assert!(client.verify_record(&patient_id, &hash2));
         let count = client.get_record_count(&patient_id);
         assert_eq!(count, 2);
     }
