@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "events:generate": "node scripts/events/generate-registry.mjs",
+    "events:validate": "node scripts/events/validate.mjs",
+    "test:pyramid:report": "node scripts/testing/pyramid-report.mjs"
+  },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
     "ajv": "^8.12.0"
