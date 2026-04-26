@@ -355,7 +355,7 @@ impl FederatedLearningContract {
             },
         );
 
-        let empty: Vec<Address> = vec![&env];
+        let empty: Vec<Address> = Vec::new(&env);
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(id), &empty);
@@ -449,13 +449,9 @@ impl FederatedLearningContract {
             return Err(Error::PrivacyBudgetExceeded);
         }
 
-        let quality_score = Self::evaluate_contribution_quality(&quality_metrics);
-        if quality_score < 30 {
-            return Err(Error::ContributionQualityLow);
-        }
-
+        let quality_score = Self::evaluate_contribution_quality(&env, &quality_metrics);
         let similarity_score = Self::compute_similarity_score(&gradient_hash, &round.base_model_id);
-        let anomaly_detected = Self::detect_anomaly(&quality_metrics, similarity_score);
+        let anomaly_detected = Self::detect_anomaly(&env, &quality_metrics, similarity_score);
 
         if anomaly_detected && inst.reputation_score < 30 {
             inst.status = InstitutionStatus::UnderReview;
@@ -488,7 +484,7 @@ impl FederatedLearningContract {
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
+            .unwrap_or(Vec::new(&env));
         participants.push_back(institution.clone());
         env.storage()
             .persistent()
@@ -519,27 +515,27 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
-    fn evaluate_contribution_quality(metrics: &Map<String, u32>) -> u32 {
+    fn evaluate_contribution_quality(env: &Env, metrics: &Map<String, u32>) -> u32 {
         let mut score = 50u32;
 
-        if let Some(loss) = metrics.get(&String::from_str(&Env::default(), "loss")) {
-            if *loss < 5 {
+        if let Some(loss) = metrics.get(String::from_str(env, "loss")) {
+            if loss < 5 {
                 score += 20;
-            } else if *loss < 10 {
+            } else if loss < 10 {
                 score += 10;
-            } else if *loss > 50 {
+            } else if loss > 50 {
                 score -= 20;
             }
         }
 
-        if let Some(accuracy) = metrics.get(&String::from_str(&Env::default(), "accuracy")) {
-            score += *accuracy / 5;
+        if let Some(accuracy) = metrics.get(String::from_str(env, "accuracy")) {
+            score += accuracy / 5;
         }
 
-        if let Some(convergence) = metrics.get(&String::from_str(&Env::default(), "convergence")) {
-            if *convergence > 80 {
+        if let Some(convergence) = metrics.get(String::from_str(env, "convergence")) {
+            if convergence > 80 {
                 score += 15;
-            } else if *convergence > 60 {
+            } else if convergence > 60 {
                 score += 10;
             }
         }
@@ -557,11 +553,9 @@ impl FederatedLearningContract {
         min(similarity, 100)
     }
 
-    fn detect_anomaly(metrics: &Map<String, u32>, similarity: u32) -> bool {
-        let anomaly_score = 0u32;
-
-        if let Some(loss) = metrics.get(&String::from_str(&Env::default(), "loss")) {
-            if *loss > 100 {
+    fn detect_anomaly(env: &Env, metrics: &Map<String, u32>, similarity: u32) -> bool {
+        if let Some(loss) = metrics.get(String::from_str(env, "loss")) {
+            if loss > 100 {
                 return true;
             }
         }
@@ -582,8 +576,8 @@ impl FederatedLearningContract {
         round_id: u64,
         participants: &Vec<Address>,
     ) -> Result<AttackDetection, Error> {
-        let mut suspicious_participants: Vec<Address> = vec![env];
-        let mut detected_attacks: Vec<String> = vec![env];
+        let mut suspicious_participants: Vec<Address> = Vec::new(env);
+        let mut detected_attacks: Vec<String> = Vec::new(env);
         let mut total_anomaly_score = 0u32;
         let mut participant_count = 0u32;
 
@@ -651,7 +645,7 @@ impl FederatedLearningContract {
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
+            .unwrap_or(Vec::new(&env));
 
         let attack_detection = Self::detect_poisoning_attacks(&env, round_id, &participants)?;
 
@@ -779,7 +773,7 @@ impl FederatedLearningContract {
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
+            .unwrap_or(Vec::new(&env));
 
         let rep_delta: u32 = if vscore >= 90 {
             3
