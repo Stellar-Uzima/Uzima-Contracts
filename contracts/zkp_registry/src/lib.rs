@@ -5,8 +5,9 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, 
+    xdr::{FromXdr, ToXdr},
+    Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 // =============================================================================
@@ -219,6 +220,19 @@ pub struct ZKPVerificationResult {
     pub verifier: Address,
     /// Additional verification metadata
     pub metadata: Bytes,
+}
+
+/// Exported state format for migrations
+#[derive(Clone)]
+#[contracttype]
+pub struct RegistryStateExport {
+    pub format_version: u32,
+    pub admin: Address,
+    pub initialized: bool,
+    pub paused: bool,
+    pub multisig_config: Option<MultiSigConfig>,
+    pub proposal_counter: u64,
+    pub proposals: Vec<AdminProposal>,
 }
 
 // =============================================================================
@@ -1005,6 +1019,84 @@ impl ZKPRegistry {
             .persistent()
             .get(&DataKey::GasTracker(user))
             .unwrap_or(0))
+    }
+
+    /// Export contract state for migrations
+    pub fn export_state(env: Env) -> Result<Bytes, Error> {
+        // Ensure only admin can export
+        if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
+            admin.require_auth();
+        } else {
+            return Err(Error::NotInitialized);
+        }
+
+        let initialized = env.storage().instance().get(&DataKey::Initialized).unwrap_or(false);
+        let admin = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let paused = env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false);
+        let multisig_config = env.storage().instance().get(&DataKey::MultiSigConfig);
+        let proposal_counter = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+
+        let mut proposals = Vec::new(&env);
+        for i in 0..proposal_counter {
+            if let Some(proposal) = env.storage().instance().get(&DataKey::AdminProposal(i)) {
+                proposals.push_back(proposal);
+            }
+        }
+
+        let state = RegistryStateExport {
+            format_version: 1,
+            admin,
+            initialized,
+            paused,
+            multisig_config,
+            proposal_counter,
+            proposals,
+        };
+
+        // Serialize all state
+        Ok(state.to_xdr(&env))
+    }
+
+    /// Import contract state during migrations
+    pub fn import_state(env: Env, caller: Address, state_bytes: Bytes) -> Result<(), Error> {
+        caller.require_auth();
+
+        // Allow import only if not initialized or if called by current admin
+        if env.storage().instance().has(&DataKey::Initialized) {
+            let current_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+            if caller != current_admin {
+                return Err(Error::NotAuthorized);
+            }
+        }
+
+        // Validate and deserialize state
+        let state = RegistryStateExport::from_xdr(&env, &state_bytes)
+            .map_err(|_| Error::InvalidInput)?;
+
+        // Format version validation
+        if state.format_version != 1 {
+            return Err(Error::InvalidInput);
+        }
+
+        // Restore state
+        env.storage().instance().set(&DataKey::Initialized, &state.initialized);
+        env.storage().instance().set(&DataKey::Admin, &state.admin);
+        env.storage().instance().set(&DataKey::ContractPaused, &state.paused);
+
+        if let Some(config) = state.multisig_config {
+            env.storage().instance().set(&DataKey::MultiSigConfig, &config);
+        }
+
+        env.storage().instance().set(&DataKey::ProposalCounter, &state.proposal_counter);
+
+        for proposal in state.proposals.iter() {
+            env.storage().instance().set(&DataKey::AdminProposal(proposal.id), &proposal);
+        }
+
+        env.storage().persistent().set(&ADMIN, &state.admin);
+        env.events().publish((symbol_short!("admin"), symbol_short!("imported")), caller);
+
+        Ok(())
     }
 
     // -------------------------------------------------------------------------
