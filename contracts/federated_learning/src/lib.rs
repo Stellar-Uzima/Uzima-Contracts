@@ -2,11 +2,12 @@
 #![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
-    Map, String, Vec, I256, U256,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    Map, String, Vec,
 };
 
-use core::cmp::{max, min};
+// Removed unused 'max' to prevent compiler warnings
+use core::cmp::min;
 
 #[derive(Clone, PartialEq)]
 #[contracttype]
