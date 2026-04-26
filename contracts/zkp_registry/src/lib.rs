@@ -137,8 +137,8 @@ pub struct RecursiveProof {
     pub base_proof_id: BytesN<32>,
     /// Recursive proof data
     pub recursive_proof: ZKProof,
-    /// Aggregated verification keys
-    pub aggregated_vk: Bytes,
+    /// Aggregated verification keys hash (compressed to save storage)
+    pub aggregated_vk_hash: BytesN<32>,
     /// Proof composition depth
     pub composition_depth: u32,
     /// Total gas cost for recursive verification
@@ -366,9 +366,9 @@ impl ZKPRegistry {
         // Perform on-chain verification (simplified for demonstration)
         let is_valid = Self::verify_zkp_internal(&env, &proof)?;
 
-        // Store proof
+        // Store proof temporarily to save costs
         env.storage()
-            .persistent()
+            .temporary()
             .set(&DataKey::ZKProof(proof_id.clone()), &proof);
 
         // Create verification result
@@ -382,7 +382,7 @@ impl ZKPRegistry {
         };
 
         env.storage()
-            .persistent()
+            .temporary()
             .set(&DataKey::VerificationResult(proof_id.clone()), &result);
 
         // Track gas usage
@@ -399,6 +399,94 @@ impl ZKPRegistry {
         } else {
             Err(Error::VerificationFailed)
         }
+    }
+
+    /// Submit and verify a batch of zero-knowledge proofs
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_zkp_batch(
+        env: Env,
+        submitter: Address,
+        proof_ids: Vec<BytesN<32>>,
+        proof_types: Vec<ZKPType>,
+        hash_functions: Vec<ZKPHashFunction>,
+        circuit_ids: Vec<String>,
+        public_inputs_batch: Vec<Vec<Bytes>>,
+        proof_data_batch: Vec<Bytes>,
+        vk_hashes: Vec<BytesN<32>>,
+        verification_gas_batch: Vec<u64>,
+    ) -> Result<Vec<bool>, Error> {
+        submitter.require_auth();
+        Self::require_initialized(&env)?;
+
+        let len = proof_ids.len();
+        if proof_types.len() != len
+            || hash_functions.len() != len
+            || circuit_ids.len() != len
+            || public_inputs_batch.len() != len
+            || proof_data_batch.len() != len
+            || vk_hashes.len() != len
+            || verification_gas_batch.len() != len
+        {
+            return Err(Error::InvalidInput);
+        }
+
+        let mut results = Vec::new(&env);
+        let mut total_gas_used = 0;
+
+        for i in 0..len {
+            let circuit_id = circuit_ids.get(i).unwrap();
+            let verification_gas = verification_gas_batch.get(i).unwrap();
+
+            if verification_gas > 100000 {
+                results.push_back(false);
+                continue;
+            }
+
+            if !env.storage().persistent().has(&DataKey::ZKPCircuitParams(circuit_id.clone())) {
+                results.push_back(false);
+                continue;
+            }
+
+            let proof_data = proof_data_batch.get(i).unwrap();
+            if proof_data.len() > 10000 {
+                results.push_back(false);
+                continue;
+            }
+
+            let proof_id = proof_ids.get(i).unwrap();
+            let proof = ZKProof {
+                proof_type: proof_types.get(i).unwrap(),
+                hash_function: hash_functions.get(i).unwrap(),
+                circuit_id: circuit_id.clone(),
+                public_inputs: public_inputs_batch.get(i).unwrap(),
+                proof_data: proof_data.clone(),
+                vk_hash: vk_hashes.get(i).unwrap(),
+                verification_gas,
+                created_at: env.ledger().timestamp(),
+            };
+
+            let is_valid = Self::verify_zkp_internal(&env, &proof).unwrap_or(false);
+
+            if is_valid {
+                env.storage().temporary().set(&DataKey::ZKProof(proof_id.clone()), &proof);
+                let result = ZKPVerificationResult {
+                    proof_id: proof_id.clone(),
+                    is_valid,
+                    gas_used: verification_gas,
+                    verified_at: env.ledger().timestamp(),
+                    verifier: submitter.clone(),
+                    metadata: Bytes::from_slice(&env, b"batch_verification"),
+                };
+                env.storage().temporary().set(&DataKey::VerificationResult(proof_id.clone()), &result);
+                total_gas_used = total_gas_used.saturating_add(verification_gas);
+            }
+
+            results.push_back(is_valid);
+            env.events().publish((symbol_short!("zkp"), symbol_short!("proof_sub")), (submitter.clone(), proof_id, is_valid));
+        }
+
+        Self::track_gas_usage(&env, &submitter, total_gas_used);
+        Ok(results)
     }
 
     /// Create medical record authenticity proof
@@ -561,7 +649,7 @@ impl ZKPRegistry {
         composer: Address,
         base_proof_id: BytesN<32>,
         recursive_proof: ZKProof,
-        aggregated_vk: Bytes,
+        aggregated_vk_hash: BytesN<32>,
         composition_depth: u32,
         total_gas: u64,
     ) -> Result<(), Error> {
@@ -579,18 +667,17 @@ impl ZKPRegistry {
         }
 
         // Verify base proof exists
-        if !env
-            .storage()
-            .persistent()
-            .has(&DataKey::ZKProof(base_proof_id.clone()))
-        {
+        let has_temp = env.storage().temporary().has(&DataKey::ZKProof(base_proof_id.clone()));
+        let has_pers = env.storage().persistent().has(&DataKey::ZKProof(base_proof_id.clone()));
+
+        if !has_temp && !has_pers {
             return Err(Error::ProofNotFound);
         }
 
         let recursive_proof = RecursiveProof {
             base_proof_id,
             recursive_proof: recursive_proof.clone(),
-            aggregated_vk: aggregated_vk.clone(),
+            aggregated_vk_hash,
             composition_depth,
             total_gas,
             composed_at: env.ledger().timestamp(),
@@ -622,16 +709,47 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    /// Clean up a proof to manually free storage space
+    pub fn cleanup_proof(env: Env, submitter: Address, proof_id: BytesN<32>) -> Result<(), Error> {
+        submitter.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Verify ownership if possible
+        let is_owner = if let Some(result) = env.storage().temporary().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+            result.verifier == submitter
+        } else if let Some(result) = env.storage().persistent().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+            result.verifier == submitter
+        } else {
+            false
+        };
+
+        if !is_owner {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Cleanup from both temporary and persistent just in case
+        env.storage().temporary().remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage().temporary().remove(&DataKey::VerificationResult(proof_id.clone()));
+        env.storage().persistent().remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage().persistent().remove(&DataKey::VerificationResult(proof_id.clone()));
+
+        env.events().publish((symbol_short!("zkp"), symbol_short!("cleanup")), (submitter, proof_id));
+        Ok(())
+    }
+
     /// Get ZKP verification result
     pub fn get_verification_result(
         env: Env,
         proof_id: BytesN<32>,
     ) -> Result<ZKPVerificationResult, Error> {
         Self::require_initialized(&env)?;
-        env.storage()
-            .persistent()
-            .get(&DataKey::VerificationResult(proof_id))
-            .ok_or(Error::ProofNotFound)
+        if let Some(result) = env.storage().temporary().get(&DataKey::VerificationResult(proof_id.clone())) {
+            Ok(result)
+        } else if let Some(result) = env.storage().persistent().get(&DataKey::VerificationResult(proof_id)) {
+            Ok(result)
+        } else {
+            Err(Error::ProofNotFound)
+        }
     }
 
     /// Get medical record proof
