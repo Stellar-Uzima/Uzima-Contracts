@@ -182,18 +182,17 @@ jobs:
           name: wasm-contracts-${{ needs.validate.outputs.network || 'testnet' }}
           path: dist/
 
+      - name: Validate network configuration
+        run: |
+          chmod +x scripts/network_manager.sh
+          chmod +x scripts/validate_network_config.sh
+          ./scripts/validate_network_config.sh --network testnet
+
       - name: Configure Soroban network
         run: |
           NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
-          if [ "$NETWORK" = "mainnet" ]; then
-            soroban config network add mainnet \
-              --rpc-url https://soroban-rpc.stellar.org:443 \
-              --network-passphrase "Public Global Stellar Network ; September 2015" || true
-          else
-            soroban config network add testnet \
-              --rpc-url https://soroban-testnet.stellar.org:443 \
-              --network-passphrase "Test SDF Network ; September 2015" || true
-          fi
+          chmod +x scripts/network_manager.sh
+          ./scripts/network_manager.sh configure "$NETWORK"
 
       - name: Setup deployment identity
         env:
@@ -222,68 +221,101 @@ jobs:
             fi
           fi
 
-      - name: Deploy contracts
+      - name: Deploy contracts using enhanced deployment script
         id: deploy
+        env:
+          MAINNET_KEY: ${{ secrets.MAINNET_DEPLOYER_SECRET_KEY }}
+          TESTNET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
         run: |
           NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
           mkdir -p deployments
           deployment_log="deployments/${NETWORK}_$(date +%Y%m%d_%H%M%S).json"
-          echo "[]" > "$deployment_log"
+          
+          # Setup deployment identity
+          if [ "$NETWORK" = "mainnet" ]; then
+            if [ -z "$MAINNET_KEY" ]; then
+              echo "❌ MAINNET_DEPLOYER_SECRET_KEY secret is required"
+              exit 1
+            fi
+            echo "$MAINNET_KEY" > /tmp/secret_key.txt
+            soroban config identity add deployer --secret-key /tmp/secret_key.txt
+            rm -f /tmp/secret_key.txt
+            DEPLOYMENT_IDENTITY="deployer"
+          else
+            if [ -n "$TESTNET_KEY" ]; then
+              echo "$TESTNET_KEY" > /tmp/secret_key.txt
+              soroban config identity add deployer --secret-key /tmp/secret_key.txt || true
+              rm -f /tmp/secret_key.txt
+              DEPLOYMENT_IDENTITY="deployer"
+            else
+              DEPLOYMENT_IDENTITY="ci-deployer"
+              if ! soroban config identity show "$DEPLOYMENT_IDENTITY" &> /dev/null; then
+                soroban config identity generate "$DEPLOYMENT_IDENTITY"
+              fi
+              soroban config identity fund "$DEPLOYMENT_IDENTITY" --network testnet || true
+            fi
+          fi
+          
+          # Make scripts executable
+          chmod +x scripts/deploy_enhanced.sh
+          chmod +x scripts/verify_deployment.sh
           
           # Determine which contracts to deploy
           if [ -n "${{ inputs.contract }}" ]; then
             contracts="${{ inputs.contract }}"
           else
-            contracts=$(ls -d contracts/*/ | xargs -n1 basename)
+            contracts=$(ls -d contracts/*/ | xargs -n1 basename | grep -v -E "(credential_notifications|medical_imaging|medical_records|healthcare_compliance|medical_record_hash_registry|appointment_booking_escrow|patient_consent_management|clinical_nlp|clinical_decision_support|remote_patient_monitoring|healthcare_analytics_dashboard|healthcare_data_marketplace|telemedicine|patient_portal|notification_system|mental_health_support|patient_gamification|medical_imaging_ai|dicomweb_services|emergency_access_override|health_data_access_logging|escrow|mfa|multi_region_orchestrator|regional_node_manager|digital_twin|aml|forensics|audit|federated_learning|rbac|sync_manager|failover_detector|healthcare_compliance_automation|drug_discovery|upgradeability|health_check)")
           fi
           
+          # Enable simulation for testnet, dry-run for mainnet safety
+          if [ "$NETWORK" = "mainnet" ] && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            DEPLOY_MODE="--dry-run"
+          elif [ "$NETWORK" = "testnet" ]; then
+            DEPLOY_MODE="--simulation"
+          else
+            DEPLOY_MODE=""
+          fi
+          
+          echo "[]" > "$deployment_log"
+          
           for contract_name in $contracts; do
-            wasm_file="dist/${contract_name}.wasm"
-            if [ ! -f "$wasm_file" ]; then
-              echo "Warning: $wasm_file not found, skipping"
-              continue
-            fi
+            echo "Deploying $contract_name to $NETWORK..."
             
-            if [ "$NETWORK" = "mainnet" ]; then
-              echo "⚠️  Deploying $contract_name to MAINNET..."
+            # Deploy using enhanced deployment script
+            if ./scripts/deploy_enhanced.sh "$contract_name" "$NETWORK" --identity "$DEPLOYMENT_IDENTITY" $DEPLOY_MODE --skip-build; then
+              # Extract contract ID from deployment info
+              if [ -f "deployments/${contract_name}_${NETWORK}.json" ]; then
+                contract_id=$(jq -r '.contract_id' "deployments/${contract_name}_${NETWORK}.json" 2>/dev/null || echo "")
+                if [ -n "$contract_id" ] && [ "$contract_id" != "null" ]; then
+                  echo "✅ Deployed $contract_name: $contract_id"
+                  
+                  # Save deployment info
+                  jq --arg name "$contract_name" \
+                     --arg id "$contract_id" \
+                     --arg network "$NETWORK" \
+                     --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+                     --arg commit "${{ github.sha }}" \
+                     '. += [{
+                       "contract_name": $name,
+                       "contract_id": $id,
+                       "network": $network,
+                       "deployed_at": $timestamp,
+                       "commit_sha": $commit,
+                       "deployer": "'$DEPLOYMENT_IDENTITY'",
+                       "source": "${{ needs.validate.outputs.source || 'branch' }}"
+                     }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
+                else
+                  echo "Warning: Could not extract contract ID for $contract_name"
+                fi
+              else
+                echo "Warning: Deployment info file not found for $contract_name"
+              fi
             else
-              echo "Deploying $contract_name to testnet..."
-            fi
-            
-            # Deploy contract
-            contract_id=$(soroban contract deploy \
-              --wasm "$wasm_file" \
-              --source deployer \
-              --network "$NETWORK" \
-              --output json | jq -r '.contract_id' || echo "")
-            
-            if [ -z "$contract_id" ] || [ "$contract_id" = "null" ]; then
               echo "Error: Failed to deploy $contract_name"
-              exit 1
+              if [ "$NETWORK" != "mainnet" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+                exit 1
+              fi
             fi
-            
-            echo "✅ Deployed $contract_name: $contract_id"
-            
-            # Save deployment info
-            jq --arg name "$contract_name" \
-               --arg id "$contract_id" \
-               --arg network "$NETWORK" \
-               --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-               --arg commit "${{ github.sha }}" \
-               '. += [{
-                 "contract_name": $name,
-                 "contract_id": $id,
-                 "network": $network,
-                 "deployed_at": $timestamp,
-                 "commit_sha": $commit,
-                 "deployer": "deployer",
-                 "source": "${{ needs.validate.outputs.source || 'branch' }}"
-               }]' "$deployment_log" > "${deployment_log}.tmp" && mv "${deployment_log}.tmp" "$deployment_log"
-
-            # Verify deployment
-            echo "Verifying $contract_name..."
-            chmod +x scripts/verify_deployment.sh
-            ./scripts/verify_deployment.sh "$contract_id" "$NETWORK" "deployer" "$contract_name"
           done
           
           echo "deployment_log=$deployment_log" >> $GITHUB_OUTPUT
