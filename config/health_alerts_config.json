@@ -1,0 +1,79 @@
+{
+  "version": "1.0.0",
+  "description": "Health check alert configuration for Uzima contracts",
+  "global_thresholds": {
+    "success_rate": {
+      "warning": 9800,
+      "critical": 9500,
+      "description": "Success rate threshold (percentage * 100)"
+    },
+    "storage_usage": {
+      "warning": 8192,
+      "critical": 10240,
+      "description": "Storage usage in bytes"
+    },
+    "inactivity_period": {
+      "warning": 1800,
+      "critical": 3600,
+      "description": "Inactivity period in seconds"
+    },
+    "error_rate": {
+      "warning": 20,
+      "critical": 50,
+      "description": "Error rate per 1000 operations"
+    },
+    "gas_usage_multiplier": {
+      "warning": 1.5,
+      "critical": 2.0,
+      "description": "Multiplier of average gas usage"
+    }
+  },
+  "contract_specific_thresholds": {
+    "appointment_booking_escrow": {
+      "success_rate": {
+        "warning": 9900,
+        "critical": 9800
+      }
+    },
+    "medical_record_backup": {
+      "success_rate": {
+        "warning": 9950,
+        "critical": 9900
+      },
+      "storage_usage": {
+        "warning": 102400,
+        "critical": 204800
+      }
+    },
+    "identity_registry": {
+      "success_rate": {
+        "warning": 9900,
+        "critical": 9800
+      }
+    },
+    "healthcare_payment": {
+      "success_rate": {
+        "warning": 9950,
+        "critical": 9900
+      }
+    }
+  },
+  "monitoring_schedule": {
+    "critical_contracts": {
+      "contracts": [
+        "appointment_booking_escrow",
+        "healthcare_payment",
+        "identity_registry"
+      ],
+      "interval_seconds": 60
+    },
+    "standard_contracts": {
+      "contracts": [
+        "medical_record_backup",
+        "audit",
+        "aml"
+      ],
+      "interval_seconds": 300
+    }
+  }
+}
