@@ -1,3 +1,4 @@
+#[cfg(all(test, feature = "testutils"))]
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec, Map};
 use crate::{
     types::{FederatedRound, ModelMetadata, ParticipantUpdateMeta},
@@ -84,7 +85,9 @@ mod tests {
         // Test large maps
         let large_map: Map<u32, String> = Map::new(env);
         for i in 0..100 {
-            large_map.set(i, &String::from_str(env, &format!("value_{}", i)));
+            let mut value_str = String::from_str(env, "value_");
+            value_str = value_str + &String::from_str(env, &i.to_string());
+            large_map.set(i, &value_str);
         }
         
         let serialized_map = large_map.try_to_val();
@@ -96,10 +99,18 @@ mod tests {
         let short_string = String::from_str(env, "short");
         assert!(short_string.try_to_val().is_ok(), "Failed to serialize short string");
         
-        let medium_string = String::from_str(env, &"a".repeat(100));
+        // Create medium string by concatenation
+        let mut medium_string = String::from_str(env, "");
+        for _ in 0..10 {
+            medium_string = medium_string + &String::from_str(env, "aaaaaaaaaa");
+        }
         assert!(medium_string.try_to_val().is_ok(), "Failed to serialize medium string");
         
-        let long_string = String::from_str(env, &"x".repeat(1000));
+        // Create long string by concatenation
+        let mut long_string = String::from_str(env, "");
+        for _ in 0..100 {
+            long_string = long_string + &String::from_str(env, "xxxxxxxxxx");
+        }
         assert!(long_string.try_to_val().is_ok(), "Failed to serialize long string");
     }
 
