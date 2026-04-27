@@ -25,6 +25,7 @@ pub enum Error {
     InvalidStateTransition = 11,
     Unauthorized = 12,
     NotAdmin = 13,
+    Overflow = 14,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -359,7 +360,11 @@ impl EscrowContract {
         env.storage().persistent().set(&ESCROWS, &escrows);
 
         // interactions: credit balances via pull-payment pattern
-        let fee = (e.amount as i128).saturating_mul(fee_conf.platform_fee_bps as i128) / 10_000;
+        let fee = e
+            .amount
+            .checked_mul(fee_conf.platform_fee_bps as i128)
+            .map(|n| n / 10_000)
+            .ok_or(Error::Overflow)?;
         let provider_amount = e.amount.saturating_sub(fee);
         add_credit(&env, &e.payee, provider_amount);
         add_credit(&env, &fee_conf.fee_receiver, fee);
