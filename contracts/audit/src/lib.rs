@@ -25,12 +25,14 @@ impl AuditTrail {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::RecordCount, &0u64);
         env.storage()
             .instance()
             .set(&DataKey::RollingHash, &BytesN::from_array(&env, &[0u8; 32]));
+        env.events().publish((symbol_short!("Init"),), admin);
         Ok(())
     }
 

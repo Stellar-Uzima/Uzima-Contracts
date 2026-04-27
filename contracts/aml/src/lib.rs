@@ -10,8 +10,18 @@ mod test;
 
 use crate::types::{AMLReport, AMLRule, DataKey, GlobalAMLStats, RiskLevel, RiskProfile};
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
 };
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    NotAuthorized = 3,
+}
 
 #[contract]
 pub struct AntiMoneyLaundering;
@@ -19,10 +29,11 @@ pub struct AntiMoneyLaundering;
 #[contractimpl]
 impl AntiMoneyLaundering {
     /// Initialize AML with admin
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextReportId, &0u64);
         env.storage().instance().set(
@@ -33,6 +44,8 @@ impl AntiMoneyLaundering {
                 blacklisted_count: 0,
             },
         );
+        env.events().publish((symbol_short!("Init"),), admin);
+        Ok(())
     }
 
     /// Configure an AML rule
