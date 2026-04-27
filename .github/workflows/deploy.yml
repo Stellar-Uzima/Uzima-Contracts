@@ -109,6 +109,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -172,6 +175,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
       - name: Install Soroban CLI
         run: |
           cargo install --locked --version ${{ env.SOROBAN_VERSION }} soroban-cli
@@ -186,7 +192,8 @@ jobs:
         run: |
           chmod +x scripts/network_manager.sh
           chmod +x scripts/validate_network_config.sh
-          ./scripts/validate_network_config.sh --network testnet
+          NETWORK="${{ needs.validate.outputs.network || 'testnet' }}"
+          ./scripts/validate_network_config.sh --network "$NETWORK"
 
       - name: Configure Soroban network
         run: |
