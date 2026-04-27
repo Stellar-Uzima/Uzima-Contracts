@@ -13,21 +13,35 @@ use crate::types::{
     LogAccessEntry, OperationResult, RetentionPolicy,
 };
 use soroban_sdk::{
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    NotAuthorized = 3,
+}
 
 #[contract]
 pub struct AuditTrail;
 
 #[contractimpl]
 impl AuditTrail {
+    /// Initialize with global audit configuration
+    pub fn initialize(env: Env, admin: Address, config: AuditConfig) -> Result<(), Error> {
     // ─── Initialisation ──────────────────────────────────────────────────────
 
     /// Initialize the contract with an admin address and audit configuration.
     pub fn initialize(env: Env, admin: Address, config: AuditConfig) {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
+        admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&DataKey::RecordCount, &0u64);
@@ -35,6 +49,8 @@ impl AuditTrail {
         env.storage()
             .instance()
             .set(&DataKey::RollingHash, &BytesN::from_array(&env, &[0u8; 32]));
+        env.events().publish((symbol_short!("Init"),), admin);
+        Ok(())
 
         // Default HIPAA-compliant retention: 7 years minimum (220_752_000 s)
         let default_retention = RetentionPolicy {

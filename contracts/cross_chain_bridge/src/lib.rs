@@ -745,6 +745,96 @@ impl CrossChainBridgeContract {
         Ok(true)
     }
 
+    /// Mark a message as failed and emit a failure event (validator only).
+    /// This enables callers to detect failures and trigger refunds or retries.
+    pub fn fail_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        reason: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status == MessageStatus::Executed
+            || message.status == MessageStatus::Failed
+        {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        message.status = MessageStatus::Failed;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageFailed"),),
+            (message_id, caller, reason),
+        );
+
+        Ok(true)
+    }
+
+    /// Retry a failed message with exponential backoff enforcement.
+    /// The caller must wait at least `base_delay * 2^attempt` seconds since
+    /// the original message timestamp before retrying.
+    /// Resets the message status to Pending so validators can re-confirm it.
+    pub fn retry_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        attempt: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        const BASE_DELAY_SECS: u64 = 60; // 1 minute base delay
+        const MAX_ATTEMPTS: u32 = 5;
+
+        if attempt == 0 || attempt > MAX_ATTEMPTS {
+            return Err(Error::InvalidMessage);
+        }
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status != MessageStatus::Failed
+            && message.status != MessageStatus::Expired
+        {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        // Enforce exponential backoff: delay = base * 2^(attempt-1)
+        let backoff: u64 = BASE_DELAY_SECS.saturating_mul(1u64 << (attempt - 1).min(10));
+        let now = env.ledger().timestamp();
+        let earliest_retry = message.timestamp.saturating_add(backoff);
+        if now < earliest_retry {
+            return Err(Error::InvalidMessage);
+        }
+
+        message.status = MessageStatus::Pending;
+        message.timestamp = now;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageRetried"),),
+            (message_id, caller, attempt),
+        );
+
+        Ok(true)
+    }
+
     // ==================== Atomic Transaction Functions ====================
 
     pub fn initiate_atomic_tx(
