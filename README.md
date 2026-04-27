@@ -207,6 +207,7 @@ These diagrams provide essential context for understanding:
 - Fully testable, modular, and CI-enabled
 - Gas-efficient contract design
 - Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+- Upgrade-safe deprecation tracking for legacy contract entrypoints with warning events and migration guides
 
 ---
 
