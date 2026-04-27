@@ -1,9 +1,14 @@
 #![no_std]
 
 mod types;
+mod test;
 
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
 use types::{Availability, DataKey, Error, PrivacySettings, ProviderProfile};
+use uzima_sanitization::{
+    sanitize_email, sanitize_name, sanitize_string, SanitizationError, MAX_BIO_LEN,
+    MAX_GENERAL_LEN,
+};
 
 #[contract]
 pub struct ProviderDirectoryContract;
@@ -41,6 +46,11 @@ impl ProviderDirectoryContract {
     ) -> Result<(), Error> {
         provider.require_auth();
         Self::check_paused(&env)?;
+
+        sanitize_name(&env, &name).map_err(Self::map_sanitization_error)?;
+        sanitize_string(&env, &bio, MAX_BIO_LEN).map_err(Self::map_sanitization_error)?;
+        sanitize_string(&env, &location, MAX_GENERAL_LEN).map_err(Self::map_sanitization_error)?;
+        sanitize_email(&env, &contact_info).map_err(Self::map_sanitization_error)?;
 
         let mut profile = if let Some(existing) = env
             .storage()
@@ -196,7 +206,13 @@ impl ProviderDirectoryContract {
         Ok(())
     }
 
-    /// Private helper to check if contract is paused
+    fn map_sanitization_error(e: SanitizationError) -> Error {
+        match e {
+            SanitizationError::InputTooLong => Error::InputTooLong,
+            _ => Error::InvalidInput,
+        }
+    }
+
     fn check_paused(env: &Env) -> Result<(), Error> {
         let paused = env
             .storage()

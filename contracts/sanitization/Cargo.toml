@@ -1,17 +1,15 @@
 [package]
-name = "provider_directory"
+name = "uzima-sanitization"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
-repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["rlib"]
 
 [dependencies]
 soroban-sdk.workspace = true
-uzima-sanitization = { path = "../sanitization" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

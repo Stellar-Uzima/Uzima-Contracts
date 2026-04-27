@@ -9,6 +9,9 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     String, Symbol, Vec,
 };
+use uzima_sanitization::{
+    sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
+};
 
 // ============================================================================
 // W3C DID COMPLIANT DECENTRALIZED IDENTITY REGISTRY
@@ -45,6 +48,8 @@ pub enum Error {
     ServiceNotFound = 21,
     InvalidServiceEndpoint = 22,
     KeyRotationCooldown = 23,
+    InputTooLong = 24,
+    InvalidInput = 25,
 }
 
 // === DID Document Structures (W3C Compliant) ===
@@ -312,6 +317,8 @@ impl IdentityRegistryContract {
     /// Initialize the contract with an owner and network identifier
     pub fn initialize(env: Env, owner: Address, network_id: String) -> Result<(), Error> {
         owner.require_auth();
+
+        sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
 
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
@@ -1342,6 +1349,11 @@ impl IdentityRegistryContract {
     ) -> Result<(), Error> {
         subject.require_auth();
 
+        sanitize_id(&env, &service_id).map_err(Self::map_sanitization_error)?;
+        sanitize_string(&env, &service_type, MAX_GENERAL_LEN)
+            .map_err(Self::map_sanitization_error)?;
+        sanitize_url(&env, &endpoint).map_err(|_| Error::InvalidServiceEndpoint)?;
+
         let mut did_doc: DIDDocument = env
             .storage()
             .persistent()
@@ -1486,6 +1498,10 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
+
+        if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
+            panic!("invalid meta");
+        }
 
         let identity_record = IdentityRecord {
             hash: hash.clone(),
@@ -1640,6 +1656,13 @@ impl IdentityRegistryContract {
     // ========================================================================
     // HELPER FUNCTIONS
     // ========================================================================
+
+    fn map_sanitization_error(e: SanitizationError) -> Error {
+        match e {
+            SanitizationError::InputTooLong => Error::InputTooLong,
+            _ => Error::InvalidInput,
+        }
+    }
 
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
