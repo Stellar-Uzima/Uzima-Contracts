@@ -159,19 +159,19 @@ where
 }
 
 impl SafeSerialize for String {
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::safe_serialize_string(env, self)
+    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
+        SerializationUtils::safe_serialize_string(_env, self)
     }
 }
 
 impl<const N: usize> SafeSerialize for BytesN<N> {
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
+    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
         SerializationUtils::validate_bytes_n(self)
     }
 }
 
 impl SafeSerialize for Address {
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
+    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
         SerializationUtils::validate_address(self)
     }
 }
