@@ -26,6 +26,7 @@ pub enum Error {
     // --- Financial & Resource (500–599) ---
     NoBasisToRefund = 560,
     NoCredit = 561,
+    Overflow = 562,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {
