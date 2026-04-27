@@ -42,14 +42,22 @@ impl ProviderDirectoryContract {
         provider.require_auth();
         Self::check_paused(&env)?;
 
-        let mut profile = if let Some(existing) = env
+        let existing: Option<ProviderProfile> = env
             .storage()
             .persistent()
-            .get::<DataKey, ProviderProfile>(&DataKey::Profile(provider.clone()))
-        {
-            existing
+            .get::<DataKey, ProviderProfile>(&DataKey::Profile(provider.clone()));
+
+        let mut profile = if let Some(prev) = existing {
+            // For added specialties, append provider to the index.
+            // Stale entries for removed specialties are tolerated (search validates against profile).
+            for s in specialties.iter() {
+                if !prev.specialties.contains(s.clone()) {
+                    Self::index_specialty(&env, &s, &provider);
+                }
+            }
+            prev
         } else {
-            // New profile
+            // New provider: register in ProviderList and index all specialties
             let mut list = env
                 .storage()
                 .persistent()
@@ -59,6 +67,10 @@ impl ProviderDirectoryContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::ProviderList, &list);
+
+            for s in specialties.iter() {
+                Self::index_specialty(&env, &s, &provider);
+            }
 
             ProviderProfile {
                 address: provider.clone(),
@@ -148,21 +160,22 @@ impl ProviderDirectoryContract {
         Ok(())
     }
 
-    /// Search providers by specialty
+    /// Search providers by specialty using the specialty index for O(M) reads instead of O(N)
     pub fn search_by_specialty(env: Env, specialty: Symbol) -> Vec<ProviderProfile> {
-        let list = env
+        let candidates: Vec<Address> = env
             .storage()
             .persistent()
-            .get::<DataKey, Vec<Address>>(&DataKey::ProviderList)
+            .get::<DataKey, Vec<Address>>(&DataKey::SpecialtyProviders(specialty.clone()))
             .unwrap_or(Vec::new(&env));
-        let mut results = Vec::new(&env);
 
-        for provider in list.iter() {
+        let mut results = Vec::new(&env);
+        for addr in candidates.iter() {
             if let Some(profile) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, ProviderProfile>(&DataKey::Profile(provider))
+                .get::<DataKey, ProviderProfile>(&DataKey::Profile(addr))
             {
+                // Validate against live profile to handle stale index entries
                 if profile.specialties.contains(specialty.clone()) {
                     results.push_back(profile);
                 }
@@ -194,6 +207,53 @@ impl ProviderDirectoryContract {
             .persistent()
             .set(&DataKey::Profile(provider), &profile);
         Ok(())
+    }
+
+    /// Batch verify multiple providers (Admin only). Reads admin once for the whole batch.
+    pub fn batch_verify_providers(
+        env: Env,
+        admin: Address,
+        providers: Vec<Address>,
+    ) -> Result<u32, Error> {
+        admin.require_auth();
+        let stored_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != stored_admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        let mut verified_count: u32 = 0;
+        for provider in providers.iter() {
+            if let Some(mut profile) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ProviderProfile>(&DataKey::Profile(provider.clone()))
+            {
+                if !profile.is_verified {
+                    profile.is_verified = true;
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Profile(provider), &profile);
+                    verified_count = verified_count.saturating_add(1);
+                }
+            }
+        }
+        Ok(verified_count)
+    }
+
+    /// Append provider to specialty index (deduplicated check skipped for gas; search validates)
+    fn index_specialty(env: &Env, specialty: &Symbol, provider: &Address) {
+        let key = DataKey::SpecialtyProviders(specialty.clone());
+        let mut list: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Address>>(&key)
+            .unwrap_or(Vec::new(env));
+        list.push_back(provider.clone());
+        env.storage().persistent().set(&key, &list);
     }
 
     /// Private helper to check if contract is paused

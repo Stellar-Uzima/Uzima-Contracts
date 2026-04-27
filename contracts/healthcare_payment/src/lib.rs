@@ -876,6 +876,56 @@ impl HealthcarePayment {
         Ok(())
     }
 
+    /// Process multiple approved claims in one call. Reads Config and creates TokenClient once.
+    pub fn batch_process_payments(env: Env, claim_ids: Vec<u64>) -> Result<Vec<u64>, Error> {
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
+        let token_client = TokenClient::new(&env, &config.token);
+        let current_time = env.ledger().timestamp();
+        let contract_addr = env.current_contract_address();
+
+        let mut paid_ids = Vec::new(&env);
+
+        for claim_id in claim_ids.iter() {
+            let mut claim: Claim = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Claim(claim_id))
+                .ok_or(Error::ClaimNotFound)?;
+
+            if claim.status != ClaimStatus::Approved {
+                return Err(Error::InvalidStatus);
+            }
+
+            let (provider_amount, fee_amount): (i128, i128) = env.invoke_contract(
+                &config.payment_router,
+                &Symbol::new(&env, "compute_split"),
+                Vec::from_array(&env, [claim.amount.into_val(&env)]),
+            );
+
+            token_client.transfer(&contract_addr, &claim.provider, &provider_amount);
+            if fee_amount > 0 {
+                token_client.transfer(&contract_addr, &config.treasury, &fee_amount);
+            }
+
+            claim.status = ClaimStatus::Paid;
+            claim.updated_at = current_time;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Claim(claim_id), &claim);
+            env.events().publish(
+                (symbol_short!("CLAIM_PD"),),
+                (claim_id, claim.provider, provider_amount),
+            );
+            paid_ids.push_back(claim_id);
+        }
+
+        Ok(paid_ids)
+    }
+
     pub fn escrow_claim(env: Env, claim_id: u64) -> Result<(), Error> {
         let config: Config = env
             .storage()
