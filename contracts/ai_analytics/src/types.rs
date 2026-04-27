@@ -1,5 +1,5 @@
+use crate::serialization_utils::{SafeSerialize, SerializationError};
 use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
-use crate::serialization_utils::{SerializationError, SafeSerialize};
 
 #[derive(Clone)]
 #[contracttype]
@@ -18,16 +18,16 @@ impl SafeSerialize for FederatedRound {
     fn safe_serialize(&self, env: &soroban_sdk::Env) -> Result<(), SerializationError> {
         // Validate individual fields
         self.base_model_id.safe_serialize(env)?;
-        
+
         // Validate edge cases
         if self.min_participants == 0 {
             soroban_sdk::log!("Warning: FederatedRound with zero minimum participants");
         }
-        
+
         if self.total_updates == 0 && !self.is_finalized {
             soroban_sdk::log!("Warning: Unfinalized round with zero updates");
         }
-        
+
         Ok(())
     }
 }
@@ -46,12 +46,12 @@ impl SafeSerialize for ParticipantUpdateMeta {
         // Validate individual fields
         self.participant.safe_serialize(env)?;
         self.update_hash.safe_serialize(env)?;
-        
+
         // Validate edge cases
         if self.num_samples == 0 {
             soroban_sdk::log!("Warning: ParticipantUpdateMeta with zero samples");
         }
-        
+
         Ok(())
     }
 }
@@ -74,20 +74,20 @@ impl SafeSerialize for ModelMetadata {
         self.description.safe_serialize(env)?;
         self.metrics_ref.safe_serialize(env)?;
         self.fairness_report_ref.safe_serialize(env)?;
-        
+
         // Validate edge cases
         if self.description.is_empty() {
             soroban_sdk::log!("Warning: ModelMetadata with empty description");
         }
-        
+
         if self.metrics_ref.is_empty() && self.fairness_report_ref.is_empty() {
             soroban_sdk::log!("Warning: ModelMetadata with no references");
         }
-        
+
         if self.created_at == 0 {
             soroban_sdk::log!("Warning: ModelMetadata with zero timestamp");
         }
-        
+
         Ok(())
     }
 }

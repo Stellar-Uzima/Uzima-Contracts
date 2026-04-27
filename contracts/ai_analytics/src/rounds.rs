@@ -1,9 +1,9 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 use crate::{
+    serialization_utils::{SafeSerialize, SerializationError},
     types::{DataKey, Error, FederatedRound, ModelMetadata, ParticipantUpdateMeta},
     utils,
-    serialization_utils::{SerializationError, SafeSerialize},
 };
 
 pub fn start_round(
@@ -33,7 +33,9 @@ pub fn start_round(
     };
 
     // Validate serialization before storing
-    round.safe_serialize(&env).map_err(|_| Error::SerializationError)?;
+    round
+        .safe_serialize(&env)
+        .map_err(|_| Error::SerializationError)?;
 
     env.storage().instance().set(&DataKey::Round(id), &round);
     env.events().publish((symbol_short!("RndStart"),), id);
@@ -72,7 +74,9 @@ pub fn submit_update(
     };
 
     // Validate serialization before storing
-    update.safe_serialize(&env).map_err(|_| Error::SerializationError)?;
+    update
+        .safe_serialize(&env)
+        .map_err(|_| Error::SerializationError)?;
 
     env.storage().instance().set(&key, &update);
 
@@ -129,7 +133,9 @@ pub fn finalize_round(
     };
 
     // Validate serialization before storing
-    metadata.safe_serialize(&env).map_err(|_| Error::SerializationError)?;
+    metadata
+        .safe_serialize(&env)
+        .map_err(|_| Error::SerializationError)?;
 
     env.storage()
         .instance()

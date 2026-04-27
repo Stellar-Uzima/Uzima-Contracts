@@ -2,10 +2,10 @@
 
 mod admin;
 mod rounds;
+mod serialization_edge_cases;
+mod serialization_utils;
 mod types;
 mod utils;
-mod serialization_utils;
-mod serialization_edge_cases;
 
 #[cfg(all(test, feature = "testutils"))]
 mod test;

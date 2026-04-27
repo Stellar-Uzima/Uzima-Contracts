@@ -764,9 +764,7 @@ impl CrossChainBridgeContract {
             .get::<DataKey, CrossChainMessage>(&msg_key)
             .ok_or(Error::MessageNotFound)?;
 
-        if message.status == MessageStatus::Executed
-            || message.status == MessageStatus::Failed
-        {
+        if message.status == MessageStatus::Executed || message.status == MessageStatus::Failed {
             return Err(Error::MessageAlreadyProcessed);
         }
 
@@ -809,9 +807,7 @@ impl CrossChainBridgeContract {
             .get::<DataKey, CrossChainMessage>(&msg_key)
             .ok_or(Error::MessageNotFound)?;
 
-        if message.status != MessageStatus::Failed
-            && message.status != MessageStatus::Expired
-        {
+        if message.status != MessageStatus::Failed && message.status != MessageStatus::Expired {
             return Err(Error::MessageAlreadyProcessed);
         }
 
