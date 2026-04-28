@@ -151,40 +151,9 @@ impl MetaTxForwarder {
         signature: BytesN<64>,
     ) -> Result<Bytes, Error> {
         relayer.require_auth();
-
-        // Verify relayer is authorized
         Self::require_active_relayer(&env, &relayer)?;
-
-        // Verify request hasn't expired
         let current_time = env.ledger().timestamp();
-        if current_time > request.deadline {
-            return Err(Error::RequestExpired);
-        }
-
-        // Verify nonce (don't increment yet)
-        Self::verify_nonce(&env, &request.from, request.nonce)?;
-
-        // Verify signature
-        Self::verify_signature(&env, &request, &signature)?;
-
-        // Execute the forwarded call
-        let result = Self::forward_call(&env, &request)?;
-
-        // Only increment nonce after successful execution
-        Self::increment_nonce(&env, &request.from);
-
-        // Emit forwarding event
-        env.events().publish(
-            (symbol_short!("fwd"),),
-            (
-                relayer.clone(),
-                request.from.clone(),
-                request.to.clone(),
-                request.nonce,
-            ),
-        );
-
-        Ok(result)
+        Self::execute_one(&env, request, signature, current_time, &relayer)
     }
 
     /// Execute multiple meta-transactions in a batch
@@ -200,25 +169,20 @@ impl MetaTxForwarder {
         signatures: Vec<BytesN<64>>,
     ) -> Result<Vec<Bytes>, Error> {
         relayer.require_auth();
-
-        // Verify relayer is authorized
         Self::require_active_relayer(&env, &relayer)?;
 
-        // Verify same length
         if requests.len() != signatures.len() {
             return Err(Error::BatchLengthMismatch);
         }
 
+        // Read timestamp once for all requests in the batch
+        let current_time = env.ledger().timestamp();
         let mut results = Vec::new(&env);
 
         for i in 0..requests.len() {
             let request = requests.get(i).ok_or(Error::InvalidSignature)?;
             let signature = signatures.get(i).ok_or(Error::InvalidSignature)?;
-
-            // Execute each request
-            let result = Self::execute(env.clone(), relayer.clone(), request, signature)?;
-
-            results.push_back(result);
+            results.push_back(Self::execute_one(&env, request, signature, current_time, &relayer)?);
         }
 
         Ok(results)
@@ -365,6 +329,28 @@ impl MetaTxForwarder {
     // ========================================================================
     // Internal Helper Functions
     // ========================================================================
+
+    /// Inner execute: deadline + nonce + sig check, then forward. Relayer auth must be done by caller.
+    fn execute_one(
+        env: &Env,
+        request: ForwardRequest,
+        signature: BytesN<64>,
+        current_time: u64,
+        relayer: &Address,
+    ) -> Result<Bytes, Error> {
+        if current_time > request.deadline {
+            return Err(Error::RequestExpired);
+        }
+        Self::verify_nonce(env, &request.from, request.nonce)?;
+        Self::verify_signature(env, &request, &signature)?;
+        let result = Self::forward_call(env, &request)?;
+        Self::increment_nonce(env, &request.from);
+        env.events().publish(
+            (symbol_short!("fwd"),),
+            (relayer.clone(), request.from.clone(), request.to.clone(), request.nonce),
+        );
+        Ok(result)
+    }
 
     /// Verify user nonce without incrementing
     fn verify_nonce(env: &Env, user: &Address, expected_nonce: u64) -> Result<(), Error> {
