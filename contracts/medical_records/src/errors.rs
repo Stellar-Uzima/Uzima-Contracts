@@ -77,6 +77,7 @@ pub enum Error {
     InvalidParticipantCount = 834,
 }
 
+#[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
