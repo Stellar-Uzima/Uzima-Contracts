@@ -382,7 +382,7 @@ pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
 /// * `address` - The address to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 ///
 /// # Note
 /// In Soroban, we validate addresses by ensuring they're provided and authorized
@@ -403,7 +403,7 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
 /// * `addr2` - Second address
 ///
 /// # Returns
-/// `Ok(())` if addresses are different, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if addresses are different, otherwise returns `Error::Unauthorized`
 pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<(), Error> {
     if addr1 == addr2 {
         return Err(Error::SameAddress);
@@ -535,7 +535,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 /// * `amount` - The amount to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NumberOutOfBounds);
@@ -554,7 +554,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 /// * `page_size` - The page size
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
@@ -1053,7 +1053,7 @@ pub fn compute_quality_score(
 pub fn validate_fhir_compliance(env: &Env, record: &MedicalRecord) -> (u32, Vec<ValidationIssue>) {
     let mut issues: Vec<ValidationIssue> = Vec::new(env);
     let mut checks_passed = 0u32;
-    let total_checks = 7u32;
+    let total_checks = 5u32;
 
     // FHIR: subject (patient) reference is mandatory
     // Validates that a real patient address is present and differs from the doctor.
@@ -1366,7 +1366,7 @@ fn try_normalize_category(env: &Env, input: &String) -> Option<String> {
     let variants: [(&str, &str); 12] = [
         ("modern", "Modern"),
         ("MODERN", "Modern"),
-        ("Modern ", "Modern"),  // trailing space variant
+        ("Modern ", "Modern"), // trailing space variant
         ("traditional", "Traditional"),
         ("TRADITIONAL", "Traditional"),
         ("Traditional ", "Traditional"),

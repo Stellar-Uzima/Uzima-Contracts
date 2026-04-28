@@ -48,9 +48,9 @@ impl AntiMoneyLaundering {
                 blacklisted_count: 0,
             },
         );
+        upgradeability::storage::set_deprecated_functions(&env, &Self::deprecated_functions(&env));
         env.events().publish((symbol_short!("Init"),), admin);
         Ok(())
-        upgradeability::storage::set_deprecated_functions(&env, &Self::deprecated_functions(&env));
     }
 
     /// Configure an AML rule

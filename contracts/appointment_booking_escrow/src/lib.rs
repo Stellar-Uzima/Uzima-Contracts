@@ -9,9 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Vec};
 
 // ==================== Data Types ====================
 
@@ -78,7 +76,7 @@ pub struct AppointmentBookingEscrow;
 #[contractimpl]
 impl AppointmentBookingEscrow {
     /// Initialize the contract with an admin and token address
-    pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address, _token: Address) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Initialized) {
@@ -91,10 +89,18 @@ impl AppointmentBookingEscrow {
             .instance()
             .set(&DataKey::AppointmentCounter, &0u64);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.storage().instance().set(&DataKey::LastActivity, &env.ledger().timestamp());
-        env.storage().instance().set(&DataKey::TotalOperations, &0u64);
-        env.storage().instance().set(&DataKey::FailedOperations, &0u64);
-        env.storage().instance().set(&DataKey::Version, &String::from_str(&env, "1.0.0"));
+        env.storage()
+            .instance()
+            .set(&DataKey::LastActivity, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::FailedOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, "1.0.0"));
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -168,9 +174,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::PatientAppointments(patient.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         patient_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::PatientAppointments(patient), &patient_appts);
+        env.storage().persistent().set(
+            &DataKey::PatientAppointments(patient.clone()),
+            &patient_appts,
+        );
 
         // Add to provider's appointments list
         let mut provider_appts: Vec<u64> = env
@@ -179,9 +186,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::ProviderAppointments(provider.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         provider_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderAppointments(provider), &provider_appts);
+        env.storage().persistent().set(
+            &DataKey::ProviderAppointments(provider.clone()),
+            &provider_appts,
+        );
 
         events::publish_appointment_booked(
             &env,
@@ -213,9 +221,9 @@ impl AppointmentBookingEscrow {
             .persistent()
             .get(&appointment_key)
             .ok_or_else(|| {
-                Self::record_operation(&env, false);
-                Error::AppointmentNotFound
-            })?;
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Verify provider matches
         if appointment.provider != provider {
@@ -224,7 +232,9 @@ impl AppointmentBookingEscrow {
         }
 
         // Check if already confirmed or refunded
-        if appointment.status == AppointmentStatus::Confirmed {
+        if appointment.status == AppointmentStatus::Confirmed
+            || appointment.status == AppointmentStatus::Completed
+        {
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyConfirmed);
         }
@@ -290,9 +300,9 @@ impl AppointmentBookingEscrow {
             .persistent()
             .get(&appointment_key)
             .ok_or_else(|| {
-                Self::record_operation(&env, false);
-                Error::AppointmentNotFound
-            })?;
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Verify patient matches
         if appointment.patient != patient {
@@ -420,31 +430,36 @@ impl AppointmentBookingEscrow {
 
     /// Get comprehensive health check
     pub fn health_check(env: Env) -> ContractHealth {
-        let version = env.storage()
+        let version = env
+            .storage()
             .instance()
             .get(&DataKey::Version)
             .unwrap_or_else(|| String::from_str(&env, "1.0.0"));
-        
-        let is_paused = env.storage()
+
+        let is_paused = env
+            .storage()
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false);
-        
-        let last_activity = env.storage()
+
+        let last_activity = env
+            .storage()
             .instance()
             .get(&DataKey::LastActivity)
             .unwrap_or(0);
-        
-        let total_operations = env.storage()
+
+        let total_operations: u64 = env
+            .storage()
             .instance()
             .get(&DataKey::TotalOperations)
             .unwrap_or(0);
-        
-        let failed_operations = env.storage()
+
+        let failed_operations: u64 = env
+            .storage()
             .instance()
             .get(&DataKey::FailedOperations)
             .unwrap_or(0);
-        
+
         let success_rate = if total_operations > 0 {
             let successful = total_operations.saturating_sub(failed_operations);
             ((successful * 10000) / total_operations) as u32
@@ -452,7 +467,8 @@ impl AppointmentBookingEscrow {
             10000u32
         };
 
-        let total_appointments = env.storage()
+        let total_appointments = env
+            .storage()
             .instance()
             .get(&DataKey::AppointmentCounter)
             .unwrap_or(0);
@@ -478,12 +494,13 @@ impl AppointmentBookingEscrow {
     pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
-        
-        let stored_admin: Address = env.storage()
+
+        let stored_admin: Address = env
+            .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        
+
         if admin != stored_admin {
             return Err(Error::NotInitialized); // Reusing error for unauthorized
         }
@@ -510,20 +527,28 @@ impl AppointmentBookingEscrow {
     }
 
     fn record_operation(env: &Env, success: bool) {
-        env.storage().instance().set(&DataKey::LastActivity, &env.ledger().timestamp());
-        
-        let total: u64 = env.storage()
+        env.storage()
+            .instance()
+            .set(&DataKey::LastActivity, &env.ledger().timestamp());
+
+        let total: u64 = env
+            .storage()
             .instance()
             .get(&DataKey::TotalOperations)
             .unwrap_or(0);
-        env.storage().instance().set(&DataKey::TotalOperations, &(total + 1));
-        
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalOperations, &(total + 1));
+
         if !success {
-            let failed: u64 = env.storage()
+            let failed: u64 = env
+                .storage()
                 .instance()
                 .get(&DataKey::FailedOperations)
                 .unwrap_or(0);
-            env.storage().instance().set(&DataKey::FailedOperations, &(failed + 1));
+            env.storage()
+                .instance()
+                .set(&DataKey::FailedOperations, &(failed + 1));
         }
     }
 }

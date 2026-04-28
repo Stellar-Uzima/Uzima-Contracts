@@ -100,6 +100,8 @@ fmt:
 lint: check-deps
 	@echo "Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
+	@echo "Checking error codes..."
+	bash scripts/check_error_codes.sh
 
 # Lint shell scripts
 shellcheck: check-deps

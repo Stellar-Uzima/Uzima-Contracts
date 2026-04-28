@@ -284,7 +284,11 @@ impl AnomalyDetectorContract {
             .instance()
             .get(&DataKey::AlertCount)
             .unwrap_or(0);
-        let limit = if count == 0 || count > total { total } else { count };
+        let limit = if count == 0 || count > total {
+            total
+        } else {
+            count
+        };
         let mut cleared: u64 = 0;
         for i in 0..limit {
             if let Some(mut alert) = env

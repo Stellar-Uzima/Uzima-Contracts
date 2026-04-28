@@ -4,68 +4,66 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    // --- System & State Errors (1-9) ---
-    ContractPaused = 1,
-    NotInitialized = 2,
-    InvalidConfiguration = 3,
-    ProcessingTimeout = 4,
-    RateLimitExceeded = 5,
+    // --- Authorization (100–199) ---
+    Unauthorized = 100,
+    InsufficientPermissions = 101,
+    HIPAAComplianceViolation = 104,
+    RecordAccessDenied = 112,
 
-    // --- Input Validation Errors (10-19) ---
-    EmptyClinicalNote = 10,
-    InvalidInputLength = 11,
-    InvalidLanguageCode = 12,
-    InvalidEncoding = 13,
-    InputTooLarge = 14,
+    // --- Input Validation (200–299) ---
+    InputTooLong = 201,
+    BatchTooLarge = 208,
+    EmptyClinicalNote = 209,
+    InvalidLanguageCode = 212,
+    InvalidEncoding = 213,
 
-    // --- NLP Processing Errors (20-29) ---
-    NLPEngineNotInitialized = 20,
-    EntityExtractionFailed = 21,
-    ConceptExtractionFailed = 22,
-    SentimentAnalysisFailed = 23,
-    CodingSuggestionFailed = 24,
-    TokenizationFailed = 25,
-    LanguageDetectionFailed = 26,
+    // --- Lifecycle & State (300–399) ---
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+    ContractPaused = 302,
+    RateLimitExceeded = 307,
+    Timeout = 308,
+    InvalidConfiguration = 310,
 
-    // --- Medical Terms Errors (30-39) ---
-    MedicalTermNotFound = 30,
-    InvalidMedicalTerm = 31,
-    TermDatabaseNotLoaded = 32,
+    // --- Entity Existence (400–499) ---
+    RecordNotFound = 403,
 
-    // --- Coding Errors (40-49) ---
-    ICD10CodeNotFound = 40,
-    CPTCodeNotFound = 41,
-    InvalidCodeFormat = 42,
-    CodeMappingFailed = 43,
+    // --- Integration (700–799) ---
+    IntegrationFailed = 704,
+    ExternalContractNotSet = 705,
 
-    // --- Integration Errors (50-59) ---
-    MedicalRecordsContractNotSet = 50,
-    RecordAccessDenied = 51,
-    RecordNotFound = 52,
-    IntegrationFailed = 53,
-
-    // --- Authorization Errors (60-69) ---
-    NotAuthorized = 60,
-    InsufficientPermissions = 61,
-    HIPAAComplianceViolation = 62,
-
-    // --- Performance Errors (70-79) ---
-    ProcessingTimeExceeded = 70,
-    MemoryLimitExceeded = 71,
-    BatchSizeTooLarge = 72,
+    // --- Domain-Specific: NLP (800–899) ---
+    NLPEngineNotInitialized = 800,
+    EntityExtractionFailed = 801,
+    ConceptExtractionFailed = 802,
+    SentimentAnalysisFailed = 803,
+    CodingSuggestionFailed = 804,
+    TokenizationFailed = 805,
+    LanguageDetectionFailed = 806,
+    MedicalTermNotFound = 807,
+    InvalidMedicalTerm = 808,
+    TermDatabaseNotLoaded = 809,
+    ICD10CodeNotFound = 810,
+    CPTCodeNotFound = 811,
+    InvalidCodeFormat = 812,
+    CodeMappingFailed = 813,
 }
 
-/// Recovery suggestions to help users fix issues
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::EmptyClinicalNote => symbol_short!("ADD_TEXT"),
-        Error::InvalidInputLength => symbol_short!("CHK_LEN"),
+        Error::InputTooLong => symbol_short!("CHK_LEN"),
         Error::InvalidLanguageCode => symbol_short!("FIX_LANG"),
-        Error::ProcessingTimeout => symbol_short!("RETRY"),
-        Error::NotAuthorized => symbol_short!("CHK_AUTH"),
-        Error::MedicalRecordsContractNotSet => symbol_short!("SET_CNTR"),
-        Error::InputTooLarge => symbol_short!("REDUCE"),
+        Error::Timeout => symbol_short!("RE_TRY_L"),
+        Error::Unauthorized | Error::InsufficientPermissions | Error::RecordAccessDenied => {
+            symbol_short!("CHK_AUTH")
+        }
+        Error::ExternalContractNotSet => symbol_short!("SET_CNTR"),
+        Error::BatchTooLarge => symbol_short!("REDUCE"),
         Error::HIPAAComplianceViolation => symbol_short!("CHK_PHI"),
+        Error::NotInitialized => symbol_short!("INIT_CTR"),
+        Error::AlreadyInitialized => symbol_short!("ALREADY"),
+        Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
         _ => symbol_short!("CONTACT"),
     }
 }
