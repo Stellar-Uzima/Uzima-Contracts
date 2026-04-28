@@ -1,156 +1,120 @@
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
-    use soroban_sdk::{Address, Env};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Env,
+    };
 
-    fn setup() -> (Env, PatientConsentManagementClient, Address) {
+    fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let client = PatientConsentManagementClient::new(
-            &env,
-            &env.register_contract(None, PatientConsentManagement),
-        );
+        env.mock_all_auths();
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1_000_000;
+        });
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, PatientConsentManagement);
+        let client = PatientConsentManagementClient::new(&env, &contract_id);
         (env, client, admin)
     }
 
     #[test]
     fn test_initialize() {
-        let (env, client, admin) = setup();
-        let result = client.initialize(&admin);
-        assert!(result.is_ok());
+        let (_env, client, admin) = setup();
+        client.initialize(&admin);
     }
 
     #[test]
     fn test_initialize_twice_fails() {
-        let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-        let result = client.initialize(&admin);
-        assert_eq!(result, Err(Error::AlreadyInitialized));
+        let (_env, client, admin) = setup();
+        client.initialize(&admin);
+        let result = client.try_initialize(&admin);
+        assert_eq!(result, Err(Ok(Error::AlreadyInitialized)));
     }
 
     #[test]
     fn test_grant_consent() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        let result = client.grant_consent(&patient, &provider);
-        assert!(result.is_ok());
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
     }
 
     #[test]
     fn test_check_consent_after_grant() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Check consent
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
         let result = client.check_consent(&patient, &provider);
-        assert_eq!(result, Ok(true));
+        assert!(result);
     }
 
     #[test]
     fn test_check_consent_before_grant() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Check without granting
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
         let result = client.check_consent(&patient, &provider);
-        assert_eq!(result, Ok(false));
+        assert!(!result);
     }
 
     #[test]
     fn test_revoke_consent() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Verify it's granted
-        assert_eq!(client.check_consent(&patient, &provider), Ok(true));
-
-        // Revoke consent
-        let result = client.revoke_consent(&patient, &provider);
-        assert!(result.is_ok());
-
-        // Verify it's revoked
-        assert_eq!(client.check_consent(&patient, &provider), Ok(false));
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        assert!(client.check_consent(&patient, &provider));
+        client.revoke_consent(&patient, &provider);
+        assert!(!client.check_consent(&patient, &provider));
     }
 
     #[test]
     fn test_revoke_nonexistent_consent() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Try to revoke without granting
-        let result = client.revoke_consent(&patient, &provider);
-        assert_eq!(result, Err(Error::ConsentNotFound));
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let result = client.try_revoke_consent(&patient, &provider);
+        assert_eq!(result, Err(Ok(Error::ConsentNotFound)));
     }
 
     #[test]
     fn test_duplicate_consent_fails() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Try to grant same consent again
-        let result = client.grant_consent(&patient, &provider);
-        assert_eq!(result, Err(Error::ConsentAlreadyExists));
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        let result = client.try_grant_consent(&patient, &provider);
+        assert_eq!(result, Err(Ok(Error::ConsentAlreadyExists)));
     }
 
     #[test]
     fn test_patient_to_self_fails() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-
-        // Try to grant consent to self
-        let result = client.grant_consent(&patient, &patient);
-        assert_eq!(result, Err(Error::InvalidProvider));
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let result = client.try_grant_consent(&patient, &patient);
+        assert_eq!(result, Err(Ok(Error::InvalidProvider)));
     }
 
     #[test]
     fn test_multiple_providers_same_patient() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider1 = Address::random(&env);
-        let provider2 = Address::random(&env);
-
-        // Grant to multiple providers
-        client.grant_consent(&patient, &provider1).unwrap();
-        client.grant_consent(&patient, &provider2).unwrap();
-
-        // Verify both
-        assert_eq!(client.check_consent(&patient, &provider1), Ok(true));
-        assert_eq!(client.check_consent(&patient, &provider2), Ok(true));
-
-        // Get count
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider1 = Address::generate(&env);
+        let provider2 = Address::generate(&env);
+        client.grant_consent(&patient, &provider1);
+        client.grant_consent(&patient, &provider2);
+        assert!(client.check_consent(&patient, &provider1));
+        assert!(client.check_consent(&patient, &provider2));
         let count = client.get_active_consent_count(&patient);
         assert_eq!(count, 2);
     }
@@ -158,39 +122,26 @@ mod tests {
     #[test]
     fn test_grant_revoke_regrant() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant
-        client.grant_consent(&patient, &provider).unwrap();
-        assert_eq!(client.check_consent(&patient, &provider), Ok(true));
-
-        // Revoke
-        client.revoke_consent(&patient, &provider).unwrap();
-        assert_eq!(client.check_consent(&patient, &provider), Ok(false));
-
-        // Re-grant (should work since previous is revoked)
-        let result = client.grant_consent(&patient, &provider);
-        assert!(result.is_ok());
-        assert_eq!(client.check_consent(&patient, &provider), Ok(true));
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        assert!(client.check_consent(&patient, &provider));
+        client.revoke_consent(&patient, &provider);
+        assert!(!client.check_consent(&patient, &provider));
+        client.grant_consent(&patient, &provider);
+        assert!(client.check_consent(&patient, &provider));
     }
 
     #[test]
     fn test_get_patient_consents() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider1 = Address::random(&env);
-        let provider2 = Address::random(&env);
-
-        // Grant consents
-        client.grant_consent(&patient, &provider1).unwrap();
-        client.grant_consent(&patient, &provider2).unwrap();
-
-        // Get consent log
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider1 = Address::generate(&env);
+        let provider2 = Address::generate(&env);
+        client.grant_consent(&patient, &provider1);
+        client.grant_consent(&patient, &provider2);
         let log = client.get_patient_consents(&patient);
         assert!(log.is_some());
         assert_eq!(log.unwrap().record_count, 2);
@@ -199,87 +150,57 @@ mod tests {
     #[test]
     fn test_verify_consent_with_audit() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Verify with audit trail
-        let result = client.verify_consent_with_audit(&patient, &provider);
-        assert!(result.is_ok());
-        let (has_consent, granted_at, revoked_at) = result.unwrap();
-        assert_eq!(has_consent, true);
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        let (has_consent, granted_at, revoked_at) =
+            client.verify_consent_with_audit(&patient, &provider);
+        assert!(has_consent);
         assert!(granted_at > 0);
-        assert_eq!(revoked_at, 0); // Not revoked
+        assert_eq!(revoked_at, 0);
     }
 
     #[test]
     fn test_verify_consent_with_audit_after_revoke() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Revoke consent
-        client.revoke_consent(&patient, &provider).unwrap();
-
-        // Verify with audit trail
-        let result = client.verify_consent_with_audit(&patient, &provider);
-        assert!(result.is_ok());
-        let (has_consent, granted_at, revoked_at) = result.unwrap();
-        assert_eq!(has_consent, false);
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        client.revoke_consent(&patient, &provider);
+        let (has_consent, granted_at, revoked_at) =
+            client.verify_consent_with_audit(&patient, &provider);
+        assert!(!has_consent);
         assert!(granted_at > 0);
-        assert!(revoked_at > 0); // Should be revoked
+        assert!(revoked_at > 0);
         assert!(revoked_at >= granted_at);
     }
 
     #[test]
     fn test_authorization_required_for_grant() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
-        let unauthorized = Address::random(&env);
-
-        // Try to grant consent as unauthorized address
-        // This should fail because unauthorized doesn't have auth for granting
-        let result = client.grant_consent(&patient, &provider);
-        // Note: In actual Soroban testing, this would fail at require_auth() at ledger time
-        // For this test structure, we're checking that grant_consent exists and behaves correctly
-        assert!(result.is_ok());
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let _unauthorized = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
     }
 
     #[test]
     fn test_get_active_consent_count() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
-
-        let patient = Address::random(&env);
-        let provider1 = Address::random(&env);
-        let provider2 = Address::random(&env);
-        let provider3 = Address::random(&env);
-
-        // Grant 3 consents
-        client.grant_consent(&patient, &provider1).unwrap();
-        client.grant_consent(&patient, &provider2).unwrap();
-        client.grant_consent(&patient, &provider3).unwrap();
-
-        // Verify count
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider1 = Address::generate(&env);
+        let provider2 = Address::generate(&env);
+        let provider3 = Address::generate(&env);
+        client.grant_consent(&patient, &provider1);
+        client.grant_consent(&patient, &provider2);
+        client.grant_consent(&patient, &provider3);
         let count = client.get_active_consent_count(&patient);
         assert_eq!(count, 3);
-
-        // Revoke one
-        client.revoke_consent(&patient, &provider2).unwrap();
-
-        // Verify count decreased
+        client.revoke_consent(&patient, &provider2);
         let count = client.get_active_consent_count(&patient);
         assert_eq!(count, 2);
     }
@@ -287,18 +208,48 @@ mod tests {
     #[test]
     fn test_consent_persistence() {
         let (env, client, admin) = setup();
-        client.initialize(&admin).unwrap();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        assert!(client.check_consent(&patient, &provider));
+        assert!(client.check_consent(&patient, &provider));
+    }
 
-        let patient = Address::random(&env);
-        let provider = Address::random(&env);
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::InvalidPatient as u32, 210);
+        assert_eq!(Error::InvalidProvider as u32, 211);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::ConsentNotFound as u32, 406);
+        assert_eq!(Error::ConsentAlreadyExists as u32, 460);
+    }
 
-        // Grant consent
-        client.grant_consent(&patient, &provider).unwrap();
-
-        // Check immediately
-        assert_eq!(client.check_consent(&patient, &provider), Ok(true));
-
-        // Check again (simulating state persistence)
-        assert_eq!(client.check_consent(&patient, &provider), Ok(true));
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use crate::errors::get_suggestion;
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            get_suggestion(Error::ConsentNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            get_suggestion(Error::InvalidPatient),
+            symbol_short!("CHK_ID")
+        );
     }
 }

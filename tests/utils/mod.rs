@@ -6,6 +6,7 @@ pub mod test_fixtures;
 pub mod test_data;
 pub mod assertions;
 pub mod performance;
+pub mod contract_fixtures;
 pub mod integration_framework;
 
 pub use contract_utils::*;
@@ -13,6 +14,7 @@ pub use test_fixtures::*;
 pub use test_data::*;
 pub use assertions::*;
 pub use performance::*;
+pub use contract_fixtures::*;
 pub use integration_framework::*;
 
 /// Common test constants

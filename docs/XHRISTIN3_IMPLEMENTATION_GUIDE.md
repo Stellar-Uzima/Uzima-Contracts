@@ -155,6 +155,8 @@ Create `docs/API_VERSIONING.md`:
 ## Scheme
 Semantic versioning: MAJOR.MINOR.PATCH stored as a single u32 (e.g., 1 = v1.0.0).
 
+See [Contract API Stability Guarantees](./api.md) for repository-wide stability levels, deprecation timelines, and compatibility policies.
+
 ## Compatibility guarantees
 - Minor/patch bumps: fully backward compatible.
 - Major bumps: compatibility layer provided for one full release cycle.

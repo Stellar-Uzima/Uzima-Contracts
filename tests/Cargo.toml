@@ -6,8 +6,8 @@ publish = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
-medical_records = { path = "../contracts/medical_records", features = ["testutils"] }
-sut_token = { path = "../contracts/sut_token", features = ["testutils"] }
+medical_records = { path = "../contracts/medical_records" }
+sut_token = { path = "../contracts/sut_token" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
