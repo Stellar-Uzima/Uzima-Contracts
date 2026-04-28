@@ -32,6 +32,11 @@ help:
 	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
 	@echo "  estimate-storage    - Calculate storage costs"
 	@echo "  estimate-cross-chain- Estimate cross-chain fees"
+	@echo "  release VERSION=X.Y.Z - Automated release process"
+	@echo "  bump-version VERSION=X.Y.Z - Bump version in all files"
+	@echo "  generate-changelog VERSION=X.Y.Z - Generate changelog entry"
+	@echo "  validate-release VERSION=X.Y.Z - Validate release prerequisites"
+	@echo "  check-versions      - Check version consistency"
 
 # Install required dependencies
 install-deps:
@@ -308,3 +313,73 @@ estimate-cross-chain:
 	@echo "Bridge Fee:            0.00010000 XLM"
 	@echo "Destination Chain Fee: 0.00032000 XLM"
 	@echo "Total Estimated Fee:   0.00087678 XLM"
+
+# ─── Release Automation (Issue #448) ───────────────────────────────────────
+
+# Release automation
+release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting release process for v$(VERSION)..."
+	./scripts/release.sh $(VERSION)
+
+# Version bump
+bump-version: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make bump-version VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	./scripts/bump_version.sh $(VERSION)
+
+# Changelog generation
+generate-changelog: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make generate-changelog VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	./scripts/generate_changelog.sh --version $(VERSION)
+
+# Release validation
+validate-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make validate-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔍 Validating release prerequisites for v$(VERSION)..."
+	@echo "Checking version format..."
+	@echo "$(VERSION)" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$$' || { echo "Invalid version format"; exit 1; }
+	@echo "Checking git state..."
+	@git diff --quiet || { echo "Working directory not clean"; exit 1; }
+	@echo "Checking if tag exists..."
+	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 && { echo "Tag v$(VERSION) already exists"; exit 1; } || echo "Tag available"
+	@echo "Running tests..."
+	$(MAKE) test
+	@echo "Running code quality checks..."
+	$(MAKE) check
+	@echo "✅ Release validation passed for v$(VERSION)"
+
+# Version consistency check
+check-versions: check-deps
+	@echo "🔍 Checking version consistency..."
+	@echo "Workspace version: $$(grep '^version = ' Cargo.toml | cut -d'"' -f2)"
+	@echo "Contract versions:"
+	@for cargo_toml in contracts/*/Cargo.toml; do \
+		if [ -f "$$cargo_toml" ]; then \
+			contract_name=$$(basename "$$(dirname "$$cargo_toml")"); \
+			version=$$(grep '^version = ' "$$cargo_toml" | cut -d'"' -f2); \
+			echo "  $$contract_name: $$version"; \
+		fi; \
+	done
+	@echo "✅ Version consistency check completed"
+
+# Release notes generation
+release-notes: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-notes VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📝 Generating release notes for v$(VERSION)..."
+	./scripts/generate_release_notes.sh --version $(VERSION) --output RELEASE_NOTES_$(VERSION).md
+	@echo "✅ Release notes saved to RELEASE_NOTES_$(VERSION).md"

@@ -71,10 +71,47 @@ jobs:
             reports/testing/pyramid.md
           retention-days: 14
 
+  # Network Configuration Validation
+  network-config:
+    name: Network Configuration Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y curl jq
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-unknown-unknown
+
+      - name: Install Soroban CLI
+        run: |
+          cargo install --locked --version 21.7.7 soroban-cli
+          soroban --version
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/network_manager.sh
+          chmod +x scripts/validate_network_config.sh
+          chmod +x scripts/deploy_enhanced.sh
+
+      - name: Validate network configuration
+        run: |
+          ./scripts/validate_network_config.sh --network testnet
+
+      - name: Test network manager
+        run: |
+          ./scripts/network_manager.sh status testnet
+
   # Code Quality
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
+    needs: [network-config]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -437,6 +474,7 @@ jobs:
       - name: Generate summary
         run: |
           echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- Network Config: ${{ needs.network-config.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Lint & Format: ${{ needs.lint.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Tests: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Node.js Tests: ${{ needs.test-nodejs.result }}" >> $GITHUB_STEP_SUMMARY
