@@ -919,6 +919,35 @@ impl MedicalRecordsContract {
         true
     }
 
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        let version = env
+            .storage()
+            .instance()
+            .get::<_, u32>(&VERSION)
+            .unwrap_or(0);
+        let timestamp = env.ledger().timestamp();
+
+        let is_paused = env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&DataKey::Paused)
+            .unwrap_or(false);
+
+        let status = if is_paused {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
+        };
+
+        events::emit_health_check(
+            &env,
+            String::from_str(&env, if is_paused { "PAUSED" } else { "OK" }),
+            0,
+        );
+
+        (status, version, timestamp)
+    }
+
     pub fn set_audit_forensics(
         env: Env,
         admin: Address,

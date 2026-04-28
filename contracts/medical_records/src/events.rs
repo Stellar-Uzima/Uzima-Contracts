@@ -681,16 +681,26 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         .publish((symbol_short!("AI_TRIG"), patient), event);
 }
 
-pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
-    let _dummy_user = Address::from_string(&String::from_str(
-        env,
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
-    ));
-
-    // WORKAROUND: In tests this address might work as a mock if strict auth isn't checked for events.
-    // However, creating arbitrary addresses in contract execution is generally not possible without a valid strkey.
-    // The previous implementation was failing.
-    // We will just do nothing for now to fix compilation as this event is non-critical System event.
+pub fn emit_health_check(env: &Env, status: String, gas_used: u64) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::HealthCheck,
+            category: OperationCategory::System,
+            timestamp: env.ledger().timestamp(),
+            user_id: env.current_contract_address(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: Some(gas_used),
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::SystemEvent(SystemEventData {
+            status,
+            metric_name: Some(String::from_str(env, "health_liveness")),
+            metric_value: Some(1),
+        }),
+    };
+    env.events()
+        .publish(("EVENT", symbol_short!("HEALTH")), event);
 }
 
 pub fn emit_permission_granted(
