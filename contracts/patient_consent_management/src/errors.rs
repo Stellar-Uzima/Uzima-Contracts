@@ -13,6 +13,7 @@ pub enum Error {
     ConsentAlreadyExists = 460,
 }
 
+#[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),
