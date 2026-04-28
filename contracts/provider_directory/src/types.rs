@@ -13,6 +13,8 @@ pub enum Error {
     InvalidAvailability = 7,
     NotVerified = 8,
     ContractPaused = 9,
+    InputTooLong = 10,
+    InvalidInput = 11,
 }
 
 #[contracttype]
