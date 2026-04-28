@@ -361,3 +361,82 @@ release-notes: check-deps
 	@echo "📝 Generating release notes for v$(VERSION)..."
 	./scripts/generate_release_notes.sh --version $(VERSION) --output RELEASE_NOTES_$(VERSION).md
 	@echo "✅ Release notes saved to RELEASE_NOTES_$(VERSION).md"
+
+# Comprehensive release validation
+validate-release-full: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make validate-release-full VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔍 Running comprehensive release validation for v$(VERSION)..."
+	./scripts/validate_release.sh $(VERSION)
+
+# Release announcement
+announce-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make announce-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📢 Sending release announcements for v$(VERSION)..."
+	./scripts/announce_release.sh $(VERSION)
+
+# Release artifact publication
+publish-artifacts: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make publish-artifacts VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📦 Publishing release artifacts for v$(VERSION)..."
+	./scripts/publish_artifacts.sh $(VERSION)
+
+# Release health check
+check-release-health: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make check-release-health VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🏥 Checking release health for v$(VERSION)..."
+	./scripts/check_release_health.sh $(VERSION)
+
+# Complete release automation pipeline
+release-pipeline: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-pipeline VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting complete release pipeline for v$(VERSION)..."
+	@echo "Step 1: Comprehensive validation..."
+	./scripts/validate_release.sh $(VERSION)
+	@echo "Step 2: Version bump..."
+	./scripts/bump_version.sh $(VERSION)
+	@echo "Step 3: Changelog generation..."
+	./scripts/generate_changelog.sh --version $(VERSION)
+	@echo "Step 4: Build and test..."
+	$(MAKE) build-opt test
+	@echo "Step 5: Create release..."
+	./scripts/release.sh $(VERSION)
+	@echo "Step 6: Publish artifacts..."
+	./scripts/publish_artifacts.sh $(VERSION)
+	@echo "Step 7: Send announcements..."
+	./scripts/announce_release.sh $(VERSION)
+	@echo "Step 8: Health check..."
+	./scripts/check_release_health.sh $(VERSION)
+	@echo "✅ Complete release pipeline finished for v$(VERSION)"
+
+# Rollback release
+rollback-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make rollback-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔄 Rolling back release v$(VERSION)..."
+	./scripts/rollback_release.sh $(VERSION)
+
+# Release metrics and analytics
+release-metrics: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-metrics VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📊 Generating release metrics for v$(VERSION)..."
+	./scripts/release_metrics.sh $(VERSION)
