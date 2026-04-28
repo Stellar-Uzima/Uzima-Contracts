@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contracts/*",
+    "tests",
     "tests/interoperability_suite",
 ]
 exclude = [
@@ -26,12 +27,13 @@ exclude = [
     "contracts/digital_twin",
     "contracts/aml",
     "contracts/forensics",
+    "contracts/audit",
+    "contracts/rbac",
     "contracts/federated_learning",
     "contracts/sync_manager",
     "contracts/failover_detector",
     "contracts/healthcare_compliance_automation",
     "contracts/drug_discovery",
-    "contracts/upgradeability",
     "contracts/health_check",
 ]
 
