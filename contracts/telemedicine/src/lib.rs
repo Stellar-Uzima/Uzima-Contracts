@@ -11,6 +11,7 @@ extern crate alloc;
 #[cfg(test)]
 mod test;
 
+use alloc::borrow::ToOwned;
 use alloc::string::{String as StdString, ToString};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, log, Address, Bytes, BytesN, Env, String,

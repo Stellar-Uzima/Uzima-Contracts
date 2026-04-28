@@ -2,6 +2,9 @@
 
 mod types;
 
+#[cfg(test)]
+mod test;
+
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
 use types::{Availability, DataKey, Error, PrivacySettings, ProviderProfile};
 
