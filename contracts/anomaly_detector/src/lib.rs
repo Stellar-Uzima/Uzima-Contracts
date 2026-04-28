@@ -298,7 +298,9 @@ impl AnomalyDetectorContract {
             {
                 if alert.status == AlertStatus::Active {
                     alert.status = AlertStatus::Resolved;
-                    env.storage().persistent().set(&DataKey::Alert(i), &alert);
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Alert(i), &alert);
                     cleared = cleared.saturating_add(1);
                 }
             }
