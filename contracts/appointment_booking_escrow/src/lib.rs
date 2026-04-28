@@ -9,7 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Vec};
 
 // ==================== Data Types ====================
 
@@ -438,12 +438,12 @@ impl AppointmentBookingEscrow {
         let total_operations = env.storage()
             .instance()
             .get(&DataKey::TotalOperations)
-            .unwrap_or(0);
+            .unwrap_or(0u64);
         
         let failed_operations = env.storage()
             .instance()
             .get(&DataKey::FailedOperations)
-            .unwrap_or(0);
+            .unwrap_or(0u64);
         
         let success_rate = if total_operations > 0 {
             let successful = total_operations.saturating_sub(failed_operations);
