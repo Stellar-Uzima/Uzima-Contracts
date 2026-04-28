@@ -1,5 +1,7 @@
 #![no_std]
 
+extern crate fp_math;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
 };
@@ -10,6 +12,14 @@ use soroban_sdk::{
 pub enum Error {
     InvalidFeeBps = 1,
     FeeNotSet = 2,
+    Overflow = 3,
+    InsufficientFunds = 10,
+    DeadlineExceeded = 11,
+    InvalidSignature = 12,
+    UnauthorizedCaller = 13,
+    ContractPaused = 14,
+    StorageFull = 15,
+    CrossChainTimeout = 16,
 }
 
 #[derive(Clone)]
@@ -52,7 +62,7 @@ impl PaymentRouter {
             .persistent()
             .get(&FEE_CONF)
             .ok_or(Error::FeeNotSet)?;
-        let fee = amount.saturating_mul(conf.platform_fee_bps as i128) / 10_000;
+        let fee = fp_math::mul_bps(amount, conf.platform_fee_bps).ok_or(Error::Overflow)?;
         let provider = amount.saturating_sub(fee);
         env.events()
             .publish((symbol_short!("FeeSplit"),), (provider, fee));

@@ -1,0 +1,5765 @@
+{
+  "registry_version": "1.0.0",
+  "generated_at": "2026-04-25T20:10:36.979Z",
+  "generator": {
+    "name": "scripts/events/generate-registry.mjs",
+    "source_glob": "contracts/**/src/**/*.rs"
+  },
+  "contracts": [
+    {
+      "name": "ai_analytics",
+      "events": [
+        {
+          "id": "ai_analytics:RndStart:contracts/ai_analytics/src/lib.rs:130",
+          "contract": "ai_analytics",
+          "topics": [
+            "RndStart"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/ai_analytics/src/lib.rs",
+            "line": 130
+          }
+        }
+      ]
+    },
+    {
+      "name": "aml",
+      "events": [
+        {
+          "id": "aml:AML.STATUS:contracts/aml/src/lib.rs:129",
+          "contract": "aml",
+          "topics": [
+            "AML",
+            "STATUS"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/aml/src/lib.rs",
+            "line": 129
+          }
+        }
+      ]
+    },
+    {
+      "name": "anomaly_detection",
+      "events": [
+        {
+          "id": "anomaly_detection:AlertAck:contracts/anomaly_detection/src/lib.rs:472",
+          "contract": "anomaly_detection",
+          "topics": [
+            "AlertAck"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 472
+          }
+        },
+        {
+          "id": "anomaly_detection:AlertRes:contracts/anomaly_detection/src/lib.rs:503",
+          "contract": "anomaly_detection",
+          "topics": [
+            "AlertRes"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 503
+          }
+        },
+        {
+          "id": "anomaly_detection:AnomDet:contracts/anomaly_detection/src/lib.rs:341",
+          "contract": "anomaly_detection",
+          "topics": [
+            "AnomDet"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 341
+          }
+        },
+        {
+          "id": "anomaly_detection:CfgUpdate:contracts/anomaly_detection/src/lib.rs:205",
+          "contract": "anomaly_detection",
+          "topics": [
+            "CfgUpdate"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 205
+          }
+        },
+        {
+          "id": "anomaly_detection:FalsePos:contracts/anomaly_detection/src/lib.rs:532",
+          "contract": "anomaly_detection",
+          "topics": [
+            "FalsePos"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 532
+          }
+        },
+        {
+          "id": "anomaly_detection:Feedback:contracts/anomaly_detection/src/lib.rs:566",
+          "contract": "anomaly_detection",
+          "topics": [
+            "Feedback"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/anomaly_detection/src/lib.rs",
+            "line": 566
+          }
+        }
+      ]
+    },
+    {
+      "name": "anomaly_detector",
+      "events": [
+        {
+          "id": "anomaly_detector:AccAnm:contracts/anomaly_detector/src/lib.rs:626",
+          "contract": "anomaly_detector",
+          "topics": [
+            "AccAnm"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 626
+          }
+        },
+        {
+          "id": "anomaly_detector:AlertCrt:contracts/anomaly_detector/src/lib.rs:674",
+          "contract": "anomaly_detector",
+          "topics": [
+            "AlertCrt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 674
+          }
+        },
+        {
+          "id": "anomaly_detector:AlertRes:contracts/anomaly_detector/src/lib.rs:736",
+          "contract": "anomaly_detector",
+          "topics": [
+            "AlertRes"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 736
+          }
+        },
+        {
+          "id": "anomaly_detector:FedUpd:contracts/anomaly_detector/src/lib.rs:867",
+          "contract": "anomaly_detector",
+          "topics": [
+            "FedUpd"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 867
+          }
+        },
+        {
+          "id": "anomaly_detector:Feedback:contracts/anomaly_detector/src/lib.rs:830",
+          "contract": "anomaly_detector",
+          "topics": [
+            "Feedback"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 830
+          }
+        },
+        {
+          "id": "anomaly_detector:Infer:contracts/anomaly_detector/src/lib.rs:426",
+          "contract": "anomaly_detector",
+          "topics": [
+            "Infer"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 426
+          }
+        },
+        {
+          "id": "anomaly_detector:Init:contracts/anomaly_detector/src/lib.rs:208",
+          "contract": "anomaly_detector",
+          "topics": [
+            "Init"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 208
+          }
+        },
+        {
+          "id": "anomaly_detector:MdlReg:contracts/anomaly_detector/src/lib.rs:302",
+          "contract": "anomaly_detector",
+          "topics": [
+            "MdlReg"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 302
+          }
+        },
+        {
+          "id": "anomaly_detector:Paused:contracts/anomaly_detector/src/lib.rs:237",
+          "contract": "anomaly_detector",
+          "topics": [
+            "Paused"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 237
+          }
+        },
+        {
+          "id": "anomaly_detector:PrescAnm:contracts/anomaly_detector/src/lib.rs:526",
+          "contract": "anomaly_detector",
+          "topics": [
+            "PrescAnm"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 526
+          }
+        },
+        {
+          "id": "anomaly_detector:Unpaused:contracts/anomaly_detector/src/lib.rs:245",
+          "contract": "anomaly_detector",
+          "topics": [
+            "Unpaused"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 245
+          }
+        },
+        {
+          "id": "anomaly_detector:ValRmvd:contracts/anomaly_detector/src/lib.rs:229",
+          "contract": "anomaly_detector",
+          "topics": [
+            "ValRmvd"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/anomaly_detector/src/lib.rs",
+            "line": 229
+          }
+        }
+      ]
+    },
+    {
+      "name": "appointment_booking_escrow",
+      "events": [
+        {
+          "id": "appointment_booking_escrow:APPT.BOOK:contracts/appointment_booking_escrow/src/events.rs:11",
+          "contract": "appointment_booking_escrow",
+          "topics": [
+            "APPT",
+            "BOOK"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/appointment_booking_escrow/src/events.rs",
+            "line": 11
+          }
+        },
+        {
+          "id": "appointment_booking_escrow:APPT.CONF:contracts/appointment_booking_escrow/src/events.rs:23",
+          "contract": "appointment_booking_escrow",
+          "topics": [
+            "APPT",
+            "CONF"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/appointment_booking_escrow/src/events.rs",
+            "line": 23
+          }
+        },
+        {
+          "id": "appointment_booking_escrow:APPT.REFUND:contracts/appointment_booking_escrow/src/events.rs:36",
+          "contract": "appointment_booking_escrow",
+          "topics": [
+            "APPT",
+            "REFUND"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/appointment_booking_escrow/src/events.rs",
+            "line": 36
+          }
+        },
+        {
+          "id": "appointment_booking_escrow:APPT.RELEASE:contracts/appointment_booking_escrow/src/events.rs:49",
+          "contract": "appointment_booking_escrow",
+          "topics": [
+            "APPT",
+            "RELEASE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/appointment_booking_escrow/src/events.rs",
+            "line": 49
+          }
+        }
+      ]
+    },
+    {
+      "name": "audit",
+      "events": [
+        {
+          "id": "audit:AUDIT.LOG:contracts/audit/src/lib.rs:74",
+          "contract": "audit",
+          "topics": [
+            "AUDIT",
+            "LOG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/audit/src/lib.rs",
+            "line": 74
+          }
+        }
+      ]
+    },
+    {
+      "name": "audit_forensics",
+      "events": [
+        {
+          "id": "audit_forensics:AUDIT.ARCHIVE:contracts/audit_forensics/src/lib.rs:516",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "ARCHIVE"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 516
+          }
+        },
+        {
+          "id": "audit_forensics:AUDIT.COMPRESS:contracts/audit_forensics/src/lib.rs:504",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "COMPRESS"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 504
+          }
+        },
+        {
+          "id": "audit_forensics:AUDIT.LOG:contracts/audit_forensics/src/lib.rs:219",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "LOG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 219
+          }
+        },
+        {
+          "id": "audit_forensics:AUDIT.RUN:contracts/audit_forensics/src/lib.rs:299",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "RUN"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 299
+          }
+        },
+        {
+          "id": "audit_forensics:AUDIT.SHARE:contracts/audit_forensics/src/lib.rs:548",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "SHARE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 548
+          }
+        },
+        {
+          "id": "audit_forensics:AUDIT.XCSYNC:contracts/audit_forensics/src/lib.rs:531",
+          "contract": "audit_forensics",
+          "topics": [
+            "AUDIT",
+            "XCSYNC"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/audit_forensics/src/lib.rs",
+            "line": 531
+          }
+        }
+      ]
+    },
+    {
+      "name": "clinical_decision_support",
+      "events": [
+        {
+          "id": "clinical_decision_support:cdss.learning_update:contracts/clinical_decision_support/src/lib.rs:204",
+          "contract": "clinical_decision_support",
+          "topics": [
+            "cdss",
+            "learning_update"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/clinical_decision_support/src/lib.rs",
+            "line": 204
+          }
+        }
+      ]
+    },
+    {
+      "name": "clinical_nlp",
+      "events": [
+        {
+          "id": "clinical_nlp:BATCH:contracts/clinical_nlp/src/events.rs:157",
+          "contract": "clinical_nlp",
+          "topics": [
+            "BATCH"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/clinical_nlp/src/events.rs",
+            "line": 157
+          }
+        },
+        {
+          "id": "clinical_nlp:CODING:contracts/clinical_nlp/src/events.rs:148",
+          "contract": "clinical_nlp",
+          "topics": [
+            "CODING"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/clinical_nlp/src/events.rs",
+            "line": 148
+          }
+        },
+        {
+          "id": "clinical_nlp:ENTITY:contracts/clinical_nlp/src/events.rs:130",
+          "contract": "clinical_nlp",
+          "topics": [
+            "ENTITY"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/clinical_nlp/src/events.rs",
+            "line": 130
+          }
+        },
+        {
+          "id": "clinical_nlp:NLP_PROC:contracts/clinical_nlp/src/events.rs:121",
+          "contract": "clinical_nlp",
+          "topics": [
+            "NLP_PROC"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/clinical_nlp/src/events.rs",
+            "line": 121
+          }
+        },
+        {
+          "id": "clinical_nlp:SENTIM:contracts/clinical_nlp/src/events.rs:139",
+          "contract": "clinical_nlp",
+          "topics": [
+            "SENTIM"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/clinical_nlp/src/events.rs",
+            "line": 139
+          }
+        }
+      ]
+    },
+    {
+      "name": "clinical_trial",
+      "events": [
+        {
+          "id": "clinical_trial:AdverseEvent:contracts/clinical_trial/src/lib.rs:230",
+          "contract": "clinical_trial",
+          "topics": [
+            "AdverseEvent"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/clinical_trial/src/lib.rs",
+            "line": 230
+          }
+        },
+        {
+          "id": "clinical_trial:ConsentRecorded:contracts/clinical_trial/src/lib.rs:192",
+          "contract": "clinical_trial",
+          "topics": [
+            "ConsentRecorded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/clinical_trial/src/lib.rs",
+            "line": 192
+          }
+        },
+        {
+          "id": "clinical_trial:PatientRecruited:contracts/clinical_trial/src/lib.rs:164",
+          "contract": "clinical_trial",
+          "topics": [
+            "PatientRecruited"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/clinical_trial/src/lib.rs",
+            "line": 164
+          }
+        }
+      ]
+    },
+    {
+      "name": "credential_registry",
+      "events": [
+        {
+          "id": "credential_registry:CREDREG.IADMIN:contracts/credential_registry/src/lib.rs:78",
+          "contract": "credential_registry",
+          "topics": [
+            "CREDREG",
+            "IADMIN"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/credential_registry/src/lib.rs",
+            "line": 78
+          }
+        },
+        {
+          "id": "credential_registry:CREDREG.ROOT:contracts/credential_registry/src/lib.rs:135",
+          "contract": "credential_registry",
+          "topics": [
+            "CREDREG",
+            "ROOT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/credential_registry/src/lib.rs",
+            "line": 135
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross_chain_access",
+      "events": [
+        {
+          "id": "cross_chain_access:AccessControlInitialized:contracts/cross_chain_access/src/lib.rs:274",
+          "contract": "cross_chain_access",
+          "topics": [
+            "AccessControlInitialized"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 274
+          }
+        },
+        {
+          "id": "cross_chain_access:AccessGranted:contracts/cross_chain_access/src/lib.rs:322",
+          "contract": "cross_chain_access",
+          "topics": [
+            "AccessGranted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 322
+          }
+        },
+        {
+          "id": "cross_chain_access:AccessLogged:contracts/cross_chain_access/src/lib.rs:691",
+          "contract": "cross_chain_access",
+          "topics": [
+            "AccessLogged"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 691
+          }
+        },
+        {
+          "id": "cross_chain_access:AccessRequested:contracts/cross_chain_access/src/lib.rs:460",
+          "contract": "cross_chain_access",
+          "topics": [
+            "AccessRequested"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 6
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 460
+          }
+        },
+        {
+          "id": "cross_chain_access:DelegationCreated:contracts/cross_chain_access/src/lib.rs:578",
+          "contract": "cross_chain_access",
+          "topics": [
+            "DelegationCreated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 578
+          }
+        },
+        {
+          "id": "cross_chain_access:DelegationRevoked:contracts/cross_chain_access/src/lib.rs:604",
+          "contract": "cross_chain_access",
+          "topics": [
+            "DelegationRevoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 604
+          }
+        },
+        {
+          "id": "cross_chain_access:EmergencyAutoApproved:contracts/cross_chain_access/src/lib.rs:1182",
+          "contract": "cross_chain_access",
+          "topics": [
+            "EmergencyAutoApproved"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 1182
+          }
+        },
+        {
+          "id": "cross_chain_access:EmergencyConfigured:contracts/cross_chain_access/src/lib.rs:643",
+          "contract": "cross_chain_access",
+          "topics": [
+            "EmergencyConfigured"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 643
+          }
+        },
+        {
+          "id": "cross_chain_access:Paused:contracts/cross_chain_access/src/lib.rs:999",
+          "contract": "cross_chain_access",
+          "topics": [
+            "Paused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 999
+          }
+        },
+        {
+          "id": "cross_chain_access:RequestProcessed:contracts/cross_chain_access/src/lib.rs:531",
+          "contract": "cross_chain_access",
+          "topics": [
+            "RequestProcessed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 531
+          }
+        },
+        {
+          "id": "cross_chain_access:SwapAccepted:contracts/cross_chain_access/src/lib.rs:806",
+          "contract": "cross_chain_access",
+          "topics": [
+            "SwapAccepted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 806
+          }
+        },
+        {
+          "id": "cross_chain_access:SwapProposed:contracts/cross_chain_access/src/lib.rs:753",
+          "contract": "cross_chain_access",
+          "topics": [
+            "SwapProposed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 753
+          }
+        },
+        {
+          "id": "cross_chain_access:Unpaused:contracts/cross_chain_access/src/lib.rs:1013",
+          "contract": "cross_chain_access",
+          "topics": [
+            "Unpaused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_access/src/lib.rs",
+            "line": 1013
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross_chain_bridge",
+      "events": [
+        {
+          "id": "cross_chain_bridge:AtomicTxInitiated:contracts/cross_chain_bridge/src/lib.rs:774",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "AtomicTxInitiated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 774
+          }
+        },
+        {
+          "id": "cross_chain_bridge:EventSynced:contracts/cross_chain_bridge/src/lib.rs:1293",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "EventSynced"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1293
+          }
+        },
+        {
+          "id": "cross_chain_bridge:MessageConfirmed:contracts/cross_chain_bridge/src/lib.rs:697",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "MessageConfirmed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 697
+          }
+        },
+        {
+          "id": "cross_chain_bridge:MessageExecuted:contracts/cross_chain_bridge/src/lib.rs:740",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "MessageExecuted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 740
+          }
+        },
+        {
+          "id": "cross_chain_bridge:MessageSubmitted:contracts/cross_chain_bridge/src/lib.rs:624",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "MessageSubmitted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 624
+          }
+        },
+        {
+          "id": "cross_chain_bridge:MessageVerified:contracts/cross_chain_bridge/src/lib.rs:691",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "MessageVerified"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 691
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OperationCreated:contracts/cross_chain_bridge/src/lib.rs:1368",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationCreated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1368
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OperationRefunded:contracts/cross_chain_bridge/src/lib.rs:1399",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationRefunded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1399
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OperationStatusUpdated:contracts/cross_chain_bridge/src/lib.rs:1484",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationStatusUpdated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1484
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OracleDataAggregated:contracts/cross_chain_bridge/src/lib.rs:1120",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OracleDataAggregated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1120
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OracleReportSubmitted:contracts/cross_chain_bridge/src/lib.rs:1068",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OracleReportSubmitted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1068
+          }
+        },
+        {
+          "id": "cross_chain_bridge:Paused:contracts/cross_chain_bridge/src/lib.rs:548",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "Paused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 548
+          }
+        },
+        {
+          "id": "cross_chain_bridge:ProofSubmitted:contracts/cross_chain_bridge/src/lib.rs:1164",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "ProofSubmitted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1164
+          }
+        },
+        {
+          "id": "cross_chain_bridge:ProofVerified:contracts/cross_chain_bridge/src/lib.rs:1205",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "ProofVerified"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1205
+          }
+        },
+        {
+          "id": "cross_chain_bridge:RecordRefRegistered:contracts/cross_chain_bridge/src/lib.rs:915",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "RecordRefRegistered"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 915
+          }
+        },
+        {
+          "id": "cross_chain_bridge:RefundProcessed:contracts/cross_chain_bridge/src/lib.rs:1857",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "RefundProcessed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1857
+          }
+        },
+        {
+          "id": "cross_chain_bridge:RollbackInitiated:contracts/cross_chain_bridge/src/lib.rs:1547",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "RollbackInitiated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1547
+          }
+        },
+        {
+          "id": "cross_chain_bridge:SyncStatusUpdated:contracts/cross_chain_bridge/src/lib.rs:947",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "SyncStatusUpdated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 947
+          }
+        },
+        {
+          "id": "cross_chain_bridge:TimeoutExtended:contracts/cross_chain_bridge/src/lib.rs:1451",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "TimeoutExtended"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1451
+          }
+        },
+        {
+          "id": "cross_chain_bridge:Unpaused:contracts/cross_chain_bridge/src/lib.rs:562",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "Unpaused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 562
+          }
+        },
+        {
+          "id": "cross_chain_bridge:ValidatorDeactivated:contracts/cross_chain_bridge/src/lib.rs:493",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "ValidatorDeactivated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 493
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross_chain_enhancements",
+      "events": [
+        {
+          "id": "cross_chain_enhancements:rl.set:contracts/cross_chain_enhancements/src/lib.rs:314",
+          "contract": "cross_chain_enhancements",
+          "topics": [
+            "rl",
+            "set"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_enhancements/src/lib.rs",
+            "line": 314
+          }
+        },
+        {
+          "id": "cross_chain_enhancements:zk.integrity:contracts/cross_chain_enhancements/src/lib.rs:249",
+          "contract": "cross_chain_enhancements",
+          "topics": [
+            "zk",
+            "integrity"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_enhancements/src/lib.rs",
+            "line": 249
+          }
+        },
+        {
+          "id": "cross_chain_enhancements:zk.own_proof:contracts/cross_chain_enhancements/src/lib.rs:166",
+          "contract": "cross_chain_enhancements",
+          "topics": [
+            "zk",
+            "own_proof"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_enhancements/src/lib.rs",
+            "line": 166
+          }
+        },
+        {
+          "id": "cross_chain_enhancements:zk.verified:contracts/cross_chain_enhancements/src/lib.rs:205",
+          "contract": "cross_chain_enhancements",
+          "topics": [
+            "zk",
+            "verified"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_enhancements/src/lib.rs",
+            "line": 205
+          }
+        }
+      ]
+    },
+    {
+      "name": "cross_chain_identity",
+      "events": [
+        {
+          "id": "cross_chain_identity:AttestationAdded:contracts/cross_chain_identity/src/lib.rs:460",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "AttestationAdded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 460
+          }
+        },
+        {
+          "id": "cross_chain_identity:IdentityContractInitialized:contracts/cross_chain_identity/src/lib.rs:200",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "IdentityContractInitialized"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 200
+          }
+        },
+        {
+          "id": "cross_chain_identity:IdentityRevoked:contracts/cross_chain_identity/src/lib.rs:491",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "IdentityRevoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 491
+          }
+        },
+        {
+          "id": "cross_chain_identity:IdentityVerified:contracts/cross_chain_identity/src/lib.rs:733",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "IdentityVerified"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 733
+          }
+        },
+        {
+          "id": "cross_chain_identity:Paused:contracts/cross_chain_identity/src/lib.rs:311",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "Paused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 311
+          }
+        },
+        {
+          "id": "cross_chain_identity:SyncInitiated:contracts/cross_chain_identity/src/lib.rs:546",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "SyncInitiated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 546
+          }
+        },
+        {
+          "id": "cross_chain_identity:Unpaused:contracts/cross_chain_identity/src/lib.rs:325",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "Unpaused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 325
+          }
+        },
+        {
+          "id": "cross_chain_identity:ValidatorDeactivated:contracts/cross_chain_identity/src/lib.rs:257",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "ValidatorDeactivated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 257
+          }
+        },
+        {
+          "id": "cross_chain_identity:VerificationApproved:contracts/cross_chain_identity/src/lib.rs:448",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "VerificationApproved"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 448
+          }
+        },
+        {
+          "id": "cross_chain_identity:VerificationRequested:contracts/cross_chain_identity/src/lib.rs:375",
+          "contract": "cross_chain_identity",
+          "topics": [
+            "VerificationRequested"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_identity/src/lib.rs",
+            "line": 375
+          }
+        }
+      ]
+    },
+    {
+      "name": "crypto_registry",
+      "events": [
+        {
+          "id": "crypto_registry:crypto.bundle:contracts/crypto_registry/src/lib.rs:211",
+          "contract": "crypto_registry",
+          "topics": [
+            "crypto",
+            "bundle"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/crypto_registry/src/lib.rs",
+            "line": 211
+          }
+        },
+        {
+          "id": "crypto_registry:crypto.revoke:contracts/crypto_registry/src/lib.rs:236",
+          "contract": "crypto_registry",
+          "topics": [
+            "crypto",
+            "revoke"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/crypto_registry/src/lib.rs",
+            "line": 236
+          }
+        }
+      ]
+    },
+    {
+      "name": "differential_privacy",
+      "events": [
+        {
+          "id": "differential_privacy:dp.budget:contracts/differential_privacy/src/lib.rs:132",
+          "contract": "differential_privacy",
+          "topics": [
+            "dp",
+            "budget"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/differential_privacy/src/lib.rs",
+            "line": 132
+          }
+        },
+        {
+          "id": "differential_privacy:dp.gaussian:contracts/differential_privacy/src/lib.rs:267",
+          "contract": "differential_privacy",
+          "topics": [
+            "dp",
+            "gaussian"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/differential_privacy/src/lib.rs",
+            "line": 267
+          }
+        },
+        {
+          "id": "differential_privacy:dp.laplace:contracts/differential_privacy/src/lib.rs:199",
+          "contract": "differential_privacy",
+          "topics": [
+            "dp",
+            "laplace"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/differential_privacy/src/lib.rs",
+            "line": 199
+          }
+        }
+      ]
+    },
+    {
+      "name": "digital_twin",
+      "events": [
+        {
+          "id": "digital_twin:DT_CREATED:contracts/digital_twin/src/lib.rs:373",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_CREATED"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 373
+          }
+        },
+        {
+          "id": "digital_twin:DT_DATAPOINT:contracts/digital_twin/src/lib.rs:543",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_DATAPOINT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 543
+          }
+        },
+        {
+          "id": "digital_twin:DT_GD_SET:contracts/digital_twin/src/lib.rs:313",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_GD_SET"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 313
+          }
+        },
+        {
+          "id": "digital_twin:DT_INIT:contracts/digital_twin/src/lib.rs:285",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 285
+          }
+        },
+        {
+          "id": "digital_twin:DT_MODEL:contracts/digital_twin/src/lib.rs:591",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_MODEL"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 591
+          }
+        },
+        {
+          "id": "digital_twin:DT_MR_SET:contracts/digital_twin/src/lib.rs:299",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_MR_SET"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 299
+          }
+        },
+        {
+          "id": "digital_twin:DT_PREDICTION:contracts/digital_twin/src/lib.rs:648",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_PREDICTION"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 648
+          }
+        },
+        {
+          "id": "digital_twin:DT_SIM:contracts/digital_twin/src/lib.rs:706",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_SIM"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 706
+          }
+        },
+        {
+          "id": "digital_twin:DT_SIM_COMP:contracts/digital_twin/src/lib.rs:746",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_SIM_COMP"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 746
+          }
+        },
+        {
+          "id": "digital_twin:DT_SNAPSHOT:contracts/digital_twin/src/lib.rs:814",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_SNAPSHOT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 814
+          }
+        },
+        {
+          "id": "digital_twin:DT_STATUS:contracts/digital_twin/src/lib.rs:412",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_STATUS"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 412
+          }
+        },
+        {
+          "id": "digital_twin:DT_STREAM:contracts/digital_twin/src/lib.rs:483",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_STREAM"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 483
+          }
+        },
+        {
+          "id": "digital_twin:DT_SYNC:contracts/digital_twin/src/lib.rs:874",
+          "contract": "digital_twin",
+          "topics": [
+            "DT_SYNC"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/digital_twin/src/lib.rs",
+            "line": 874
+          }
+        }
+      ]
+    },
+    {
+      "name": "drug_discovery",
+      "events": [
+        {
+          "id": "drug_discovery:CfgInt:contracts/drug_discovery/src/lib.rs:272",
+          "contract": "drug_discovery",
+          "topics": [
+            "CfgInt"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/drug_discovery/src/lib.rs",
+            "line": 272
+          }
+        }
+      ]
+    },
+    {
+      "name": "emergency_access_override",
+      "events": [
+        {
+          "id": "emergency_access_override:EMER.APPR:contracts/emergency_access_override/src/events.rs:23",
+          "contract": "emergency_access_override",
+          "topics": [
+            "EMER",
+            "APPR"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/emergency_access_override/src/events.rs",
+            "line": 23
+          }
+        },
+        {
+          "id": "emergency_access_override:EMER.CHECK:contracts/emergency_access_override/src/events.rs:49",
+          "contract": "emergency_access_override",
+          "topics": [
+            "EMER",
+            "CHECK"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/emergency_access_override/src/events.rs",
+            "line": 49
+          }
+        },
+        {
+          "id": "emergency_access_override:EMER.DUPA:contracts/emergency_access_override/src/events.rs:36",
+          "contract": "emergency_access_override",
+          "topics": [
+            "EMER",
+            "DUPA"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/emergency_access_override/src/events.rs",
+            "line": 36
+          }
+        },
+        {
+          "id": "emergency_access_override:EMER.GRANT:contracts/emergency_access_override/src/events.rs:10",
+          "contract": "emergency_access_override",
+          "topics": [
+            "EMER",
+            "GRANT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/emergency_access_override/src/events.rs",
+            "line": 10
+          }
+        },
+        {
+          "id": "emergency_access_override:EMER.REVOKE:contracts/emergency_access_override/src/events.rs:61",
+          "contract": "emergency_access_override",
+          "topics": [
+            "EMER",
+            "REVOKE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/emergency_access_override/src/events.rs",
+            "line": 61
+          }
+        }
+      ]
+    },
+    {
+      "name": "escrow",
+      "events": [
+        {
+          "id": "escrow:EscNew:contracts/escrow/src/lib.rs:269",
+          "contract": "escrow",
+          "topics": [
+            "EscNew"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/escrow/src/lib.rs",
+            "line": 269
+          }
+        },
+        {
+          "id": "escrow:EscRel:contracts/escrow/src/lib.rs:369",
+          "contract": "escrow",
+          "topics": [
+            "EscRel"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 6
+          },
+          "source": {
+            "file": "contracts/escrow/src/lib.rs",
+            "line": 369
+          }
+        },
+        {
+          "id": "escrow:Refunded:contracts/escrow/src/lib.rs:421",
+          "contract": "escrow",
+          "topics": [
+            "Refunded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/escrow/src/lib.rs",
+            "line": 421
+          }
+        }
+      ]
+    },
+    {
+      "name": "explainable_ai",
+      "events": [
+        {
+          "id": "explainable_ai:ExpFull:contracts/explainable_ai/src/lib.rs:301",
+          "contract": "explainable_ai",
+          "topics": [
+            "ExpFull"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/explainable_ai/src/lib.rs",
+            "line": 301
+          }
+        },
+        {
+          "id": "explainable_ai:ExpReq:contracts/explainable_ai/src/lib.rs:228",
+          "contract": "explainable_ai",
+          "topics": [
+            "ExpReq"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/explainable_ai/src/lib.rs",
+            "line": 228
+          }
+        },
+        {
+          "id": "explainable_ai:cf.created:contracts/explainable_ai/src/lib.rs:545",
+          "contract": "explainable_ai",
+          "topics": [
+            "cf",
+            "created"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/explainable_ai/src/lib.rs",
+            "line": 545
+          }
+        },
+        {
+          "id": "explainable_ai:shap.created:contracts/explainable_ai/src/lib.rs:472",
+          "contract": "explainable_ai",
+          "topics": [
+            "shap",
+            "created"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/explainable_ai/src/lib.rs",
+            "line": 472
+          }
+        }
+      ]
+    },
+    {
+      "name": "failover_detector",
+      "events": [
+        {
+          "id": "failover_detector:FD_CRIT:contracts/failover_detector/src/lib.rs:260",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_CRIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 260
+          }
+        },
+        {
+          "id": "failover_detector:FD_DEAC:contracts/failover_detector/src/lib.rs:504",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_DEAC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 504
+          }
+        },
+        {
+          "id": "failover_detector:FD_DETC:contracts/failover_detector/src/lib.rs:257",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_DETC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 257
+          }
+        },
+        {
+          "id": "failover_detector:FD_EXEC:contracts/failover_detector/src/lib.rs:418",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_EXEC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 418
+          }
+        },
+        {
+          "id": "failover_detector:FD_INIT:contracts/failover_detector/src/lib.rs:141",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 141
+          }
+        },
+        {
+          "id": "failover_detector:FD_PLAN:contracts/failover_detector/src/lib.rs:324",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_PLAN"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 324
+          }
+        },
+        {
+          "id": "failover_detector:FD_REC:contracts/failover_detector/src/lib.rs:471",
+          "contract": "failover_detector",
+          "topics": [
+            "FD_REC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/failover_detector/src/lib.rs",
+            "line": 471
+          }
+        }
+      ]
+    },
+    {
+      "name": "federated_learning",
+      "events": [
+        {
+          "id": "federated_learning:AggStart:contracts/federated_learning/src/lib.rs:647",
+          "contract": "federated_learning",
+          "topics": [
+            "AggStart"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/federated_learning/src/lib.rs",
+            "line": 647
+          }
+        },
+        {
+          "id": "federated_learning:InstBlack:contracts/federated_learning/src/lib.rs:847",
+          "contract": "federated_learning",
+          "topics": [
+            "InstBlack"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/federated_learning/src/lib.rs",
+            "line": 847
+          }
+        },
+        {
+          "id": "federated_learning:RndStart:contracts/federated_learning/src/lib.rs:388",
+          "contract": "federated_learning",
+          "topics": [
+            "RndStart"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/federated_learning/src/lib.rs",
+            "line": 388
+          }
+        }
+      ]
+    },
+    {
+      "name": "forensics",
+      "events": [
+        {
+          "id": "forensics:FORENSIC.B_LIST:contracts/forensics/src/lib.rs:163",
+          "contract": "forensics",
+          "topics": [
+            "FORENSIC",
+            "B_LIST"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/forensics/src/lib.rs",
+            "line": 163
+          }
+        },
+        {
+          "id": "forensics:FORENSIC.COLLECT:contracts/forensics/src/lib.rs:66",
+          "contract": "forensics",
+          "topics": [
+            "FORENSIC",
+            "COLLECT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/forensics/src/lib.rs",
+            "line": 66
+          }
+        },
+        {
+          "id": "forensics:FORENSIC.REPORT:contracts/forensics/src/lib.rs:127",
+          "contract": "forensics",
+          "topics": [
+            "FORENSIC",
+            "REPORT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/forensics/src/lib.rs",
+            "line": 127
+          }
+        }
+      ]
+    },
+    {
+      "name": "genomic_data",
+      "events": [
+        {
+          "id": "genomic_data:LOG:contracts/genomic_data/src/lib.rs:257",
+          "contract": "genomic_data",
+          "topics": [
+            "LOG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/genomic_data/src/lib.rs",
+            "line": 257
+          }
+        }
+      ]
+    },
+    {
+      "name": "governor",
+      "events": [
+        {
+          "id": "governor:Vote:contracts/governor/src/lib.rs:218",
+          "contract": "governor",
+          "topics": [
+            "Vote"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/governor/src/lib.rs",
+            "line": 218
+          }
+        }
+      ]
+    },
+    {
+      "name": "health_data_access_logging",
+      "events": [
+        {
+          "id": "health_data_access_logging:ACCESS.LOG:contracts/health_data_access_logging/src/lib.rs:113",
+          "contract": "health_data_access_logging",
+          "topics": [
+            "ACCESS",
+            "LOG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 6
+          },
+          "source": {
+            "file": "contracts/health_data_access_logging/src/lib.rs",
+            "line": 113
+          }
+        }
+      ]
+    },
+    {
+      "name": "healthcare_analytics_dashboard",
+      "events": [
+        {
+          "id": "healthcare_analytics_dashboard:AiSync:contracts/healthcare_analytics_dashboard/src/lib.rs:983",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "AiSync"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 983
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:CompAuto:contracts/healthcare_analytics_dashboard/src/lib.rs:939",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "CompAuto"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 939
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:DashInit:contracts/healthcare_analytics_dashboard/src/lib.rs:308",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "DashInit"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 308
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:DashSnap:contracts/healthcare_analytics_dashboard/src/lib.rs:770",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "DashSnap"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 770
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:LakeCfg:contracts/healthcare_analytics_dashboard/src/lib.rs:480",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "LakeCfg"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 480
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:LakeOpt:contracts/healthcare_analytics_dashboard/src/lib.rs:623",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "LakeOpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 623
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:LakeSync:contracts/healthcare_analytics_dashboard/src/lib.rs:563",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "LakeSync"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 563
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:PrivAgg:contracts/healthcare_analytics_dashboard/src/lib.rs:694",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "PrivAgg"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 694
+          }
+        },
+        {
+          "id": "healthcare_analytics_dashboard:TplCreate:contracts/healthcare_analytics_dashboard/src/lib.rs:806",
+          "contract": "healthcare_analytics_dashboard",
+          "topics": [
+            "TplCreate"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/healthcare_analytics_dashboard/src/lib.rs",
+            "line": 806
+          }
+        }
+      ]
+    },
+    {
+      "name": "healthcare_compliance",
+      "events": [
+        {
+          "id": "healthcare_compliance:audit_event:contracts/healthcare_compliance/src/lib.rs:581",
+          "contract": "healthcare_compliance",
+          "topics": [
+            "audit_event"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 6
+          },
+          "source": {
+            "file": "contracts/healthcare_compliance/src/lib.rs",
+            "line": 581
+          }
+        },
+        {
+          "id": "healthcare_compliance:breach_reported:contracts/healthcare_compliance/src/lib.rs:660",
+          "contract": "healthcare_compliance",
+          "topics": [
+            "breach_reported"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/healthcare_compliance/src/lib.rs",
+            "line": 660
+          }
+        },
+        {
+          "id": "healthcare_compliance:compliance_report_submitted:contracts/healthcare_compliance/src/lib.rs:1160",
+          "contract": "healthcare_compliance",
+          "topics": [
+            "compliance_report_submitted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/healthcare_compliance/src/lib.rs",
+            "line": 1160
+          }
+        },
+        {
+          "id": "healthcare_compliance:consent_granted:contracts/healthcare_compliance/src/lib.rs:424",
+          "contract": "healthcare_compliance",
+          "topics": [
+            "consent_granted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_compliance/src/lib.rs",
+            "line": 424
+          }
+        },
+        {
+          "id": "healthcare_compliance:consent_revoked:contracts/healthcare_compliance/src/lib.rs:486",
+          "contract": "healthcare_compliance",
+          "topics": [
+            "consent_revoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_compliance/src/lib.rs",
+            "line": 486
+          }
+        }
+      ]
+    },
+    {
+      "name": "healthcare_data_marketplace",
+      "events": [
+        {
+          "id": "healthcare_data_marketplace:settled:contracts/healthcare_data_marketplace/src/lib.rs:474",
+          "contract": "healthcare_data_marketplace",
+          "topics": [
+            "settled"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_data_marketplace/src/lib.rs",
+            "line": 474
+          }
+        }
+      ]
+    },
+    {
+      "name": "healthcare_payment",
+      "events": [
+        {
+          "id": "healthcare_payment:CLAIM_EDI:contracts/healthcare_payment/src/lib.rs:589",
+          "contract": "healthcare_payment",
+          "topics": [
+            "CLAIM_EDI"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_payment/src/lib.rs",
+            "line": 589
+          }
+        },
+        {
+          "id": "healthcare_payment:CLAIM_PD:contracts/healthcare_payment/src/lib.rs:871",
+          "contract": "healthcare_payment",
+          "topics": [
+            "CLAIM_PD"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_payment/src/lib.rs",
+            "line": 871
+          }
+        },
+        {
+          "id": "healthcare_payment:COV_834:contracts/healthcare_payment/src/lib.rs:628",
+          "contract": "healthcare_payment",
+          "topics": [
+            "COV_834"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/healthcare_payment/src/lib.rs",
+            "line": 628
+          }
+        },
+        {
+          "id": "healthcare_payment:ELIG:contracts/healthcare_payment/src/lib.rs:473",
+          "contract": "healthcare_payment",
+          "topics": [
+            "ELIG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_payment/src/lib.rs",
+            "line": 473
+          }
+        },
+        {
+          "id": "healthcare_payment:EOB:contracts/healthcare_payment/src/lib.rs:819",
+          "contract": "healthcare_payment",
+          "topics": [
+            "EOB"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_payment/src/lib.rs",
+            "line": 819
+          }
+        }
+      ]
+    },
+    {
+      "name": "healthcare_reputation",
+      "events": [
+        {
+          "id": "healthcare_reputation:HLTHREP.CONDUCT:contracts/healthcare_reputation/src/lib.rs:497",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "CONDUCT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 497
+          }
+        },
+        {
+          "id": "healthcare_reputation:HLTHREP.CRED_ADD:contracts/healthcare_reputation/src/lib.rs:268",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "CRED_ADD"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 268
+          }
+        },
+        {
+          "id": "healthcare_reputation:HLTHREP.CRED_VER:contracts/healthcare_reputation/src/lib.rs:311",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "CRED_VER"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 311
+          }
+        },
+        {
+          "id": "healthcare_reputation:HLTHREP.DISPUTE:contracts/healthcare_reputation/src/lib.rs:583",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "DISPUTE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 583
+          }
+        },
+        {
+          "id": "healthcare_reputation:HLTHREP.DISP_RES:contracts/healthcare_reputation/src/lib.rs:624",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "DISP_RES"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 624
+          }
+        },
+        {
+          "id": "healthcare_reputation:HLTHREP.FEEDBACK:contracts/healthcare_reputation/src/lib.rs:403",
+          "contract": "healthcare_reputation",
+          "topics": [
+            "HLTHREP",
+            "FEEDBACK"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/healthcare_reputation/src/lib.rs",
+            "line": 403
+          }
+        }
+      ]
+    },
+    {
+      "name": "homomorphic_registry",
+      "events": [
+        {
+          "id": "homomorphic_registry:he.ctx:contracts/homomorphic_registry/src/lib.rs:649",
+          "contract": "homomorphic_registry",
+          "topics": [
+            "he",
+            "ctx"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/homomorphic_registry/src/lib.rs",
+            "line": 649
+          }
+        },
+        {
+          "id": "homomorphic_registry:he.key:contracts/homomorphic_registry/src/lib.rs:230",
+          "contract": "homomorphic_registry",
+          "topics": [
+            "he",
+            "key"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/homomorphic_registry/src/lib.rs",
+            "line": 230
+          }
+        },
+        {
+          "id": "homomorphic_registry:he.submit:contracts/homomorphic_registry/src/lib.rs:736",
+          "contract": "homomorphic_registry",
+          "topics": [
+            "he",
+            "submit"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/homomorphic_registry/src/lib.rs",
+            "line": 736
+          }
+        }
+      ]
+    },
+    {
+      "name": "identity_registry",
+      "events": [
+        {
+          "id": "identity_registry:Attested:contracts/identity_registry/src/lib.rs:1541",
+          "contract": "identity_registry",
+          "topics": [
+            "Attested"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1541
+          }
+        },
+        {
+          "id": "identity_registry:CredentialIssued:contracts/identity_registry/src/lib.rs:850",
+          "contract": "identity_registry",
+          "topics": [
+            "CredentialIssued"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 850
+          }
+        },
+        {
+          "id": "identity_registry:CredentialRevoked:contracts/identity_registry/src/lib.rs:926",
+          "contract": "identity_registry",
+          "topics": [
+            "CredentialRevoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 926
+          }
+        },
+        {
+          "id": "identity_registry:DIDCreated:contracts/identity_registry/src/lib.rs:454",
+          "contract": "identity_registry",
+          "topics": [
+            "DIDCreated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 454
+          }
+        },
+        {
+          "id": "identity_registry:DIDUpdated:contracts/identity_registry/src/lib.rs:520",
+          "contract": "identity_registry",
+          "topics": [
+            "DIDUpdated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 520
+          }
+        },
+        {
+          "id": "identity_registry:GuardianAdded:contracts/identity_registry/src/lib.rs:1005",
+          "contract": "identity_registry",
+          "topics": [
+            "GuardianAdded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1005
+          }
+        },
+        {
+          "id": "identity_registry:Initialized:contracts/identity_registry/src/lib.rs:333",
+          "contract": "identity_registry",
+          "topics": [
+            "Initialized"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 333
+          }
+        },
+        {
+          "id": "identity_registry:RecoveryApproved:contracts/identity_registry/src/lib.rs:1179",
+          "contract": "identity_registry",
+          "topics": [
+            "RecoveryApproved"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1179
+          }
+        },
+        {
+          "id": "identity_registry:RecoveryCancelled:contracts/identity_registry/src/lib.rs:1323",
+          "contract": "identity_registry",
+          "topics": [
+            "RecoveryCancelled"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1323
+          }
+        },
+        {
+          "id": "identity_registry:RecoveryExecuted:contracts/identity_registry/src/lib.rs:1279",
+          "contract": "identity_registry",
+          "topics": [
+            "RecoveryExecuted"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1279
+          }
+        },
+        {
+          "id": "identity_registry:RecoveryInitiated:contracts/identity_registry/src/lib.rs:1133",
+          "contract": "identity_registry",
+          "topics": [
+            "RecoveryInitiated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1133
+          }
+        },
+        {
+          "id": "identity_registry:ServiceRemoved:contracts/identity_registry/src/lib.rs:1410",
+          "contract": "identity_registry",
+          "topics": [
+            "ServiceRemoved"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1410
+          }
+        },
+        {
+          "id": "identity_registry:ThresholdUpdated:contracts/identity_registry/src/lib.rs:1052",
+          "contract": "identity_registry",
+          "topics": [
+            "ThresholdUpdated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 1052
+          }
+        },
+        {
+          "id": "identity_registry:VerificationMethodAdded:contracts/identity_registry/src/lib.rs:618",
+          "contract": "identity_registry",
+          "topics": [
+            "VerificationMethodAdded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 618
+          }
+        },
+        {
+          "id": "identity_registry:VerificationMethodRevoked:contracts/identity_registry/src/lib.rs:767",
+          "contract": "identity_registry",
+          "topics": [
+            "VerificationMethodRevoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/identity_registry/src/lib.rs",
+            "line": 767
+          }
+        }
+      ]
+    },
+    {
+      "name": "ihe_integration",
+      "events": [
+        {
+          "id": "ihe_integration:ATNA.AUTH:contracts/ihe_integration/src/lib.rs:1048",
+          "contract": "ihe_integration",
+          "topics": [
+            "ATNA",
+            "AUTH"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1048
+          }
+        },
+        {
+          "id": "ihe_integration:ATNA.AUTO:contracts/ihe_integration/src/lib.rs:1744",
+          "contract": "ihe_integration",
+          "topics": [
+            "ATNA",
+            "AUTO"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1744
+          }
+        },
+        {
+          "id": "ihe_integration:ATNA.LOG:contracts/ihe_integration/src/lib.rs:990",
+          "contract": "ihe_integration",
+          "topics": [
+            "ATNA",
+            "LOG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 990
+          }
+        },
+        {
+          "id": "ihe_integration:BPPC.REG:contracts/ihe_integration/src/lib.rs:1325",
+          "contract": "ihe_integration",
+          "topics": [
+            "BPPC",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1325
+          }
+        },
+        {
+          "id": "ihe_integration:BPPC.REVOKE:contracts/ihe_integration/src/lib.rs:1348",
+          "contract": "ihe_integration",
+          "topics": [
+            "BPPC",
+            "REVOKE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1348
+          }
+        },
+        {
+          "id": "ihe_integration:CONN.TEST:contracts/ihe_integration/src/lib.rs:1622",
+          "contract": "ihe_integration",
+          "topics": [
+            "CONN",
+            "TEST"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1622
+          }
+        },
+        {
+          "id": "ihe_integration:CT.SYNC:contracts/ihe_integration/src/lib.rs:1264",
+          "contract": "ihe_integration",
+          "topics": [
+            "CT",
+            "SYNC"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1264
+          }
+        },
+        {
+          "id": "ihe_integration:DSG.SIGN:contracts/ihe_integration/src/lib.rs:1432",
+          "contract": "ihe_integration",
+          "topics": [
+            "DSG",
+            "SIGN"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1432
+          }
+        },
+        {
+          "id": "ihe_integration:HPD.REG:contracts/ihe_integration/src/lib.rs:1505",
+          "contract": "ihe_integration",
+          "topics": [
+            "HPD",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1505
+          }
+        },
+        {
+          "id": "ihe_integration:MPI.REG:contracts/ihe_integration/src/lib.rs:1154",
+          "contract": "ihe_integration",
+          "topics": [
+            "MPI",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1154
+          }
+        },
+        {
+          "id": "ihe_integration:PIX.MERGE:contracts/ihe_integration/src/lib.rs:842",
+          "contract": "ihe_integration",
+          "topics": [
+            "PIX",
+            "MERGE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 842
+          }
+        },
+        {
+          "id": "ihe_integration:PIX.REG:contracts/ihe_integration/src/lib.rs:752",
+          "contract": "ihe_integration",
+          "topics": [
+            "PIX",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 752
+          }
+        },
+        {
+          "id": "ihe_integration:SVS.REG:contracts/ihe_integration/src/lib.rs:1556",
+          "contract": "ihe_integration",
+          "topics": [
+            "SVS",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1556
+          }
+        },
+        {
+          "id": "ihe_integration:XDM.PKG:contracts/ihe_integration/src/lib.rs:1237",
+          "contract": "ihe_integration",
+          "topics": [
+            "XDM",
+            "PKG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1237
+          }
+        },
+        {
+          "id": "ihe_integration:XDR.SEND:contracts/ihe_integration/src/lib.rs:1198",
+          "contract": "ihe_integration",
+          "topics": [
+            "XDR",
+            "SEND"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 1198
+          }
+        },
+        {
+          "id": "ihe_integration:XDS.DEPR:contracts/ihe_integration/src/lib.rs:598",
+          "contract": "ihe_integration",
+          "topics": [
+            "XDS",
+            "DEPR"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 598
+          }
+        },
+        {
+          "id": "ihe_integration:XDS.REG:contracts/ihe_integration/src/lib.rs:560",
+          "contract": "ihe_integration",
+          "topics": [
+            "XDS",
+            "REG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 560
+          }
+        },
+        {
+          "id": "ihe_integration:XDS.SUBMIT:contracts/ihe_integration/src/lib.rs:695",
+          "contract": "ihe_integration",
+          "topics": [
+            "XDS",
+            "SUBMIT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/ihe_integration/src/lib.rs",
+            "line": 695
+          }
+        }
+      ]
+    },
+    {
+      "name": "iot_device_management",
+      "events": [
+        {
+          "id": "iot_device_management:dev_reg.IoT:contracts/iot_device_management/src/events.rs:16",
+          "contract": "iot_device_management",
+          "topics": [
+            "dev_reg",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 16
+          }
+        },
+        {
+          "id": "iot_device_management:dev_sts.IoT:contracts/iot_device_management/src/events.rs:28",
+          "contract": "iot_device_management",
+          "topics": [
+            "dev_sts",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 28
+          }
+        },
+        {
+          "id": "iot_device_management:fw_pub.IoT:contracts/iot_device_management/src/events.rs:40",
+          "contract": "iot_device_management",
+          "topics": [
+            "fw_pub",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 40
+          }
+        },
+        {
+          "id": "iot_device_management:fw_sts.IoT:contracts/iot_device_management/src/events.rs:52",
+          "contract": "iot_device_management",
+          "topics": [
+            "fw_sts",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 52
+          }
+        },
+        {
+          "id": "iot_device_management:fw_upd.IoT:contracts/iot_device_management/src/events.rs:65",
+          "contract": "iot_device_management",
+          "topics": [
+            "fw_upd",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 65
+          }
+        },
+        {
+          "id": "iot_device_management:hbeat.IoT:contracts/iot_device_management/src/events.rs:72",
+          "contract": "iot_device_management",
+          "topics": [
+            "hbeat",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 72
+          }
+        },
+        {
+          "id": "iot_device_management:keyrot.IoT:contracts/iot_device_management/src/events.rs:79",
+          "contract": "iot_device_management",
+          "topics": [
+            "keyrot",
+            "IoT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/iot_device_management/src/events.rs",
+            "line": 79
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_consent_nft",
+      "events": [
+        {
+          "id": "medical_consent_nft:consent.delegated:contracts/medical_consent_nft/src/lib.rs:1081",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "delegated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 1081
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.emerg_ovr:contracts/medical_consent_nft/src/lib.rs:1345",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "emerg_ovr"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 1345
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.issued:contracts/medical_consent_nft/src/lib.rs:421",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "issued"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 421
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.mkt_list:contracts/medical_consent_nft/src/lib.rs:1450",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "mkt_list"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 1450
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.mkt_purch:contracts/medical_consent_nft/src/lib.rs:1514",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "mkt_purch"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 1514
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.perm_upd:contracts/medical_consent_nft/src/lib.rs:780",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "perm_upd"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 780
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.revoked:contracts/medical_consent_nft/src/lib.rs:571",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "revoked"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 571
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.transfer:contracts/medical_consent_nft/src/lib.rs:643",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "transfer"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 643
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.upd_dyn:contracts/medical_consent_nft/src/lib.rs:1593",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "upd_dyn"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 1593
+          }
+        },
+        {
+          "id": "medical_consent_nft:consent.updated:contracts/medical_consent_nft/src/lib.rs:489",
+          "contract": "medical_consent_nft",
+          "topics": [
+            "consent",
+            "updated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_consent_nft/src/lib.rs",
+            "line": 489
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_imaging",
+      "events": [
+        {
+          "id": "medical_imaging:DISCREP:contracts/medical_imaging/src/lib.rs:1472",
+          "contract": "medical_imaging",
+          "topics": [
+            "DISCREP"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_imaging/src/lib.rs",
+            "line": 1472
+          }
+        },
+        {
+          "id": "medical_imaging:IMG_MDL:contracts/medical_imaging/src/lib.rs:634",
+          "contract": "medical_imaging",
+          "topics": [
+            "IMG_MDL"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_imaging/src/lib.rs",
+            "line": 634
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_imaging_ai",
+      "events": [
+        {
+          "id": "medical_imaging_ai:MDL_REG:contracts/medical_imaging_ai/src/lib.rs:319",
+          "contract": "medical_imaging_ai",
+          "topics": [
+            "MDL_REG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_imaging_ai/src/lib.rs",
+            "line": 319
+          }
+        },
+        {
+          "id": "medical_imaging_ai:MDL_RET:contracts/medical_imaging_ai/src/lib.rs:351",
+          "contract": "medical_imaging_ai",
+          "topics": [
+            "MDL_RET"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_imaging_ai/src/lib.rs",
+            "line": 351
+          }
+        },
+        {
+          "id": "medical_imaging_ai:SEG:contracts/medical_imaging_ai/src/lib.rs:515",
+          "contract": "medical_imaging_ai",
+          "topics": [
+            "SEG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_imaging_ai/src/lib.rs",
+            "line": 515
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_record_backup",
+      "events": [
+        {
+          "id": "medical_record_backup:BKP_POL:contracts/medical_record_backup/src/lib.rs:388",
+          "contract": "medical_record_backup",
+          "topics": [
+            "BKP_POL"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_record_backup/src/lib.rs",
+            "line": 388
+          }
+        },
+        {
+          "id": "medical_record_backup:BKP_REST:contracts/medical_record_backup/src/lib.rs:672",
+          "contract": "medical_record_backup",
+          "topics": [
+            "BKP_REST"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/medical_record_backup/src/lib.rs",
+            "line": 672
+          }
+        },
+        {
+          "id": "medical_record_backup:BKP_RUN:contracts/medical_record_backup/src/lib.rs:984",
+          "contract": "medical_record_backup",
+          "topics": [
+            "BKP_RUN"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_record_backup/src/lib.rs",
+            "line": 984
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_record_hash_registry",
+      "events": [
+        {
+          "id": "medical_record_hash_registry:MEDREG.DUP:contracts/medical_record_hash_registry/src/events.rs:33",
+          "contract": "medical_record_hash_registry",
+          "topics": [
+            "MEDREG",
+            "DUP"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/medical_record_hash_registry/src/events.rs",
+            "line": 33
+          }
+        },
+        {
+          "id": "medical_record_hash_registry:MEDREG.STORE:contracts/medical_record_hash_registry/src/events.rs:9",
+          "contract": "medical_record_hash_registry",
+          "topics": [
+            "MEDREG",
+            "STORE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_record_hash_registry/src/events.rs",
+            "line": 9
+          }
+        },
+        {
+          "id": "medical_record_hash_registry:MEDREG.VERIFY:contracts/medical_record_hash_registry/src/events.rs:21",
+          "contract": "medical_record_hash_registry",
+          "topics": [
+            "MEDREG",
+            "VERIFY"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_record_hash_registry/src/events.rs",
+            "line": 21
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_record_search",
+      "events": [
+        {
+          "id": "medical_record_search:SRCH_AUD:contracts/medical_record_search/src/lib.rs:740",
+          "contract": "medical_record_search",
+          "topics": [
+            "SRCH_AUD"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_record_search/src/lib.rs",
+            "line": 740
+          }
+        }
+      ]
+    },
+    {
+      "name": "medical_records",
+      "events": [
+        {
+          "id": "medical_records:DQ_VALID.EVENT:contracts/medical_records/src/events.rs:812",
+          "contract": "medical_records",
+          "topics": [
+            "DQ_VALID",
+            "EVENT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/medical_records/src/events.rs",
+            "line": 812
+          }
+        },
+        {
+          "id": "medical_records:LOG:contracts/medical_records/src/lib.rs:801",
+          "contract": "medical_records",
+          "topics": [
+            "LOG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medical_records/src/lib.rs",
+            "line": 801
+          }
+        }
+      ]
+    },
+    {
+      "name": "medication_management",
+      "events": [
+        {
+          "id": "medication_management:CAT_SYNC:contracts/medication_management/src/lib.rs:305",
+          "contract": "medication_management",
+          "topics": [
+            "CAT_SYNC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medication_management/src/lib.rs",
+            "line": 305
+          }
+        },
+        {
+          "id": "medication_management:MED_SYNC:contracts/medication_management/src/lib.rs:759",
+          "contract": "medication_management",
+          "topics": [
+            "MED_SYNC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/medication_management/src/lib.rs",
+            "line": 759
+          }
+        }
+      ]
+    },
+    {
+      "name": "meta_tx_forwarder",
+      "events": [
+        {
+          "id": "meta_tx_forwarder:fwd:contracts/meta_tx_forwarder/src/lib.rs:177",
+          "contract": "meta_tx_forwarder",
+          "topics": [
+            "fwd"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/meta_tx_forwarder/src/lib.rs",
+            "line": 177
+          }
+        },
+        {
+          "id": "meta_tx_forwarder:init:contracts/meta_tx_forwarder/src/lib.rs:129",
+          "contract": "meta_tx_forwarder",
+          "topics": [
+            "init"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/meta_tx_forwarder/src/lib.rs",
+            "line": 129
+          }
+        },
+        {
+          "id": "meta_tx_forwarder:reg_relay:contracts/meta_tx_forwarder/src/lib.rs:269",
+          "contract": "meta_tx_forwarder",
+          "topics": [
+            "reg_relay"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/meta_tx_forwarder/src/lib.rs",
+            "line": 269
+          }
+        }
+      ]
+    },
+    {
+      "name": "mfa",
+      "events": [
+        {
+          "id": "mfa:MFA:contracts/mfa/src/lib.rs:228",
+          "contract": "mfa",
+          "topics": [
+            "MFA"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/mfa/src/lib.rs",
+            "line": 228
+          }
+        }
+      ]
+    },
+    {
+      "name": "mpc_manager",
+      "events": [
+        {
+          "id": "mpc_manager:mpc.commit:contracts/mpc_manager/src/lib.rs:293",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "commit"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 293
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.final:contracts/mpc_manager/src/lib.rs:402",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "final"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 402
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.ml:contracts/mpc_manager/src/lib.rs:667",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "ml"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 667
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.proof:contracts/mpc_manager/src/lib.rs:559",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "proof"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 559
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.reveal:contracts/mpc_manager/src/lib.rs:343",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "reveal"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 343
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.start:contracts/mpc_manager/src/lib.rs:246",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "start"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 246
+          }
+        },
+        {
+          "id": "mpc_manager:mpc.stats:contracts/mpc_manager/src/lib.rs:610",
+          "contract": "mpc_manager",
+          "topics": [
+            "mpc",
+            "stats"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/mpc_manager/src/lib.rs",
+            "line": 610
+          }
+        }
+      ]
+    },
+    {
+      "name": "multi_region_orchestrator",
+      "events": [
+        {
+          "id": "multi_region_orchestrator:DRO_FAIL:contracts/multi_region_orchestrator/src/lib.rs:379",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_FAIL"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 379
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_HLTH:contracts/multi_region_orchestrator/src/lib.rs:476",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_HLTH"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 476
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_INIT:contracts/multi_region_orchestrator/src/lib.rs:170",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 170
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_REGI:contracts/multi_region_orchestrator/src/lib.rs:238",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_REGI"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 238
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_SETP:contracts/multi_region_orchestrator/src/lib.rs:548",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_SETP"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 548
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_SLAM:contracts/multi_region_orchestrator/src/lib.rs:511",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_SLAM"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 511
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_STAT:contracts/multi_region_orchestrator/src/lib.rs:296",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_STAT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 296
+          }
+        },
+        {
+          "id": "multi_region_orchestrator:DRO_SYNC:contracts/multi_region_orchestrator/src/lib.rs:433",
+          "contract": "multi_region_orchestrator",
+          "topics": [
+            "DRO_SYNC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/multi_region_orchestrator/src/lib.rs",
+            "line": 433
+          }
+        }
+      ]
+    },
+    {
+      "name": "notification_system",
+      "events": [
+        {
+          "id": "notification_system:ALRT_DEL.NOTIF:contracts/notification_system/src/events.rs:171",
+          "contract": "notification_system",
+          "topics": [
+            "ALRT_DEL",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 171
+          }
+        },
+        {
+          "id": "notification_system:ALRT_NEW.NOTIF:contracts/notification_system/src/events.rs:136",
+          "contract": "notification_system",
+          "topics": [
+            "ALRT_NEW",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 136
+          }
+        },
+        {
+          "id": "notification_system:ALRT_TRG.NOTIF:contracts/notification_system/src/events.rs:191",
+          "contract": "notification_system",
+          "topics": [
+            "ALRT_TRG",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 191
+          }
+        },
+        {
+          "id": "notification_system:ALRT_UPD.NOTIF:contracts/notification_system/src/events.rs:157",
+          "contract": "notification_system",
+          "topics": [
+            "ALRT_UPD",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 157
+          }
+        },
+        {
+          "id": "notification_system:NOTIF_ARC.NOTIF:contracts/notification_system/src/events.rs:119",
+          "contract": "notification_system",
+          "topics": [
+            "NOTIF_ARC",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 119
+          }
+        },
+        {
+          "id": "notification_system:NOTIF_NEW.NOTIF:contracts/notification_system/src/events.rs:93",
+          "contract": "notification_system",
+          "topics": [
+            "NOTIF_NEW",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 93
+          }
+        },
+        {
+          "id": "notification_system:NOTIF_RD.NOTIF:contracts/notification_system/src/events.rs:108",
+          "contract": "notification_system",
+          "topics": [
+            "NOTIF_RD",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 108
+          }
+        },
+        {
+          "id": "notification_system:PREF_UPD.NOTIF:contracts/notification_system/src/events.rs:204",
+          "contract": "notification_system",
+          "topics": [
+            "PREF_UPD",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 204
+          }
+        },
+        {
+          "id": "notification_system:SNDR_ADD.NOTIF:contracts/notification_system/src/events.rs:216",
+          "contract": "notification_system",
+          "topics": [
+            "SNDR_ADD",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 216
+          }
+        },
+        {
+          "id": "notification_system:SNDR_RMV.NOTIF:contracts/notification_system/src/events.rs:228",
+          "contract": "notification_system",
+          "topics": [
+            "SNDR_RMV",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 228
+          }
+        },
+        {
+          "id": "notification_system:TMPL_SET.NOTIF:contracts/notification_system/src/events.rs:240",
+          "contract": "notification_system",
+          "topics": [
+            "TMPL_SET",
+            "NOTIF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/notification_system/src/events.rs",
+            "line": 240
+          }
+        }
+      ]
+    },
+    {
+      "name": "patient_consent_management",
+      "events": [
+        {
+          "id": "patient_consent_management:CONSENT.CHECK:contracts/patient_consent_management/src/events.rs:40",
+          "contract": "patient_consent_management",
+          "topics": [
+            "CONSENT",
+            "CHECK"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_consent_management/src/events.rs",
+            "line": 40
+          }
+        },
+        {
+          "id": "patient_consent_management:CONSENT.GRANT:contracts/patient_consent_management/src/events.rs:4",
+          "contract": "patient_consent_management",
+          "topics": [
+            "CONSENT",
+            "GRANT"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_consent_management/src/events.rs",
+            "line": 4
+          }
+        },
+        {
+          "id": "patient_consent_management:CONSENT.REVOKE:contracts/patient_consent_management/src/events.rs:11",
+          "contract": "patient_consent_management",
+          "topics": [
+            "CONSENT",
+            "REVOKE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_consent_management/src/events.rs",
+            "line": 11
+          }
+        },
+        {
+          "id": "patient_consent_management:CONSENT.UNAUTH:contracts/patient_consent_management/src/events.rs:28",
+          "contract": "patient_consent_management",
+          "topics": [
+            "CONSENT",
+            "UNAUTH"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_consent_management/src/events.rs",
+            "line": 28
+          }
+        }
+      ]
+    },
+    {
+      "name": "patient_gamification",
+      "events": [
+        {
+          "id": "patient_gamification:AchCreate:contracts/patient_gamification/src/lib.rs:330",
+          "contract": "patient_gamification",
+          "topics": [
+            "AchCreate"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 330
+          }
+        },
+        {
+          "id": "patient_gamification:AchEarn:contracts/patient_gamification/src/lib.rs:401",
+          "contract": "patient_gamification",
+          "topics": [
+            "AchEarn"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 401
+          }
+        },
+        {
+          "id": "patient_gamification:ChalComp:contracts/patient_gamification/src/lib.rs:594",
+          "contract": "patient_gamification",
+          "topics": [
+            "ChalComp"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 594
+          }
+        },
+        {
+          "id": "patient_gamification:ChalCrt:contracts/patient_gamification/src/lib.rs:477",
+          "contract": "patient_gamification",
+          "topics": [
+            "ChalCrt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 477
+          }
+        },
+        {
+          "id": "patient_gamification:ChalJoin:contracts/patient_gamification/src/lib.rs:546",
+          "contract": "patient_gamification",
+          "topics": [
+            "ChalJoin"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 546
+          }
+        },
+        {
+          "id": "patient_gamification:ConfigUpd:contracts/patient_gamification/src/lib.rs:1248",
+          "contract": "patient_gamification",
+          "topics": [
+            "ConfigUpd"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 1248
+          }
+        },
+        {
+          "id": "patient_gamification:GamInit:contracts/patient_gamification/src/lib.rs:262",
+          "contract": "patient_gamification",
+          "topics": [
+            "GamInit"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 262
+          }
+        },
+        {
+          "id": "patient_gamification:MetricRec:contracts/patient_gamification/src/lib.rs:1113",
+          "contract": "patient_gamification",
+          "topics": [
+            "MetricRec"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 1113
+          }
+        },
+        {
+          "id": "patient_gamification:ProfCrt:contracts/patient_gamification/src/lib.rs:860",
+          "contract": "patient_gamification",
+          "topics": [
+            "ProfCrt"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 860
+          }
+        },
+        {
+          "id": "patient_gamification:PtsRedeem:contracts/patient_gamification/src/lib.rs:704",
+          "contract": "patient_gamification",
+          "topics": [
+            "PtsRedeem"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 704
+          }
+        },
+        {
+          "id": "patient_gamification:RndCmt:contracts/patient_gamification/src/lib.rs:750",
+          "contract": "patient_gamification",
+          "topics": [
+            "RndCmt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 750
+          }
+        },
+        {
+          "id": "patient_gamification:RndRvl:contracts/patient_gamification/src/lib.rs:802",
+          "contract": "patient_gamification",
+          "topics": [
+            "RndRvl"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/patient_gamification/src/lib.rs",
+            "line": 802
+          }
+        }
+      ]
+    },
+    {
+      "name": "patient_risk_stratification",
+      "events": [
+        {
+          "id": "patient_risk_stratification:ModelReg:contracts/patient_risk_stratification/src/lib.rs:195",
+          "contract": "patient_risk_stratification",
+          "topics": [
+            "ModelReg"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/patient_risk_stratification/src/lib.rs",
+            "line": 195
+          }
+        },
+        {
+          "id": "patient_risk_stratification:RiskAsses:contracts/patient_risk_stratification/src/lib.rs:263",
+          "contract": "patient_risk_stratification",
+          "topics": [
+            "RiskAsses"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/patient_risk_stratification/src/lib.rs",
+            "line": 263
+          }
+        }
+      ]
+    },
+    {
+      "name": "predictive_analytics",
+      "events": [
+        {
+          "id": "predictive_analytics:CfgUpdate:contracts/predictive_analytics/src/lib.rs:192",
+          "contract": "predictive_analytics",
+          "topics": [
+            "CfgUpdate"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/predictive_analytics/src/lib.rs",
+            "line": 192
+          }
+        },
+        {
+          "id": "predictive_analytics:PredMade:contracts/predictive_analytics/src/lib.rs:289",
+          "contract": "predictive_analytics",
+          "topics": [
+            "PredMade"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/predictive_analytics/src/lib.rs",
+            "line": 289
+          }
+        }
+      ]
+    },
+    {
+      "name": "public_health_surveillance",
+      "events": [
+        {
+          "id": "public_health_surveillance:phs.alert_crt:contracts/public_health_surveillance/src/lib.rs:569",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "alert_crt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 569
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.amr_alert:contracts/public_health_surveillance/src/lib.rs:1191",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "amr_alert"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 1191
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.amr_rpt:contracts/public_health_surveillance/src/lib.rs:760",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "amr_rpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 760
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.auto_alrt:contracts/public_health_surveillance/src/lib.rs:1105",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "auto_alrt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 1105
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.colab_crt:contracts/public_health_surveillance/src/lib.rs:932",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "colab_crt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 932
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.cov_rpt:contracts/public_health_surveillance/src/lib.rs:639",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "cov_rpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 639
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.env_alert:contracts/public_health_surveillance/src/lib.rs:1150",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "env_alert"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 1150
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.env_rpt:contracts/public_health_surveillance/src/lib.rs:703",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "env_rpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 703
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.intv_crt:contracts/public_health_surveillance/src/lib.rs:872",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "intv_crt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 872
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.model_crt:contracts/public_health_surveillance/src/lib.rs:511",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "model_crt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 511
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.out_rpt:contracts/public_health_surveillance/src/lib.rs:441",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "out_rpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 441
+          }
+        },
+        {
+          "id": "public_health_surveillance:phs.sdoh_rpt:contracts/public_health_surveillance/src/lib.rs:809",
+          "contract": "public_health_surveillance",
+          "topics": [
+            "phs",
+            "sdoh_rpt"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/public_health_surveillance/src/lib.rs",
+            "line": 809
+          }
+        }
+      ]
+    },
+    {
+      "name": "rbac",
+      "events": [
+        {
+          "id": "rbac:ROLE.ASSIGN:contracts/rbac/src/lib.rs:80",
+          "contract": "rbac",
+          "topics": [
+            "ROLE",
+            "ASSIGN"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/rbac/src/lib.rs",
+            "line": 80
+          }
+        },
+        {
+          "id": "rbac:ROLE.REMOVE:contracts/rbac/src/lib.rs:118",
+          "contract": "rbac",
+          "topics": [
+            "ROLE",
+            "REMOVE"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/rbac/src/lib.rs",
+            "line": 118
+          }
+        }
+      ]
+    },
+    {
+      "name": "regional_node_manager",
+      "events": [
+        {
+          "id": "regional_node_manager:RNM_CFG:contracts/regional_node_manager/src/lib.rs:467",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_CFG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 467
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_HLTH:contracts/regional_node_manager/src/lib.rs:330",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_HLTH"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 330
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_INIT:contracts/regional_node_manager/src/lib.rs:136",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 136
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_REG:contracts/regional_node_manager/src/lib.rs:200",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_REG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 200
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_REPL:contracts/regional_node_manager/src/lib.rs:393",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_REPL"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 393
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_SYNC:contracts/regional_node_manager/src/lib.rs:432",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_SYNC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 432
+          }
+        },
+        {
+          "id": "regional_node_manager:RNM_UPD:contracts/regional_node_manager/src/lib.rs:282",
+          "contract": "regional_node_manager",
+          "topics": [
+            "RNM_UPD"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/regional_node_manager/src/lib.rs",
+            "line": 282
+          }
+        }
+      ]
+    },
+    {
+      "name": "remote_patient_monitoring",
+      "events": [
+        {
+          "id": "remote_patient_monitoring:alert:contracts/remote_patient_monitoring/src/lib.rs:275",
+          "contract": "remote_patient_monitoring",
+          "topics": [
+            "alert"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/remote_patient_monitoring/src/lib.rs",
+            "line": 275
+          }
+        },
+        {
+          "id": "remote_patient_monitoring:caregiver_alert:contracts/remote_patient_monitoring/src/lib.rs:194",
+          "contract": "remote_patient_monitoring",
+          "topics": [
+            "caregiver_alert"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/remote_patient_monitoring/src/lib.rs",
+            "line": 194
+          }
+        },
+        {
+          "id": "remote_patient_monitoring:caregiver_alert:contracts/remote_patient_monitoring/src/lib.rs:280",
+          "contract": "remote_patient_monitoring",
+          "topics": [
+            "caregiver_alert"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/remote_patient_monitoring/src/lib.rs",
+            "line": 280
+          }
+        }
+      ]
+    },
+    {
+      "name": "reputation_access_control",
+      "events": [
+        {
+          "id": "reputation_access_control:REPUTAC.APPROVED:contracts/reputation_access_control/src/lib.rs:275",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "APPROVED"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 275
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.DENIED:contracts/reputation_access_control/src/lib.rs:298",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "DENIED"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 298
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.EMERGENCY:contracts/reputation_access_control/src/lib.rs:319",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "EMERGENCY"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 319
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.POLICY:contracts/reputation_access_control/src/lib.rs:149",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "POLICY"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 149
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.REQUEST:contracts/reputation_access_control/src/lib.rs:246",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "REQUEST"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 246
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.REVOKE_EM.REVOKE_EMERGENCY:contracts/reputation_access_control/src/lib.rs:339",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "REVOKE_EM",
+            "REVOKE_EMERGENCY"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 339
+          }
+        },
+        {
+          "id": "reputation_access_control:REPUTAC.THRESHOLD:contracts/reputation_access_control/src/lib.rs:404",
+          "contract": "reputation_access_control",
+          "topics": [
+            "REPUTAC",
+            "THRESHOLD"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/reputation_access_control/src/lib.rs",
+            "line": 404
+          }
+        }
+      ]
+    },
+    {
+      "name": "reputation_integration",
+      "events": [
+        {
+          "id": "reputation_integration:REPUTINT.AUTO_SYNC:contracts/reputation_integration/src/lib.rs:205",
+          "contract": "reputation_integration",
+          "topics": [
+            "REPUTINT",
+            "AUTO_SYNC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_integration/src/lib.rs",
+            "line": 205
+          }
+        },
+        {
+          "id": "reputation_integration:REPUTINT.BASE_UPD:contracts/reputation_integration/src/lib.rs:432",
+          "contract": "reputation_integration",
+          "topics": [
+            "REPUTINT",
+            "BASE_UPD"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/reputation_integration/src/lib.rs",
+            "line": 432
+          }
+        },
+        {
+          "id": "reputation_integration:REPUTINT.MAP_UPD:contracts/reputation_integration/src/lib.rs:238",
+          "contract": "reputation_integration",
+          "topics": [
+            "REPUTINT",
+            "MAP_UPD"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_integration/src/lib.rs",
+            "line": 238
+          }
+        },
+        {
+          "id": "reputation_integration:REPUTINT.SET_UPD:contracts/reputation_integration/src/lib.rs:258",
+          "contract": "reputation_integration",
+          "topics": [
+            "REPUTINT",
+            "SET_UPD"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/reputation_integration/src/lib.rs",
+            "line": 258
+          }
+        },
+        {
+          "id": "reputation_integration:REPUTINT.SYNC:contracts/reputation_integration/src/lib.rs:156",
+          "contract": "reputation_integration",
+          "topics": [
+            "REPUTINT",
+            "SYNC"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/reputation_integration/src/lib.rs",
+            "line": 156
+          }
+        }
+      ]
+    },
+    {
+      "name": "sut_token",
+      "events": [
+        {
+          "id": "sut_token:burn:contracts/sut_token/src/lib.rs:469",
+          "contract": "sut_token",
+          "topics": [
+            "burn"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sut_token/src/lib.rs",
+            "line": 469
+          }
+        },
+        {
+          "id": "sut_token:mint:contracts/sut_token/src/lib.rs:404",
+          "contract": "sut_token",
+          "topics": [
+            "mint"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sut_token/src/lib.rs",
+            "line": 404
+          }
+        }
+      ]
+    },
+    {
+      "name": "sync_manager",
+      "events": [
+        {
+          "id": "sync_manager:SM_CONF:contracts/sync_manager/src/lib.rs:450",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_CONF"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 450
+          }
+        },
+        {
+          "id": "sync_manager:SM_EXEC:contracts/sync_manager/src/lib.rs:272",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_EXEC"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 272
+          }
+        },
+        {
+          "id": "sync_manager:SM_INIT:contracts/sync_manager/src/lib.rs:165",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 165
+          }
+        },
+        {
+          "id": "sync_manager:SM_INIT_S:contracts/sync_manager/src/lib.rs:231",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_INIT_S"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 231
+          }
+        },
+        {
+          "id": "sync_manager:SM_LAG:contracts/sync_manager/src/lib.rs:377",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_LAG"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 377
+          }
+        },
+        {
+          "id": "sync_manager:SM_RESO:contracts/sync_manager/src/lib.rs:485",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_RESO"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 485
+          }
+        },
+        {
+          "id": "sync_manager:SM_RETR:contracts/sync_manager/src/lib.rs:315",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_RETR"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 315
+          }
+        },
+        {
+          "id": "sync_manager:SM_SETP:contracts/sync_manager/src/lib.rs:508",
+          "contract": "sync_manager",
+          "topics": [
+            "SM_SETP"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/sync_manager/src/lib.rs",
+            "line": 508
+          }
+        }
+      ]
+    },
+    {
+      "name": "timelock",
+      "events": [
+        {
+          "id": "timelock:Queued:contracts/timelock/src/lib.rs:83",
+          "contract": "timelock",
+          "topics": [
+            "Queued"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/timelock/src/lib.rs",
+            "line": 83
+          }
+        }
+      ]
+    },
+    {
+      "name": "token_sale",
+      "events": [
+        {
+          "id": "token_sale:contribution:contracts/token_sale/src/contract.rs:209",
+          "contract": "token_sale",
+          "topics": [
+            "contribution"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 209
+          }
+        },
+        {
+          "id": "token_sale:phase_added:contracts/token_sale/src/contract.rs:90",
+          "contract": "token_sale",
+          "topics": [
+            "phase_added"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 90
+          }
+        },
+        {
+          "id": "token_sale:sale_initialized:contracts/token_sale/src/contract.rs:54",
+          "contract": "token_sale",
+          "topics": [
+            "sale_initialized"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 54
+          }
+        },
+        {
+          "id": "token_sale:sale_paused:contracts/token_sale/src/contract.rs:112",
+          "contract": "token_sale",
+          "topics": [
+            "sale_paused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 0
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 112
+          }
+        },
+        {
+          "id": "token_sale:sale_unpaused:contracts/token_sale/src/contract.rs:121",
+          "contract": "token_sale",
+          "topics": [
+            "sale_unpaused"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 0
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 121
+          }
+        },
+        {
+          "id": "token_sale:token_added:contracts/token_sale/src/contract.rs:103",
+          "contract": "token_sale",
+          "topics": [
+            "token_added"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 103
+          }
+        },
+        {
+          "id": "token_sale:tokens_claimed:contracts/token_sale/src/contract.rs:266",
+          "contract": "token_sale",
+          "topics": [
+            "tokens_claimed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/token_sale/src/contract.rs",
+            "line": 266
+          }
+        },
+        {
+          "id": "token_sale:vesting_schedule_created:contracts/token_sale/src/vesting.rs:70",
+          "contract": "token_sale",
+          "topics": [
+            "vesting_schedule_created"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/token_sale/src/vesting.rs",
+            "line": 70
+          }
+        },
+        {
+          "id": "token_sale:vesting_schedule_updated:contracts/token_sale/src/vesting.rs:220",
+          "contract": "token_sale",
+          "topics": [
+            "vesting_schedule_updated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 5
+          },
+          "source": {
+            "file": "contracts/token_sale/src/vesting.rs",
+            "line": 220
+          }
+        }
+      ]
+    },
+    {
+      "name": "treasury_controller",
+      "events": [
+        {
+          "id": "treasury_controller:APPROVED:contracts/treasury_controller/src/lib.rs:354",
+          "contract": "treasury_controller",
+          "topics": [
+            "APPROVED"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 354
+          }
+        },
+        {
+          "id": "treasury_controller:EMERGENCY:contracts/treasury_controller/src/lib.rs:475",
+          "contract": "treasury_controller",
+          "topics": [
+            "EMERGENCY"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 475
+          }
+        },
+        {
+          "id": "treasury_controller:EXECUTED:contracts/treasury_controller/src/lib.rs:445",
+          "contract": "treasury_controller",
+          "topics": [
+            "EXECUTED"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 445
+          }
+        },
+        {
+          "id": "treasury_controller:INIT:contracts/treasury_controller/src/lib.rs:178",
+          "contract": "treasury_controller",
+          "topics": [
+            "INIT"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 178
+          }
+        },
+        {
+          "id": "treasury_controller:PROPOSAL:contracts/treasury_controller/src/lib.rs:290",
+          "contract": "treasury_controller",
+          "topics": [
+            "PROPOSAL"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 290
+          }
+        },
+        {
+          "id": "treasury_controller:RESUMED:contracts/treasury_controller/src/lib.rs:499",
+          "contract": "treasury_controller",
+          "topics": [
+            "RESUMED"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/treasury_controller/src/lib.rs",
+            "line": 499
+          }
+        }
+      ]
+    },
+    {
+      "name": "zk_verifier",
+      "events": [
+        {
+          "id": "zk_verifier:ZKVER.ATTEST:contracts/zk_verifier/src/lib.rs:237",
+          "contract": "zk_verifier",
+          "topics": [
+            "ZKVER",
+            "ATTEST"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/zk_verifier/src/lib.rs",
+            "line": 237
+          }
+        },
+        {
+          "id": "zk_verifier:ZKVER.VKREG:contracts/zk_verifier/src/lib.rs:147",
+          "contract": "zk_verifier",
+          "topics": [
+            "ZKVER",
+            "VKREG"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/zk_verifier/src/lib.rs",
+            "line": 147
+          }
+        }
+      ]
+    },
+    {
+      "name": "zkp_registry",
+      "events": [
+        {
+          "id": "zkp_registry:zkp.circ_reg:contracts/zkp_registry/src/lib.rs:310",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "circ_reg"
+          ],
+          "payload": {
+            "shape": "single",
+            "arity": 1
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 310
+          }
+        },
+        {
+          "id": "zkp_registry:zkp.cred_prf:contracts/zkp_registry/src/lib.rs:549",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "cred_prf"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 549
+          }
+        },
+        {
+          "id": "zkp_registry:zkp.med_proof:contracts/zkp_registry/src/lib.rs:440",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "med_proof"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 440
+          }
+        },
+        {
+          "id": "zkp_registry:zkp.proof_sub:contracts/zkp_registry/src/lib.rs:392",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "proof_sub"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 392
+          }
+        },
+        {
+          "id": "zkp_registry:zkp.rec_proof:contracts/zkp_registry/src/lib.rs:617",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "rec_proof"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 617
+          }
+        },
+        {
+          "id": "zkp_registry:zkp.rng_proof:contracts/zkp_registry/src/lib.rs:499",
+          "contract": "zkp_registry",
+          "topics": [
+            "zkp",
+            "rng_proof"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/zkp_registry/src/lib.rs",
+            "line": 499
+          }
+        }
+      ]
+    }
+  ]
+}

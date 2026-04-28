@@ -205,21 +205,21 @@ pub fn emit_user_created(
             event_type: EventType::UserCreated,
             category: OperationCategory::UserManagement,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::UserEvent(UserEventData {
-            target_user: new_user,
+            target_user: new_user.clone(),
             role: Some(String::from_str(env, role)),
             previous_role: None,
             did_reference: did_ref,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("USER_ADD")), event);
+        .publish((symbol_short!("USER_ADD"), admin, new_user), event);
 }
 
 pub fn emit_user_role_updated(
@@ -234,21 +234,21 @@ pub fn emit_user_role_updated(
             event_type: EventType::UserRoleUpdated,
             category: OperationCategory::UserManagement,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::UserEvent(UserEventData {
-            target_user,
+            target_user: target_user.clone(),
             role: Some(String::from_str(env, new_role)),
             previous_role: previous_role.map(|r| String::from_str(env, r)),
             did_reference: None,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("ROLE_UPD")), event);
+        .publish((symbol_short!("ROLE_UPD"), admin, target_user), event);
 }
 
 pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
@@ -257,21 +257,21 @@ pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
             event_type: EventType::UserDeactivated,
             category: OperationCategory::UserManagement,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::UserEvent(UserEventData {
-            target_user,
+            target_user: target_user.clone(),
             role: None,
             previous_role: None,
             did_reference: None,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("USR_DEACT")), event);
+        .publish((symbol_short!("USR_DEACT"), admin, target_user), event);
 }
 
 pub fn emit_record_created(
@@ -296,15 +296,15 @@ pub fn emit_record_created(
         },
         data: EventData::RecordEvent(RecordEventData {
             record_id,
-            patient_id: patient,
-            doctor_id: Some(doctor),
+            patient_id: patient.clone(),
+            doctor_id: Some(doctor.clone()),
             is_confidential,
             category,
             tags,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("REC_NEW")), event);
+        .publish((symbol_short!("REC_NEW"), doctor, patient), event);
 }
 
 pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patient: Address) {
@@ -313,7 +313,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
             event_type: EventType::RecordAccessed,
             category: OperationCategory::RecordOperations,
             timestamp: env.ledger().timestamp(),
-            user_id: accessor,
+            user_id: accessor.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -321,7 +321,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         },
         data: EventData::RecordEvent(RecordEventData {
             record_id,
-            patient_id: patient,
+            patient_id: patient.clone(),
             doctor_id: None,
             is_confidential: false,
             category: String::from_str(env, ""),
@@ -329,7 +329,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("REC_ACC")), event);
+        .publish((symbol_short!("REC_ACC"), accessor, patient), event);
 }
 
 pub fn emit_access_requested(
@@ -353,15 +353,15 @@ pub fn emit_access_requested(
         },
         data: EventData::AccessEvent(AccessEventData {
             record_id,
-            requester,
-            patient,
+            requester: requester.clone(),
+            patient: patient.clone(),
             purpose,
             granted: false,
             credential_hash,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("ACC_REQ")), event);
+        .publish((symbol_short!("ACC_REQ"), requester, patient), event);
 }
 
 pub fn emit_access_granted(
@@ -378,7 +378,7 @@ pub fn emit_access_granted(
             event_type: EventType::AccessGranted,
             category: OperationCategory::AccessControl,
             timestamp: env.ledger().timestamp(),
-            user_id: granter,
+            user_id: granter.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -386,15 +386,15 @@ pub fn emit_access_granted(
         },
         data: EventData::AccessEvent(AccessEventData {
             record_id,
-            requester,
-            patient,
+            requester: requester.clone(),
+            patient: patient.clone(),
             purpose,
             granted: true,
             credential_hash,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("ACC_GRANT")), event);
+        .publish((symbol_short!("ACC_GRANT"), granter, requester), event);
 }
 
 pub fn emit_emergency_access_granted(
@@ -410,22 +410,22 @@ pub fn emit_emergency_access_granted(
             event_type: EventType::EmergencyAccessGranted,
             category: OperationCategory::EmergencyAccess,
             timestamp: env.ledger().timestamp(),
-            user_id: granter,
+            user_id: granter.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::EmergencyEvent(EmergencyEventData {
-            grantee,
-            patient,
+            grantee: grantee.clone(),
+            patient: patient.clone(),
             record_scope,
             expires_at,
             is_active: true,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("EM_GRANT")), event);
+        .publish((symbol_short!("EM_GRANT"), granter, grantee), event);
 }
 
 pub fn emit_contract_paused(env: &Env, admin: Address) {
@@ -434,7 +434,7 @@ pub fn emit_contract_paused(env: &Env, admin: Address) {
             event_type: EventType::ContractPaused,
             category: OperationCategory::Administrative,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -447,7 +447,7 @@ pub fn emit_contract_paused(env: &Env, admin: Address) {
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("PAUSED")), event);
+        .publish((symbol_short!("PAUSED"), admin), event);
 }
 
 pub fn emit_contract_unpaused(env: &Env, admin: Address) {
@@ -456,7 +456,7 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
             event_type: EventType::ContractUnpaused,
             category: OperationCategory::Administrative,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -469,7 +469,7 @@ pub fn emit_contract_unpaused(env: &Env, admin: Address) {
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("UNPAUSED")), event);
+        .publish((symbol_short!("UNPAUSED"), admin), event);
 }
 
 pub fn emit_recovery_proposed(
@@ -485,7 +485,7 @@ pub fn emit_recovery_proposed(
             event_type: EventType::RecoveryProposed,
             category: OperationCategory::Administrative,
             timestamp: env.ledger().timestamp(),
-            user_id: proposer,
+            user_id: proposer.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -493,15 +493,15 @@ pub fn emit_recovery_proposed(
         },
         data: EventData::RecoveryEvent(RecoveryEventData {
             proposal_id,
-            token_contract,
-            recipient,
+            token_contract: token_contract.clone(),
+            recipient: recipient.clone(),
             amount,
             executed: false,
             approver_count: 1,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("REC_PROP")), event);
+        .publish((symbol_short!("REC_PROP"), proposer, recipient), event);
 }
 
 pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
@@ -515,7 +515,7 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
             event_type: EventType::RecoveryApproved,
             category: OperationCategory::Administrative,
             timestamp: env.ledger().timestamp(),
-            user_id: approver,
+            user_id: approver.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -531,7 +531,7 @@ pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("REC_APPR")), event);
+        .publish((symbol_short!("REC_APPR"), approver), event);
 }
 
 pub fn emit_recovery_executed(
@@ -547,7 +547,7 @@ pub fn emit_recovery_executed(
             event_type: EventType::RecoveryExecuted,
             category: OperationCategory::Administrative,
             timestamp: env.ledger().timestamp(),
-            user_id: executor,
+            user_id: executor.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -555,15 +555,15 @@ pub fn emit_recovery_executed(
         },
         data: EventData::RecoveryEvent(RecoveryEventData {
             proposal_id,
-            token_contract,
-            recipient,
+            token_contract: token_contract.clone(),
+            recipient: recipient.clone(),
             amount,
             executed: true,
             approver_count: 0,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("REC_EXEC")), event);
+        .publish((symbol_short!("REC_EXEC"), executor, recipient), event);
 }
 
 pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Address) {
@@ -572,7 +572,7 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
             event_type: EventType::AIConfigUpdated,
             category: OperationCategory::AIIntegration,
             timestamp: env.ledger().timestamp(),
-            user_id: admin,
+            user_id: admin.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -588,7 +588,7 @@ pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Addres
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("AI_CFG")), event);
+        .publish((symbol_short!("AI_CFG"), admin, _ai_coordinator), event);
 }
 
 pub fn emit_anomaly_score_submitted(
@@ -605,7 +605,7 @@ pub fn emit_anomaly_score_submitted(
             event_type: EventType::AnomalyScoreSubmitted,
             category: OperationCategory::AIIntegration,
             timestamp: env.ledger().timestamp(),
-            user_id: ai_coordinator,
+            user_id: ai_coordinator.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -613,7 +613,7 @@ pub fn emit_anomaly_score_submitted(
         },
         data: EventData::AIEvent(AIEventData {
             record_id: Some(record_id),
-            patient_id: Some(patient),
+            patient_id: Some(patient.clone()),
             model_id,
             score_bps,
             model_version,
@@ -621,7 +621,7 @@ pub fn emit_anomaly_score_submitted(
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("ANOMALY")), event);
+        .publish((symbol_short!("ANOMALY"), ai_coordinator, patient), event);
 }
 
 pub fn emit_risk_score_submitted(
@@ -637,7 +637,7 @@ pub fn emit_risk_score_submitted(
             event_type: EventType::RiskScoreSubmitted,
             category: OperationCategory::AIIntegration,
             timestamp: env.ledger().timestamp(),
-            user_id: ai_coordinator,
+            user_id: ai_coordinator.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -645,7 +645,7 @@ pub fn emit_risk_score_submitted(
         },
         data: EventData::AIEvent(AIEventData {
             record_id: None,
-            patient_id: Some(patient),
+            patient_id: Some(patient.clone()),
             model_id,
             score_bps,
             model_version,
@@ -653,7 +653,7 @@ pub fn emit_risk_score_submitted(
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("RISK_SCR")), event);
+        .publish((symbol_short!("RISK_SCR"), ai_coordinator, patient), event);
 }
 
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
@@ -670,7 +670,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         },
         data: EventData::AIEvent(AIEventData {
             record_id: Some(record_id),
-            patient_id: Some(patient),
+            patient_id: Some(patient.clone()),
             model_id: BytesN::from_array(env, &[0u8; 32]), // Placeholder
             score_bps: 0,
             model_version: String::from_str(env, ""),
@@ -678,7 +678,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("AI_TRIG")), event);
+        .publish((symbol_short!("AI_TRIG"), patient), event);
 }
 
 pub fn emit_health_check(env: &Env, _status: String, _gas_used: u64) {
@@ -713,15 +713,15 @@ pub fn emit_permission_granted(
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::PermissionEvent(PermissionEventData {
-            grantee,
+            grantee: grantee.clone(),
             permission_bit: permission,
-            granter,
+            granter: granter.clone(),
             expiration,
             is_delegatable,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("PERM_GRNT")), event);
+        .publish((symbol_short!("PERM_GRNT"), granter, grantee), event);
 }
 
 pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, permission: u32) {
@@ -737,15 +737,15 @@ pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, pe
             block_height: env.ledger().sequence() as u64,
         },
         data: EventData::PermissionEvent(PermissionEventData {
-            grantee,
+            grantee: grantee.clone(),
             permission_bit: permission,
-            granter: revoker,
+            granter: revoker.clone(),
             expiration: 0,
             is_delegatable: false,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("PERM_REV")), event);
+        .publish((symbol_short!("PERM_REV"), revoker, grantee), event);
 }
 
 pub fn emit_metadata_updated(
@@ -762,7 +762,7 @@ pub fn emit_metadata_updated(
             event_type: EventType::MetadataUpdated,
             category: OperationCategory::RecordOperations,
             timestamp: env.ledger().timestamp(),
-            user_id: caller,
+            user_id: caller.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -770,14 +770,14 @@ pub fn emit_metadata_updated(
         },
         data: EventData::MetadataEvent(MetadataEventData {
             record_id,
-            patient_id,
+            patient_id: patient_id.clone(),
             version,
             tag_count,
             custom_field_count,
         }),
     };
     env.events()
-        .publish(("EVENT", symbol_short!("META_UPD")), event);
+        .publish((symbol_short!("META_UPD"), caller, patient_id), event);
 }
 
 pub fn emit_data_quality_validated(
@@ -793,7 +793,7 @@ pub fn emit_data_quality_validated(
             event_type: EventType::DataQualityValidated,
             category: OperationCategory::DataQuality,
             timestamp: env.ledger().timestamp(),
-            user_id: caller,
+            user_id: caller.clone(),
             session_id: None,
             ipfs_ref: None,
             gas_used: None,
@@ -810,7 +810,7 @@ pub fn emit_data_quality_validated(
         }),
     };
     env.events().publish(
-        ("EVENT", symbol_short!("DQ_VALID")),
+        (symbol_short!("DQ_VALID"), caller),
         (event, record_id, issue_count),
     );
 }

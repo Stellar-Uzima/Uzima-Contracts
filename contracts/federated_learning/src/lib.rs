@@ -48,7 +48,6 @@ pub enum RoundStatus {
     Failed,
     Verification,
 }
-}
 
 #[derive(Clone, PartialEq)]
 #[contracttype]
@@ -57,7 +56,6 @@ pub enum InstitutionStatus {
     Suspended,
     Blacklisted,
     UnderReview,
-}
 }
 
 #[derive(Clone)]

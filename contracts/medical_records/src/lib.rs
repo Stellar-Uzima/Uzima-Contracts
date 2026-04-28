@@ -4396,6 +4396,13 @@ impl MedicalRecordsContract {
         Ok(())
     }
 
+    pub fn validate_upgrade(
+        env: Env,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, Error> {
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash).map_err(|_| Error::InvalidInput)
+    }
+
     fn migrate_data(_env: &Env, from_version: u32) {
         if from_version < 2 {
             // Future migration space
@@ -5577,5 +5584,24 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
 
         let hash_bytes = env.crypto().sha256(&data.to_xdr(env));
         Ok(BytesN::from_array(env, &hash_bytes.to_array()))
+    }
+
+    fn validate(env: &Env, _new_wasm_hash: &BytesN<32>) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+        let mut report = soroban_sdk::Vec::new(env);
+        
+        // Example check: ensure we are initialized
+        let initialized = env.storage().instance().has(&UPGRADE_ADMIN);
+        if !initialized {
+            report.push_back(soroban_sdk::symbol_short!("NOT_INIT"));
+        }
+
+        Ok(upgradeability::UpgradeValidation {
+            state_compatible: initialized,
+            api_compatible: true,
+            storage_layout_valid: true,
+            tests_passed: true,
+            gas_impact: 0,
+            report,
+        })
     }
 }

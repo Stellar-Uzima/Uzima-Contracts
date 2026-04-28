@@ -1,0 +1,725 @@
+{
+  "generated_at": "2026-04-25T20:10:38.250Z",
+  "summary": {
+    "total": 854,
+    "counts": {
+      "unit": 714,
+      "integration": 139,
+      "e2e": 1
+    },
+    "ratios": {
+      "unit": 0.8360655737704918,
+      "integration": 0.16276346604215455,
+      "e2e": 0.00117096018735363
+    },
+    "targets": {
+      "unit": 0.7,
+      "integration": 0.2,
+      "e2e": 0.1
+    },
+    "tolerance": 0.3
+  },
+  "files": [
+    {
+      "file": "contracts/aml/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/anomaly_detector/src/test.rs",
+      "level": "unit",
+      "tests": 39
+    },
+    {
+      "file": "contracts/appointment_booking_escrow/src/test.rs",
+      "level": "unit",
+      "tests": 24
+    },
+    {
+      "file": "contracts/audit/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/audit_forensics/src/test.rs",
+      "level": "unit",
+      "tests": 3
+    },
+    {
+      "file": "contracts/clinical_nlp/src/test.rs",
+      "level": "unit",
+      "tests": 9
+    },
+    {
+      "file": "contracts/cross_chain_access/src/test.rs",
+      "level": "unit",
+      "tests": 41
+    },
+    {
+      "file": "contracts/cross_chain_bridge/src/test.rs",
+      "level": "unit",
+      "tests": 40
+    },
+    {
+      "file": "contracts/cross_chain_bridge/src/timeout_simple_test.rs",
+      "level": "unit",
+      "tests": 3
+    },
+    {
+      "file": "contracts/cross_chain_bridge/src/timeout_test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/cross_chain_identity/src/test.rs",
+      "level": "unit",
+      "tests": 22
+    },
+    {
+      "file": "contracts/crypto_registry/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/dicomweb_services/src/test.rs",
+      "level": "unit",
+      "tests": 19
+    },
+    {
+      "file": "contracts/differential_privacy/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/drug_discovery/src/test.rs",
+      "level": "unit",
+      "tests": 3
+    },
+    {
+      "file": "contracts/emergency_access_override/src/test.rs",
+      "level": "unit",
+      "tests": 8
+    },
+    {
+      "file": "contracts/emr_integration/src/test.rs",
+      "level": "unit",
+      "tests": 8
+    },
+    {
+      "file": "contracts/fhir_integration/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/forensics/src/test.rs",
+      "level": "unit",
+      "tests": 2
+    },
+    {
+      "file": "contracts/genomic_data/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/health_data_access_logging/src/test.rs",
+      "level": "unit",
+      "tests": 13
+    },
+    {
+      "file": "contracts/healthcare_compliance/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/healthcare_data_conversion/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/healthcare_data_marketplace/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/healthcare_oracle_network/src/test.rs",
+      "level": "unit",
+      "tests": 5
+    },
+    {
+      "file": "contracts/healthcare_payment/src/test.rs",
+      "level": "unit",
+      "tests": 6
+    },
+    {
+      "file": "contracts/homomorphic_registry/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/identity_registry/src/comprehensive_tests.rs",
+      "level": "unit",
+      "tests": 48
+    },
+    {
+      "file": "contracts/ihe_integration/src/test.rs",
+      "level": "unit",
+      "tests": 26
+    },
+    {
+      "file": "contracts/iot_device_management/src/test.rs",
+      "level": "unit",
+      "tests": 28
+    },
+    {
+      "file": "contracts/medical_consent_nft/src/test.rs",
+      "level": "unit",
+      "tests": 12
+    },
+    {
+      "file": "contracts/medical_imaging/src/test.rs",
+      "level": "unit",
+      "tests": 16
+    },
+    {
+      "file": "contracts/medical_imaging_ai/src/test.rs",
+      "level": "unit",
+      "tests": 25
+    },
+    {
+      "file": "contracts/medical_record_backup/src/test.rs",
+      "level": "unit",
+      "tests": 5
+    },
+    {
+      "file": "contracts/medical_record_hash_registry/src/test.rs",
+      "level": "unit",
+      "tests": 10
+    },
+    {
+      "file": "contracts/medical_record_search/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/medical_records/src/test.rs",
+      "level": "unit",
+      "tests": 32
+    },
+    {
+      "file": "contracts/medical_records/src/test_migration.rs",
+      "level": "unit",
+      "tests": 2
+    },
+    {
+      "file": "contracts/medical_records/src/test_permissions.rs",
+      "level": "unit",
+      "tests": 3
+    },
+    {
+      "file": "contracts/medical_records/tests/crypto_security_tests.rs",
+      "level": "integration",
+      "tests": 8
+    },
+    {
+      "file": "contracts/medical_records/tests/integration/mod.rs",
+      "level": "integration",
+      "tests": 13
+    },
+    {
+      "file": "contracts/medical_records/tests/logging_tests.rs",
+      "level": "integration",
+      "tests": 4
+    },
+    {
+      "file": "contracts/medical_records/tests/medical_records_test.rs",
+      "level": "integration",
+      "tests": 4
+    },
+    {
+      "file": "contracts/medical_records/tests/unit/mod.rs",
+      "level": "integration",
+      "tests": 3
+    },
+    {
+      "file": "contracts/medical_records/tests/zk_access_tests.rs",
+      "level": "integration",
+      "tests": 7
+    },
+    {
+      "file": "contracts/mental_health_support/src/test.rs",
+      "level": "unit",
+      "tests": 2
+    },
+    {
+      "file": "contracts/meta_tx_forwarder/src/test.rs",
+      "level": "unit",
+      "tests": 8
+    },
+    {
+      "file": "contracts/mfa/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/mpc_manager/src/test.rs",
+      "level": "unit",
+      "tests": 8
+    },
+    {
+      "file": "contracts/notification_system/src/test.rs",
+      "level": "unit",
+      "tests": 50
+    },
+    {
+      "file": "contracts/patient_consent_management/src/test.rs",
+      "level": "unit",
+      "tests": 17
+    },
+    {
+      "file": "contracts/patient_gamification/src/test.rs",
+      "level": "unit",
+      "tests": 12
+    },
+    {
+      "file": "contracts/patient_portal/src/test.rs",
+      "level": "unit",
+      "tests": 2
+    },
+    {
+      "file": "contracts/provider_directory/src/test.rs",
+      "level": "unit",
+      "tests": 5
+    },
+    {
+      "file": "contracts/public_health_surveillance/src/test.rs",
+      "level": "unit",
+      "tests": 11
+    },
+    {
+      "file": "contracts/rbac/src/test.rs",
+      "level": "unit",
+      "tests": 21
+    },
+    {
+      "file": "contracts/remote_patient_monitoring/tests/test.rs",
+      "level": "integration",
+      "tests": 4
+    },
+    {
+      "file": "contracts/secure_enclave/src/test.rs",
+      "level": "unit",
+      "tests": 2
+    },
+    {
+      "file": "contracts/sut_token/src/test.rs",
+      "level": "unit",
+      "tests": 20
+    },
+    {
+      "file": "contracts/telemedicine/src/test.rs",
+      "level": "unit",
+      "tests": 21
+    },
+    {
+      "file": "contracts/token_sale/src/test.rs",
+      "level": "unit",
+      "tests": 5
+    },
+    {
+      "file": "contracts/treasury_controller/src/test.rs",
+      "level": "unit",
+      "tests": 4
+    },
+    {
+      "file": "contracts/upgrade_manager/src/test.rs",
+      "level": "unit",
+      "tests": 1
+    },
+    {
+      "file": "contracts/zkp_registry/src/test.rs",
+      "level": "unit",
+      "tests": 10
+    },
+    {
+      "file": "tests/ai_integration_test.rs",
+      "level": "integration",
+      "tests": 5
+    },
+    {
+      "file": "tests/did_integration_test.rs",
+      "level": "integration",
+      "tests": 20
+    },
+    {
+      "file": "tests/e2e/smoke_e2e.rs",
+      "level": "e2e",
+      "tests": 1
+    },
+    {
+      "file": "tests/integration/healthcare_workflows.rs",
+      "level": "integration",
+      "tests": 9
+    },
+    {
+      "file": "tests/integration/ihe_fhir_integration_tests.rs",
+      "level": "integration",
+      "tests": 34
+    },
+    {
+      "file": "tests/integration/mod.rs",
+      "level": "integration",
+      "tests": 5
+    },
+    {
+      "file": "tests/integration/multi_region_dr_integration.rs",
+      "level": "integration",
+      "tests": 14
+    },
+    {
+      "file": "tests/meta_tx_integration_test.rs",
+      "level": "integration",
+      "tests": 9
+    },
+    {
+      "file": "tests/unit/mod.rs",
+      "level": "unit",
+      "tests": 3
+    },
+    {
+      "file": "tests/unit/performance_tests.rs",
+      "level": "unit",
+      "tests": 14
+    },
+    {
+      "file": "tests/unit/property_based_tests.rs",
+      "level": "unit",
+      "tests": 12
+    }
+  ],
+  "per_contract": [
+    {
+      "contract": "aml",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "anomaly_detector",
+      "unit": 39,
+      "integration": 0,
+      "total": 39
+    },
+    {
+      "contract": "appointment_booking_escrow",
+      "unit": 24,
+      "integration": 0,
+      "total": 24
+    },
+    {
+      "contract": "audit",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "audit_forensics",
+      "unit": 3,
+      "integration": 0,
+      "total": 3
+    },
+    {
+      "contract": "clinical_nlp",
+      "unit": 9,
+      "integration": 0,
+      "total": 9
+    },
+    {
+      "contract": "cross_chain_access",
+      "unit": 41,
+      "integration": 0,
+      "total": 41
+    },
+    {
+      "contract": "cross_chain_bridge",
+      "unit": 47,
+      "integration": 0,
+      "total": 47
+    },
+    {
+      "contract": "cross_chain_identity",
+      "unit": 22,
+      "integration": 0,
+      "total": 22
+    },
+    {
+      "contract": "crypto_registry",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "dicomweb_services",
+      "unit": 19,
+      "integration": 0,
+      "total": 19
+    },
+    {
+      "contract": "differential_privacy",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "drug_discovery",
+      "unit": 3,
+      "integration": 0,
+      "total": 3
+    },
+    {
+      "contract": "emergency_access_override",
+      "unit": 8,
+      "integration": 0,
+      "total": 8
+    },
+    {
+      "contract": "emr_integration",
+      "unit": 8,
+      "integration": 0,
+      "total": 8
+    },
+    {
+      "contract": "fhir_integration",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "forensics",
+      "unit": 2,
+      "integration": 0,
+      "total": 2
+    },
+    {
+      "contract": "genomic_data",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "health_data_access_logging",
+      "unit": 13,
+      "integration": 0,
+      "total": 13
+    },
+    {
+      "contract": "healthcare_compliance",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "healthcare_data_conversion",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "healthcare_data_marketplace",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "healthcare_oracle_network",
+      "unit": 5,
+      "integration": 0,
+      "total": 5
+    },
+    {
+      "contract": "healthcare_payment",
+      "unit": 6,
+      "integration": 0,
+      "total": 6
+    },
+    {
+      "contract": "homomorphic_registry",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "identity_registry",
+      "unit": 48,
+      "integration": 0,
+      "total": 48
+    },
+    {
+      "contract": "ihe_integration",
+      "unit": 26,
+      "integration": 0,
+      "total": 26
+    },
+    {
+      "contract": "iot_device_management",
+      "unit": 28,
+      "integration": 0,
+      "total": 28
+    },
+    {
+      "contract": "medical_consent_nft",
+      "unit": 12,
+      "integration": 0,
+      "total": 12
+    },
+    {
+      "contract": "medical_imaging",
+      "unit": 16,
+      "integration": 0,
+      "total": 16
+    },
+    {
+      "contract": "medical_imaging_ai",
+      "unit": 25,
+      "integration": 0,
+      "total": 25
+    },
+    {
+      "contract": "medical_record_backup",
+      "unit": 5,
+      "integration": 0,
+      "total": 5
+    },
+    {
+      "contract": "medical_record_hash_registry",
+      "unit": 10,
+      "integration": 0,
+      "total": 10
+    },
+    {
+      "contract": "medical_record_search",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "medical_records",
+      "unit": 37,
+      "integration": 39,
+      "total": 76
+    },
+    {
+      "contract": "mental_health_support",
+      "unit": 2,
+      "integration": 0,
+      "total": 2
+    },
+    {
+      "contract": "meta_tx_forwarder",
+      "unit": 8,
+      "integration": 0,
+      "total": 8
+    },
+    {
+      "contract": "mfa",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "mpc_manager",
+      "unit": 8,
+      "integration": 0,
+      "total": 8
+    },
+    {
+      "contract": "notification_system",
+      "unit": 50,
+      "integration": 0,
+      "total": 50
+    },
+    {
+      "contract": "patient_consent_management",
+      "unit": 17,
+      "integration": 0,
+      "total": 17
+    },
+    {
+      "contract": "patient_gamification",
+      "unit": 12,
+      "integration": 0,
+      "total": 12
+    },
+    {
+      "contract": "patient_portal",
+      "unit": 2,
+      "integration": 0,
+      "total": 2
+    },
+    {
+      "contract": "provider_directory",
+      "unit": 5,
+      "integration": 0,
+      "total": 5
+    },
+    {
+      "contract": "public_health_surveillance",
+      "unit": 11,
+      "integration": 0,
+      "total": 11
+    },
+    {
+      "contract": "rbac",
+      "unit": 21,
+      "integration": 0,
+      "total": 21
+    },
+    {
+      "contract": "remote_patient_monitoring",
+      "unit": 0,
+      "integration": 4,
+      "total": 4
+    },
+    {
+      "contract": "secure_enclave",
+      "unit": 2,
+      "integration": 0,
+      "total": 2
+    },
+    {
+      "contract": "sut_token",
+      "unit": 20,
+      "integration": 0,
+      "total": 20
+    },
+    {
+      "contract": "telemedicine",
+      "unit": 21,
+      "integration": 0,
+      "total": 21
+    },
+    {
+      "contract": "token_sale",
+      "unit": 5,
+      "integration": 0,
+      "total": 5
+    },
+    {
+      "contract": "treasury_controller",
+      "unit": 4,
+      "integration": 0,
+      "total": 4
+    },
+    {
+      "contract": "upgrade_manager",
+      "unit": 1,
+      "integration": 0,
+      "total": 1
+    },
+    {
+      "contract": "zkp_registry",
+      "unit": 10,
+      "integration": 0,
+      "total": 10
+    }
+  ]
+}

@@ -235,6 +235,13 @@ pub enum Error {
     ProofTooLarge = 13,
     RecursiveDepthExceeded = 14,
     InvalidHashFunction = 15,
+    InsufficientFunds = 20,
+    DeadlineExceeded = 21,
+    InvalidSignature = 22,
+    UnauthorizedCaller = 23,
+    ContractPaused = 24,
+    StorageFull = 25,
+    CrossChainTimeout = 26,
 }
 
 // =============================================================================

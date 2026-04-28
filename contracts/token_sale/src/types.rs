@@ -39,6 +39,7 @@ pub struct SaleConfig {
     pub treasury: Address,      // Treasury address for funds
     pub soft_cap: u128,         // Minimum raise target
     pub hard_cap: u128,         // Maximum raise target
+    pub token_decimals: u32,    // Decimal places of the SUT token (e.g. 6 or 7)
     pub is_finalized: bool,
     pub refunds_enabled: bool,
 }

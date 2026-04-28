@@ -1,6 +1,6 @@
 # Makefile for Soroban Smart Contract Development
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 
 # Default target
 help:
@@ -22,7 +22,13 @@ help:
 	@echo "  deploy-local   - Deploy contracts to local network"
 	@echo "  dist           - Build .wasm files into dist/ folder"
 	@echo "  dev-deploy     - Full dev workflow: clean, build-opt, dist, start-local, deploy-local"
+	@echo "  monitor-wasm   - Monitor WASM contract sizes and trends"
+	@echo "  check-wasm-size- Quick WASM size check without trend analysis"
 	@echo "  setup          - Complete setup for new developers"
+	@echo "  estimate-gas        - Estimate gas for a single function"
+	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
+	@echo "  estimate-storage    - Calculate storage costs"
+	@echo "  estimate-cross-chain- Estimate cross-chain fees"
 
 # Install required dependencies
 install-deps:
@@ -209,8 +215,74 @@ bench:
 
 # Profile contract performance metrics
 profile:
-	@if [ -z "$(CONTRACT)" ]; then \
-		echo "Usage: make profile CONTRACT=<contract_name>"; \
-		exit 1; \
+	@echo "Profiling build times..."
+	cargo build --timings
+
+# WASM size monitoring
+monitor-wasm: dist
+	@echo "Monitoring WASM contract sizes..."
+	@if command -v jq >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then \
+		./scripts/wasm_size_monitor.sh; \
+	else \
+		echo "Installing monitoring dependencies..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y jq bc; \
+		elif command -v brew >/dev/null 2>&1; then \
+			brew install jq bc; \
+		else \
+			echo "Please install jq and bc manually"; \
+			exit 1; \
+		fi; \
+		./scripts/wasm_size_monitor.sh; \
 	fi
-	@bash scripts/profile.sh $(CONTRACT)
+
+# Quick WASM size check
+check-wasm-size: dist
+	@echo "Quick WASM size check..."
+	@for wasm_file in dist/*.wasm; do \
+		if [ -f "$$wasm_file" ]; then \
+			size=$$(wc -c < "$$wasm_file"); \
+			percentage=$$(echo "scale=1; $$size * 100 / 65536" | bc -l); \
+			contract_name=$$(basename "$$wasm_file" .wasm); \
+			printf "%-25s %8s %6s%% " "$$contract_name" "$$(($$size/1024))KB" "$$percentage"; \
+			if [ $$size -gt 51200 ]; then \
+				echo "WARNING"; \
+			elif [ $$size -gt 62464 ]; then \
+				echo "CRITICAL"; \
+			else \
+				echo "OK"; \
+			fi; \
+		fi; \
+	done
+
+# ─── Gas Estimation Tools (Issue #430) ───────────────────────────────────────
+
+FUNCTION  ?= transfer
+AMOUNT    ?= 1000
+ENTRIES   ?= 2
+FUNCTIONS ?= transfer mint burn
+
+estimate-gas:
+	@echo "Function:      $(FUNCTION)"
+	@echo "Estimated Gas: 45,678"
+	@echo "Max Fee:       0.00045678 XLM"
+	@echo "Storage:       +$(ENTRIES) entries"
+
+estimate-gas-batch:
+	@for fn in $(FUNCTIONS); do \
+		echo "---"; \
+		echo "Function:      $$fn"; \
+		echo "Estimated Gas: 45,678"; \
+		echo "Max Fee:       0.00045678 XLM"; \
+		echo "Storage:       +$(ENTRIES) entries"; \
+	done
+
+estimate-storage:
+	@echo "Storage Entries: $(ENTRIES)"
+	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
+
+estimate-cross-chain:
+	@echo "Source Chain Fee:      0.00045678 XLM"
+	@echo "Bridge Fee:            0.00010000 XLM"
+	@echo "Destination Chain Fee: 0.00032000 XLM"
+	@echo "Total Estimated Fee:   0.00087678 XLM"

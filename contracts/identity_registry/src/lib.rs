@@ -1807,6 +1807,9 @@ impl IdentityRegistryContract {
 // ============================================================================
 
 #[cfg(test)]
+mod comprehensive_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger as _};
