@@ -167,7 +167,7 @@ pub struct BreachEvent {
 pub enum LogLevel {
     Info,
     Warning,
-    ErrorLevel,
+    Error,
 }
 
 #[derive(Clone)]
@@ -244,7 +244,7 @@ impl GenomicDataContract {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
-            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+            LogLevel::Error => symbol_short!("LOG_ERROR"),
         };
         let entry = StructuredLog {
             timestamp: env.ledger().timestamp(),

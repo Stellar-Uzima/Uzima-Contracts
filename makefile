@@ -1,6 +1,7 @@
 # Makefile for Soroban Smart Contract Development
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain release bump-version generate-changelog validate-release check-versions
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 
 # Default target
 help:
@@ -24,6 +25,8 @@ help:
 	@echo "  dev-deploy     - Full dev workflow: clean, build-opt, dist, start-local, deploy-local"
 	@echo "  monitor-wasm   - Monitor WASM contract sizes and trends"
 	@echo "  check-wasm-size- Quick WASM size check without trend analysis"
+	@echo "  optimize       - Run contract optimization analysis"
+	@echo "  analyze-optimizations - Analyze and display optimization recommendations"
 	@echo "  setup          - Complete setup for new developers"
 	@echo "  estimate-gas        - Estimate gas for a single function"
 	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
@@ -105,6 +108,8 @@ fmt:
 lint: check-deps
 	@echo "Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
+	@echo "Checking error codes..."
+	bash scripts/check_error_codes.sh
 
 # Lint shell scripts
 shellcheck: check-deps
@@ -206,7 +211,7 @@ audit:
 # Generate documentation
 docs:
 	@echo "Generating documentation..."
-	cargo doc --no-deps --all-features --open
+	node scripts/docs/generate.mjs
 
 # Watch for changes and rebuild (requires cargo-watch)
 watch:
@@ -218,7 +223,7 @@ bench:
 	@echo "Running benchmarks..."
 	cargo bench
 
-# Profile build times
+# Profile contract performance metrics
 profile:
 	@echo "Profiling build times..."
 	cargo build --timings
@@ -260,6 +265,23 @@ check-wasm-size: dist
 		fi; \
 	done
 
+# Contract optimization analysis
+optimize: check-deps
+	@echo "Building optimization engine..."
+	cargo build --package contract_optimizer
+	@echo "Running optimization analysis..."
+	cargo run --package contract_optimizer -- analyze
+
+# Analyze and display optimization recommendations
+analyze-optimizations: optimize
+	@echo "Generating optimization report..."
+	cargo run --package contract_optimizer -- report --input optimization_results.json --output reports/optimization_report.md
+	@echo "Report generated: reports/optimization_report.md"
+
+# View optimization metrics
+optimization-metrics:
+	@echo "Viewing optimization metrics..."
+	cargo run --package contract_optimizer -- metrics
 # ─── Gas Estimation Tools (Issue #430) ───────────────────────────────────────
 
 FUNCTION  ?= transfer

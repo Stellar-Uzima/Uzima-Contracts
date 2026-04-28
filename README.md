@@ -49,6 +49,18 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 - Patients seeking control over their medical data
 - Traditional medicine practitioners
 
+## 🔧 Contract Optimization Engine
+
+The project includes an advanced **Contract Optimization Recommendations Engine** that analyzes smart contracts and provides actionable recommendations for:
+
+- **Gas Optimization**: Reduce transaction costs through efficient code patterns
+- **Storage Efficiency**: Optimize data storage and access patterns
+- **Algorithm Optimization**: Improve computational efficiency
+- **Batching Opportunities**: Group operations to minimize overhead
+- **Parallelization Possibilities**: Identify opportunities for concurrent execution
+
+The engine integrates with CI/CD pipelines to automatically review pull requests and track recommendation accuracy over time.
+
 ---
 
 ## 🚀 Setup Instructions
@@ -134,6 +146,18 @@ cargo test --all
 # Run specific test types
 make test-unit          # Unit tests only
 make test-integration   # Integration tests only
+
+# Test the optimization engine
+./scripts/test_optimizer.sh
+
+# Run optimization analysis
+make optimize
+
+# Generate optimization report
+make analyze-optimizations
+
+# View optimization metrics
+make optimization-metrics
 ```
 
 ### 🌐 Network Configuration
@@ -622,6 +646,7 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 ### Documentation
 - [API Reference](./docs/api.md) - Complete contract API documentation and stability guarantees
 - [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Type Safety Guidelines](./docs/TYPE_SAFETY_GUIDELINES.md) - Best practices for Soroban type safety
 - [Contract Resource Limits](./docs/CONTRACT_RESOURCE_LIMITS.md) - Storage, execution, and batch constraints for all contracts
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
 - [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem

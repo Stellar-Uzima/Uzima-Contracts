@@ -502,6 +502,50 @@ impl AuditTrail {
         buffer.append(&log.target.clone().to_xdr(env));
 
         let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .expect("Contract not initialized");
+        if *caller == admin {
+            return;
+        }
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::LogReader(caller.clone()))
+        {
+            panic!("Caller does not have log-read access");
+        }
+    }
+
+    fn next_log_id(env: &Env) -> u64 {
+        let current: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+        let next = current.saturating_add(1);
+        env.storage().instance().set(&DataKey::LogCount, &next);
+        next
+    }
+
+    fn update_log_rolling_hash(env: &Env, log: &AuditLog) {
+        use soroban_sdk::xdr::ToXdr;
+        let current: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RollingHash)
+            .unwrap_or(BytesN::from_array(env, &[0u8; 32]));
+
+        let mut buffer = Bytes::new(env);
+        buffer.append(&current.to_xdr(env));
+        buffer.append(&log.id.to_xdr(env));
+        buffer.append(&log.timestamp.to_xdr(env));
+        let action_disc = log.action as u32;
+        buffer.append(&action_disc.to_xdr(env));
+        buffer.append(&log.target.clone().to_xdr(env));
+
+        let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
         env.storage().instance().set(&DataKey::RollingHash, &new_hash);
     }
 

@@ -7,7 +7,7 @@ use soroban_sdk::{BytesN, Map, Vec};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-fn setup(env: &Env) -> (AuditTrailClient, Address) {
+fn setup(env: &Env) -> (AuditTrailClient<'_>, Address) {
     env.mock_all_auths();
     let admin = Address::generate(env);
     let contract_id = env.register_contract(None, AuditTrail);
@@ -224,8 +224,20 @@ fn test_get_logs_by_actor() {
     let actor = Address::generate(&env);
     let target = dummy_target(&env);
 
-    client.log_event(&actor, &ActionType::DataRead, &target, &OperationResult::Success, &empty_meta(&env));
-    client.log_event(&actor, &ActionType::DataWrite, &target, &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::DataWrite,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
 
     let logs = client.get_logs_by_actor(&admin, &actor);
     assert_eq!(logs.len(), 2);
@@ -239,12 +251,40 @@ fn test_get_logs_by_action() {
     let actor = Address::generate(&env);
     let target = dummy_target(&env);
 
-    client.log_event(&actor, &ActionType::AuthFailure, &target, &OperationResult::Failure, &empty_meta(&env));
-    client.log_event(&actor, &ActionType::AuthFailure, &target, &OperationResult::Failure, &empty_meta(&env));
-    client.log_event(&actor, &ActionType::AuthSuccess, &target, &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::AuthFailure,
+        &target,
+        &OperationResult::Failure,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::AuthFailure,
+        &target,
+        &OperationResult::Failure,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::AuthSuccess,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
 
-    assert_eq!(client.get_logs_by_action(&admin, &ActionType::AuthFailure).len(), 2);
-    assert_eq!(client.get_logs_by_action(&admin, &ActionType::AuthSuccess).len(), 1);
+    assert_eq!(
+        client
+            .get_logs_by_action(&admin, &ActionType::AuthFailure)
+            .len(),
+        2
+    );
+    assert_eq!(
+        client
+            .get_logs_by_action(&admin, &ActionType::AuthSuccess)
+            .len(),
+        1
+    );
 }
 
 #[test]
@@ -255,10 +295,26 @@ fn test_get_logs_by_timeframe() {
     let actor = Address::generate(&env);
     let t0 = env.ledger().timestamp();
 
-    client.log_event(&actor, &ActionType::DataRead, &dummy_target(&env), &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &dummy_target(&env),
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
 
-    assert_eq!(client.get_logs_by_timeframe(&admin, &t0, &(t0 + 1000)).len(), 1);
-    assert_eq!(client.get_logs_by_timeframe(&admin, &(t0 + 5000), &(t0 + 9999)).len(), 0);
+    assert_eq!(
+        client
+            .get_logs_by_timeframe(&admin, &t0, &(t0 + 1000))
+            .len(),
+        1
+    );
+    assert_eq!(
+        client
+            .get_logs_by_timeframe(&admin, &(t0 + 5000), &(t0 + 9999))
+            .len(),
+        0
+    );
 }
 
 // ─── Access Control ───────────────────────────────────────────────────────────
@@ -285,7 +341,13 @@ fn test_granted_reader_can_query() {
     let actor = Address::generate(&env);
     let reader = Address::generate(&env);
 
-    client.log_event(&actor, &ActionType::DataRead, &dummy_target(&env), &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &dummy_target(&env),
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
     client.grant_log_access(&admin, &reader);
 
     let logs = client.get_logs_by_actor(&reader, &actor);
@@ -338,7 +400,13 @@ fn test_export_logs() {
     let target = dummy_target(&env);
 
     for _ in 0..3 {
-        client.log_event(&actor, &ActionType::DataRead, &target, &OperationResult::Success, &empty_meta(&env));
+        client.log_event(
+            &actor,
+            &ActionType::DataRead,
+            &target,
+            &OperationResult::Success,
+            &empty_meta(&env),
+        );
     }
 
     let bundle = client.export_logs(&admin, &1, &3);
@@ -358,11 +426,23 @@ fn test_rolling_hash_changes_with_each_entry() {
     let target = dummy_target(&env);
 
     let h0 = client.get_log_rolling_hash();
-    client.log_event(&actor, &ActionType::DataRead, &target, &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
     let h1 = client.get_log_rolling_hash();
     assert_ne!(h0, h1);
 
-    client.log_event(&actor, &ActionType::DataWrite, &target, &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataWrite,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
     let h2 = client.get_log_rolling_hash();
     assert_ne!(h1, h2);
 }
@@ -375,8 +455,20 @@ fn test_verify_log_integrity_matches_stored_hash() {
     let actor = Address::generate(&env);
     let target = dummy_target(&env);
 
-    client.log_event(&actor, &ActionType::DataRead, &target, &OperationResult::Success, &empty_meta(&env));
-    client.log_event(&actor, &ActionType::AuthSuccess, &target, &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::AuthSuccess,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
 
     let stored = client.get_log_rolling_hash();
     let recomputed = client.verify_log_integrity();
@@ -390,7 +482,13 @@ fn test_is_log_tampered_detects_wrong_hash() {
     let (client, _admin) = setup(&env);
 
     let actor = Address::generate(&env);
-    client.log_event(&actor, &ActionType::DataRead, &dummy_target(&env), &OperationResult::Success, &empty_meta(&env));
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &dummy_target(&env),
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
 
     let wrong_hash = BytesN::from_array(&env, &[0xFFu8; 32]);
     assert!(client.is_log_tampered(&wrong_hash));

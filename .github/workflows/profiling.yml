@@ -1,0 +1,47 @@
+name: Contract Profiling
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Soroban CLI
+        run: cargo install --locked soroban-cli
+
+      - name: Profile Core Contracts
+        run: |
+          mkdir -p profiles
+          make profile CONTRACT=appointment_booking_escrow --json > profiles/appointment_booking_escrow.json
+          make profile CONTRACT=telemedicine --json > profiles/telemedicine.json
+          make profile CONTRACT=provider_directory --json > profiles/provider_directory.json
+          make profile CONTRACT=medical_records --json > profiles/medical_records.json
+
+      - name: Generate CI Report
+        run: |
+          echo "## Contract Performance Profiles 📊" >> $GITHUB_STEP_SUMMARY
+          echo "Detailed performance profiles (Gas, Storage, Exec Time) have been generated for core contracts." >> $GITHUB_STEP_SUMMARY
+          for f in profiles/*.json; do
+            contract=$(basename "$f" .json)
+            echo "### $contract" >> $GITHUB_STEP_SUMMARY
+            echo '```json' >> $GITHUB_STEP_SUMMARY
+            cat "$f" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          done
+
+      - name: Upload Profile Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: contract-profiles
+          path: profiles/*.json

@@ -4,10 +4,15 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
+    Symbol, Vec,
+};
+use uzima_sanitization::{
+    sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
 };
 
 // ============================================================================
@@ -16,36 +21,6 @@ use soroban_sdk::{
 // Implements W3C DID Core Specification (https://www.w3.org/TR/did-core/)
 // DID Method: did:stellar:uzima:<network>:<address>
 // ============================================================================
-
-// === Error Definitions ===
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    NotVerifier = 4,
-    CannotRemoveOwner = 5,
-    DIDNotFound = 6,
-    DIDAlreadyExists = 7,
-    DIDDeactivated = 8,
-    InvalidVerificationMethod = 9,
-    VerificationMethodNotFound = 10,
-    CredentialNotFound = 11,
-    CredentialRevoked = 12,
-    CredentialExpired = 13,
-    InvalidCredentialType = 14,
-    AttestationNotFound = 15,
-    RecoveryNotInitiated = 16,
-    RecoveryAlreadyPending = 17,
-    RecoveryTimelockNotElapsed = 18,
-    InvalidRecoveryGuardian = 19,
-    InsufficientGuardianApprovals = 20,
-    ServiceNotFound = 21,
-    InvalidServiceEndpoint = 22,
-    KeyRotationCooldown = 23,
-}
 
 // === DID Document Structures (W3C Compliant) ===
 
@@ -313,6 +288,8 @@ impl IdentityRegistryContract {
     pub fn initialize(env: Env, owner: Address, network_id: String) -> Result<(), Error> {
         owner.require_auth();
 
+        sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
+
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
@@ -336,6 +313,24 @@ impl IdentityRegistryContract {
         );
 
         Ok(())
+    }
+
+    /// Perform a health check on the contract
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        let initialized = env.storage().instance().has(&DataKey::Initialized);
+        let status = if initialized {
+            symbol_short!("OK")
+        } else {
+            symbol_short!("NOT_INIT")
+        };
+
+        // Emit health check event
+        env.events().publish(
+            (Symbol::new(&env, "HealthCheck"),),
+            (status.clone(), env.ledger().timestamp()),
+        );
+
+        (status, 1, env.ledger().timestamp())
     }
 
     /// Legacy initialize for backward compatibility
@@ -908,7 +903,7 @@ impl IdentityRegistryContract {
             .ok_or(Error::CredentialNotFound)?;
 
         if credential.issuer != issuer {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         if credential.is_revoked {
@@ -1342,6 +1337,11 @@ impl IdentityRegistryContract {
     ) -> Result<(), Error> {
         subject.require_auth();
 
+        sanitize_id(&env, &service_id).map_err(Self::map_sanitization_error)?;
+        sanitize_string(&env, &service_type, MAX_GENERAL_LEN)
+            .map_err(Self::map_sanitization_error)?;
+        sanitize_url(&env, &endpoint).map_err(|_| Error::InvalidServiceEndpoint)?;
+
         let mut did_doc: DIDDocument = env
             .storage()
             .persistent()
@@ -1486,6 +1486,10 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
+
+        if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
+            panic!("invalid meta");
+        }
 
         let identity_record = IdentityRecord {
             hash: hash.clone(),
@@ -1640,6 +1644,13 @@ impl IdentityRegistryContract {
     // ========================================================================
     // HELPER FUNCTIONS
     // ========================================================================
+
+    fn map_sanitization_error(e: SanitizationError) -> Error {
+        match e {
+            SanitizationError::InputTooLong => Error::InputTooLong,
+            _ => Error::InvalidInput,
+        }
+    }
 
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
@@ -1855,7 +1866,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #301)")]
     fn test_double_initialization() {
         let (env, client, _owner) = create_contract();
         let owner2 = Address::generate(&env);
@@ -1906,7 +1917,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
+    #[should_panic(expected = "Error(Contract, #471)")]
     fn test_create_duplicate_did() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
@@ -2320,7 +2331,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
+    #[should_panic(expected = "Error(Contract, #111)")]
     fn test_cannot_remove_owner_as_verifier() {
         let (_env, client, owner) = create_contract();
         client.remove_verifier(&owner);
@@ -2412,6 +2423,42 @@ mod tests {
         // Should not be authorized after deactivation
         assert!(
             !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotVerifier as u32, 110);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::DIDNotFound as u32, 470);
+        assert_eq!(Error::DIDAlreadyExists as u32, 471);
+        assert_eq!(Error::CredentialExpired as u32, 605);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::DIDNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::KeyRotationCooldown),
+            symbol_short!("RE_TRY_L")
         );
     }
 }
