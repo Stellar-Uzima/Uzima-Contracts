@@ -415,7 +415,7 @@ pub struct CryptoConfigProposal {
 
 // ==================== Storage Keys ====================
 
-#[contracttype]
+#[contracttype(export = false)]
 pub enum DataKey {
     // Lifecycle
     Initialized,
@@ -746,7 +746,7 @@ const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 pub enum LogLevel {
     Info,
     Warning,
-    ErrorLevel,
+    Error,
 }
 
 #[derive(Clone)]
@@ -785,7 +785,7 @@ impl MedicalRecordsContract {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
-            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+            LogLevel::Error => symbol_short!("LOG_ERROR"),
         };
 
         let entry = StructuredLog {
@@ -849,7 +849,7 @@ impl MedicalRecordsContract {
     ) {
         Self::emit_structured_log(
             env,
-            LogLevel::ErrorLevel,
+            LogLevel::Error,
             operation,
             actor,
             target_id,
@@ -1051,7 +1051,7 @@ impl MedicalRecordsContract {
         Self::require_admin(&env, &admin)?;
 
         let mut users = Self::read_users(&env);
-        let mut profile = users.get(user.clone()).ok_or(Error::NotAuthorized)?;
+        let mut profile = users.get(user.clone()).ok_or(Error::Unauthorized)?;
         profile.qkd_capable = capable;
         users.set(user.clone(), profile);
         env.storage().persistent().set(&DataKey::Users, &users);
@@ -1204,7 +1204,7 @@ impl MedicalRecordsContract {
                 None,
                 "Permission grant denied: caller lacks delegation rights",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let key = DataKey::UserPermissions(grantee.clone());
@@ -1284,7 +1284,7 @@ impl MedicalRecordsContract {
                 None,
                 "Permission revoke denied: caller lacks delegation rights",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let key = DataKey::UserPermissions(grantee.clone());
@@ -1354,7 +1354,7 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &issuer)
             && !Self::check_permission(&env, &issuer, Permission::DelegatePermission)
         {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         validation::validate_attribute_namespace(&namespace)?;
@@ -1424,7 +1424,7 @@ impl MedicalRecordsContract {
         if !Self::is_admin(&env, &revoker)
             && !Self::check_permission(&env, &revoker, Permission::DelegatePermission)
         {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         validation::validate_attribute_namespace(&namespace)?;
@@ -1538,7 +1538,7 @@ impl MedicalRecordsContract {
                 None,
                 "Record creation denied: caller lacks CreateRecord permission",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
@@ -1552,7 +1552,7 @@ impl MedicalRecordsContract {
                 None,
                 "Record creation denied because patient is marked as forgotten",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         validation::validate_diagnosis(&diagnosis)?;
         validation::validate_treatment(&treatment)?;
@@ -1638,7 +1638,7 @@ impl MedicalRecordsContract {
                 None,
                 "Record creation with DID denied: caller lacks CreateRecord permission",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         if Self::is_patient_forgotten(&env, &patient) {
@@ -1650,7 +1650,7 @@ impl MedicalRecordsContract {
                 None,
                 "Record creation with DID denied because patient is marked as forgotten",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         validation::validate_diagnosis(&diagnosis)?;
@@ -1737,7 +1737,7 @@ impl MedicalRecordsContract {
                 Some(record_id),
                 "Record access denied",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
             Self::emit_zk_audit(
@@ -1797,7 +1797,7 @@ impl MedicalRecordsContract {
         );
 
         if !acl_granted {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if !zk_granted {
             Self::emit_zk_audit(
@@ -1846,7 +1846,7 @@ impl MedicalRecordsContract {
             && !Self::is_admin(&env, &caller)
             && !Self::is_active_doctor(&env, &caller)
         {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let total_records: u64 = env
@@ -1897,11 +1897,11 @@ impl MedicalRecordsContract {
             return Ok(out);
         }
 
-        let start = page.saturating_mul(page_size);
+        let start = u64::from(page.saturating_mul(page_size));
         if start >= total_records {
             return Ok(Vec::new(&env));
         }
-        let mut end = start.saturating_add(page_size);
+        let mut end = start.saturating_add(u64::from(page_size));
         if end > total_records {
             end = total_records;
         }
@@ -2272,7 +2272,7 @@ impl MedicalRecordsContract {
                 Some(record_id),
                 "Metadata update denied: caller is neither doctor nor admin",
             );
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         // Validate new metadata
@@ -2389,7 +2389,7 @@ impl MedicalRecordsContract {
             && !Self::is_admin(&env, &caller)
             && !Self::has_emergency_access_internal(&env, &caller, &record.patient_id, record_id)
         {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         env.storage()
@@ -2765,7 +2765,7 @@ impl MedicalRecordsContract {
 
         let now = env.ledger().timestamp();
         if now < proposal.created_at.saturating_add(TIMELOCK_SECS) {
-            return Err(Error::TimelockNotElasped);
+            return Err(Error::TimelockNotElapsed);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
@@ -2943,7 +2943,7 @@ impl MedicalRecordsContract {
             .ok_or(Error::RecordNotFound)?;
 
         if caller != record.patient_id && caller != record.doctor_id {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         if new_envelope.pq_wrapped_key.is_none() {
@@ -3264,7 +3264,7 @@ impl MedicalRecordsContract {
         };
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
             Self::emit_zk_audit(
@@ -3310,7 +3310,7 @@ impl MedicalRecordsContract {
         };
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
             Self::emit_zk_audit(
@@ -3349,10 +3349,10 @@ impl MedicalRecordsContract {
 
         // Only record owner (patient) or creator (doctor) can update *their own* envelope.
         if caller != record.patient_id && caller != record.doctor_id {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if envelope.recipient != caller {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if envelope.key_version == 0 || envelope.wrapped_key.is_empty() {
             return Err(Error::InvalidInput);
@@ -3412,7 +3412,7 @@ impl MedicalRecordsContract {
         };
 
         if !Self::can_view_encrypted_record(&env, &caller, &record, record_id) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if !Self::is_valid_zk_access_grant(&env, &caller, record_id) {
             return Err(Error::InvalidCredential);
@@ -3519,12 +3519,12 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
 
         if caller != user && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         validation::validate_did_reference(&did)?;
 
         let mut users = Self::read_users(&env);
-        let mut profile = users.get(user.clone()).ok_or(Error::NotAuthorized)?;
+        let mut profile = users.get(user.clone()).ok_or(Error::Unauthorized)?;
         profile.did_reference = Some(did);
         users.set(user, profile);
         env.storage().persistent().set(&DataKey::Users, &users);
@@ -3659,7 +3659,7 @@ impl MedicalRecordsContract {
             .get(&DataKey::Record(record_id))
             .ok_or(Error::RecordNotFound)?;
         if caller != record.patient_id && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         Ok(env
@@ -3741,7 +3741,7 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
 
         if caller != patient && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(env
             .storage()
@@ -4122,7 +4122,7 @@ impl MedicalRecordsContract {
                 Some(proposal_id),
                 "Recovery execution denied because timelock has not elapsed",
             );
-            return Err(Error::TimelockNotElasped);
+            return Err(Error::TimelockNotElapsed);
         }
 
         if proposal.approvals.len() < APPROVAL_THRESHOLD {
@@ -4380,7 +4380,7 @@ impl MedicalRecordsContract {
         caller.require_auth();
 
         if !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         upgradeability::execute_upgrade::<Self>(
@@ -4400,7 +4400,8 @@ impl MedicalRecordsContract {
         env: Env,
         new_wasm_hash: BytesN<32>,
     ) -> Result<upgradeability::UpgradeValidation, Error> {
-        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash).map_err(|_| Error::InvalidInput)
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash)
+            .map_err(|_| Error::InvalidInput)
     }
 
     fn migrate_data(_env: &Env, from_version: u32) {
@@ -4470,7 +4471,7 @@ impl MedicalRecordsContract {
         if Self::is_admin(env, caller) {
             Ok(())
         } else {
-            Err(Error::NotAuthorized)
+            Err(Error::Unauthorized)
         }
     }
 
@@ -4478,7 +4479,7 @@ impl MedicalRecordsContract {
         if Self::is_active_doctor(env, caller) {
             Ok(())
         } else {
-            Err(Error::NotAuthorized)
+            Err(Error::Unauthorized)
         }
     }
 
@@ -4486,7 +4487,7 @@ impl MedicalRecordsContract {
         let users = Self::read_users(env);
         match users.get(user.clone()) {
             Some(profile) if profile.active => Ok(()),
-            _ => Err(Error::NotAuthorized),
+            _ => Err(Error::Unauthorized),
         }
     }
 
@@ -4494,7 +4495,7 @@ impl MedicalRecordsContract {
         if Self::is_active_patient(env, patient) {
             Ok(())
         } else {
-            Err(Error::NotAuthorized)
+            Err(Error::Unauthorized)
         }
     }
 
@@ -4928,7 +4929,7 @@ impl MedicalRecordsContract {
             && *caller != record.doctor_id
             && !Self::is_admin(env, caller)
         {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let policy = AbePolicyMetadata {
@@ -5402,7 +5403,7 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
 
         if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let record: MedicalRecord = env
@@ -5435,7 +5436,7 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
 
         if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let record: MedicalRecord = env
@@ -5459,7 +5460,7 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
 
         if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let record: MedicalRecord = env
@@ -5490,7 +5491,7 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
 
         if !Self::check_permission(&env, &caller, Permission::ReadRecord) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let record: MedicalRecord = env
@@ -5526,7 +5527,7 @@ impl MedicalRecordsContract {
         Self::require_not_paused(&env)?;
 
         if !Self::check_permission(&env, &caller, Permission::UpdateRecord) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let record: MedicalRecord = env
@@ -5586,9 +5587,12 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
         Ok(BytesN::from_array(env, &hash_bytes.to_array()))
     }
 
-    fn validate(env: &Env, _new_wasm_hash: &BytesN<32>) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+    fn validate(
+        env: &Env,
+        _new_wasm_hash: &BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
         let mut report = soroban_sdk::Vec::new(env);
-        
+
         // Example check: ensure we are initialized
         let initialized = env.storage().instance().has(&UPGRADE_ADMIN);
         if !initialized {

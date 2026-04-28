@@ -1,8 +1,9 @@
 #![no_std]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    Symbol,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol,
 };
 
 #[derive(Clone)]
@@ -18,24 +19,6 @@ pub struct QueuedTx {
     pub target: Address,
     pub call: BytesN<32>,
     pub eta: u64,
-}
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    AlreadyQueued = 3,
-    NotQueued = 4,
-    NotReady = 5,
-    InsufficientFunds = 10,
-    DeadlineExceeded = 11,
-    InvalidSignature = 12,
-    UnauthorizedCaller = 13,
-    ContractPaused = 14,
-    StorageFull = 15,
-    CrossChainTimeout = 16,
 }
 
 const CFG: Symbol = symbol_short!("cfg");
@@ -163,5 +146,40 @@ mod test {
             // Or rather we should unwrap it to force panic for should_panic test
             Timelock::execute(env.clone(), 1).unwrap();
         });
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::ContractPaused as u32, 302);
+        assert_eq!(Error::DeadlineExceeded as u32, 306);
+        assert_eq!(Error::InsufficientFunds as u32, 500);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::ContractPaused),
+            symbol_short!("RE_TRY_L")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::InsufficientFunds),
+            symbol_short!("ADD_FUND")
+        );
     }
 }

@@ -246,6 +246,70 @@ impl AnomalyDetectorContract {
         Ok(true)
     }
 
+    /// Update the anomaly detection threshold for a model (admin only).
+    /// `threshold_bps` must be in range 1–9999 (basis points).
+    pub fn update_threshold(
+        env: Env,
+        caller: Address,
+        model_id: BytesN<32>,
+        threshold_bps: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        if threshold_bps == 0 || threshold_bps >= 10_000 {
+            return Err(Error::InvalidThreshold);
+        }
+        let mut model: AnomalyModel = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Model(model_id.clone()))
+            .ok_or(Error::ModelNotFound)?;
+        model.threshold_bps = threshold_bps;
+        model.updated_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Model(model_id.clone()), &model);
+        env.events()
+            .publish((symbol_short!("ThrUpd"),), (model_id, threshold_bps));
+        Ok(true)
+    }
+
+    /// Clear active alerts up to `count` (admin only). Pass 0 to clear all.
+    /// Marks each active alert as Resolved and emits a ClearAlerts event.
+    pub fn clear_alerts(env: Env, caller: Address, count: u64) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        let total: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AlertCount)
+            .unwrap_or(0);
+        let limit = if count == 0 || count > total {
+            total
+        } else {
+            count
+        };
+        let mut cleared: u64 = 0;
+        for i in 0..limit {
+            if let Some(mut alert) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, Alert>(&DataKey::Alert(i))
+            {
+                if alert.status == AlertStatus::Active {
+                    alert.status = AlertStatus::Resolved;
+                    env.storage()
+                        .persistent()
+                        .set(&DataKey::Alert(i), &alert);
+                    cleared = cleared.saturating_add(1);
+                }
+            }
+        }
+        env.events()
+            .publish((symbol_short!("ClrAlrt"),), (caller, cleared));
+        Ok(cleared)
+    }
+
     // -------------------- Model Management --------------------
 
     /// Register an ML model with its initial feature weights.

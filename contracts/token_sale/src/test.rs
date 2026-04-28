@@ -34,7 +34,7 @@ fn test_token_sale_initialization() {
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
-    client.initialize(&owner, &token_address, &treasury, &1000, &10000);
+    client.initialize(&owner, &token_address, &treasury, &1000, &10000, &6u32);
 
     let config = client.get_config();
     assert_eq!(config.token_address, token_address);
@@ -56,7 +56,7 @@ fn test_add_sale_phase() {
     let contract_id = env.register_contract(None, TokenSaleContract);
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
-    client.initialize(&owner, &token_address, &treasury, &1000, &10000);
+    client.initialize(&owner, &token_address, &treasury, &1000, &10000, &6u32);
 
     // Add a sale phase
     let start_time = 1000;
@@ -101,7 +101,7 @@ fn test_contribution_and_claim() {
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
     // Initialize contract
-    client.initialize(&owner, &sut_token_address, &treasury, &500, &10000);
+    client.initialize(&owner, &sut_token_address, &treasury, &500, &10000, &6u32);
 
     // Add supported payment token
     client.add_supported_token(&payment_token_address);
@@ -221,7 +221,7 @@ fn test_refund_mechanism() {
     let client = TokenSaleContractClient::new(&env, &contract_id);
 
     // Initialize with high soft cap that won't be met
-    client.initialize(&owner, &sut_token_address, &treasury, &10000, &20000);
+    client.initialize(&owner, &sut_token_address, &treasury, &10000, &20000, &6u32);
     client.add_supported_token(&payment_token_address);
 
     env.ledger().with_mut(|li| {
