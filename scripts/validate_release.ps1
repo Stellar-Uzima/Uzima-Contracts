@@ -79,13 +79,12 @@ function Test-GitState {
     
     # Check if tag already exists
     $tag = "v$Version"
-    try {
-        git rev-parse $tag 2>$null | Out-Null
+    $tagCheck = git rev-parse $tag 2>$null
+    if ($LASTEXITCODE -eq 0) {
         Write-Error "Tag $tag already exists"
         return $false
-    } catch {
-        # Tag doesn't exist, which is good
     }
+    # Tag doesn't exist, which is good
     
     Write-Success "Git state is valid"
     return $true
