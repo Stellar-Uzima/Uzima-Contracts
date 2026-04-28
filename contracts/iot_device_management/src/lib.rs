@@ -7,7 +7,7 @@
 mod errors;
 mod events;
 mod validation;
-pub use errors::IoTError;
+pub use errors::Error;
 
 #[cfg(test)]
 mod test;
@@ -220,10 +220,10 @@ impl IoTDeviceManagement {
     // SYSTEM
     // ============================================================
 
-    pub fn initialize(env: Env, admin: Address) -> Result<(), IoTError> {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(IoTError::AlreadyInitialized);
+            return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -248,7 +248,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn pause(env: Env, admin: Address) -> Result<(), IoTError> {
+    pub fn pause(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         env.storage().instance().set(&DataKey::Paused, &true);
@@ -256,7 +256,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn unpause(env: Env, admin: Address) -> Result<(), IoTError> {
+    pub fn unpause(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         let paused: bool = env
@@ -265,7 +265,7 @@ impl IoTDeviceManagement {
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if !paused {
-            return Err(IoTError::NotPaused);
+            return Err(Error::NotPaused);
         }
         env.storage().instance().set(&DataKey::Paused, &false);
         events::emit_unpaused(&env, &admin);
@@ -276,7 +276,7 @@ impl IoTDeviceManagement {
     // RBAC
     // ============================================================
 
-    pub fn set_role(env: Env, admin: Address, user: Address, role: Role) -> Result<(), IoTError> {
+    pub fn set_role(env: Env, admin: Address, user: Address, role: Role) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
@@ -297,30 +297,30 @@ impl IoTDeviceManagement {
     // INTERNAL HELPERS
     // ============================================================
 
-    fn require_admin(env: &Env, caller: &Address) -> Result<(), IoTError> {
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
-            return Err(IoTError::NotInitialized);
+            return Err(Error::NotInitialized);
         }
         let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if caller != &admin {
-            return Err(IoTError::NotAdmin);
+            return Err(Error::NotAdmin);
         }
         Ok(())
     }
 
-    fn check_not_paused(env: &Env) -> Result<(), IoTError> {
+    fn check_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
             .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false);
         if paused {
-            return Err(IoTError::ContractPaused);
+            return Err(Error::ContractPaused);
         }
         Ok(())
     }
 
-    fn require_role(env: &Env, caller: &Address, required: Role) -> Result<(), IoTError> {
+    fn require_role(env: &Env, caller: &Address, required: Role) -> Result<(), Error> {
         let role: Role = env
             .storage()
             .persistent()
@@ -332,7 +332,7 @@ impl IoTDeviceManagement {
             return Ok(());
         }
         if role as u32 > required as u32 {
-            return Err(IoTError::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(())
     }
@@ -347,7 +347,7 @@ impl IoTDeviceManagement {
         manufacturer_id: BytesN<32>,
         name: String,
         certification_hash: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
@@ -358,7 +358,7 @@ impl IoTDeviceManagement {
             .persistent()
             .has(&DataKey::Manufacturer(manufacturer_id.clone()))
         {
-            return Err(IoTError::ManufacturerAlreadyRegistered);
+            return Err(Error::ManufacturerAlreadyRegistered);
         }
 
         let mfr = Manufacturer {
@@ -391,21 +391,18 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_manufacturer(
-        env: Env,
-        manufacturer_id: BytesN<32>,
-    ) -> Result<Manufacturer, IoTError> {
+    pub fn get_manufacturer(env: Env, manufacturer_id: BytesN<32>) -> Result<Manufacturer, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id))
-            .ok_or(IoTError::ManufacturerNotRegistered)
+            .ok_or(Error::ManufacturerNotRegistered)
     }
 
     pub fn deactivate_manufacturer(
         env: Env,
         admin: Address,
         manufacturer_id: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
@@ -414,7 +411,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id.clone()))
-            .ok_or(IoTError::ManufacturerNotRegistered)?;
+            .ok_or(Error::ManufacturerNotRegistered)?;
 
         mfr.is_active = false;
         env.storage()
@@ -438,7 +435,7 @@ impl IoTDeviceManagement {
         location: String,
         encryption_key_hash: BytesN<32>,
         metadata_ref: String,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         operator.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &operator, Role::Operator)?;
@@ -452,16 +449,16 @@ impl IoTDeviceManagement {
             .persistent()
             .has(&DataKey::Device(device_id.clone()))
         {
-            return Err(IoTError::DeviceAlreadyRegistered);
+            return Err(Error::DeviceAlreadyRegistered);
         }
 
         let mfr: Manufacturer = env
             .storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id.clone()))
-            .ok_or(IoTError::ManufacturerNotRegistered)?;
+            .ok_or(Error::ManufacturerNotRegistered)?;
         if !mfr.is_active {
-            return Err(IoTError::ManufacturerNotRegistered);
+            return Err(Error::ManufacturerNotRegistered);
         }
 
         let now = env.ledger().timestamp();
@@ -533,11 +530,11 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_device(env: Env, device_id: BytesN<32>) -> Result<Device, IoTError> {
+    pub fn get_device(env: Env, device_id: BytesN<32>) -> Result<Device, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Device(device_id))
-            .ok_or(IoTError::DeviceNotFound)
+            .ok_or(Error::DeviceNotFound)
     }
 
     pub fn get_device_count(env: Env) -> u64 {
@@ -554,11 +551,7 @@ impl IoTDeviceManagement {
             .unwrap_or(Vec::new(&env))
     }
 
-    pub fn activate_device(
-        env: Env,
-        caller: Address,
-        device_id: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    pub fn activate_device(env: Env, caller: Address, device_id: BytesN<32>) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -567,10 +560,10 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         if device.status == DeviceStatus::Decommissioned {
-            return Err(IoTError::DeviceDecommissioned);
+            return Err(Error::DeviceDecommissioned);
         }
 
         let old_status = device.status;
@@ -599,11 +592,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn suspend_device(
-        env: Env,
-        caller: Address,
-        device_id: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    pub fn suspend_device(env: Env, caller: Address, device_id: BytesN<32>) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -612,10 +601,10 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         if device.status == DeviceStatus::Decommissioned {
-            return Err(IoTError::DeviceDecommissioned);
+            return Err(Error::DeviceDecommissioned);
         }
 
         let old_status = device.status;
@@ -652,7 +641,7 @@ impl IoTDeviceManagement {
         env: Env,
         admin: Address,
         device_id: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
@@ -661,7 +650,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         let old_status = device.status;
         device.status = DeviceStatus::Decommissioned;
@@ -705,7 +694,7 @@ impl IoTDeviceManagement {
         release_notes_ref: String,
         min_version: u32,
         size_bytes: u64,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Manufacturer)?;
@@ -715,14 +704,14 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Manufacturer(manufacturer_id.clone()))
-            .ok_or(IoTError::ManufacturerNotRegistered)?;
+            .ok_or(Error::ManufacturerNotRegistered)?;
 
         if env
             .storage()
             .persistent()
             .has(&DataKey::Firmware(manufacturer_id.clone(), version))
         {
-            return Err(IoTError::FirmwareAlreadyExists);
+            return Err(Error::FirmwareAlreadyExists);
         }
 
         let fw = FirmwareVersion {
@@ -750,7 +739,7 @@ impl IoTDeviceManagement {
         admin: Address,
         manufacturer_id: BytesN<32>,
         version: u32,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         Self::check_not_paused(&env)?;
@@ -759,7 +748,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Firmware(manufacturer_id.clone(), version))
-            .ok_or(IoTError::FirmwareVersionNotFound)?;
+            .ok_or(Error::FirmwareVersionNotFound)?;
 
         fw.status = FirmwareStatus::Approved;
         fw.approved_by = admin;
@@ -787,7 +776,7 @@ impl IoTDeviceManagement {
         admin: Address,
         manufacturer_id: BytesN<32>,
         version: u32,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
@@ -795,7 +784,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Firmware(manufacturer_id.clone(), version))
-            .ok_or(IoTError::FirmwareVersionNotFound)?;
+            .ok_or(Error::FirmwareVersionNotFound)?;
 
         fw.status = FirmwareStatus::Rejected;
         env.storage()
@@ -814,25 +803,25 @@ impl IoTDeviceManagement {
         env: Env,
         manufacturer_id: BytesN<32>,
         version: u32,
-    ) -> Result<FirmwareVersion, IoTError> {
+    ) -> Result<FirmwareVersion, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::Firmware(manufacturer_id, version))
-            .ok_or(IoTError::FirmwareVersionNotFound)
+            .ok_or(Error::FirmwareVersionNotFound)
     }
 
     pub fn get_latest_firmware_version(
         env: Env,
         manufacturer_id: BytesN<32>,
         device_type: DeviceType,
-    ) -> Result<u32, IoTError> {
+    ) -> Result<u32, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::LatestFirmware(
                 manufacturer_id,
                 device_type as u32,
             ))
-            .ok_or(IoTError::FirmwareVersionNotFound)
+            .ok_or(Error::FirmwareVersionNotFound)
     }
 
     pub fn update_device_firmware(
@@ -840,7 +829,7 @@ impl IoTDeviceManagement {
         caller: Address,
         device_id: BytesN<32>,
         target_version: u32,
-    ) -> Result<u64, IoTError> {
+    ) -> Result<u64, Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -849,15 +838,15 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         if device.status == DeviceStatus::Decommissioned {
-            return Err(IoTError::DeviceDecommissioned);
+            return Err(Error::DeviceDecommissioned);
         }
 
         // Cannot downgrade
         if target_version <= device.firmware_version {
-            return Err(IoTError::DowngradeNotAllowed);
+            return Err(Error::DowngradeNotAllowed);
         }
 
         // Firmware must be approved
@@ -868,10 +857,10 @@ impl IoTDeviceManagement {
                 device.manufacturer_id.clone(),
                 target_version,
             ))
-            .ok_or(IoTError::FirmwareVersionNotFound)?;
+            .ok_or(Error::FirmwareVersionNotFound)?;
 
         if fw.status != FirmwareStatus::Approved {
-            return Err(IoTError::FirmwareNotApproved);
+            return Err(Error::FirmwareNotApproved);
         }
 
         let from_version = device.firmware_version;
@@ -940,7 +929,7 @@ impl IoTDeviceManagement {
         signal_strength: u32,
         error_count: u32,
         metrics_ref: String,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -952,13 +941,13 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         if device.status == DeviceStatus::Decommissioned {
-            return Err(IoTError::DeviceDecommissioned);
+            return Err(Error::DeviceDecommissioned);
         }
         if device.status != DeviceStatus::Active && device.status != DeviceStatus::Maintenance {
-            return Err(IoTError::DeviceNotActive);
+            return Err(Error::DeviceNotActive);
         }
 
         let now = env.ledger().timestamp();
@@ -969,7 +958,7 @@ impl IoTDeviceManagement {
             .unwrap_or(60);
 
         if device.last_heartbeat > 0 && now.saturating_sub(device.last_heartbeat) < min_interval {
-            return Err(IoTError::HeartbeatTooFrequent);
+            return Err(Error::HeartbeatTooFrequent);
         }
 
         let heartbeat = Heartbeat {
@@ -1008,16 +997,13 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_device_heartbeats(
-        env: Env,
-        device_id: BytesN<32>,
-    ) -> Result<Vec<Heartbeat>, IoTError> {
+    pub fn get_device_heartbeats(env: Env, device_id: BytesN<32>) -> Result<Vec<Heartbeat>, Error> {
         if !env
             .storage()
             .persistent()
             .has(&DataKey::Device(device_id.clone()))
         {
-            return Err(IoTError::DeviceNotFound);
+            return Err(Error::DeviceNotFound);
         }
         Ok(env
             .storage()
@@ -1026,12 +1012,12 @@ impl IoTDeviceManagement {
             .unwrap_or(Vec::new(&env)))
     }
 
-    pub fn get_device_uptime_bps(env: Env, device_id: BytesN<32>) -> Result<u32, IoTError> {
+    pub fn get_device_uptime_bps(env: Env, device_id: BytesN<32>) -> Result<u32, Error> {
         let device: Device = env
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         let now = env.ledger().timestamp();
 
@@ -1070,7 +1056,7 @@ impl IoTDeviceManagement {
         env: Env,
         admin: Address,
         interval_secs: u64,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         env.storage()
@@ -1090,7 +1076,7 @@ impl IoTDeviceManagement {
         channel_id: BytesN<32>,
         encryption_key_hash: BytesN<32>,
         protocol: String,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -1100,7 +1086,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         let now = env.ledger().timestamp();
         let channel = CommChannel {
@@ -1122,11 +1108,11 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
-    pub fn get_comm_channel(env: Env, channel_id: BytesN<32>) -> Result<CommChannel, IoTError> {
+    pub fn get_comm_channel(env: Env, channel_id: BytesN<32>) -> Result<CommChannel, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::CommChannel(channel_id))
-            .ok_or(IoTError::ChannelNotFound)
+            .ok_or(Error::ChannelNotFound)
     }
 
     pub fn rotate_encryption_key(
@@ -1134,7 +1120,7 @@ impl IoTDeviceManagement {
         caller: Address,
         channel_id: BytesN<32>,
         new_encryption_key_hash: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -1143,7 +1129,7 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::CommChannel(channel_id.clone()))
-            .ok_or(IoTError::ChannelNotFound)?;
+            .ok_or(Error::ChannelNotFound)?;
 
         let now = env.ledger().timestamp();
         let min_interval: u64 = env
@@ -1153,7 +1139,7 @@ impl IoTDeviceManagement {
             .unwrap_or(3600);
 
         if now.saturating_sub(channel.last_rotated) < min_interval {
-            return Err(IoTError::KeyRotationTooFrequent);
+            return Err(Error::KeyRotationTooFrequent);
         }
 
         channel.encryption_key_hash = new_encryption_key_hash;
@@ -1172,7 +1158,7 @@ impl IoTDeviceManagement {
         caller: Address,
         device_id: BytesN<32>,
         new_encryption_key_hash: BytesN<32>,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         Self::check_not_paused(&env)?;
         Self::require_role(&env, &caller, Role::Operator)?;
@@ -1181,10 +1167,10 @@ impl IoTDeviceManagement {
             .storage()
             .persistent()
             .get(&DataKey::Device(device_id.clone()))
-            .ok_or(IoTError::DeviceNotFound)?;
+            .ok_or(Error::DeviceNotFound)?;
 
         if device.status == DeviceStatus::Decommissioned {
-            return Err(IoTError::DeviceDecommissioned);
+            return Err(Error::DeviceDecommissioned);
         }
 
         device.encryption_key_hash = new_encryption_key_hash;
@@ -1199,7 +1185,7 @@ impl IoTDeviceManagement {
         env: Env,
         admin: Address,
         interval_secs: u64,
-    ) -> Result<(), IoTError> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
         env.storage()
@@ -1222,13 +1208,13 @@ impl IoTDeviceManagement {
     pub fn get_device_firmware_history(
         env: Env,
         device_id: BytesN<32>,
-    ) -> Result<Vec<FirmwareUpdateRecord>, IoTError> {
+    ) -> Result<Vec<FirmwareUpdateRecord>, Error> {
         if !env
             .storage()
             .persistent()
             .has(&DataKey::Device(device_id.clone()))
         {
-            return Err(IoTError::DeviceNotFound);
+            return Err(Error::DeviceNotFound);
         }
 
         let update_ids: Vec<u64> = env
@@ -1260,10 +1246,10 @@ impl IoTDeviceManagement {
     pub fn get_firmware_update_record(
         env: Env,
         update_id: u64,
-    ) -> Result<FirmwareUpdateRecord, IoTError> {
+    ) -> Result<FirmwareUpdateRecord, Error> {
         env.storage()
             .persistent()
             .get(&DataKey::FirmwareUpdateRecord(update_id))
-            .ok_or(IoTError::FirmwareVersionNotFound)
+            .ok_or(Error::FirmwareVersionNotFound)
     }
 }

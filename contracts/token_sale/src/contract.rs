@@ -7,6 +7,7 @@
 use crate::storage::*;
 use crate::types::*;
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};
+extern crate fp_math;
 
 // Metadata that is added on to every WASM custom section
 contractmeta!(
@@ -27,6 +28,7 @@ impl TokenSaleContract {
         treasury: Address,
         soft_cap: u128,
         hard_cap: u128,
+        token_decimals: u32,
     ) {
         if env.storage().instance().has(&DataKey::Config) {
             return; // Already initialized - early return instead of panic
@@ -35,12 +37,14 @@ impl TokenSaleContract {
         owner.require_auth();
 
         assert!(soft_cap <= hard_cap, "Soft cap must be <= hard cap");
+        assert!(token_decimals <= 18, "Decimals must be <= 18");
 
         let config = SaleConfig {
             token_address: token_address.clone(),
             treasury: treasury.clone(),
             soft_cap,
             hard_cap,
+            token_decimals,
             is_finalized: false,
             refunds_enabled: false,
         };
@@ -157,8 +161,10 @@ impl TokenSaleContract {
         assert!(current_time >= phase.start_time, "Phase not started");
         assert!(current_time <= phase.end_time, "Phase ended");
 
-        // Calculate tokens to allocate
-        let tokens_to_allocate = (amount * 1_000_000) / phase.price_per_token; // Assuming 6 decimal places
+        // Calculate tokens to allocate using configurable decimal precision
+        let tokens_to_allocate =
+            fp_math::tokens_for_payment(amount, phase.price_per_token, config.token_decimals)
+                .expect("token allocation overflow");
         assert!(
             phase.sold_tokens + tokens_to_allocate <= phase.max_tokens,
             "Phase cap exceeded"

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Uzima Analytics Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Outfit:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard-container">
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">U</span>
+                <h1>Uzima</h1>
+            </div>
+            <nav>
+                <ul>
+                    <li class="active"><a href="#overview">Overview</a></li>
+                    <li><a href="#functions">Functions</a></li>
+                    <li><a href="#users">Users</a></li>
+                    <li><a href="#performance">Performance</a></li>
+                </ul>
+            </nav>
+            <div class="sidebar-footer">
+                <p>Contract Analytics v1.0</p>
+            </div>
+        </aside>
+        
+        <main class="content">
+            <header>
+                <h2>Analytics Overview</h2>
+                <div class="header-actions">
+                    <button id="refresh-btn">Refresh Data</button>
+                    <div class="user-profile">
+                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Admin" alt="Admin">
+                    </div>
+                </div>
+            </header>
+            
+            <section class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Calls</h3>
+                    <p class="stat-value" id="total-calls">0</p>
+                    <span class="stat-trend positive">+12% from last period</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Active Users</h3>
+                    <p class="stat-value" id="active-users">0</p>
+                    <span class="stat-trend positive">+5% from last period</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Error Rate</h3>
+                    <p class="stat-value" id="error-rate">0.00%</p>
+                    <span class="stat-trend negative">+0.2% from last period</span>
+                </div>
+                <div class="stat-card">
+                    <h3>Avg Latency</h3>
+                    <p class="stat-value" id="avg-latency">0ms</p>
+                    <span class="stat-trend neutral">Stable</span>
+                </div>
+            </section>
+            
+            <section class="charts-container">
+                <div class="chart-box">
+                    <h3>Call Frequency (Last 30 Days)</h3>
+                    <canvas id="callsChart"></canvas>
+                </div>
+                <div class="chart-box">
+                    <h3>Function Distribution</h3>
+                    <canvas id="functionChart"></canvas>
+                </div>
+            </section>
+            
+            <section class="table-container">
+                <h3>Top Performing Functions</h3>
+                <table id="functions-table">
+                    <thead>
+                        <tr>
+                            <th>Function Name</th>
+                            <th>Call Count</th>
+                            <th>Gas (CPU)</th>
+                            <th>Gas (RAM)</th>
+                            <th>Error Rate</th>
+                            <th>Avg Latency</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Data will be populated by JS -->
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

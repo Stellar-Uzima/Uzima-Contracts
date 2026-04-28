@@ -6,7 +6,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 
 ---
 
-## � Table of Contents
+## 📋 Table of Contents
 
 - [Project Overview](#project-overview)
 - [Setup Instructions](#setup-instructions)
@@ -25,6 +25,8 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#frequently-asked-questions-faq)
 - [License](#license)
 
 ---
@@ -231,6 +233,7 @@ These diagrams provide essential context for understanding:
 - Fully testable, modular, and CI-enabled
 - Gas-efficient contract design
 - Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+- Upgrade-safe deprecation tracking for legacy contract entrypoints with warning events and migration guides
 
 ---
 
@@ -641,8 +644,9 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 ## 🔗 Helpful Links
 
 ### Documentation
-- [API Reference](./docs/api.md) - Complete contract API documentation
+- [API Reference](./docs/api.md) - Complete contract API documentation and stability guarantees
 - [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Contract Resource Limits](./docs/CONTRACT_RESOURCE_LIMITS.md) - Storage, execution, and batch constraints for all contracts
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
 - [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem
 
@@ -742,6 +746,147 @@ A contribution is complete when:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 **Copyright © 2025 Stellar Uzima Contributors**
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues and Solutions
+
+#### Setup Issues
+
+**Problem**: Rust installation fails
+```bash
+# Solution: Use rustup installer
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+```
+
+**Problem**: Soroban CLI not found
+```bash
+# Solution: Install with specific version
+cargo install --locked --version 21.7.7 soroban-cli
+```
+
+**Problem**: Permission denied on setup.sh
+```bash
+# Solution: Make script executable
+chmod +x setup.sh
+./setup.sh
+```
+
+#### Build Issues
+
+**Problem**: WASM target not found
+```bash
+# Solution: Add WASM target
+rustup target add wasm32-unknown-unknown
+```
+
+**Problem**: Contract compilation fails
+```bash
+# Solution: Clean and rebuild
+make clean
+make build
+```
+
+#### Network Issues
+
+**Problem**: Local network won't start
+```bash
+# Solution: Check if port is in use
+netstat -tulpn | grep :8000
+# Kill existing process if needed
+sudo kill -9 <PID>
+# Restart network
+make start-local
+```
+
+**Problem**: Testnet deployment fails
+```bash
+# Solution: Check account balance
+soroban config account show
+# Fund account if needed
+# (Use Stellar Laboratory or friendbot on testnet)
+```
+
+#### Contract Issues
+
+**Problem**: Contract not found after deployment
+```bash
+# Solution: Verify contract exists
+soroban contract invoke --id <CONTRACT_ID> --network testnet \
+  --wasm target/wasm32-unknown-unknown/release/<CONTRACT_NAME>.wasm \
+  -- function_name="get_version"
+```
+
+**Problem**: Transaction timeout
+```bash
+# Solution: Increase timeout or use local network
+soroban contract invoke --id <CONTRACT_ID> --network local \
+  --timeout 300 \
+  -- function_name="your_function"
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check the logs**: Look at the full error output
+2. **Search existing issues**: Check [GitHub Issues](https://github.com/Stellar-Uzima/Uzima-Contracts/issues)
+3. **Ask for help**: Start a [GitHub Discussion](https://github.com/Stellar-Uzima/Uzima-Contracts/discussions)
+4. **Join our community**: Connect with other developers
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### General Questions
+
+**Q: What is Stellar Uzima?**
+A: Stellar Uzima is a decentralized medical records system built on the Stellar blockchain that enables secure, patient-controlled healthcare data management.
+
+**Q: Why use blockchain for medical records?**
+A: Blockchain provides immutability, security, audit trails, and patient control over data access - all critical for healthcare data.
+
+**Q: Is this HIPAA compliant?**
+A: The system is designed with privacy and security principles that align with HIPAA requirements, but compliance depends on implementation and usage.
+
+### Technical Questions
+
+**Q: What programming languages are used?**
+A: Smart contracts are written in Rust using the Soroban framework. The project also includes shell scripts for deployment and automation.
+
+**Q: Can I run this on my own infrastructure?**
+A: Yes, you can deploy to your own Stellar node or use the public testnet/mainnet networks.
+
+**Q: How are medical records encrypted?**
+A: Records are encrypted using public key cryptography before being stored on-chain. Only authorized parties with the correct keys can decrypt the data.
+
+**Q: What about traditional medicine?**
+A: The system includes metadata fields specifically designed to support traditional healing practices and indigenous medical knowledge.
+
+### Development Questions
+
+**Q: How do I contribute?**
+A: See the [Contribution Guidelines](#contribution-guidelines) section. We welcome bug reports, feature requests, and code contributions.
+
+**Q: What's the best way to test changes?**
+A: Use the local development network for testing: `make start-local && make deploy-local`
+
+**Q: Are there any gas fees?**
+A: Yes, Stellar transactions require small fees in XLM, but they are significantly lower than other blockchain platforms.
+
+### Deployment Questions
+
+**Q: Can I deploy to mainnet?**
+A: Yes, but ensure thorough testing on testnet first. Mainnet deployment involves real costs and should be done carefully.
+
+**Q: How do I handle contract upgrades?**
+A: The system includes upgrade-safe deprecation tracking and migration guides for legacy contracts.
+
+**Q: What about data privacy?**
+A: All sensitive medical data is encrypted before storage, and access is controlled through patient consent mechanisms.
 
 ---
 
