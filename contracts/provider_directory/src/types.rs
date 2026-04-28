@@ -13,6 +13,8 @@ pub enum Error {
     InvalidAvailability = 7,
     NotVerified = 8,
     ContractPaused = 9,
+    InputTooLong = 10,
+    InvalidInput = 11,
 }
 
 #[contracttype]
@@ -65,5 +67,6 @@ pub enum DataKey {
     Profile(Address),
     Availability(Address),
     Privacy(Address),
-    ProviderList, // Vector of addresses for discovery
+    ProviderList,               // Vector of addresses for discovery
+    SpecialtyProviders(Symbol), // index: specialty → Vec<Address>
 }

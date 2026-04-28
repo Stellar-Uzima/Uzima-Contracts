@@ -201,7 +201,7 @@ impl ClinicalNLP {
 
         let stored_admin: Address = env.storage().instance().get(&"admin").unwrap();
         if admin != stored_admin {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         env.storage().instance().set(&"config", &config);
@@ -228,7 +228,7 @@ impl ClinicalNLP {
 
         let batch_size = request.notes.len();
         if batch_size > 100 {
-            return Err(Error::BatchSizeTooLarge);
+            return Err(Error::BatchTooLarge);
         }
 
         for i in 0..batch_size {

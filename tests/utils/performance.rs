@@ -1,6 +1,92 @@
-/// Performance testing utilities for contracts
+/// Performance testing utilities for contracts.
+///
+/// For Soroban-specific benchmarks see the per-contract `benchmarks.rs` test
+/// modules, which use `env.budget().cpu_instruction_cost()` /
+/// `env.budget().memory_bytes_cost()` from `soroban_sdk::testutils::budget`.
 use std::time::Instant;
 use std::collections::HashMap;
+
+// ── Soroban budget result ────────────────────────────────────────────────────
+
+/// Captured Soroban execution costs for one contract invocation.
+#[derive(Clone, Debug)]
+pub struct SorobanBenchmarkResult {
+    pub name: String,
+    /// CPU instructions consumed (Soroban gas proxy).
+    pub cpu_instructions: u64,
+    /// Memory bytes consumed.
+    pub memory_bytes: u64,
+    /// Wall-clock duration in microseconds.
+    pub wall_us: u128,
+}
+
+impl SorobanBenchmarkResult {
+    pub fn summary(&self) -> String {
+        format!(
+            "Test: {:40} cpu={:>12} insns  mem={:>10} bytes  wall={:>8}µs",
+            self.name, self.cpu_instructions, self.memory_bytes, self.wall_us
+        )
+    }
+
+    pub fn cpu_within_budget(&self, limit: u64) -> bool {
+        self.cpu_instructions <= limit
+    }
+
+    pub fn memory_within_budget(&self, limit: u64) -> bool {
+        self.memory_bytes <= limit
+    }
+}
+
+/// Suite that aggregates multiple [`SorobanBenchmarkResult`]s.
+pub struct SorobanBenchmarkSuite {
+    results: Vec<SorobanBenchmarkResult>,
+}
+
+impl SorobanBenchmarkSuite {
+    pub fn new() -> Self {
+        Self { results: Vec::new() }
+    }
+
+    pub fn add(&mut self, result: SorobanBenchmarkResult) {
+        self.results.push(result);
+    }
+
+    pub fn generate_report(&self) -> String {
+        let mut out = "=== Soroban Benchmark Report ===\n".to_string();
+        for r in &self.results {
+            out.push_str(&format!("{}\n", r.summary()));
+        }
+        out.push_str("================================\n");
+        out
+    }
+
+    /// Returns results that exceed `cpu_limit` instructions.
+    pub fn regressions(&self, cpu_limit: u64) -> Vec<&SorobanBenchmarkResult> {
+        self.results
+            .iter()
+            .filter(|r| r.cpu_instructions > cpu_limit)
+            .collect()
+    }
+}
+
+// ── Performance regression baseline ─────────────────────────────────────────
+
+/// Known-good CPU instruction baselines per operation.
+/// Update when intentional performance changes land.
+pub mod soroban_baselines {
+    pub const EMR_INITIALIZE: u64 = 2_000_000;
+    pub const EMR_REGISTER_SYSTEM: u64 = 5_000_000;
+    pub const EMR_GENERATE_MESSAGE: u64 = 8_000_000;
+    pub const EMR_PARSE_MESSAGE: u64 = 8_000_000;
+    pub const EMR_GET_SYSTEM: u64 = 2_000_000;
+    pub const EMR_VALIDATE_MESSAGE: u64 = 5_000_000;
+
+    pub const CRYPTO_INITIALIZE: u64 = 2_000_000;
+    pub const CRYPTO_REGISTER_KEY: u64 = 5_000_000;
+    pub const CRYPTO_GET_BUNDLE: u64 = 2_000_000;
+    pub const CRYPTO_REVOKE_KEY: u64 = 3_000_000;
+    pub const CRYPTO_GET_VERSION: u64 = 1_500_000;
+}
 
 /// Performance test result
 #[derive(Clone, Debug)]
@@ -201,7 +287,7 @@ impl MemoryTracker {
 
     /// Calculate memory delta
     pub fn delta(&self) -> Option<usize> {
-        self.initial.map(|initial| {
+        self.initial.map(|_initial| {
             // Simplified: return a placeholder value
             0
         })

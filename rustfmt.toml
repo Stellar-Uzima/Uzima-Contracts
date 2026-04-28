@@ -1,0 +1,46 @@
+# Rustfmt configuration for Uzima Contracts
+# Ensures consistent code formatting across the project
+
+# Formatting style
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Auto"
+use_small_heuristics = "Default"
+
+# Imports
+imports_granularity = "Crate"
+imports_layout = "Mixed"
+group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Code organization
+reorder_modules = true
+reorder_impl_items = false
+
+# Function formatting
+fn_args_layout = "Tall"
+fn_return_indent = "WithArgs"
+where_layout = "Tall"
+
+# Control flow
+control_brace_style = "AlwaysSameLine"
+match_arm_blocks = true
+match_block_trailing_comma = true
+match_expression_indent = "Block"
+
+# Comments
+wrap_comments = false
+comment_width = 100
+normalize_comments = true
+
+# Maximum widths
+max_width = 100
+error_on_line_overflow = false
+
+# Special cases
+format_strings = true
+format_macro_matchers = true
+format_macro_bodies = true
+
+# Edition-specific
+edition = "2021"

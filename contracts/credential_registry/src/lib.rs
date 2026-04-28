@@ -27,6 +27,7 @@ pub enum DataKey {
     ActiveRoot(Address),
     RootRecord(Address, u32),
     RevocationRoot(Address),
+    RootToVersion(Address, BytesN<32>), // index: root bytes → version number
 }
 
 #[contracterror]
@@ -130,7 +131,10 @@ impl CredentialRegistryContract {
             .set(&DataKey::ActiveVersion(issuer.clone()), &next);
         env.storage()
             .persistent()
-            .set(&DataKey::ActiveRoot(issuer.clone()), &root);
+            .set(&DataKey::ActiveRoot(issuer.clone()), &root.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootToVersion(issuer.clone(), root.clone()), &next);
 
         env.events().publish(
             (symbol_short!("CREDREG"), symbol_short!("ROOT")),
@@ -219,29 +223,93 @@ impl CredentialRegistryContract {
     }
 
     pub fn is_root_revoked(env: Env, issuer: Address, root: BytesN<32>) -> bool {
-        let active_version: u32 = env
+        let version: Option<u32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RootToVersion(issuer.clone(), root.clone()));
+        let Some(v) = version else {
+            return false;
+        };
+        env.storage()
+            .persistent()
+            .get::<_, CredentialRootRecord>(&DataKey::RootRecord(issuer, v))
+            .map(|rec| rec.revoked)
+            .unwrap_or(false)
+    }
+
+    pub fn batch_set_credential_roots(
+        env: Env,
+        caller: Address,
+        issuer: Address,
+        roots: soroban_sdk::Vec<BytesN<32>>,
+        metadata_hashes: soroban_sdk::Vec<BytesN<32>>,
+        expiries: soroban_sdk::Vec<u64>,
+        signatures: soroban_sdk::Vec<BytesN<64>>,
+    ) -> Result<soroban_sdk::Vec<u32>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_issuer_manager(&env, &caller, &issuer)?;
+
+        let len = roots.len();
+        if len != metadata_hashes.len() || len != expiries.len() || len != signatures.len() {
+            return Err(Error::InvalidCredentialId);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut current: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::ActiveVersion(issuer.clone()))
             .unwrap_or(0);
-        if active_version == 0 {
-            return false;
+
+        let mut versions = soroban_sdk::Vec::new(&env);
+
+        for i in 0..len {
+            let root = roots.get(i).unwrap();
+            let metadata_hash = metadata_hashes.get(i).unwrap();
+            let expiry = expiries.get(i).unwrap();
+            let signature = signatures.get(i).unwrap();
+
+            Self::validate_credential_id(&root)?;
+            if expiry <= now {
+                return Err(Error::InvalidExpiry);
+            }
+            Self::validate_metadata_hash(&metadata_hash)?;
+            Self::validate_signature(&signature)?;
+
+            current = current.saturating_add(1);
+            let rec = CredentialRootRecord {
+                version: current,
+                root: root.clone(),
+                metadata_hash,
+                updated_at: now,
+                expiry,
+                signature,
+                revoked: false,
+            };
+            env.storage()
+                .persistent()
+                .set(&DataKey::RootRecord(issuer.clone(), current), &rec);
+            env.storage()
+                .persistent()
+                .set(&DataKey::RootToVersion(issuer.clone(), root.clone()), &current);
+            versions.push_back(current);
         }
 
-        let mut v = 1u32;
-        while v <= active_version {
-            if let Some(rec) = env
-                .storage()
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveVersion(issuer.clone()), &current);
+        if let Some(last_root) = roots.get(len - 1) {
+            env.storage()
                 .persistent()
-                .get::<_, CredentialRootRecord>(&DataKey::RootRecord(issuer.clone(), v))
-            {
-                if rec.root == root {
-                    return rec.revoked;
-                }
-            }
-            v = v.saturating_add(1);
+                .set(&DataKey::ActiveRoot(issuer.clone()), &last_root);
         }
-        false
+
+        env.events().publish(
+            (symbol_short!("CREDREG"), symbol_short!("BROOT")),
+            (issuer, current),
+        );
+        Ok(versions)
     }
 
     pub fn has_active_root(env: Env, issuer: Address) -> bool {
