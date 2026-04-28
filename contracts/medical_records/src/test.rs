@@ -56,12 +56,13 @@ fn test_add_and_get_record() {
     let record_events_count = events_after_add
         .iter()
         .filter(|e| {
-            if e.1.len() < 2 {
+            if e.1.is_empty() {
                 return false;
             }
-            let topic = e.1.get(1).unwrap();
-            let sym = Symbol::try_from_val(&env, &topic).unwrap();
-            sym == symbol_short!("REC_NEW")
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("REC_NEW"))
+                .unwrap_or(false)
         })
         .count();
     assert_eq!(record_events_count, 1);
@@ -78,12 +79,13 @@ fn test_add_and_get_record() {
     let access_events_count = events_after_get
         .iter()
         .filter(|e| {
-            if e.1.len() < 2 {
+            if e.1.is_empty() {
                 return false;
             }
-            let topic = e.1.get(1).unwrap();
-            let sym = Symbol::try_from_val(&env, &topic).unwrap();
-            sym == symbol_short!("REC_ACC")
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("REC_ACC"))
+                .unwrap_or(false)
         })
         .count();
     assert_eq!(access_events_count, 1);

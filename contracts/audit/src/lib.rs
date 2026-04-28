@@ -232,9 +232,7 @@ impl AuditTrail {
             .get(&DataKey::LogReaderList)
             .unwrap_or(Vec::new(&env));
         list.push_back(reader.clone());
-        env.storage()
-            .instance()
-            .set(&DataKey::LogReaderList, &list);
+        env.storage().instance().set(&DataKey::LogReaderList, &list);
 
         env.events().publish(
             (symbol_short!("AUDIT"), symbol_short!("GRANT")),
@@ -259,9 +257,7 @@ impl AuditTrail {
 
     /// Check whether an address has log-read access.
     pub fn has_log_access(env: Env, reader: Address) -> bool {
-        env.storage()
-            .persistent()
-            .has(&DataKey::LogReader(reader))
+        env.storage().persistent().has(&DataKey::LogReader(reader))
     }
 
     // ─── Retention Policy ────────────────────────────────────────────────────
