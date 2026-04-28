@@ -408,13 +408,15 @@ jobs:
           echo "- Interoperability Suite: ${{ needs.test-interoperability.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Build: ${{ needs.build.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Security: ${{ needs.security.result }}" >> $GITHUB_STEP_SUMMARY
-          
+          echo "- Benchmarks: ${{ needs.benchmarks.result }}" >> $GITHUB_STEP_SUMMARY
+
           if [ "${{ needs.lint.result }}" != "success" ] || \
              [ "${{ needs.test.result }}" != "success" ] || \
              [ "${{ needs.test-nodejs.result }}" != "success" ] || \
              [ "${{ needs.test-interoperability.result }}" != "success" ] || \
              [ "${{ needs.build.result }}" != "success" ] || \
-             [ "${{ needs.security.result }}" = "failure" ]; then
+             [ "${{ needs.security.result }}" = "failure" ] || \
+             [ "${{ needs.benchmarks.result }}" = "failure" ]; then
             echo "❌ CI checks failed"
             exit 1
           fi
