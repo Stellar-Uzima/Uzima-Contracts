@@ -2,6 +2,8 @@
 
 mod admin;
 mod rounds;
+mod serialization_edge_cases;
+mod serialization_utils;
 mod types;
 mod utils;
 
