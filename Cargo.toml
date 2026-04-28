@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "contracts/*",
+    "contract_optimizer",
     "tests",
     "tests/interoperability_suite",
 ]
