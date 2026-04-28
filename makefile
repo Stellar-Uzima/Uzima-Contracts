@@ -206,7 +206,7 @@ audit:
 # Generate documentation
 docs:
 	@echo "Generating documentation..."
-	cargo doc --no-deps --all-features --open
+	node scripts/docs/generate.mjs
 
 # Watch for changes and rebuild (requires cargo-watch)
 watch:
