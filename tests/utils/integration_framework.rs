@@ -101,6 +101,28 @@ impl IntegrationTestEnv {
     pub fn register_sac_token(&self, admin: &Address) -> Address {
         self.env.register_stellar_asset_contract(admin.clone())
     }
+
+    /// Register and initialize the MedicalRecords contract
+    pub fn register_medical_records(&self) -> (Address, medical_records::MedicalRecordsContractClient<'static>) {
+        let contract_id = self.env.register_contract(None, medical_records::MedicalRecordsContract);
+        let client = medical_records::MedicalRecordsContractClient::new(&self.env, &contract_id);
+        (contract_id, client)
+    }
+
+    /// Register and initialize the SutToken contract
+    pub fn register_token(&self, admin: &Address) -> (Address, sut_token::SutTokenClient<'static>) {
+        let contract_id = self.env.register_contract(None, sut_token::SutToken);
+        let client = sut_token::SutTokenClient::new(&self.env, &contract_id);
+        
+        let name = SorobanString::from_str(&self.env, "Stellar Utility Token");
+        let symbol = SorobanString::from_str(&self.env, "SUT");
+        let decimals = 7;
+        let supply_cap = 100_000_000_000_000_i128; // 10M with 7 decimals
+        
+        client.initialize(admin, &name, &symbol, &decimals, &supply_cap).expect("Failed to initialize token");
+        
+        (contract_id, client)
+    }
 }
 
 /// Helper to mock a contract call with a specific result
