@@ -75,6 +75,14 @@ const STATS: Symbol = symbol_short!("stats");
 const ADMIN: Symbol = symbol_short!("admin");
 const DAILY_STATS: Symbol = symbol_short!("dlystats");
 
+// TTL constants for storage management
+/// TTL threshold: extend persistent data if remaining TTL falls below this
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+/// Extend persistent data to this many ledgers (~4 days at 5s/ledger)
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+/// TTL for temporary/session storage (reentrancy lock, ~30 min)
+const TEMP_SESSION_TTL: u32 = 500;
+
 #[contract]
 pub struct EscrowContract;
 
@@ -88,6 +96,7 @@ fn require_not_reentrant(env: &Env) -> Result<(), Error> {
         return Err(Error::ReentrancyGuard);
     }
     env.storage().temporary().set(&REENTRANCY_LOCK, &true);
+    env.storage().temporary().extend_ttl(&REENTRANCY_LOCK, 0, TEMP_SESSION_TTL);
     Ok(())
 }
 
@@ -204,12 +213,12 @@ impl EscrowContract {
             fee_receiver,
             platform_fee_bps,
         };
-        env.storage().persistent().set(&FEE_CONF, &conf);
+        env.storage().instance().set(&FEE_CONF, &conf);
         Ok(())
     }
 
     pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
-        env.storage().persistent().get(&FEE_CONF)
+        env.storage().instance().get(&FEE_CONF)
     }
 
     pub fn create_escrow(
@@ -314,7 +323,7 @@ impl EscrowContract {
         // checks
         let fee_conf: FeeConfig = env
             .storage()
-            .persistent()
+            .instance()
             .get(&FEE_CONF)
             .ok_or(Error::FeeNotSet)?;
 

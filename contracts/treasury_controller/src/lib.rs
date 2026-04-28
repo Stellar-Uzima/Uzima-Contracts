@@ -121,6 +121,10 @@ const MIN_TIMELOCK: u64 = 3600; // 1 hour minimum
 const MAX_TIMELOCK: u64 = 604800; // 1 week maximum
 const PROPOSAL_EXPIRY: u64 = 2592000; // 30 days
 
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+
 #[contract]
 pub struct TreasuryController;
 
@@ -283,6 +287,9 @@ impl TreasuryController {
             .persistent()
             .set(&DataKey::Proposals, &proposals);
         env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Proposals, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &proposal_id);
 
@@ -349,6 +356,9 @@ impl TreasuryController {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Proposals, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         // Emit approval event
         env.events().publish(
@@ -415,6 +425,9 @@ impl TreasuryController {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage()
+            .persistent()
+            .extend_ttl(&DataKey::Proposals, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         // Record withdrawal for audit trail
         if matches!(proposal.proposal_type, ProposalType::Withdrawal) {
@@ -439,6 +452,9 @@ impl TreasuryController {
             env.storage()
                 .persistent()
                 .set(&DataKey::Withdrawals, &withdrawals);
+            env.storage()
+                .persistent()
+                .extend_ttl(&DataKey::Withdrawals, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         }
 
         // Emit execution event
