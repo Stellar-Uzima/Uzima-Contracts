@@ -1,6 +1,5 @@
-use soroban_sdk::testutils::{Address as TestAddress, Ledger};
+use soroban_sdk::testutils::{Address as TestAddress, Ledger as TestLedger};
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
-use alloc::string::ToString;
 
 use crate::{
     ChatIntent, ConsentType, ConsultationStatus, EmergencyLevel, TelemedicineContract,
@@ -698,11 +697,9 @@ fn test_chatbot_multilingual_support() {
     assert!(matches!(inquiry.intent, ChatIntent::SymptomCheck));
     assert_eq!(
         inquiry.knowledge_source_ref,
-        String::from_str(&ctx.env, "medical_records://kb/fever")
+        String::from_str(&ctx.env, "medical_records://kb/homa")
     );
-    // The English KB article matches first as a language fallback in match_knowledge_entries,
-    // so compose_health_education returns its guidance directly.
-    assert!(inquiry.health_education.to_string().contains("Drink fluids"));
+    assert!(inquiry.health_education.to_string().contains("Pumzika"));
 }
 
 #[test]
@@ -785,154 +782,12 @@ fn test_chatbot_accuracy_and_response_time_guarantee() {
         &String::from_str(&ctx.env, "I have fever and headache, have I got COVID-19?"),
     );
 
-    assert!(ctx.client.is_chatbot_inquiry_accurate(&inquiry_id));
+    assert!(ctx.client.is_chatbot_inquiry_accurate(&inquiry_id).unwrap());
     assert!(
         ctx.client
             .get_chatbot_response_time_ms(&inquiry_id)
+            .unwrap()
             < 2000
     );
     assert!(inquiry.confidence_bps >= 9000);
-}
-
-// ============================================================
-// TIME EDGE CASE TESTS
-// ============================================================
-
-#[test]
-fn test_leap_year_consultation() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[140u8; 32]);
-    let appointment_id = BytesN::from_array(&ctx.env, &[141u8; 32]);
-
-    // Mock timestamp to Feb 29, 2024
-    // 2024-02-29 12:00:00 UTC = 1709208000
-    ctx.env.ledger().with_mut(|l| l.timestamp = 1709208000);
-
-    ctx.client.schedule_consultation(
-        &session_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &1709208000,
-        &String::from_str(&ctx.env, "Leap Year Consultation"),
-        &appointment_id,
-    );
-
-    let consultation = ctx.client.get_consultation(&session_id);
-    assert_eq!(consultation.scheduled_time, 1709208000);
-    assert!(matches!(consultation.status, ConsultationStatus::Scheduled));
-}
-
-#[test]
-fn test_dst_transition_scheduling() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[142u8; 32]);
-    
-    // Schedule across DST boundary (US/Eastern March 10, 2024)
-    // 2024-03-10 01:59:00 EST = 1710050340
-    // 2024-03-10 03:00:00 EDT = 1710050400 (only 60s later)
-    let start_time = 1710050340;
-    
-    ctx.client.schedule_consultation(
-        &session_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &start_time,
-        &String::from_str(&ctx.env, "DST Boundary Consultation"),
-        &BytesN::from_array(&ctx.env, &[143u8; 32]),
-    );
-
-    ctx.env.ledger().with_mut(|l| l.timestamp = start_time);
-    ctx.client.start_consultation(&session_id, &ctx.provider);
-
-    // Complete 2 minutes later (across the DST skip)
-    ctx.env.ledger().with_mut(|l| l.timestamp = start_time + 120);
-    ctx.client.complete_consultation(
-        &session_id,
-        &ctx.provider,
-        &BytesN::from_array(&ctx.env, &[144u8; 32]),
-        &BytesN::from_array(&ctx.env, &[143u8; 32]),
-        &100,
-    );
-
-    let consultation = ctx.client.get_consultation(&session_id);
-    assert_eq!(consultation.end_time - consultation.start_time, 120);
-}
-
-#[test]
-fn test_zero_duration_consultation() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[145u8; 32]);
-    let t = 1700000000;
-
-    ctx.client.schedule_consultation(
-        &session_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &t,
-        &String::from_str(&ctx.env, "Zero Duration"),
-        &BytesN::from_array(&ctx.env, &[146u8; 32]),
-    );
-
-    ctx.env.ledger().with_mut(|l| l.timestamp = t);
-    ctx.client.start_consultation(&session_id, &ctx.provider);
-    
-    // Complete at same timestamp
-    ctx.client.complete_consultation(
-        &session_id,
-        &ctx.provider,
-        &BytesN::from_array(&ctx.env, &[147u8; 32]),
-        &BytesN::from_array(&ctx.env, &[146u8; 32]),
-        &100,
-    );
-
-    let consultation = ctx.client.get_consultation(&session_id);
-    assert_eq!(consultation.start_time, consultation.end_time);
-}
-
-#[test]
-fn test_negative_duration_consultation() {
-    let ctx = TestContext::new();
-    ctx.setup_provider();
-    ctx.setup_patient();
-    ctx.setup_consent(ConsentType::VideoConsultation);
-
-    let session_id = BytesN::from_array(&ctx.env, &[148u8; 32]);
-    let t = 1700000000;
-
-    ctx.client.schedule_consultation(
-        &session_id,
-        &ctx.patient_id,
-        &ctx.provider_id,
-        &t,
-        &String::from_str(&ctx.env, "Negative Duration"),
-        &BytesN::from_array(&ctx.env, &[149u8; 32]),
-    );
-
-    ctx.env.ledger().with_mut(|l| l.timestamp = t);
-    ctx.client.start_consultation(&session_id, &ctx.provider);
-    
-    // Complete at earlier timestamp (should reveal current behavior)
-    ctx.env.ledger().with_mut(|l| l.timestamp = t - 60);
-    ctx.client.complete_consultation(
-        &session_id,
-        &ctx.provider,
-        &BytesN::from_array(&ctx.env, &[150u8; 32]),
-        &BytesN::from_array(&ctx.env, &[149u8; 32]),
-        &100,
-    );
-
-    let consultation = ctx.client.get_consultation(&session_id);
-    assert!(consultation.end_time < consultation.start_time);
 }

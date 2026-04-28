@@ -170,7 +170,7 @@ impl AppointmentBookingEscrow {
         patient_appts.push_back(appointment_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientAppointments(patient.clone()), &patient_appts);
+            .set(&DataKey::PatientAppointments(patient), &patient_appts);
 
         // Add to provider's appointments list
         let mut provider_appts: Vec<u64> = env
@@ -181,7 +181,7 @@ impl AppointmentBookingEscrow {
         provider_appts.push_back(appointment_id);
         env.storage()
             .persistent()
-            .set(&DataKey::ProviderAppointments(provider.clone()), &provider_appts);
+            .set(&DataKey::ProviderAppointments(provider), &provider_appts);
 
         events::publish_appointment_booked(
             &env,

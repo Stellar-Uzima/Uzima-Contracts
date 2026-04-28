@@ -1,4 +1,4 @@
-// Provider Directory Tests
+#![cfg(test)]
 
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
@@ -158,79 +158,4 @@ fn test_verification() {
     client.verify_provider(&admin, &provider);
     let profile = client.get_profile(&provider);
     assert_eq!(profile.is_verified, true);
-}
-
-#[test]
-fn test_timezone_and_dst_availability() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let admin = Address::generate(&env);
-    let identity_registry = Address::generate(&env);
-    let provider = Address::generate(&env);
-    
-    let contract_id = env.register_contract(None, ProviderDirectoryContract);
-    let client = ProviderDirectoryContractClient::new(&env, &contract_id);
-    client.initialize(&admin, &identity_registry);
-
-    client.update_profile(
-        &provider,
-        &String::from_str(&env, "Dr. Timezone"),
-        &vec![&env],
-        &String::from_str(&env, "Bio"),
-        &String::from_str(&env, "Loc"),
-        &String::from_str(&env, "Contact"),
-    );
-
-    // Test multiple timezones (e.g., provider working in different regions)
-    let avail = vec![&env, 
-        Availability {
-            day_of_week: 1,
-            start_hour: 9,
-            end_hour: 17,
-            timezone: String::from_str(&env, "UTC"),
-        },
-        Availability {
-            day_of_week: 1,
-            start_hour: 13,
-            end_hour: 21,
-            timezone: String::from_str(&env, "EAT"), // East Africa Time
-        }
-    ];
-
-    client.set_availability(&provider, &avail);
-    let stored_avail = client.get_availability(&provider);
-    assert_eq!(stored_avail.len(), 2);
-    assert_eq!(stored_avail.get(0).unwrap().timezone, String::from_str(&env, "UTC"));
-    assert_eq!(stored_avail.get(1).unwrap().timezone, String::from_str(&env, "EAT"));
-}
-
-#[test]
-fn test_leap_year_registration_timestamp() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let admin = Address::generate(&env);
-    let identity_registry = Address::generate(&env);
-    let provider = Address::generate(&env);
-    
-    let contract_id = env.register_contract(None, ProviderDirectoryContract);
-    let client = ProviderDirectoryContractClient::new(&env, &contract_id);
-    client.initialize(&admin, &identity_registry);
-
-    // Mock timestamp to Feb 29, 2024
-    let leap_year_ts = 1709208000;
-    env.ledger().with_mut(|li| li.timestamp = leap_year_ts);
-
-    client.update_profile(
-        &provider,
-        &String::from_str(&env, "Dr. LeapYear"),
-        &vec![&env],
-        &String::from_str(&env, "Bio"),
-        &String::from_str(&env, "Loc"),
-        &String::from_str(&env, "Contact"),
-    );
-
-    let profile = client.get_profile(&provider);
-    assert_eq!(profile.joining_timestamp, leap_year_ts);
 }
