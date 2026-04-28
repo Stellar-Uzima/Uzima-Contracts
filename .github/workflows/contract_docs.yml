@@ -1,0 +1,47 @@
+name: Contract Documentation Automation
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - 'contracts/**'
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - 'contracts/**'
+
+permissions:
+  contents: write
+
+jobs:
+  docs-automation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install Rust
+        run: |
+          rustup update stable
+          rustup target add wasm32-unknown-unknown
+
+      - name: Install Soroban CLI
+        run: cargo install --locked soroban-cli
+
+      - name: Build Contracts
+        run: cargo build --target wasm32-unknown-unknown --release
+
+      - name: Run Documentation Automation
+        run: |
+          chmod +x scripts/update_docs.sh
+          ./scripts/update_docs.sh
+
+      - name: Commit and Push Documentation Updates
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/api/ docs/VERSION_HISTORY.md
+          git commit -m "docs: automated contract documentation and API tracking" || echo "No docs changes to commit"
+          git push

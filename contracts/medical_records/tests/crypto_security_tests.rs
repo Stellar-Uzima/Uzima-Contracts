@@ -141,7 +141,7 @@ fn test_encrypted_record_access_control_and_envelope_scoping() {
     let denied = t
         .client
         .try_get_encrypted_record_header(&intruder, &record_id);
-    assert!(matches!(denied, Err(Ok(Error::NotAuthorized))));
+    assert!(matches!(denied, Err(Ok(Error::Unauthorized))));
 }
 
 #[test]
@@ -257,7 +257,7 @@ fn test_crypto_config_threshold_proposal_flow() {
     let early = t
         .client
         .try_execute_crypto_config_update(&t.admin1, &proposal_id);
-    assert_eq!(early, Err(Ok(Error::TimelockNotElasped)));
+    assert_eq!(early, Err(Ok(Error::TimelockNotElapsed)));
 
     // Fast forward past timelock.
     env.ledger()

@@ -3,6 +3,8 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod benchmarks;
 
 extern crate alloc;
 

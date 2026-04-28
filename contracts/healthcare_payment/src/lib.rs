@@ -1,40 +1,11 @@
 #![no_std]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short,
-    token::Client as TokenClient, Address, Env, IntoVal, String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, Env,
+    IntoVal, String, Symbol, Vec,
 };
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    ClaimNotFound = 4,
-    InvalidStatus = 5,
-    PreAuthNotFound = 6,
-    PaymentPlanNotFound = 7,
-    InsufficientFunds = 8,
-    FraudDetected = 9,
-    EscrowFailed = 10,
-    InvalidAmount = 11,
-    InsuranceProviderNotFound = 12,
-    CoveragePolicyNotFound = 13,
-    EligibilityCheckNotFound = 14,
-    ClaimSubmissionNotFound = 15,
-    EobNotFound = 16,
-    InvalidCoverage = 17,
-    UnsupportedTransaction = 18,
-    PolicyMismatch = 19,
-    DeadlineExceeded = 32,
-    InvalidSignature = 33,
-    UnauthorizedCaller = 34,
-    ContractPaused = 35,
-    StorageFull = 36,
-    CrossChainTimeout = 37,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -63,6 +34,25 @@ pub enum PaymentPlanStatus {
     Completed = 1,
     Defaulted = 2,
     Cancelled = 3,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum CircuitState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CircuitBreaker {
+    pub state: CircuitState,
+    pub failure_count: u32,
+    pub failure_threshold: u32,
+    pub opened_at: u64,
+    pub last_state_change: u64,
+    pub triggered_by: Option<Address>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -246,6 +236,8 @@ pub enum DataKey {
     CoverageEnrollment(u64),
     Eob(u64),
     PatientResponsibility(Address),
+    CircuitBreakerState,
+    AuthorizedPausers,
 }
 
 #[contract]
@@ -297,6 +289,68 @@ impl HealthcarePayment {
         Ok(())
     }
 
+    fn require_operational(env: &Env) -> Result<(), Error> {
+        if let Some(cb) = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+        {
+            if cb.state == CircuitState::Open {
+                return Err(Error::CircuitOpen);
+            }
+        }
+        Ok(())
+    }
+
+    fn is_authorized_pauser(env: &Env, caller: &Address) -> bool {
+        if let Some(config) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Config>(&DataKey::Config)
+        {
+            if config.admin == *caller {
+                return true;
+            }
+        }
+        if let Some(pausers) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Vec<Address>>(&DataKey::AuthorizedPausers)
+        {
+            return pausers.contains(caller);
+        }
+        false
+    }
+
+    fn trip_circuit(env: &Env, triggered_by: &Address) {
+        let now = env.ledger().timestamp();
+        let cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+        let updated = CircuitBreaker {
+            state: CircuitState::Open,
+            failure_count: cb.failure_count,
+            failure_threshold: cb.failure_threshold,
+            opened_at: now,
+            last_state_change: now,
+            triggered_by: Some(triggered_by.clone()),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &updated);
+        env.events()
+            .publish((symbol_short!("CB_OPEN"),), (triggered_by.clone(), now));
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -335,6 +389,20 @@ impl HealthcarePayment {
         env.storage()
             .instance()
             .set(&DataKey::CoverageEnrollmentCount, &0u64);
+        env.storage().instance().set(
+            &DataKey::CircuitBreakerState,
+            &CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: env.ledger().timestamp(),
+                triggered_by: None,
+            },
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::AuthorizedPausers, &Vec::<Address>::new(&env));
 
         Ok(())
     }
@@ -488,6 +556,7 @@ impl HealthcarePayment {
         preauth_id: Option<u64>,
     ) -> Result<u64, Error> {
         provider.require_auth();
+        Self::require_operational(&env)?;
         Self::validate_positive_amount(amount)?;
 
         let claim_id: u64 = env
@@ -534,6 +603,7 @@ impl HealthcarePayment {
         transaction_code: String,
     ) -> Result<bool, Error> {
         caller.require_auth();
+        Self::require_operational(&env)?;
         if transaction_code != String::from_str(&env, "837") {
             return Err(Error::UnsupportedTransaction);
         }
@@ -825,6 +895,7 @@ impl HealthcarePayment {
     }
 
     pub fn process_payment(env: Env, claim_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
         let config: Config = env
             .storage()
             .instance()
@@ -927,6 +998,7 @@ impl HealthcarePayment {
     }
 
     pub fn escrow_claim(env: Env, claim_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
         let config: Config = env
             .storage()
             .instance()
@@ -1116,6 +1188,7 @@ impl HealthcarePayment {
     }
 
     pub fn pay_installment(env: Env, plan_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
         let mut plan: PaymentPlan = env
             .storage()
             .persistent()
@@ -1202,6 +1275,238 @@ impl HealthcarePayment {
         env.storage()
             .persistent()
             .get(&DataKey::PatientResponsibility(patient))
+    }
+
+    // Circuit breaker controls.
+
+    /// Immediately open the circuit (emergency stop). Callable by admin or any
+    /// authorized pauser.
+    pub fn emergency_pause(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        if !Self::is_authorized_pauser(&env, &caller) {
+            return Err(Error::NotAuthorizedPauser);
+        }
+        if let Some(ref cb) = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+        {
+            if cb.state == CircuitState::Open {
+                return Err(Error::AlreadyInState);
+            }
+        }
+        Self::trip_circuit(&env, &caller);
+        Ok(())
+    }
+
+    /// Transition circuit from Open -> HalfOpen to begin gradual recovery.
+    /// Admin only.
+    pub fn begin_recovery(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut cb: CircuitBreaker = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircuitBreakerState)
+            .ok_or(Error::AlreadyInState)?;
+
+        if cb.state != CircuitState::Open {
+            return Err(Error::AlreadyInState);
+        }
+
+        let now = env.ledger().timestamp();
+        cb.state = CircuitState::HalfOpen;
+        cb.last_state_change = now;
+        cb.triggered_by = Some(caller.clone());
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+        env.events()
+            .publish((symbol_short!("CB_HALF"),), (caller, now));
+
+        Ok(())
+    }
+
+    /// Transition circuit from HalfOpen -> Closed, resetting the failure counter.
+    /// Admin only.
+    pub fn resume_operations(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut cb: CircuitBreaker = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircuitBreakerState)
+            .ok_or(Error::AlreadyInState)?;
+
+        if cb.state != CircuitState::HalfOpen {
+            return Err(Error::AlreadyInState);
+        }
+
+        let now = env.ledger().timestamp();
+        cb.state = CircuitState::Closed;
+        cb.failure_count = 0;
+        cb.last_state_change = now;
+        cb.triggered_by = Some(caller.clone());
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+        env.events()
+            .publish((symbol_short!("CB_CLOSE"),), (caller, now));
+
+        Ok(())
+    }
+
+    /// Grant an address the ability to trigger an emergency pause. Admin only.
+    pub fn add_authorized_pauser(env: Env, caller: Address, pauser: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut pausers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuthorizedPausers)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        if !pausers.contains(&pauser) {
+            pausers.push_back(pauser.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::AuthorizedPausers, &pausers);
+        }
+        env.events()
+            .publish((symbol_short!("CB_AUTH"),), (caller, pauser, true));
+
+        Ok(())
+    }
+
+    /// Revoke an address's ability to trigger an emergency pause. Admin only.
+    pub fn remove_authorized_pauser(
+        env: Env,
+        caller: Address,
+        pauser: Address,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let pausers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuthorizedPausers)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut updated: Vec<Address> = Vec::new(&env);
+        for p in pausers.iter() {
+            if p != pauser {
+                updated.push_back(p);
+            }
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AuthorizedPausers, &updated);
+        env.events()
+            .publish((symbol_short!("CB_AUTH"),), (caller, pauser, false));
+
+        Ok(())
+    }
+
+    /// Report an anomaly. Increments the internal failure counter and
+    /// automatically trips the circuit when the threshold is reached.
+    /// Callable by admin or any authorized pauser (e.g. the anomaly_detection
+    /// contract).
+    pub fn report_anomaly(
+        env: Env,
+        caller: Address,
+        increment: u32,
+    ) -> Result<CircuitState, Error> {
+        caller.require_auth();
+        if !Self::is_authorized_pauser(&env, &caller) {
+            return Err(Error::NotAuthorizedPauser);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+
+        if cb.state == CircuitState::Open {
+            return Ok(CircuitState::Open);
+        }
+
+        cb.failure_count = cb.failure_count.saturating_add(increment);
+        // Persist updated count before potentially tripping so trip_circuit
+        // reads the correct value.
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+
+        env.events().publish(
+            (symbol_short!("CB_ANOM"),),
+            (caller.clone(), cb.failure_count, cb.failure_threshold),
+        );
+
+        if cb.failure_count >= cb.failure_threshold {
+            Self::trip_circuit(&env, &caller);
+            return Ok(CircuitState::Open);
+        }
+
+        Ok(cb.state)
+    }
+
+    /// Set the failure threshold for automatic circuit tripping. Admin only.
+    pub fn set_failure_threshold(env: Env, caller: Address, threshold: u32) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        if threshold == 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+        cb.failure_threshold = threshold;
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+
+        Ok(())
+    }
+
+    /// Returns the current circuit state (defaults to Closed if never set).
+    pub fn get_circuit_state(env: Env) -> CircuitState {
+        env.storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .map(|cb| cb.state)
+            .unwrap_or(CircuitState::Closed)
+    }
+
+    /// Returns the full circuit breaker record.
+    pub fn get_circuit_breaker(env: Env) -> Option<CircuitBreaker> {
+        env.storage().instance().get(&DataKey::CircuitBreakerState)
     }
 }
 

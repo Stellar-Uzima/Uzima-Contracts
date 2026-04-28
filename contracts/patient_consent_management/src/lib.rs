@@ -9,7 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Map, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
 
 // ==================== Data Types ====================
 
@@ -160,13 +160,16 @@ impl PatientConsentManagement {
             .ok_or(Error::ConsentNotFound)?;
 
         // Find and update the record in the log
-        for record in consent_log.records.iter_mut() {
-            if record.provider == provider && record.patient == patient {
-                record.revoked_at = timestamp;
-                record.active = false;
-                break;
+        let mut updated_records = soroban_sdk::Vec::new(&env);
+        for record in consent_log.records.iter() {
+            let mut r = record;
+            if r.provider == provider && r.patient == patient {
+                r.revoked_at = timestamp;
+                r.active = false;
             }
+            updated_records.push_back(r);
         }
+        consent_log.records = updated_records;
 
         // Store updated consent log
         env.storage()
