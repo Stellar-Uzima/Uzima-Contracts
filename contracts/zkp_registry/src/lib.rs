@@ -13,6 +13,36 @@ use soroban_sdk::{
 // Types
 // =============================================================================
 
+/// Multi-signature configuration for admin operations
+#[derive(Clone)]
+#[contracttype]
+pub struct MultiSigConfig {
+    pub signers: Vec<Address>,
+    pub threshold: u32,
+    pub timelock_duration: u64,
+}
+
+/// Allowed admin actions via multisig
+#[derive(Clone, PartialEq, Eq)]
+#[contracttype]
+pub enum AdminAction {
+    UpgradeContract(BytesN<32>),
+    UpdateParameters(String, u32),
+    EmergencyPause,
+    EmergencyResume,
+}
+
+/// Multi-sig proposal
+#[derive(Clone)]
+#[contracttype]
+pub struct AdminProposal {
+    pub id: u64,
+    pub action: AdminAction,
+    pub created_at: u64,
+    pub executed: bool,
+    pub approvals: Vec<Address>,
+}
+
 /// Zero-knowledge proof types
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
@@ -199,6 +229,10 @@ pub struct ZKPVerificationResult {
 pub enum DataKey {
     Initialized,
     Admin,
+    MultiSigConfig,
+    ProposalCounter,
+    AdminProposal(u64),
+    ContractPaused,
     ZKProof(BytesN<32>),
     MedicalRecordProof(Address, u64),
     RangeProof(BytesN<32>),
@@ -242,6 +276,13 @@ pub enum Error {
     ContractPaused = 24,
     StorageFull = 25,
     CrossChainTimeout = 26,
+    InvalidSigner = 27,
+    InvalidThreshold = 28,
+    ProposalNotFound = 29,
+    AlreadyApproved = 30,
+    TimelockNotExpired = 31,
+    AlreadyExecuted = 32,
+    NotEnoughApprovals = 33,
 }
 
 // =============================================================================
@@ -267,6 +308,160 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    /// Configure multi-signature for admin operations
+    pub fn configure_multisig(
+        env: Env,
+        admin: Address,
+        config: MultiSigConfig,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let current_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotAuthorized)?;
+        if current_admin != admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        if config.threshold == 0 || config.threshold > config.signers.len() as u32 {
+            return Err(Error::InvalidThreshold);
+        }
+
+        env.storage().instance().set(&DataKey::MultiSigConfig, &config);
+        env.events().publish((symbol_short!("admin"), symbol_short!("cfg_msig")), admin);
+        Ok(())
+    }
+
+    /// Create an admin proposal
+    pub fn create_admin_proposal(
+        env: Env,
+        signer: Address,
+        action: AdminAction,
+    ) -> Result<u64, Error> {
+        signer.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        if !config.signers.contains(&signer) {
+            return Err(Error::InvalidSigner);
+        }
+
+        let proposal_id: u64 = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+        let mut approvals = Vec::new(&env);
+        approvals.push_back(signer.clone());
+
+        let proposal = AdminProposal {
+            id: proposal_id,
+            action: action.clone(),
+            created_at: env.ledger().timestamp(),
+            executed: false,
+            approvals,
+        };
+
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage().instance().set(&DataKey::ProposalCounter, &(proposal_id + 1));
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("proposed")), (proposal_id, signer));
+
+        Ok(proposal_id)
+    }
+
+    /// Approve an admin proposal
+    pub fn approve_admin_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        signer.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        if !config.signers.contains(&signer) {
+            return Err(Error::InvalidSigner);
+        }
+
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        if proposal.approvals.contains(&signer) {
+            return Err(Error::AlreadyApproved);
+        }
+
+        proposal.approvals.push_back(signer.clone());
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("approved")), (proposal_id, signer));
+
+        Ok(())
+    }
+
+    /// Execute an admin proposal
+    pub fn execute_admin_proposal(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        executor.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        if proposal.approvals.len() < config.threshold {
+            return Err(Error::NotEnoughApprovals);
+        }
+
+        if env.ledger().timestamp() < proposal.created_at + config.timelock_duration {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        proposal.executed = true;
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        Self::execute_action(&env, &proposal.action)?;
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("executed")), proposal_id);
+
+        Ok(())
+    }
+
+    /// Emergency override to execute a proposal without waiting for the timelock
+    pub fn emergency_override(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        executor.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        // Emergency requires 100% of signers to approve to bypass timelock
+        if proposal.approvals.len() < config.signers.len() as u32 {
+            return Err(Error::NotEnoughApprovals);
+        }
+
+        proposal.executed = true;
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        Self::execute_action(&env, &proposal.action)?;
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("emer_exec")), proposal_id);
+
+        Ok(())
+    }
+
     /// Register ZKP circuit parameters
     #[allow(clippy::too_many_arguments)]
     pub fn register_circuit(
@@ -284,6 +479,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Validate circuit parameters
         if num_public_inputs > 50 || num_private_inputs > 100 || num_constraints > 10000 {
@@ -331,6 +527,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         submitter.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Check gas limit
         if verification_gas > 100000 {
@@ -501,6 +698,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Verify both proofs
         let auth_valid = Self::verify_zkp_internal(&env, &authenticity_proof)?;
@@ -548,6 +746,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         prover.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Validate range
         if min_value >= max_value {
@@ -605,6 +804,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         holder.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Verify both proofs
         let valid_valid = Self::verify_zkp_internal(&env, &validity_proof)?;
@@ -655,6 +855,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         composer.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Check recursion depth limit
         if composition_depth > 10 {
@@ -810,9 +1011,34 @@ impl ZKPRegistry {
     // Internal helper functions
     // -------------------------------------------------------------------------
 
+    fn execute_action(env: &Env, action: &AdminAction) -> Result<(), Error> {
+        match action {
+            AdminAction::UpgradeContract(wasm_hash) => {
+                env.deployer().update_current_contract_wasm(wasm_hash.clone());
+            },
+            AdminAction::EmergencyPause => {
+                env.storage().instance().set(&DataKey::ContractPaused, &true);
+            },
+            AdminAction::EmergencyResume => {
+                env.storage().instance().set(&DataKey::ContractPaused, &false);
+            },
+            AdminAction::UpdateParameters(_key, _val) => {
+                // Placeholder for dynamic parameter updates
+            },
+        }
+        Ok(())
+    }
+
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
+        }
+        Ok(())
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false) {
+            return Err(Error::ContractPaused);
         }
         Ok(())
     }
