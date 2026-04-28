@@ -1,0 +1,71 @@
+name: WASM Size Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  wasm-size:
+    name: Check WASM binary sizes
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Build optimized WASM
+        run: |
+          cargo build --release --target wasm32-unknown-unknown \
+            --workspace \
+            --exclude tests \
+            --exclude interoperability-suite
+
+      - name: Check WASM sizes
+        id: size_check
+        run: |
+          WARN_KB=50
+          ERROR_KB=60
+          FAILED=0
+
+          echo "| Contract | Size (KB) | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|---|"                      >> $GITHUB_STEP_SUMMARY
+
+          for wasm in target/wasm32-unknown-unknown/release/*.wasm; do
+            [ -f "$wasm" ] || continue
+            name=$(basename "$wasm" .wasm)
+            size_bytes=$(stat -c%s "$wasm")
+            size_kb=$(echo "scale=1; $size_bytes / 1024" | bc)
+
+            if (( size_bytes > ERROR_KB * 1024 )); then
+              status="❌ EXCEEDS ${ERROR_KB}KB limit"
+              FAILED=1
+            elif (( size_bytes > WARN_KB * 1024 )); then
+              status="⚠️ Approaching limit"
+            else
+              status="✅ OK"
+            fi
+
+            echo "| $name | $size_kb | $status |" >> $GITHUB_STEP_SUMMARY
+            echo "$status  $name: ${size_kb}KB"
+          done
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "::error::One or more WASM binaries exceed the ${ERROR_KB}KB size limit."
+            exit 1
+          fi
