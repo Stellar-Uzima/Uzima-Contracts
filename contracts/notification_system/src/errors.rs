@@ -4,46 +4,43 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    // --- Lifecycle (1–2) ---
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
+    // --- Authorization (100–129) ---
+    Unauthorized = 100,
+    SenderNotAuthorized = 120,
 
-    // --- Authorization (3–4) ---
-    NotAuthorized = 3,
-    SenderNotAuthorized = 4,
+    // --- Input Validation (200–299) ---
+    BatchTooLarge = 208,
+    RecipientsEmpty = 209,
+    TitleTooLong = 221,
+    MessageTooLong = 222,
+    NameTooLong = 223,
+    LocaleTooLong = 224,
+    InvalidNotifType = 241,
+    TooManyEnabledTypes = 242,
 
-    // --- Capacity limits (5–8) ---
-    MaxSendersReached = 5,
-    MaxRulesReached = 6,
-    MaxNotificationsReached = 7,
-    MaxTemplatesReached = 8,
+    // --- Lifecycle (300–399) ---
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+    RateLimitExceeded = 307,
+    AlreadyRead = 330,
+    AlreadyArchived = 331,
 
-    // --- Input validation (9–16) ---
-    TitleTooLong = 9,
-    MessageTooLong = 10,
-    NameTooLong = 11,
-    LocaleTooLong = 12,
-    InvalidNotifType = 13,
-    BatchTooLarge = 14,
-    RecipientsEmpty = 15,
-    TooManyEnabledTypes = 16,
+    // --- Entity Existence (400–499) ---
+    NotificationNotFound = 450,
+    AlertRuleNotFound = 451,
+    TemplateNotFound = 452,
+    SenderNotFound = 453,
 
-    // --- Not found (17–20) ---
-    NotificationNotFound = 17,
-    AlertRuleNotFound = 18,
-    TemplateNotFound = 19,
-    SenderNotFound = 20,
-
-    // --- State transitions (21–23) ---
-    AlreadyRead = 21,
-    AlreadyArchived = 22,
-    RateLimitExceeded = 23,
+    // --- Financial & Resource (500–599) ---
+    MaxSendersReached = 510,
+    MaxRulesReached = 511,
+    MaxNotificationsReached = 512,
+    MaxTemplatesReached = 513,
 }
 
-/// Recovery hints surfaced to callers alongside an error.
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
-        Error::NotAuthorized | Error::SenderNotAuthorized => symbol_short!("CHK_AUTH"),
+        Error::Unauthorized | Error::SenderNotAuthorized => symbol_short!("CHK_AUTH"),
         Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
         Error::TitleTooLong | Error::MessageTooLong | Error::NameTooLong => {
             symbol_short!("SHORTEN")
@@ -56,6 +53,12 @@ pub fn get_suggestion(error: Error) -> Symbol {
         | Error::MaxNotificationsReached
         | Error::MaxTemplatesReached => symbol_short!("CLN_OLD"),
         Error::BatchTooLarge | Error::TooManyEnabledTypes => symbol_short!("REDUCE"),
+        Error::NotInitialized => symbol_short!("INIT_CTR"),
+        Error::AlreadyInitialized | Error::AlreadyRead | Error::AlreadyArchived => {
+            symbol_short!("ALREADY")
+        }
+        Error::RecipientsEmpty => symbol_short!("ADD_TEXT"),
+        Error::LocaleTooLong => symbol_short!("FIX_LANG"),
         _ => symbol_short!("CONTACT"),
     }
 }

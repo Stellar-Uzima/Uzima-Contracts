@@ -141,7 +141,7 @@ fn test_encrypted_record_access_control_and_envelope_scoping() {
     let denied = t
         .client
         .try_get_encrypted_record_header(&intruder, &record_id);
-    assert!(matches!(denied, Err(Ok(Error::NotAuthorized))));
+    assert!(matches!(denied, Err(Ok(Error::Unauthorized))));
 }
 
 #[test]
