@@ -1,165 +1,97 @@
 /// Comprehensive integration tests for healthcare workflow scenarios
-#[cfg(test)]
-mod tests {
-    use soroban_sdk::{Address, Env};
+use soroban_sdk::{vec, String, testutils::Address as _};
+use crate::utils::{IntegrationTestEnv};
+use medical_records::{Role};
 
-    /// Test user registration workflow
-    #[test]
-    fn test_user_registration_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
+#[test]
+fn test_user_registration_workflow() {
+    let test_env = IntegrationTestEnv::new();
+    let (_, records_client) = test_env.register_medical_records();
+    
+    let admin = &test_env.team.admin.address;
+    let doctor = &test_env.team.doctors[0].address;
+    let patient = &test_env.team.patients[0].address;
 
-        // This is a placeholder for actual contract integration
-        // In real scenario, you would:
-        // 1. Register contract
-        // 2. Create client
-        // 3. Test registration flow
+    // Workflow: Admin registers doctor and patient
+    records_client.initialize(admin);
+    records_client.manage_user(admin, doctor, &Role::Doctor);
+    records_client.manage_user(admin, patient, &Role::Patient);
 
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-
-        // Verify addresses are different
-        assert_ne!(admin, user);
-    }
-
-    /// Test record creation and retrieval workflow
-    #[test]
-    fn test_record_creation_retrieval_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let patient = Address::generate(&env);
-        let doctor = Address::generate(&env);
-
-        // Workflow:
-        // 1. Patient creates a medical record
-        // 2. Patient grants access to doctor
-        // 3. Doctor retrieves the record
-        // 4. Verify access is logged
-
-        assert_ne!(patient, doctor);
-    }
-
-    /// Test multi-step consent flow
-    #[test]
-    fn test_consent_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let patient = Address::generate(&env);
-        let provider1 = Address::generate(&env);
-        let provider2 = Address::generate(&env);
-
-        // Workflow:
-        // 1. Patient consents to provider1
-        // 2. Patient consents to provider2
-        // 3. Verify both can access
-        // 4. Patient revokes provider2
-        // 5. Verify provider2 cannot access
-
-        assert_ne!(provider1, provider2);
-    }
-
-    /// Test cross-hospital access scenario
-    #[test]
-    fn test_cross_hospital_access() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let patient = Address::generate(&env);
-        let hospital1_doctor = Address::generate(&env);
-        let hospital2_doctor = Address::generate(&env);
-
-        // Workflow:
-        // 1. Patient creates record at hospital1
-        // 2. Patient consents to cross-hospital access
-        // 3. Hospital2 doctor can access patient's records
-        // 4. All access is auditable
-
-        assert_ne!(hospital1_doctor, hospital2_doctor);
-    }
-
-    /// Test concurrent access handling
-    #[test]
-    fn test_concurrent_access() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let patient = Address::generate(&env);
-        let doctor1 = Address::generate(&env);
-        let doctor2 = Address::generate(&env);
-
-        // Verify multiple providers can access simultaneously
-
-        assert_ne!(doctor1, doctor2);
-    }
-
-    /// Test audit trail completeness
-    #[test]
-    fn test_audit_trail_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let patient = Address::generate(&env);
-        let accessor = Address::generate(&env);
-
-        // Workflow:
-        // 1. Patient creates record
-        // 2. Accessor reads record
-        // 3. Verify audit trail has entry
-        // 4. Verify entry contains timestamp, actor, action
-
-        assert_ne!(patient, accessor);
-    }
-
-    /// Test error recovery workflow
-    #[test]
-    fn test_error_recovery_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let admin = Address::generate(&env);
-        let user = Address::generate(&env);
-
-        // Test recovery from various error conditions:
-        // 1. Invalid input handling
-        // 2. Permission denied scenarios
-        // 3. State consistency after errors
-
-        assert_ne!(admin, user);
-    }
-
-    /// Test permission cascade workflow
-    #[test]
-    fn test_permission_cascade() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        let owner = Address::generate(&env);
-        let delegate1 = Address::generate(&env);
-        let delegate2 = Address::generate(&env);
-
-        // Test nested permissions:
-        // 1. Owner grants permission to delegate1
-        // 2. Delegate1 grants permission to delegate2
-        // 3. Verify delegation chain works correctly
-
-        assert_ne!(delegate1, delegate2);
-    }
-
-    /// Test data consistency across operations
-    #[test]
-    fn test_data_consistency_workflow() {
-        let env = Env::default();
-        env.mock_all_auths();
-
-        // Test invariants:
-        // 1. Record version consistency
-        // 2. Audit trail completeness
-        // 3. State machine validity
-        // 4. No data loss on errors
-
-        let record_owner = Address::generate(&env);
-        assert!(true);
-    }
+    // Verify roles
+    assert_eq!(records_client.get_user_role(doctor), Role::Doctor);
+    assert_eq!(records_client.get_user_role(patient), Role::Patient);
 }
+
+#[test]
+fn test_record_creation_retrieval_workflow() {
+    let test_env = IntegrationTestEnv::new();
+    let (records_id, records_client) = test_env.register_medical_records();
+    
+    let admin = &test_env.team.admin.address;
+    let doctor = &test_env.team.doctors[0].address;
+    let patient = &test_env.team.patients[0].address;
+
+    records_client.initialize(admin);
+    records_client.manage_user(admin, doctor, &Role::Doctor);
+    records_client.manage_user(admin, patient, &Role::Patient);
+
+    // 1. Doctor creates a medical record
+    let diagnosis = String::from_str(&test_env.env, "Integration Test Diagnosis");
+    let treatment = String::from_str(&test_env.env, "Automated Treatment");
+    
+    let record_id = records_client.add_record(
+        doctor,
+        patient,
+        &diagnosis,
+        &treatment,
+        &false,
+        &vec![&test_env.env, String::from_str(&test_env.env, "test")],
+        &String::from_str(&test_env.env, "General"),
+        &String::from_str(&test_env.env, "Testing"),
+        &String::from_str(&test_env.env, "QmHash"),
+    );
+
+    // 2. Retrieve and verify
+    let record = records_client.get_record(patient, &record_id);
+    assert_eq!(record.diagnosis, diagnosis);
+    assert_eq!(record.doctor_id, *doctor);
+
+    // 3. Verify event
+    test_env.assert_event_topics(&records_id, test_env.topics(&["EVENT", "REC_NEW"]));
+}
+
+#[test]
+fn test_pause_emergency_workflow() {
+    let test_env = IntegrationTestEnv::new();
+    let (_, records_client) = test_env.register_medical_records();
+    
+    let admin = &test_env.team.admin.address;
+    let doctor = &test_env.team.doctors[0].address;
+    let patient = &test_env.team.patients[0].address;
+
+    records_client.initialize(admin);
+    records_client.manage_user(admin, doctor, &Role::Doctor);
+
+    // Pause contract
+    records_client.pause(admin);
+    assert!(records_client.is_paused());
+
+    // Try to add record while paused (should fail)
+    let res = records_client.try_add_record(
+        doctor,
+        patient,
+        &String::from_str(&test_env.env, "D"),
+        &String::from_str(&test_env.env, "T"),
+        &false,
+        &vec![&test_env.env],
+        &String::from_str(&test_env.env, "C"),
+        &String::from_str(&test_env.env, "T"),
+        &String::from_str(&test_env.env, "H"),
+    );
+    assert!(res.is_err());
+
+    // Unpause
+    records_client.unpause(admin);
+    assert!(!records_client.is_paused());
+}
+

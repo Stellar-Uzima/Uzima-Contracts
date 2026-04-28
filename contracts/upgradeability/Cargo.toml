@@ -6,5 +6,12 @@ edition = "2021"
 [dependencies]
 soroban-sdk = { version = "21.7.7" }
 
+[dev-dependencies]
+soroban-sdk = { version = "21.7.7", features = ["testutils"] }
+
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

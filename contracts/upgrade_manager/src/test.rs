@@ -55,3 +55,35 @@ fn test_complex_upgrade_flow() {
     // it will fail. But for CI/linting purpose, this code is now syntactically correct and type-safe.
     // manager_client.execute(&prop_id);
 }
+
+#[test]
+fn test_error_codes_are_stable() {
+    use crate::errors::Error;
+    assert_eq!(Error::NotAValidator as u32, 110);
+    assert_eq!(Error::NotEnoughApprovals as u32, 120);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::InvalidState as u32, 304);
+    assert_eq!(Error::TimelockNotExpired as u32, 376);
+    assert_eq!(Error::ProposalNotFound as u32, 450);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::{get_suggestion, Error};
+    assert_eq!(
+        get_suggestion(Error::NotAValidator),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        get_suggestion(Error::AlreadyInitialized),
+        symbol_short!("ALREADY")
+    );
+    assert_eq!(
+        get_suggestion(Error::ProposalNotFound),
+        symbol_short!("CHK_ID")
+    );
+    assert_eq!(
+        get_suggestion(Error::TimelockNotExpired),
+        symbol_short!("RE_TRY_L")
+    );
+}

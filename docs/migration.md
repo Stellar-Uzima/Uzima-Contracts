@@ -47,3 +47,14 @@ When you make a "breaking change" to the data structure (e.g., V1 to V2):
 
 3.  **Test:**
     Add a test case in `tests/test_migration.rs` that explicitly sets up "Old Data" and verifies it transforms correctly into "New Data".
+
+## Deprecating Old Entry Points During Migration
+
+If a release keeps a legacy function temporarily available, do not remove it immediately. Instead:
+
+1. Add `#[deprecated(...)]` to the old function.
+2. Register that function in the upgradeability deprecation registry.
+3. Emit a deprecation warning event from the old function body.
+4. Point callers to the replacement function and planned removal version.
+
+See [docs/deprecation_migration.md](./deprecation_migration.md) for the recommended pattern.

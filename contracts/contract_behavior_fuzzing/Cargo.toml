@@ -1,0 +1,19 @@
+[package]
+name = "contract_behavior_fuzzing"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+
+[dev-dependencies]
+identity_registry = { path = "../identity_registry" }
+proptest = "1.6.0"
+soroban-sdk = { workspace = true, features = ["testutils"] }
+sut_token = { path = "../sut_token" }
+token_sale = { path = "../token_sale" }

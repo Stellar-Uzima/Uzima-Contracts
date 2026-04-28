@@ -27,6 +27,7 @@ impl VestingContract {
             treasury: owner.clone(),
             soft_cap: 0,
             hard_cap: 0,
+            token_decimals: 7,
             is_finalized: false,
             refunds_enabled: false,
         };

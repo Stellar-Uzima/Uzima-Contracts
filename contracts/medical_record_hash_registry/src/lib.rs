@@ -9,10 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Vec,
-};
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 // ==================== Data Types ====================
 
