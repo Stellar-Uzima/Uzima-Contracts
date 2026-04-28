@@ -94,6 +94,8 @@ fn setup_zk_gate<'a>(
         &issuer,
         &credential_root,
         &BytesN::from_array(env, &[0x11; 32]),
+        &2_000_000_000u64,
+        &BytesN::from_array(env, &[0xAA; 64]),
     );
 
     let vk_version = zk_verifier.register_verifying_key(
@@ -522,7 +524,7 @@ fn test_acl_and_zk_gate_interplay() {
         &intruder_proof,
     ));
     let intruder_read = t.client.try_get_record(&intruder, &record_id);
-    assert!(matches!(intruder_read, Err(Ok(Error::NotAuthorized))));
+    assert!(matches!(intruder_read, Err(Ok(Error::Unauthorized))));
 
     // Patient with valid proof succeeds.
     let public_inputs_patient = build_public_inputs(

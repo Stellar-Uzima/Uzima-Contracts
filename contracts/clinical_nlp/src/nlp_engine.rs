@@ -99,7 +99,7 @@ impl NLPEngine {
         }
 
         if note_text.len() > 100000 {
-            return Err(Error::InputTooLarge);
+            return Err(Error::InputTooLong);
         }
 
         let detected_language = language;
@@ -142,7 +142,7 @@ impl NLPEngine {
         let processing_time_ms = (end_time - start_time) * 1000;
 
         if processing_time_ms > self.config.max_processing_time_ms {
-            return Err(Error::ProcessingTimeExceeded);
+            return Err(Error::Timeout);
         }
 
         let accuracy_score_bps = self.calculate_accuracy_score(&entities, &concepts);

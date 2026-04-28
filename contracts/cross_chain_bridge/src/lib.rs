@@ -5,11 +5,17 @@
 #![allow(clippy::enum_variant_names)]
 #![allow(dead_code)]
 
+pub mod errors;
+pub use errors::Error;
+
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod timeout_simple_test;
+
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Existing Core Types ====================
@@ -216,6 +222,42 @@ pub enum RollbackStatus {
     Failed,
 }
 
+// ==================== Timeout Management ====================
+
+/// Cross-chain operation with timeout and refund mechanism
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossChainOp {
+    pub id: BytesN<32>,
+    pub deadline: u64,
+    pub refund_address: Address,
+    pub op_type: OperationType,
+    pub status: OperationStatus,
+    pub created_at: u64,
+    pub extended_count: u32,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
+#[contracttype]
+pub enum OperationType {
+    TokenTransfer,
+    MessagePassing,
+    Verification,
+    AtomicSwap,
+    RecordSync,
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Copy)]
+#[contracttype]
+pub enum OperationStatus {
+    Pending,
+    InProgress,
+    Completed,
+    Failed,
+    Refunded,
+    Extended,
+}
+
 // ==================== New Types: Event Synchronization ====================
 
 /// Cross-chain event for synchronization between chains
@@ -286,6 +328,9 @@ pub enum DataKey {
     // Event synchronization
     Event(u64),
     EventCount,
+    // Timeout operations
+    CrossChainOp(BytesN<32>),
+    OpCount,
 }
 
 // Constants
@@ -295,44 +340,12 @@ const ATOMIC_TX_TIMEOUT: u64 = 3_600; // 1 hour
 const MIN_ORACLE_REPORTS: u32 = 3; // Minimum oracle reports for consensus
 const DEFAULT_ORACLE_REPUTATION: u32 = 50;
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    // Existing errors
-    NotAuthorized = 1,
-    ContractPaused = 2,
-    InvalidChain = 3,
-    InvalidMessage = 4,
-    MessageNotFound = 5,
-    MessageExpired = 6,
-    MessageAlreadyProcessed = 7,
-    InvalidSignature = 8,
-    InsufficientConfirmations = 9,
-    ValidatorNotFound = 10,
-    ValidatorNotActive = 11,
-    DuplicateConfirmation = 12,
-    AtomicTxNotFound = 13,
-    AtomicTxExpired = 14,
-    AtomicTxAlreadyProcessed = 15,
-    InvalidNonce = 16,
-    ChainNotSupported = 17,
-    RecordRefNotFound = 18,
-    AlreadyInitialized = 19,
-    InvalidPayload = 20,
-    Overflow = 21,
-    // New errors
-    OracleNotFound = 22,
-    OracleNotActive = 23,
-    ProofNotFound = 24,
-    ProofAlreadyVerified = 25,
-    RollbackNotFound = 26,
-    RollbackAlreadyProcessed = 27,
-    EventNotFound = 28,
-    InvalidAddress = 29,
-    InsufficientOracleReports = 30,
-    DuplicateOracleReport = 31,
-}
+// Default timeout constants for different operations
+const TOKEN_TRANSFER_TIMEOUT: u64 = 3_600; // 1 hour
+const MESSAGE_PASSING_TIMEOUT: u64 = 1_800; // 30 minutes
+const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
+const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
+const EXTENSION_MULTIPLIER: u64 = 2; // Each extension doubles the timeout
 
 #[contract]
 pub struct CrossChainBridgeContract;
@@ -686,6 +699,92 @@ impl CrossChainBridgeContract {
         env.events().publish(
             (Symbol::new(&env, "MessageExecuted"),),
             (message_id, payload_type),
+        );
+
+        Ok(true)
+    }
+
+    /// Mark a message as failed and emit a failure event (validator only).
+    /// This enables callers to detect failures and trigger refunds or retries.
+    pub fn fail_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        reason: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status == MessageStatus::Executed || message.status == MessageStatus::Failed {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        message.status = MessageStatus::Failed;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageFailed"),),
+            (message_id, caller, reason),
+        );
+
+        Ok(true)
+    }
+
+    /// Retry a failed message with exponential backoff enforcement.
+    /// The caller must wait at least `base_delay * 2^attempt` seconds since
+    /// the original message timestamp before retrying.
+    /// Resets the message status to Pending so validators can re-confirm it.
+    pub fn retry_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        attempt: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        const BASE_DELAY_SECS: u64 = 60; // 1 minute base delay
+        const MAX_ATTEMPTS: u32 = 5;
+
+        if attempt == 0 || attempt > MAX_ATTEMPTS {
+            return Err(Error::InvalidMessage);
+        }
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status != MessageStatus::Failed && message.status != MessageStatus::Expired {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        // Enforce exponential backoff: delay = base * 2^(attempt-1)
+        let backoff: u64 = BASE_DELAY_SECS.saturating_mul(1u64 << (attempt - 1).min(10));
+        let now = env.ledger().timestamp();
+        let earliest_retry = message.timestamp.saturating_add(backoff);
+        if now < earliest_retry {
+            return Err(Error::InvalidMessage);
+        }
+
+        message.status = MessageStatus::Pending;
+        message.timestamp = now;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageRetried"),),
+            (message_id, caller, attempt),
         );
 
         Ok(true)
@@ -1271,6 +1370,178 @@ impl CrossChainBridgeContract {
         Ok(true)
     }
 
+    // ==================== Timeout Management Functions ====================
+
+    /// Create a new cross-chain operation with timeout
+    pub fn create_operation(
+        env: Env,
+        caller: Address,
+        op_id: BytesN<32>,
+        op_type: OperationType,
+        refund_address: Address,
+    ) -> Result<BytesN<32>, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let now = env.ledger().timestamp();
+        let timeout = Self::get_default_timeout(&op_type);
+        let deadline = now.checked_add(timeout).ok_or(Error::Overflow)?;
+
+        let operation = CrossChainOp {
+            id: op_id.clone(),
+            deadline,
+            refund_address: refund_address.clone(),
+            op_type,
+            status: OperationStatus::Pending,
+            created_at: now,
+            extended_count: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CrossChainOp(op_id.clone()), &operation);
+
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::OpCount)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::OpCount, &(count.saturating_add(1)));
+
+        env.events().publish(
+            (Symbol::new(&env, "OperationCreated"),),
+            (op_id.clone(), op_type, deadline),
+        );
+
+        Ok(op_id)
+    }
+
+    /// Check if an operation has timed out and trigger refund if needed
+    pub fn check_timeout(env: Env, op_id: BytesN<32>) -> Result<(), Error> {
+        let op_key = DataKey::CrossChainOp(op_id.clone());
+        let mut operation = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainOp>(&op_key)
+            .ok_or(Error::OperationNotFound)?;
+
+        // Only check timeout for operations that haven't completed or been refunded
+        match operation.status {
+            OperationStatus::Completed | OperationStatus::Refunded => {
+                return Ok(());
+            }
+            _ => {}
+        }
+
+        let now = env.ledger().timestamp();
+        if now > operation.deadline {
+            // Operation has timed out, trigger refund
+            Self::refund(&env, &mut operation)?;
+            env.storage().persistent().set(&op_key, &operation);
+
+            env.events().publish(
+                (Symbol::new(&env, "OperationRefunded"),),
+                (op_id, operation.refund_address),
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Extend the deadline for an operation
+    pub fn extend_timeout(
+        env: Env,
+        caller: Address,
+        op_id: BytesN<32>,
+        additional_time: u64,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let op_key = DataKey::CrossChainOp(op_id.clone());
+        let mut operation = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainOp>(&op_key)
+            .ok_or(Error::OperationNotFound)?;
+
+        // Only allow extension for pending or in-progress operations
+        match operation.status {
+            OperationStatus::Pending | OperationStatus::InProgress => {}
+            _ => return Err(Error::OperationAlreadyCompleted),
+        }
+
+        // Check if caller is authorized (operation creator or admin)
+        if caller != operation.refund_address && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Check extension limit
+        if operation.extended_count >= MAX_EXTENSIONS {
+            return Err(Error::MaxExtensionsReached);
+        }
+
+        // Extend the deadline
+        operation.deadline = operation
+            .deadline
+            .checked_add(additional_time)
+            .ok_or(Error::Overflow)?;
+        operation.extended_count += 1;
+        operation.status = OperationStatus::Extended;
+
+        env.storage().persistent().set(&op_key, &operation);
+
+        env.events().publish(
+            (Symbol::new(&env, "TimeoutExtended"),),
+            (op_id, operation.deadline),
+        );
+
+        Ok(true)
+    }
+
+    /// Update operation status
+    pub fn update_operation_status(
+        env: Env,
+        caller: Address,
+        op_id: BytesN<32>,
+        status: OperationStatus,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let op_key = DataKey::CrossChainOp(op_id.clone());
+        let mut operation = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainOp>(&op_key)
+            .ok_or(Error::OperationNotFound)?;
+
+        // Only allow status updates from authorized parties
+        if !Self::is_admin(&env, &caller) && caller != operation.refund_address {
+            return Err(Error::Unauthorized);
+        }
+
+        operation.status = status;
+        env.storage().persistent().set(&op_key, &operation);
+
+        env.events().publish(
+            (Symbol::new(&env, "OperationStatusUpdated"),),
+            (op_id, status),
+        );
+
+        Ok(true)
+    }
+
+    /// Get operation details
+    pub fn get_operation(env: Env, op_id: BytesN<32>) -> Result<CrossChainOp, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::CrossChainOp(op_id))
+            .ok_or(Error::OperationNotFound)
+    }
+
     // ==================== Emergency Rollback Functions ====================
 
     /// Initiate an emergency rollback for a failed cross-chain operation
@@ -1289,7 +1560,7 @@ impl CrossChainBridgeContract {
         let is_admin = Self::is_admin(&env, &caller);
         let is_validator = Self::check_active_validator(&env, &caller);
         if !is_admin && !is_validator {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let now = env.ledger().timestamp();
@@ -1520,10 +1791,10 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&DataKey::Admin)
-            .ok_or(Error::NotAuthorized)?;
+            .ok_or(Error::Unauthorized)?;
 
         if caller != &admin {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(())
     }
@@ -1608,5 +1879,40 @@ impl CrossChainBridgeContract {
             v.confirmed_messages = v.confirmed_messages.saturating_add(1);
             env.storage().persistent().set(&key, &v);
         }
+    }
+
+    /// Get default timeout for operation type
+    fn get_default_timeout(op_type: &OperationType) -> u64 {
+        match op_type {
+            OperationType::TokenTransfer => TOKEN_TRANSFER_TIMEOUT,
+            OperationType::MessagePassing => MESSAGE_PASSING_TIMEOUT,
+            OperationType::Verification => VERIFICATION_TIMEOUT,
+            OperationType::AtomicSwap => ATOMIC_TX_TIMEOUT,
+            OperationType::RecordSync => MESSAGE_PASSING_TIMEOUT,
+        }
+    }
+
+    /// Process refund for timed out operation
+    fn refund(env: &Env, operation: &mut CrossChainOp) -> Result<(), Error> {
+        // Mark operation as refunded
+        operation.status = OperationStatus::Refunded;
+
+        // In a real implementation, this would trigger actual token transfer
+        // For now, we just emit an event and update status
+        env.events().publish(
+            (Symbol::new(&env, "RefundProcessed"),),
+            (
+                operation.id.clone(),
+                operation.refund_address.clone(),
+                operation.op_type,
+            ),
+        );
+
+        Ok(())
+    }
+
+    /// Expose get_default_timeout for testing
+    pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
+        Self::get_default_timeout(&op_type)
     }
 }
