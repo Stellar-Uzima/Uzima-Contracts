@@ -356,6 +356,29 @@ impl HealthcareComplianceContract {
         Ok(())
     }
 
+    /// Perform a health check on the contract
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        let is_paused = env
+            .storage()
+            .instance()
+            .get::<_, bool>(&PAUSED)
+            .unwrap_or(false);
+
+        let status = if is_paused {
+            symbol_short!("PAUSED")
+        } else {
+            symbol_short!("OK")
+        };
+
+        // Emit health check event
+        env.events().publish(
+            ("health_check",),
+            (status.clone(), env.ledger().timestamp()),
+        );
+
+        (status, 1, env.ledger().timestamp())
+    }
+
     /// Update compliance configuration
     pub fn update_config(env: Env, admin: Address, config: ComplianceConfig) -> Result<(), Error> {
         #[cfg(not(test))]

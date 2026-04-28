@@ -20,6 +20,7 @@ To prevent data corruption during upgrades, the system enforces:
 - **Key Separation**: Critical configuration is stored in `Instance` storage, while user data is in `Persistent` storage.
 - **Version Tracking**: Every contract stores its current version.
 - **Cross-Version Compatibility**: New versions must increment the version number and handle migrations if necessary.
+- **Deprecation Tracking**: Deprecated entrypoints can be registered during upgrades and monitored via emitted warning events.
 
 ## Upgrade Procedure
 
@@ -30,6 +31,17 @@ To prevent data corruption during upgrades, the system enforces:
 5. **Approval**: Obtain necessary validator signatures.
 6. **Execution**: Trigger `execute` on the `UpgradeManager`.
 7. **Migration (Optional)**: If the data layout changed, the new version's `initialize` or a dedicated `migrate` function should be called.
+8. **Deprecation Registration (Optional)**: If old entrypoints remain temporarily supported, register them with the shared upgradeability deprecation registry.
+
+## Deprecation Warnings
+
+The shared `upgradeability` crate now supports:
+
+- tracking deprecated functions in contract storage
+- registering deprecations as part of an upgrade
+- emitting `Deprecated` events when legacy entrypoints are used
+
+For the implementation pattern and migration expectations, see [docs/deprecation_migration.md](./deprecation_migration.md).
 
 ## Security Features
 - **Rollback**: In case of a critical bug, the `UpgradeManager` can facilitate a rollback to the previous known-good WASM hash.

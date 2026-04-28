@@ -8,7 +8,7 @@ pub fn publish_record_stored(
 ) {
     env.events().publish(
         (symbol_short!("MEDREG"), symbol_short!("STORE")),
-        (patient_id, record_hash, timestamp),
+        (patient_id, record_hash.clone(), timestamp),
     );
 }
 
@@ -20,7 +20,7 @@ pub fn publish_record_verified(
 ) {
     env.events().publish(
         (symbol_short!("MEDREG"), symbol_short!("VERIFY")),
-        (patient_id, record_hash, verified),
+        (patient_id, record_hash.clone(), verified),
     );
 }
 
@@ -32,6 +32,6 @@ pub fn publish_initialization(env: &Env, admin: &Address) {
 pub fn publish_duplicate_rejected(env: &Env, patient_id: &Address, record_hash: &BytesN<32>) {
     env.events().publish(
         (symbol_short!("MEDREG"), symbol_short!("DUP")),
-        (patient_id, record_hash),
+        (patient_id, record_hash.clone()),
     );
 }

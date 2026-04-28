@@ -5,6 +5,9 @@
 #![allow(clippy::enum_variant_names)]
 #![allow(dead_code)]
 
+pub mod errors;
+pub use errors::Error;
+
 #[cfg(test)]
 mod test;
 
@@ -12,7 +15,7 @@ mod test;
 mod timeout_simple_test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Existing Core Types ====================
@@ -343,50 +346,6 @@ const MESSAGE_PASSING_TIMEOUT: u64 = 1_800; // 30 minutes
 const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
 const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
 const EXTENSION_MULTIPLIER: u64 = 2; // Each extension doubles the timeout
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    // Existing errors
-    NotAuthorized = 1,
-    ContractPaused = 2,
-    InvalidChain = 3,
-    InvalidMessage = 4,
-    MessageNotFound = 5,
-    MessageExpired = 6,
-    MessageAlreadyProcessed = 7,
-    InvalidSignature = 8,
-    InsufficientConfirmations = 9,
-    ValidatorNotFound = 10,
-    ValidatorNotActive = 11,
-    DuplicateConfirmation = 12,
-    AtomicTxNotFound = 13,
-    AtomicTxExpired = 14,
-    AtomicTxAlreadyProcessed = 15,
-    InvalidNonce = 16,
-    ChainNotSupported = 17,
-    RecordRefNotFound = 18,
-    AlreadyInitialized = 19,
-    InvalidPayload = 20,
-    Overflow = 21,
-    // New errors
-    OracleNotFound = 22,
-    OracleNotActive = 23,
-    ProofNotFound = 24,
-    ProofAlreadyVerified = 25,
-    RollbackNotFound = 26,
-    RollbackAlreadyProcessed = 27,
-    EventNotFound = 28,
-    InvalidAddress = 29,
-    InsufficientOracleReports = 30,
-    DuplicateOracleReport = 31,
-    OperationNotFound = 32,
-    OperationExpired = 33,
-    OperationAlreadyCompleted = 34,
-    MaxExtensionsReached = 35,
-    RefundFailed = 36,
-}
 
 #[contract]
 pub struct CrossChainBridgeContract;
@@ -740,6 +699,92 @@ impl CrossChainBridgeContract {
         env.events().publish(
             (Symbol::new(&env, "MessageExecuted"),),
             (message_id, payload_type),
+        );
+
+        Ok(true)
+    }
+
+    /// Mark a message as failed and emit a failure event (validator only).
+    /// This enables callers to detect failures and trigger refunds or retries.
+    pub fn fail_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        reason: String,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status == MessageStatus::Executed || message.status == MessageStatus::Failed {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        message.status = MessageStatus::Failed;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageFailed"),),
+            (message_id, caller, reason),
+        );
+
+        Ok(true)
+    }
+
+    /// Retry a failed message with exponential backoff enforcement.
+    /// The caller must wait at least `base_delay * 2^attempt` seconds since
+    /// the original message timestamp before retrying.
+    /// Resets the message status to Pending so validators can re-confirm it.
+    pub fn retry_message(
+        env: Env,
+        caller: Address,
+        message_id: BytesN<32>,
+        attempt: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+        Self::require_active_validator(&env, &caller)?;
+
+        const BASE_DELAY_SECS: u64 = 60; // 1 minute base delay
+        const MAX_ATTEMPTS: u32 = 5;
+
+        if attempt == 0 || attempt > MAX_ATTEMPTS {
+            return Err(Error::InvalidMessage);
+        }
+
+        let msg_key = DataKey::Message(message_id.clone());
+        let mut message = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainMessage>(&msg_key)
+            .ok_or(Error::MessageNotFound)?;
+
+        if message.status != MessageStatus::Failed && message.status != MessageStatus::Expired {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        // Enforce exponential backoff: delay = base * 2^(attempt-1)
+        let backoff: u64 = BASE_DELAY_SECS.saturating_mul(1u64 << (attempt - 1).min(10));
+        let now = env.ledger().timestamp();
+        let earliest_retry = message.timestamp.saturating_add(backoff);
+        if now < earliest_retry {
+            return Err(Error::InvalidMessage);
+        }
+
+        message.status = MessageStatus::Pending;
+        message.timestamp = now;
+        env.storage().persistent().set(&msg_key, &message);
+
+        env.events().publish(
+            (Symbol::new(&env, "MessageRetried"),),
+            (message_id, caller, attempt),
         );
 
         Ok(true)
@@ -1430,7 +1475,7 @@ impl CrossChainBridgeContract {
 
         // Check if caller is authorized (operation creator or admin)
         if caller != operation.refund_address && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         // Check extension limit
@@ -1475,7 +1520,7 @@ impl CrossChainBridgeContract {
 
         // Only allow status updates from authorized parties
         if !Self::is_admin(&env, &caller) && caller != operation.refund_address {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         operation.status = status;
@@ -1515,7 +1560,7 @@ impl CrossChainBridgeContract {
         let is_admin = Self::is_admin(&env, &caller);
         let is_validator = Self::check_active_validator(&env, &caller);
         if !is_admin && !is_validator {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let now = env.ledger().timestamp();
@@ -1746,10 +1791,10 @@ impl CrossChainBridgeContract {
             .storage()
             .persistent()
             .get(&DataKey::Admin)
-            .ok_or(Error::NotAuthorized)?;
+            .ok_or(Error::Unauthorized)?;
 
         if caller != &admin {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(())
     }
