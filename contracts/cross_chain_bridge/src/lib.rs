@@ -299,7 +299,7 @@ pub enum EventSyncStatus {
 
 #[contracttype]
 pub enum DataKey {
-    // Core config
+    // Instance storage keys (contract config/metadata)
     Admin,
     MedicalContract,
     IdentityContract,
@@ -308,29 +308,25 @@ pub enum DataKey {
     MessageCount,
     MinConfirmations,
     SupportedChains,
-    // Per-item storage (replaces Map<Key, Value> under a shared symbol)
+    OracleCount,
+    RollbackCount,
+    EventCount,
+    OpCount,
+    // Persistent storage keys (critical long-lived data)
     Validator(Address),
     Message(BytesN<32>),
-    Confirmations(BytesN<32>), // BUG FIX: was always "conf_key"
     Nonce(String),
-    RecordRef(u64, ChainId), // BUG FIX: was always "rec_ref"
+    RecordRef(u64, ChainId),
     AtomicTx(BytesN<32>),
-    // Oracle network
     OracleNode(Address),
     OracleReport(u64),
-    OracleCount,
     AggregatedOracle(ChainId),
-    // Proof verification
     Proof(BytesN<32>),
-    // Rollback mechanism
     Rollback(BytesN<32>),
-    RollbackCount,
-    // Event synchronization
     Event(u64),
-    EventCount,
-    // Timeout operations
     CrossChainOp(BytesN<32>),
-    OpCount,
+    // Temporary storage keys (session/short-lived data)
+    Confirmations(BytesN<32>),
 }
 
 // Constants
@@ -347,11 +343,45 @@ const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
 const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
 const EXTENSION_MULTIPLIER: u64 = 2; // Each extension doubles the timeout
 
+// TTL constants for storage management
+/// TTL threshold: extend persistent data if remaining TTL falls below this
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+/// Extend persistent data to this many ledgers (~4 days at 5s/ledger)
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+/// TTL for temporary/session storage (~4 hours)
+const TEMP_SESSION_TTL: u32 = 1000;
+
 #[contract]
 pub struct CrossChainBridgeContract;
 
 #[contractimpl]
 impl CrossChainBridgeContract {
+    // ============================================================
+    // Storage tier helpers
+    // ============================================================
+
+    /// Set a persistent value and extend its TTL in one call.
+    fn persistent_set<T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val> + Clone>(
+        env: &Env,
+        key: &DataKey,
+        val: &T,
+    ) {
+        env.storage().persistent().set(key, val);
+        env.storage().persistent().extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+    }
+
+    /// Get a persistent value and extend its TTL.
+    fn persistent_get<T: soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val> + Clone>(
+        env: &Env,
+        key: &DataKey,
+    ) -> Option<T> {
+        let val = env.storage().persistent().get(key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
+    }
+
     /// Initialize the bridge contract
     pub fn initialize(
         env: Env,
@@ -362,27 +392,27 @@ impl CrossChainBridgeContract {
     ) -> Result<bool, Error> {
         admin.require_auth();
 
-        if env.storage().persistent().has(&DataKey::Admin) {
+        if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
 
-        env.storage().persistent().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MedicalContract, &medical_contract);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::IdentityContract, &identity_contract);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::AccessContract, &access_contract);
 
-        env.storage().persistent().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MessageCount, &0u64);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MinConfirmations, &DEFAULT_MIN_CONFIRMATIONS);
 
         let mut chains: Vec<ChainId> = Vec::new(&env);
@@ -390,14 +420,14 @@ impl CrossChainBridgeContract {
         chains.push_back(ChainId::Ethereum);
         chains.push_back(ChainId::Polygon);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::SupportedChains, &chains);
 
-        env.storage().persistent().set(&DataKey::OracleCount, &0u64);
+        env.storage().instance().set(&DataKey::OracleCount, &0u64);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::RollbackCount, &0u64);
-        env.storage().persistent().set(&DataKey::EventCount, &0u64);
+        env.storage().instance().set(&DataKey::EventCount, &0u64);
 
         env.events()
             .publish((Symbol::new(&env, "BridgeInitialized"),), (admin.clone(),));
@@ -466,14 +496,14 @@ impl CrossChainBridgeContract {
 
         let mut chains: Vec<ChainId> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::SupportedChains)
             .unwrap_or(Vec::new(&env));
 
         if !chains.contains(&chain) {
             chains.push_back(chain.clone());
             env.storage()
-                .persistent()
+                .instance()
                 .set(&DataKey::SupportedChains, &chains);
 
             env.events()
@@ -492,7 +522,7 @@ impl CrossChainBridgeContract {
         Self::require_admin(&env, &caller)?;
 
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MinConfirmations, &min_confirmations);
 
         Ok(true)
@@ -502,7 +532,7 @@ impl CrossChainBridgeContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::Paused, &true);
 
         env.events().publish(
             (Symbol::new(&env, "Paused"),),
@@ -516,7 +546,7 @@ impl CrossChainBridgeContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
 
-        env.storage().persistent().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::Paused, &false);
 
         env.events().publish(
             (Symbol::new(&env, "Unpaused"),),
@@ -564,18 +594,19 @@ impl CrossChainBridgeContract {
             signature,
         };
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::Message(message_id.clone()), &message);
+        env.storage().persistent().set(
+            &DataKey::Message(message_id.clone()), &message);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Message(message_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         Self::update_nonce(&env, &sender, nonce);
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MessageCount)
             .unwrap_or(0);
-        env.storage().persistent().set(
+        env.storage().instance().set(
             &DataKey::MessageCount,
             &(count.checked_add(1).ok_or(Error::Overflow)?),
         );
@@ -634,18 +665,20 @@ impl CrossChainBridgeContract {
 
         confirmations.push_back(validator.clone());
         env.storage().temporary().set(&conf_key, &confirmations);
+        env.storage().temporary().extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
 
         Self::increment_validator_confirmations(&env, &validator);
 
         let min_confirmations: u32 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
         if confirmations.len() as u32 >= min_confirmations {
             message.status = MessageStatus::Verified;
             env.storage().persistent().set(&msg_key, &message);
+            env.storage().persistent().extend_ttl(&msg_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
             env.events().publish(
                 (Symbol::new(&env, "MessageVerified"),),
@@ -1687,13 +1720,21 @@ impl CrossChainBridgeContract {
     // ==================== Query Functions ====================
 
     pub fn get_message(env: Env, message_id: BytesN<32>) -> Option<CrossChainMessage> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Message(message_id))
+        let key = DataKey::Message(message_id);
+        let val: Option<CrossChainMessage> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_atomic_tx(env: Env, tx_id: BytesN<32>) -> Option<AtomicTransaction> {
-        env.storage().persistent().get(&DataKey::AtomicTx(tx_id))
+        let key = DataKey::AtomicTx(tx_id);
+        let val: Option<AtomicTransaction> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_record_ref(
@@ -1701,85 +1742,115 @@ impl CrossChainBridgeContract {
         local_record_id: u64,
         external_chain: ChainId,
     ) -> Option<CrossChainRecordRef> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::RecordRef(local_record_id, external_chain))
+        let key = DataKey::RecordRef(local_record_id, external_chain);
+        let val: Option<CrossChainRecordRef> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_validator(env: Env, validator_address: Address) -> Option<Validator> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Validator(validator_address))
+        let key = DataKey::Validator(validator_address);
+        let val: Option<Validator> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_oracle_node(env: Env, oracle_address: Address) -> Option<OracleNode> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::OracleNode(oracle_address))
+        let key = DataKey::OracleNode(oracle_address);
+        let val: Option<OracleNode> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_oracle_report(env: Env, report_id: u64) -> Option<OracleReport> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::OracleReport(report_id))
+        let key = DataKey::OracleReport(report_id);
+        let val: Option<OracleReport> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_aggregated_oracle(env: Env, chain: ChainId) -> Option<AggregatedOracleData> {
-        env.storage()
-            .persistent()
-            .get(&DataKey::AggregatedOracle(chain))
+        let key = DataKey::AggregatedOracle(chain);
+        let val: Option<AggregatedOracleData> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_proof(env: Env, proof_id: BytesN<32>) -> Option<CrossChainProof> {
-        env.storage().persistent().get(&DataKey::Proof(proof_id))
+        let key = DataKey::Proof(proof_id);
+        let val: Option<CrossChainProof> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_rollback(env: Env, op_id: BytesN<32>) -> Option<RollbackRecord> {
-        env.storage().persistent().get(&DataKey::Rollback(op_id))
+        let key = DataKey::Rollback(op_id);
+        let val: Option<RollbackRecord> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_sync_event(env: Env, event_id: u64) -> Option<CrossChainEvent> {
-        env.storage().persistent().get(&DataKey::Event(event_id))
+        let key = DataKey::Event(event_id);
+        let val: Option<CrossChainEvent> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        }
+        val
     }
 
     pub fn get_supported_chains(env: Env) -> Vec<ChainId> {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::SupportedChains)
             .unwrap_or(Vec::new(&env))
     }
 
     pub fn is_paused(env: Env) -> bool {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
     }
 
     pub fn get_message_count(env: Env) -> u64 {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MessageCount)
             .unwrap_or(0)
     }
 
     pub fn get_oracle_count(env: Env) -> u64 {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::OracleCount)
             .unwrap_or(0)
     }
 
     pub fn get_event_count(env: Env) -> u64 {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::EventCount)
             .unwrap_or(0)
     }
 
     pub fn get_rollback_count(env: Env) -> u64 {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::RollbackCount)
             .unwrap_or(0)
     }
@@ -1789,7 +1860,7 @@ impl CrossChainBridgeContract {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::Unauthorized)?;
 
@@ -1800,7 +1871,7 @@ impl CrossChainBridgeContract {
     }
 
     fn is_admin(env: &Env, caller: &Address) -> bool {
-        let admin: Option<Address> = env.storage().persistent().get(&DataKey::Admin);
+        let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         match admin {
             Some(a) => &a == caller,
             None => false,
@@ -1810,7 +1881,7 @@ impl CrossChainBridgeContract {
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
         {

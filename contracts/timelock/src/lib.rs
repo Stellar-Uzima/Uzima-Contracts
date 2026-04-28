@@ -24,31 +24,35 @@ pub struct QueuedTx {
 const CFG: Symbol = symbol_short!("cfg");
 const QUEUE: Symbol = symbol_short!("queue");
 
+// TTL constants for storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+
 #[contract]
 pub struct Timelock;
 
 #[contractimpl]
 impl Timelock {
     pub fn initialize(env: Env, admin: Address, delay_seconds: u64) -> Result<(), Error> {
-        if env.storage().persistent().has(&CFG) {
+        if env.storage().instance().has(&CFG) {
             return Err(Error::AlreadyInitialized);
         }
         let cfg = TimelockConfig {
             admin,
             delay_seconds,
         };
-        env.storage().persistent().set(&CFG, &cfg);
+        env.storage().instance().set(&CFG, &cfg);
         Ok(())
     }
 
     pub fn get_config(env: Env) -> Option<TimelockConfig> {
-        env.storage().persistent().get(&CFG)
+        env.storage().instance().get(&CFG)
     }
 
     pub fn queue(env: Env, id: u64, target: Address, call: BytesN<32>) -> Result<(), Error> {
         let cfg: TimelockConfig = env
             .storage()
-            .persistent()
+            .instance()
             .get(&CFG)
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
@@ -63,6 +67,7 @@ impl Timelock {
         }
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
+        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.events().publish((symbol_short!("Queued"), id), (eta,));
         Ok(())
     }
@@ -73,6 +78,7 @@ impl Timelock {
             .persistent()
             .get(&QUEUE)
             .unwrap_or(Map::new(&env));
+        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
         if now < tx.eta {
@@ -82,6 +88,7 @@ impl Timelock {
         // Here we just emit execution event and remove from queue.
         q.remove(id);
         env.storage().persistent().set(&QUEUE, &q);
+        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.events()
             .publish((symbol_short!("Exec"), id), (tx.target, tx.call));
         Ok(())

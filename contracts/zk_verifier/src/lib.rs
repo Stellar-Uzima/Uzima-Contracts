@@ -52,6 +52,10 @@ pub enum DataKey {
 const MAX_DEFAULT_TTL: u64 = 86_400;
 const MIN_DEFAULT_TTL: u64 = 1;
 
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+
 #[contract]
 pub struct ZkVerifierContract;
 
@@ -301,6 +305,7 @@ impl ZkVerifierContract {
             consumed_at: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&key, &value);
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         true
     }
 

@@ -241,24 +241,32 @@ pub struct RegistryStateExport {
 
 #[contracttype]
 pub enum DataKey {
+    // Instance storage keys (contract config/metadata)
     Initialized,
     Admin,
     MultiSigConfig,
     ProposalCounter,
-    AdminProposal(u64),
     ContractPaused,
-    ZKProof(BytesN<32>),
+    ProofCounter,
+    // Persistent storage keys (critical long-lived data)
+    AdminProposal(u64),
     MedicalRecordProof(Address, u64),
     RangeProof(BytesN<32>),
     CredentialProof(Address, String),
     RecursiveProof(BytesN<32>),
     ZKPCircuitParams(String),
-    VerificationResult(BytesN<32>),
-    ProofCounter,
     GasTracker(Address),
+    // Temporary storage keys (session/short-lived data)
+    ZKProof(BytesN<32>),
+    VerificationResult(BytesN<32>),
 }
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
+
+// TTL constants for storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+const TEMP_SESSION_TTL: u32 = 1000;
 
 // =============================================================================
 // Errors
@@ -316,7 +324,6 @@ impl ZKPRegistry {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage().persistent().set(&ADMIN, &admin);
         env.events()
             .publish((symbol_short!("zkp"), symbol_short!("init")), admin);
         Ok(())
@@ -680,6 +687,7 @@ impl ZKPRegistry {
 
             if is_valid {
                 env.storage().temporary().set(&DataKey::ZKProof(proof_id.clone()), &proof);
+                env.storage().temporary().extend_ttl(&DataKey::ZKProof(proof_id.clone()), 0, TEMP_SESSION_TTL);
                 let result = ZKPVerificationResult {
                     proof_id: proof_id.clone(),
                     is_valid,
@@ -689,6 +697,7 @@ impl ZKPRegistry {
                     metadata: Bytes::from_slice(&env, b"batch_verification"),
                 };
                 env.storage().temporary().set(&DataKey::VerificationResult(proof_id.clone()), &result);
+                env.storage().temporary().extend_ttl(&DataKey::VerificationResult(proof_id.clone()), 0, TEMP_SESSION_TTL);
                 total_gas_used = total_gas_used.saturating_add(verification_gas);
             }
 
@@ -1093,7 +1102,7 @@ impl ZKPRegistry {
             env.storage().instance().set(&DataKey::AdminProposal(proposal.id), &proposal);
         }
 
-        env.storage().persistent().set(&ADMIN, &state.admin);
+        env.storage().instance().set(&DataKey::Admin, &state.admin);
         env.events().publish((symbol_short!("admin"), symbol_short!("imported")), caller);
 
         Ok(())

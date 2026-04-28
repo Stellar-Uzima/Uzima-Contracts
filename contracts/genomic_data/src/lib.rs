@@ -197,23 +197,26 @@ pub struct RateLimitEntry {
 
 #[contracttype]
 pub enum DataKey {
+    // Instance storage keys (contract config/metadata)
     Initialized,
     NextId,
+    ListingNextId,
+    ZkVerifierContract,
+    // Persistent storage keys (critical long-lived data)
     Record(u64),
     RecordHeader(u64),
     PatientRecords(Address),
-    ZkVerifierContract,
     Consent(u64, Address),
     AssocCount(u64),
     Assoc(u64, u64),
     DrugRespCount(u64),
     DrugResp(u64, u64),
     Ancestry(u64),
-    ListingNextId,
     Listing(u64),
     RecordListings(u64),
     BreachCount,
     Breach(u64),
+    // Temporary storage keys (short-lived data)
     RateLimitCfg(u32),
     RateLimit(Address, u32),
 }
@@ -264,10 +267,10 @@ impl GenomicDataContract {
         }
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
-        env.storage().persistent().set(&DataKey::Initialized, &true);
-        env.storage().persistent().set(&DataKey::NextId, &0u64);
+        env.storage().instance().set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&DataKey::NextId, &0u64);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::ListingNextId, &0u64);
         Self::emit_log(
             &env,
@@ -286,7 +289,7 @@ impl GenomicDataContract {
             return false;
         }
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::ZkVerifierContract, &contract_id);
         Self::emit_log(
             &env,
@@ -315,7 +318,7 @@ impl GenomicDataContract {
         uploader.require_auth();
         let id = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, u64>(&DataKey::NextId)
             .unwrap_or(0);
         let new_id = id + 1;
@@ -351,7 +354,9 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::PatientRecords(patient), &list);
-        env.storage().persistent().set(&DataKey::NextId, &new_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::NextId, &new_id);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -476,7 +481,7 @@ impl GenomicDataContract {
         }
         let verifier = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, Address>(&DataKey::ZkVerifierContract);
         if let Some(addr) = verifier {
             let client = ZkVerifierClient::new(&env, &addr);
@@ -495,6 +500,12 @@ impl GenomicDataContract {
         env.storage().temporary().set(
             &(Symbol::new(&env, "pg"), record_id, requester.clone()),
             &grant,
+        );
+        // Set TTL for privacy grant temporary storage (~4 hours)
+        env.storage().temporary().extend_ttl(
+            &(Symbol::new(&env, "pg"), record_id, requester.clone()),
+            0,
+            1000,
         );
         Self::emit_log(
             &env,
@@ -664,7 +675,7 @@ impl GenomicDataContract {
         }
         let lid = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, u64>(&DataKey::ListingNextId)
             .unwrap_or(0)
             + 1;
@@ -692,7 +703,7 @@ impl GenomicDataContract {
             .persistent()
             .set(&DataKey::RecordListings(record_id), &ids);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::ListingNextId, &lid);
         Self::emit_log(
             &env,

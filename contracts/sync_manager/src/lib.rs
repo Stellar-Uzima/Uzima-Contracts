@@ -122,6 +122,10 @@ const LAGS: Symbol = symbol_short!("LAGS");
 const CONFLICTS: Symbol = symbol_short!("CONF");
 const SYNC_POLICY: Symbol = symbol_short!("SPOL");
 const NEXT_OPERATION_ID: Symbol = symbol_short!("NOID");
+
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 const NEXT_WINDOW_ID: Symbol = symbol_short!("NWID");
 const NEXT_LAG_ID: Symbol = symbol_short!("NLID");
 const NEXT_CONFLICT_ID: Symbol = symbol_short!("NCID");
@@ -224,6 +228,7 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         operations.push_back(operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.storage()
             .instance()
             .set(&NEXT_OPERATION_ID, &(operation_id + 1));
@@ -268,6 +273,7 @@ impl SyncManager {
 
         operations.set(idx, operation.clone());
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         env.events().publish((symbol_short!("SM_EXEC"),), operation_id);
         Ok(true)
@@ -311,6 +317,7 @@ impl SyncManager {
 
         operations.set(idx, operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         env.events().publish((symbol_short!("SM_RETR"),), operation_id);
         Ok(true)
@@ -372,6 +379,7 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         lags.push_back(lag_record);
         env.storage().persistent().set(&LAGS, &lags);
+        env.storage().persistent().extend_ttl(&LAGS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.storage().instance().set(&NEXT_LAG_ID, &(lag_id + 1));
 
         env.events().publish((symbol_short!("SM_LAG"),), lag_id);
@@ -443,6 +451,7 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         conflicts.push_back(conflict);
         env.storage().persistent().set(&CONFLICTS, &conflicts);
+        env.storage().persistent().extend_ttl(&CONFLICTS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.storage()
             .instance()
             .set(&NEXT_CONFLICT_ID, &(conflict_id + 1));
@@ -482,6 +491,7 @@ impl SyncManager {
         }
 
         env.storage().persistent().set(&CONFLICTS, &conflicts);
+        env.storage().persistent().extend_ttl(&CONFLICTS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         env.events().publish((symbol_short!("SM_RESO"),), conflict_id);
         Ok(())
     }
