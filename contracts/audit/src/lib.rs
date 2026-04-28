@@ -9,8 +9,8 @@ pub mod verification;
 mod test;
 
 use crate::types::{
-    ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle,
-    LogAccessEntry, OperationResult, RetentionPolicy,
+    ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
+    OperationResult, RetentionPolicy,
 };
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
@@ -199,12 +199,7 @@ impl AuditTrail {
     }
 
     /// Fetch logs within a timestamp range (requires log access).
-    pub fn get_logs_by_timeframe(
-        env: Env,
-        caller: Address,
-        start: u64,
-        end: u64,
-    ) -> Vec<AuditLog> {
+    pub fn get_logs_by_timeframe(env: Env, caller: Address, start: u64, end: u64) -> Vec<AuditLog> {
         caller.require_auth();
         Self::require_log_access(&env, &caller);
         crate::querying::audit_query::AuditQuery::logs_by_timeframe(&env, start, end)
@@ -482,7 +477,9 @@ impl AuditTrail {
         buffer.append(&log.target.clone().to_xdr(env));
 
         let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
-        env.storage().instance().set(&DataKey::RollingHash, &new_hash);
+        env.storage()
+            .instance()
+            .set(&DataKey::RollingHash, &new_hash);
     }
 
     fn index_log_by_actor(env: &Env, actor: &Address, id: u64) {

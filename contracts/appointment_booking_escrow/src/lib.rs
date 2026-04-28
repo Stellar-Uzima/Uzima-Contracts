@@ -232,7 +232,9 @@ impl AppointmentBookingEscrow {
         }
 
         // Check if already confirmed or refunded
-        if appointment.status == AppointmentStatus::Confirmed {
+        if appointment.status == AppointmentStatus::Confirmed
+            || appointment.status == AppointmentStatus::Completed
+        {
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyConfirmed);
         }
@@ -446,7 +448,6 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::LastActivity)
             .unwrap_or(0);
 
-
         let total_operations: u64 = env
             .storage()
             .instance()
@@ -458,7 +459,6 @@ impl AppointmentBookingEscrow {
             .instance()
             .get(&DataKey::FailedOperations)
             .unwrap_or(0);
-
 
         let success_rate = if total_operations > 0 {
             let successful = total_operations.saturating_sub(failed_operations);
