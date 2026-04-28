@@ -299,7 +299,7 @@ pub enum EventSyncStatus {
 
 #[contracttype]
 pub enum DataKey {
-    // Core config
+    // Instance storage keys (contract config/metadata)
     Admin,
     MedicalContract,
     IdentityContract,
@@ -308,29 +308,25 @@ pub enum DataKey {
     MessageCount,
     MinConfirmations,
     SupportedChains,
-    // Per-item storage (replaces Map<Key, Value> under a shared symbol)
+    OracleCount,
+    RollbackCount,
+    EventCount,
+    OpCount,
+    // Persistent storage keys (critical long-lived data)
     Validator(Address),
     Message(BytesN<32>),
-    Confirmations(BytesN<32>), // BUG FIX: was always "conf_key"
     Nonce(String),
-    RecordRef(u64, ChainId), // BUG FIX: was always "rec_ref"
+    RecordRef(u64, ChainId),
     AtomicTx(BytesN<32>),
-    // Oracle network
     OracleNode(Address),
     OracleReport(u64),
-    OracleCount,
     AggregatedOracle(ChainId),
-    // Proof verification
     Proof(BytesN<32>),
-    // Rollback mechanism
     Rollback(BytesN<32>),
-    RollbackCount,
-    // Event synchronization
     Event(u64),
-    EventCount,
-    // Timeout operations
     CrossChainOp(BytesN<32>),
-    OpCount,
+    // Temporary storage keys (session/short-lived data)
+    Confirmations(BytesN<32>),
 }
 
 // Constants
@@ -347,6 +343,14 @@ const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
 const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
 const EXTENSION_MULTIPLIER: u64 = 2; // Each extension doubles the timeout
 
+// TTL constants for storage management
+/// TTL threshold: extend persistent data if remaining TTL falls below this
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+/// Extend persistent data to this many ledgers (~4 days at 5s/ledger)
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+/// TTL for temporary/session storage (~4 hours)
+const TEMP_SESSION_TTL: u32 = 1000;
+
 #[contract]
 pub struct CrossChainBridgeContract;
 
@@ -362,27 +366,27 @@ impl CrossChainBridgeContract {
     ) -> Result<bool, Error> {
         admin.require_auth();
 
-        if env.storage().persistent().has(&DataKey::Admin) {
+        if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
 
-        env.storage().persistent().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MedicalContract, &medical_contract);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::IdentityContract, &identity_contract);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::AccessContract, &access_contract);
 
-        env.storage().persistent().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MessageCount, &0u64);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::MinConfirmations, &DEFAULT_MIN_CONFIRMATIONS);
 
         let mut chains: Vec<ChainId> = Vec::new(&env);
@@ -390,14 +394,14 @@ impl CrossChainBridgeContract {
         chains.push_back(ChainId::Ethereum);
         chains.push_back(ChainId::Polygon);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::SupportedChains, &chains);
 
-        env.storage().persistent().set(&DataKey::OracleCount, &0u64);
+        env.storage().instance().set(&DataKey::OracleCount, &0u64);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::RollbackCount, &0u64);
-        env.storage().persistent().set(&DataKey::EventCount, &0u64);
+        env.storage().instance().set(&DataKey::EventCount, &0u64);
 
         env.events()
             .publish((Symbol::new(&env, "BridgeInitialized"),), (admin.clone(),));

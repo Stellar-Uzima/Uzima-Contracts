@@ -1501,7 +1501,7 @@ impl TelemedicineContract {
         let normalized_language = Self::normalize_string(language);
         let index: Vec<BytesN<32>> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::KnowledgeIndex)
             .unwrap_or_else(|| Vec::new(env));
 
@@ -1743,6 +1743,7 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::Emergency(emergency_id.clone()), &emergency);
+        env.storage().persistent().extend_ttl(&DataKey::Emergency(emergency_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         let mut active: Vec<BytesN<32>> = env
             .storage()
@@ -1754,6 +1755,7 @@ impl TelemedicineContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::ActiveEmergencies, &active);
+            env.storage().persistent().extend_ttl(&DataKey::ActiveEmergencies, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         }
         Self::increment_platform_stat(env, 5);
 
@@ -1809,7 +1811,7 @@ impl TelemedicineContract {
     fn increment_platform_stat(env: &Env, stat_index: usize) {
         let mut stats: (u64, u64, u64, u64, u64, u64) = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::PlatformStats)
             .unwrap_or((0, 0, 0, 0, 0, 0));
         match stat_index {
@@ -1822,13 +1824,13 @@ impl TelemedicineContract {
             _ => {}
         }
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::PlatformStats, &stats);
     }
 
     pub fn get_platform_stats(env: Env) -> (u64, u64, u64, u64, u64, u64) {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::PlatformStats)
             .unwrap_or((0, 0, 0, 0, 0, 0))
     }
