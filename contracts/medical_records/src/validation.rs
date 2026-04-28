@@ -70,11 +70,13 @@ pub const MIN_PURPOSE_LENGTH: u32 = 5;
 pub const MAX_PURPOSE_LENGTH: u32 = 256;
 
 /// Minimum length for explanation summary
+#[allow(dead_code)]
 pub const MIN_EXPLANATION_LENGTH: u32 = 10;
 /// Maximum length for explanation summary
 pub const MAX_EXPLANATION_LENGTH: u32 = 512;
 
 /// Minimum length for model version string
+#[allow(dead_code)]
 pub const MIN_MODEL_VERSION_LENGTH: u32 = 1;
 /// Maximum length for model version string
 pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
@@ -83,6 +85,7 @@ pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
 pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
+#[allow(dead_code)]
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
 
 /// Maximum number of custom metadata fields per record
@@ -421,6 +424,7 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
@@ -655,6 +659,7 @@ pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_ai_explanation(
     explanation_summary: &String,
     model_version: &String,
@@ -685,6 +690,7 @@ pub fn validate_ai_explanation(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> Result<(), Error> {
     // Check count
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
@@ -748,6 +754,7 @@ pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result
 // ==================== DATA QUALITY ASSESSMENT ====================
 
 /// Minimum quality score threshold for a record to be considered acceptable (60%).
+#[allow(dead_code)]
 pub const MIN_QUALITY_THRESHOLD_BPS: u32 = 6_000;
 
 /// Weight constants for quality sub-scores (out of 10_000 total).
@@ -1199,6 +1206,7 @@ pub fn validate_record_by_type(
 ///
 /// Returns a potentially cleaned `String`. Whitespace-only strings are returned
 /// as-is because the downstream length validators will reject them.
+#[allow(dead_code)]
 pub fn normalize_medical_string(env: &Env, input: &String) -> String {
     // In Soroban no_std, String doesn't expose slice/trim operations directly.
     // We can at least detect empty or whitespace-only strings.
@@ -1439,6 +1447,7 @@ pub fn auto_cleanse_record(env: &Env, record: &MedicalRecord) -> CleanseResult {
 ///
 /// The workflow is built from the *post-cleanse* report so that any issues
 /// resolved by auto-normalisation are not included in the correction items.
+#[allow(dead_code)]
 pub fn validate_cleanse_and_report(
     env: &Env,
     record_id: u64,

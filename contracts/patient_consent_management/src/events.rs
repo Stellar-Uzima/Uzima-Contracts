@@ -19,6 +19,7 @@ pub fn publish_initialization(env: &Env, admin: &Address) {
         .publish((symbol_short!("CONSENT"), symbol_short!("INIT")), admin);
 }
 
+#[allow(dead_code)]
 pub fn publish_unauthorized_attempt(
     env: &Env,
     caller: &Address,

@@ -1,5 +1,4 @@
 #![no_std]
-#![allow(dead_code)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::enum_variant_names)]
 
@@ -858,6 +857,7 @@ impl MedicalRecordsContract {
         );
     }
 
+    /// Initialize the contract, setting the admin and default storage values.
     pub fn initialize(env: Env, admin: Address) -> bool {
         admin.require_auth();
 
@@ -919,6 +919,7 @@ impl MedicalRecordsContract {
         true
     }
 
+    /// Return contract status, current version, and ledger timestamp.
     pub fn health_check(env: Env) -> (Symbol, u32, u64) {
         let version = env
             .storage()
@@ -948,6 +949,7 @@ impl MedicalRecordsContract {
         (status, version, timestamp)
     }
 
+    /// Set the audit/forensics contract address; only callable by admin.
     pub fn set_audit_forensics(
         env: Env,
         admin: Address,
@@ -970,12 +972,14 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
+    /// Return the registered audit/forensics contract address, if set.
     pub fn get_audit_forensics(env: Env) -> Option<Address> {
         env.storage()
             .persistent()
             .get(&DataKey::AuditForensicsContract)
     }
 
+    /// Register or update a user's role; only callable by admin.
     pub fn manage_user(
         env: Env,
         caller: Address,
@@ -1530,6 +1534,7 @@ impl MedicalRecordsContract {
     // ---------------------------------------------------------------------
     // Records
     // ---------------------------------------------------------------------
+    /// Store a new medical record; enforces RBAC and consent checks.
     pub fn add_record(
         env: Env,
         caller: Address,
@@ -1736,6 +1741,7 @@ impl MedicalRecordsContract {
         Ok(record_id)
     }
 
+    /// Retrieve a medical record by ID; enforces caller authorization and access control.
     pub fn get_record(env: Env, caller: Address, record_id: u64) -> Result<MedicalRecord, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
@@ -1965,6 +1971,7 @@ impl MedicalRecordsContract {
         Ok(out)
     }
 
+    /// Return the total number of records stored in the contract.
     pub fn get_record_count(env: Env) -> u64 {
         env.storage()
             .persistent()
@@ -4387,6 +4394,7 @@ impl MedicalRecordsContract {
     // MIGRATION & UPGRADE SYSTEM
     // =================================================================
 
+    #[allow(dead_code)]
     fn get_contract_version(env: &Env) -> u32 {
         env.storage()
             .instance()
@@ -4394,6 +4402,7 @@ impl MedicalRecordsContract {
             .unwrap_or(0)
     }
 
+    #[allow(dead_code)]
     fn set_contract_version(env: &Env, new_version: u32) {
         env.storage()
             .instance()

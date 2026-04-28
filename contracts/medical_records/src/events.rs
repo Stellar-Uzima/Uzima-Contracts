@@ -332,6 +332,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         .publish((symbol_short!("REC_ACC"), accessor, patient), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_access_requested(
     env: &Env,
     requester: Address,
@@ -364,6 +365,7 @@ pub fn emit_access_requested(
         .publish((symbol_short!("ACC_REQ"), requester, patient), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_access_granted(
     env: &Env,
     granter: Address,
@@ -656,6 +658,7 @@ pub fn emit_risk_score_submitted(
         .publish((symbol_short!("RISK_SCR"), ai_coordinator, patient), event);
 }
 
+#[allow(dead_code)]
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -863,6 +866,7 @@ pub struct MonitoringDashboard {
     pub health_status: String,
 }
 
+#[allow(dead_code)]
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
     let mut filtered = Vec::new(events.env());
 
@@ -935,6 +939,7 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
     }
 }
 
+#[allow(dead_code)]
 pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);
