@@ -1,0 +1,90 @@
+# Code Ownership and Review Routing
+# This file defines code ownership for accountability and automated review routing
+
+# Root configuration and documentation
+*.md @Stellar-Uzima/maintainers
+Cargo.toml @Stellar-Uzima/maintainers
+Makefile @Stellar-Uzima/maintainers
+setup.sh @Stellar-Uzima/maintainers
+.github/ @Stellar-Uzima/maintainers
+
+# Configuration files
+config/ @Stellar-Uzima/devops @Stellar-Uzima/maintainers
+
+# Core SDK
+abe_sdk/ @Stellar-Uzima/cryptography @Stellar-Uzima/core-team
+
+# Financial & Escrow Contracts
+contracts/appointment_booking_escrow/ @Stellar-Uzima/healthcare-payments @Stellar-Uzima/core-team
+contracts/escrow/ @Stellar-Uzima/healthcare-payments @Stellar-Uzima/core-team
+contracts/payment_router/ @Stellar-Uzima/healthcare-payments @Stellar-Uzima/core-team
+contracts/treasury_controller/ @Stellar-Uzima/healthcare-payments @Stellar-Uzima/core-team
+
+# Compliance & Monitoring Contracts
+contracts/aml/ @Stellar-Uzima/compliance @Stellar-Uzima/core-team
+contracts/audit/ @Stellar-Uzima/compliance @Stellar-Uzima/core-team
+contracts/audit_forensics/ @Stellar-Uzima/compliance @Stellar-Uzima/core-team
+contracts/healthcare_compliance/ @Stellar-Uzima/compliance @Stellar-Uzima/core-team
+contracts/health_data_access_logging/ @Stellar-Uzima/compliance @Stellar-Uzima/core-team
+
+# Identity & Access Control Contracts
+contracts/identity_registry/ @Stellar-Uzima/identity @Stellar-Uzima/core-team
+contracts/rbac/ @Stellar-Uzima/identity @Stellar-Uzima/core-team
+contracts/credential_registry/ @Stellar-Uzima/identity @Stellar-Uzima/core-team
+contracts/credential_notifications/ @Stellar-Uzima/identity @Stellar-Uzima/core-team
+contracts/cross_chain_identity/ @Stellar-Uzima/identity @Stellar-Uzima/cross-chain
+
+# Data & Analytics Contracts
+contracts/clinical_nlp/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/medical_records/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+contracts/medical_imaging_ai/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/healthcare_analytics_dashboard/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/healthcare_data_marketplace/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+contracts/anomaly_detection/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/anomaly_detector/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/ai_analytics/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+
+# Cross-Chain & Interoperability Contracts
+contracts/cross_chain_bridge/ @Stellar-Uzima/cross-chain @Stellar-Uzima/core-team
+contracts/cross_chain_access/ @Stellar-Uzima/cross-chain @Stellar-Uzima/core-team
+contracts/cross_chain_enhancements/ @Stellar-Uzima/cross-chain @Stellar-Uzima/core-team
+contracts/sync_manager/ @Stellar-Uzima/cross-chain @Stellar-Uzima/core-team
+contracts/multi_region_orchestrator/ @Stellar-Uzima/cross-chain @Stellar-Uzima/devops
+contracts/regional_node_manager/ @Stellar-Uzima/cross-chain @Stellar-Uzima/devops
+
+# Advanced Features
+contracts/federated_learning/ @Stellar-Uzima/data-science @Stellar-Uzima/core-team
+contracts/zk_verifier/ @Stellar-Uzima/cryptography @Stellar-Uzima/core-team
+contracts/digital_twin/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+contracts/drug_discovery/ @Stellar-Uzima/data-science @Stellar-Uzima/healthcare-data
+
+# Healthcare-Specific Contracts
+contracts/clinical_decision_support/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/data-science
+contracts/clinical_trial/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/data-science
+contracts/telemedicine/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+contracts/patient_portal/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+contracts/patient_consent_management/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/identity
+contracts/remote_patient_monitoring/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/data-science
+contracts/mental_health_support/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/data-science
+contracts/patient_gamification/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/core-team
+
+# Infrastructure & System Contracts
+contracts/upgradeability/ @Stellar-Uzima/core-team @Stellar-Uzima/devops
+contracts/health_check/ @Stellar-Uzima/devops @Stellar-Uzima/core-team
+contracts/failover_detector/ @Stellar-Uzima/devops @Stellar-Uzima/cross-chain
+contracts/notification_system/ @Stellar-Uzima/core-team @Stellar-Uzima/devops
+contracts/mfa/ @Stellar-Uzima/identity @Stellar-Uzima/core-team
+contracts/emergency_access_override/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/compliance
+
+# Cryptography & Security
+contracts/crypto_registry/ @Stellar-Uzima/cryptography @Stellar-Uzima/core-team
+
+# Medical Imaging
+contracts/medical_imaging/ @Stellar-Uzima/data-science @Stellar-Uzima/healthcare-data
+contracts/dicomweb_services/ @Stellar-Uzima/data-science @Stellar-Uzima/healthcare-data
+
+# Medical Record Hash Registry
+contracts/medical_record_hash_registry/ @Stellar-Uzima/healthcare-data @Stellar-Uzima/compliance
+
+# Default fallback
+* @Stellar-Uzima/maintainers

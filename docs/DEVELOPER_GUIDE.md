@@ -16,6 +16,8 @@ Comprehensive guidance for developers building, integrating, deploying, and main
 
 ## 1. API Reference
 
+See [Contract API Stability Guarantees](./api.md) for stability levels, deprecation policy, and compatibility guidance for public contract entrypoints.
+
 ### 1.1 Contracts and modules
 - `contracts/medical_records`: core medical records contract
 - `contracts/identity_registry`: identity management

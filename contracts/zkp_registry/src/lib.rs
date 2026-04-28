@@ -5,13 +5,44 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, 
+    xdr::{FromXdr, ToXdr},
+    Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 // =============================================================================
 // Types
 // =============================================================================
+
+/// Multi-signature configuration for admin operations
+#[derive(Clone)]
+#[contracttype]
+pub struct MultiSigConfig {
+    pub signers: Vec<Address>,
+    pub threshold: u32,
+    pub timelock_duration: u64,
+}
+
+/// Allowed admin actions via multisig
+#[derive(Clone, PartialEq, Eq)]
+#[contracttype]
+pub enum AdminAction {
+    UpgradeContract(BytesN<32>),
+    UpdateParameters(String, u32),
+    EmergencyPause,
+    EmergencyResume,
+}
+
+/// Multi-sig proposal
+#[derive(Clone)]
+#[contracttype]
+pub struct AdminProposal {
+    pub id: u64,
+    pub action: AdminAction,
+    pub created_at: u64,
+    pub executed: bool,
+    pub approvals: Vec<Address>,
+}
 
 /// Zero-knowledge proof types
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -137,8 +168,8 @@ pub struct RecursiveProof {
     pub base_proof_id: BytesN<32>,
     /// Recursive proof data
     pub recursive_proof: ZKProof,
-    /// Aggregated verification keys
-    pub aggregated_vk: Bytes,
+    /// Aggregated verification keys hash (compressed to save storage)
+    pub aggregated_vk_hash: BytesN<32>,
     /// Proof composition depth
     pub composition_depth: u32,
     /// Total gas cost for recursive verification
@@ -191,6 +222,19 @@ pub struct ZKPVerificationResult {
     pub metadata: Bytes,
 }
 
+/// Exported state format for migrations
+#[derive(Clone)]
+#[contracttype]
+pub struct RegistryStateExport {
+    pub format_version: u32,
+    pub admin: Address,
+    pub initialized: bool,
+    pub paused: bool,
+    pub multisig_config: Option<MultiSigConfig>,
+    pub proposal_counter: u64,
+    pub proposals: Vec<AdminProposal>,
+}
+
 // =============================================================================
 // Storage
 // =============================================================================
@@ -199,6 +243,10 @@ pub struct ZKPVerificationResult {
 pub enum DataKey {
     Initialized,
     Admin,
+    MultiSigConfig,
+    ProposalCounter,
+    AdminProposal(u64),
+    ContractPaused,
     ZKProof(BytesN<32>),
     MedicalRecordProof(Address, u64),
     RangeProof(BytesN<32>),
@@ -242,6 +290,13 @@ pub enum Error {
     ContractPaused = 24,
     StorageFull = 25,
     CrossChainTimeout = 26,
+    InvalidSigner = 27,
+    InvalidThreshold = 28,
+    ProposalNotFound = 29,
+    AlreadyApproved = 30,
+    TimelockNotExpired = 31,
+    AlreadyExecuted = 32,
+    NotEnoughApprovals = 33,
 }
 
 // =============================================================================
@@ -267,6 +322,160 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    /// Configure multi-signature for admin operations
+    pub fn configure_multisig(
+        env: Env,
+        admin: Address,
+        config: MultiSigConfig,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let current_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotAuthorized)?;
+        if current_admin != admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        if config.threshold == 0 || config.threshold > config.signers.len() as u32 {
+            return Err(Error::InvalidThreshold);
+        }
+
+        env.storage().instance().set(&DataKey::MultiSigConfig, &config);
+        env.events().publish((symbol_short!("admin"), symbol_short!("cfg_msig")), admin);
+        Ok(())
+    }
+
+    /// Create an admin proposal
+    pub fn create_admin_proposal(
+        env: Env,
+        signer: Address,
+        action: AdminAction,
+    ) -> Result<u64, Error> {
+        signer.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        if !config.signers.contains(&signer) {
+            return Err(Error::InvalidSigner);
+        }
+
+        let proposal_id: u64 = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+        let mut approvals = Vec::new(&env);
+        approvals.push_back(signer.clone());
+
+        let proposal = AdminProposal {
+            id: proposal_id,
+            action: action.clone(),
+            created_at: env.ledger().timestamp(),
+            executed: false,
+            approvals,
+        };
+
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage().instance().set(&DataKey::ProposalCounter, &(proposal_id + 1));
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("proposed")), (proposal_id, signer));
+
+        Ok(proposal_id)
+    }
+
+    /// Approve an admin proposal
+    pub fn approve_admin_proposal(
+        env: Env,
+        signer: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        signer.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        if !config.signers.contains(&signer) {
+            return Err(Error::InvalidSigner);
+        }
+
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        if proposal.approvals.contains(&signer) {
+            return Err(Error::AlreadyApproved);
+        }
+
+        proposal.approvals.push_back(signer.clone());
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("approved")), (proposal_id, signer));
+
+        Ok(())
+    }
+
+    /// Execute an admin proposal
+    pub fn execute_admin_proposal(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        executor.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        if proposal.approvals.len() < config.threshold {
+            return Err(Error::NotEnoughApprovals);
+        }
+
+        if env.ledger().timestamp() < proposal.created_at + config.timelock_duration {
+            return Err(Error::TimelockNotExpired);
+        }
+
+        proposal.executed = true;
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        Self::execute_action(&env, &proposal.action)?;
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("executed")), proposal_id);
+
+        Ok(())
+    }
+
+    /// Emergency override to execute a proposal without waiting for the timelock
+    pub fn emergency_override(
+        env: Env,
+        executor: Address,
+        proposal_id: u64,
+    ) -> Result<(), Error> {
+        executor.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+
+        if proposal.executed {
+            return Err(Error::AlreadyExecuted);
+        }
+
+        // Emergency requires 100% of signers to approve to bypass timelock
+        if proposal.approvals.len() < config.signers.len() as u32 {
+            return Err(Error::NotEnoughApprovals);
+        }
+
+        proposal.executed = true;
+        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+
+        Self::execute_action(&env, &proposal.action)?;
+
+        env.events().publish((symbol_short!("admin"), symbol_short!("emer_exec")), proposal_id);
+
+        Ok(())
+    }
+
     /// Register ZKP circuit parameters
     #[allow(clippy::too_many_arguments)]
     pub fn register_circuit(
@@ -284,6 +493,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Validate circuit parameters
         if num_public_inputs > 50 || num_private_inputs > 100 || num_constraints > 10000 {
@@ -331,6 +541,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         submitter.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Check gas limit
         if verification_gas > 100000 {
@@ -366,9 +577,9 @@ impl ZKPRegistry {
         // Perform on-chain verification (simplified for demonstration)
         let is_valid = Self::verify_zkp_internal(&env, &proof)?;
 
-        // Store proof
+        // Store proof temporarily to save costs
         env.storage()
-            .persistent()
+            .temporary()
             .set(&DataKey::ZKProof(proof_id.clone()), &proof);
 
         // Create verification result
@@ -382,7 +593,7 @@ impl ZKPRegistry {
         };
 
         env.storage()
-            .persistent()
+            .temporary()
             .set(&DataKey::VerificationResult(proof_id.clone()), &result);
 
         // Track gas usage
@@ -401,6 +612,94 @@ impl ZKPRegistry {
         }
     }
 
+    /// Submit and verify a batch of zero-knowledge proofs
+    #[allow(clippy::too_many_arguments)]
+    pub fn submit_zkp_batch(
+        env: Env,
+        submitter: Address,
+        proof_ids: Vec<BytesN<32>>,
+        proof_types: Vec<ZKPType>,
+        hash_functions: Vec<ZKPHashFunction>,
+        circuit_ids: Vec<String>,
+        public_inputs_batch: Vec<Vec<Bytes>>,
+        proof_data_batch: Vec<Bytes>,
+        vk_hashes: Vec<BytesN<32>>,
+        verification_gas_batch: Vec<u64>,
+    ) -> Result<Vec<bool>, Error> {
+        submitter.require_auth();
+        Self::require_initialized(&env)?;
+
+        let len = proof_ids.len();
+        if proof_types.len() != len
+            || hash_functions.len() != len
+            || circuit_ids.len() != len
+            || public_inputs_batch.len() != len
+            || proof_data_batch.len() != len
+            || vk_hashes.len() != len
+            || verification_gas_batch.len() != len
+        {
+            return Err(Error::InvalidInput);
+        }
+
+        let mut results = Vec::new(&env);
+        let mut total_gas_used = 0;
+
+        for i in 0..len {
+            let circuit_id = circuit_ids.get(i).unwrap();
+            let verification_gas = verification_gas_batch.get(i).unwrap();
+
+            if verification_gas > 100000 {
+                results.push_back(false);
+                continue;
+            }
+
+            if !env.storage().persistent().has(&DataKey::ZKPCircuitParams(circuit_id.clone())) {
+                results.push_back(false);
+                continue;
+            }
+
+            let proof_data = proof_data_batch.get(i).unwrap();
+            if proof_data.len() > 10000 {
+                results.push_back(false);
+                continue;
+            }
+
+            let proof_id = proof_ids.get(i).unwrap();
+            let proof = ZKProof {
+                proof_type: proof_types.get(i).unwrap(),
+                hash_function: hash_functions.get(i).unwrap(),
+                circuit_id: circuit_id.clone(),
+                public_inputs: public_inputs_batch.get(i).unwrap(),
+                proof_data: proof_data.clone(),
+                vk_hash: vk_hashes.get(i).unwrap(),
+                verification_gas,
+                created_at: env.ledger().timestamp(),
+            };
+
+            let is_valid = Self::verify_zkp_internal(&env, &proof).unwrap_or(false);
+
+            if is_valid {
+                env.storage().temporary().set(&DataKey::ZKProof(proof_id.clone()), &proof);
+                let result = ZKPVerificationResult {
+                    proof_id: proof_id.clone(),
+                    is_valid,
+                    gas_used: verification_gas,
+                    verified_at: env.ledger().timestamp(),
+                    verifier: submitter.clone(),
+                    metadata: Bytes::from_slice(&env, b"batch_verification"),
+                };
+                env.storage().temporary().set(&DataKey::VerificationResult(proof_id.clone()), &result);
+                total_gas_used = total_gas_used.saturating_add(verification_gas);
+            }
+
+            results.push_back(is_valid);
+            env.events().publish((symbol_short!("zkp"), symbol_short!("proof_sub")), (submitter.clone(), proof_id, is_valid));
+        }
+
+        Self::track_gas_usage(&env, &submitter, total_gas_used);
+        Ok(results)
+    }
+
     /// Create medical record authenticity proof
     #[allow(clippy::too_many_arguments)]
     pub fn create_medical_record_proof(
@@ -413,6 +712,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Verify both proofs
         let auth_valid = Self::verify_zkp_internal(&env, &authenticity_proof)?;
@@ -460,6 +760,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         prover.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Validate range
         if min_value >= max_value {
@@ -517,6 +818,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         holder.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Verify both proofs
         let valid_valid = Self::verify_zkp_internal(&env, &validity_proof)?;
@@ -561,12 +863,13 @@ impl ZKPRegistry {
         composer: Address,
         base_proof_id: BytesN<32>,
         recursive_proof: ZKProof,
-        aggregated_vk: Bytes,
+        aggregated_vk_hash: BytesN<32>,
         composition_depth: u32,
         total_gas: u64,
     ) -> Result<(), Error> {
         composer.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
 
         // Check recursion depth limit
         if composition_depth > 10 {
@@ -579,18 +882,17 @@ impl ZKPRegistry {
         }
 
         // Verify base proof exists
-        if !env
-            .storage()
-            .persistent()
-            .has(&DataKey::ZKProof(base_proof_id.clone()))
-        {
+        let has_temp = env.storage().temporary().has(&DataKey::ZKProof(base_proof_id.clone()));
+        let has_pers = env.storage().persistent().has(&DataKey::ZKProof(base_proof_id.clone()));
+
+        if !has_temp && !has_pers {
             return Err(Error::ProofNotFound);
         }
 
         let recursive_proof = RecursiveProof {
             base_proof_id,
             recursive_proof: recursive_proof.clone(),
-            aggregated_vk: aggregated_vk.clone(),
+            aggregated_vk_hash,
             composition_depth,
             total_gas,
             composed_at: env.ledger().timestamp(),
@@ -622,16 +924,47 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    /// Clean up a proof to manually free storage space
+    pub fn cleanup_proof(env: Env, submitter: Address, proof_id: BytesN<32>) -> Result<(), Error> {
+        submitter.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Verify ownership if possible
+        let is_owner = if let Some(result) = env.storage().temporary().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+            result.verifier == submitter
+        } else if let Some(result) = env.storage().persistent().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+            result.verifier == submitter
+        } else {
+            false
+        };
+
+        if !is_owner {
+            return Err(Error::NotAuthorized);
+        }
+
+        // Cleanup from both temporary and persistent just in case
+        env.storage().temporary().remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage().temporary().remove(&DataKey::VerificationResult(proof_id.clone()));
+        env.storage().persistent().remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage().persistent().remove(&DataKey::VerificationResult(proof_id.clone()));
+
+        env.events().publish((symbol_short!("zkp"), symbol_short!("cleanup")), (submitter, proof_id));
+        Ok(())
+    }
+
     /// Get ZKP verification result
     pub fn get_verification_result(
         env: Env,
         proof_id: BytesN<32>,
     ) -> Result<ZKPVerificationResult, Error> {
         Self::require_initialized(&env)?;
-        env.storage()
-            .persistent()
-            .get(&DataKey::VerificationResult(proof_id))
-            .ok_or(Error::ProofNotFound)
+        if let Some(result) = env.storage().temporary().get(&DataKey::VerificationResult(proof_id.clone())) {
+            Ok(result)
+        } else if let Some(result) = env.storage().persistent().get(&DataKey::VerificationResult(proof_id)) {
+            Ok(result)
+        } else {
+            Err(Error::ProofNotFound)
+        }
     }
 
     /// Get medical record proof
@@ -688,13 +1021,116 @@ impl ZKPRegistry {
             .unwrap_or(0))
     }
 
+    /// Export contract state for migrations
+    pub fn export_state(env: Env) -> Result<Bytes, Error> {
+        // Ensure only admin can export
+        if let Some(admin) = env.storage().instance().get::<_, Address>(&DataKey::Admin) {
+            admin.require_auth();
+        } else {
+            return Err(Error::NotInitialized);
+        }
+
+        let initialized = env.storage().instance().get(&DataKey::Initialized).unwrap_or(false);
+        let admin = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let paused = env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false);
+        let multisig_config = env.storage().instance().get(&DataKey::MultiSigConfig);
+        let proposal_counter = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+
+        let mut proposals = Vec::new(&env);
+        for i in 0..proposal_counter {
+            if let Some(proposal) = env.storage().instance().get(&DataKey::AdminProposal(i)) {
+                proposals.push_back(proposal);
+            }
+        }
+
+        let state = RegistryStateExport {
+            format_version: 1,
+            admin,
+            initialized,
+            paused,
+            multisig_config,
+            proposal_counter,
+            proposals,
+        };
+
+        // Serialize all state
+        Ok(state.to_xdr(&env))
+    }
+
+    /// Import contract state during migrations
+    pub fn import_state(env: Env, caller: Address, state_bytes: Bytes) -> Result<(), Error> {
+        caller.require_auth();
+
+        // Allow import only if not initialized or if called by current admin
+        if env.storage().instance().has(&DataKey::Initialized) {
+            let current_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+            if caller != current_admin {
+                return Err(Error::NotAuthorized);
+            }
+        }
+
+        // Validate and deserialize state
+        let state = RegistryStateExport::from_xdr(&env, &state_bytes)
+            .map_err(|_| Error::InvalidInput)?;
+
+        // Format version validation
+        if state.format_version != 1 {
+            return Err(Error::InvalidInput);
+        }
+
+        // Restore state
+        env.storage().instance().set(&DataKey::Initialized, &state.initialized);
+        env.storage().instance().set(&DataKey::Admin, &state.admin);
+        env.storage().instance().set(&DataKey::ContractPaused, &state.paused);
+
+        if let Some(config) = state.multisig_config {
+            env.storage().instance().set(&DataKey::MultiSigConfig, &config);
+        }
+
+        env.storage().instance().set(&DataKey::ProposalCounter, &state.proposal_counter);
+
+        for proposal in state.proposals.iter() {
+            env.storage().instance().set(&DataKey::AdminProposal(proposal.id), &proposal);
+        }
+
+        env.storage().persistent().set(&ADMIN, &state.admin);
+        env.events().publish((symbol_short!("admin"), symbol_short!("imported")), caller);
+
+        Ok(())
+    }
+
     // -------------------------------------------------------------------------
     // Internal helper functions
     // -------------------------------------------------------------------------
 
+    fn execute_action(env: &Env, action: &AdminAction) -> Result<(), Error> {
+        match action {
+            AdminAction::UpgradeContract(wasm_hash) => {
+                env.deployer().update_current_contract_wasm(wasm_hash.clone());
+            },
+            AdminAction::EmergencyPause => {
+                env.storage().instance().set(&DataKey::ContractPaused, &true);
+            },
+            AdminAction::EmergencyResume => {
+                env.storage().instance().set(&DataKey::ContractPaused, &false);
+            },
+            AdminAction::UpdateParameters(_key, _val) => {
+                // Placeholder for dynamic parameter updates
+            },
+        }
+        Ok(())
+    }
+
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
+        }
+        Ok(())
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false) {
+            return Err(Error::ContractPaused);
         }
         Ok(())
     }

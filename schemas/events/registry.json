@@ -1,6 +1,6 @@
 {
   "registry_version": "1.0.0",
-  "generated_at": "2026-04-25T04:43:58.181Z",
+  "generated_at": "2026-04-25T20:10:36.979Z",
   "generator": {
     "name": "scripts/events/generate-registry.mjs",
     "source_glob": "contracts/**/src/**/*.rs"
@@ -673,7 +673,7 @@
       "name": "credential_registry",
       "events": [
         {
-          "id": "credential_registry:CREDREG.IADMIN:contracts/credential_registry/src/lib.rs:70",
+          "id": "credential_registry:CREDREG.IADMIN:contracts/credential_registry/src/lib.rs:78",
           "contract": "credential_registry",
           "topics": [
             "CREDREG",
@@ -685,11 +685,11 @@
           },
           "source": {
             "file": "contracts/credential_registry/src/lib.rs",
-            "line": 70
+            "line": 78
           }
         },
         {
-          "id": "credential_registry:CREDREG.ROOT:contracts/credential_registry/src/lib.rs:118",
+          "id": "credential_registry:CREDREG.ROOT:contracts/credential_registry/src/lib.rs:135",
           "contract": "credential_registry",
           "topics": [
             "CREDREG",
@@ -701,7 +701,7 @@
           },
           "source": {
             "file": "contracts/credential_registry/src/lib.rs",
-            "line": 118
+            "line": 135
           }
         }
       ]
@@ -910,7 +910,7 @@
       "name": "cross_chain_bridge",
       "events": [
         {
-          "id": "cross_chain_bridge:AtomicTxInitiated:contracts/cross_chain_bridge/src/lib.rs:720",
+          "id": "cross_chain_bridge:AtomicTxInitiated:contracts/cross_chain_bridge/src/lib.rs:774",
           "contract": "cross_chain_bridge",
           "topics": [
             "AtomicTxInitiated"
@@ -921,11 +921,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 720
+            "line": 774
           }
         },
         {
-          "id": "cross_chain_bridge:EventSynced:contracts/cross_chain_bridge/src/lib.rs:1239",
+          "id": "cross_chain_bridge:EventSynced:contracts/cross_chain_bridge/src/lib.rs:1293",
           "contract": "cross_chain_bridge",
           "topics": [
             "EventSynced"
@@ -936,11 +936,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1239
+            "line": 1293
           }
         },
         {
-          "id": "cross_chain_bridge:MessageConfirmed:contracts/cross_chain_bridge/src/lib.rs:643",
+          "id": "cross_chain_bridge:MessageConfirmed:contracts/cross_chain_bridge/src/lib.rs:697",
           "contract": "cross_chain_bridge",
           "topics": [
             "MessageConfirmed"
@@ -951,11 +951,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 643
+            "line": 697
           }
         },
         {
-          "id": "cross_chain_bridge:MessageExecuted:contracts/cross_chain_bridge/src/lib.rs:686",
+          "id": "cross_chain_bridge:MessageExecuted:contracts/cross_chain_bridge/src/lib.rs:740",
           "contract": "cross_chain_bridge",
           "topics": [
             "MessageExecuted"
@@ -966,11 +966,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 686
+            "line": 740
           }
         },
         {
-          "id": "cross_chain_bridge:MessageSubmitted:contracts/cross_chain_bridge/src/lib.rs:570",
+          "id": "cross_chain_bridge:MessageSubmitted:contracts/cross_chain_bridge/src/lib.rs:624",
           "contract": "cross_chain_bridge",
           "topics": [
             "MessageSubmitted"
@@ -981,11 +981,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 570
+            "line": 624
           }
         },
         {
-          "id": "cross_chain_bridge:MessageVerified:contracts/cross_chain_bridge/src/lib.rs:637",
+          "id": "cross_chain_bridge:MessageVerified:contracts/cross_chain_bridge/src/lib.rs:691",
           "contract": "cross_chain_bridge",
           "topics": [
             "MessageVerified"
@@ -996,11 +996,56 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 637
+            "line": 691
           }
         },
         {
-          "id": "cross_chain_bridge:OracleDataAggregated:contracts/cross_chain_bridge/src/lib.rs:1066",
+          "id": "cross_chain_bridge:OperationCreated:contracts/cross_chain_bridge/src/lib.rs:1368",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationCreated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 3
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1368
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OperationRefunded:contracts/cross_chain_bridge/src/lib.rs:1399",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationRefunded"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1399
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OperationStatusUpdated:contracts/cross_chain_bridge/src/lib.rs:1484",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "OperationStatusUpdated"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1484
+          }
+        },
+        {
+          "id": "cross_chain_bridge:OracleDataAggregated:contracts/cross_chain_bridge/src/lib.rs:1120",
           "contract": "cross_chain_bridge",
           "topics": [
             "OracleDataAggregated"
@@ -1011,11 +1056,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1066
+            "line": 1120
           }
         },
         {
-          "id": "cross_chain_bridge:OracleReportSubmitted:contracts/cross_chain_bridge/src/lib.rs:1014",
+          "id": "cross_chain_bridge:OracleReportSubmitted:contracts/cross_chain_bridge/src/lib.rs:1068",
           "contract": "cross_chain_bridge",
           "topics": [
             "OracleReportSubmitted"
@@ -1026,11 +1071,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1014
+            "line": 1068
           }
         },
         {
-          "id": "cross_chain_bridge:Paused:contracts/cross_chain_bridge/src/lib.rs:494",
+          "id": "cross_chain_bridge:Paused:contracts/cross_chain_bridge/src/lib.rs:548",
           "contract": "cross_chain_bridge",
           "topics": [
             "Paused"
@@ -1041,11 +1086,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 494
+            "line": 548
           }
         },
         {
-          "id": "cross_chain_bridge:ProofSubmitted:contracts/cross_chain_bridge/src/lib.rs:1110",
+          "id": "cross_chain_bridge:ProofSubmitted:contracts/cross_chain_bridge/src/lib.rs:1164",
           "contract": "cross_chain_bridge",
           "topics": [
             "ProofSubmitted"
@@ -1056,11 +1101,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1110
+            "line": 1164
           }
         },
         {
-          "id": "cross_chain_bridge:ProofVerified:contracts/cross_chain_bridge/src/lib.rs:1151",
+          "id": "cross_chain_bridge:ProofVerified:contracts/cross_chain_bridge/src/lib.rs:1205",
           "contract": "cross_chain_bridge",
           "topics": [
             "ProofVerified"
@@ -1071,11 +1116,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1151
+            "line": 1205
           }
         },
         {
-          "id": "cross_chain_bridge:RecordRefRegistered:contracts/cross_chain_bridge/src/lib.rs:861",
+          "id": "cross_chain_bridge:RecordRefRegistered:contracts/cross_chain_bridge/src/lib.rs:915",
           "contract": "cross_chain_bridge",
           "topics": [
             "RecordRefRegistered"
@@ -1086,11 +1131,26 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 861
+            "line": 915
           }
         },
         {
-          "id": "cross_chain_bridge:RollbackInitiated:contracts/cross_chain_bridge/src/lib.rs:1321",
+          "id": "cross_chain_bridge:RefundProcessed:contracts/cross_chain_bridge/src/lib.rs:1857",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "RefundProcessed"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 4
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1857
+          }
+        },
+        {
+          "id": "cross_chain_bridge:RollbackInitiated:contracts/cross_chain_bridge/src/lib.rs:1547",
           "contract": "cross_chain_bridge",
           "topics": [
             "RollbackInitiated"
@@ -1101,11 +1161,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 1321
+            "line": 1547
           }
         },
         {
-          "id": "cross_chain_bridge:SyncStatusUpdated:contracts/cross_chain_bridge/src/lib.rs:893",
+          "id": "cross_chain_bridge:SyncStatusUpdated:contracts/cross_chain_bridge/src/lib.rs:947",
           "contract": "cross_chain_bridge",
           "topics": [
             "SyncStatusUpdated"
@@ -1116,11 +1176,26 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 893
+            "line": 947
           }
         },
         {
-          "id": "cross_chain_bridge:Unpaused:contracts/cross_chain_bridge/src/lib.rs:508",
+          "id": "cross_chain_bridge:TimeoutExtended:contracts/cross_chain_bridge/src/lib.rs:1451",
+          "contract": "cross_chain_bridge",
+          "topics": [
+            "TimeoutExtended"
+          ],
+          "payload": {
+            "shape": "tuple",
+            "arity": 2
+          },
+          "source": {
+            "file": "contracts/cross_chain_bridge/src/lib.rs",
+            "line": 1451
+          }
+        },
+        {
+          "id": "cross_chain_bridge:Unpaused:contracts/cross_chain_bridge/src/lib.rs:562",
           "contract": "cross_chain_bridge",
           "topics": [
             "Unpaused"
@@ -1131,11 +1206,11 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 508
+            "line": 562
           }
         },
         {
-          "id": "cross_chain_bridge:ValidatorDeactivated:contracts/cross_chain_bridge/src/lib.rs:439",
+          "id": "cross_chain_bridge:ValidatorDeactivated:contracts/cross_chain_bridge/src/lib.rs:493",
           "contract": "cross_chain_bridge",
           "topics": [
             "ValidatorDeactivated"
@@ -1146,7 +1221,7 @@
           },
           "source": {
             "file": "contracts/cross_chain_bridge/src/lib.rs",
-            "line": 439
+            "line": 493
           }
         }
       ]

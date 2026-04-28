@@ -8,5 +8,5 @@ mod vesting;
 #[cfg(test)]
 mod test;
 
-pub use contract::TokenSaleContract;
-pub use vesting::VestingContract;
+pub use contract::{TokenSaleContract, TokenSaleContractClient};
+pub use vesting::{VestingContract, VestingContractClient};
