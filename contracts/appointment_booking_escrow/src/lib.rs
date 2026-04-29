@@ -117,14 +117,17 @@ impl AppointmentBookingEscrow {
     ) -> Result<u64, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "book_appointment");
 
         // Validate inputs
         if amount <= 0 {
+            events::diag_validation_fail(&env, "book_appointment", "invalid_amount");
             Self::record_operation(&env, false);
             return Err(Error::InvalidAmount);
         }
 
         if patient == provider {
+            events::diag_validation_fail(&env, "book_appointment", "patient_eq_provider");
             Self::record_operation(&env, false);
             return Err(Error::InvalidProvider);
         }
@@ -200,6 +203,7 @@ impl AppointmentBookingEscrow {
             timestamp,
         );
 
+        events::diag_fn_exit(&env, "book_appointment");
         Self::record_operation(&env, true);
         Ok(appointment_id)
     }
@@ -213,6 +217,7 @@ impl AppointmentBookingEscrow {
     ) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "confirm_appointment");
 
         // Get appointment
         let appointment_key = DataKey::Appointment(appointment_id);
@@ -227,6 +232,7 @@ impl AppointmentBookingEscrow {
 
         // Verify provider matches
         if appointment.provider != provider {
+            events::diag_auth_fail(&env, "confirm_appointment");
             Self::record_operation(&env, false);
             return Err(Error::OnlyProviderCanConfirm);
         }
@@ -235,49 +241,62 @@ impl AppointmentBookingEscrow {
         if appointment.status == AppointmentStatus::Confirmed
             || appointment.status == AppointmentStatus::Completed
         {
+            events::diag_validation_fail(&env, "confirm_appointment", "already_confirmed");
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyConfirmed);
         }
         if appointment.status == AppointmentStatus::Refunded {
+            events::diag_validation_fail(&env, "confirm_appointment", "already_refunded");
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyRefunded);
         }
 
         // Prevent double withdrawal
         if appointment.funds_released {
+            events::diag_validation_fail(&env, "confirm_appointment", "double_withdrawal");
             Self::record_operation(&env, false);
             return Err(Error::DoubleWithdrawal);
         }
 
         let timestamp = env.ledger().timestamp();
+        let transfer_amount = appointment.amount;
+        let token_addr = appointment.token.clone();
 
-        // Transfer funds from contract to provider
-        let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &provider,
-            &appointment.amount,
-        );
-
-        // Update appointment status
+        // CEI: Update state BEFORE external call to prevent reentrancy
         appointment.confirmed_at = timestamp;
         appointment.status = AppointmentStatus::Completed;
         appointment.funds_released = true;
 
-        // Store updated appointment
+        // Store updated appointment before transfer
         env.storage()
             .persistent()
             .set(&appointment_key, &appointment);
+
+        events::diag_state_change(
+            &env,
+            appointment_id,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::Completed as u32,
+        );
+
+        // Interaction: Transfer funds from contract to provider
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &provider,
+            &transfer_amount,
+        );
 
         events::publish_appointment_confirmed(&env, appointment_id, &provider, timestamp);
         events::publish_funds_released(
             &env,
             appointment_id,
             &provider,
-            appointment.amount,
+            transfer_amount,
             timestamp,
         );
 
+        events::diag_fn_exit(&env, "confirm_appointment");
         Self::record_operation(&env, true);
         Ok(())
     }
@@ -292,6 +311,7 @@ impl AppointmentBookingEscrow {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "refund_appointment");
 
         // Get appointment
         let appointment_key = DataKey::Appointment(appointment_id);
@@ -306,12 +326,14 @@ impl AppointmentBookingEscrow {
 
         // Verify patient matches
         if appointment.patient != patient {
+            events::diag_auth_fail(&env, "refund_appointment");
             Self::record_operation(&env, false);
             return Err(Error::OnlyPatientCanRefund);
         }
 
         // Check if already refunded
         if appointment.status == AppointmentStatus::Refunded {
+            events::diag_validation_fail(&env, "refund_appointment", "already_refunded");
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyRefunded);
         }
@@ -320,44 +342,56 @@ impl AppointmentBookingEscrow {
         if appointment.status == AppointmentStatus::Confirmed
             || appointment.status == AppointmentStatus::Completed
         {
+            events::diag_validation_fail(&env, "refund_appointment", "already_confirmed");
             Self::record_operation(&env, false);
             return Err(Error::InvalidState);
         }
 
         // Prevent double withdrawal
         if appointment.funds_released {
+            events::diag_validation_fail(&env, "refund_appointment", "double_withdrawal");
             Self::record_operation(&env, false);
             return Err(Error::DoubleWithdrawal);
         }
 
         let timestamp = env.ledger().timestamp();
+        let refund_amount = appointment.amount;
+        let token_addr = appointment.token.clone();
 
-        // Transfer funds from contract back to patient
-        let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &patient,
-            &appointment.amount,
-        );
-
-        // Update appointment status
+        // CEI: Update state BEFORE external call to prevent reentrancy
         appointment.refunded_at = timestamp;
         appointment.status = AppointmentStatus::Refunded;
         appointment.funds_released = true;
 
-        // Store updated appointment
+        // Store updated appointment before transfer
         env.storage()
             .persistent()
             .set(&appointment_key, &appointment);
+
+        events::diag_state_change(
+            &env,
+            appointment_id,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::Refunded as u32,
+        );
+
+        // Interaction: Transfer funds from contract back to patient
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(
+            &env.current_contract_address(),
+            &patient,
+            &refund_amount,
+        );
 
         events::publish_appointment_refunded(
             &env,
             appointment_id,
             &patient,
-            appointment.amount,
+            refund_amount,
             timestamp,
         );
 
+        events::diag_fn_exit(&env, "refund_appointment");
         Self::record_operation(&env, true);
         Ok(())
     }

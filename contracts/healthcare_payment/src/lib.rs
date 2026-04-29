@@ -896,6 +896,10 @@ impl HealthcarePayment {
 
     pub fn process_payment(env: Env, claim_id: u64) -> Result<(), Error> {
         Self::require_operational(&env)?;
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("ENTER")),
+            (symbol_short!("proc_pay"), claim_id),
+        );
         let config: Config = env
             .storage()
             .instance()
@@ -908,6 +912,10 @@ impl HealthcarePayment {
             .ok_or(Error::ClaimNotFound)?;
 
         if claim.status != ClaimStatus::Approved {
+            env.events().publish(
+                (symbol_short!("DIAG"), symbol_short!("VALFAIL")),
+                (symbol_short!("proc_pay"), claim_id, claim.status as u32),
+            );
             return Err(Error::InvalidStatus);
         }
 
@@ -918,6 +926,18 @@ impl HealthcarePayment {
         );
 
         let token_client = TokenClient::new(&env, &config.token);
+
+        // CEI: Update state BEFORE external token transfers to prevent reentrancy
+        claim.status = ClaimStatus::Paid;
+        claim.updated_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Claim(claim_id), &claim);
+
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("STATE")),
+            (claim_id, ClaimStatus::Approved as u32, ClaimStatus::Paid as u32),
+        );
 
         token_client.transfer(
             &env.current_contract_address(),
@@ -933,15 +953,14 @@ impl HealthcarePayment {
             );
         }
 
-        claim.status = ClaimStatus::Paid;
-        claim.updated_at = env.ledger().timestamp();
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Claim(claim_id), &claim);
         env.events().publish(
             (symbol_short!("CLAIM_PD"),),
             (claim_id, claim.provider, provider_amount),
+        );
+
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("EXIT")),
+            (symbol_short!("proc_pay"), claim_id),
         );
 
         Ok(())
@@ -977,16 +996,18 @@ impl HealthcarePayment {
                 Vec::from_array(&env, [claim.amount.into_val(&env)]),
             );
 
-            token_client.transfer(&contract_addr, &claim.provider, &provider_amount);
-            if fee_amount > 0 {
-                token_client.transfer(&contract_addr, &config.treasury, &fee_amount);
-            }
-
+            // CEI: Update state BEFORE external token transfers to prevent reentrancy
             claim.status = ClaimStatus::Paid;
             claim.updated_at = current_time;
             env.storage()
                 .persistent()
                 .set(&DataKey::Claim(claim_id), &claim);
+
+            token_client.transfer(&contract_addr, &claim.provider, &provider_amount);
+            if fee_amount > 0 {
+                token_client.transfer(&contract_addr, &config.treasury, &fee_amount);
+            }
+
             env.events().publish(
                 (symbol_short!("CLAIM_PD"),),
                 (claim_id, claim.provider, provider_amount),
