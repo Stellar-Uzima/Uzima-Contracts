@@ -134,17 +134,17 @@ impl BehaviorHarness for TokenSaleHarness {
                     ledger.timestamp = timestamp;
                 });
                 OperationOutcome::new(0)
-            }
+            },
             TokenSaleOp::Pause => {
                 self.client.pause_sale();
                 self.paused = true;
                 OperationOutcome::new(1)
-            }
+            },
             TokenSaleOp::Unpause => {
                 self.client.unpause_sale();
                 self.paused = false;
                 OperationOutcome::new(1)
-            }
+            },
             TokenSaleOp::Contribute {
                 contributor,
                 amount,
@@ -183,7 +183,7 @@ impl BehaviorHarness for TokenSaleHarness {
                 }
 
                 OperationOutcome::new(if success { 2 } else { 0 })
-            }
+            },
             TokenSaleOp::Finalize => {
                 let success = !self.finalized;
                 let result = self.client.try_finalize_sale();
@@ -197,7 +197,7 @@ impl BehaviorHarness for TokenSaleHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             TokenSaleOp::ClaimTokens { contributor } => {
                 let contributor_index = *contributor as usize % self.contributors.len();
                 let contributor = self.contributor(*contributor).clone();
@@ -224,7 +224,7 @@ impl BehaviorHarness for TokenSaleHarness {
                 }
 
                 OperationOutcome::new(if emits_event { 2 } else { 0 })
-            }
+            },
             TokenSaleOp::ClaimRefund { contributor } => {
                 let contributor_index = *contributor as usize % self.contributors.len();
                 let contributor = self.contributor(*contributor).clone();
@@ -252,7 +252,7 @@ impl BehaviorHarness for TokenSaleHarness {
                 }
 
                 OperationOutcome::new(if emits_event { 2 } else { 0 })
-            }
+            },
         }
     }
 

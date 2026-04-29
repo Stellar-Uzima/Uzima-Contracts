@@ -1,21 +1,20 @@
+pub mod assertions;
+pub mod contract_fixtures;
 /// Testing utilities module for contract testing
 /// This module provides helper functions and utilities for testing Soroban contracts
-
 pub mod contract_utils;
-pub mod test_fixtures;
-pub mod test_data;
-pub mod assertions;
-pub mod performance;
-pub mod contract_fixtures;
 pub mod integration_framework;
+pub mod performance;
+pub mod test_data;
+pub mod test_fixtures;
 
-pub use contract_utils::*;
-pub use test_fixtures::*;
-pub use test_data::*;
 pub use assertions::*;
-pub use performance::*;
 pub use contract_fixtures::*;
+pub use contract_utils::*;
 pub use integration_framework::*;
+pub use performance::*;
+pub use test_data::*;
+pub use test_fixtures::*;
 
 /// Common test constants
 pub mod constants {

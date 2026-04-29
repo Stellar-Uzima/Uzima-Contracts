@@ -936,7 +936,11 @@ impl HealthcarePayment {
 
         env.events().publish(
             (symbol_short!("DIAG"), symbol_short!("STATE")),
-            (claim_id, ClaimStatus::Approved as u32, ClaimStatus::Paid as u32),
+            (
+                claim_id,
+                ClaimStatus::Approved as u32,
+                ClaimStatus::Paid as u32,
+            ),
         );
 
         token_client.transfer(

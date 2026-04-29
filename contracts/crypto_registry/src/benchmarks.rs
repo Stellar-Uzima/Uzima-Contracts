@@ -29,7 +29,10 @@ impl BenchResult {
     fn print(&self) {
         std::println!(
             "[BENCH] {:40} cpu={:>12} insns  mem={:>10} bytes  wall={:>8}µs",
-            self.name, self.cpu_instructions, self.memory_bytes, self.wall_us
+            self.name,
+            self.cpu_instructions,
+            self.memory_bytes,
+            self.wall_us
         );
     }
 
@@ -133,9 +136,13 @@ fn bench_get_current_key_bundle() {
         &false,
     );
 
-    let r = measure(&env, "crypto_registry::get_current_key_bundle (read)", || {
-        client.get_current_key_bundle(&alice);
-    });
+    let r = measure(
+        &env,
+        "crypto_registry::get_current_key_bundle (read)",
+        || {
+            client.get_current_key_bundle(&alice);
+        },
+    );
     r.print();
     r.assert_cpu_under(BUDGET_GET_BUNDLE);
 }
@@ -269,9 +276,13 @@ fn bench_storage_write_vs_read_ratio() {
         );
     });
 
-    let read = measure(&env, "crypto_registry::get_current_key_bundle (read)", || {
-        client.get_current_key_bundle(&alice);
-    });
+    let read = measure(
+        &env,
+        "crypto_registry::get_current_key_bundle (read)",
+        || {
+            client.get_current_key_bundle(&alice);
+        },
+    );
 
     write.print();
     read.print();

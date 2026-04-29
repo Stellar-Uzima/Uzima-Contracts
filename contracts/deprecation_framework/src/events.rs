@@ -2,10 +2,8 @@ use crate::types::{DeprecationStatus, MigrationGuide, SunsetTimeline};
 use soroban_sdk::{symbol_short, Address, Env, String};
 
 pub fn publish_initialization(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("INIT")),
-        admin,
-    );
+    env.events()
+        .publish((symbol_short!("DEPREC"), symbol_short!("INIT")), admin);
 }
 
 pub fn publish_deprecation_marked(env: &Env, status: &DeprecationStatus) {

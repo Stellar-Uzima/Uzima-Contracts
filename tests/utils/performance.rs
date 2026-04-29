@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 /// Performance testing utilities for contracts.
 ///
 /// For Soroban-specific benchmarks see the per-contract `benchmarks.rs` test
 /// modules, which use `env.budget().cpu_instruction_cost()` /
 /// `env.budget().memory_bytes_cost()` from `soroban_sdk::testutils::budget`.
 use std::time::Instant;
-use std::collections::HashMap;
 
 // ── Soroban budget result ────────────────────────────────────────────────────
 
@@ -44,7 +44,9 @@ pub struct SorobanBenchmarkSuite {
 
 impl SorobanBenchmarkSuite {
     pub fn new() -> Self {
-        Self { results: Vec::new() }
+        Self {
+            results: Vec::new(),
+        }
     }
 
     pub fn add(&mut self, result: SorobanBenchmarkResult) {

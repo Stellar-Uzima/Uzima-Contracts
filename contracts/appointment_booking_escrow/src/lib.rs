@@ -281,20 +281,10 @@ impl AppointmentBookingEscrow {
 
         // Interaction: Transfer funds from contract to provider
         let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &provider,
-            &transfer_amount,
-        );
+        token_client.transfer(&env.current_contract_address(), &provider, &transfer_amount);
 
         events::publish_appointment_confirmed(&env, appointment_id, &provider, timestamp);
-        events::publish_funds_released(
-            &env,
-            appointment_id,
-            &provider,
-            transfer_amount,
-            timestamp,
-        );
+        events::publish_funds_released(&env, appointment_id, &provider, transfer_amount, timestamp);
 
         events::diag_fn_exit(&env, "confirm_appointment");
         Self::record_operation(&env, true);
@@ -377,11 +367,7 @@ impl AppointmentBookingEscrow {
 
         // Interaction: Transfer funds from contract back to patient
         let token_client = token::Client::new(&env, &token_addr);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &patient,
-            &refund_amount,
-        );
+        token_client.transfer(&env.current_contract_address(), &patient, &refund_amount);
 
         events::publish_appointment_refunded(
             &env,

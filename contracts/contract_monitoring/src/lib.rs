@@ -13,9 +13,7 @@
 
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Map, String};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -165,11 +163,8 @@ impl ContractMonitoring {
 
         // Update per-function stats.
         let key = DataKey::FnStats(function_name.clone());
-        let mut stats: FunctionStats = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(FunctionStats {
+        let mut stats: FunctionStats =
+            env.storage().instance().get(&key).unwrap_or(FunctionStats {
                 call_count: 0,
                 error_count: 0,
                 total_gas: 0,
@@ -187,10 +182,7 @@ impl ContractMonitoring {
     }
 
     /// Record a failed function call / error.
-    pub fn record_error(
-        env: Env,
-        function_name: String,
-    ) -> Result<(), MonitoringError> {
+    pub fn record_error(env: Env, function_name: String) -> Result<(), MonitoringError> {
         Self::ensure_initialized(&env)?;
 
         let errors: u64 = env
@@ -203,11 +195,8 @@ impl ContractMonitoring {
             .set(&DataKey::TotalErrors, &(errors + 1));
 
         let key = DataKey::FnStats(function_name);
-        let mut stats: FunctionStats = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(FunctionStats {
+        let mut stats: FunctionStats =
+            env.storage().instance().get(&key).unwrap_or(FunctionStats {
                 call_count: 0,
                 error_count: 0,
                 total_gas: 0,
@@ -217,29 +206,20 @@ impl ContractMonitoring {
         env.storage().instance().set(&key, &stats);
 
         // Emit error event.
-        env.events().publish(
-            (symbol_short!("MON"), symbol_short!("ERROR")),
-            errors + 1,
-        );
+        env.events()
+            .publish((symbol_short!("MON"), symbol_short!("ERROR")), errors + 1);
 
         Ok(())
     }
 
     /// Update storage-entry count (call after writes to tracked contracts).
-    pub fn update_storage_count(
-        env: Env,
-        count: u32,
-    ) -> Result<(), MonitoringError> {
+    pub fn update_storage_count(env: Env, count: u32) -> Result<(), MonitoringError> {
         Self::ensure_initialized(&env)?;
         env.storage()
             .instance()
             .set(&DataKey::StorageEntries, &count);
 
-        let config: AlertConfig = env
-            .storage()
-            .instance()
-            .get(&DataKey::AlertConfig)
-            .unwrap();
+        let config: AlertConfig = env.storage().instance().get(&DataKey::AlertConfig).unwrap();
         if config.max_storage_entries > 0 && count > config.max_storage_entries {
             env.events().publish(
                 (symbol_short!("MON"), symbol_short!("ALERT")),
@@ -251,15 +231,10 @@ impl ContractMonitoring {
     }
 
     /// Update alert thresholds (admin only).
-    pub fn update_alert_config(
-        env: Env,
-        config: AlertConfig,
-    ) -> Result<(), MonitoringError> {
+    pub fn update_alert_config(env: Env, config: AlertConfig) -> Result<(), MonitoringError> {
         let admin = Self::get_admin(&env)?;
         admin.require_auth();
-        env.storage()
-            .instance()
-            .set(&DataKey::AlertConfig, &config);
+        env.storage().instance().set(&DataKey::AlertConfig, &config);
         Ok(())
     }
 
@@ -301,11 +276,7 @@ impl ContractMonitoring {
             0
         };
 
-        let config: AlertConfig = env
-            .storage()
-            .instance()
-            .get(&DataKey::AlertConfig)
-            .unwrap();
+        let config: AlertConfig = env.storage().instance().get(&DataKey::AlertConfig).unwrap();
 
         let alert_active = (config.max_error_rate_pct > 0
             && error_rate_pct > config.max_error_rate_pct)

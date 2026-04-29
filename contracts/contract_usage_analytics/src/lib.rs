@@ -1,7 +1,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec, Map,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    Vec,
 };
 
 #[derive(Clone)]
@@ -76,13 +77,16 @@ impl ContractUsageAnalytics {
         success: bool,
         latency_ms: u64,
     ) -> Result<(), Error> {
-        // In a real scenario, we might want to restrict who can call this, 
+        // In a real scenario, we might want to restrict who can call this,
         // or let any contract report its own usage.
-        
+
         let timestamp = env.ledger().timestamp();
-        
+
         // 1. Update Function Metrics
-        let mut f_metric = env.storage().instance().get(&DataKey::FunctionMetric(function_name.clone()))
+        let mut f_metric = env
+            .storage()
+            .instance()
+            .get(&DataKey::FunctionMetric(function_name.clone()))
             .unwrap_or(FunctionMetric {
                 name: function_name.clone(),
                 call_count: 0,
@@ -99,18 +103,27 @@ impl ContractUsageAnalytics {
         if !success {
             f_metric.error_count = f_metric.error_count.saturating_add(1);
         }
-        
+
         // Rolling average for latency
         let prev_total_latency = f_metric.avg_latency_ms.saturating_mul(f_metric.call_count);
-        f_metric.avg_latency_ms = prev_total_latency.saturating_add(latency_ms).checked_div(new_count).unwrap_or(0);
-        
+        f_metric.avg_latency_ms = prev_total_latency
+            .saturating_add(latency_ms)
+            .checked_div(new_count)
+            .unwrap_or(0);
+
         f_metric.call_count = new_count;
         f_metric.last_called = timestamp;
-        
-        env.storage().instance().set(&DataKey::FunctionMetric(function_name.clone()), &f_metric);
+
+        env.storage()
+            .instance()
+            .set(&DataKey::FunctionMetric(function_name.clone()), &f_metric);
 
         // Track function name if new
-        let mut all_functions: Vec<String> = env.storage().instance().get(&DataKey::AllFunctions).unwrap_or(Vec::new(&env));
+        let mut all_functions: Vec<String> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllFunctions)
+            .unwrap_or(Vec::new(&env));
         let mut exists = false;
         for f in all_functions.iter() {
             if f == function_name {
@@ -120,24 +133,35 @@ impl ContractUsageAnalytics {
         }
         if !exists {
             all_functions.push_back(function_name.clone());
-            env.storage().instance().set(&DataKey::AllFunctions, &all_functions);
+            env.storage()
+                .instance()
+                .set(&DataKey::AllFunctions, &all_functions);
         }
 
         // 2. Update User Metrics
-        let mut u_metric = env.storage().instance().get(&DataKey::UserMetric(user.clone()))
+        let mut u_metric = env
+            .storage()
+            .instance()
+            .get(&DataKey::UserMetric(user.clone()))
             .unwrap_or(UserMetric {
                 user: user.clone(),
                 total_calls: 0,
                 last_active: 0,
             });
-        
+
         u_metric.total_calls = u_metric.total_calls.saturating_add(1);
         u_metric.last_active = timestamp;
-        env.storage().instance().set(&DataKey::UserMetric(user.clone()), &u_metric);
+        env.storage()
+            .instance()
+            .set(&DataKey::UserMetric(user.clone()), &u_metric);
 
         // 3. Track daily active users
         let day_id = timestamp / 86400;
-        let mut active_users_today: Vec<Address> = env.storage().instance().get(&DataKey::ActiveUsers(day_id)).unwrap_or(Vec::new(&env));
+        let mut active_users_today: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveUsers(day_id))
+            .unwrap_or(Vec::new(&env));
         let mut user_exists = false;
         for u in active_users_today.iter() {
             if u == user {
@@ -147,13 +171,15 @@ impl ContractUsageAnalytics {
         }
         if !user_exists {
             active_users_today.push_back(user.clone());
-            env.storage().instance().set(&DataKey::ActiveUsers(day_id), &active_users_today);
+            env.storage()
+                .instance()
+                .set(&DataKey::ActiveUsers(day_id), &active_users_today);
         }
 
         // 4. Publish Event
         env.events().publish(
             (symbol_short!("usage"), function_name),
-            (user, success, cpu_usage, ram_usage)
+            (user, success, cpu_usage, ram_usage),
         );
 
         Ok(())
@@ -162,48 +188,70 @@ impl ContractUsageAnalytics {
     pub fn take_snapshot(env: Env) -> Result<UsageSnapshot, Error> {
         let timestamp = env.ledger().timestamp();
         let day_id = timestamp / 86400;
-        
-        let active_users_today: Vec<Address> = env.storage().instance().get(&DataKey::ActiveUsers(day_id)).unwrap_or(Vec::new(&env));
-        let all_functions: Vec<String> = env.storage().instance().get(&DataKey::AllFunctions).unwrap_or(Vec::new(&env));
-        
+
+        let active_users_today: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::ActiveUsers(day_id))
+            .unwrap_or(Vec::new(&env));
+        let all_functions: Vec<String> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AllFunctions)
+            .unwrap_or(Vec::new(&env));
+
         let mut total_calls = 0;
         let mut total_errors = 0;
-        
+
         for f_name in all_functions.iter() {
-            if let Some(metric) = env.storage().instance().get::<_, FunctionMetric>(&DataKey::FunctionMetric(f_name)) {
+            if let Some(metric) = env
+                .storage()
+                .instance()
+                .get::<_, FunctionMetric>(&DataKey::FunctionMetric(f_name))
+            {
                 total_calls = total_calls.saturating_add(metric.call_count);
                 total_errors = total_errors.saturating_add(metric.error_count);
             }
         }
-        
+
         let error_rate_bps = if total_calls > 0 {
-            (total_errors.saturating_mul(10000)).checked_div(total_calls).unwrap_or(0) as u32
+            (total_errors.saturating_mul(10000))
+                .checked_div(total_calls)
+                .unwrap_or(0) as u32
         } else {
             0
         };
-        
+
         let snapshot = UsageSnapshot {
             timestamp,
             total_calls,
             active_users: active_users_today.len(),
             error_rate_bps,
         };
-        
-        let mut snapshots: Vec<UsageSnapshot> = env.storage().instance().get(&DataKey::Snapshots).unwrap_or(Vec::new(&env));
+
+        let mut snapshots: Vec<UsageSnapshot> = env
+            .storage()
+            .instance()
+            .get(&DataKey::Snapshots)
+            .unwrap_or(Vec::new(&env));
         snapshots.push_back(snapshot.clone());
-        
+
         // Keep only last 30 snapshots
         if snapshots.len() > 30 {
             snapshots.remove(0);
         }
-        
-        env.storage().instance().set(&DataKey::Snapshots, &snapshots);
-        
+
+        env.storage()
+            .instance()
+            .set(&DataKey::Snapshots, &snapshots);
+
         Ok(snapshot)
     }
 
     pub fn get_function_metrics(env: Env, function_name: String) -> Option<FunctionMetric> {
-        env.storage().instance().get(&DataKey::FunctionMetric(function_name))
+        env.storage()
+            .instance()
+            .get(&DataKey::FunctionMetric(function_name))
     }
 
     pub fn get_user_metrics(env: Env, user: Address) -> Option<UserMetric> {
@@ -211,10 +259,16 @@ impl ContractUsageAnalytics {
     }
 
     pub fn get_all_functions(env: Env) -> Vec<String> {
-        env.storage().instance().get(&DataKey::AllFunctions).unwrap_or(Vec::new(&env))
+        env.storage()
+            .instance()
+            .get(&DataKey::AllFunctions)
+            .unwrap_or(Vec::new(&env))
     }
 
     pub fn get_snapshots(env: Env) -> Vec<UsageSnapshot> {
-        env.storage().instance().get(&DataKey::Snapshots).unwrap_or(Vec::new(&env))
+        env.storage()
+            .instance()
+            .get(&DataKey::Snapshots)
+            .unwrap_or(Vec::new(&env))
     }
 }

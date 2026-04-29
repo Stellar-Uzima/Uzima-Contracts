@@ -243,7 +243,7 @@ pub fn aggregate_payload(
                         if value.observed_at > observed_at {
                             observed_at = value.observed_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -256,7 +256,7 @@ pub fn aggregate_payload(
                 availability_units: (availability_weighted / sum_weight) as u32,
                 observed_at,
             }))
-        }
+        },
         FeedKind::ClinicalTrial => {
             let mut phase_weighted = 0i128;
             let mut enrolled_weighted = 0i128;
@@ -284,7 +284,7 @@ pub fn aggregate_payload(
                             published_at = value.published_at;
                             result_hash = value.result_hash.clone();
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -299,7 +299,7 @@ pub fn aggregate_payload(
                 result_hash,
                 published_at,
             }))
-        }
+        },
         FeedKind::RegulatoryUpdate => {
             let mut best_weight = -1i128;
             let mut picked: Option<RegulatoryUpdateData> = None;
@@ -312,7 +312,7 @@ pub fn aggregate_payload(
                             best_weight = weight;
                             picked = Some(value.clone());
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -324,7 +324,7 @@ pub fn aggregate_payload(
             } else {
                 Err(Error::InvalidData)
             }
-        }
+        },
         FeedKind::TreatmentOutcome => {
             let mut improvement_weighted = 0i128;
             let mut readmission_weighted = 0i128;
@@ -357,7 +357,7 @@ pub fn aggregate_payload(
                         if value.reported_at > reported_at {
                             reported_at = value.reported_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -373,7 +373,7 @@ pub fn aggregate_payload(
                 sample_size: (sample_weighted / sum_weight) as u32,
                 reported_at,
             }))
-        }
+        },
     }
 }
 
@@ -415,7 +415,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -3
             }
-        }
+        },
         (FeedPayload::ClinicalTrial(consensus_data), FeedPayload::ClinicalTrial(payload_data)) => {
             let diff = if payload_data.success_rate_bps > consensus_data.success_rate_bps {
                 payload_data
@@ -431,7 +431,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         (
             FeedPayload::RegulatoryUpdate(consensus_data),
             FeedPayload::RegulatoryUpdate(payload_data),
@@ -441,7 +441,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -4
             }
-        }
+        },
         (
             FeedPayload::TreatmentOutcome(consensus_data),
             FeedPayload::TreatmentOutcome(payload_data),
@@ -460,7 +460,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         _ => -5,
     }
 }

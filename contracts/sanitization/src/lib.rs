@@ -25,11 +25,7 @@ pub enum SanitizationError {
 
 /// Validates a general-purpose string: non-empty, within `max_len` bytes,
 /// no null bytes, no ASCII control characters (allows tab/LF/CR).
-pub fn sanitize_string(
-    _env: &Env,
-    input: &String,
-    max_len: u32,
-) -> Result<(), SanitizationError> {
+pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), SanitizationError> {
     let len = input.len();
 
     if len == 0 {
@@ -326,12 +322,14 @@ mod tests {
     fn test_sanitize_name_too_long() {
         let env = Env::default();
         // 129 'a' characters
-        let long: &str =
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
+        let long: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\
              aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         assert_eq!(long.len(), 130);
         let s = String::from_str(&env, long);
-        assert_eq!(sanitize_name(&env, &s), Err(SanitizationError::InputTooLong));
+        assert_eq!(
+            sanitize_name(&env, &s),
+            Err(SanitizationError::InputTooLong)
+        );
     }
 
     // --- sanitize_email ---

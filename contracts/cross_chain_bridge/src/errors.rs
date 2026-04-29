@@ -61,7 +61,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         | Error::InsufficientConfirmations
         | Error::InsufficientOracleReports => {
             symbol_short!("CHK_AUTH")
-        }
+        },
         Error::AlreadyInitialized
         | Error::MessageAlreadyProcessed
         | Error::AtomicTxAlreadyProcessed

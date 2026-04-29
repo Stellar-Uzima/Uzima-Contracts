@@ -44,8 +44,12 @@ impl AccuracyMetrics {
         for analysis in recommendations {
             for opt in &analysis.optimizations {
                 self.total_recommendations += 1;
-                self.categories.entry(opt.category.clone())
-                    .or_insert(CategoryMetrics { total: 0, applied: 0 })
+                self.categories
+                    .entry(opt.category.clone())
+                    .or_insert(CategoryMetrics {
+                        total: 0,
+                        applied: 0,
+                    })
                     .total += 1;
             }
         }

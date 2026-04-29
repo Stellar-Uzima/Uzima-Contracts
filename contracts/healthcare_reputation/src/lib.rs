@@ -772,17 +772,17 @@ impl HealthcareReputationSystem {
                 match entry.conduct_type {
                     ConductType::Positive | ConductType::ProfessionalAchievement => {
                         score = score.saturating_add(5);
-                    }
+                    },
                     ConductType::Complaint => {
                         score = score.saturating_sub(entry.severity);
-                    }
+                    },
                     ConductType::Malpractice => {
                         score = score.saturating_sub(entry.severity * 2);
-                    }
+                    },
                     ConductType::EthicsViolation => {
                         score = score.saturating_sub(entry.severity * 3);
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
             }
         }

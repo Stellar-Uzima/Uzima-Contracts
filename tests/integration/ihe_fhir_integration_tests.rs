@@ -1,27 +1,25 @@
 #![cfg(test)]
 
 //! Comprehensive Integration Test Suite for IHE/FHIR Standard Compliance
-//! 
+//!
 //! This test suite validates:
 //! - FHIR resource validation
 //! - IHE profile compliance
 //! - HL7 message format testing
 //! - Interoperability verification
-//! 
+//!
 //! Test Scenarios:
 //! - Patient record exchange
 //! - Consent management flow
 //! - Audit trail compliance
 //! - Security profile testing
 
-use soroban_sdk::{
-    testutils::Address as _, Address, BytesN, Env, Map, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Map, String, Vec};
 
 // Import contract types
 mod fhir_types {
     pub use super::*;
-    
+
     #[derive(Clone, Copy, PartialEq, Eq)]
     pub enum FHIRResourceType {
         Patient = 0,
@@ -36,7 +34,7 @@ mod fhir_types {
         Immunization = 9,
         DocumentReference = 10,
     }
-    
+
     #[derive(Clone, Copy, PartialEq, Eq)]
     pub enum CodingSystem {
         ICD10,
@@ -49,17 +47,16 @@ mod fhir_types {
     }
 }
 
-
 // ==================== Test Helper Functions ====================
 
 fn create_test_env() -> (Env, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let admin = Address::generate(&env);
     let provider = Address::generate(&env);
     let patient = Address::generate(&env);
-    
+
     (env, admin, provider, patient)
 }
 
@@ -70,7 +67,7 @@ fn create_fhir_patient(env: &Env) -> FHIRPatient {
         value: String::from_str(env, "MRN-12345"),
         use_type: String::from_str(env, "official"),
     });
-    
+
     FHIRPatient {
         identifiers,
         given_name: String::from_str(env, "John"),
@@ -122,22 +119,21 @@ fn validate_hl7_message_format(message_type: &str) -> bool {
     )
 }
 
-
 // ==================== FHIR Resource Validation Tests ====================
 
 #[test]
 fn test_fhir_patient_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let patient = create_fhir_patient(&env);
-    
+
     // Validate patient resource structure
     assert!(!patient.identifiers.is_empty());
     assert_eq!(patient.given_name, String::from_str(&env, "John"));
     assert_eq!(patient.family_name, String::from_str(&env, "Doe"));
     assert_eq!(patient.birth_date, String::from_str(&env, "1980-01-01"));
     assert_eq!(patient.gender, String::from_str(&env, "male"));
-    
+
     // Validate FHIR resource type
     assert!(validate_fhir_resource(FHIRResourceType::Patient));
 }
@@ -145,7 +141,7 @@ fn test_fhir_patient_resource() {
 #[test]
 fn test_fhir_observation_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let observation = FHIRObservation {
         identifier: String::from_str(&env, "obs-001"),
         status: String::from_str(&env, "final"),
@@ -158,7 +154,7 @@ fn test_fhir_observation_resource() {
         interpretation: Vec::new(&env),
         reference_range: String::from_str(&env, "60-100 beats/minute"),
     };
-    
+
     // Validate observation structure
     assert_eq!(observation.status, String::from_str(&env, "final"));
     assert_eq!(observation.value_quantity_value, 72);
@@ -168,17 +164,22 @@ fn test_fhir_observation_resource() {
 #[test]
 fn test_fhir_condition_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let condition = FHIRCondition {
         identifier: String::from_str(&env, "cond-001"),
         clinical_status: String::from_str(&env, "active"),
-        code: create_fhir_code(&env, CodingSystem::ICD10, "E11.9", "Type 2 diabetes mellitus"),
+        code: create_fhir_code(
+            &env,
+            CodingSystem::ICD10,
+            "E11.9",
+            "Type 2 diabetes mellitus",
+        ),
         subject_reference: String::from_str(&env, "Patient/MRN-12345"),
         onset_date_time: String::from_str(&env, "2020-06-15T00:00:00Z"),
         recorded_date: String::from_str(&env, "2020-06-15T00:00:00Z"),
         severity: Vec::new(&env),
     };
-    
+
     // Validate condition structure
     assert_eq!(condition.clinical_status, String::from_str(&env, "active"));
     assert_eq!(condition.code.code, String::from_str(&env, "E11.9"));
@@ -188,7 +189,7 @@ fn test_fhir_condition_resource() {
 #[test]
 fn test_fhir_medication_statement_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let medication = FHIRMedicationStatement {
         identifier: String::from_str(&env, "med-001"),
         status: String::from_str(&env, "active"),
@@ -199,21 +200,25 @@ fn test_fhir_medication_statement_resource() {
         dosage: String::from_str(&env, "500mg twice daily"),
         reason_code: Vec::new(&env),
     };
-    
+
     // Validate medication statement
     assert_eq!(medication.status, String::from_str(&env, "active"));
-    assert_eq!(medication.dosage, String::from_str(&env, "500mg twice daily"));
-    assert!(validate_fhir_resource(FHIRResourceType::MedicationStatement));
+    assert_eq!(
+        medication.dosage,
+        String::from_str(&env, "500mg twice daily")
+    );
+    assert!(validate_fhir_resource(
+        FHIRResourceType::MedicationStatement
+    ));
 }
-
 
 #[test]
 fn test_fhir_procedure_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let mut performers = Vec::new(&env);
     performers.push_back(String::from_str(&env, "Practitioner/dr-smith"));
-    
+
     let procedure = FHIRProcedure {
         identifier: String::from_str(&env, "proc-001"),
         status: String::from_str(&env, "completed"),
@@ -223,7 +228,7 @@ fn test_fhir_procedure_resource() {
         performer: performers,
         reason_code: Vec::new(&env),
     };
-    
+
     // Validate procedure
     assert_eq!(procedure.status, String::from_str(&env, "completed"));
     assert!(!procedure.performer.is_empty());
@@ -233,7 +238,7 @@ fn test_fhir_procedure_resource() {
 #[test]
 fn test_fhir_allergy_intolerance_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let allergy = FHIRAllergyIntolerance {
         identifier: String::from_str(&env, "allergy-001"),
         clinical_status: String::from_str(&env, "active"),
@@ -244,7 +249,7 @@ fn test_fhir_allergy_intolerance_resource() {
         manifestation: Vec::new(&env),
         severity: String::from_str(&env, "severe"),
     };
-    
+
     // Validate allergy intolerance
     assert_eq!(allergy.clinical_status, String::from_str(&env, "active"));
     assert_eq!(allergy.severity, String::from_str(&env, "severe"));
@@ -256,7 +261,7 @@ fn test_fhir_allergy_intolerance_resource() {
 #[test]
 fn test_ihe_xds_profile_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test XDS (Cross-Enterprise Document Sharing) profile
     let document_entry = XDSDocumentEntry {
         document_id: String::from_str(&env, "doc-001"),
@@ -277,32 +282,34 @@ fn test_ihe_xds_profile_compliance() {
         submission_set_id: String::from_str(&env, "ss-001"),
         mime_type: String::from_str(&env, "application/pdf"),
     };
-    
+
     // Validate XDS document entry
-    assert_eq!(document_entry.document_id, String::from_str(&env, "doc-001"));
+    assert_eq!(
+        document_entry.document_id,
+        String::from_str(&env, "doc-001")
+    );
     assert_eq!(document_entry.status, DocumentStatus::Approved);
     assert!(!document_entry.format_code.is_empty());
 }
 
-
 #[test]
 fn test_ihe_pix_profile_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test PIX (Patient Identifier Cross-referencing) profile
     let local_id = PatientIdentifier {
         id_value: String::from_str(&env, "MRN-12345"),
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let mut cross_ids = Vec::new(&env);
     cross_ids.push_back(PatientIdentifier {
         id_value: String::from_str(&env, "PID-67890"),
         assigning_authority: String::from_str(&env, "Hospital-B"),
         identifier_type_code: String::from_str(&env, "PI"),
     });
-    
+
     let pix_cross_ref = PIXCrossReference {
         reference_id: 1,
         local_id: local_id.clone(),
@@ -311,9 +318,12 @@ fn test_ihe_pix_profile_compliance() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     // Validate PIX cross-reference
-    assert_eq!(pix_cross_ref.local_id.id_value, String::from_str(&env, "MRN-12345"));
+    assert_eq!(
+        pix_cross_ref.local_id.id_value,
+        String::from_str(&env, "MRN-12345")
+    );
     assert!(!pix_cross_ref.cross_referenced_ids.is_empty());
     assert!(!pix_cross_ref.is_merged);
 }
@@ -321,7 +331,7 @@ fn test_ihe_pix_profile_compliance() {
 #[test]
 fn test_ihe_pdq_profile_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test PDQ (Patient Demographics Query) profile
     let demographics = PatientDemographics {
         patient_id: String::from_str(&env, "MRN-12345"),
@@ -344,17 +354,20 @@ fn test_ihe_pdq_profile_compliance() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
     };
-    
+
     // Validate PDQ demographics
     assert_eq!(demographics.given_name, String::from_str(&env, "John"));
     assert_eq!(demographics.family_name, String::from_str(&env, "Doe"));
-    assert_eq!(demographics.administrative_gender, String::from_str(&env, "M"));
+    assert_eq!(
+        demographics.administrative_gender,
+        String::from_str(&env, "M")
+    );
 }
 
 #[test]
 fn test_ihe_atna_profile_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test ATNA (Audit Trail and Node Authentication) profile
     let mut participants = Vec::new(&env);
     participants.push_back(ATNAParticipant {
@@ -364,7 +377,7 @@ fn test_ihe_atna_profile_compliance() {
         is_requestor: true,
         network_access_point: String::from_str(&env, "192.168.1.100"),
     });
-    
+
     let audit_event = ATNAAuditEvent {
         event_id: 1,
         event_type: ATNAEventType::PatientRecordAccess,
@@ -378,13 +391,12 @@ fn test_ihe_atna_profile_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     // Validate ATNA audit event
     assert_eq!(audit_event.event_type, ATNAEventType::PatientRecordAccess);
     assert_eq!(audit_event.event_outcome, ATNAEventOutcome::Success);
     assert!(!audit_event.active_participants.is_empty());
 }
-
 
 // ==================== HL7 Message Format Tests ====================
 
@@ -419,7 +431,7 @@ fn test_hl7_v2_qbp_message_format() {
 #[test]
 fn test_hl7_message_type_enum() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test all HL7 message types
     let message_types = vec![
         HL7MessageType::V2ADT,
@@ -434,7 +446,7 @@ fn test_hl7_message_type_enum() {
         HL7MessageType::V3PatientResponse,
         HL7MessageType::V3DeviceQuery,
     ];
-    
+
     // Validate all message types are distinct
     assert_eq!(message_types.len(), 11);
 }
@@ -444,10 +456,10 @@ fn test_hl7_message_type_enum() {
 #[test]
 fn test_patient_record_exchange_interoperability() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Simulate patient record exchange between systems
     let fhir_patient = create_fhir_patient(&env);
-    
+
     // Convert to IHE PDQ demographics
     let demographics = PatientDemographics {
         patient_id: fhir_patient.identifiers.get(0).unwrap().value.clone(),
@@ -470,22 +482,21 @@ fn test_patient_record_exchange_interoperability() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
     };
-    
+
     // Validate interoperability
     assert_eq!(demographics.given_name, fhir_patient.given_name);
     assert_eq!(demographics.family_name, fhir_patient.family_name);
     assert_eq!(demographics.date_of_birth, fhir_patient.birth_date);
 }
 
-
 #[test]
 fn test_fhir_to_xds_document_conversion() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Create FHIR DocumentReference
     let fhir_doc_ref_id = String::from_str(&env, "doc-ref-001");
     let patient_id = String::from_str(&env, "MRN-12345");
-    
+
     // Convert to IHE XDS Document Entry
     let xds_entry = XDSDocumentEntry {
         document_id: fhir_doc_ref_id.clone(),
@@ -506,7 +517,7 @@ fn test_fhir_to_xds_document_conversion() {
         submission_set_id: String::from_str(&env, "ss-001"),
         mime_type: String::from_str(&env, "application/pdf"),
     };
-    
+
     // Validate conversion
     assert_eq!(xds_entry.document_id, fhir_doc_ref_id);
     assert_eq!(xds_entry.patient_id, patient_id);
@@ -516,30 +527,30 @@ fn test_fhir_to_xds_document_conversion() {
 #[test]
 fn test_cross_system_patient_identifier_mapping() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test PIX cross-referencing for interoperability
     let system_a_id = PatientIdentifier {
         id_value: String::from_str(&env, "MRN-12345"),
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let system_b_id = PatientIdentifier {
         id_value: String::from_str(&env, "PID-67890"),
         assigning_authority: String::from_str(&env, "Hospital-B"),
         identifier_type_code: String::from_str(&env, "PI"),
     };
-    
+
     let system_c_id = PatientIdentifier {
         id_value: String::from_str(&env, "EID-ABCDE"),
         assigning_authority: String::from_str(&env, "Clinic-C"),
         identifier_type_code: String::from_str(&env, "EI"),
     };
-    
+
     let mut cross_ids = Vec::new(&env);
     cross_ids.push_back(system_b_id);
     cross_ids.push_back(system_c_id);
-    
+
     let pix_mapping = PIXCrossReference {
         reference_id: 1,
         local_id: system_a_id,
@@ -548,7 +559,7 @@ fn test_cross_system_patient_identifier_mapping() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     // Validate cross-system mapping
     assert_eq!(pix_mapping.cross_referenced_ids.len(), 2);
     assert_eq!(
@@ -562,20 +573,20 @@ fn test_cross_system_patient_identifier_mapping() {
 #[test]
 fn test_scenario_patient_record_exchange() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Scenario: Complete patient record exchange workflow
-    
+
     // Step 1: Create FHIR patient
     let fhir_patient = create_fhir_patient(&env);
     assert!(!fhir_patient.identifiers.is_empty());
-    
+
     // Step 2: Register patient in PIX
     let local_id = PatientIdentifier {
         id_value: fhir_patient.identifiers.get(0).unwrap().value.clone(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let pix_ref = PIXCrossReference {
         reference_id: 1,
         local_id,
@@ -584,9 +595,9 @@ fn test_scenario_patient_record_exchange() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     assert_eq!(pix_ref.reference_id, 1);
-    
+
     // Step 3: Store demographics in PDQ
     let demographics = PatientDemographics {
         patient_id: fhir_patient.identifiers.get(0).unwrap().value.clone(),
@@ -609,9 +620,9 @@ fn test_scenario_patient_record_exchange() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
     };
-    
+
     assert_eq!(demographics.given_name, fhir_patient.given_name);
-    
+
     // Step 4: Create XDS document entry
     let xds_entry = XDSDocumentEntry {
         document_id: String::from_str(&env, "doc-001"),
@@ -632,20 +643,19 @@ fn test_scenario_patient_record_exchange() {
         submission_set_id: String::from_str(&env, "ss-001"),
         mime_type: String::from_str(&env, "application/pdf"),
     };
-    
+
     assert_eq!(xds_entry.status, DocumentStatus::Approved);
 }
-
 
 #[test]
 fn test_scenario_consent_management_flow() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Scenario: Complete consent management workflow
-    
+
     // Step 1: Create FHIR patient
     let fhir_patient = create_fhir_patient(&env);
-    
+
     // Step 2: Grant consent (BPPC profile)
     let consent = BPPCConsent {
         consent_id: 1,
@@ -663,10 +673,10 @@ fn test_scenario_consent_management_flow() {
         author: patient.clone(),
         document_ref: String::from_str(&env, "consent-doc-001"),
     };
-    
+
     assert_eq!(consent.consent_status, ConsentStatus::Active);
     assert_eq!(consent.access_consent_list.len(), 2);
-    
+
     // Step 3: Log ATNA audit event for consent
     let mut participants = Vec::new(&env);
     participants.push_back(ATNAParticipant {
@@ -676,7 +686,7 @@ fn test_scenario_consent_management_flow() {
         is_requestor: true,
         network_access_point: String::from_str(&env, "192.168.1.100"),
     });
-    
+
     let audit_event = ATNAAuditEvent {
         event_id: 1,
         event_type: ATNAEventType::PatientRecordAccess,
@@ -690,10 +700,10 @@ fn test_scenario_consent_management_flow() {
         hl7_message_id: String::from_str(&env, "MSG-CONSENT-001"),
         profile: IHEProfile::BPPC,
     };
-    
+
     assert_eq!(audit_event.event_outcome, ATNAEventOutcome::Success);
     assert_eq!(audit_event.profile, IHEProfile::BPPC);
-    
+
     // Step 4: Verify consent is active
     assert_eq!(consent.consent_status, ConsentStatus::Active);
     assert!(consent.expiry_time > env.ledger().timestamp());
@@ -702,9 +712,9 @@ fn test_scenario_consent_management_flow() {
 #[test]
 fn test_scenario_audit_trail_compliance() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Scenario: Complete audit trail compliance workflow
-    
+
     // Step 1: Patient record access
     let mut participants = Vec::new(&env);
     participants.push_back(ATNAParticipant {
@@ -714,7 +724,7 @@ fn test_scenario_audit_trail_compliance() {
         is_requestor: true,
         network_access_point: String::from_str(&env, "192.168.1.50"),
     });
-    
+
     let mut participant_objects = Vec::new(&env);
     participant_objects.push_back(ATNAParticipantObject {
         object_id_type_code: String::from_str(&env, "2"),
@@ -723,7 +733,7 @@ fn test_scenario_audit_trail_compliance() {
         object_sensitivity: String::from_str(&env, "N"),
         object_query: String::from_str(&env, ""),
     });
-    
+
     let access_event = ATNAAuditEvent {
         event_id: 1,
         event_type: ATNAEventType::PatientRecordAccess,
@@ -737,10 +747,10 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(access_event.event_type, ATNAEventType::PatientRecordAccess);
     assert_eq!(access_event.event_outcome, ATNAEventOutcome::Success);
-    
+
     // Step 2: Patient record update
     let update_event = ATNAAuditEvent {
         event_id: 2,
@@ -755,9 +765,9 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-002"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(update_event.event_type, ATNAEventType::PatientRecordUpdate);
-    
+
     // Step 3: Document export
     let export_event = ATNAAuditEvent {
         event_id: 3,
@@ -772,22 +782,21 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-003"),
         profile: IHEProfile::XDS,
     };
-    
+
     assert_eq!(export_event.event_type, ATNAEventType::DocumentExport);
-    
+
     // Validate audit trail completeness
     assert_eq!(access_event.event_id, 1);
     assert_eq!(update_event.event_id, 2);
     assert_eq!(export_event.event_id, 3);
 }
 
-
 #[test]
 fn test_scenario_security_profile_testing() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Scenario: Security profile testing with ATNA and DSG
-    
+
     // Step 1: User authentication audit
     let mut auth_participants = Vec::new(&env);
     auth_participants.push_back(ATNAParticipant {
@@ -797,7 +806,7 @@ fn test_scenario_security_profile_testing() {
         is_requestor: true,
         network_access_point: String::from_str(&env, "192.168.1.100"),
     });
-    
+
     let auth_event = ATNAAuditEvent {
         event_id: 1,
         event_type: ATNAEventType::UserAuthentication,
@@ -811,10 +820,10 @@ fn test_scenario_security_profile_testing() {
         hl7_message_id: String::from_str(&env, "AUTH-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(auth_event.event_type, ATNAEventType::UserAuthentication);
     assert_eq!(auth_event.event_outcome, ATNAEventOutcome::Success);
-    
+
     // Step 2: Document digital signature (DSG profile)
     let signature = DSGSignature {
         signature_id: 1,
@@ -827,10 +836,13 @@ fn test_scenario_security_profile_testing() {
         signature_purpose: String::from_str(&env, "author"),
         is_valid: true,
     };
-    
+
     assert!(signature.is_valid);
-    assert_eq!(signature.signature_algorithm, String::from_str(&env, "RS256"));
-    
+    assert_eq!(
+        signature.signature_algorithm,
+        String::from_str(&env, "RS256")
+    );
+
     // Step 3: Security alert audit
     let mut alert_participants = Vec::new(&env);
     alert_participants.push_back(ATNAParticipant {
@@ -840,7 +852,7 @@ fn test_scenario_security_profile_testing() {
         is_requestor: false,
         network_access_point: String::from_str(&env, "192.168.1.1"),
     });
-    
+
     let alert_event = ATNAAuditEvent {
         event_id: 2,
         event_type: ATNAEventType::SecurityAlert,
@@ -854,7 +866,7 @@ fn test_scenario_security_profile_testing() {
         hl7_message_id: String::from_str(&env, "ALERT-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(alert_event.event_type, ATNAEventType::SecurityAlert);
     assert_eq!(alert_event.event_outcome, ATNAEventOutcome::MinorFailure);
 }
@@ -864,24 +876,34 @@ fn test_scenario_security_profile_testing() {
 #[test]
 fn test_fhir_coding_systems() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test ICD-10 coding
-    let icd10_code = create_fhir_code(&env, CodingSystem::ICD10, "E11.9", "Type 2 diabetes mellitus");
+    let icd10_code = create_fhir_code(
+        &env,
+        CodingSystem::ICD10,
+        "E11.9",
+        "Type 2 diabetes mellitus",
+    );
     assert_eq!(icd10_code.system, CodingSystem::ICD10);
     assert_eq!(icd10_code.code, String::from_str(&env, "E11.9"));
-    
+
     // Test SNOMED CT coding
-    let snomed_code = create_fhir_code(&env, CodingSystem::SNOMEDCT, "73211009", "Diabetes mellitus");
+    let snomed_code = create_fhir_code(
+        &env,
+        CodingSystem::SNOMEDCT,
+        "73211009",
+        "Diabetes mellitus",
+    );
     assert_eq!(snomed_code.system, CodingSystem::SNOMEDCT);
-    
+
     // Test LOINC coding
     let loinc_code = create_fhir_code(&env, CodingSystem::LOINC, "8867-4", "Heart rate");
     assert_eq!(loinc_code.system, CodingSystem::LOINC);
-    
+
     // Test RxNorm coding
     let rxnorm_code = create_fhir_code(&env, CodingSystem::RxNorm, "860975", "Metformin 500mg");
     assert_eq!(rxnorm_code.system, CodingSystem::RxNorm);
-    
+
     // Test CPT coding
     let cpt_code = create_fhir_code(&env, CodingSystem::CPT, "99213", "Office visit");
     assert_eq!(cpt_code.system, CodingSystem::CPT);
@@ -890,7 +912,7 @@ fn test_fhir_coding_systems() {
 #[test]
 fn test_fhir_bundle_operations() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test FHIR bundle creation
     let bundle = FHIRBundle {
         bundle_id: String::from_str(&env, "bundle-001"),
@@ -898,18 +920,17 @@ fn test_fhir_bundle_operations() {
         bundle_type: String::from_str(&env, "transaction"),
         total: 5,
     };
-    
+
     assert_eq!(bundle.bundle_type, String::from_str(&env, "transaction"));
     assert_eq!(bundle.total, 5);
 }
-
 
 // ==================== IHE Connectathon Compliance Tests ====================
 
 #[test]
 fn test_ihe_connectathon_xds_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test Connectathon compliance for XDS profile
     let test_result = ConnectathonTestResult {
         test_id: 1,
@@ -921,7 +942,7 @@ fn test_ihe_connectathon_xds_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "All tests passed"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::XDS);
 }
@@ -929,7 +950,7 @@ fn test_ihe_connectathon_xds_compliance() {
 #[test]
 fn test_ihe_connectathon_pix_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test Connectathon compliance for PIX profile
     let test_result = ConnectathonTestResult {
         test_id: 2,
@@ -941,7 +962,7 @@ fn test_ihe_connectathon_pix_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Identity cross-referencing validated"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::PIX);
 }
@@ -949,7 +970,7 @@ fn test_ihe_connectathon_pix_compliance() {
 #[test]
 fn test_ihe_connectathon_pdq_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test Connectathon compliance for PDQ profile
     let test_result = ConnectathonTestResult {
         test_id: 3,
@@ -961,7 +982,7 @@ fn test_ihe_connectathon_pdq_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Demographics query successful"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::PDQ);
 }
@@ -969,7 +990,7 @@ fn test_ihe_connectathon_pdq_compliance() {
 #[test]
 fn test_ihe_connectathon_atna_compliance() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test Connectathon compliance for ATNA profile
     let test_result = ConnectathonTestResult {
         test_id: 4,
@@ -981,7 +1002,7 @@ fn test_ihe_connectathon_atna_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Audit logging compliant"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::ATNA);
 }
@@ -991,7 +1012,7 @@ fn test_ihe_connectathon_atna_compliance() {
 #[test]
 fn test_ihe_hpd_provider_registration() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test HPD (Healthcare Provider Directory) profile
     let hpd_provider = HPDProvider {
         provider_id: 1,
@@ -1008,7 +1029,7 @@ fn test_ihe_hpd_provider_registration() {
         registration_time: env.ledger().timestamp(),
         is_active: true,
     };
-    
+
     assert_eq!(hpd_provider.provider_type, ProviderType::Individual);
     assert!(hpd_provider.is_active);
     assert_eq!(hpd_provider.npi, String::from_str(&env, "1234567890"));
@@ -1019,7 +1040,7 @@ fn test_ihe_hpd_provider_registration() {
 #[test]
 fn test_ihe_svs_value_set_sharing() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test SVS (Sharing Value Sets) profile
     let mut concepts = Vec::new(&env);
     concepts.push_back(SVSConcept {
@@ -1030,7 +1051,7 @@ fn test_ihe_svs_value_set_sharing() {
         level: 0,
         type_code: String::from_str(&env, "L"),
     });
-    
+
     let value_set = SVSValueSet {
         value_set_id: 1,
         oid: String::from_str(&env, "2.16.840.1.113883.3.464.1003.103.12.1001"),
@@ -1043,24 +1064,23 @@ fn test_ihe_svs_value_set_sharing() {
         source_url: String::from_str(&env, "https://vsac.nlm.nih.gov/"),
         registered_by: Address::generate(&env),
     };
-    
+
     assert_eq!(value_set.status, String::from_str(&env, "active"));
     assert!(!value_set.concepts.is_empty());
 }
-
 
 // ==================== Cross-Community Access Tests ====================
 
 #[test]
 fn test_ihe_xca_gateway_registration() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test XCA (Cross-Community Access) profile
     let mut supported_profiles = Vec::new(&env);
     supported_profiles.push_back(IHEProfile::XDS);
     supported_profiles.push_back(IHEProfile::PIX);
     supported_profiles.push_back(IHEProfile::PDQ);
-    
+
     let xca_gateway = XCAGateway {
         gateway_id: String::from_str(&env, "gateway-001"),
         community_id: String::from_str(&env, "community-a"),
@@ -1070,10 +1090,13 @@ fn test_ihe_xca_gateway_registration() {
         registration_time: env.ledger().timestamp(),
         is_active: true,
     };
-    
+
     assert!(xca_gateway.is_active);
     assert_eq!(xca_gateway.supported_profiles.len(), 3);
-    assert_eq!(xca_gateway.community_id, String::from_str(&env, "community-a"));
+    assert_eq!(
+        xca_gateway.community_id,
+        String::from_str(&env, "community-a")
+    );
 }
 
 // ==================== Master Patient Index Tests ====================
@@ -1081,7 +1104,7 @@ fn test_ihe_xca_gateway_registration() {
 #[test]
 fn test_ihe_mpi_master_patient_record() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test MPI (Master Patient Index) profile
     let mut linked_identifiers = Vec::new(&env);
     linked_identifiers.push_back(PatientIdentifier {
@@ -1094,7 +1117,7 @@ fn test_ihe_mpi_master_patient_record() {
         assigning_authority: String::from_str(&env, "Hospital-B"),
         identifier_type_code: String::from_str(&env, "PI"),
     });
-    
+
     let demographics = PatientDemographics {
         patient_id: String::from_str(&env, "MASTER-001"),
         given_name: String::from_str(&env, "John"),
@@ -1116,7 +1139,7 @@ fn test_ihe_mpi_master_patient_record() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "MPI-SYSTEM"),
     };
-    
+
     let mpi_master = MPIMasterPatient {
         master_id: 1,
         global_patient_id: String::from_str(&env, "GLOBAL-001"),
@@ -1126,10 +1149,13 @@ fn test_ihe_mpi_master_patient_record() {
         updated_at: env.ledger().timestamp(),
         confidence_score: 95,
     };
-    
+
     assert_eq!(mpi_master.linked_identifiers.len(), 2);
     assert_eq!(mpi_master.confidence_score, 95);
-    assert_eq!(mpi_master.global_patient_id, String::from_str(&env, "GLOBAL-001"));
+    assert_eq!(
+        mpi_master.global_patient_id,
+        String::from_str(&env, "GLOBAL-001")
+    );
 }
 
 // ==================== Document Submission Set Tests ====================
@@ -1137,13 +1163,13 @@ fn test_ihe_mpi_master_patient_record() {
 #[test]
 fn test_xds_submission_set() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     // Test XDS submission set
     let mut document_ids = Vec::new(&env);
     document_ids.push_back(String::from_str(&env, "doc-001"));
     document_ids.push_back(String::from_str(&env, "doc-002"));
     document_ids.push_back(String::from_str(&env, "doc-003"));
-    
+
     let submission_set = XDSSubmissionSet {
         submission_set_id: String::from_str(&env, "ss-001"),
         patient_id: String::from_str(&env, "MRN-12345"),
@@ -1154,9 +1180,12 @@ fn test_xds_submission_set() {
         document_ids,
         intended_recipient: String::from_str(&env, "Hospital-B"),
     };
-    
+
     assert_eq!(submission_set.document_ids.len(), 3);
-    assert_eq!(submission_set.patient_id, String::from_str(&env, "MRN-12345"));
+    assert_eq!(
+        submission_set.patient_id,
+        String::from_str(&env, "MRN-12345")
+    );
 }
 
 // ==================== Comprehensive Integration Test ====================
@@ -1164,27 +1193,27 @@ fn test_xds_submission_set() {
 #[test]
 fn test_comprehensive_ihe_fhir_integration() {
     let (env, admin, provider, patient) = create_test_env();
-    
+
     // Comprehensive integration test covering multiple profiles
-    
+
     // 1. Create FHIR patient
     let fhir_patient = create_fhir_patient(&env);
     assert!(!fhir_patient.identifiers.is_empty());
-    
+
     // 2. Register in PIX
     let local_id = PatientIdentifier {
         id_value: fhir_patient.identifiers.get(0).unwrap().value.clone(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let mut cross_ids = Vec::new(&env);
     cross_ids.push_back(PatientIdentifier {
         id_value: String::from_str(&env, "PID-67890"),
         assigning_authority: String::from_str(&env, "Hospital-B"),
         identifier_type_code: String::from_str(&env, "PI"),
     });
-    
+
     let pix_ref = PIXCrossReference {
         reference_id: 1,
         local_id,
@@ -1193,9 +1222,9 @@ fn test_comprehensive_ihe_fhir_integration() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     assert_eq!(pix_ref.reference_id, 1);
-    
+
     // 3. Store demographics in PDQ
     let demographics = PatientDemographics {
         patient_id: fhir_patient.identifiers.get(0).unwrap().value.clone(),
@@ -1218,7 +1247,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
     };
-    
+
     // 4. Create clinical observations
     let observation = FHIRObservation {
         identifier: String::from_str(&env, "obs-001"),
@@ -1232,7 +1261,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         interpretation: Vec::new(&env),
         reference_range: String::from_str(&env, "60-100 beats/minute"),
     };
-    
+
     // 5. Create XDS document entry
     let xds_entry = XDSDocumentEntry {
         document_id: String::from_str(&env, "doc-001"),
@@ -1253,7 +1282,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         submission_set_id: String::from_str(&env, "ss-001"),
         mime_type: String::from_str(&env, "application/pdf"),
     };
-    
+
     // 6. Grant consent (BPPC)
     let consent = BPPCConsent {
         consent_id: 1,
@@ -1270,7 +1299,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         author: patient.clone(),
         document_ref: String::from_str(&env, "consent-doc-001"),
     };
-    
+
     // 7. Log ATNA audit events
     let mut participants = Vec::new(&env);
     participants.push_back(ATNAParticipant {
@@ -1280,7 +1309,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         is_requestor: true,
         network_access_point: String::from_str(&env, "192.168.1.100"),
     });
-    
+
     let audit_event = ATNAAuditEvent {
         event_id: 1,
         event_type: ATNAEventType::PatientRecordAccess,
@@ -1294,7 +1323,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         hl7_message_id: String::from_str(&env, "MSG-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     // Validate complete workflow
     assert_eq!(fhir_patient.given_name, demographics.given_name);
     assert_eq!(observation.status, String::from_str(&env, "final"));

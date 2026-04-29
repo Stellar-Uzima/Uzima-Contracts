@@ -1,9 +1,5 @@
-// Vesting contract - arithmetic is bounds-checked and overflow is impossible with token amounts
-#![allow(clippy::arithmetic_side_effects)]
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
-#![allow(clippy::panic)]
-
+// Token vesting contract
+use crate::errors::Error;
 use crate::storage::*;
 use crate::types::*;
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env, Vec};
@@ -75,20 +71,24 @@ impl VestingContract {
     }
 
     /// Release vested tokens to beneficiary
-    pub fn release_tokens(env: Env, beneficiary: Address) -> u128 {
+    pub fn release_tokens(env: Env, beneficiary: Address) -> Result<u128, Error> {
         beneficiary.require_auth();
 
-        let releasable = Self::get_releasable_amount(env.clone(), beneficiary.clone());
-        assert!(releasable > 0, "No tokens to release");
+        let releasable = Self::get_releasable_amount(env.clone(), beneficiary.clone())?;
+        if releasable == 0 {
+            return Err(Error::InvalidArgument);
+        }
 
-        // Update released amount
         let Some(mut schedule) = get_vesting_schedule(&env, &beneficiary) else {
-            return 0; // No vesting schedule
+            return Ok(0);
         };
-        schedule.released_amount += releasable;
+
+        schedule.released_amount = schedule
+            .released_amount
+            .checked_add(releasable)
+            .ok_or(Error::Overflow)?;
         set_vesting_schedule(&env, &beneficiary, &schedule);
 
-        // Transfer tokens
         let config = get_config(&env);
         let token_client = token::Client::new(&env, &config.token_address);
         token_client.transfer(
@@ -100,7 +100,7 @@ impl VestingContract {
         env.events()
             .publish(("tokens_released",), (beneficiary, releasable));
 
-        releasable
+        Ok(releasable)
     }
 
     /// Get vesting schedule for a beneficiary
@@ -109,53 +109,60 @@ impl VestingContract {
     }
 
     /// Get the amount of tokens that can be released now
-    pub fn get_releasable_amount(env: Env, beneficiary: Address) -> u128 {
+    pub fn get_releasable_amount(env: Env, beneficiary: Address) -> Result<u128, Error> {
         let schedule = match get_vesting_schedule(&env, &beneficiary) {
             Some(s) => s,
-            None => return 0,
+            None => return Ok(0),
         };
 
         let current_time = get_ledger_timestamp(&env);
-        let vested_amount = Self::get_vested_amount(env, beneficiary, current_time);
+        let vested_amount = Self::get_vested_amount(env, beneficiary, current_time)?;
 
-        vested_amount.saturating_sub(schedule.released_amount)
+        Ok(vested_amount.saturating_sub(schedule.released_amount))
     }
 
     /// Calculate vested amount at a specific timestamp
-    pub fn get_vested_amount(env: Env, beneficiary: Address, timestamp: u64) -> u128 {
+    pub fn get_vested_amount(
+        env: Env,
+        beneficiary: Address,
+        timestamp: u64,
+    ) -> Result<u128, Error> {
         let schedule = match get_vesting_schedule(&env, &beneficiary) {
             Some(s) => s,
-            None => return 0,
+            None => return Ok(0),
         };
 
         if schedule.total_amount == 0 {
-            return 0;
+            return Ok(0);
         }
 
         let cliff_end = schedule.start_time + schedule.cliff_duration;
 
-        // Before cliff, nothing is vested
         if timestamp < cliff_end {
-            return 0;
+            return Ok(0);
         }
 
         let vesting_end = schedule.start_time + schedule.vesting_duration;
 
-        // After vesting period, everything is vested
         if timestamp >= vesting_end {
-            return schedule.total_amount;
+            return Ok(schedule.total_amount);
         }
 
-        // Linear vesting between cliff and end
         let time_since_cliff = timestamp - cliff_end;
         let vesting_period = schedule.vesting_duration - schedule.cliff_duration;
 
         if vesting_period == 0 {
-            return schedule.total_amount;
+            return Ok(schedule.total_amount);
         }
 
-        // Calculate proportional vesting
-        (schedule.total_amount * time_since_cliff as u128) / vesting_period as u128
+        // Safe: checked_mul prevents overflow on large total_amount * time_since_cliff
+        let vested = schedule
+            .total_amount
+            .checked_mul(time_since_cliff as u128)
+            .ok_or(Error::Overflow)?
+            / vesting_period as u128;
+
+        Ok(vested)
     }
 
     /// Batch create vesting schedules for team members
@@ -195,18 +202,17 @@ impl VestingContract {
         new_cliff_duration: u64,
         new_vesting_duration: u64,
         new_total_amount: u128,
-    ) {
+    ) -> Result<(), Error> {
         let owner = get_owner(&env);
         owner.require_auth();
 
         let Some(mut schedule) = get_vesting_schedule(&env, &beneficiary) else {
-            return; // No vesting schedule
+            return Ok(());
         };
 
-        // Ensure we don't reduce already vested amounts
         let current_time = get_ledger_timestamp(&env);
         let current_vested =
-            Self::get_vested_amount(env.clone(), beneficiary.clone(), current_time);
+            Self::get_vested_amount(env.clone(), beneficiary.clone(), current_time)?;
         assert!(
             new_total_amount >= current_vested,
             "Cannot reduce vested amount"
@@ -227,5 +233,7 @@ impl VestingContract {
                 new_total_amount,
             ),
         );
+
+        Ok(())
     }
 }

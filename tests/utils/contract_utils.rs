@@ -19,7 +19,7 @@ impl ContractSetup {
     pub fn new() -> Self {
         let env = Env::default();
         let admin = Address::generate(&env);
-        
+
         Self {
             env,
             admin,

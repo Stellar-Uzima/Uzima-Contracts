@@ -55,24 +55,24 @@ pub fn get_suggestion(error: Error) -> Symbol {
         | Error::NotDeviceOperator
         | Error::NotManufacturer => {
             symbol_short!("CHK_AUTH")
-        }
+        },
         Error::NotInitialized => symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized
         | Error::DeviceAlreadyRegistered
         | Error::ManufacturerAlreadyRegistered
         | Error::FirmwareAlreadyExists => {
             symbol_short!("ALREADY")
-        }
+        },
         Error::ContractPaused | Error::HeartbeatTooFrequent | Error::KeyRotationTooFrequent => {
             symbol_short!("RE_TRY_L")
-        }
+        },
         Error::InputTooLong | Error::InputTooShort => symbol_short!("CHK_LEN"),
         Error::DeviceNotFound
         | Error::ManufacturerNotRegistered
         | Error::FirmwareVersionNotFound
         | Error::ChannelNotFound => {
             symbol_short!("CHK_ID")
-        }
+        },
         _ => symbol_short!("CONTACT"),
     }
 }

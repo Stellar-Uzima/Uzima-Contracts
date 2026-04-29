@@ -120,12 +120,7 @@ mod tests {
             &expertise,
         );
 
-        let result = client.update_module_ownership(
-            &admin,
-            &module_id,
-            &owner2,
-            &Vec::new(&env),
-        );
+        let result = client.update_module_ownership(&admin, &module_id, &owner2, &Vec::new(&env));
 
         assert_eq!(result, ());
 
@@ -159,13 +154,7 @@ mod tests {
             &expertise,
         );
 
-        let result = client.configure_review_route(
-            &admin,
-            &module_id,
-            &2,
-            &5,
-            &escalation_owner,
-        );
+        let result = client.configure_review_route(&admin, &module_id, &2, &5, &escalation_owner);
 
         assert_eq!(result, ());
 

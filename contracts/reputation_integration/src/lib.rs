@@ -176,7 +176,7 @@ impl ReputationIntegration {
                 Err(_) => {
                     // Continue with other providers even if one fails
                     results.push_back(0);
-                }
+                },
             }
         }
 

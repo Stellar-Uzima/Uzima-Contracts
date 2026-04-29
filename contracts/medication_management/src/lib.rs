@@ -900,14 +900,14 @@ impl MedicationManagement {
                 } else {
                     24 / *hours
                 }
-            }
+            },
             DosingSchedule::EveryNDays(days) => {
                 if *days == 0 {
                     0
                 } else {
                     1
                 }
-            }
+            },
             DosingSchedule::Weekly => 1,
             DosingSchedule::SpecificTimes(times) => times.len(),
         }
@@ -936,7 +936,7 @@ impl MedicationManagement {
                     let days_u64 = u64::from(*days);
                     elapsed_days.div_ceil(days_u64) as u32
                 }
-            }
+            },
             DosingSchedule::Weekly => elapsed_days.div_ceil(7) as u32,
             _ => (elapsed_days as u32).saturating_mul(Self::doses_per_day(&schedule.schedule)),
         }

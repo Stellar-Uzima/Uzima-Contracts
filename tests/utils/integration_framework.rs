@@ -1,10 +1,9 @@
+use crate::utils::{HealthcareTeam, UserFixture, UserFixtureFactory};
 /// Integration testing framework for Uzima Contracts
 use soroban_sdk::{
-    Address, BytesN, Env, IntoVal, String as SorobanString, Val, Vec,
     testutils::{Address as _, Events, Ledger},
-    vec,
+    vec, Address, BytesN, Env, IntoVal, String as SorobanString, Val, Vec,
 };
-use crate::utils::{UserFixture, UserFixtureFactory, HealthcareTeam};
 
 // Import contract types for registration helpers
 // Note: In a real multi-crate workspace, these might need to be imported via crate features or separate dev-dependencies
@@ -22,15 +21,11 @@ impl IntegrationTestEnv {
         let env = Env::default();
         // Enable mock auths by default for integration tests to focus on logic
         env.mock_all_auths();
-        
+
         let team = UserFixtureFactory::create_healthcare_team(&env);
         let admin = team.admin.address.clone();
 
-        Self {
-            env,
-            admin,
-            team,
-        }
+        Self { env, admin, team }
     }
 
     /// Advance the ledger time by a specific number of seconds
@@ -61,19 +56,27 @@ impl IntegrationTestEnv {
     /// Assert that a specific event was emitted
     pub fn assert_event_emitted(&self, contract_id: &Address, topics: Vec<Val>, data: Val) {
         let events = self.env.events().all();
-        let found = events.iter().any(|(id, t, d)| {
-            id == *contract_id && t == topics && d == data
-        });
-        assert!(found, "Expected event not found for contract {:?}", contract_id);
+        let found = events
+            .iter()
+            .any(|(id, t, d)| id == *contract_id && t == topics && d == data);
+        assert!(
+            found,
+            "Expected event not found for contract {:?}",
+            contract_id
+        );
     }
 
     /// Assert that an event with specific topics was emitted (ignoring data)
     pub fn assert_event_topics(&self, contract_id: &Address, topics: Vec<Val>) {
         let events = self.env.events().all();
-        let found = events.iter().any(|(id, t, _)| {
-            id == *contract_id && t == topics
-        });
-        assert!(found, "Expected event topics not found for contract {:?}", contract_id);
+        let found = events
+            .iter()
+            .any(|(id, t, _)| id == *contract_id && t == topics);
+        assert!(
+            found,
+            "Expected event topics not found for contract {:?}",
+            contract_id
+        );
     }
 
     /// Generate a new random address in the test environment
@@ -103,8 +106,15 @@ impl IntegrationTestEnv {
     }
 
     /// Register and initialize the MedicalRecords contract
-    pub fn register_medical_records(&self) -> (Address, medical_records::MedicalRecordsContractClient<'static>) {
-        let contract_id = self.env.register_contract(None, medical_records::MedicalRecordsContract);
+    pub fn register_medical_records(
+        &self,
+    ) -> (
+        Address,
+        medical_records::MedicalRecordsContractClient<'static>,
+    ) {
+        let contract_id = self
+            .env
+            .register_contract(None, medical_records::MedicalRecordsContract);
         let client = medical_records::MedicalRecordsContractClient::new(&self.env, &contract_id);
         (contract_id, client)
     }
@@ -113,25 +123,37 @@ impl IntegrationTestEnv {
     pub fn register_token(&self, admin: &Address) -> (Address, sut_token::SutTokenClient<'static>) {
         let contract_id = self.env.register_contract(None, sut_token::SutToken);
         let client = sut_token::SutTokenClient::new(&self.env, &contract_id);
-        
+
         let name = SorobanString::from_str(&self.env, "Stellar Utility Token");
         let symbol = SorobanString::from_str(&self.env, "SUT");
         let decimals = 7;
         let supply_cap = 100_000_000_000_000_i128; // 10M with 7 decimals
-        
-        client.initialize(admin, &name, &symbol, &decimals, &supply_cap).expect("Failed to initialize token");
-        
+
+        client
+            .initialize(admin, &name, &symbol, &decimals, &supply_cap)
+            .expect("Failed to initialize token");
+
         (contract_id, client)
     }
 }
 
 /// Helper to mock a contract call with a specific result
 pub trait MockService {
-    fn setup_mock_response<T: IntoVal<Env, Val>>(&self, contract_id: &Address, fn_name: &str, response: T);
+    fn setup_mock_response<T: IntoVal<Env, Val>>(
+        &self,
+        contract_id: &Address,
+        fn_name: &str,
+        response: T,
+    );
 }
 
 impl MockService for IntegrationTestEnv {
-    fn setup_mock_response<T: IntoVal<Env, Val>>(&self, _contract_id: &Address, _fn_name: &str, _response: T) {
+    fn setup_mock_response<T: IntoVal<Env, Val>>(
+        &self,
+        _contract_id: &Address,
+        _fn_name: &str,
+        _response: T,
+    ) {
         // Implementation for mocking external contract calls
         // In Soroban, this is usually done by registering a mock contract implementation.
         // This is a placeholder for more complex logic.
@@ -164,4 +186,3 @@ mod tests {
         assert!(token_id.to_string().len() > 0);
     }
 }
-

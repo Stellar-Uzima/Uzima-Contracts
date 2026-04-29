@@ -33,7 +33,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::NotAdmin | Error::InsufficientApprovals => {
             symbol_short!("CHK_AUTH")
-        }
+        },
         Error::InvalidAmount | Error::InvalidFeeBps => symbol_short!("CHK_LEN"),
         Error::EscrowNotFound => symbol_short!("CHK_ID"),
         Error::AlreadySettled | Error::EscrowExists => symbol_short!("ALREADY"),

@@ -1,9 +1,9 @@
 #![no_std]
 
 #[cfg(test)]
-mod test;
-#[cfg(test)]
 mod benchmarks;
+#[cfg(test)]
+mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
@@ -315,39 +315,39 @@ impl CryptoRegistry {
                 if len != 32 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Secp256k1 => {
                 // Compressed: 33, uncompressed: 65. Allow either.
                 if len != 33 && len != 65 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Kyber768 => {
                 if len != 1184 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Kyber1024 => {
                 if len != 1568 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium2 => {
                 if len != 1312 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium3 => {
                 if len != 1952 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium5 => {
                 if len != 2592 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         Ok(())

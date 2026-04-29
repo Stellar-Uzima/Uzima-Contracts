@@ -42,7 +42,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::NotVerifier | Error::CannotRemoveOwner => {
             symbol_short!("CHK_AUTH")
-        }
+        },
         Error::NotInitialized => symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized => symbol_short!("ALREADY"),
         Error::DIDNotFound

@@ -1,13 +1,13 @@
+use crate::utils::IntegrationTestEnv;
+use medical_records::Role;
 /// Comprehensive integration tests for healthcare workflow scenarios
-use soroban_sdk::{vec, String, testutils::Address as _};
-use crate::utils::{IntegrationTestEnv};
-use medical_records::{Role};
+use soroban_sdk::{testutils::Address as _, vec, String};
 
 #[test]
 fn test_user_registration_workflow() {
     let test_env = IntegrationTestEnv::new();
     let (_, records_client) = test_env.register_medical_records();
-    
+
     let admin = &test_env.team.admin.address;
     let doctor = &test_env.team.doctors[0].address;
     let patient = &test_env.team.patients[0].address;
@@ -26,7 +26,7 @@ fn test_user_registration_workflow() {
 fn test_record_creation_retrieval_workflow() {
     let test_env = IntegrationTestEnv::new();
     let (records_id, records_client) = test_env.register_medical_records();
-    
+
     let admin = &test_env.team.admin.address;
     let doctor = &test_env.team.doctors[0].address;
     let patient = &test_env.team.patients[0].address;
@@ -38,7 +38,7 @@ fn test_record_creation_retrieval_workflow() {
     // 1. Doctor creates a medical record
     let diagnosis = String::from_str(&test_env.env, "Integration Test Diagnosis");
     let treatment = String::from_str(&test_env.env, "Automated Treatment");
-    
+
     let record_id = records_client.add_record(
         doctor,
         patient,
@@ -64,7 +64,7 @@ fn test_record_creation_retrieval_workflow() {
 fn test_pause_emergency_workflow() {
     let test_env = IntegrationTestEnv::new();
     let (_, records_client) = test_env.register_medical_records();
-    
+
     let admin = &test_env.team.admin.address;
     let doctor = &test_env.team.doctors[0].address;
     let patient = &test_env.team.patients[0].address;
@@ -94,4 +94,3 @@ fn test_pause_emergency_workflow() {
     records_client.unpause(admin);
     assert!(!records_client.is_paused());
 }
-

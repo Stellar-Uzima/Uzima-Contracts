@@ -119,7 +119,11 @@ impl UpgradeManager {
 
         proposals.set(id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        env.storage().persistent().extend_ttl(&PROPOSALS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &PROPOSALS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
         env.events()
             .publish((symbol_short!("proposed"), id), proposer);
@@ -153,7 +157,11 @@ impl UpgradeManager {
         proposal.approvals.push_back(validator);
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        env.storage().persistent().extend_ttl(&PROPOSALS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &PROPOSALS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         Ok(())
     }
 
@@ -190,7 +198,11 @@ impl UpgradeManager {
         proposal.executed = true;
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        env.storage().persistent().extend_ttl(&PROPOSALS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &PROPOSALS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
         env.events()
             .publish((symbol_short!("executed"), proposal_id), ());
@@ -229,7 +241,11 @@ impl UpgradeManager {
         proposal.executed = true;
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
-        env.storage().persistent().extend_ttl(&PROPOSALS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &PROPOSALS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
         env.events()
             .publish((symbol_short!("emergency"), proposal_id), ());

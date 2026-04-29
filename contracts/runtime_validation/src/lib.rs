@@ -13,9 +13,7 @@ pub use types::{
     ValidationReport, ViolationType,
 };
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 #[contract]
 pub struct RuntimeValidation;
@@ -34,9 +32,7 @@ impl RuntimeValidation {
         env.storage()
             .instance()
             .set(&DataKey::ViolationCount, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::CheckCount, &0u32);
+        env.storage().instance().set(&DataKey::CheckCount, &0u32);
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -309,11 +305,7 @@ impl RuntimeValidation {
     }
 
     /// Check permission
-    pub fn verify_permission(
-        env: Env,
-        check_id: String,
-        user_role: String,
-    ) -> Result<bool, Error> {
+    pub fn verify_permission(env: Env, check_id: String, user_role: String) -> Result<bool, Error> {
         let check: PermissionCheck = env
             .storage()
             .persistent()
