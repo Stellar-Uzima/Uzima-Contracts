@@ -1,9 +1,5 @@
-// Token sale contract - arithmetic is bounds-checked via asserts
-#![allow(clippy::arithmetic_side_effects)]
-#![allow(clippy::unwrap_used)]
-#![allow(clippy::expect_used)]
-#![allow(clippy::panic)]
-
+// Token sale contract
+use crate::errors::Error;
 use crate::storage::*;
 use crate::types::*;
 use soroban_sdk::{contract, contractimpl, contractmeta, token, Address, Env};
@@ -143,41 +139,55 @@ impl TokenSaleContract {
     }
 
     /// Contribute to the sale using ERC20 tokens
-    pub fn contribute(env: Env, contributor: Address, phase_id: u32, token: Address, amount: u128) {
+    pub fn contribute(
+        env: Env,
+        contributor: Address,
+        phase_id: u32,
+        token: Address,
+        amount: u128,
+    ) -> Result<(), Error> {
         contributor.require_auth();
 
-        assert!(!is_paused(&env), "Sale is paused");
+        if is_paused(&env) {
+            return Err(Error::Paused);
+        }
         let config = get_config(&env);
-        assert!(!config.is_finalized, "Sale is finalized");
-        assert!(is_supported_token(&env, &token), "Token not supported");
+        if config.is_finalized {
+            return Err(Error::PhaseClosed);
+        }
+        if !is_supported_token(&env, &token) {
+            return Err(Error::InvalidArgument);
+        }
 
         let current_time = get_ledger_timestamp(&env);
         let Some(mut phase) = get_sale_phase(&env, phase_id) else {
-            return; // Phase not found
+            return Err(Error::PhaseNotFound);
         };
 
-        // Validate phase
-        assert!(phase.is_active, "Phase not active");
-        assert!(current_time >= phase.start_time, "Phase not started");
-        assert!(current_time <= phase.end_time, "Phase ended");
+        if !phase.is_active || current_time < phase.start_time || current_time > phase.end_time {
+            return Err(Error::PhaseClosed);
+        }
 
-        // Calculate tokens to allocate using configurable decimal precision
         let tokens_to_allocate =
             fp_math::tokens_for_payment(amount, phase.price_per_token, config.token_decimals)
                 .expect("token allocation overflow");
-        assert!(
-            phase.sold_tokens + tokens_to_allocate <= phase.max_tokens,
-            "Phase cap exceeded"
-        );
 
-        // Check per-address cap
+        let new_sold = phase
+            .sold_tokens
+            .checked_add(tokens_to_allocate)
+            .ok_or(Error::Overflow)?;
+        if new_sold > phase.max_tokens {
+            return Err(Error::CapExceeded);
+        }
+
         let user_phase_contribution = get_phase_contribution(&env, &contributor, phase_id);
-        assert!(
-            user_phase_contribution + amount <= phase.per_address_cap,
-            "Per-address cap exceeded"
-        );
+        let new_contribution = user_phase_contribution
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+        if new_contribution > phase.per_address_cap {
+            return Err(Error::CapExceeded);
+        }
 
-        // Transfer payment tokens from contributor
         let token_client = token::Client::new(&env, &token);
         token_client.transfer(
             &contributor,
@@ -185,20 +195,16 @@ impl TokenSaleContract {
             &(amount as i128),
         );
 
-        // Update phase
-        phase.sold_tokens += tokens_to_allocate;
+        phase.sold_tokens = new_sold;
         set_sale_phase(&env, phase_id, &phase);
 
-        // Update user contributions
-        set_phase_contribution(
-            &env,
-            &contributor,
-            phase_id,
-            user_phase_contribution + amount,
-        );
-        set_total_raised(&env, get_total_raised(&env) + amount);
+        set_phase_contribution(&env, &contributor, phase_id, new_contribution);
 
-        // Update or create user contribution record
+        let new_total = get_total_raised(&env)
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+        set_total_raised(&env, new_total);
+
         let mut contribution = get_contribution(&env, &contributor).unwrap_or(Contribution {
             amount: 0,
             tokens_allocated: 0,
@@ -207,8 +213,14 @@ impl TokenSaleContract {
             claimed: false,
         });
 
-        contribution.amount += amount;
-        contribution.tokens_allocated += tokens_to_allocate;
+        contribution.amount = contribution
+            .amount
+            .checked_add(amount)
+            .ok_or(Error::Overflow)?;
+        contribution.tokens_allocated = contribution
+            .tokens_allocated
+            .checked_add(tokens_to_allocate)
+            .ok_or(Error::Overflow)?;
         contribution.timestamp = current_time;
         set_contribution(&env, &contributor, &contribution);
 
@@ -216,6 +228,8 @@ impl TokenSaleContract {
             ("contribution",),
             (contributor, phase_id, amount, tokens_to_allocate),
         );
+
+        Ok(())
     }
 
     /// Finalize the sale
@@ -257,11 +271,9 @@ impl TokenSaleContract {
         assert!(!contribution.claimed, "Tokens already claimed");
         assert!(contribution.tokens_allocated > 0, "No tokens to claim");
 
-        // Mark as claimed
         contribution.claimed = true;
         set_contribution(&env, &claimer, &contribution);
 
-        // Transfer SUT tokens
         let token_client = token::Client::new(&env, &config.token_address);
         token_client.transfer(
             &env.current_contract_address(),
@@ -288,11 +300,9 @@ impl TokenSaleContract {
         assert!(!contribution.claimed, "Already claimed");
         assert!(contribution.amount > 0, "No contribution to refund");
 
-        // Mark as claimed
         contribution.claimed = true;
         set_contribution(&env, &claimer, &contribution);
 
-        // Transfer refund
         let token_client = token::Client::new(&env, &payment_token);
         token_client.transfer(
             &env.current_contract_address(),

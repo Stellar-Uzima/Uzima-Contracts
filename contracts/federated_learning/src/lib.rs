@@ -233,6 +233,7 @@ pub enum Error {
     VerificationFailed = 21,
     FrameworkNotSupported = 22,
     ContributionQualityLow = 23,
+    Overflow               = 24,
 }
 
 #[contract]
@@ -787,8 +788,10 @@ impl FederatedLearningContract {
         for addr in participants.iter() {
             let k = DataKey::Institution(addr.clone());
             if let Some(mut inst) = env.storage().persistent().get::<DataKey, Institution>(&k) {
-                inst.reward_balance += round.reward_per_participant;
-                inst.reputation_score = (inst.reputation_score + rep_delta).min(100);
+                inst.reward_balance = inst.reward_balance
+                    .checked_add(round.reward_per_participant)
+                    .ok_or(Error::Overflow)?;
+                inst.reputation_score = inst.reputation_score.saturating_add(rep_delta).min(100);
 
                 if let Some(verification) =
                     env.storage()
@@ -798,7 +801,7 @@ impl FederatedLearningContract {
                         )
                 {
                     if verification.quality_score > 80 {
-                        inst.reputation_score = (inst.reputation_score + 1).min(100);
+                        inst.reputation_score = inst.reputation_score.saturating_add(1).min(100);
                     }
                 }
 
