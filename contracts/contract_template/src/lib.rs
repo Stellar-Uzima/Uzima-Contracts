@@ -92,7 +92,10 @@ impl ContractTemplate {
         }
 
         // 4. Execute the state change.
-        let record = ContractData { owner: caller.clone(), value: data.clone() };
+        let record = ContractData {
+            owner: caller.clone(),
+            value: data.clone(),
+        };
         env.storage().persistent().set(&KEY_DATA, &record);
 
         // 5. Emit an event for auditability.

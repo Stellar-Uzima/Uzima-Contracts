@@ -94,7 +94,7 @@ fn test_drug_feed_consensus_and_weighted_aggregation() {
             assert_eq!(data.price_minor, 1050);
             assert_eq!(data.availability_units, 210);
             assert_eq!(data.observed_at, 101);
-        }
+        },
         _ => panic!("expected drug pricing payload"),
     }
 }
@@ -121,7 +121,7 @@ fn test_clinical_trial_and_regulatory_feeds() {
             assert_eq!(data.trial_id, trial_id);
             assert_eq!(data.phase, 3);
             assert_eq!(data.enrolled, 450);
-        }
+        },
         _ => panic!("expected clinical payload"),
     }
 
@@ -146,7 +146,7 @@ fn test_clinical_trial_and_regulatory_feeds() {
             assert_eq!(data.regulation_id, regulation_id);
             assert_eq!(data.status, RegulatoryStatus::GuidelineUpdate);
             assert_eq!(data.authority, RegulatoryAuthority::FDA);
-        }
+        },
         _ => panic!("expected regulatory payload"),
     }
 
@@ -227,7 +227,7 @@ fn test_treatment_outcome_feed_consensus() {
             assert_eq!(data.mortality_rate_bps, 190);
             assert_eq!(data.sample_size, 1150);
             assert_eq!(data.reported_at, 1010);
-        }
+        },
         _ => panic!("expected treatment outcome payload"),
     }
 

@@ -1193,8 +1193,8 @@ impl MedicalRecordsContract {
                     ) {
                         return true;
                     }
-                }
-                Role::Patient | Role::None => {}
+                },
+                Role::Patient | Role::None => {},
             }
         }
 
@@ -1759,7 +1759,7 @@ impl MedicalRecordsContract {
                         "Record access requested for a non-existent record",
                     );
                     return Err(Error::RecordNotFound);
-                }
+                },
             };
 
         if !Self::can_view_record(&env, &caller, &record, record_id) {
@@ -3877,7 +3877,7 @@ impl MedicalRecordsContract {
                     "Emergency access revoke requested but grant was not found",
                 );
                 return Err(Error::EmergencyAccessNotFound);
-            }
+            },
         };
         entry.is_active = false;
         grants.set(grantee.clone(), entry);
@@ -4075,7 +4075,7 @@ impl MedicalRecordsContract {
                     "Recovery approval requested for a non-existent proposal",
                 );
                 return Err(Error::RecordNotFound);
-            }
+            },
         };
         if proposal.executed {
             Self::log_error(
@@ -4134,7 +4134,7 @@ impl MedicalRecordsContract {
                     "Recovery execution requested for a non-existent proposal",
                 );
                 return Err(Error::RecordNotFound);
-            }
+            },
         };
         if proposal.executed {
             Self::log_error(
@@ -5335,7 +5335,7 @@ impl MedicalRecordsContract {
                         return Ok(()); // Admins unlimited by default
                     }
                     cfg.admin_max_calls
-                }
+                },
                 Role::Doctor => cfg.doctor_max_calls,
                 Role::Patient | Role::None => cfg.patient_max_calls,
             },

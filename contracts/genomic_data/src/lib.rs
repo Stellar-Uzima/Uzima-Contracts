@@ -269,9 +269,7 @@ impl GenomicDataContract {
         env.storage().instance().set(&VERSION, &1u32);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::NextId, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::ListingNextId, &0u64);
+        env.storage().instance().set(&DataKey::ListingNextId, &0u64);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -354,9 +352,7 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::PatientRecords(patient), &list);
-        env.storage()
-            .instance()
-            .set(&DataKey::NextId, &new_id);
+        env.storage().instance().set(&DataKey::NextId, &new_id);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -702,9 +698,7 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::RecordListings(record_id), &ids);
-        env.storage()
-            .instance()
-            .set(&DataKey::ListingNextId, &lid);
+        env.storage().instance().set(&DataKey::ListingNextId, &lid);
         Self::emit_log(
             &env,
             LogLevel::Info,

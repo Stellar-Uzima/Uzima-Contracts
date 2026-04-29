@@ -67,7 +67,11 @@ impl Timelock {
         }
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
-        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &QUEUE,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.events().publish((symbol_short!("Queued"), id), (eta,));
         Ok(())
     }
@@ -78,7 +82,11 @@ impl Timelock {
             .persistent()
             .get(&QUEUE)
             .unwrap_or(Map::new(&env));
-        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &QUEUE,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
         if now < tx.eta {
@@ -88,7 +96,11 @@ impl Timelock {
         // Here we just emit execution event and remove from queue.
         q.remove(id);
         env.storage().persistent().set(&QUEUE, &q);
-        env.storage().persistent().extend_ttl(&QUEUE, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &QUEUE,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.events()
             .publish((symbol_short!("Exec"), id), (tx.target, tx.call));
         Ok(())

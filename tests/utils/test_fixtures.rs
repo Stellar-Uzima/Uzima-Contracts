@@ -50,13 +50,27 @@ impl UserFixtureFactory {
     /// Create admin fixture
     pub fn create_admin(env: &Env) -> UserFixture {
         let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Admin, "Admin User", "admin@hospital.com").verified()
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Admin,
+            "Admin User",
+            "admin@hospital.com",
+        )
+        .verified()
     }
 
     /// Create doctor fixture
     pub fn create_doctor(env: &Env) -> UserFixture {
         let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Doctor, "Dr. Smith", "smith@hospital.com").verified()
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Doctor,
+            "Dr. Smith",
+            "smith@hospital.com",
+        )
+        .verified()
     }
 
     /// Create multiple doctors
@@ -79,8 +93,14 @@ impl UserFixtureFactory {
     /// Create patient fixture
     pub fn create_patient(env: &Env) -> UserFixture {
         let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Patient, "John Patient", "patient@example.com")
-            .verified()
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Patient,
+            "John Patient",
+            "patient@example.com",
+        )
+        .verified()
     }
 
     /// Create multiple patients
@@ -103,8 +123,14 @@ impl UserFixtureFactory {
     /// Create nurse fixture
     pub fn create_nurse(env: &Env) -> UserFixture {
         let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Nurse, "Nurse Jane", "nurse@hospital.com")
-            .verified()
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Nurse,
+            "Nurse Jane",
+            "nurse@hospital.com",
+        )
+        .verified()
     }
 
     /// Create pharmacist fixture
@@ -252,7 +278,13 @@ mod tests {
     fn test_user_fixture_creation() {
         let env = soroban_sdk::Env::default();
         let addr = Address::generate(&env);
-        let user = UserFixture::new(&env, addr.clone(), UserRole::Doctor, "Test", "test@test.com");
+        let user = UserFixture::new(
+            &env,
+            addr.clone(),
+            UserRole::Doctor,
+            "Test",
+            "test@test.com",
+        );
         assert_eq!(user.role, UserRole::Doctor);
         assert!(!user.verified);
     }
@@ -261,7 +293,8 @@ mod tests {
     fn test_user_fixture_verified() {
         let env = soroban_sdk::Env::default();
         let addr = Address::generate(&env);
-        let user = UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
+        let user =
+            UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
         assert!(user.verified);
     }
 

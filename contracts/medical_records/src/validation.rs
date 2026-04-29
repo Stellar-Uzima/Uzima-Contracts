@@ -1153,20 +1153,20 @@ pub fn validate_record_by_type(
         MedicalRecordType::General => {
             // Standard validation is sufficient
             Ok(())
-        }
+        },
         MedicalRecordType::Laboratory => {
             // Lab records MUST have a data reference for results
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Prescription => {
             // Prescriptions MUST have treatment and treatment_type
             validate_treatment(&record.treatment)?;
             validate_treatment_type(&record.treatment_type)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Imaging => {
             // Imaging records MUST have a data reference for the images
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
@@ -1174,7 +1174,7 @@ pub fn validate_record_by_type(
             }
             validate_data_ref(env, &record.data_ref)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Surgical => {
             // Surgical records need diagnosis, treatment, AND doctor DID
             validate_diagnosis(&record.diagnosis)?;
@@ -1183,7 +1183,7 @@ pub fn validate_record_by_type(
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Emergency => {
             // Emergency records: timestamp must be recent (within 1 hour)
             let current_time = env.ledger().timestamp();
@@ -1193,7 +1193,7 @@ pub fn validate_record_by_type(
             }
             validate_diagnosis(&record.diagnosis)?;
             Ok(())
-        }
+        },
     }
 }
 

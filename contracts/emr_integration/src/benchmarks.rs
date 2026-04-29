@@ -30,7 +30,10 @@ impl BenchResult {
     fn print(&self) {
         std::println!(
             "[BENCH] {:40} cpu={:>12} insns  mem={:>10} bytes  wall={:>8}µs",
-            self.name, self.cpu_instructions, self.memory_bytes, self.wall_us
+            self.name,
+            self.cpu_instructions,
+            self.memory_bytes,
+            self.wall_us
         );
     }
 
@@ -240,13 +243,17 @@ fn bench_validate_message() {
         &sample_metadata(&env),
     );
 
-    let r = measure(&env, "emr_integration::validate_message (read+write)", || {
-        client.validate_message(
-            &sender,
-            &String::from_str(&env, "report-bench-1"),
-            &String::from_str(&env, "msg-to-validate"),
-        );
-    });
+    let r = measure(
+        &env,
+        "emr_integration::validate_message (read+write)",
+        || {
+            client.validate_message(
+                &sender,
+                &String::from_str(&env, "report-bench-1"),
+                &String::from_str(&env, "msg-to-validate"),
+            );
+        },
+    );
     r.print();
     r.assert_cpu_under(BUDGET_VALIDATE_MESSAGE);
 }

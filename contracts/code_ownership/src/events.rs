@@ -2,10 +2,8 @@ use crate::types::{ModuleOwnership, ReviewRoute};
 use soroban_sdk::{symbol_short, Address, Env};
 
 pub fn publish_initialization(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("OWNER"), symbol_short!("INIT")),
-        admin,
-    );
+    env.events()
+        .publish((symbol_short!("OWNER"), symbol_short!("INIT")), admin);
 }
 
 pub fn publish_module_registered(env: &Env, ownership: &ModuleOwnership) {

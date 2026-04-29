@@ -10,9 +10,7 @@ mod test;
 pub use errors::Error;
 pub use types::{DataKey, ModuleOwnership, OwnershipMatrix, ReviewRoute};
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 #[contract]
 pub struct CodeOwnership;
@@ -28,9 +26,7 @@ impl CodeOwnership {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::ModuleCount, &0u32);
+        env.storage().instance().set(&DataKey::ModuleCount, &0u32);
 
         events::publish_initialization(&env, &admin);
         Ok(())

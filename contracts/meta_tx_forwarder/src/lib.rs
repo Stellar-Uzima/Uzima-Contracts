@@ -182,7 +182,13 @@ impl MetaTxForwarder {
         for i in 0..requests.len() {
             let request = requests.get(i).ok_or(Error::InvalidSignature)?;
             let signature = signatures.get(i).ok_or(Error::InvalidSignature)?;
-            results.push_back(Self::execute_one(&env, request, signature, current_time, &relayer)?);
+            results.push_back(Self::execute_one(
+                &env,
+                request,
+                signature,
+                current_time,
+                &relayer,
+            )?);
         }
 
         Ok(results)
@@ -347,7 +353,12 @@ impl MetaTxForwarder {
         Self::increment_nonce(env, &request.from);
         env.events().publish(
             (symbol_short!("fwd"),),
-            (relayer.clone(), request.from.clone(), request.to.clone(), request.nonce),
+            (
+                relayer.clone(),
+                request.from.clone(),
+                request.to.clone(),
+                request.nonce,
+            ),
         );
         Ok(result)
     }

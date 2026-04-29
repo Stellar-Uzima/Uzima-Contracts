@@ -142,7 +142,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(0)
-            }
+            },
             SutTokenOp::Mint { minter, to, amount } => {
                 let minter_index = *minter as usize % self.accounts.len();
                 let to_index = *to as usize % self.accounts.len();
@@ -165,7 +165,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             SutTokenOp::Burn {
                 minter,
                 from,
@@ -192,7 +192,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             SutTokenOp::Transfer { from, to, amount } => {
                 let from_index = *from as usize % self.accounts.len();
                 let to_index = *to as usize % self.accounts.len();
@@ -214,7 +214,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success && amount > 0))
-            }
+            },
             SutTokenOp::Approve {
                 owner,
                 spender,
@@ -243,7 +243,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             SutTokenOp::TransferFrom {
                 spender,
                 owner,
@@ -288,7 +288,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success && amount > 0))
-            }
+            },
             SutTokenOp::AddMinter { minter } => {
                 let minter_index = *minter as usize % self.accounts.len();
                 let success = self.model.initialized;
@@ -302,7 +302,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(0)
-            }
+            },
             SutTokenOp::RemoveMinter { minter } => {
                 let minter_index = *minter as usize % self.accounts.len();
                 let success = self.model.initialized;
@@ -316,7 +316,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(0)
-            }
+            },
             SutTokenOp::Snapshot => {
                 let success = self.model.initialized;
                 let result = self.client.try_snapshot();
@@ -328,7 +328,7 @@ impl BehaviorHarness for SutTokenHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
         }
     }
 

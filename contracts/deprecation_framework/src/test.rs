@@ -97,13 +97,8 @@ mod tests {
             &None,
         );
 
-        let result = client.set_sunset_timeline(
-            &admin,
-            &contract_to_deprecate,
-            &1000,
-            &2000,
-            &3000,
-        );
+        let result =
+            client.set_sunset_timeline(&admin, &contract_to_deprecate, &1000, &2000, &3000);
         assert_eq!(result, ());
     }
 
@@ -132,13 +127,7 @@ mod tests {
         );
 
         // Invalid: dates not in chronological order
-        client.set_sunset_timeline(
-            &admin,
-            &contract_to_deprecate,
-            &3000,
-            &2000,
-            &1000,
-        );
+        client.set_sunset_timeline(&admin, &contract_to_deprecate, &3000, &2000, &1000);
     }
 
     #[test]
@@ -235,12 +224,8 @@ mod tests {
         let message = String::from_str(&env, "This contract is deprecated");
         let comm_type = String::from_str(&env, "announcement");
 
-        let result = client.publish_user_communication(
-            &admin,
-            &contract_to_deprecate,
-            &message,
-            &comm_type,
-        );
+        let result =
+            client.publish_user_communication(&admin, &contract_to_deprecate, &message, &comm_type);
         assert_eq!(result, 0);
     }
 

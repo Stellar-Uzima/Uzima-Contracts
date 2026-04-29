@@ -218,8 +218,10 @@ impl AccessControlImpl {
     // ── Internal ──────────────────────────────────────────────────────────────
 
     fn emit_role_event(env: &Env, action: Symbol, address: &Address, role: Role) {
-        env.events()
-            .publish((symbol_short!("AC"), action), (address.clone(), role as u32));
+        env.events().publish(
+            (symbol_short!("AC"), action),
+            (address.clone(), role as u32),
+        );
     }
 }
 

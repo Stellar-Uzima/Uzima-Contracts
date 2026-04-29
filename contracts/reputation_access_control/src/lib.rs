@@ -191,8 +191,8 @@ impl ReputationAccessControl {
                 if !Self::check_time_restriction(&env, time_restriction)? {
                     return Ok(false);
                 }
-            }
-            TimeRestrictionPolicy::None => {}
+            },
+            TimeRestrictionPolicy::None => {},
         }
 
         // Check if requested access level is allowed

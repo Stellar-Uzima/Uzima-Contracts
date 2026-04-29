@@ -5,7 +5,7 @@
 mod test;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, 
+    contract, contracterror, contractimpl, contracttype, symbol_short,
     xdr::{FromXdr, ToXdr},
     Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
@@ -338,7 +338,11 @@ impl ZKPRegistry {
         admin.require_auth();
         Self::require_initialized(&env)?;
 
-        let current_admin: Address = env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotAuthorized)?;
+        let current_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotAuthorized)?;
         if current_admin != admin {
             return Err(Error::NotAuthorized);
         }
@@ -347,8 +351,11 @@ impl ZKPRegistry {
             return Err(Error::InvalidThreshold);
         }
 
-        env.storage().instance().set(&DataKey::MultiSigConfig, &config);
-        env.events().publish((symbol_short!("admin"), symbol_short!("cfg_msig")), admin);
+        env.storage()
+            .instance()
+            .set(&DataKey::MultiSigConfig, &config);
+        env.events()
+            .publish((symbol_short!("admin"), symbol_short!("cfg_msig")), admin);
         Ok(())
     }
 
@@ -361,12 +368,20 @@ impl ZKPRegistry {
         signer.require_auth();
         Self::require_initialized(&env)?;
 
-        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::NotAuthorized)?;
         if !config.signers.contains(&signer) {
             return Err(Error::InvalidSigner);
         }
 
-        let proposal_id: u64 = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+        let proposal_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalCounter)
+            .unwrap_or(0);
         let mut approvals = Vec::new(&env);
         approvals.push_back(signer.clone());
 
@@ -378,10 +393,17 @@ impl ZKPRegistry {
             approvals,
         };
 
-        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
-        env.storage().instance().set(&DataKey::ProposalCounter, &(proposal_id + 1));
+        env.storage()
+            .instance()
+            .set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCounter, &(proposal_id + 1));
 
-        env.events().publish((symbol_short!("admin"), symbol_short!("proposed")), (proposal_id, signer));
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("proposed")),
+            (proposal_id, signer),
+        );
 
         Ok(proposal_id)
     }
@@ -395,12 +417,20 @@ impl ZKPRegistry {
         signer.require_auth();
         Self::require_initialized(&env)?;
 
-        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::NotAuthorized)?;
         if !config.signers.contains(&signer) {
             return Err(Error::InvalidSigner);
         }
 
-        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+        let mut proposal: AdminProposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::AdminProposal(proposal_id))
+            .ok_or(Error::ProposalNotFound)?;
 
         if proposal.executed {
             return Err(Error::AlreadyExecuted);
@@ -411,9 +441,14 @@ impl ZKPRegistry {
         }
 
         proposal.approvals.push_back(signer.clone());
-        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::AdminProposal(proposal_id), &proposal);
 
-        env.events().publish((symbol_short!("admin"), symbol_short!("approved")), (proposal_id, signer));
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("approved")),
+            (proposal_id, signer),
+        );
 
         Ok(())
     }
@@ -427,8 +462,16 @@ impl ZKPRegistry {
         executor.require_auth();
         Self::require_initialized(&env)?;
 
-        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
-        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::AdminProposal(proposal_id))
+            .ok_or(Error::ProposalNotFound)?;
 
         if proposal.executed {
             return Err(Error::AlreadyExecuted);
@@ -443,26 +486,35 @@ impl ZKPRegistry {
         }
 
         proposal.executed = true;
-        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::AdminProposal(proposal_id), &proposal);
 
         Self::execute_action(&env, &proposal.action)?;
 
-        env.events().publish((symbol_short!("admin"), symbol_short!("executed")), proposal_id);
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("executed")),
+            proposal_id,
+        );
 
         Ok(())
     }
 
     /// Emergency override to execute a proposal without waiting for the timelock
-    pub fn emergency_override(
-        env: Env,
-        executor: Address,
-        proposal_id: u64,
-    ) -> Result<(), Error> {
+    pub fn emergency_override(env: Env, executor: Address, proposal_id: u64) -> Result<(), Error> {
         executor.require_auth();
         Self::require_initialized(&env)?;
 
-        let config: MultiSigConfig = env.storage().instance().get(&DataKey::MultiSigConfig).ok_or(Error::NotAuthorized)?;
-        let mut proposal: AdminProposal = env.storage().instance().get(&DataKey::AdminProposal(proposal_id)).ok_or(Error::ProposalNotFound)?;
+        let config: MultiSigConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::MultiSigConfig)
+            .ok_or(Error::NotAuthorized)?;
+        let mut proposal: AdminProposal = env
+            .storage()
+            .instance()
+            .get(&DataKey::AdminProposal(proposal_id))
+            .ok_or(Error::ProposalNotFound)?;
 
         if proposal.executed {
             return Err(Error::AlreadyExecuted);
@@ -474,11 +526,16 @@ impl ZKPRegistry {
         }
 
         proposal.executed = true;
-        env.storage().instance().set(&DataKey::AdminProposal(proposal_id), &proposal);
+        env.storage()
+            .instance()
+            .set(&DataKey::AdminProposal(proposal_id), &proposal);
 
         Self::execute_action(&env, &proposal.action)?;
 
-        env.events().publish((symbol_short!("admin"), symbol_short!("emer_exec")), proposal_id);
+        env.events().publish(
+            (symbol_short!("admin"), symbol_short!("emer_exec")),
+            proposal_id,
+        );
 
         Ok(())
     }
@@ -660,7 +717,11 @@ impl ZKPRegistry {
                 continue;
             }
 
-            if !env.storage().persistent().has(&DataKey::ZKPCircuitParams(circuit_id.clone())) {
+            if !env
+                .storage()
+                .persistent()
+                .has(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            {
                 results.push_back(false);
                 continue;
             }
@@ -686,8 +747,14 @@ impl ZKPRegistry {
             let is_valid = Self::verify_zkp_internal(&env, &proof).unwrap_or(false);
 
             if is_valid {
-                env.storage().temporary().set(&DataKey::ZKProof(proof_id.clone()), &proof);
-                env.storage().temporary().extend_ttl(&DataKey::ZKProof(proof_id.clone()), 0, TEMP_SESSION_TTL);
+                env.storage()
+                    .temporary()
+                    .set(&DataKey::ZKProof(proof_id.clone()), &proof);
+                env.storage().temporary().extend_ttl(
+                    &DataKey::ZKProof(proof_id.clone()),
+                    0,
+                    TEMP_SESSION_TTL,
+                );
                 let result = ZKPVerificationResult {
                     proof_id: proof_id.clone(),
                     is_valid,
@@ -696,13 +763,22 @@ impl ZKPRegistry {
                     verifier: submitter.clone(),
                     metadata: Bytes::from_slice(&env, b"batch_verification"),
                 };
-                env.storage().temporary().set(&DataKey::VerificationResult(proof_id.clone()), &result);
-                env.storage().temporary().extend_ttl(&DataKey::VerificationResult(proof_id.clone()), 0, TEMP_SESSION_TTL);
+                env.storage()
+                    .temporary()
+                    .set(&DataKey::VerificationResult(proof_id.clone()), &result);
+                env.storage().temporary().extend_ttl(
+                    &DataKey::VerificationResult(proof_id.clone()),
+                    0,
+                    TEMP_SESSION_TTL,
+                );
                 total_gas_used = total_gas_used.saturating_add(verification_gas);
             }
 
             results.push_back(is_valid);
-            env.events().publish((symbol_short!("zkp"), symbol_short!("proof_sub")), (submitter.clone(), proof_id, is_valid));
+            env.events().publish(
+                (symbol_short!("zkp"), symbol_short!("proof_sub")),
+                (submitter.clone(), proof_id, is_valid),
+            );
         }
 
         Self::track_gas_usage(&env, &submitter, total_gas_used);
@@ -891,8 +967,14 @@ impl ZKPRegistry {
         }
 
         // Verify base proof exists
-        let has_temp = env.storage().temporary().has(&DataKey::ZKProof(base_proof_id.clone()));
-        let has_pers = env.storage().persistent().has(&DataKey::ZKProof(base_proof_id.clone()));
+        let has_temp = env
+            .storage()
+            .temporary()
+            .has(&DataKey::ZKProof(base_proof_id.clone()));
+        let has_pers = env
+            .storage()
+            .persistent()
+            .has(&DataKey::ZKProof(base_proof_id.clone()));
 
         if !has_temp && !has_pers {
             return Err(Error::ProofNotFound);
@@ -939,9 +1021,17 @@ impl ZKPRegistry {
         Self::require_initialized(&env)?;
 
         // Verify ownership if possible
-        let is_owner = if let Some(result) = env.storage().temporary().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+        let is_owner = if let Some(result) = env
+            .storage()
+            .temporary()
+            .get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone()))
+        {
             result.verifier == submitter
-        } else if let Some(result) = env.storage().persistent().get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone())) {
+        } else if let Some(result) = env
+            .storage()
+            .persistent()
+            .get::<_, ZKPVerificationResult>(&DataKey::VerificationResult(proof_id.clone()))
+        {
             result.verifier == submitter
         } else {
             false
@@ -952,12 +1042,23 @@ impl ZKPRegistry {
         }
 
         // Cleanup from both temporary and persistent just in case
-        env.storage().temporary().remove(&DataKey::ZKProof(proof_id.clone()));
-        env.storage().temporary().remove(&DataKey::VerificationResult(proof_id.clone()));
-        env.storage().persistent().remove(&DataKey::ZKProof(proof_id.clone()));
-        env.storage().persistent().remove(&DataKey::VerificationResult(proof_id.clone()));
+        env.storage()
+            .temporary()
+            .remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage()
+            .temporary()
+            .remove(&DataKey::VerificationResult(proof_id.clone()));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::ZKProof(proof_id.clone()));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::VerificationResult(proof_id.clone()));
 
-        env.events().publish((symbol_short!("zkp"), symbol_short!("cleanup")), (submitter, proof_id));
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("cleanup")),
+            (submitter, proof_id),
+        );
         Ok(())
     }
 
@@ -967,9 +1068,17 @@ impl ZKPRegistry {
         proof_id: BytesN<32>,
     ) -> Result<ZKPVerificationResult, Error> {
         Self::require_initialized(&env)?;
-        if let Some(result) = env.storage().temporary().get(&DataKey::VerificationResult(proof_id.clone())) {
+        if let Some(result) = env
+            .storage()
+            .temporary()
+            .get(&DataKey::VerificationResult(proof_id.clone()))
+        {
             Ok(result)
-        } else if let Some(result) = env.storage().persistent().get(&DataKey::VerificationResult(proof_id)) {
+        } else if let Some(result) = env
+            .storage()
+            .persistent()
+            .get(&DataKey::VerificationResult(proof_id))
+        {
             Ok(result)
         } else {
             Err(Error::ProofNotFound)
@@ -1039,11 +1148,23 @@ impl ZKPRegistry {
             return Err(Error::NotInitialized);
         }
 
-        let initialized = env.storage().instance().get(&DataKey::Initialized).unwrap_or(false);
+        let initialized = env
+            .storage()
+            .instance()
+            .get(&DataKey::Initialized)
+            .unwrap_or(false);
         let admin = env.storage().instance().get(&DataKey::Admin).unwrap();
-        let paused = env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false);
+        let paused = env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractPaused)
+            .unwrap_or(false);
         let multisig_config = env.storage().instance().get(&DataKey::MultiSigConfig);
-        let proposal_counter = env.storage().instance().get(&DataKey::ProposalCounter).unwrap_or(0);
+        let proposal_counter = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalCounter)
+            .unwrap_or(0);
 
         let mut proposals = Vec::new(&env);
         for i in 0..proposal_counter {
@@ -1079,8 +1200,8 @@ impl ZKPRegistry {
         }
 
         // Validate and deserialize state
-        let state = RegistryStateExport::from_xdr(&env, &state_bytes)
-            .map_err(|_| Error::InvalidInput)?;
+        let state =
+            RegistryStateExport::from_xdr(&env, &state_bytes).map_err(|_| Error::InvalidInput)?;
 
         // Format version validation
         if state.format_version != 1 {
@@ -1088,22 +1209,33 @@ impl ZKPRegistry {
         }
 
         // Restore state
-        env.storage().instance().set(&DataKey::Initialized, &state.initialized);
+        env.storage()
+            .instance()
+            .set(&DataKey::Initialized, &state.initialized);
         env.storage().instance().set(&DataKey::Admin, &state.admin);
-        env.storage().instance().set(&DataKey::ContractPaused, &state.paused);
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractPaused, &state.paused);
 
         if let Some(config) = state.multisig_config {
-            env.storage().instance().set(&DataKey::MultiSigConfig, &config);
+            env.storage()
+                .instance()
+                .set(&DataKey::MultiSigConfig, &config);
         }
 
-        env.storage().instance().set(&DataKey::ProposalCounter, &state.proposal_counter);
+        env.storage()
+            .instance()
+            .set(&DataKey::ProposalCounter, &state.proposal_counter);
 
         for proposal in state.proposals.iter() {
-            env.storage().instance().set(&DataKey::AdminProposal(proposal.id), &proposal);
+            env.storage()
+                .instance()
+                .set(&DataKey::AdminProposal(proposal.id), &proposal);
         }
 
         env.storage().instance().set(&DataKey::Admin, &state.admin);
-        env.events().publish((symbol_short!("admin"), symbol_short!("imported")), caller);
+        env.events()
+            .publish((symbol_short!("admin"), symbol_short!("imported")), caller);
 
         Ok(())
     }
@@ -1115,13 +1247,18 @@ impl ZKPRegistry {
     fn execute_action(env: &Env, action: &AdminAction) -> Result<(), Error> {
         match action {
             AdminAction::UpgradeContract(wasm_hash) => {
-                env.deployer().update_current_contract_wasm(wasm_hash.clone());
+                env.deployer()
+                    .update_current_contract_wasm(wasm_hash.clone());
             },
             AdminAction::EmergencyPause => {
-                env.storage().instance().set(&DataKey::ContractPaused, &true);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::ContractPaused, &true);
             },
             AdminAction::EmergencyResume => {
-                env.storage().instance().set(&DataKey::ContractPaused, &false);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::ContractPaused, &false);
             },
             AdminAction::UpdateParameters(_key, _val) => {
                 // Placeholder for dynamic parameter updates
@@ -1138,7 +1275,12 @@ impl ZKPRegistry {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().instance().get(&DataKey::ContractPaused).unwrap_or(false) {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::ContractPaused)
+            .unwrap_or(false)
+        {
             return Err(Error::ContractPaused);
         }
         Ok(())

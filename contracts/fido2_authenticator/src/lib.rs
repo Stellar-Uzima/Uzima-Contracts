@@ -964,12 +964,12 @@ impl Fido2AuthenticatorContract {
                 if len != ED25519_KEY_LEN {
                     return Err(Error::AlgorithmKeyMismatch);
                 }
-            }
+            },
             PublicKeyAlgorithm::ES256 => {
                 if len != P256_UNCOMPRESSED_KEY_LEN && len != P256_COMPRESSED_KEY_LEN {
                     return Err(Error::AlgorithmKeyMismatch);
                 }
-            }
+            },
         }
         if len == 0 {
             return Err(Error::InvalidPublicKey);

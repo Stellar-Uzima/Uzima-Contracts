@@ -114,8 +114,8 @@ impl LoadTestRunner {
             0
         };
 
-        let passed = success_rate >= config.min_success_rate
-            && avg_latency <= config.max_avg_latency;
+        let passed =
+            success_rate >= config.min_success_rate && avg_latency <= config.max_avg_latency;
 
         let result = LoadTestResult {
             total_requests: config.num_requests,
@@ -131,9 +131,7 @@ impl LoadTestRunner {
         };
 
         // Persist result and increment run counter.
-        env.storage()
-            .instance()
-            .set(&DataKey::LastResult, &result);
+        env.storage().instance().set(&DataKey::LastResult, &result);
         let run_count: u32 = env
             .storage()
             .instance()
@@ -143,8 +141,10 @@ impl LoadTestRunner {
             .instance()
             .set(&DataKey::RunCount, &(run_count + 1));
 
-        env.events()
-            .publish((symbol_short!("LOAD"), symbol_short!("DONE")), result.passed);
+        env.events().publish(
+            (symbol_short!("LOAD"), symbol_short!("DONE")),
+            result.passed,
+        );
 
         result
     }

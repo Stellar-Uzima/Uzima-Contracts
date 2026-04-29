@@ -170,8 +170,7 @@ pub fn assert_state_transition(from: &str, to: &str, allowed: &[(&str, &str)]) {
     assert!(
         transition_allowed,
         "Invalid state transition from '{}' to '{}'",
-        from,
-        to
+        from, to
     );
 }
 

@@ -96,7 +96,9 @@ fn require_not_reentrant(env: &Env) -> Result<(), Error> {
         return Err(Error::ReentrancyGuard);
     }
     env.storage().temporary().set(&REENTRANCY_LOCK, &true);
-    env.storage().temporary().extend_ttl(&REENTRANCY_LOCK, 0, TEMP_SESSION_TTL);
+    env.storage()
+        .temporary()
+        .extend_ttl(&REENTRANCY_LOCK, 0, TEMP_SESSION_TTL);
     Ok(())
 }
 

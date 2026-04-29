@@ -305,7 +305,11 @@ impl ZkVerifierContract {
             consumed_at: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&key, &value);
-        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         true
     }
 

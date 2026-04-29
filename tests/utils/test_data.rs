@@ -46,13 +46,23 @@ impl MedicalRecordGenerator {
     pub fn generate_medical_entries(env: &Env, count: usize) -> Vec<MedicalEntry> {
         let mut entries = Vec::new();
         let diagnoses = vec!["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
-        let medications = vec!["Metformin", "Lisinopril", "Albuterol", "Sumatriptan", "Omeprazole"];
+        let medications = vec![
+            "Metformin",
+            "Lisinopril",
+            "Albuterol",
+            "Sumatriptan",
+            "Omeprazole",
+        ];
 
         for i in 0..count {
             entries.push(MedicalEntry {
                 entry_type: SorobanString::from_str(
                     env,
-                    if i % 2 == 0 { "diagnosis" } else { "medication" },
+                    if i % 2 == 0 {
+                        "diagnosis"
+                    } else {
+                        "medication"
+                    },
                 ),
                 description: SorobanString::from_str(
                     env,
@@ -154,7 +164,12 @@ impl TransactionDataGenerator {
     }
 
     /// Generate transaction record
-    pub fn generate_transaction(env: &Env, from: &Address, to: &Address, amount: u128) -> Transaction {
+    pub fn generate_transaction(
+        env: &Env,
+        from: &Address,
+        to: &Address,
+        amount: u128,
+    ) -> Transaction {
         Transaction {
             tx_id: Self::generate_tx_id(env),
             from: from.clone(),
@@ -236,11 +251,11 @@ impl PropertyTestDataGenerator {
     /// Generate edge case amounts
     pub fn generate_edge_case_amounts() -> Vec<u128> {
         vec![
-            0,                                   // Zero
-            1,                                   // Minimum
-            u128::MAX,                           // Maximum
-            u128::MAX / 2,                       // Half max
-            1_000_000_000_000_000_000,          // Large amount
+            0,                         // Zero
+            1,                         // Minimum
+            u128::MAX,                 // Maximum
+            u128::MAX / 2,             // Half max
+            1_000_000_000_000_000_000, // Large amount
         ]
     }
 
@@ -252,23 +267,17 @@ impl PropertyTestDataGenerator {
             .as_secs();
 
         vec![
-            0,              // Unix epoch
-            now,            // Current time
-            now + 86400,    // Tomorrow
-            now - 86400,    // Yesterday
-            u64::MAX / 2,   // Far future
+            0,            // Unix epoch
+            now,          // Current time
+            now + 86400,  // Tomorrow
+            now - 86400,  // Yesterday
+            u64::MAX / 2, // Far future
         ]
     }
 
     /// Generate boundary test values
     pub fn generate_boundary_values(min: u32, max: u32) -> Vec<u32> {
-        vec![
-            min,
-            max,
-            min + 1,
-            max - 1,
-            (min + max) / 2,
-        ]
+        vec![min, max, min + 1, max - 1, (min + max) / 2]
     }
 }
 

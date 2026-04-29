@@ -133,9 +133,7 @@ impl ContractVerification {
             publisher: admin,
         };
 
-        env.storage()
-            .instance()
-            .set(&DataKey::Metadata, &metadata);
+        env.storage().instance().set(&DataKey::Metadata, &metadata);
 
         // Emit event for block-explorer indexing.
         env.events().publish(
@@ -170,10 +168,8 @@ impl ContractVerification {
             .instance()
             .set(&DataKey::BuildInfo, &build_info);
 
-        env.events().publish(
-            (symbol_short!("VERIFY"), symbol_short!("BUILD")),
-            wasm_hash,
-        );
+        env.events()
+            .publish((symbol_short!("VERIFY"), symbol_short!("BUILD")), wasm_hash);
 
         Ok(())
     }
@@ -183,9 +179,7 @@ impl ContractVerification {
         let admin = Self::get_admin(&env)?;
         admin.require_auth();
 
-        env.storage()
-            .instance()
-            .set(&DataKey::AbiEntries, &entries);
+        env.storage().instance().set(&DataKey::AbiEntries, &entries);
 
         env.events().publish(
             (symbol_short!("VERIFY"), symbol_short!("ABI")),

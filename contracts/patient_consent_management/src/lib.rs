@@ -221,7 +221,7 @@ impl PatientConsentManagement {
                     }
                 }
                 count
-            }
+            },
             None => 0,
         }
     }

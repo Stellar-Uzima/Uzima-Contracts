@@ -29,9 +29,7 @@ pub mod ihe_fhir_integration_tests;
 pub mod medical_records_tests {
     use super::*;
     use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
-    use soroban_sdk::{
-        testutils::{Address as _, MockAuth, MockAuthInvoke},
-    };
+    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
 
     #[test]
     fn test_full_medical_record_workflow() {
@@ -48,8 +46,12 @@ pub mod medical_records_tests {
 
         // Initialize contract and roles
         client.mock_all_auths().initialize(&admin);
-        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
-        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+        client
+            .mock_all_auths()
+            .manage_user(&admin, &doctor, &Role::Doctor);
+        client
+            .mock_all_auths()
+            .manage_user(&admin, &patient, &Role::Patient);
 
         // Add a medical record
         let record_id = client
@@ -83,7 +85,10 @@ pub mod medical_records_tests {
         assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
         assert_eq!(record.category, String::from_str(&env, "Traditional"));
-        assert_eq!(record.treatment_type, String::from_str(&env, "Herbal Therapy"));
+        assert_eq!(
+            record.treatment_type,
+            String::from_str(&env, "Herbal Therapy")
+        );
         assert_eq!(record.tags.len(), 2);
     }
 
@@ -98,13 +103,25 @@ pub mod medical_records_tests {
         let patient = Address::generate(&env);
 
         client.mock_all_auths().initialize(&admin);
-        client.mock_all_auths().manage_user(&admin, &doctor, &Role::Doctor);
-        client.mock_all_auths().manage_user(&admin, &patient, &Role::Patient);
+        client
+            .mock_all_auths()
+            .manage_user(&admin, &doctor, &Role::Doctor);
+        client
+            .mock_all_auths()
+            .manage_user(&admin, &patient, &Role::Patient);
 
         assert!(client.mock_all_auths().pause(&admin));
 
         let res = client
-            .mock_auths(&[MockAuth { address: &doctor, invoke: &MockAuthInvoke { contract: &contract_id, fn_name: "add_record", args: (), sub_invokes: &[] } }])
+            .mock_auths(&[MockAuth {
+                address: &doctor,
+                invoke: &MockAuthInvoke {
+                    contract: &contract_id,
+                    fn_name: "add_record",
+                    args: (),
+                    sub_invokes: &[],
+                },
+            }])
             .try_add_record(
                 &doctor,
                 &patient,
@@ -131,21 +148,31 @@ pub mod medical_records_tests {
         let recipient = Address::generate(&env);
 
         client.mock_all_auths().initialize(&admin1);
-        client.mock_all_auths().manage_user(&admin1, &admin2, &Role::Admin);
+        client
+            .mock_all_auths()
+            .manage_user(&admin1, &admin2, &Role::Admin);
 
-        let proposal_id = client.mock_all_auths().propose_recovery(&admin1, &token, &recipient, &100i128);
+        let proposal_id = client
+            .mock_all_auths()
+            .propose_recovery(&admin1, &token, &recipient, &100i128);
         assert!(proposal_id > 0);
 
-        assert!(client.mock_all_auths().approve_recovery(&admin2, &proposal_id));
+        assert!(client
+            .mock_all_auths()
+            .approve_recovery(&admin2, &proposal_id));
 
         // Fail before timelock
-        let res = client.mock_all_auths().try_execute_recovery(&admin1, &proposal_id);
+        let res = client
+            .mock_all_auths()
+            .try_execute_recovery(&admin1, &proposal_id);
         assert!(res.is_err());
 
         let now = env.ledger().timestamp();
         env.ledger().with_mut(|l| l.timestamp = now + 86_401);
 
-        assert!(client.mock_all_auths().execute_recovery(&admin1, &proposal_id));
+        assert!(client
+            .mock_all_auths()
+            .execute_recovery(&admin1, &proposal_id));
     }
 }
 

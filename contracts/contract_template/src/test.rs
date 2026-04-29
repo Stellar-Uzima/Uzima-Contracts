@@ -18,7 +18,10 @@ fn test_initialize() {
     let (_, _, client) = setup();
     // Second init must fail
     let admin2 = Address::generate(&client.env);
-    assert_eq!(client.initialize(&admin2), Err(Ok(Error::AlreadyInitialized)));
+    assert_eq!(
+        client.initialize(&admin2),
+        Err(Ok(Error::AlreadyInitialized))
+    );
 }
 
 #[test]

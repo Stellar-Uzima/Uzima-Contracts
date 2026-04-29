@@ -148,7 +148,8 @@ mod tests {
         let description = String::from_str(&env, "Must be admin");
         let required_role = String::from_str(&env, "admin");
 
-        let result = client.register_permission_check(&admin, &check_id, &description, &required_role);
+        let result =
+            client.register_permission_check(&admin, &check_id, &description, &required_role);
         assert_eq!(result, ());
     }
 
