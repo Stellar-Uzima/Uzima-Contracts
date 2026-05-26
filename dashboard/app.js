@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Mock Data for Demonstration
     const mockFunctions = [
         { name: 'submit_clinical_trial', calls: 1250, cpu: '45.2M', ram: '1.2MB', error: '0.5%', latency: '120ms' },
         { name: 'authorize_access', calls: 3420, cpu: '12.8M', ram: '0.4MB', error: '0.1%', latency: '45ms' },
@@ -14,10 +13,24 @@ document.addEventListener('DOMContentLoaded', () => {
         activeUsers: [120, 150, 140, 210, 180, 250, 280]
     };
 
-    // Initialize UI
+    let complexityTrendChart;
+    let complexityBarChart;
+
     updateStats();
     populateTable();
     initCharts();
+    loadComplexityData();
+
+    document.getElementById('refresh-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('refresh-btn');
+        btn.textContent = 'Refreshing...';
+        btn.disabled = true;
+        await loadComplexityData();
+        setTimeout(() => {
+            btn.textContent = 'Refresh Data';
+            btn.disabled = false;
+        }, 600);
+    });
 
     function updateStats() {
         document.getElementById('total-calls').textContent = '8,110';
@@ -29,7 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function populateTable() {
         const tbody = document.querySelector('#functions-table tbody');
         tbody.innerHTML = '';
-        
+
         mockFunctions.forEach(func => {
             const row = `
                 <tr>
@@ -46,7 +59,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function initCharts() {
-        // Line Chart for Calls
         const callsCtx = document.getElementById('callsChart').getContext('2d');
         new Chart(callsCtx, {
             type: 'line',
@@ -64,27 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     pointBackgroundColor: '#6366f1'
                 }]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#94a3b8' }
-                    }
-                }
-            }
+            options: chartLineOptions()
         });
 
-        // Pie Chart for Function Distribution
         const funcCtx = document.getElementById('functionChart').getContext('2d');
         new Chart(funcCtx, {
             type: 'doughnut',
@@ -92,13 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 labels: mockFunctions.map(f => f.name),
                 datasets: [{
                     data: mockFunctions.map(f => f.calls),
-                    backgroundColor: [
-                        '#6366f1',
-                        '#a855f7',
-                        '#ec4899',
-                        '#10b981',
-                        '#f59e0b'
-                    ],
+                    backgroundColor: ['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b'],
                     borderWidth: 0,
                     hoverOffset: 10
                 }]
@@ -109,12 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: {
                         position: 'bottom',
-                        labels: {
-                            color: '#94a3b8',
-                            padding: 20,
-                            usePointStyle: true,
-                            font: { size: 10 }
-                        }
+                        labels: { color: '#94a3b8', padding: 20, usePointStyle: true, font: { size: 10 } }
                     }
                 },
                 cutout: '70%'
@@ -122,16 +105,169 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Refresh Button Event
-    document.getElementById('refresh-btn').addEventListener('click', () => {
-        const btn = document.getElementById('refresh-btn');
-        btn.textContent = 'Refreshing...';
-        btn.disabled = true;
-        
-        setTimeout(() => {
-            btn.textContent = 'Refresh Data';
-            btn.disabled = false;
-            // In a real app, this would re-fetch from the contract
-        }, 1000);
-    });
+    async function loadComplexityData() {
+        const report = await fetchJson('data/complexity_report.json');
+        const trends = await fetchJson('data/complexity_trends.json');
+
+        if (!report || !report.contracts || report.contracts.length === 0) {
+            document.getElementById('complexity-trend-label').textContent =
+                'Run ./scripts/complexity_score.sh to generate scores';
+            return;
+        }
+
+        renderComplexitySummary(report, trends);
+        renderComplexityTable(report.contracts);
+        renderComplexityCharts(report, trends);
+    }
+
+    function renderComplexitySummary(report, trends) {
+        const contracts = report.contracts;
+        const highest = contracts[0];
+        const lowest = contracts[contracts.length - 1];
+
+        document.getElementById('complexity-avg').textContent = String(report.workspace_average);
+        document.getElementById('complexity-count').textContent = String(contracts.length);
+        document.getElementById('complexity-highest-name').textContent = highest.contract_name;
+        document.getElementById('complexity-highest-score').textContent = `Score ${highest.total_score} (${highest.grade})`;
+        document.getElementById('complexity-lowest-name').textContent = lowest.contract_name;
+        document.getElementById('complexity-lowest-score').textContent = `Score ${lowest.total_score} (${lowest.grade})`;
+
+        const generated = report.generated_at
+            ? new Date(Number(report.generated_at) * 1000).toLocaleString()
+            : '—';
+        document.getElementById('complexity-generated').textContent = `Updated ${generated}`;
+
+        const trendLabel = document.getElementById('complexity-trend-label');
+        if (trends && trends.snapshots && trends.snapshots.length >= 2) {
+            const prev = trends.snapshots[trends.snapshots.length - 2].workspace_average;
+            const delta = report.workspace_average - prev;
+            const sign = delta > 0 ? '+' : '';
+            trendLabel.textContent = `${sign}${delta} vs previous run`;
+            trendLabel.className = `stat-trend ${delta > 0 ? 'negative' : delta < 0 ? 'positive' : 'neutral'}`;
+        } else {
+            trendLabel.textContent = 'First trend snapshot recorded';
+            trendLabel.className = 'stat-trend neutral';
+        }
+    }
+
+    function renderComplexityTable(contracts) {
+        const tbody = document.querySelector('#complexity-table tbody');
+        tbody.innerHTML = '';
+
+        contracts.forEach(c => {
+            const gradeClass = `grade-${String(c.grade).toLowerCase()}`;
+            tbody.innerHTML += `
+                <tr>
+                    <td style="font-weight: 600;">${c.contract_name}</td>
+                    <td>${c.total_score}</td>
+                    <td><span class="grade-badge ${gradeClass}">${c.grade}</span></td>
+                    <td>${c.component_scores.cyclomatic}</td>
+                    <td>${c.component_scores.data_structure}</td>
+                    <td>${c.component_scores.external_interaction}</td>
+                    <td>${c.component_scores.state_transition}</td>
+                    <td>${c.component_scores.permission_model}</td>
+                    <td>${c.function_count}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function renderComplexityCharts(report, trends) {
+        const snapshots = (trends && trends.snapshots) ? trends.snapshots : [];
+        const labels = snapshots.map((s, i) => {
+            if (s.recorded_at) {
+                return new Date(Number(s.recorded_at) * 1000).toLocaleDateString();
+            }
+            return `Run ${i + 1}`;
+        });
+        const averages = snapshots.map(s => s.workspace_average);
+
+        if (labels.length === 0 && report.workspace_average) {
+            labels.push('Current');
+            averages.push(report.workspace_average);
+        }
+
+        const trendCtx = document.getElementById('complexityTrendChart').getContext('2d');
+        if (complexityTrendChart) complexityTrendChart.destroy();
+        complexityTrendChart = new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Workspace avg complexity',
+                    data: averages,
+                    borderColor: '#f59e0b',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 2
+                }]
+            },
+            options: chartLineOptions()
+        });
+
+        const top = report.contracts.slice(0, 8);
+        const barCtx = document.getElementById('complexityBarChart').getContext('2d');
+        if (complexityBarChart) complexityBarChart.destroy();
+        complexityBarChart = new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: top.map(c => c.contract_name),
+                datasets: [{
+                    label: 'Total score',
+                    data: top.map(c => c.total_score),
+                    backgroundColor: top.map(c =>
+                        c.grade === 'high' ? '#ef4444' : c.grade === 'medium' ? '#f59e0b' : '#10b981'
+                    ),
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8' }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { size: 9 } }
+                    }
+                }
+            }
+        });
+    }
+
+    function chartLineOptions() {
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#94a3b8' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#94a3b8' }
+                }
+            }
+        };
+    }
+
+    async function fetchJson(path) {
+        try {
+            const res = await fetch(path);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch {
+            return null;
+        }
+    }
 });

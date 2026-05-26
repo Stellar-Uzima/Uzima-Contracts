@@ -10,6 +10,18 @@ This tool analyzes Soroban smart contracts written in Rust and provides optimiza
 - **Batching Opportunities**: Identifies where operations can be batched to reduce costs
 - **Parallelization Possibilities**: Suggests opportunities for parallel execution where applicable
 
+## Contract complexity scoring (#481)
+
+Score Soroban contracts on cyclomatic complexity, data structures, external calls, state transitions, and permission checks.
+
+```bash
+./scripts/complexity_score.sh
+# or
+cargo run -p contract_optimizer -- complexity
+```
+
+Output: `dashboard/data/complexity_report.json` and trend history in `dashboard/data/complexity_trends.json`. See [docs/CONTRACT_COMPLEXITY_SCORING.md](../docs/CONTRACT_COMPLEXITY_SCORING.md).
+
 ## Usage
 
 ### Analyze Contracts
