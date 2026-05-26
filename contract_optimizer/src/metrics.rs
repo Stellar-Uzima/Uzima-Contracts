@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize)]
+use crate::ContractAnalysis;
+
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AccuracyMetrics {
     pub total_recommendations: usize,
     pub applied_recommendations: usize,

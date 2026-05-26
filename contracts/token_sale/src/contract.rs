@@ -17,6 +17,7 @@ pub struct TokenSaleContract;
 #[contractimpl]
 impl TokenSaleContract {
     /// Initialize the token sale contract
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize(
         env: Env,
         owner: Address,

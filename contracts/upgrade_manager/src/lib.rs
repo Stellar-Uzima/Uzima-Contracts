@@ -71,6 +71,7 @@ impl UpgradeManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn propose_upgrade(
         env: Env,
         proposer: Address,

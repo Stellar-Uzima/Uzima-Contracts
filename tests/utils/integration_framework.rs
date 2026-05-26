@@ -1,8 +1,10 @@
-use crate::utils::{HealthcareTeam, UserFixture, UserFixtureFactory};
+#![allow(clippy::new_without_default)]
+
+use crate::utils::{HealthcareTeam, UserFixtureFactory};
 /// Integration testing framework for Uzima Contracts
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
-    vec, Address, BytesN, Env, IntoVal, String as SorobanString, Val, Vec,
+    Address, Env, IntoVal, String as SorobanString, Val, Vec,
 };
 
 // Import contract types for registration helpers
@@ -58,7 +60,7 @@ impl IntegrationTestEnv {
         let events = self.env.events().all();
         let found = events
             .iter()
-            .any(|(id, t, d)| id == *contract_id && t == topics && d == data);
+            .any(|(id, t, d)| id == *contract_id && t == topics && d.get_payload() == data.get_payload());
         assert!(
             found,
             "Expected event not found for contract {:?}",
@@ -93,7 +95,7 @@ impl IntegrationTestEnv {
     pub fn topics<T: IntoVal<Env, Val>>(&self, topics: &[T]) -> Vec<Val> {
         let mut v = Vec::new(&self.env);
         for t in topics {
-            v.push(t.into_val(&self.env));
+            v.push_back(t.into_val(&self.env));
         }
         v
     }
@@ -102,7 +104,9 @@ impl IntegrationTestEnv {
 
     /// Create a standard SAC (Stellar Asset Contract) token for testing
     pub fn register_sac_token(&self, admin: &Address) -> Address {
-        self.env.register_stellar_asset_contract(admin.clone())
+        self.env
+            .register_stellar_asset_contract_v2(admin.clone())
+            .address()
     }
 
     /// Register and initialize the MedicalRecords contract
@@ -130,8 +134,7 @@ impl IntegrationTestEnv {
         let supply_cap = 100_000_000_000_000_i128; // 10M with 7 decimals
 
         client
-            .initialize(admin, &name, &symbol, &decimals, &supply_cap)
-            .expect("Failed to initialize token");
+            .initialize(admin, &name, &symbol, &decimals, &supply_cap);
 
         (contract_id, client)
     }
@@ -167,7 +170,7 @@ mod tests {
     #[test]
     fn test_framework_initialization() {
         let test_env = IntegrationTestEnv::new();
-        assert!(test_env.team.doctors.len() > 0);
+        assert!(!test_env.team.doctors.is_empty());
         assert_eq!(test_env.admin, test_env.team.admin.address);
     }
 
@@ -183,6 +186,6 @@ mod tests {
     fn test_contract_registration() {
         let test_env = IntegrationTestEnv::new();
         let token_id = test_env.register_sac_token(&test_env.admin);
-        assert!(token_id.to_string().len() > 0);
+        assert!(!token_id.to_string().is_empty());
     }
 }

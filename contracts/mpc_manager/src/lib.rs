@@ -347,6 +347,7 @@ impl MPCManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn finalize_session(
         env: Env,
         initiator: Address,

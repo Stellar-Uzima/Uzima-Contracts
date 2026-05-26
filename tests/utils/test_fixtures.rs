@@ -1,5 +1,5 @@
 /// Test fixtures for different user roles and scenarios
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 /// User role fixture
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -26,7 +26,7 @@ pub struct UserFixture {
 
 impl UserFixture {
     /// Create a new user fixture
-    pub fn new(env: &Env, address: Address, role: UserRole, name: &str, email: &str) -> Self {
+    pub fn new(_env: &Env, address: Address, role: UserRole, name: &str, email: &str) -> Self {
         Self {
             address,
             role,
@@ -322,14 +322,14 @@ mod tests {
         let team = UserFixtureFactory::create_healthcare_team(&env);
         assert_eq!(team.doctors.len(), 3);
         assert_eq!(team.patients.len(), 5);
-        assert!(team.all_users().len() > 0);
+        assert!(!team.all_users().is_empty());
     }
 
     #[test]
     fn test_scenario_fixture() {
         let scenario = scenarios::patient_record_creation();
         assert_eq!(scenario.name, "Patient Creates Medical Record");
-        assert!(scenario.preconditions.len() > 0);
-        assert!(scenario.expected_outcomes.len() > 0);
+        assert!(!scenario.preconditions.is_empty());
+        assert!(!scenario.expected_outcomes.is_empty());
     }
 }

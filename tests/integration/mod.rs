@@ -1,35 +1,12 @@
-pub mod ihe_fhir_integration_tests;
+pub mod cross_chain_tests;
+pub mod healthcare_workflows;
 pub mod multi_region_dr_integration;
 
-// tests/unit/mod.rs
 #[cfg(test)]
-mod unit_tests {
-    use soroban_sdk::{Env, String};
-
-    #[test]
-    fn test_string_operations() {
-        let env = Env::default();
-        let test_string = String::from_str(&env, "test_patient_id");
-        assert_eq!(test_string.len(), 15);
-    }
-
-    #[test]
-    fn test_environment_setup() {
-        let env = Env::default();
-        assert!(env.ledger().timestamp() > 0);
-        assert!(env.ledger().sequence() > 0);
-    }
-}
-// tests/integration/mod.rs
-use soroban_sdk::{vec, Address, Env, String};
-
-pub mod healthcare_workflows;
-pub mod ihe_fhir_integration_tests;
-
-pub mod medical_records_tests {
-    use super::*;
+mod medical_records_tests {
     use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
-    use soroban_sdk::testutils::{Address as _, MockAuth, MockAuthInvoke};
+    use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
+    use soroban_sdk::{vec, Address, Env, String};
 
     #[test]
     fn test_full_medical_record_workflow() {
@@ -37,14 +14,12 @@ pub mod medical_records_tests {
         let contract_id = env.register_contract(None, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-        // Setup test data
         let admin = Address::generate(&env);
         let doctor = Address::generate(&env);
         let patient = Address::generate(&env);
         let diagnosis = String::from_str(&env, "Hypertension");
         let treatment = String::from_str(&env, "ACE inhibitor medication");
 
-        // Initialize contract and roles
         client.mock_all_auths().initialize(&admin);
         client
             .mock_all_auths()
@@ -53,14 +28,13 @@ pub mod medical_records_tests {
             .mock_all_auths()
             .manage_user(&admin, &patient, &Role::Patient);
 
-        // Add a medical record
         let record_id = client
             .mock_auths(&[MockAuth {
                 address: &doctor,
                 invoke: &MockAuthInvoke {
                     contract: &contract_id,
                     fn_name: "add_record",
-                    args: (),
+                    args: soroban_sdk::vec![&env],
                     sub_invokes: &[],
                 },
             }])
@@ -80,7 +54,6 @@ pub mod medical_records_tests {
                 &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
             );
 
-        // Verify record was added
         let record = client.get_record(&patient, &record_id);
         assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
@@ -118,7 +91,7 @@ pub mod medical_records_tests {
                 invoke: &MockAuthInvoke {
                     contract: &contract_id,
                     fn_name: "add_record",
-                    args: (),
+                    args: soroban_sdk::vec![&env],
                     sub_invokes: &[],
                 },
             }])
@@ -161,7 +134,6 @@ pub mod medical_records_tests {
             .mock_all_auths()
             .approve_recovery(&admin2, &proposal_id));
 
-        // Fail before timelock
         let res = client
             .mock_all_auths()
             .try_execute_recovery(&admin1, &proposal_id);
@@ -176,7 +148,6 @@ pub mod medical_records_tests {
     }
 }
 
-// tests/unit/mod.rs
 #[cfg(test)]
 mod unit_tests {
     use soroban_sdk::{Env, String};
@@ -195,4 +166,3 @@ mod unit_tests {
         assert!(env.ledger().sequence() > 0);
     }
 }
-pub mod cross_chain_tests;

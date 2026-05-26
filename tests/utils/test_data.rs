@@ -1,9 +1,10 @@
+#![allow(clippy::new_without_default)]
+
 /// Test data generators for various contract scenarios
-use soroban_sdk::{Address, Env, String as SorobanString, Vec};
+use soroban_sdk::{Address, Env, String as SorobanString};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(clippy::unwrap_used)]
-
 /// Medical record data generator
 pub struct MedicalRecordGenerator {
     counter: usize,
@@ -45,8 +46,8 @@ impl MedicalRecordGenerator {
     /// Generate medical data entries
     pub fn generate_medical_entries(env: &Env, count: usize) -> Vec<MedicalEntry> {
         let mut entries = Vec::new();
-        let diagnoses = vec!["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
-        let medications = vec![
+        let diagnoses = ["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
+        let medications = [
             "Metformin",
             "Lisinopril",
             "Albuterol",
@@ -102,6 +103,7 @@ pub struct MedicalEntry {
 }
 
 /// Consent data generator
+#[allow(dead_code)]
 pub struct ConsentDataGenerator {
     counter: usize,
 }
@@ -206,7 +208,7 @@ impl AccessLogGenerator {
     }
 
     /// Generate access log entry
-    pub fn generate_access_log(env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
+    pub fn generate_access_log(&mut self, env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
         self.counter += 1;
         AccessLog {
             log_id: self.counter as u64,
@@ -303,8 +305,8 @@ mod tests {
     #[test]
     fn test_consent_data_generator() {
         let env = Env::default();
-        let addr1 = Address::generate(&env);
-        let addr2 = Address::generate(&env);
+        let addr1 = <Address as soroban_sdk::testutils::Address>::generate(&env);
+        let addr2 = <Address as soroban_sdk::testutils::Address>::generate(&env);
         let grant = ConsentDataGenerator::generate_consent_grant(&env, &addr1, &addr2);
         assert_eq!(grant.grantor, addr1);
         assert_eq!(grant.grantee, addr2);
@@ -313,8 +315,8 @@ mod tests {
     #[test]
     fn test_transaction_generator() {
         let env = Env::default();
-        let addr1 = Address::generate(&env);
-        let addr2 = Address::generate(&env);
+        let addr1 = <Address as soroban_sdk::testutils::Address>::generate(&env);
+        let addr2 = <Address as soroban_sdk::testutils::Address>::generate(&env);
         let tx = TransactionDataGenerator::generate_transaction(&env, &addr1, &addr2, 1000);
         assert_eq!(tx.amount, 1000);
     }
@@ -323,7 +325,7 @@ mod tests {
     fn test_access_log_generator() {
         let env = Env::default();
         let mut gen = AccessLogGenerator::new();
-        let addr = Address::generate(&env);
+        let addr = <Address as soroban_sdk::testutils::Address>::generate(&env);
         let log = gen.generate_access_log(&env, &addr, 123);
         assert_eq!(log.resource_id, 123);
     }

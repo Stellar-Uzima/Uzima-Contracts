@@ -12,6 +12,8 @@ pub enum Error {
     InsufficientGuardianApprovals = 121,
 
     // --- Input Validation (200–299) ---
+    InvalidInput = 200,
+    InputTooLong = 201,
     InvalidVerificationMethod = 250,
     InvalidCredentialType = 251,
     InvalidServiceEndpoint = 252,

@@ -225,12 +225,20 @@ pub struct ZKPVerificationResult {
 /// Exported state format for migrations
 #[derive(Clone)]
 #[contracttype]
+pub enum OptionalMultiSigConfig {
+    None,
+    Some(MultiSigConfig),
+}
+
+/// Exported state format for migrations
+#[derive(Clone)]
+#[contracttype]
 pub struct RegistryStateExport {
     pub format_version: u32,
     pub admin: Address,
     pub initialized: bool,
     pub paused: bool,
-    pub multisig_config: Option<MultiSigConfig>,
+    pub multisig_config: OptionalMultiSigConfig,
     pub proposal_counter: u64,
     pub proposals: Vec<AdminProposal>,
 }
@@ -1159,7 +1167,10 @@ impl ZKPRegistry {
             .instance()
             .get(&DataKey::ContractPaused)
             .unwrap_or(false);
-        let multisig_config = env.storage().instance().get(&DataKey::MultiSigConfig);
+        let multisig_config = match env.storage().instance().get::<_, MultiSigConfig>(&DataKey::MultiSigConfig) {
+            Some(cfg) => OptionalMultiSigConfig::Some(cfg),
+            None => OptionalMultiSigConfig::None,
+        };
         let proposal_counter = env
             .storage()
             .instance()

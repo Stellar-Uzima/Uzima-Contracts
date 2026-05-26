@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 use std::collections::HashMap;
 /// Performance testing utilities for contracts.
 ///
@@ -213,6 +215,7 @@ impl PerformanceSuite {
 }
 
 /// Load test utilities
+#[allow(dead_code)]
 pub struct LoadTest {
     name: String,
     concurrent_operations: usize,

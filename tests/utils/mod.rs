@@ -18,10 +18,8 @@ pub use test_fixtures::*;
 
 /// Common test constants
 pub mod constants {
-    use soroban_sdk::Duration;
-
     pub const INITIAL_BALANCE: u128 = 1_000_000 * 10_u128.pow(7); // 10M tokens
     pub const MIN_BALANCE: u128 = 1_000 * 10_u128.pow(7); // 1k tokens
     pub const MAX_PAGES: u32 = 1000;
-    pub const DEFAULT_TIMEOUT: Duration = Duration::from_millis(5000);
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 5; // 5 seconds
 }

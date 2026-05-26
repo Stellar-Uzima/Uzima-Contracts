@@ -80,6 +80,7 @@ impl TokenSaleHarness {
             &treasury,
             &Self::SOFT_CAP,
             &Self::HARD_CAP,
+            &7u32,
         );
         client.add_supported_token(&payment_contract);
         client.add_sale_phase(
@@ -158,8 +159,7 @@ impl BehaviorHarness for TokenSaleHarness {
                 let current_balance = self.payment_token.balance(&contributor);
                 let success = !self.paused
                     && !self.finalized
-                    && timestamp >= Self::PHASE_START
-                    && timestamp <= Self::PHASE_END
+                    && (Self::PHASE_START..=Self::PHASE_END).contains(&timestamp)
                     && amount + contribution.amount <= Self::PER_ADDRESS_CAP
                     && self.phase_sold_tokens + tokens <= Self::MAX_TOKENS
                     && i128::try_from(amount).unwrap() <= current_balance;

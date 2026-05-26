@@ -1,16 +1,14 @@
-use crate::utils::{
-    IntegrationTestEnv, MedicalEntry, MedicalRecordGenerator, RecordMetadata, UserFixture, UserRole,
-};
+use crate::utils::{IntegrationTestEnv, MedicalRecordGenerator};
 use medical_records::{MedicalRecordsContractClient, Role};
 /// Library of complex contract fixtures for integration testing
-use soroban_sdk::{vec, Address, Env, String, Vec};
+use soroban_sdk::{vec, String};
 use sut_token::SutTokenClient;
 
 /// Fixture for a fully configured MedicalRecords contract
 pub struct MedicalRecordsFixture {
-    pub contract_id: Address,
+    pub contract_id: soroban_sdk::Address,
     pub client: MedicalRecordsContractClient<'static>,
-    pub admin: Address,
+    pub admin: soroban_sdk::Address,
 }
 
 impl MedicalRecordsFixture {
@@ -23,14 +21,10 @@ impl MedicalRecordsFixture {
 
         // Configure standard roles for the team
         for doctor in &test_env.team.doctors {
-            client
-                .manage_user(admin, &doctor.address, &Role::Doctor)
-                .expect("Failed to manage user");
+            client.manage_user(admin, &doctor.address, &Role::Doctor);
         }
         for patient in &test_env.team.patients {
-            client
-                .manage_user(admin, &patient.address, &Role::Patient)
-                .expect("Failed to manage user");
+            client.manage_user(admin, &patient.address, &Role::Patient);
         }
 
         Self {
@@ -43,7 +37,7 @@ impl MedicalRecordsFixture {
     /// Add a set of sample records to the contract
     pub fn with_sample_data(self, test_env: &IntegrationTestEnv) -> Self {
         let env = &test_env.env;
-        let mut gen = MedicalRecordGenerator::new();
+        let _gen = MedicalRecordGenerator::new();
 
         let doctor = &test_env.team.doctors[0].address;
         let patient = &test_env.team.patients[0].address;
@@ -52,19 +46,17 @@ impl MedicalRecordsFixture {
             let diagnosis = String::from_str(env, &format!("Sample Diagnosis {}", i));
             let treatment = String::from_str(env, &format!("Sample Treatment {}", i));
 
-            self.client
-                .add_record(
-                    doctor,
-                    patient,
-                    &diagnosis,
-                    &treatment,
-                    &false,
-                    &vec![env, String::from_str(env, "sample")],
-                    &String::from_str(env, "General"),
-                    &String::from_str(env, "Routine"),
-                    &String::from_str(env, &format!("QmHash{}", i)),
-                )
-                .expect("Failed to add record");
+            self.client.add_record(
+                doctor,
+                patient,
+                &diagnosis,
+                &treatment,
+                &false,
+                &vec![env, String::from_str(env, "sample")],
+                &String::from_str(env, "General"),
+                &String::from_str(env, "Routine"),
+                &String::from_str(env, &format!("QmHash{}", i)),
+            );
         }
 
         self
@@ -73,9 +65,9 @@ impl MedicalRecordsFixture {
 
 /// Fixture for a fully configured SUT Token
 pub struct SutTokenFixture {
-    pub contract_id: Address,
+    pub contract_id: soroban_sdk::Address,
     pub client: SutTokenClient<'static>,
-    pub admin: Address,
+    pub admin: soroban_sdk::Address,
 }
 
 impl SutTokenFixture {
@@ -93,9 +85,7 @@ impl SutTokenFixture {
     /// Distribute tokens to all team members
     pub fn distribute_tokens(self, test_env: &IntegrationTestEnv, amount: i128) -> Self {
         for user in test_env.team.all_users() {
-            self.client
-                .mint(&self.admin, &user.address, &amount)
-                .expect("Failed to mint tokens");
+            self.client.mint(&self.admin, &user.address, &amount);
         }
         self
     }

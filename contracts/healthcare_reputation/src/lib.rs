@@ -409,6 +409,7 @@ impl HealthcareReputationSystem {
     }
 
     // Add professional conduct entry
+    #[allow(clippy::too_many_arguments)]
     pub fn add_conduct_entry(
         env: Env,
         reporter: Address,

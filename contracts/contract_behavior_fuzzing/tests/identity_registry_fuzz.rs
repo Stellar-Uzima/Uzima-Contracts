@@ -362,7 +362,7 @@ impl BehaviorHarness for IdentityHarness {
                 .verification_methods
                 .iter()
                 .filter(|method| method.is_active)
-                .count() as usize;
+                .count();
             assert_eq!(did.verification_methods.len() as usize, total_methods);
             assert_eq!(
                 active_methods,

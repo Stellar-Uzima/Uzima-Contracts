@@ -1,8 +1,7 @@
-/// Custom assertions for contract testing
-use soroban_sdk::Address;
+//! Custom assertions for contract testing
+#![allow(clippy::unwrap_used, clippy::panic)]
 
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::panic)]
+use soroban_sdk::Address;
 
 /// Assert two addresses are equal
 #[macro_export]

@@ -13,7 +13,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Map, String};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Map, String};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ pub enum DataKey {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
+#[contracterror]
 #[repr(u32)]
 pub enum MonitoringError {
     NotInitialized = 1,

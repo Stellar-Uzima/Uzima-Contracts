@@ -37,6 +37,18 @@ enum Commands {
         #[arg(short, long, default_value = "optimization_metrics.json")]
         metrics_file: PathBuf,
     },
+    /// Integrate analysis into a GitHub PR review
+    PrReview {
+        /// Repository in owner/repo format
+        #[arg(short, long)]
+        repo: String,
+        /// Pull request number
+        #[arg(short, long)]
+        pr_number: u64,
+        /// GitHub token
+        #[arg(short, long)]
+        token: String,
+    },
 }
 
 #[tokio::main]

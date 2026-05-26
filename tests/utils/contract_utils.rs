@@ -1,9 +1,10 @@
+#![allow(clippy::new_without_default)]
+
 /// Contract utilities for common testing operations
-use soroban_sdk::{Address, Env, String as SorobanString};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 
 #[allow(clippy::expect_used)]
 #[allow(clippy::panic)]
-
 /// Result type for contract operations
 pub type ContractResult<T> = Result<T, String>;
 
@@ -28,7 +29,7 @@ impl ContractSetup {
     }
 
     /// Add mock authentication for all calls
-    pub fn with_mock_auth(mut self) -> Self {
+    pub fn with_mock_auth(self) -> Self {
         self.env.mock_all_auths();
         self
     }

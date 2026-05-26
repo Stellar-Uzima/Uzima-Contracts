@@ -187,6 +187,7 @@ impl ZkVerifierContract {
             .unwrap_or(0)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_attestation(
         env: Env,
         attestor: Address,

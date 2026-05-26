@@ -336,7 +336,7 @@ impl BehaviorHarness for SutTokenHarness {
         if !self.model.initialized {
             for (index, account) in self.accounts.iter().enumerate() {
                 assert_eq!(self.client.balance_of(account), self.model.balances[index]);
-                assert_eq!(self.client.is_minter(account), false);
+                assert!(!self.client.is_minter(account));
             }
 
             for owner_index in 0..self.accounts.len() {

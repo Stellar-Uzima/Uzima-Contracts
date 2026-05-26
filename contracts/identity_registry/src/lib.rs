@@ -772,6 +772,7 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Issue a verifiable credential (only verifiers/issuers can do this)
+    #[allow(clippy::too_many_arguments)]
     pub fn issue_credential(
         env: Env,
         issuer: Address,

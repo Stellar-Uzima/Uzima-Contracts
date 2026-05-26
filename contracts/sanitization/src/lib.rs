@@ -40,8 +40,8 @@ pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), S
     let mut buf = [0u8; BUFFER_SIZE];
     input.copy_into_slice(&mut buf[..len_usize]);
 
-    for i in 0..len_usize {
-        let b = buf[i];
+    for b in buf.iter().take(len_usize) {
+        let b = *b;
         if b == 0x00 {
             return Err(SanitizationError::NullByte);
         }
@@ -74,8 +74,8 @@ pub fn sanitize_name(_env: &Env, input: &String) -> Result<(), SanitizationError
     let mut buf = [0u8; BUFFER_SIZE];
     input.copy_into_slice(&mut buf[..len_usize]);
 
-    for i in 0..len_usize {
-        let b = buf[i];
+    for b in buf.iter().take(len_usize) {
+        let b = *b;
         if b == 0x00 {
             return Err(SanitizationError::NullByte);
         }
@@ -112,8 +112,8 @@ pub fn sanitize_email(_env: &Env, input: &String) -> Result<(), SanitizationErro
     let mut at_count: u32 = 0;
     let mut at_pos: usize = 0;
 
-    for i in 0..len_usize {
-        let b = buf[i];
+    for (i, b) in buf.iter().enumerate().take(len_usize) {
+        let b = *b;
         if b == 0x00 {
             return Err(SanitizationError::NullByte);
         }
@@ -140,8 +140,8 @@ pub fn sanitize_email(_env: &Env, input: &String) -> Result<(), SanitizationErro
     }
 
     let mut domain_has_dot = false;
-    for i in domain_start..len_usize {
-        if buf[i] == b'.' {
+    for b in buf.iter().take(len_usize).skip(domain_start) {
+        if *b == b'.' {
             domain_has_dot = true;
             break;
         }
@@ -169,8 +169,8 @@ pub fn sanitize_id(_env: &Env, input: &String) -> Result<(), SanitizationError> 
     let mut buf = [0u8; BUFFER_SIZE];
     input.copy_into_slice(&mut buf[..len_usize]);
 
-    for i in 0..len_usize {
-        let b = buf[i];
+    for b in buf.iter().take(len_usize) {
+        let b = *b;
         if b == 0x00 {
             return Err(SanitizationError::NullByte);
         }
@@ -197,13 +197,13 @@ pub fn sanitize_url(_env: &Env, input: &String) -> Result<(), SanitizationError>
     let mut buf = [0u8; BUFFER_SIZE];
     input.copy_into_slice(&mut buf[..len_usize]);
 
-    for i in 0..len_usize {
-        let b = buf[i];
+    for b in buf.iter().take(len_usize) {
+        let b = *b;
         if b == 0x00 {
             return Err(SanitizationError::NullByte);
         }
         // Printable ASCII only for URLs (0x21-0x7E, no space).
-        if b < 0x21 || b > 0x7E {
+        if !(0x21..=0x7E).contains(&b) {
             return Err(SanitizationError::InvalidCharacter);
         }
     }

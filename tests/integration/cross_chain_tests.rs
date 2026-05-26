@@ -1,4 +1,6 @@
-use crate::medical_records::{MedicalRecordsContract, MedicalRecordsContractClient};
+#![allow(unused_imports)]
+
+use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 #[test]

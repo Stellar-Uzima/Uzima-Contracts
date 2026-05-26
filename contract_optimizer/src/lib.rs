@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
-use syn::{visit::Visit, Expr, ExprCall, ExprMethodCall, File, ItemFn};
+use syn::{visit::Visit, Expr, ExprCall, ItemFn};
 use walkdir::WalkDir;
 
 pub mod metrics;
@@ -92,54 +91,48 @@ impl<'a> OptimizationVisitor<'a> {
 impl<'a> Visit<'a> for OptimizationVisitor<'a> {
     fn visit_item_fn(&mut self, node: &'a ItemFn) {
         // Check for gas-intensive operations
-        if let Some(block) = &node.block {
-            self.analyze_function_body(block, &node.sig.ident.to_string());
-        }
+        self.analyze_function_body(&node.block, &node.sig.ident.to_string());
     }
 
     fn visit_expr_call(&mut self, node: &'a ExprCall) {
         // Check for expensive function calls
         if let Expr::Path(path) = &*node.func {
             if let Some(ident) = path.path.get_ident() {
-                match ident.to_string().as_str() {
-                    "env" => {
-                        if let Some(arg) = node.args.first() {
-                            if let Expr::MethodCall(method_call) = arg {
-                                if let Some(method_ident) = &method_call.method.get_ident() {
-                                    match method_ident.to_string().as_str() {
-                                        "storage" => {
-                                            self.recommendations.push(OptimizationRecommendation {
-                                                category: "Storage Efficiency".to_string(),
-                                                description: "Frequent storage operations detected".to_string(),
-                                                severity: "medium".to_string(),
-                                                location: Some(format!("{}:{}", self.path.display(), line_number(node))),
-                                                suggestion: "Consider batching storage operations or using temporary variables".to_string(),
-                                            });
-                                        },
-                                        "events" => {
-                                            self.recommendations.push(OptimizationRecommendation {
-                                                category: "Gas Optimization".to_string(),
-                                                description:
-                                                    "Event emission in loop or frequent call"
-                                                        .to_string(),
-                                                severity: "low".to_string(),
-                                                location: Some(format!(
-                                                    "{}:{}",
-                                                    self.path.display(),
-                                                    line_number(node)
-                                                )),
-                                                suggestion:
-                                                    "Emit events outside of loops when possible"
-                                                        .to_string(),
-                                            });
-                                        },
-                                        _ => {},
-                                    }
-                                }
+                if ident == "env" {
+                    if let Some(Expr::MethodCall(method_call)) = node.args.first() {
+                        match method_call.method.to_string().as_str() {
+                            "storage" => {
+                                self.recommendations.push(OptimizationRecommendation {
+                                    category: "Storage Efficiency".to_string(),
+                                    description: "Frequent storage operations detected"
+                                        .to_string(),
+                                    severity: "medium".to_string(),
+                                    location: Some(format!(
+                                        "{}:{}",
+                                        self.path.display(),
+                                        line_number(node)
+                                    )),
+                                    suggestion: "Consider batching storage operations or using temporary variables".to_string(),
+                                });
                             }
+                            "events" => {
+                                self.recommendations.push(OptimizationRecommendation {
+                                    category: "Gas Optimization".to_string(),
+                                    description: "Event emission in loop or frequent call"
+                                        .to_string(),
+                                    severity: "low".to_string(),
+                                    location: Some(format!(
+                                        "{}:{}",
+                                        self.path.display(),
+                                        line_number(node)
+                                    )),
+                                    suggestion: "Emit events outside of loops when possible"
+                                        .to_string(),
+                                });
+                            }
+                            _ => {}
                         }
-                    },
-                    _ => {},
+                    }
                 }
             }
         }
@@ -223,7 +216,7 @@ fn analyze_text_patterns(content: &str, path: &Path) -> Vec<OptimizationRecommen
     recommendations
 }
 
-fn line_number<T>(node: &T) -> usize {
+fn line_number<T>(_node: &T) -> usize {
     // Simplified: in practice, use node.span().start().line
     // But for this demo, return 0
     0
@@ -259,7 +252,7 @@ pub fn generate_report(input_path: &Path) -> Result<String, Box<dyn std::error::
 pub async fn integrate_pr_review(
     repo: &str,
     pr_number: u64,
-    token: &str,
+    _token: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // This would integrate with GitHub API to post comments on PR
     // For now, just a placeholder

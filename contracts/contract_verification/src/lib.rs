@@ -17,7 +17,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
+    contract, contractimpl, contracterror, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ pub enum DataKey {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
+#[contracterror]
 #[repr(u32)]
 pub enum VerificationError {
     NotInitialized = 1,

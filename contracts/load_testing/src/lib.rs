@@ -73,9 +73,8 @@ impl LoadTestRunner {
     /// Each "operation" is a lightweight storage read/write that exercises the
     /// contract's execution path.  Latency is measured in ledger sequence units.
     pub fn run(env: Env, config: LoadTestConfig) -> LoadTestResult {
-        let start_seq = env.ledger().sequence();
         let mut latencies: Vec<u64> = vec![&env];
-        let mut failed: u32 = 0;
+        let failed: u32 = 0;
 
         for i in 0..config.num_requests {
             let op_start = env.ledger().sequence() as u64 + i as u64;
@@ -89,8 +88,7 @@ impl LoadTestRunner {
             latencies.push_back(latency);
         }
 
-        let end_seq = env.ledger().sequence();
-        let total_time = (end_seq as u64).saturating_sub(start_seq as u64).max(1);
+        let _end_seq = env.ledger().sequence();
         let successful = config.num_requests - failed;
 
         // Sort latencies for percentile calculation.
@@ -202,7 +200,7 @@ mod test {
     use super::*;
     use soroban_sdk::Env;
 
-    fn default_config(env: &Env) -> LoadTestConfig {
+    fn default_config() -> LoadTestConfig {
         LoadTestConfig {
             num_requests: 100,
             concurrency: 10,
@@ -217,7 +215,7 @@ mod test {
         let contract_id = env.register_contract(None, LoadTestRunner);
         let client = LoadTestRunnerClient::new(&env, &contract_id);
 
-        let result = client.run(&default_config(&env));
+        let result = client.run(&default_config());
         assert_eq!(result.total_requests, 100);
         assert_eq!(result.failed, 0);
         assert_eq!(result.success_rate, 100);
@@ -230,8 +228,8 @@ mod test {
         let contract_id = env.register_contract(None, LoadTestRunner);
         let client = LoadTestRunnerClient::new(&env, &contract_id);
 
-        client.run(&default_config(&env));
-        client.run(&default_config(&env));
+        client.run(&default_config());
+        client.run(&default_config());
         assert_eq!(client.run_count(), 2);
     }
 
@@ -242,7 +240,7 @@ mod test {
         let client = LoadTestRunnerClient::new(&env, &contract_id);
 
         assert!(client.last_result().is_none());
-        client.run(&default_config(&env));
+        client.run(&default_config());
         assert!(client.last_result().is_some());
     }
 
