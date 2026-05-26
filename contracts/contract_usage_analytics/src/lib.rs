@@ -200,8 +200,8 @@ impl ContractUsageAnalytics {
             .get(&DataKey::AllFunctions)
             .unwrap_or(Vec::new(&env));
 
-        let mut total_calls = 0;
-        let mut total_errors = 0;
+        let mut total_calls: u64 = 0;
+        let mut total_errors: u64 = 0;
 
         for f_name in all_functions.iter() {
             if let Some(metric) = env
