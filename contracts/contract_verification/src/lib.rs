@@ -17,8 +17,10 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contractimpl, contracterror, contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec,
+    contract, contractimpl, contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Vec,
 };
+#[allow(unused_imports)] // `vec!` macro is re-exported to the nested test module via `use super::*`
+use soroban_sdk::vec;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -258,7 +260,7 @@ mod test {
     use super::*;
     use soroban_sdk::{testutils::Address as _, BytesN, Env};
 
-    fn setup(env: &Env) -> (ContractVerificationClient, Address) {
+    fn setup(env: &Env) -> (ContractVerificationClient<'_>, Address) {
         let contract_id = env.register_contract(None, ContractVerification);
         let client = ContractVerificationClient::new(env, &contract_id);
         let admin = Address::generate(env);

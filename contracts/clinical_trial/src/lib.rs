@@ -69,6 +69,7 @@ pub enum DataKey {
 #[contract]
 pub struct ClinicalTrial;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl ClinicalTrial {
     pub fn initialize(env: Env, admin: Address) {
@@ -196,6 +197,7 @@ impl ClinicalTrial {
         id
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn report_adverse_event(
         env: Env,
         reporter: Address,

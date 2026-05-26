@@ -1,7 +1,7 @@
 #![allow(clippy::unwrap_used)]
 
-use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env, String, Symbol, Vec};
+use soroban_sdk::testutils::{Address as _, Events};
+use soroban_sdk::{Address, Env, String, Symbol, TryFromVal, Vec};
 
 use crate::{
     emit_deprecation_warning, get_deprecated_function, get_deprecated_functions,
@@ -58,8 +58,14 @@ fn test_deprecation_warning_emits_event() {
 
     let deprecated_events = events
         .iter()
-        .filter(|event| {
-            event.topics.len() >= 2 && event.topics[0] == Symbol::new(&env, "Deprecated")
+        .filter(|(_, topics, _)| {
+            if topics.len() < 2 {
+                return false;
+            }
+            let Some(first) = topics.get(0) else {
+                return false;
+            };
+            Symbol::try_from_val(&env, &first) == Ok(Symbol::new(&env, "Deprecated"))
         })
         .count();
     assert_eq!(deprecated_events, 1);

@@ -127,6 +127,7 @@ pub enum Error {
 #[contract]
 pub struct CryptoRegistry;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl CryptoRegistry {
     /// Initialize the registry with an admin address for policy upgrades.
@@ -148,6 +149,7 @@ impl CryptoRegistry {
     /// Register (or rotate) the caller's key bundle.
     ///
     /// Returns the newly assigned version.
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_key_bundle(
         env: Env,
         owner: Address,
@@ -353,6 +355,7 @@ impl CryptoRegistry {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)] // All fields are needed to produce a deterministic bundle ID hash
     fn compute_bundle_id(
         env: &Env,
         version: u32,

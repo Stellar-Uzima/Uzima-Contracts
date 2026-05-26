@@ -440,7 +440,7 @@ impl HealthcarePayment {
         Ok(provider_id)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_coverage_policy(
         env: Env,
         caller: Address,
@@ -546,6 +546,7 @@ impl HealthcarePayment {
         Ok(check_id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn submit_claim(
         env: Env,
         patient: Address,
@@ -787,7 +788,7 @@ impl HealthcarePayment {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn process_eob(
         env: Env,
         caller: Address,
