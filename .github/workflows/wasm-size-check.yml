@@ -42,9 +42,20 @@ jobs:
 
       - name: Optimize WASM with wasm-opt
         run: |
+          # Rust 1.70+ enables bulk-memory, mutable-globals, sign-ext, and
+          # nontrapping-float-to-int by default for wasm32-unknown-unknown.
+          # wasm-opt's CLI defaults to MVP-only, so we must re-enable the same
+          # feature set or the validator rejects memory.copy / memory.fill.
+          WASM_FEATURES=(
+            --enable-bulk-memory
+            --enable-mutable-globals
+            --enable-sign-ext
+            --enable-nontrapping-float-to-int
+          )
           for wasm in target/wasm32-unknown-unknown/release/*.wasm; do
             [ -f "$wasm" ] || continue
-            wasm-opt -Oz --strip-debug --strip-producers "$wasm" -o "$wasm"
+            wasm-opt -Oz "${WASM_FEATURES[@]}" --strip-debug --strip-producers \
+              "$wasm" -o "$wasm"
           done
 
       - name: Check WASM sizes
