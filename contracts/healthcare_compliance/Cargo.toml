@@ -14,3 +14,4 @@ soroban-sdk = { version = "22.0.0", features = ["testutils"] }
 
 [features]
 default = []
+testutils = ["soroban-sdk/testutils"]

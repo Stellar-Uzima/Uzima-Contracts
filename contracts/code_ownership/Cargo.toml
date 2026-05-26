@@ -8,7 +8,11 @@ publish = false
 soroban-sdk = { workspace = true, features = ["alloc"] }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["alloc"] }
+soroban-sdk = { workspace = true, features = ["alloc", "testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
 
 [lib]
 crate-type = ["cdylib"]
