@@ -10,7 +10,7 @@ OUTPUT="${2:-dashboard/data/complexity_report.json}"
 TRENDS="${3:-dashboard/data/complexity_trends.json}"
 
 echo "Analyzing contract complexity in ${CONTRACTS_PATH}..."
-cargo run --quiet -p contract_optimizer -- complexity \
+cargo run --quiet -p contract_optimizer --features cli -- complexity \
   --contracts-path "$CONTRACTS_PATH" \
   --output "$OUTPUT" \
   --trends "$TRENDS"

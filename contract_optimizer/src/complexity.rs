@@ -442,7 +442,6 @@ mod tests {
         let m = analyze_rust_source(SAMPLE);
         assert!(m.cyclomatic_complexity >= 3);
         assert!(m.data_structure_complexity >= 5);
-        assert!(m.external_interaction_count >= 0);
         assert!(m.permission_model_complexity >= 2);
         assert!(m.state_transition_count >= 3);
         assert_eq!(m.function_count, 2);

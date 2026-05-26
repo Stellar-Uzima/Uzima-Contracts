@@ -29,7 +29,7 @@ Each component is normalized to **0–100**, then combined with weights:
 ./scripts/complexity_score.sh
 
 # Or directly
-cargo run -p contract_optimizer -- complexity \
+cargo run -p contract_optimizer --features cli -- complexity \
   --contracts-path contracts \
   --output dashboard/data/complexity_report.json \
   --trends dashboard/data/complexity_trends.json
