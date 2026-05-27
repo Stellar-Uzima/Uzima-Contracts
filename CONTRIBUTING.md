@@ -30,6 +30,7 @@ All code must follow the naming conventions defined in [CODING_STANDARDS.md](./d
 - Document all public APIs with `///` doc comments
 - Include examples for complex functions
 - Update relevant documentation when changing functionality
+ - Follow the repository policies for error handling: see `docs/policies/soroban-error-handling.md` for guidance on Soroban contract utilities.
 
 ## Testing Requirements
 
