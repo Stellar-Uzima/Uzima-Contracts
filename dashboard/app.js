@@ -14,7 +14,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     let complexityTrendChart;
-    let complexityBarChart;
 
     updateStats();
     populateTable();
@@ -112,25 +111,21 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!report || !report.contracts || report.contracts.length === 0) {
             document.getElementById('complexity-trend-label').textContent =
                 'Run ./scripts/complexity_score.sh to generate scores';
+            document.getElementById('complexity-generated').textContent =
+                'No report found — run ./scripts/complexity_score.sh';
             return;
         }
 
         renderComplexitySummary(report, trends);
         renderComplexityTable(report.contracts);
-        renderComplexityCharts(report, trends);
+        renderComplexityTrendChart(report, trends);
     }
 
     function renderComplexitySummary(report, trends) {
         const contracts = report.contracts;
-        const highest = contracts[0];
-        const lowest = contracts[contracts.length - 1];
 
         document.getElementById('complexity-avg').textContent = String(report.workspace_average);
         document.getElementById('complexity-count').textContent = String(contracts.length);
-        document.getElementById('complexity-highest-name').textContent = highest.contract_name;
-        document.getElementById('complexity-highest-score').textContent = `Score ${highest.total_score} (${highest.grade})`;
-        document.getElementById('complexity-lowest-name').textContent = lowest.contract_name;
-        document.getElementById('complexity-lowest-score').textContent = `Score ${lowest.total_score} (${lowest.grade})`;
 
         const generated = report.generated_at
             ? new Date(Number(report.generated_at) * 1000).toLocaleString()
@@ -145,7 +140,7 @@ document.addEventListener('DOMContentLoaded', () => {
             trendLabel.textContent = `${sign}${delta} vs previous run`;
             trendLabel.className = `stat-trend ${delta > 0 ? 'negative' : delta < 0 ? 'positive' : 'neutral'}`;
         } else {
-            trendLabel.textContent = 'First trend snapshot recorded';
+            trendLabel.textContent = 'Trend history grows on each script run';
             trendLabel.className = 'stat-trend neutral';
         }
     }
@@ -166,13 +161,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${c.component_scores.external_interaction}</td>
                     <td>${c.component_scores.state_transition}</td>
                     <td>${c.component_scores.permission_model}</td>
-                    <td>${c.function_count}</td>
                 </tr>
             `;
         });
     }
 
-    function renderComplexityCharts(report, trends) {
+    function renderComplexityTrendChart(report, trends) {
         const snapshots = (trends && trends.snapshots) ? trends.snapshots : [];
         const labels = snapshots.map((s, i) => {
             if (s.recorded_at) {
@@ -204,41 +198,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }]
             },
             options: chartLineOptions()
-        });
-
-        const top = report.contracts.slice(0, 8);
-        const barCtx = document.getElementById('complexityBarChart').getContext('2d');
-        if (complexityBarChart) complexityBarChart.destroy();
-        complexityBarChart = new Chart(barCtx, {
-            type: 'bar',
-            data: {
-                labels: top.map(c => c.contract_name),
-                datasets: [{
-                    label: 'Total score',
-                    data: top.map(c => c.total_score),
-                    backgroundColor: top.map(c =>
-                        c.grade === 'high' ? '#ef4444' : c.grade === 'medium' ? '#f59e0b' : '#10b981'
-                    ),
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        max: 100,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#94a3b8' }
-                    },
-                    x: {
-                        grid: { display: false },
-                        ticks: { color: '#94a3b8', font: { size: 9 } }
-                    }
-                }
-            }
         });
     }
 

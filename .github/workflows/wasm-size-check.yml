@@ -33,9 +33,8 @@ jobs:
         run: |
           cargo build --release --target wasm32-unknown-unknown \
             --workspace \
-            --exclude uzima-tests \
-            --exclude interoperability_suite \
-            --exclude contract_optimizer
+            --exclude tests \
+            --exclude interoperability-suite
 
       - name: Check WASM sizes
         id: size_check

@@ -7,8 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-# `alloc` enables soroban-sdk's bump allocator (required for `extern crate alloc` in lib.rs).
-soroban-sdk = { workspace = true, features = ["alloc"] }
+soroban-sdk.workspace = true
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

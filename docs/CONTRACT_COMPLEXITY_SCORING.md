@@ -37,11 +37,13 @@ cargo run -p contract_optimizer --features cli -- complexity \
 
 ## Dashboard
 
-1. Run the script above to refresh `dashboard/data/complexity_report.json`.
-2. Open `dashboard/index.html` in a browser (or serve the `dashboard/` folder).
-3. Use the **Complexity** nav item for scores, component breakdown, and trend chart.
+Report files are **generated locally** (gitignored). See `dashboard/data/README.md`.
 
-Trend snapshots append to `dashboard/data/complexity_trends.json` (last 90 runs).
+1. Run `./scripts/complexity_score.sh` to write `dashboard/data/complexity_report.json` and append to `complexity_trends.json`.
+2. Open `dashboard/index.html` in a browser (or serve the `dashboard/` folder).
+3. Use the **Complexity** section: per-contract table (five component scores), workspace average, and trend chart.
+
+Trend snapshots append on each script run (last 90 retained).
 
 ## Tests
 

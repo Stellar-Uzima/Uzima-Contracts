@@ -714,7 +714,7 @@ impl ZKPRegistry {
         }
 
         let mut results = Vec::new(&env);
-        let mut total_gas_used: u64 = 0;
+        let mut total_gas_used = 0;
 
         for i in 0..len {
             let circuit_id = circuit_ids.get(i).unwrap();
@@ -1228,13 +1228,10 @@ impl ZKPRegistry {
             .instance()
             .set(&DataKey::ContractPaused, &state.paused);
 
-        match state.multisig_config {
-            OptionalMultiSigConfig::Some(config) => {
-                env.storage()
-                    .instance()
-                    .set(&DataKey::MultiSigConfig, &config);
-            }
-            OptionalMultiSigConfig::None => {}
+        if let Some(config) = state.multisig_config {
+            env.storage()
+                .instance()
+                .set(&DataKey::MultiSigConfig, &config);
         }
 
         env.storage()

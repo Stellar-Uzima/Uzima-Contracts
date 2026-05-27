@@ -78,24 +78,18 @@
             
             <section class="table-container" id="complexity">
                 <div class="section-header-row">
-                    <h3>Contract Complexity Scores</h3>
-                    <span class="complexity-meta" id="complexity-generated">—</span>
+                    <h3>Contract Complexity (#481)</h3>
+                    <span class="complexity-meta" id="complexity-generated">Run ./scripts/complexity_score.sh</span>
                 </div>
+                <p class="complexity-hint">
+                    Scores use cyclomatic complexity, data structures, external calls, state transitions, and permissions.
+                    Generate <code>dashboard/data/complexity_report.json</code> and trend history before viewing.
+                </p>
                 <div class="stats-grid complexity-stats">
                     <div class="stat-card">
                         <h3>Workspace Average</h3>
                         <p class="stat-value" id="complexity-avg">—</p>
-                        <span class="stat-trend neutral" id="complexity-trend-label">Run ./scripts/complexity_score.sh</span>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Highest Complexity</h3>
-                        <p class="stat-value complexity-contract-name" id="complexity-highest-name">—</p>
-                        <span class="stat-trend negative" id="complexity-highest-score">—</span>
-                    </div>
-                    <div class="stat-card">
-                        <h3>Lowest Complexity</h3>
-                        <p class="stat-value complexity-contract-name" id="complexity-lowest-name">—</p>
-                        <span class="stat-trend positive" id="complexity-lowest-score">—</span>
+                        <span class="stat-trend neutral" id="complexity-trend-label">—</span>
                     </div>
                     <div class="stat-card">
                         <h3>Contracts Scored</h3>
@@ -103,15 +97,9 @@
                         <span class="stat-trend neutral">Static analysis</span>
                     </div>
                 </div>
-                <div class="charts-container">
-                    <div class="chart-box">
-                        <h3>Complexity Trend (workspace average)</h3>
-                        <canvas id="complexityTrendChart"></canvas>
-                    </div>
-                    <div class="chart-box">
-                        <h3>Top contracts by score</h3>
-                        <canvas id="complexityBarChart"></canvas>
-                    </div>
+                <div class="chart-box complexity-trend-box">
+                    <h3>Complexity trend (workspace average)</h3>
+                    <canvas id="complexityTrendChart"></canvas>
                 </div>
                 <table id="complexity-table">
                     <thead>
@@ -124,7 +112,6 @@
                             <th>External</th>
                             <th>State</th>
                             <th>Permissions</th>
-                            <th>Functions</th>
                         </tr>
                     </thead>
                     <tbody></tbody>
