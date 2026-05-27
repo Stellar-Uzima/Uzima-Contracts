@@ -21,11 +21,14 @@ impl SafeSerialize for FederatedRound {
 
         // Validate edge cases
         if self.min_participants == 0 {
-            soroban_sdk::log!("Warning: FederatedRound with zero minimum participants");
+            soroban_sdk::log!(
+                env,
+                "Warning: FederatedRound with zero minimum participants"
+            );
         }
 
         if self.total_updates == 0 && !self.is_finalized {
-            soroban_sdk::log!("Warning: Unfinalized round with zero updates");
+            soroban_sdk::log!(env, "Warning: Unfinalized round with zero updates");
         }
 
         Ok(())
@@ -49,7 +52,7 @@ impl SafeSerialize for ParticipantUpdateMeta {
 
         // Validate edge cases
         if self.num_samples == 0 {
-            soroban_sdk::log!("Warning: ParticipantUpdateMeta with zero samples");
+            soroban_sdk::log!(env, "Warning: ParticipantUpdateMeta with zero samples");
         }
 
         Ok(())
@@ -77,15 +80,15 @@ impl SafeSerialize for ModelMetadata {
 
         // Validate edge cases
         if self.description.is_empty() {
-            soroban_sdk::log!("Warning: ModelMetadata with empty description");
+            soroban_sdk::log!(env, "Warning: ModelMetadata with empty description");
         }
 
         if self.metrics_ref.is_empty() && self.fairness_report_ref.is_empty() {
-            soroban_sdk::log!("Warning: ModelMetadata with no references");
+            soroban_sdk::log!(env, "Warning: ModelMetadata with no references");
         }
 
         if self.created_at == 0 {
-            soroban_sdk::log!("Warning: ModelMetadata with zero timestamp");
+            soroban_sdk::log!(env, "Warning: ModelMetadata with zero timestamp");
         }
 
         Ok(())

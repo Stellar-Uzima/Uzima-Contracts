@@ -10,6 +10,9 @@ mod utils;
 #[cfg(all(test, feature = "testutils"))]
 mod test;
 
+#[cfg(all(test, feature = "testutils"))]
+mod test_serialization;
+
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String};
 
 pub use types::{DataKey, Error, FederatedRound, ModelMetadata, ParticipantUpdateMeta};

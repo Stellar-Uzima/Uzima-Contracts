@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, String, TryIntoVal, Val, Vec};
+use soroban_sdk::{Address, BytesN, Env, IntoVal, Map, String, Val, Vec};
 
 /// Maximum allowed nesting depth for serialized structures
 pub const MAX_NESTING_DEPTH: u32 = 50;
@@ -48,14 +48,14 @@ impl SerializationUtils {
     /// Safe serialization for Vec with validation
     pub fn safe_serialize_vec<T>(_env: &Env, vec: &Vec<T>) -> Result<(), SerializationError>
     where
-        T: TryIntoVal<Val> + Clone,
+        T: IntoVal<Env, Val> + Clone,
     {
         Self::validate_collection_size(vec)?;
 
         // Additional validation for empty collections
         if vec.is_empty() {
             // Empty collections are valid, but we log this for debugging
-            soroban_sdk::log!("Serializing empty collection");
+            soroban_sdk::log!(_env, "Serializing empty collection");
         }
 
         Ok(())
@@ -64,13 +64,13 @@ impl SerializationUtils {
     /// Safe serialization for Map with validation
     pub fn safe_serialize_map<K, V>(_env: &Env, map: &Map<K, V>) -> Result<(), SerializationError>
     where
-        K: TryIntoVal<Val> + Clone,
-        V: TryIntoVal<Val> + Clone,
+        K: IntoVal<Env, Val> + Clone,
+        V: IntoVal<Env, Val> + Clone,
     {
         Self::validate_map_size(map)?;
 
         if map.is_empty() {
-            soroban_sdk::log!("Serializing empty map");
+            soroban_sdk::log!(_env, "Serializing empty map");
         }
 
         Ok(())
@@ -81,7 +81,7 @@ impl SerializationUtils {
         Self::validate_string_length(string)?;
 
         if string.is_empty() {
-            soroban_sdk::log!("Serializing empty string");
+            soroban_sdk::log!(_env, "Serializing empty string");
         }
 
         Ok(())
@@ -91,7 +91,7 @@ impl SerializationUtils {
     pub fn validate_bytes_n<const N: usize>(_bytes: &BytesN<N>) -> Result<(), SerializationError> {
         // In Soroban, we can't directly index or convert BytesN arrays
         // We'll use a simple approach - just log that we're validating BytesN
-        soroban_sdk::log!("Validating BytesN of length {}", N);
+        soroban_sdk::log!(_bytes.env(), "Validating BytesN");
 
         // For now, we'll accept all BytesN values as valid
         // In a real implementation, you might want to add specific checks
@@ -102,7 +102,7 @@ impl SerializationUtils {
     /// Validates Address for edge cases
     pub fn validate_address(_address: &Address) -> Result<(), SerializationError> {
         // In Soroban, all addresses are valid, but we can add logging for edge cases
-        soroban_sdk::log!("Serializing address");
+        soroban_sdk::log!(_address.env(), "Serializing address");
         Ok(())
     }
 }
@@ -118,21 +118,6 @@ pub enum SerializationError {
     CircularReference,
 }
 
-impl soroban_sdk::contracterror for SerializationError {
-    type Error = soroban_sdk::Error;
-
-    fn as_error(&self) -> Self::Error {
-        match self {
-            SerializationError::CollectionTooLarge => soroban_sdk::Error::from_contract_error(1000),
-            SerializationError::StringTooLong => soroban_sdk::Error::from_contract_error(1001),
-            SerializationError::NestingTooDeep => soroban_sdk::Error::from_contract_error(1002),
-            SerializationError::InvalidValue => soroban_sdk::Error::from_contract_error(1003),
-            SerializationError::EmptyCollection => soroban_sdk::Error::from_contract_error(1004),
-            SerializationError::CircularReference => soroban_sdk::Error::from_contract_error(1005),
-        }
-    }
-}
-
 /// Trait for safe serialization with edge case handling
 pub trait SafeSerialize {
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError>;
@@ -141,7 +126,7 @@ pub trait SafeSerialize {
 // Implement SafeSerialize for common Soroban types
 impl<T> SafeSerialize for Vec<T>
 where
-    T: TryIntoVal<Val> + Clone,
+    T: IntoVal<Env, Val> + Clone,
 {
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         SerializationUtils::safe_serialize_vec(env, self)
@@ -150,8 +135,8 @@ where
 
 impl<K, V> SafeSerialize for Map<K, V>
 where
-    K: TryIntoVal<Val> + Clone,
-    V: TryIntoVal<Val> + Clone,
+    K: IntoVal<Env, Val> + Clone,
+    V: IntoVal<Env, Val> + Clone,
 {
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         SerializationUtils::safe_serialize_map(env, self)

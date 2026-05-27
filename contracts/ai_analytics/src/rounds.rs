@@ -1,7 +1,7 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 use crate::{
-    serialization_utils::{SafeSerialize, SerializationError},
+    serialization_utils::SafeSerialize,
     types::{DataKey, Error, FederatedRound, ModelMetadata, ParticipantUpdateMeta},
     utils,
 };
