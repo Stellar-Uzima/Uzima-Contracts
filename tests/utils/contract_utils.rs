@@ -2,11 +2,12 @@
 
 /// Contract utilities for common testing operations
 use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
+use super::contract_error::ContractError;
 
 #[allow(clippy::expect_used)]
 #[allow(clippy::panic)]
-/// Result type for contract operations
-pub type ContractResult<T> = Result<T, String>;
+/// Result type for contract operations following the shared policy
+pub type ContractResult<T> = Result<T, ContractError>;
 
 /// Setup helper for contract initialization
 pub struct ContractSetup {
@@ -51,15 +52,24 @@ impl ContractSetup {
 }
 
 /// Error assertion helpers
-pub fn assert_contract_error(result: Result<(), i32>, expected_code: i32) {
+/// Assert that a legacy numeric contract result returned the expected code
+pub fn assert_contract_error_code(result: Result<(), i32>, expected_code: i32) {
     match result {
         Err(code) => assert_eq!(code, expected_code, "Contract error code mismatch"),
         Ok(_) => panic!("Expected contract error but succeeded"),
     }
 }
 
+/// Assert using the shared `ContractError` type
+pub fn assert_contract_error(result: ContractResult<()>, expected: ContractError) {
+    match result {
+        Err(e) => assert_eq!(format!("{}", e), format!("{}", expected), "Contract error mismatch"),
+        Ok(_) => panic!("Expected contract error but succeeded"),
+    }
+}
+
 /// Success assertion helper
-pub fn assert_contract_success<T>(result: Result<T, i32>) -> T {
+pub fn assert_contract_success<T>(result: ContractResult<T>) -> T {
     result.expect("Contract operation failed")
 }
 

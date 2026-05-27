@@ -1,5 +1,6 @@
 pub mod assertions;
 pub mod contract_fixtures;
+pub mod contract_error;
 /// Testing utilities module for contract testing
 /// This module provides helper functions and utilities for testing Soroban contracts
 pub mod contract_utils;
@@ -10,6 +11,7 @@ pub mod test_fixtures;
 
 pub use assertions::*;
 pub use contract_fixtures::*;
+pub use contract_error::*;
 pub use contract_utils::*;
 pub use integration_framework::*;
 pub use performance::*;
