@@ -1,7 +1,7 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 use crate::{
-    serialization_utils::{SafeSerialize, SerializationError},
+    serialization_utils::SafeSerialize,
     types::{DataKey, Error, FederatedRound, ModelMetadata, ParticipantUpdateMeta},
     utils,
 };
@@ -91,6 +91,9 @@ pub fn submit_update(
     Ok(true)
 }
 
+// All 7 parameters are required for the on-chain finalize_round call; no grouping is
+// possible without adding serialization boilerplate to the contract ABI.
+#[allow(clippy::too_many_arguments)]
 pub fn finalize_round(
     env: Env,
     caller: Address,

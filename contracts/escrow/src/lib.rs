@@ -118,6 +118,7 @@ fn add_credit(env: &Env, addr: &Address, delta: i128) {
     env.storage().persistent().set(&CREDITS, &credits);
 }
 
+#[allow(clippy::too_many_arguments)] // All boolean flags represent distinct independent escrow state transitions
 fn update_stats(
     env: &Env,
     volume: i128,

@@ -269,10 +269,13 @@ pub enum DataKey {
     VerificationResult(BytesN<32>),
 }
 
+#[allow(dead_code)] // Reserved for future admin-key lookups; kept for ABI consistency
 const ADMIN: Symbol = symbol_short!("ADMIN");
 
 // TTL constants for storage management
+#[allow(dead_code)] // Reserved for future TTL maintenance; kept as configuration constants
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+#[allow(dead_code)]
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 const TEMP_SESSION_TTL: u32 = 1000;
 
@@ -355,7 +358,7 @@ impl ZKPRegistry {
             return Err(Error::NotAuthorized);
         }
 
-        if config.threshold == 0 || config.threshold > config.signers.len() as u32 {
+        if config.threshold == 0 || config.threshold > config.signers.len() {
             return Err(Error::InvalidThreshold);
         }
 
@@ -529,7 +532,7 @@ impl ZKPRegistry {
         }
 
         // Emergency requires 100% of signers to approve to bypass timelock
-        if proposal.approvals.len() < config.signers.len() as u32 {
+        if proposal.approvals.len() < config.signers.len() {
             return Err(Error::NotEnoughApprovals);
         }
 
@@ -714,7 +717,7 @@ impl ZKPRegistry {
         }
 
         let mut results = Vec::new(&env);
-        let mut total_gas_used = 0;
+        let mut total_gas_used: u64 = 0;
 
         for i in 0..len {
             let circuit_id = circuit_ids.get(i).unwrap();
@@ -1228,7 +1231,7 @@ impl ZKPRegistry {
             .instance()
             .set(&DataKey::ContractPaused, &state.paused);
 
-        if let Some(config) = state.multisig_config {
+        if let OptionalMultiSigConfig::Some(config) = state.multisig_config {
             env.storage()
                 .instance()
                 .set(&DataKey::MultiSigConfig, &config);

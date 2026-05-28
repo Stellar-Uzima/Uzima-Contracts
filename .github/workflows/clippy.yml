@@ -21,5 +21,13 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      - name: Run clippy
+      - name: Run clippy (workspace)
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run clippy (tests crate — dead code + unused imports)
+        run: >
+          cargo clippy -p uzima-tests --tests --
+          -D warnings
+          -D dead_code
+          -D unused_imports
+          -D unused_variables

@@ -117,6 +117,7 @@ pub enum DataKey {
 #[contract]
 pub struct AuditForensicsContract;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl AuditForensicsContract {
     #[allow(clippy::panic)]
@@ -133,6 +134,7 @@ impl AuditForensicsContract {
         env.storage().instance().set(&DataKey::NextFindingId, &0u64);
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn configure_audit_rule(
         env: Env,
         admin: Address,
@@ -224,6 +226,7 @@ impl AuditForensicsContract {
         id
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn run_automated_audit(
         env: Env,
         caller: Address,
