@@ -466,6 +466,7 @@ impl FHIRIntegrationContract {
     }
 
     /// Store an observation (vital signs, lab results, etc.)
+    /// Validates FHIR R4 required fields before storing.
     pub fn store_observation(
         env: Env,
         provider: Address,
@@ -475,6 +476,25 @@ impl FHIRIntegrationContract {
 
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
+        }
+
+        // FHIR R4 validation: required fields must be non-empty
+        if observation.identifier.is_empty() {
+            return Err(Error::InvalidFHIRData);
+        }
+        // R4 Observation.status is required and must be a valid value
+        let valid_statuses = ["registered", "preliminary", "final", "amended", "cancelled"];
+        let status_str = observation.status.to_string();
+        if !valid_statuses.iter().any(|s| status_str == *s) {
+            return Err(Error::InvalidFHIRData);
+        }
+        // R4 Observation.subject (patient reference) must be present
+        if observation.subject_reference.is_empty() {
+            return Err(Error::InvalidFHIRData);
+        }
+        // R4 Observation.code is required
+        if observation.code.code.is_empty() {
+            return Err(Error::InvalidFHIRData);
         }
 
         let mut observations: Map<String, FHIRObservation> = env
@@ -503,6 +523,7 @@ impl FHIRIntegrationContract {
     }
 
     /// Store a condition (diagnosis)
+    /// Validates FHIR R4 required fields before storing.
     pub fn store_condition(
         env: Env,
         provider: Address,
@@ -512,6 +533,14 @@ impl FHIRIntegrationContract {
 
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
+        }
+
+        // FHIR R4 validation: Condition.identifier and Condition.code are required
+        if condition.identifier.is_empty() {
+            return Err(Error::InvalidFHIRData);
+        }
+        if condition.code.code.is_empty() {
+            return Err(Error::InvalidFHIRData);
         }
 
         let mut conditions: Map<String, FHIRCondition> = env
