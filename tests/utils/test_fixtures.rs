@@ -326,6 +326,49 @@ mod tests {
     }
 
     #[test]
+    fn test_healthcare_team_integrity() {
+        let env = soroban_sdk::Env::default();
+        let team = UserFixtureFactory::create_healthcare_team(&env);
+
+        assert_eq!(team.doctors.len(), 3);
+        assert_eq!(team.patients.len(), 5);
+        assert_eq!(team.nurses.len(), 2);
+        assert_eq!(team.pharmacists.len(), 1);
+        assert!(team.admin.verified);
+
+        let addresses = team.all_addresses();
+        let unique_addresses: std::collections::HashSet<_> =
+            addresses.iter().collect();
+        assert_eq!(unique_addresses.len(), addresses.len());
+
+        for doctor in team.doctors.iter() {
+            assert_eq!(doctor.role, UserRole::Doctor);
+            assert!(doctor.verified);
+        }
+        for patient in team.patients.iter() {
+            assert_eq!(patient.role, UserRole::Patient);
+            assert!(patient.verified);
+        }
+    }
+
+    #[test]
+    fn test_shared_scenario_fixtures() {
+        let scenarios = vec![
+            scenarios::patient_record_creation(),
+            scenarios::record_sharing(),
+            scenarios::consent_management(),
+            scenarios::cross_hospital_access(),
+        ];
+
+        for scenario in scenarios {
+            assert!(!scenario.name.is_empty());
+            assert!(!scenario.description.is_empty());
+            assert!(!scenario.preconditions.is_empty());
+            assert!(!scenario.expected_outcomes.is_empty());
+        }
+    }
+
+    #[test]
     fn test_scenario_fixture() {
         let scenario = scenarios::patient_record_creation();
         assert_eq!(scenario.name, "Patient Creates Medical Record");
