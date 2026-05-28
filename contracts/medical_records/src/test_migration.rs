@@ -1,4 +1,7 @@
+// internal
 use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
+
+// external crates
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 #[test]

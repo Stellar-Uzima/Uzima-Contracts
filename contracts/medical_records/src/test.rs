@@ -1,7 +1,11 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+
+// internal
 use super::*;
 use crate::errors::Error;
+
+// external crates
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
@@ -993,7 +997,10 @@ fn test_rate_limit_admin_bypass() {
 
 #[cfg(test)]
 mod test_metadata {
+    // internal
     use super::*;
+
+    // external crates
     use soroban_sdk::{map, vec, Address, Env, Map, String};
 
     fn setup(

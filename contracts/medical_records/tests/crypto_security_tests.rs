@@ -3,13 +3,16 @@
 
 mod common;
 
-use common::setup_uzima;
+// external crates
 use medical_records::{
     AdvancedEncryptedRecordInput, CryptoAuditAction, EnvelopeAlgorithm, Error, KeyEnvelope,
     Permission,
 };
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Bytes, BytesN, String, Vec};
+
+// test helpers
+use common::setup_uzima;
 
 fn make_envelopes(
     env: &soroban_sdk::Env,
