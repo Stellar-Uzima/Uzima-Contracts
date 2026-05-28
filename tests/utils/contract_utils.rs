@@ -1,7 +1,8 @@
 #![allow(clippy::new_without_default)]
 
 /// Contract utilities for common testing operations
-use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
+use crate::utils::generate_test_address;
+use soroban_sdk::{Address, Env, String as SorobanString};
 
 #[allow(clippy::expect_used)]
 #[allow(clippy::panic)]
@@ -19,7 +20,7 @@ impl ContractSetup {
     /// Create a new contract setup with test environment
     pub fn new() -> Self {
         let env = Env::default();
-        let admin = Address::generate(&env);
+        let admin = generate_test_address(&env);
 
         Self {
             env,
@@ -36,7 +37,7 @@ impl ContractSetup {
 
     /// Generate a random test address
     pub fn generate_address(&self) -> Address {
-        Address::generate(&self.env)
+        generate_test_address(&self.env)
     }
 
     /// Create N test users

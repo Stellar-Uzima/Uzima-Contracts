@@ -1,5 +1,6 @@
 /// Test fixtures for different user roles and scenarios
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use crate::utils::generate_test_address;
+use soroban_sdk::{Address, Env};
 
 /// User role fixture
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -49,7 +50,7 @@ pub struct UserFixtureFactory;
 impl UserFixtureFactory {
     /// Create admin fixture
     pub fn create_admin(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -62,7 +63,7 @@ impl UserFixtureFactory {
 
     /// Create doctor fixture
     pub fn create_doctor(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -77,7 +78,7 @@ impl UserFixtureFactory {
     pub fn create_doctors(env: &Env, count: usize) -> Vec<UserFixture> {
         (0..count)
             .map(|i| {
-                let address = Address::generate(env);
+                let address = generate_test_address(env);
                 UserFixture::new(
                     env,
                     address,
@@ -92,7 +93,7 @@ impl UserFixtureFactory {
 
     /// Create patient fixture
     pub fn create_patient(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -107,7 +108,7 @@ impl UserFixtureFactory {
     pub fn create_patients(env: &Env, count: usize) -> Vec<UserFixture> {
         (0..count)
             .map(|i| {
-                let address = Address::generate(env);
+                let address = generate_test_address(env);
                 UserFixture::new(
                     env,
                     address,
@@ -122,7 +123,7 @@ impl UserFixtureFactory {
 
     /// Create nurse fixture
     pub fn create_nurse(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -135,7 +136,7 @@ impl UserFixtureFactory {
 
     /// Create pharmacist fixture
     pub fn create_pharmacist(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -277,7 +278,7 @@ mod tests {
     #[test]
     fn test_user_fixture_creation() {
         let env = soroban_sdk::Env::default();
-        let addr = Address::generate(&env);
+        let addr = generate_test_address(&env);
         let user = UserFixture::new(
             &env,
             addr.clone(),
@@ -292,7 +293,7 @@ mod tests {
     #[test]
     fn test_user_fixture_verified() {
         let env = soroban_sdk::Env::default();
-        let addr = Address::generate(&env);
+        let addr = generate_test_address(&env);
         let user =
             UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
         assert!(user.verified);
