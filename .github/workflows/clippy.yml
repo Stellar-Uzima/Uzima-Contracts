@@ -14,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Contract review checklist reminder
+        run: echo "Review contract checklist at docs/contract-review-checklist.md"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: "1.92.0"
