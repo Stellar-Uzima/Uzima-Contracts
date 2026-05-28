@@ -12,8 +12,7 @@ mod tests {
         let contract_id = env.register_contract(None, RuntimeValidation);
         let client = RuntimeValidationClient::new(&env, &contract_id);
 
-        let result = client.initialize(&admin);
-        assert_eq!(result, ());
+        client.initialize(&admin);
     }
 
     #[test]
@@ -30,8 +29,7 @@ mod tests {
         let check_id = String::from_str(&env, "balance_check");
         let description = String::from_str(&env, "Balance must be non-negative");
 
-        let result = client.register_invariant(&admin, &check_id, &description, &3);
-        assert_eq!(result, ());
+        client.register_invariant(&admin, &check_id, &description, &3);
     }
 
     #[test]
@@ -107,8 +105,7 @@ mod tests {
         let description = String::from_str(&env, "State must be active");
         let expected_state = String::from_str(&env, "active");
 
-        let result = client.register_state_check(&admin, &check_id, &description, &expected_state);
-        assert_eq!(result, ());
+        client.register_state_check(&admin, &check_id, &description, &expected_state);
     }
 
     #[test]
@@ -148,9 +145,7 @@ mod tests {
         let description = String::from_str(&env, "Must be admin");
         let required_role = String::from_str(&env, "admin");
 
-        let result =
-            client.register_permission_check(&admin, &check_id, &description, &required_role);
-        assert_eq!(result, ());
+        client.register_permission_check(&admin, &check_id, &description, &required_role);
     }
 
     #[test]
@@ -189,8 +184,7 @@ mod tests {
         let tracker_id = String::from_str(&env, "memory_tracker");
         let resource_type = String::from_str(&env, "memory");
 
-        let result = client.register_resource_tracker(&admin, &tracker_id, &resource_type, &1000);
-        assert_eq!(result, ());
+        client.register_resource_tracker(&admin, &tracker_id, &resource_type, &1000);
     }
 
     #[test]
@@ -209,8 +203,7 @@ mod tests {
 
         client.register_resource_tracker(&admin, &tracker_id, &resource_type, &1000);
 
-        let result = client.update_resource_usage(&tracker_id, &100);
-        assert_eq!(result, ());
+        client.update_resource_usage(&tracker_id, &100);
     }
 
     #[test]

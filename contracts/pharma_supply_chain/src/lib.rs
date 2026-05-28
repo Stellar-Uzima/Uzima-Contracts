@@ -237,6 +237,7 @@ impl PharmaSupplyChainContract {
         Ok(id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn create_batch(
         env: Env,
         caller: Address,
@@ -344,6 +345,7 @@ impl PharmaSupplyChainContract {
         Ok(shipment_id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn log_condition_data(
         env: Env,
         caller: Address,

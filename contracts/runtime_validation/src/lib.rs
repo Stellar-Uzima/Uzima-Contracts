@@ -13,7 +13,7 @@ pub use types::{
     ValidationReport, ViolationType,
 };
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
 #[contract]
 pub struct RuntimeValidation;
@@ -49,7 +49,7 @@ impl RuntimeValidation {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
-        if severity < 1 || severity > 4 {
+        if !(1..=4).contains(&severity) {
             return Err(Error::InvalidSeverity);
         }
 

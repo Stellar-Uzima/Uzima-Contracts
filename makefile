@@ -64,16 +64,17 @@ build: check-deps
 	cargo build --all-targets
 
 # Build optimized contracts for deployment
+# Excludes host-only tools and test packages that are not wasm-compatible:
+#   contract_optimizer  — uses tokio/reqwest/octocrab (native I/O only)
+#   uzima-tests         — soroban testutils are host-side only
+#   interoperability_suite — test harness, no wasm output needed
 build-opt: check-deps
 	@echo "Building optimized contracts..."
-	@for contract in contracts/*/; do \
-		if [ -d "$$contract" ]; then \
-			echo "Building contract: $$contract"; \
-			cd "$$contract" && \
-			cargo build --target wasm32-unknown-unknown --release && \
-			cd - > /dev/null; \
-		fi \
-	done
+	cargo build --release --target wasm32-unknown-unknown \
+		--workspace \
+		--exclude contract_optimizer \
+		--exclude uzima-tests \
+		--exclude interoperability_suite
 	@echo "Contracts built successfully!"
 
 # Run all tests
