@@ -12,10 +12,10 @@ mod multi_region_dr_tests {
     use regional_node_manager::{
         Error as RnmError, NodeStatus, RegionalNodeManager, RegionalNodeManagerClient,
     };
+    use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
     use sync_manager::{
         ConsistencyLevel, Error as SmError, SyncManager, SyncManagerClient, SyncStatus,
     };
-    use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
     #[test]
     fn test_multi_region_deployment() {
@@ -138,8 +138,7 @@ mod multi_region_dr_tests {
 
         let metrics = client.get_node_metrics(&1u32).unwrap();
         assert_eq!(
-            metrics.consecutive_failures,
-            5u32,
+            metrics.consecutive_failures, 5u32,
             "node 1 should have 5 consecutive failures"
         );
     }
@@ -181,8 +180,7 @@ mod multi_region_dr_tests {
 
         let metrics = client.get_node_metrics(&1u32).unwrap();
         assert_eq!(
-            metrics.consecutive_failures,
-            0u32,
+            metrics.consecutive_failures, 0u32,
             "node should have 0 consecutive failures after recovery"
         );
     }
@@ -226,7 +224,10 @@ mod multi_region_dr_tests {
         );
 
         let current = client.get_current_uptime();
-        assert_eq!(current, 9997u32, "current uptime should be last recorded value");
+        assert_eq!(
+            current, 9997u32,
+            "current uptime should be last recorded value"
+        );
     }
 
     #[test]
@@ -258,14 +259,29 @@ mod multi_region_dr_tests {
         targets3.push_back(3u32);
         targets3.push_back(2u32);
 
-        let op_id1 =
-            client.initiate_sync(&operator, &1u32, &targets1, &1000u64, &ConsistencyLevel::Eventual);
+        let op_id1 = client.initiate_sync(
+            &operator,
+            &1u32,
+            &targets1,
+            &1000u64,
+            &ConsistencyLevel::Eventual,
+        );
         assert_eq!(op_id1, 1u64, "first sync op should have id=1");
-        let op_id2 =
-            client.initiate_sync(&operator, &3u32, &targets2, &2000u64, &ConsistencyLevel::Strong);
+        let op_id2 = client.initiate_sync(
+            &operator,
+            &3u32,
+            &targets2,
+            &2000u64,
+            &ConsistencyLevel::Strong,
+        );
         assert_eq!(op_id2, 2u64, "second sync op should have id=2");
-        let op_id3 =
-            client.initiate_sync(&operator, &5u32, &targets3, &3000u64, &ConsistencyLevel::Causal);
+        let op_id3 = client.initiate_sync(
+            &operator,
+            &5u32,
+            &targets3,
+            &3000u64,
+            &ConsistencyLevel::Causal,
+        );
         assert_eq!(op_id3, 3u64, "third sync op should have id=3");
 
         assert!(client.execute_sync(&operator, &op_id1));
@@ -286,7 +302,13 @@ mod multi_region_dr_tests {
 
         let empty: Vec<u32> = Vec::new(&env);
         assert_eq!(
-            client.try_initiate_sync(&operator, &1u32, &empty, &9999u64, &ConsistencyLevel::Eventual),
+            client.try_initiate_sync(
+                &operator,
+                &1u32,
+                &empty,
+                &9999u64,
+                &ConsistencyLevel::Eventual
+            ),
             Err(Ok(SmError::InvalidInput)),
             "empty target list should return InvalidInput"
         );
@@ -367,8 +389,13 @@ mod multi_region_dr_tests {
         let mut targets = Vec::new(&env);
         targets.push_back(3u32);
         targets.push_back(4u32);
-        let op_id =
-            client.initiate_sync(&operator, &1u32, &targets, &1000u64, &ConsistencyLevel::Strong);
+        let op_id = client.initiate_sync(
+            &operator,
+            &1u32,
+            &targets,
+            &1000u64,
+            &ConsistencyLevel::Strong,
+        );
 
         let mut conflicting = Vec::new(&env);
         conflicting.push_back(1u32);
@@ -386,7 +413,10 @@ mod multi_region_dr_tests {
         client.resolve_conflict(&operator, &conflict_id, &1u32);
 
         let conflicts = client.get_conflicts();
-        assert!(conflicts.get_unchecked(0u32).resolved, "conflict should be resolved");
+        assert!(
+            conflicts.get_unchecked(0u32).resolved,
+            "conflict should be resolved"
+        );
         assert_eq!(
             conflicts.get_unchecked(0u32).resolution_strategy,
             1u32,
@@ -453,7 +483,10 @@ mod multi_region_dr_tests {
             matches!(check.status, NodeStatus::Degraded),
             "recent health check for eu-central-1 should show Degraded"
         );
-        assert_eq!(check.cpu_usage, 89u32, "cpu_usage in health check should be 89");
+        assert_eq!(
+            check.cpu_usage, 89u32,
+            "cpu_usage in health check should be 89"
+        );
     }
 
     #[test]
@@ -471,28 +504,38 @@ mod multi_region_dr_tests {
         // Drill 1: node 1
         client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
         let metrics1 = client.get_node_metrics(&1u32).unwrap();
-        assert_eq!(metrics1.consecutive_failures, 1u32, "node 1 should have 1 consecutive failure");
+        assert_eq!(
+            metrics1.consecutive_failures, 1u32,
+            "node 1 should have 1 consecutive failure"
+        );
         client.mark_recovery_success(&operator, &1u32);
         let metrics1 = client.get_node_metrics(&1u32).unwrap();
         assert_eq!(
-            metrics1.consecutive_failures,
-            0u32,
+            metrics1.consecutive_failures, 0u32,
             "node 1 consecutive failures should reset to 0"
         );
-        assert_eq!(metrics1.recovery_attempts, 1u32, "node 1 should have 1 recovery attempt");
+        assert_eq!(
+            metrics1.recovery_attempts, 1u32,
+            "node 1 should have 1 recovery attempt"
+        );
 
         // Drill 2: node 2
         client.detect_node_failure(&operator, &2u32, &FailoverReason::HeartbeatTimeout, &3u32);
         let metrics2 = client.get_node_metrics(&2u32).unwrap();
-        assert_eq!(metrics2.consecutive_failures, 1u32, "node 2 should have 1 consecutive failure");
+        assert_eq!(
+            metrics2.consecutive_failures, 1u32,
+            "node 2 should have 1 consecutive failure"
+        );
         client.mark_recovery_success(&operator, &2u32);
         let metrics2 = client.get_node_metrics(&2u32).unwrap();
         assert_eq!(
-            metrics2.consecutive_failures,
-            0u32,
+            metrics2.consecutive_failures, 0u32,
             "node 2 consecutive failures should reset to 0"
         );
-        assert_eq!(metrics2.recovery_attempts, 1u32, "node 2 should have 1 recovery attempt");
+        assert_eq!(
+            metrics2.recovery_attempts, 1u32,
+            "node 2 should have 1 recovery attempt"
+        );
 
         assert_eq!(
             client.get_detections().len(),
@@ -533,7 +576,11 @@ mod multi_region_dr_tests {
             assert_eq!(replicas.len(), 1u32);
             let replica = replicas.get_unchecked(0u32);
             assert!(replica.is_in_sync, "replica {} should be in sync", rid);
-            assert_eq!(replica.data_hash, data_hash, "replica {} data_hash mismatch", rid);
+            assert_eq!(
+                replica.data_hash, data_hash,
+                "replica {} data_hash mismatch",
+                rid
+            );
         }
 
         assert_eq!(
@@ -560,13 +607,7 @@ mod multi_region_dr_tests {
 
         // Unauthorized calls must fail
         assert_eq!(
-            client.try_register_region(
-                &unauthorized,
-                &GeoRegion::UsEast,
-                &1u32,
-                &1000u64,
-                &true
-            ),
+            client.try_register_region(&unauthorized, &GeoRegion::UsEast, &1u32, &1000u64, &true),
             Err(Ok(OrchError::NotAuthorized)),
             "unauthorized cannot register region"
         );
@@ -604,7 +645,10 @@ mod multi_region_dr_tests {
 
         // 1 active region < min_replicas=3 → health is false
         let healthy = client.check_health(&auditor);
-        assert!(!healthy, "health should be false with only 1 active region vs min_replicas=3");
+        assert!(
+            !healthy,
+            "health should be false with only 1 active region vs min_replicas=3"
+        );
 
         client.set_policy(
             &admin,
@@ -630,9 +674,11 @@ mod multi_region_dr_tests {
 
 #[cfg(test)]
 mod performance_tests {
-    use failover_detector::{FailoverDetector, FailoverDetectorClient, FailoverReason, FailoverState};
-    use sync_manager::{ConsistencyLevel, SyncManager, SyncManagerClient, SyncStatus};
+    use failover_detector::{
+        FailoverDetector, FailoverDetectorClient, FailoverReason, FailoverState,
+    };
     use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+    use sync_manager::{ConsistencyLevel, SyncManager, SyncManagerClient, SyncStatus};
 
     #[test]
     fn test_failover_performance_metrics() {
