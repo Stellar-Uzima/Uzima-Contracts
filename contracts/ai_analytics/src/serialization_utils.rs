@@ -1,177 +1,117 @@
-use soroban_sdk::{Address, BytesN, Env, Map, String, TryIntoVal, Val, Vec};
+//! # Serialization Edge Cases Validation
+//!
+//! This module provides utilities to prevent potential Soroban serialization edge
+//! cases, such as runtime panics with malformed data, storage corruption, and
+//! out-of-memory errors caused by excessively large or deeply nested payloads.
+//!
+//! ## Core Components
+//!
+//! - `SerializationUtils`: Contains static validation functions for primitive types
+//!   and collections (Strings, Vecs, Maps, Bytes, etc.).
+//! - `SafeSerialize`: A trait that should be implemented by contract structures to
+//!   ensure they are validated before being persisted to the ledger.
+//! - `SerializationError`: Defines explicit and consistent errors mapping to edge case failures.
 
-/// Maximum allowed nesting depth for serialized structures
+use soroban_sdk::{contracterror, Address, Bytes, Env, Map, String, Vec};
+
+/// Maximum allowable nesting depth to prevent stack overflow issues.
 pub const MAX_NESTING_DEPTH: u32 = 50;
-
-/// Maximum allowed size for collections (in number of elements)
+/// Maximum number of elements in Vecs and Maps to prevent memory exhaustion.
 pub const MAX_COLLECTION_SIZE: u32 = 10000;
-
-/// Maximum allowed string length
+/// Maximum byte length for string structures.
 pub const MAX_STRING_LENGTH: u32 = 100000;
 
-/// Serialization utilities for handling edge cases
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum SerializationError {
+    SerializationError = 8,
+    CollectionTooLarge = 9,
+    StringTooLong = 10,
+    NestingTooDeep = 11,
+    EmptyCollection = 12,
+    InvalidAddress = 13,
+    InvalidBytes = 14,
+    ZeroValueMetadata = 15,
+}
+
+/// Trait to ensure types can be safely serialized and stored.
+pub trait SafeSerialize {
+    /// Validates the implementor's fields against edge-case constraints.
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError>;
+}
+
 pub struct SerializationUtils;
 
 impl SerializationUtils {
-    /// Validates a collection size before serialization
-    pub fn validate_collection_size<T>(collection: &Vec<T>) -> Result<(), SerializationError> {
-        if collection.len() > MAX_COLLECTION_SIZE {
-            return Err(SerializationError::CollectionTooLarge);
+    /// Validates that a string is neither empty nor excessively long.
+    pub fn validate_string(s: &String) -> Result<(), SerializationError> {
+        let len = s.len();
+        if len == 0 {
+            return Err(SerializationError::EmptyCollection);
         }
-        Ok(())
-    }
-
-    /// Validates a map size before serialization
-    pub fn validate_map_size<K, V>(map: &Map<K, V>) -> Result<(), SerializationError> {
-        if map.len() > MAX_COLLECTION_SIZE {
-            return Err(SerializationError::CollectionTooLarge);
-        }
-        Ok(())
-    }
-
-    /// Validates string length before serialization
-    pub fn validate_string_length(string: &String) -> Result<(), SerializationError> {
-        if string.len() > MAX_STRING_LENGTH {
+        if len > MAX_STRING_LENGTH {
             return Err(SerializationError::StringTooLong);
         }
         Ok(())
     }
 
-    /// Validates nesting depth (conceptual - Soroban handles this internally)
-    pub fn validate_nesting_depth(current_depth: u32) -> Result<(), SerializationError> {
-        if current_depth > MAX_NESTING_DEPTH {
-            return Err(SerializationError::NestingTooDeep);
+    /// Validates that a vector is not empty and respects size limits.
+    pub fn validate_vec<T>(v: &Vec<T>) -> Result<(), SerializationError> {
+        let len = v.len();
+        if len == 0 {
+            return Err(SerializationError::EmptyCollection);
+        }
+        if len > MAX_COLLECTION_SIZE {
+            return Err(SerializationError::CollectionTooLarge);
         }
         Ok(())
     }
 
-    /// Safe serialization for Vec with validation
-    pub fn safe_serialize_vec<T>(_env: &Env, vec: &Vec<T>) -> Result<(), SerializationError>
-    where
-        T: TryIntoVal<Val> + Clone,
-    {
-        Self::validate_collection_size(vec)?;
-
-        // Additional validation for empty collections
-        if vec.is_empty() {
-            // Empty collections are valid, but we log this for debugging
-            soroban_sdk::log!("Serializing empty collection");
+    /// Validates that a map is not empty and respects size limits.
+    pub fn validate_map<K, V>(m: &Map<K, V>) -> Result<(), SerializationError> {
+        let len = m.len();
+        if len == 0 {
+            return Err(SerializationError::EmptyCollection);
         }
-
-        Ok(())
-    }
-
-    /// Safe serialization for Map with validation
-    pub fn safe_serialize_map<K, V>(_env: &Env, map: &Map<K, V>) -> Result<(), SerializationError>
-    where
-        K: TryIntoVal<Val> + Clone,
-        V: TryIntoVal<Val> + Clone,
-    {
-        Self::validate_map_size(map)?;
-
-        if map.is_empty() {
-            soroban_sdk::log!("Serializing empty map");
+        if len > MAX_COLLECTION_SIZE {
+            return Err(SerializationError::CollectionTooLarge);
         }
-
         Ok(())
     }
 
-    /// Safe serialization for String with validation
-    pub fn safe_serialize_string(_env: &Env, string: &String) -> Result<(), SerializationError> {
-        Self::validate_string_length(string)?;
-
-        if string.is_empty() {
-            soroban_sdk::log!("Serializing empty string");
+    /// Validates that raw bytes are non-empty and bounded.
+    pub fn validate_bytes(b: &Bytes) -> Result<(), SerializationError> {
+        let len = b.len();
+        if len == 0 {
+            return Err(SerializationError::InvalidBytes);
         }
-
-        Ok(())
-    }
-
-    /// Validates BytesN for edge cases
-    pub fn validate_bytes_n<const N: usize>(_bytes: &BytesN<N>) -> Result<(), SerializationError> {
-        // In Soroban, we can't directly index or convert BytesN arrays
-        // We'll use a simple approach - just log that we're validating BytesN
-        soroban_sdk::log!("Validating BytesN of length {}", N);
-
-        // For now, we'll accept all BytesN values as valid
-        // In a real implementation, you might want to add specific checks
-
-        Ok(())
-    }
-
-    /// Validates Address for edge cases
-    pub fn validate_address(_address: &Address) -> Result<(), SerializationError> {
-        // In Soroban, all addresses are valid, but we can add logging for edge cases
-        soroban_sdk::log!("Serializing address");
-        Ok(())
-    }
-}
-
-/// Serialization error types
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SerializationError {
-    CollectionTooLarge,
-    StringTooLong,
-    NestingTooDeep,
-    InvalidValue,
-    EmptyCollection,
-    CircularReference,
-}
-
-impl soroban_sdk::contracterror for SerializationError {
-    type Error = soroban_sdk::Error;
-
-    fn as_error(&self) -> Self::Error {
-        match self {
-            SerializationError::CollectionTooLarge => soroban_sdk::Error::from_contract_error(1000),
-            SerializationError::StringTooLong => soroban_sdk::Error::from_contract_error(1001),
-            SerializationError::NestingTooDeep => soroban_sdk::Error::from_contract_error(1002),
-            SerializationError::InvalidValue => soroban_sdk::Error::from_contract_error(1003),
-            SerializationError::EmptyCollection => soroban_sdk::Error::from_contract_error(1004),
-            SerializationError::CircularReference => soroban_sdk::Error::from_contract_error(1005),
+        if len > MAX_COLLECTION_SIZE {
+            return Err(SerializationError::CollectionTooLarge);
         }
+        Ok(())
     }
-}
-
-/// Trait for safe serialization with edge case handling
-pub trait SafeSerialize {
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError>;
-}
-
-// Implement SafeSerialize for common Soroban types
-impl<T> SafeSerialize for Vec<T>
-where
-    T: TryIntoVal<Val> + Clone,
-{
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::safe_serialize_vec(env, self)
+    
+    /// Validates that a BytesN fixed-size array is not completely empty (all zeros).
+    pub fn validate_bytesn<const N: usize>(b: &soroban_sdk::BytesN<N>) -> Result<(), SerializationError> {
+        let all_zeros = [0u8; N];
+        if b.to_array() == all_zeros {
+            return Err(SerializationError::InvalidBytes);
+        }
+        Ok(())
     }
-}
 
-impl<K, V> SafeSerialize for Map<K, V>
-where
-    K: TryIntoVal<Val> + Clone,
-    V: TryIntoVal<Val> + Clone,
-{
-    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::safe_serialize_map(env, self)
+    /// Ensures metadata numeric values are non-zero.
+    pub fn validate_metadata_value(val: u64) -> Result<(), SerializationError> {
+        if val == 0 {
+            return Err(SerializationError::ZeroValueMetadata);
+        }
+        Ok(())
     }
-}
-
-impl SafeSerialize for String {
-    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::safe_serialize_string(_env, self)
-    }
-}
-
-impl<const N: usize> SafeSerialize for BytesN<N> {
-    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::validate_bytes_n(self)
-    }
-}
-
-impl SafeSerialize for Address {
-    fn safe_serialize(&self, _env: &Env) -> Result<(), SerializationError> {
-        SerializationUtils::validate_address(self)
+    
+    /// Validates that an address is properly instantiated (placeholder for deeper validation).
+    pub fn validate_address(_env: &Env, _address: &Address) -> Result<(), SerializationError> {
+        // In Soroban, Address objects are valid by construction at the host environment level.
+        Ok(())
     }
 }
