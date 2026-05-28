@@ -44,6 +44,12 @@ pub struct SorobanBenchmarkSuite {
     results: Vec<SorobanBenchmarkResult>,
 }
 
+impl Default for SorobanBenchmarkSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SorobanBenchmarkSuite {
     pub fn new() -> Self {
         Self {
@@ -119,6 +125,7 @@ impl PerformanceResult {
 }
 
 /// Performance benchmark runner
+#[allow(dead_code)]
 pub struct BenchmarkRunner {
     name: String,
     iterations: u32,
@@ -160,8 +167,15 @@ impl BenchmarkRunner {
 }
 
 /// Performance test suite
+#[allow(dead_code)]
 pub struct PerformanceSuite {
     tests: HashMap<String, PerformanceResult>,
+}
+
+impl Default for PerformanceSuite {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerformanceSuite {
