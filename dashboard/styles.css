@@ -179,6 +179,57 @@ header h2 {
 .stat-trend.negative { color: var(--danger); }
 .stat-trend.neutral { color: var(--text-secondary); }
 
+.section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.complexity-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.complexity-hint {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.25rem;
+    line-height: 1.5;
+}
+
+.complexity-hint code {
+    font-size: 0.8rem;
+    color: var(--text-primary);
+}
+
+.complexity-trend-box {
+    margin-bottom: 1.5rem;
+    min-height: 220px;
+}
+
+.complexity-stats {
+    grid-template-columns: repeat(2, 1fr);
+    margin-bottom: 1.5rem;
+}
+
+.grade-badge {
+    display: inline-block;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.grade-low { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+.grade-medium { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.grade-high { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+#complexity { margin-bottom: 2.5rem; }
+
 /* Charts */
 .charts-container {
     display: grid;

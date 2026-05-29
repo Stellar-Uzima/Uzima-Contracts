@@ -1,3 +1,6 @@
+#![cfg(test)]
+
+// external crates
 use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role, StructuredLog};
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::{symbol_short, Address, Env, String, Symbol, TryFromVal, Vec};

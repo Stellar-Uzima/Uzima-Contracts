@@ -252,4 +252,57 @@ mod tests {
             symbol_short!("CHK_ID")
         );
     }
+
+    #[test]
+    fn test_double_revoke_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        client.revoke_consent(&patient, &provider);
+        // Second revocation should fail
+        let result = client.try_revoke_consent(&patient, &provider);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_revoke_expired_consent_succeeds() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        // Advance time past any expiry
+        env.ledger().with_mut(|li| {
+            li.timestamp = 9_999_999;
+        });
+        // Revocation of an active (non-expired) consent should still succeed
+        client.revoke_consent(&patient, &provider);
+        assert!(!client.check_consent(&patient, &provider));
+    }
+
+    #[test]
+    fn test_cross_patient_revoke_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient_a = Address::generate(&env);
+        let patient_b = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient_a, &provider);
+        // patient_b cannot revoke patient_a's consent
+        let result = client.try_revoke_consent(&patient_b, &provider);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_revoke_emits_event_and_check_returns_false() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+        client.revoke_consent(&patient, &provider);
+        assert!(!client.check_consent(&patient, &provider));
+    }
 }

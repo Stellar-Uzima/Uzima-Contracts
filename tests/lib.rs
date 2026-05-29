@@ -1,2 +1,4 @@
-pub mod integration;
 pub mod utils;
+
+#[cfg(test)]
+pub mod integration;

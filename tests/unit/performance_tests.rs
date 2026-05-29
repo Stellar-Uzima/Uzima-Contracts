@@ -197,6 +197,6 @@ mod tests {
     fn stress_large_data_operations() {
         // Handle large medical records (10MB+)
         let large_record = vec![0u8; 10 * 1024 * 1024];
-        assert!(large_record.len() > 0);
+        assert!(!large_record.is_empty());
     }
 }
