@@ -1,0 +1,66 @@
+name: Tests Crate Quality Gates
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tests/**'
+      - '.github/workflows/tests-quality-gates.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'tests/**'
+      - '.github/workflows/tests-quality-gates.yml'
+
+jobs:
+  fmt:
+    name: Formatting (tests crate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+          components: rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt -p uzima-tests -- --check
+
+  lint:
+    name: Lint (tests crate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy — deny warnings, dead code, unused imports
+        run: >
+          cargo clippy -p uzima-tests --tests --
+          -D warnings
+          -D dead_code
+          -D unused_imports
+          -D unused_variables
+
+  build:
+    name: Build (tests crate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Build tests crate
+        run: cargo build -p uzima-tests --tests

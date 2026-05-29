@@ -5646,4 +5646,10 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
             report,
         })
     }
+
+    /// On-chain health check endpoint.
+    /// Returns true if the contract is initialized and operational.
+    pub fn health_check(env: Env) -> bool {
+        env.storage().instance().has(&UPGRADE_ADMIN)
+    }
 }

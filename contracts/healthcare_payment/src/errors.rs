@@ -43,6 +43,9 @@ pub enum Error {
 
     // --- Cross-Chain (700–799) ---
     CrossChainTimeout = 702,
+
+    // --- Reentrancy (800–899) ---
+    Reentrancy = 800,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {

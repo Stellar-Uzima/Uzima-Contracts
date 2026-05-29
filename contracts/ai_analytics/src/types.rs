@@ -21,10 +21,7 @@ impl SafeSerialize for FederatedRound {
 
         // Validate edge cases
         if self.min_participants == 0 {
-            soroban_sdk::log!(
-                env,
-                "Warning: FederatedRound with zero minimum participants"
-            );
+            soroban_sdk::log!(env, "Warning: FederatedRound with zero minimum participants");
         }
 
         if self.total_updates == 0 && !self.is_finalized {

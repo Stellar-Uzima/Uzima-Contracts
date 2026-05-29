@@ -13,7 +13,7 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Map, String};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -384,7 +384,7 @@ mod test {
         }
     }
 
-    fn setup(env: &Env) -> (ContractMonitoringClient, Address) {
+    fn setup(env: &Env) -> (ContractMonitoringClient<'_>, Address) {
         let contract_id = env.register_contract(None, ContractMonitoring);
         let client = ContractMonitoringClient::new(env, &contract_id);
         let admin = Address::generate(env);

@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, map, Map};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
 
 // ============================================================================
 // Data Types & Constants
@@ -8,13 +8,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 const ROLE_ADMIN: u32 = 1;
 const ROLE_OPERATOR: u32 = 2;
-const ROLE_AUDITOR: u32 = 4;
-const ALL_ROLES: u32 = 7;
+const ALL_ROLES: u32 = 3;
 
 const MAX_RETRIES: u32 = 3;
-const SYNC_TIMEOUT_MS: u64 = 60000; // 60 seconds
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum SyncStatus {
     Pending = 0,
@@ -24,7 +22,7 @@ pub enum SyncStatus {
     PartialSuccess = 4,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum ConsistencyLevel {
     Eventual = 0,
@@ -117,7 +115,6 @@ const ADMIN: Symbol = symbol_short!("ADMIN");
 const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const OPERATIONS: Symbol = symbol_short!("OPS");
-const WINDOWS: Symbol = symbol_short!("WINS");
 const LAGS: Symbol = symbol_short!("LAGS");
 const CONFLICTS: Symbol = symbol_short!("CONF");
 const SYNC_POLICY: Symbol = symbol_short!("SPOL");
@@ -180,7 +177,7 @@ impl SyncManager {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())
@@ -250,8 +247,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;
@@ -292,8 +289,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;

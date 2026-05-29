@@ -269,10 +269,13 @@ pub enum DataKey {
     VerificationResult(BytesN<32>),
 }
 
+#[allow(dead_code)] // Reserved for future admin-key lookups; kept for ABI consistency
 const ADMIN: Symbol = symbol_short!("ADMIN");
 
 // TTL constants for storage management
+#[allow(dead_code)] // Reserved for future TTL maintenance; kept as configuration constants
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+#[allow(dead_code)]
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 const TEMP_SESSION_TTL: u32 = 1000;
 
@@ -313,6 +316,7 @@ pub enum Error {
     TimelockNotExpired = 31,
     AlreadyExecuted = 32,
     NotEnoughApprovals = 33,
+    MalformedProof = 612,
 }
 
 // =============================================================================
@@ -355,7 +359,7 @@ impl ZKPRegistry {
             return Err(Error::NotAuthorized);
         }
 
-        if config.threshold == 0 || config.threshold > config.signers.len() as u32 {
+        if config.threshold == 0 || config.threshold > config.signers.len() {
             return Err(Error::InvalidThreshold);
         }
 
@@ -529,7 +533,7 @@ impl ZKPRegistry {
         }
 
         // Emergency requires 100% of signers to approve to bypass timelock
-        if proposal.approvals.len() < config.signers.len() as u32 {
+        if proposal.approvals.len() < config.signers.len() {
             return Err(Error::NotEnoughApprovals);
         }
 
@@ -714,7 +718,7 @@ impl ZKPRegistry {
         }
 
         let mut results = Vec::new(&env);
-        let mut total_gas_used = 0;
+        let mut total_gas_used: u64 = 0;
 
         for i in 0..len {
             let circuit_id = circuit_ids.get(i).unwrap();
@@ -1228,7 +1232,7 @@ impl ZKPRegistry {
             .instance()
             .set(&DataKey::ContractPaused, &state.paused);
 
-        if let Some(config) = state.multisig_config {
+        if let OptionalMultiSigConfig::Some(config) = state.multisig_config {
             env.storage()
                 .instance()
                 .set(&DataKey::MultiSigConfig, &config);
@@ -1299,35 +1303,28 @@ impl ZKPRegistry {
 
     /// Internal ZKP verification (simplified for demonstration)
     fn verify_zkp_internal(_env: &Env, proof: &ZKProof) -> Result<bool, Error> {
-        // In production, this would perform actual cryptographic verification
-        // For demonstration, we do basic validation
-
-        // Check proof data is not empty
+        // Structural validation: proof_data must be non-empty and at least 32 bytes
         if proof.proof_data.is_empty() {
-            return Ok(false);
+            return Err(Error::MalformedProof);
         }
-
-        // Check public inputs are reasonable
+        if proof.proof_data.len() < 32 {
+            return Err(Error::MalformedProof);
+        }
+        // Public inputs must be present
+        if proof.public_inputs.is_empty() {
+            return Err(Error::MalformedProof);
+        }
+        // Bound public inputs count
         if proof.public_inputs.len() > 50 {
-            return Ok(false);
+            return Err(Error::MalformedProof);
         }
-
-        // Simulate verification based on proof type and hash function
-        let verification_cost = match proof.proof_type {
-            ZKPType::SNARK => match proof.hash_function {
-                ZKPHashFunction::Poseidon => 50000,
-                ZKPHashFunction::MiMC => 45000,
-                ZKPHashFunction::SHA256 => 80000,
-                ZKPHashFunction::Rescue => 55000,
-            },
-            ZKPType::STARK => 90000,
-            ZKPType::Bulletproof => 30000,
-            ZKPType::PedersenCommitment => 20000,
-            ZKPType::Recursive => 95000,
-        };
-
-        // Check if verification cost is within acceptable range
-        Ok(verification_cost <= 100000)
+        // Each public input must be non-empty
+        for input in proof.public_inputs.iter() {
+            if input.is_empty() {
+                return Err(Error::MalformedProof);
+            }
+        }
+        Ok(true)
     }
 
     /// Internal range proof verification

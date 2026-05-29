@@ -155,6 +155,7 @@ mod tests {
         assert_eq!(Error::InvalidThreshold as u32, 230);
         assert_eq!(Error::InvalidDuration as u32, 231);
         assert_eq!(Error::RecordNotFound as u32, 403);
+        assert_eq!(Error::RateLimitExceeded as u32, 429);
     }
 
     #[test]
@@ -181,5 +182,83 @@ mod tests {
             get_suggestion(Error::InvalidThreshold),
             symbol_short!("CHK_LEN")
         );
+    }
+
+    #[test]
+    fn test_first_call_succeeds_within_cooldown() {
+        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // First call should succeed (no prior cooldown)
+        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_second_call_within_cooldown_fails() {
+        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // First call succeeds
+        client.grant_emergency_access(&approver1, &patient, &provider, &600);
+
+        // Second call immediately after should fail with RateLimitExceeded
+        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
+        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+    }
+
+    #[test]
+    fn test_call_after_cooldown_window_succeeds() {
+        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        // Set a short cooldown of 100 seconds
+        client.update_cooldown_period(&admin, &100u64);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // First call at t=0
+        client.grant_emergency_access(&approver1, &patient, &provider, &600);
+
+        // Advance ledger time past the cooldown window
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(101);
+        });
+
+        // Call after cooldown should succeed
+        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_admin_can_update_cooldown_period() {
+        let (_env, client, admin, _, _, _, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        assert_eq!(client.get_cooldown_period(), 86_400u64);
+
+        client.update_cooldown_period(&admin, &3600u64);
+        assert_eq!(client.get_cooldown_period(), 3600u64);
+    }
+
+    #[test]
+    fn test_non_admin_cannot_update_cooldown_period() {
+        let (env, client, admin, approver1, _, _, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let outsider = Address::generate(&env);
+        let result = client.try_update_cooldown_period(&outsider, &3600u64);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+
+        // Approver also cannot update
+        let result2 = client.try_update_cooldown_period(&approver1, &3600u64);
+        assert_eq!(result2, Err(Ok(Error::Unauthorized)));
     }
 }

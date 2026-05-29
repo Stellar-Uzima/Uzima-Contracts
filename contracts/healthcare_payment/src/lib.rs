@@ -238,6 +238,7 @@ pub enum DataKey {
     PatientResponsibility(Address),
     CircuitBreakerState,
     AuthorizedPausers,
+    Locked,
 }
 
 #[contract]
@@ -300,6 +301,23 @@ impl HealthcarePayment {
             }
         }
         Ok(())
+    }
+
+    fn acquire_lock(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get::<DataKey, bool>(&DataKey::Locked)
+            .unwrap_or(false)
+        {
+            return Err(Error::Reentrancy);
+        }
+        env.storage().instance().set(&DataKey::Locked, &true);
+        Ok(())
+    }
+
+    fn release_lock(env: &Env) {
+        env.storage().instance().set(&DataKey::Locked, &false);
     }
 
     fn is_authorized_pauser(env: &Env, caller: &Address) -> bool {
@@ -440,7 +458,7 @@ impl HealthcarePayment {
         Ok(provider_id)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_coverage_policy(
         env: Env,
         caller: Address,
@@ -546,6 +564,7 @@ impl HealthcarePayment {
         Ok(check_id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn submit_claim(
         env: Env,
         patient: Address,
@@ -787,7 +806,7 @@ impl HealthcarePayment {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn process_eob(
         env: Env,
         caller: Address,
@@ -896,6 +915,7 @@ impl HealthcarePayment {
 
     pub fn process_payment(env: Env, claim_id: u64) -> Result<(), Error> {
         Self::require_operational(&env)?;
+        Self::acquire_lock(&env)?;
         env.events().publish(
             (symbol_short!("DIAG"), symbol_short!("ENTER")),
             (symbol_short!("proc_pay"), claim_id),
@@ -916,6 +936,7 @@ impl HealthcarePayment {
                 (symbol_short!("DIAG"), symbol_short!("VALFAIL")),
                 (symbol_short!("proc_pay"), claim_id, claim.status as u32),
             );
+            Self::release_lock(&env);
             return Err(Error::InvalidStatus);
         }
 
@@ -967,11 +988,13 @@ impl HealthcarePayment {
             (symbol_short!("proc_pay"), claim_id),
         );
 
+        Self::release_lock(&env);
         Ok(())
     }
 
     /// Process multiple approved claims in one call. Reads Config and creates TokenClient once.
     pub fn batch_process_payments(env: Env, claim_ids: Vec<u64>) -> Result<Vec<u64>, Error> {
+        Self::acquire_lock(&env)?;
         let config: Config = env
             .storage()
             .instance()
@@ -991,6 +1014,7 @@ impl HealthcarePayment {
                 .ok_or(Error::ClaimNotFound)?;
 
             if claim.status != ClaimStatus::Approved {
+                Self::release_lock(&env);
                 return Err(Error::InvalidStatus);
             }
 
@@ -1019,6 +1043,7 @@ impl HealthcarePayment {
             paid_ids.push_back(claim_id);
         }
 
+        Self::release_lock(&env);
         Ok(paid_ids)
     }
 

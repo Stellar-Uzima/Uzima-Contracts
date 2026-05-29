@@ -17,3 +17,7 @@ proptest = "1.6.0"
 soroban-sdk = { workspace = true, features = ["testutils"] }
 sut_token = { path = "../sut_token" }
 token_sale = { path = "../token_sale" }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

@@ -91,6 +91,9 @@ pub fn submit_update(
     Ok(true)
 }
 
+// All 7 parameters are required for the on-chain finalize_round call; no grouping is
+// possible without adding serialization boilerplate to the contract ABI.
+#[allow(clippy::too_many_arguments)]
 pub fn finalize_round(
     env: Env,
     caller: Address,

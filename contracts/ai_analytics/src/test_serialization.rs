@@ -207,21 +207,21 @@ fn test_safe_serialize_string_succeeds_on_populated() {
 fn test_validate_bytes_n_accepts_zero_bytes() {
     let env = Env::default();
     let b: BytesN<32> = BytesN::from_array(&env, &[0u8; 32]);
-    assert!(SerializationUtils::validate_bytes_n(&b).is_ok());
+    assert!(SerializationUtils::validate_bytes_n(&env, &b).is_ok());
 }
 
 #[test]
 fn test_validate_bytes_n_accepts_arbitrary_bytes() {
     let env = Env::default();
     let b: BytesN<32> = BytesN::from_array(&env, &[7u8; 32]);
-    assert!(SerializationUtils::validate_bytes_n(&b).is_ok());
+    assert!(SerializationUtils::validate_bytes_n(&env, &b).is_ok());
 }
 
 #[test]
 fn test_validate_address_accepts_generated_address() {
     let env = Env::default();
     let a = Address::generate(&env);
-    assert!(SerializationUtils::validate_address(&a).is_ok());
+    assert!(SerializationUtils::validate_address(&env, &a).is_ok());
 }
 
 // ---------------------------------------------------------------------------

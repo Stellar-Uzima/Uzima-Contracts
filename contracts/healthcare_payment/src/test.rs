@@ -343,3 +343,25 @@ fn test_get_suggestion_returns_expected_hint() {
         symbol_short!("CHK_ID")
     );
 }
+
+#[test]
+fn test_reentrancy_guard_blocks_concurrent_call() {
+    use crate::{DataKey, Error, HealthcarePayment, HealthcarePaymentClient};
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Manually set the lock to simulate a reentrant call in progress
+    let contract_id = env.register_contract(None, HealthcarePayment);
+    env.as_contract(&contract_id, || {
+        env.storage().instance().set(&DataKey::Locked, &true);
+    });
+
+    let client = HealthcarePaymentClient::new(&env, &contract_id);
+    let result = client.try_process_payment(&1u64);
+    assert_eq!(result, Err(Ok(Error::Reentrancy)));
+}
+
+#[test]
+fn test_reentrancy_error_code_is_stable() {
+    assert_eq!(Error::Reentrancy as u32, 800);
+}

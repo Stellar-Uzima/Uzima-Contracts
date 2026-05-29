@@ -7,8 +7,9 @@ Thank you for your interest in contributing to Uzima Contracts! This document pr
 1. **Fork the repository** and create a feature branch
 2. **Follow coding standards** outlined in [CODING_STANDARDS.md](./docs/CODING_STANDARDS.md)
 3. **Write tests** for new functionality
-4. **Run linting and tests** before submitting
-5. **Submit a pull request** with a clear description
+4. **Review the contract review checklist** in [docs/contract-review-checklist.md](./docs/contract-review-checklist.md)
+5. **Run linting and tests** before submitting
+6. **Submit a pull request** with a clear description
 
 ## Code Quality Standards
 
@@ -57,6 +58,10 @@ All code must follow the naming conventions defined in [CODING_STANDARDS.md](./d
 - [ ] Documentation is updated
 - [ ] No new Clippy warnings
 - [ ] Code is properly formatted
+- [ ] Contract review checklist items have been considered for correctness, safety, and testing
+
+## Contract Review Checklist
+Use the shared contract review checklist for all smart contract and contract-related pull requests: [docs/contract-review-checklist.md](./docs/contract-review-checklist.md)
 
 ## Development Setup
 

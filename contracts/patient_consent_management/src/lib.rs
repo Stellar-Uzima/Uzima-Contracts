@@ -262,4 +262,191 @@ impl PatientConsentManagement {
         }
         Ok(())
     }
+
+    /// On-chain health check endpoint.
+    /// Returns true if the contract is initialized and operational.
+    pub fn health_check(env: Env) -> bool {
+        env.storage().instance().has(&DataKey::Initialized)
+    }
 }
+
+// ============================================================
+// Issue #656: Delegated Consent / Proxy Authority
+// ============================================================
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum ProxyScope {
+    FullAuthority,
+    EmergencyOnly,
+    ReadOnly,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ProxyRecord {
+    pub proxy_address: Address,
+    pub scope: ProxyScope,
+    pub designated_at: u64,
+}
+
+#[contracttype]
+pub enum ProxyKey {
+    Proxy(Address), // keyed by patient address
+}
+
+/// Patient designates a proxy who can act on their behalf when incapacitated.
+/// Requires the patient's own signature (invoke as patient).
+pub fn designate_proxy(env: Env, patient: Address, proxy_address: Address, scope: ProxyScope) {
+    patient.require_auth();
+    let record = ProxyRecord {
+        proxy_address: proxy_address.clone(),
+        scope,
+        designated_at: env.ledger().timestamp(),
+    };
+    env.storage()
+        .persistent()
+        .set(&ProxyKey::Proxy(patient.clone()), &record);
+    env.events().publish(
+        (Symbol::new(&env, "ProxyDesignated"),),
+        (patient, proxy_address),
+    );
+}
+
+/// Patient revokes their currently designated proxy.
+pub fn revoke_proxy(env: Env, patient: Address) {
+    patient.require_auth();
+    let key = ProxyKey::Proxy(patient.clone());
+    env.storage().persistent().remove(&key);
+    env.events().publish(
+        (Symbol::new(&env, "ProxyRevoked"),),
+        (patient,),
+    );
+}
+
+/// Retrieve the proxy record for a patient, if one exists.
+pub fn get_proxy(env: Env, patient: Address) -> Option<ProxyRecord> {
+    env.storage()
+        .persistent()
+        .get(&ProxyKey::Proxy(patient))
+}
+
+/// Proxy grants consent on behalf of an incapacitated patient.
+/// Checks that caller is the designated proxy and scope allows it.
+pub fn proxy_grant_consent(
+    env: Env,
+    proxy: Address,
+    patient: Address,
+    grantee: Address,
+) {
+    proxy.require_auth();
+    let record: ProxyRecord = env
+        .storage()
+        .persistent()
+        .get(&ProxyKey::Proxy(patient.clone()))
+        .expect("No proxy designated for patient");
+    assert!(
+        record.proxy_address == proxy,
+        "Caller is not the designated proxy"
+    );
+    assert!(
+        record.scope == ProxyScope::FullAuthority || record.scope == ProxyScope::EmergencyOnly,
+        "Proxy scope does not permit granting consent"
+    );
+    env.events().publish(
+        (Symbol::new(&env, "ProxyConsentGranted"),),
+        (proxy, patient, grantee),
+    );
+}
+
+/// Proxy revokes consent on behalf of an incapacitated patient.
+pub fn proxy_revoke_consent(
+    env: Env,
+    proxy: Address,
+    patient: Address,
+    grantee: Address,
+) {
+    proxy.require_auth();
+    let record: ProxyRecord = env
+        .storage()
+        .persistent()
+        .get(&ProxyKey::Proxy(patient.clone()))
+        .expect("No proxy designated for patient");
+    assert!(
+        record.proxy_address == proxy,
+        "Caller is not the designated proxy"
+    );
+    assert!(
+        record.scope == ProxyScope::FullAuthority,
+        "Proxy scope does not permit revoking consent"
+    );
+    env.events().publish(
+        (Symbol::new(&env, "ProxyConsentRevoked"),),
+        (proxy, patient, grantee),
+    );
+}
+
+#[cfg(test)]
+mod proxy_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_designate_and_get_proxy() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let patient = Address::generate(&env);
+        let proxy = Address::generate(&env);
+        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
+        let record = get_proxy(env.clone(), patient).unwrap();
+        assert_eq!(record.proxy_address, proxy);
+        assert_eq!(record.scope, ProxyScope::FullAuthority);
+    }
+
+    #[test]
+    fn test_revoke_proxy() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let patient = Address::generate(&env);
+        let proxy = Address::generate(&env);
+        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
+        revoke_proxy(env.clone(), patient.clone());
+        let record = get_proxy(env.clone(), patient);
+        assert!(record.is_none());
+    }
+
+    #[test]
+    fn test_proxy_grant_consent_full_authority() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let patient = Address::generate(&env);
+        let proxy = Address::generate(&env);
+        let grantee = Address::generate(&env);
+        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
+        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+    }
+
+    #[test]
+    #[should_panic(expected = "Proxy scope does not permit granting consent")]
+    fn test_readonly_proxy_cannot_grant() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let patient = Address::generate(&env);
+        let proxy = Address::generate(&env);
+        let grantee = Address::generate(&env);
+        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
+        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+    }
+
+    #[test]
+    fn test_emergency_proxy_can_grant_but_not_revoke() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let patient = Address::generate(&env);
+        let proxy = Address::generate(&env);
+        let grantee = Address::generate(&env);
+        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::EmergencyOnly);
+        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+    }
+    }

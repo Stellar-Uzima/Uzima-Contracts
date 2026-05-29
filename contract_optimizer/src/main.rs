@@ -1,4 +1,7 @@
 use clap::{Parser, Subcommand};
+use contract_optimizer::complexity::{
+    analyze_contract_complexity, load_trends, record_trend, save_report,
+};
 use contract_optimizer::metrics::AccuracyMetrics;
 use contract_optimizer::{analyze_contracts, generate_report, integrate_pr_review};
 use std::path::PathBuf;
@@ -36,6 +39,21 @@ enum Commands {
         /// Path to metrics file
         #[arg(short, long, default_value = "optimization_metrics.json")]
         metrics_file: PathBuf,
+    },
+    /// Score contract complexity (cyclomatic, data, external calls, state, permissions)
+    Complexity {
+        /// Path to the contracts directory
+        #[arg(short, long, default_value = "contracts")]
+        contracts_path: PathBuf,
+        /// JSON report output path
+        #[arg(short, long, default_value = "dashboard/data/complexity_report.json")]
+        output: PathBuf,
+        /// Trend history file
+        #[arg(long, default_value = "dashboard/data/complexity_trends.json")]
+        trends: PathBuf,
+        /// Skip writing trend snapshot
+        #[arg(long)]
+        no_trend: bool,
     },
     /// Integrate analysis into a GitHub PR review
     PrReview {
@@ -82,6 +100,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("Report written to {:?}", out);
             } else {
                 println!("{}", report);
+            }
+        },
+        Commands::Complexity {
+            contracts_path,
+            output,
+            trends,
+            no_trend,
+        } => {
+            let report = analyze_contract_complexity(&contracts_path)?;
+            save_report(&report, &output)?;
+            if !no_trend {
+                record_trend(&report, &trends)?;
+            }
+            println!(
+                "Complexity report: {} contracts, workspace average {}",
+                report.contracts.len(),
+                report.workspace_average
+            );
+            println!("Written to {}", output.display());
+            if !no_trend {
+                let store = load_trends(&trends)?;
+                println!("Trend snapshots: {}", store.snapshots.len());
             }
         },
         Commands::PrReview {

@@ -68,6 +68,25 @@ test_env.assert_event_emitted(&contract_id, test_env.topics(&["EVENT", "REC_NEW"
 
 See `tests/integration/framework_tests.rs` for a complete demonstration of the framework in action.
 
+## Shared Test Utilities
+
+The shared test utilities live under `tests/utils` and are exposed through `tests/utils/mod.rs`. These helpers are intended for contributors writing integrations and contract tests across the Uzima repo.
+
+- `tests/utils/contract_utils.rs` — `ContractSetup`, `assert_contract_error`, `assert_contract_success`, `to_soroban_string`, and timing helpers.
+- `tests/utils/integration_framework.rs` — `IntegrationTestEnv`, `MockService`, time control helpers, event assertions, and contract registration helpers.
+- `tests/utils/performance.rs` — `SorobanBenchmarkResult`, `SorobanBenchmarkSuite`, `PerformanceSuite`, `BenchmarkRunner`, and `LoadTest`.
+- `tests/utils/test_fixtures.rs` — `UserFixtureFactory`, `HealthcareTeam`, `ScenarioFixture`, and reusable fixture scenarios.
+
+### Using shared utilities
+
+```rust
+use crate::utils::{ContractSetup, IntegrationTestEnv, UserFixtureFactory};
+
+let setup = ContractSetup::default().with_mock_auth();
+let test_env = IntegrationTestEnv::default();
+let team = UserFixtureFactory::create_healthcare_team(&test_env.env);
+```
+
 ## Integration with CI
 
 The framework is integrated into the standard Rust test suite. You can run the integration tests using:
