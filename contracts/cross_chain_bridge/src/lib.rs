@@ -327,6 +327,7 @@ pub enum DataKey {
     CrossChainOp(BytesN<32>),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
+    AuthorizedRelayer(Address),
 }
 
 // Constants
@@ -2039,5 +2040,52 @@ impl CrossChainBridgeContract {
     /// Expose get_default_timeout for testing
     pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
         Self::get_default_timeout(&op_type)
+    }
+
+    /// Add an authorized relayer (admin only).
+    pub fn add_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuthorizedRelayer(relayer.clone()), &true);
+        env.events().publish(
+            (soroban_sdk::symbol_short!("bridge"), soroban_sdk::symbol_short!("rel_add")),
+            relayer,
+        );
+        Ok(())
+    }
+
+    /// Remove an authorized relayer (admin only).
+    pub fn remove_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AuthorizedRelayer(relayer.clone()));
+        env.events().publish(
+            (soroban_sdk::symbol_short!("bridge"), soroban_sdk::symbol_short!("rel_rm")),
+            relayer,
+        );
+        Ok(())
+    }
+
+    /// Require that the caller is an authorized relayer.
+    fn require_authorized_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
+        let is_authorized: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuthorizedRelayer(relayer.clone()))
+            .unwrap_or(false);
+        if !is_authorized {
+            return Err(Error::UnauthorizedRelayer);
+        }
+        Ok(())
     }
 }

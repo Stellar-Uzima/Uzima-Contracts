@@ -6,6 +6,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 pub enum Error {
     // --- Access Control (100–199) ---
     Unauthorized = 100,
+    UnauthorizedRelayer = 101,
     InsufficientConfirmations = 120,
     InsufficientOracleReports = 121,
     DuplicateOracleReport = 122,
