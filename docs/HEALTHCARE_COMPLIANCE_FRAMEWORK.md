@@ -383,3 +383,37 @@ The contract provides a comprehensive compliance dashboard with metrics includin
 - Breach response follow-up tracking
 
 This comprehensive framework ensures robust healthcare compliance while maintaining the flexibility and scalability required for modern healthcare applications.
+
+
+## HIPAA Minimum Necessary Standard — Consent Scope
+
+HIPAA requires access to be limited to the minimum data necessary for the stated purpose
+(45 CFR §164.514(d)).
+
+### ConsentScope Variants
+
+Access grants include a `Vec<ConsentScope>` field restricting which record categories are readable:
+
+| Variant | Description |
+|---|---|
+| `Diagnosis` | Diagnostic findings only |
+| `Medication` | Medication lists and prescriptions |
+| `Imaging` | Radiology and imaging results |
+| `Genomic` | Genetic/genomic data |
+| `MentalHealth` | Behavioral health records |
+| `AllRecords` | Unrestricted access (requires explicit grant) |
+
+### Access Control Flow
+
+1. Grantee calls `read_record(patient_id, record_id)`.
+2. Contract checks the record category is in the grantee's `ConsentScope`.
+3. Out-of-scope access returns `Err(ContractError::ScopeNotGranted)`.
+4. Every access attempt is recorded in the audit log with its scope.
+
+### Compliance Mapping
+
+| HIPAA Requirement | Implementation |
+|---|---|
+| Minimum Necessary | `ConsentScope` field on every consent grant |
+| Out-of-scope rejection | `ScopeNotGranted` error code |
+| Audit logging | Scope recorded in every access log entry |
