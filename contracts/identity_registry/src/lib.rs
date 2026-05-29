@@ -20,7 +20,35 @@ use uzima_sanitization::{
 // ============================================================================
 // Implements W3C DID Core Specification (https://www.w3.org/TR/did-core/)
 // DID Method: did:stellar:uzima:<network>:<address>
-// ============================================================================
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+}
 
 // === DID Document Structures (W3C Compliant) ===
 
@@ -232,6 +260,7 @@ pub enum DataKey {
     Owner,
     Initialized,
     NetworkId,
+    RbacContract,
 
     // Verifier Management
     Verifier(Address),
@@ -285,7 +314,7 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Initialize the contract with an owner and network identifier
-    pub fn initialize(env: Env, owner: Address, network_id: String) -> Result<(), Error> {
+    pub fn initialize(env: Env, owner: Address, network_id: String, rbac_contract: Address) -> Result<(), Error> {
         owner.require_auth();
 
         sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
@@ -295,6 +324,7 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
+        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::NetworkId, &network_id);
@@ -334,7 +364,7 @@ impl IdentityRegistryContract {
     }
 
     /// Legacy initialize for backward compatibility
-    pub fn initialize_legacy(env: Env, owner: Address) {
+    pub fn initialize_legacy(env: Env, owner: Address, rbac_contract: Address) {
         owner.require_auth();
 
         if env.storage().instance().has(&DataKey::Owner) {
@@ -342,6 +372,7 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
+        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
@@ -785,11 +816,7 @@ impl IdentityRegistryContract {
         issuer.require_auth();
 
         // Verify issuer is a registered verifier
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(issuer.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), issuer.clone());
 
         if !is_verifier {
             return Err(Error::NotVerifier);
@@ -1430,6 +1457,15 @@ impl IdentityRegistryContract {
 
         owner.require_auth();
 
+        let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        let has_admin = rbac_client.has_role(&owner, &RbacRole::Admin).unwrap_or(false);
+        if !has_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        rbac_client.assign_role(&verifier, &RbacRole::Staff).map_err(|_| Error::Unauthorized)?;
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &true);
@@ -1454,6 +1490,15 @@ impl IdentityRegistryContract {
             return Err(Error::CannotRemoveOwner);
         }
 
+        let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        let has_admin = rbac_client.has_role(&owner, &RbacRole::Admin).unwrap_or(false);
+        if !has_admin {
+            return Err(Error::Unauthorized);
+        }
+
+        rbac_client.remove_role(&verifier, &RbacRole::Staff).map_err(|_| Error::Unauthorized)?;
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &false);
@@ -1466,10 +1511,31 @@ impl IdentityRegistryContract {
 
     /// Check if an address is a verifier
     pub fn is_verifier(env: Env, account: Address) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Verifier(account))
-            .unwrap_or(false)
+        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+            Some(v) => v,
+            None => return false,
+        };
+        let client = RbacClient::new(&env, &rbac_addr);
+        match client.has_role(&account, &RbacRole::Staff) {
+            Ok(has_staff) => {
+                if has_staff {
+                    return true;
+                }
+                match client.has_role(&account, &RbacRole::Service) {
+                    Ok(has_service) => {
+                        if has_service {
+                            return true;
+                        }
+                        match client.has_role(&account, &RbacRole::Admin) {
+                            Ok(has_admin) => has_admin,
+                            Err(_) => false,
+                        }
+                    }
+                    Err(_) => false,
+                }
+            }
+            Err(_) => false,
+        }
     }
 
     /// Get the contract owner
@@ -1510,11 +1576,7 @@ impl IdentityRegistryContract {
     pub fn attest(env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32>) {
         verifier.require_auth();
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1558,11 +1620,7 @@ impl IdentityRegistryContract {
     ) {
         verifier.require_auth();
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1822,6 +1880,33 @@ impl IdentityRegistryContract {
 mod comprehensive_tests;
 
 #[cfg(test)]
+#[soroban_sdk::contract]
+pub struct MockRbac;
+
+#[cfg(test)]
+#[soroban_sdk::contractimpl]
+impl MockRbac {
+    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+
+    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger as _};
@@ -1831,12 +1916,15 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
         let network_id = String::from_str(&env, "testnet");
-        client.initialize(&owner, &network_id);
+        client.initialize(&owner, &network_id, &rbac_id);
 
         (env, client, owner)
     }
@@ -1845,11 +1933,14 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
-        client.initialize_legacy(&owner);
+        client.initialize_legacy(&owner, &rbac_id);
 
         (env, client, owner)
     }
@@ -1872,8 +1963,9 @@ mod tests {
         let (env, client, _owner) = create_contract();
         let owner2 = Address::generate(&env);
         let network_id = String::from_str(&env, "mainnet");
+        let rbac_id = env.register_contract(None, MockRbac);
 
-        client.initialize(&owner2, &network_id);
+        client.initialize(&owner2, &network_id, &rbac_id);
     }
 
     // ========================================================================
