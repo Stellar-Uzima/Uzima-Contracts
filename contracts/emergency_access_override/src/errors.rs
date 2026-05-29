@@ -10,6 +10,7 @@ pub enum Error {
     InvalidThreshold = 230,
     InvalidDuration = 231,
     RecordNotFound = 403,
+    RateLimitExceeded = 429,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {
@@ -19,5 +20,6 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::AlreadyInitialized => symbol_short!("ALREADY"),
         Error::InvalidThreshold | Error::InvalidDuration => symbol_short!("CHK_LEN"),
         Error::RecordNotFound => symbol_short!("CHK_ID"),
+        Error::RateLimitExceeded => symbol_short!("WAIT_CD"),
     }
 }

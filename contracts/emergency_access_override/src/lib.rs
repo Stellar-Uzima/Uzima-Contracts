@@ -32,9 +32,14 @@ pub enum DataKey {
     ApprovalThreshold,
     TrustedApprover(Address),          // approver -> bool (exists)
     EmergencyAccess(Address, Address), // (patient, provider)
+    Cooldown(Address),                 // approver -> last_used timestamp
+    CooldownPeriod,                    // configurable cooldown in seconds (default 86400 = 24h)
 }
 
 // ==================== Contract ====================
+
+/// Default cooldown period: 24 hours in seconds.
+const DEFAULT_COOLDOWN_SECONDS: u64 = 86_400;
 
 #[contract]
 pub struct EmergencyAccessOverride;
@@ -60,6 +65,9 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::ApprovalThreshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::CooldownPeriod, &DEFAULT_COOLDOWN_SECONDS);
 
         for approver in approvers.iter() {
             env.storage()
@@ -95,6 +103,30 @@ impl EmergencyAccessOverride {
         }
 
         let now = env.ledger().timestamp();
+
+        // Rate limiting: enforce per-caller cooldown
+        let cooldown_period: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CooldownPeriod)
+            .unwrap_or(DEFAULT_COOLDOWN_SECONDS);
+
+        let last_used: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Cooldown(approver.clone()))
+            .unwrap_or(0);
+
+        let next_allowed_at = last_used.saturating_add(cooldown_period);
+        if now < next_allowed_at {
+            events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
+            return Err(Error::RateLimitExceeded);
+        }
+
+        // Record this invocation timestamp
+        env.storage()
+            .persistent()
+            .set(&DataKey::Cooldown(approver.clone()), &now);
 
         let key = DataKey::EmergencyAccess(patient.clone(), provider.clone());
         let mut record: EmergencyAccessRecord =
@@ -153,6 +185,40 @@ impl EmergencyAccessOverride {
         env.storage().persistent().set(&key, &record);
         events::publish_emergency_access_approved(&env, &patient, &provider, &approver, now);
         Ok(false)
+    }
+
+    /// Update the cooldown period. Only callable by admin (governance-gated).
+    pub fn update_cooldown_period(
+        env: Env,
+        admin: Address,
+        new_period_seconds: u64,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if stored_admin != admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CooldownPeriod, &new_period_seconds);
+
+        events::publish_cooldown_updated(&env, &admin, new_period_seconds);
+        Ok(())
+    }
+
+    /// Get the current cooldown period in seconds.
+    pub fn get_cooldown_period(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CooldownPeriod)
+            .unwrap_or(DEFAULT_COOLDOWN_SECONDS)
     }
 
     pub fn check_emergency_access(
