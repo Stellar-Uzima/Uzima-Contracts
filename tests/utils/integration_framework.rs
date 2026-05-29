@@ -59,9 +59,9 @@ impl IntegrationTestEnv {
     /// Assert that a specific event was emitted
     pub fn assert_event_emitted(&self, contract_id: &Address, topics: Vec<Val>, data: Val) {
         let events = self.env.events().all();
-        let found = events
-            .iter()
-            .any(|(id, t, d)| id == *contract_id && t == topics && d.get_payload() == data.get_payload());
+        let found = events.iter().any(|(id, t, d)| {
+            id == *contract_id && t == topics && d.get_payload() == data.get_payload()
+        });
         assert!(
             found,
             "Expected event not found for contract {:?}",
@@ -134,8 +134,7 @@ impl IntegrationTestEnv {
         let decimals = 7;
         let supply_cap = 100_000_000_000_000_i128; // 10M with 7 decimals
 
-        client
-            .initialize(admin, &name, &symbol, &decimals, &supply_cap);
+        client.initialize(admin, &name, &symbol, &decimals, &supply_cap);
 
         (contract_id, client)
     }

@@ -213,7 +213,12 @@ impl AccessLogGenerator {
     }
 
     /// Generate access log entry
-    pub fn generate_access_log(&mut self, env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
+    pub fn generate_access_log(
+        &mut self,
+        env: &Env,
+        accessor: &Address,
+        resource_id: u64,
+    ) -> AccessLog {
         self.counter += 1;
         AccessLog {
             log_id: self.counter as u64,
