@@ -2,7 +2,10 @@
 
 mod common;
 
-use common::setup_uzima;
+// std
+use std::time::Instant;
+
+// external crates
 use credential_registry::{CredentialRegistryContract, CredentialRegistryContractClient};
 use medical_records::{Error, ZkAuditRecord, ZkPublicInputs};
 use soroban_sdk::xdr::ToXdr;
@@ -11,8 +14,10 @@ use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
     Address, Bytes, BytesN, Env, String, Symbol, TryFromVal,
 };
-use std::time::Instant;
 use zk_verifier::{ZkVerifierContract, ZkVerifierContractClient};
+
+// test helpers
+use common::setup_uzima;
 
 fn append_bytes32(env: &Env, payload: &mut Bytes, value: &BytesN<32>) {
     payload.append(&Bytes::from_slice(env, &value.to_array()));
