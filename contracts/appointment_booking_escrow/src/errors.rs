@@ -16,6 +16,7 @@ pub enum Error {
     AppointmentNotFound = 410,
     AppointmentAlreadyConfirmed = 411,
     AppointmentAlreadyRefunded = 412,
+    AppointmentNoShow = 413,
     InsufficientFunds = 500,
     TokenTransferFailed = 501,
     DoubleWithdrawal = 505,

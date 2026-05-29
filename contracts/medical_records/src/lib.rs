@@ -516,6 +516,14 @@ pub struct BatchResult {
     pub failures: Vec<FailureInfo>,
 }
 
+/// Result type for cursor-based paginated record listing.
+#[derive(Clone)]
+#[contracttype]
+pub struct ListRecordsResult {
+    pub records: Vec<MedicalRecord>,
+    pub next_cursor: Option<u64>,
+}
+
 // ==================== Rate Limiting Types ====================
 
 /// Configures operation-specific rate limits per role.
@@ -1990,6 +1998,63 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .get(&DataKey::PatientRecord(patient, index))
+    }
+
+    /// List medical records using cursor-based pagination.
+    /// Returns up to `limit` records starting after the given cursor.
+    /// `cursor` is the last record_id from a previous page (None for first page).
+    /// `limit` must be between 1 and 100.
+    pub fn list_records(
+        env: Env,
+        caller: Address,
+        cursor: Option<u64>,
+        limit: u32,
+    ) -> Result<ListRecordsResult, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if limit == 0 || limit > 100 {
+            return Err(Error::InvalidPagination);
+        }
+
+        let start_id = cursor.map(|c| c.saturating_add(1)).unwrap_or(0);
+        let max_id = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+
+        let mut records = Vec::new(&env);
+        let mut last_id = start_id;
+        let limit_u64 = u64::from(limit);
+        let mut collected: u64 = 0;
+
+        let mut current = start_id;
+        while current < max_id && collected < limit_u64 {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, MedicalRecord>(&DataKey::Record(current))
+            {
+                if Self::can_view_record(&env, &caller, &record, current) {
+                    records.push_back(record);
+                    last_id = current;
+                    collected = collected.saturating_add(1);
+                }
+            }
+            current = current.saturating_add(1);
+        }
+
+        let next_cursor = if current < max_id && collected == limit_u64 {
+            Some(last_id)
+        } else {
+            None
+        };
+
+        Ok(ListRecordsResult {
+            records,
+            next_cursor,
+        })
     }
 
     pub fn set_zk_verifier_contract(
