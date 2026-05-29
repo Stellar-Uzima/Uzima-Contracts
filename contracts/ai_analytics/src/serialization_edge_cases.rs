@@ -1,5 +1,6 @@
 #[cfg(all(test, feature = "testutils"))]
 use crate::{
+    serialization_utils::SerializationUtils,
     types::{FederatedRound, ModelMetadata},
     AiAnalyticsContract, AiAnalyticsContractClient,
 };
@@ -189,6 +190,39 @@ mod tests {
             0,
             "ModelMetadata edge case: description should be empty"
         );
+    }
+
+    #[test]
+    fn test_serialization_logging_paths() {
+        let env = Env::default();
+
+        let empty_vec: Vec<u64> = Vec::new(&env);
+        assert!(SerializationUtils::safe_serialize_vec(&env, &empty_vec).is_ok());
+
+        let empty_string = String::from_str(&env, "");
+        assert!(SerializationUtils::safe_serialize_string(&env, &empty_string).is_ok());
+
+        let edge_case_round = FederatedRound {
+            id: 1,
+            base_model_id: BytesN::from_array(&env, &[0u8; 32]),
+            min_participants: 0,
+            dp_epsilon: 0,
+            started_at: 0,
+            finalized_at: 0,
+            total_updates: 0,
+            is_finalized: false,
+        };
+        assert!(edge_case_round.safe_serialize(&env).is_ok());
+
+        let edge_case_model = ModelMetadata {
+            model_id: BytesN::from_array(&env, &[0u8; 32]),
+            round_id: 0,
+            description: String::from_str(&env, ""),
+            metrics_ref: String::from_str(&env, ""),
+            fairness_report_ref: String::from_str(&env, ""),
+            created_at: 0,
+        };
+        assert!(edge_case_model.safe_serialize(&env).is_ok());
     }
 
     #[test]

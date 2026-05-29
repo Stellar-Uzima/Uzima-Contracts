@@ -54,7 +54,7 @@ impl SerializationUtils {
         // Additional validation for empty collections
         if vec.is_empty() {
             // Empty collections are valid, but we log this for debugging
-            soroban_sdk::log!(env, "Serializing empty collection");
+            soroban_sdk::log!(&env, "Serializing empty collection");
         }
 
         Ok(())
@@ -65,7 +65,7 @@ impl SerializationUtils {
         Self::validate_map_size(map)?;
 
         if map.is_empty() {
-            soroban_sdk::log!(env, "Serializing empty map");
+            soroban_sdk::log!(&env, "Serializing empty map");
         }
 
         Ok(())
@@ -76,7 +76,7 @@ impl SerializationUtils {
         Self::validate_string_length(string)?;
 
         if string.is_empty() {
-            soroban_sdk::log!(env, "Serializing empty string");
+            soroban_sdk::log!(&env, "Serializing empty string");
         }
 
         Ok(())
@@ -89,7 +89,7 @@ impl SerializationUtils {
     ) -> Result<(), SerializationError> {
         // In Soroban, we can't directly index or convert BytesN arrays
         // We'll use a simple approach - just log that we're validating BytesN
-        soroban_sdk::log!(env, "Validating BytesN");
+        soroban_sdk::log!(&env, "Validating BytesN");
 
         // For now, we'll accept all BytesN values as valid
         // In a real implementation, you might want to add specific checks
@@ -100,7 +100,7 @@ impl SerializationUtils {
     /// Validates Address for edge cases
     pub fn validate_address(env: &Env, _address: &Address) -> Result<(), SerializationError> {
         // In Soroban, all addresses are valid, but we can add logging for edge cases
-        soroban_sdk::log!(env, "Serializing address");
+        soroban_sdk::log!(&env, "Serializing address");
         Ok(())
     }
 }
