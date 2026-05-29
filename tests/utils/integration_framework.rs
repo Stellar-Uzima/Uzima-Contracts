@@ -1,9 +1,10 @@
 #![allow(clippy::new_without_default)]
 
+use crate::utils::generate_test_address;
 use crate::utils::{HealthcareTeam, UserFixtureFactory};
 /// Integration testing framework for Uzima Contracts
 use soroban_sdk::{
-    testutils::{Address as _, Events, Ledger},
+    testutils::{Events, Ledger},
     Address, Env, IntoVal, String as SorobanString, Val, Vec,
 };
 
@@ -83,7 +84,7 @@ impl IntegrationTestEnv {
 
     /// Generate a new random address in the test environment
     pub fn generate_address(&self) -> Address {
-        Address::generate(&self.env)
+        generate_test_address(&self.env)
     }
 
     /// Utility to convert a value into a Soroban Val
