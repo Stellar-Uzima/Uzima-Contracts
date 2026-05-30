@@ -84,6 +84,36 @@ pub enum Role {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 #[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
 pub enum Permission {
     // Admin / Management
     ManageUsers = 1,
@@ -420,6 +450,7 @@ pub enum DataKey {
     Initialized,
     Paused,
     ContractVersion,
+    RbacContract,
 
     // Users / DID
     Users,
@@ -858,7 +889,7 @@ impl MedicalRecordsContract {
     }
 
     /// Initialize the contract, setting the admin and default storage values.
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address, rbac_contract: Address) -> bool {
         admin.require_auth();
 
         if env.storage().instance().has(&UPGRADE_ADMIN) {
@@ -875,6 +906,7 @@ impl MedicalRecordsContract {
 
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
+        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
 
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
@@ -1010,6 +1042,7 @@ impl MedicalRecordsContract {
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
+            Self::sync_rbac_role(&env, &user, Some(previous_role), role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -1045,6 +1078,7 @@ impl MedicalRecordsContract {
                 );
             }
         } else {
+            Self::sync_rbac_role(&env, &user, None, role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -4484,25 +4518,40 @@ impl MedicalRecordsContract {
             .unwrap_or(Map::new(env))
     }
 
-    fn is_admin(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Admin) && profile.active,
-            None => false,
+    fn check_rbac_role(env: &Env, address: &Address, role: RbacRole) -> bool {
+        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+            Some(v) => v,
+            None => return false, // fail closed
+        };
+        let client = RbacClient::new(env, &rbac_addr);
+        match client.has_role(address, &role) {
+            Ok(has) => has,
+            Err(_) => false, // fail closed
         }
+    }
+
+    fn is_admin(env: &Env, address: &Address) -> bool {
+        let is_active = match Self::read_users(env).get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
+        };
+        is_active && Self::check_rbac_role(env, address, RbacRole::Admin)
     }
 
     fn is_active_doctor(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Doctor) && profile.active,
-            None => false,
-        }
+        let is_active = match Self::read_users(env).get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
+        };
+        is_active && Self::check_rbac_role(env, address, RbacRole::Doctor)
     }
 
     fn is_active_patient(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Patient) && profile.active,
-            None => false,
-        }
+        let is_active = match Self::read_users(env).get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
+        };
+        is_active && Self::check_rbac_role(env, address, RbacRole::Patient)
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
@@ -5596,6 +5645,32 @@ impl MedicalRecordsContract {
 
         Ok(result)
     }
+
+    fn sync_rbac_role(env: &Env, address: &Address, previous_role: Option<Role>, new_role: Role) -> Result<(), Error> {
+        let r_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
+        let client = RbacClient::new(env, &r_addr);
+        if let Some(prev) = previous_role {
+            let prev_rbac = match prev {
+                Role::Admin => Some(RbacRole::Admin),
+                Role::Doctor => Some(RbacRole::Doctor),
+                Role::Patient => Some(RbacRole::Patient),
+                _ => None,
+            };
+            if let Some(pr) = prev_rbac {
+                client.remove_role(address, &pr).map_err(|_| Error::Unauthorized)?;
+            }
+        }
+        let next_rbac = match new_role {
+            Role::Admin => Some(RbacRole::Admin),
+            Role::Doctor => Some(RbacRole::Doctor),
+            Role::Patient => Some(RbacRole::Patient),
+            _ => None,
+        };
+        if let Some(nr) = next_rbac {
+            client.assign_role(address, &nr).map_err(|_| Error::Unauthorized)?;
+        }
+        Ok(())
+    }
 }
 
 impl upgradeability::migration::Migratable for MedicalRecordsContract {
@@ -5647,4 +5722,31 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
         })
     }
 
+}
+
+#[cfg(any(test, feature = "testutils"))]
+#[soroban_sdk::contract]
+pub struct MockRbac;
+
+#[cfg(any(test, feature = "testutils"))]
+#[soroban_sdk::contractimpl]
+impl MockRbac {
+    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+
+    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
 }

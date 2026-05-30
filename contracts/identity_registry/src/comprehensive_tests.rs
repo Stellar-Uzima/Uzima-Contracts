@@ -7,11 +7,14 @@ fn create_test_contract() -> (Env, IdentityRegistryContractClient<'static>, Addr
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().set_timestamp(10_000);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
     let contract_id = env.register_contract(None, IdentityRegistryContract);
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
     let owner = Address::generate(&env);
+    let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
     let network_id = String::from_str(&env, "testnet");
-    client.initialize(&owner, &network_id);
+    client.initialize(&owner, &network_id, &rbac_id);
     (env, client, owner)
 }
 
@@ -34,12 +37,15 @@ fn create_test_did(
 fn test_initialize_with_different_networks() {
     let env = Env::default();
     env.mock_all_auths();
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
     let contract_id = env.register_contract(None, IdentityRegistryContract);
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
     let owner = Address::generate(&env);
+    let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
     let network_id = String::from_str(&env, "mainnet");
-    client.initialize(&owner, &network_id);
+    client.initialize(&owner, &network_id, &rbac_id);
 
     assert!(client.is_verifier(&owner));
 }
