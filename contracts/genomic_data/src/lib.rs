@@ -129,6 +129,46 @@ pub struct ConsentEntry {
     pub active: bool,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum GenomicConsentCategory {
+    GeneralResearch,
+    DiseaseSpecific(String),
+    CommercialResearch,
+    InternationalTransfer,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ResearchConsentEntry {
+    pub record_id: u64,
+    pub patient: Address,
+    pub grantee: Address,
+    pub category: GenomicConsentCategory,
+    pub expires_at: u64,
+    pub active: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GenomicConsentAudit {
+    pub record_id: u64,
+    pub requester: Address,
+    pub category: GenomicConsentCategory,
+    pub granted: bool,
+    pub timestamp: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ResearchWithdrawalNotification {
+    pub record_id: u64,
+    pub category: GenomicConsentCategory,
+    pub notified_project: Address,
+    pub revoked_grantee: Address,
+    pub timestamp: u64,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum ListingStatus {
@@ -207,6 +247,8 @@ pub enum DataKey {
     RecordHeader(u64),
     PatientRecords(Address),
     Consent(u64, Address),
+    ResearchConsent(u64, Address, GenomicConsentCategory),
+    ActiveResearchProjects(u64, GenomicConsentCategory),
     AssocCount(u64),
     Assoc(u64, u64),
     DrugRespCount(u64),
