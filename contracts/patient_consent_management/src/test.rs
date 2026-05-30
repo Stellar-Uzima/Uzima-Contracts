@@ -3,7 +3,7 @@ mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
-        Address, Env,
+        symbol_short, Address, Env, Symbol,
     };
 
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
