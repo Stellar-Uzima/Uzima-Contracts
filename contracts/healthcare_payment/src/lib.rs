@@ -8,14 +8,15 @@ use soroban_sdk::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[contracttype]
+#[contracttype>
 pub enum ClaimStatus {
     Submitted = 0,
     Verified = 1,
     Approved = 2,
-    Rejected = 3,
-    Paid = 4,
-    Disputed = 5,
+    PendingAMLReview = 3,
+    Rejected = 4,
+    Paid = 5,
+    Disputed = 6,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -210,6 +211,7 @@ pub struct Config {
     pub escrow_contract: Address,
     pub treasury: Address,
     pub token: Address,
+    pub aml_contract: Address,
 }
 
 #[derive(Clone)]
@@ -376,6 +378,7 @@ impl HealthcarePayment {
         escrow_contract: Address,
         treasury: Address,
         token: Address,
+        aml_contract: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -387,6 +390,7 @@ impl HealthcarePayment {
             escrow_contract,
             treasury,
             token,
+            aml_contract,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
