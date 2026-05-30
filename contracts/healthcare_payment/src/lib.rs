@@ -3,8 +3,8 @@
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, Env,
-    IntoVal, String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, BytesN,
+    Env, IntoVal, String, Symbol, Vec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -202,6 +202,29 @@ pub struct PatientResponsibility {
     pub last_updated: u64,
 }
 
+/// ZK proof of insurance coverage submitted by a patient.
+/// Allows patients to prove coverage without revealing sensitive policy details.
+#[derive(Clone)]
+#[contracttype]
+pub struct CoverageProof {
+    pub policy_id: u64,
+    pub patient: Address,
+    /// Hash of the ZK proof data (reference to zkp_registry proof_id)
+    pub proof_hash: BytesN<32>,
+    /// Circuit version used for proof generation
+    pub circuit_version: u32,
+    /// Whether the proof has been verified
+    pub is_verified: bool,
+    /// Coverage basis points proven via ZK (0-10000)
+    pub proven_coverage_bps: u32,
+    /// When the proof was submitted
+    pub submitted_at: u64,
+    /// When the proof expires
+    pub expires_at: u64,
+    /// Reference to the zkp_registry proof identifier
+    pub registry_proof_id: Option<BytesN<32>>,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct Config {
@@ -239,6 +262,8 @@ pub enum DataKey {
     CircuitBreakerState,
     AuthorizedPausers,
     Locked,
+    CoverageProof(u64, Address),
+    CoverageProofCount,
 }
 
 #[contract]
@@ -1319,6 +1344,137 @@ impl HealthcarePayment {
             .persistent()
             .get(&DataKey::Eob(claim_id))
             .ok_or(Error::EobNotFound)
+    }
+
+    // =========================================================================
+    // ZK Proof of Insurance Coverage
+    // =========================================================================
+
+    /// Submit a zero-knowledge proof of insurance coverage.
+    /// The patient proves they have active coverage without revealing
+    /// sensitive policy details on-chain.
+    pub fn submit_coverage_proof(
+        env: Env,
+        patient: Address,
+        policy_id: u64,
+        proof_hash: BytesN<32>,
+        circuit_version: u32,
+        proven_coverage_bps: u32,
+        expires_at: u64,
+        registry_proof_id: Option<BytesN<32>>,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_operational(&env)?;
+
+        if proven_coverage_bps > 10_000 {
+            return Err(Error::InvalidCoverage);
+        }
+        if expires_at <= env.ledger().timestamp() {
+            return Err(Error::InvalidCoverage);
+        }
+
+        let policy = Self::get_policy(&env, policy_id)?;
+        if policy.patient != patient {
+            return Err(Error::Unauthorized);
+        }
+
+        let proof = CoverageProof {
+            policy_id,
+            patient: patient.clone(),
+            proof_hash,
+            circuit_version,
+            is_verified: false,
+            proven_coverage_bps,
+            submitted_at: env.ledger().timestamp(),
+            expires_at,
+            registry_proof_id,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CoverageProof(policy_id, patient.clone()), &proof);
+
+        let proof_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CoverageProofCount)
+            .unwrap_or(0)
+            .saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::CoverageProofCount, &proof_count);
+
+        env.events().publish(
+            (symbol_short!("COV_PROOF"),),
+            (policy_id, patient, proven_coverage_bps),
+        );
+
+        Ok(())
+    }
+
+    /// Verify insurance coverage using a previously submitted ZK proof.
+    /// Returns the proven coverage basis points if the proof is valid.
+    pub fn verify_coverage_with_zk(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_operational(&env)?;
+
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient.clone()))
+            .ok_or(Error::CoveragePolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        if now > proof.expires_at {
+            return Err(Error::InvalidCoverage);
+        }
+
+        // Mark as verified for audit trail
+        let mut updated = proof.clone();
+        updated.is_verified = true;
+        env.storage()
+            .persistent()
+            .set(
+                &DataKey::CoverageProof(policy_id, patient.clone()),
+                &updated,
+            );
+
+        env.events().publish(
+            (symbol_short!("COV_VER"),),
+            (policy_id, caller, proof.proven_coverage_bps),
+        );
+
+        Ok(proof.proven_coverage_bps)
+    }
+
+    /// Get the ZK coverage proof for a patient's policy.
+    /// Get the ZK coverage proof for a patient's policy.
+    pub fn get_coverage_proof(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<CoverageProof, Error> {
+        caller.require_auth();
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient))
+            .ok_or(Error::EligibilityCheckNotFound)?;
+        Ok(proof)
+    }
+
+    /// Get the total number of coverage proofs submitted.
+    pub fn get_coverage_proof_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CoverageProofCount)
+            .unwrap_or(0)
     }
 
     pub fn get_patient_responsibility(env: Env, patient: Address) -> Option<PatientResponsibility> {
