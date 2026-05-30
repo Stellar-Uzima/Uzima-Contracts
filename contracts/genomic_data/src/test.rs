@@ -104,16 +104,23 @@ fn test_research_consent_category_access_and_withdrawal_notification() {
     );
 
     let general_category = GenomicConsentCategory::GeneralResearch;
+    let disease_category = GenomicConsentCategory::DiseaseSpecific(
+        String::from_str(&env, "BRCA1"),
+    );
     let commercial_category = GenomicConsentCategory::CommercialResearch;
     let international_category = GenomicConsentCategory::InternationalTransfer;
 
     assert!(client.grant_research_consent(&patient, &rid, &researcher, &general_category, &0u64));
+    assert!(client.grant_research_consent(&patient, &rid, &researcher, &disease_category, &0u64));
     assert!(client.grant_research_consent(&patient, &rid, &researcher, &commercial_category, &0u64));
 
     let before_events = env.events().all().len();
     let header_general = client.get_record_header_for_research(&researcher, &rid, &general_category);
     assert!(header_general.is_some());
     assert_eq!(env.events().all().len(), before_events + 1);
+
+    let header_disease = client.get_record_header_for_research(&researcher, &rid, &disease_category);
+    assert!(header_disease.is_some());
 
     let header_commercial = client.get_record_header_for_research(&researcher, &rid, &commercial_category);
     assert!(header_commercial.is_some());
