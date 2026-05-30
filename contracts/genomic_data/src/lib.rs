@@ -494,6 +494,207 @@ impl GenomicDataContract {
         true
     }
 
+    pub fn grant_research_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+        category: GenomicConsentCategory,
+        expires_at: u64,
+    ) -> bool {
+        patient.require_auth();
+        let header_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        if let Some(header) = header_opt.as_ref() {
+            if header.patient != patient {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        env.storage().persistent().set(
+            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+            &ResearchConsentEntry {
+                record_id,
+                patient: patient.clone(),
+                grantee: grantee.clone(),
+                category: category.clone(),
+                expires_at,
+                active: true,
+            },
+        );
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "grant_research_consent",
+            Some(&patient),
+            Some(record_id),
+            "research consent granted",
+        );
+        true
+    }
+
+    pub fn revoke_research_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+        category: GenomicConsentCategory,
+    ) -> bool {
+        patient.require_auth();
+        let ce_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ResearchConsentEntry>(
+                &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+            );
+        let mut entry = if let Some(entry) = ce_opt {
+            if entry.patient != patient {
+                return false;
+            }
+            entry
+        } else {
+            return false;
+        };
+        entry.active = false;
+        env.storage().persistent().set(
+            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+            &entry,
+        );
+        Self::notify_research_withdrawal(&env, record_id, &category, &grantee);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "revoke_research_consent",
+            Some(&patient),
+            Some(record_id),
+            "research consent revoked",
+        );
+        true
+    }
+
+    pub fn get_record_header_for_research(
+        env: Env,
+        requester: Address,
+        record_id: u64,
+        category: GenomicConsentCategory,
+    ) -> Option<GenomicRecordHeader> {
+        requester.require_auth();
+        let header = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        let header_ref = header.as_ref()?;
+        if requester == header_ref.patient
+            || requester == header_ref.uploader
+            || Self::is_research_consent_granted(&env, record_id, &requester, &category)
+        {
+            Self::emit_research_audit(&env, record_id, &requester, &category, true);
+            Self::track_active_research_project(&env, record_id, requester.clone(), &category);
+            header
+        } else {
+            Self::emit_research_audit(&env, record_id, &requester, &category, false);
+            None
+        }
+    }
+
+    fn emit_research_audit(
+        env: &Env,
+        record_id: u64,
+        requester: &Address,
+        category: &GenomicConsentCategory,
+        granted: bool,
+    ) {
+        let audit = GenomicConsentAudit {
+            record_id,
+            requester: requester.clone(),
+            category: category.clone(),
+            granted,
+            timestamp: env.ledger().timestamp(),
+        };
+        env.events().publish(("GENOMIC_CONSENT", symbol_short!("AUDIT")), audit);
+    }
+
+    fn track_active_research_project(
+        env: &Env,
+        record_id: u64,
+        project: Address,
+        category: &GenomicConsentCategory,
+    ) {
+        let mut projects: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(record_id, category.clone()))
+            .unwrap_or(Vec::new(&env));
+        let mut already_present = false;
+        let len = projects.len();
+        let mut i = 0;
+        while i < len {
+            if projects.get(i) == Some(&project) {
+                already_present = true;
+                break;
+            }
+            i += 1;
+        }
+        if !already_present {
+            projects.push_back(project.clone());
+            env.storage().persistent().set(
+                &DataKey::ActiveResearchProjects(record_id, category.clone()),
+                &projects,
+            );
+        }
+    }
+
+    fn notify_research_withdrawal(
+        env: &Env,
+        record_id: u64,
+        category: &GenomicConsentCategory,
+        revoked_grantee: &Address,
+    ) {
+        let projects: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(record_id, category.clone()))
+            .unwrap_or(Vec::new(&env));
+        let len = projects.len();
+        let mut i = 0;
+        while i < len {
+            if let Some(project) = projects.get(i) {
+                let notification = ResearchWithdrawalNotification {
+                    record_id,
+                    category: category.clone(),
+                    notified_project: project.clone(),
+                    revoked_grantee: revoked_grantee.clone(),
+                    timestamp: env.ledger().timestamp(),
+                };
+                env.events().publish(
+                    ("GENOMIC_CONSENT", symbol_short!("WITHDRAWAL")),
+                    notification,
+                );
+            }
+            i += 1;
+        }
+    }
+
+    fn is_research_consent_granted(
+        env: &Env,
+        record_id: u64,
+        grantee: &Address,
+        category: &GenomicConsentCategory,
+    ) -> bool {
+        let ce = env.storage().persistent().get::<DataKey, ResearchConsentEntry>(
+            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+        );
+        if let Some(c) = ce {
+            if c.active && (c.expires_at == 0 || env.ledger().timestamp() <= c.expires_at) {
+                return true;
+            }
+        }
+        false
+    }
+
     pub fn verify_and_grant_access(
         env: Env,
         patient: Address,
