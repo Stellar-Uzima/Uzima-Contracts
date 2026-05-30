@@ -3,7 +3,7 @@ mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
-        Address, Env,
+        symbol_short, Address, Env, Symbol,
     };
 
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
@@ -50,6 +50,61 @@ mod tests {
         client.grant_consent(&patient, &provider);
         let result = client.check_consent(&patient, &provider);
         assert!(result);
+    }
+
+    #[test]
+    fn test_check_consent_after_expiry() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let expires_at = env.ledger().timestamp().saturating_add(10);
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+        assert!(client.check_consent(&patient, &provider));
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at.saturating_add(1);
+        });
+
+        let result = client.check_consent(&patient, &provider);
+        assert!(!result);
+
+        let expired_event_count = env
+            .events()
+            .all()
+            .iter()
+            .filter(|e| {
+                e.1.get(0)
+                    .and_then(|topic| Symbol::try_from_val(&env, topic).ok())
+                    == Some(symbol_short!("CONSENT"))
+                    && e.1.get(1)
+                        .and_then(|sub| Symbol::try_from_val(&env, sub).ok())
+                        == Some(symbol_short!("EXPIRED"))
+            })
+            .count();
+        assert!(expired_event_count >= 1);
+    }
+
+    #[test]
+    fn test_cleanup_expired_consents() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let expires_at = env.ledger().timestamp().saturating_add(10);
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at.saturating_add(1);
+        });
+
+        let cleaned = client.cleanup_expired_consents(&patient);
+        assert_eq!(cleaned, 1);
+        assert!(!client.check_consent(&patient, &provider));
+
+        let audit = client.verify_consent_with_audit(&patient, &provider);
+        assert!(!audit.0);
+        assert!(audit.2 > 0);
     }
 
     #[test]

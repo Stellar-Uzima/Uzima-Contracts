@@ -11,6 +11,7 @@ pub enum Error {
     AlreadyInitialized = 301,
     ConsentNotFound = 406,
     ConsentAlreadyExists = 460,
+    InvalidExpiry = 470,
 }
 
 #[allow(dead_code)]
