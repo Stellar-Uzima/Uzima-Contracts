@@ -1,0 +1,29 @@
+name: Load Tests (Scheduled)
+
+on:
+  schedule:
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+
+jobs:
+  load-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run load tests
+        run: cargo test -p load_testing --release -- --nocapture
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-results
+          path: reports/
+          if-no-files-found: ignore

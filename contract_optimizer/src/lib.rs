@@ -3,6 +3,7 @@ use std::path::Path;
 use syn::{visit::Visit, Expr, ExprCall, ItemFn};
 use walkdir::WalkDir;
 
+pub mod complexity;
 pub mod metrics;
 
 #[derive(Debug, Serialize, Deserialize)]

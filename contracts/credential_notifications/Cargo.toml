@@ -15,6 +15,10 @@ soroban-sdk = { workspace = true }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true

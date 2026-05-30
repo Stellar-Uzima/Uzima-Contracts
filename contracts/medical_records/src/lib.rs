@@ -5646,4 +5646,5 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
             report,
         })
     }
+
 }

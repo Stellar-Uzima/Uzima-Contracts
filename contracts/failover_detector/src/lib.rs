@@ -1,6 +1,6 @@
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, map, Map};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
 
 // ============================================================================
 // Data Types & Constants
@@ -8,13 +8,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 const ROLE_ADMIN: u32 = 1;
 const ROLE_OPERATOR: u32 = 2;
-const ROLE_ANALYZER: u32 = 4;
-const ALL_ROLES: u32 = 7;
+const ALL_ROLES: u32 = 3;
 
-const HEARTBEAT_TIMEOUT_MS: u64 = 30000; // 30 seconds
 const FAILURE_THRESHOLD: u32 = 3; // Trigger after 3 consecutive failures
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum FailoverReason {
     NodeFailure = 0,
@@ -25,7 +23,7 @@ pub enum FailoverReason {
     ManualTrigger = 5,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum FailoverState {
     Pending = 0,
@@ -152,7 +150,7 @@ impl FailoverDetector {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())
@@ -185,9 +183,9 @@ impl FailoverDetector {
             .unwrap_or_else(|| Vec::new(&env));
 
         let mut node_metric: Option<NodeFailureMetric> = None;
-        let mut found_index: Option<usize> = None;
+        let mut found_index: Option<u32> = None;
 
-        for i in 0..metrics.len() {
+        for i in 0u32..metrics.len() {
             if metrics.get_unchecked(i).node_id == node_id {
                 node_metric = Some(metrics.get_unchecked(i).clone());
                 found_index = Some(i);
@@ -195,7 +193,7 @@ impl FailoverDetector {
             }
         }
 
-        let mut current_failures = if let Some(metric) = &node_metric {
+        let current_failures = if let Some(metric) = &node_metric {
             metric.consecutive_failures + 1
         } else {
             1
@@ -203,26 +201,20 @@ impl FailoverDetector {
 
         let is_critical = current_failures >= FAILURE_THRESHOLD;
 
-        // Update metrics
+        let (total_failures, recovery_attempts, last_successful_recovery) =
+            if let Some(metric) = &node_metric {
+                (metric.total_failures + 1, metric.recovery_attempts, metric.last_successful_recovery)
+            } else {
+                (1, 0, 0)
+            };
+
         let updated_metric = NodeFailureMetric {
             node_id,
             consecutive_failures: current_failures,
             last_failure_at: env.ledger().timestamp(),
-            total_failures: if let Some(metric) = node_metric.clone() {
-                metric.total_failures + 1
-            } else {
-                1
-            },
-            recovery_attempts: if let Some(metric) = node_metric {
-                metric.recovery_attempts
-            } else {
-                0
-            },
-            last_successful_recovery: if let Some(metric) = node_metric {
-                metric.last_successful_recovery
-            } else {
-                0
-            },
+            total_failures,
+            recovery_attempts,
+            last_successful_recovery,
         };
 
         if let Some(idx) = found_index {

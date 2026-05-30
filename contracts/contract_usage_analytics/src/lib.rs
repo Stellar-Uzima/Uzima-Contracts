@@ -1,7 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
     Vec,
 };
 
@@ -58,6 +58,7 @@ pub enum Error {
 #[contract]
 pub struct ContractUsageAnalytics;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl ContractUsageAnalytics {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
@@ -68,6 +69,7 @@ impl ContractUsageAnalytics {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn record_call(
         env: Env,
         function_name: String,
@@ -200,8 +202,8 @@ impl ContractUsageAnalytics {
             .get(&DataKey::AllFunctions)
             .unwrap_or(Vec::new(&env));
 
-        let mut total_calls = 0;
-        let mut total_errors = 0;
+        let mut total_calls: u64 = 0;
+        let mut total_errors: u64 = 0;
 
         for f_name in all_functions.iter() {
             if let Some(metric) = env

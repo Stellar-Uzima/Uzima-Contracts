@@ -31,3 +31,31 @@ soroban contract invoke --id $MEDICAL_RECORDS_ID \
   -- caller $ADMIN_ADDRESS \
   -- compliance $COMPLIANCE_ID
 ```
+
+
+## GDPR Article 17 — Right to Erasure (Cryptographic Key Deletion)
+
+Since blockchain data is immutable, full deletion is not possible. The system uses
+**cryptographic erasure**: deleting the patient's encryption key renders all encrypted
+records permanently inaccessible.
+
+### How It Works
+
+1. Patient calls `request_erasure(patient_id)` on the `medical_records` contract.
+2. Identity is verified against `identity_registry`.
+3. The patient's encryption key is deleted from `crypto_registry`.
+4. All active consents for the patient are atomically revoked.
+5. An `ErasureCompleted` event is emitted (timestamp + patient ID hash — no PII).
+6. Subsequent read attempts return `Err(ContractError::DataErased)`.
+
+### Key Properties
+
+| Property | Value |
+|---|---|
+| Irreversible | Yes — deleted key cannot be recovered |
+| Who can invoke | Patient only (verified via `identity_registry`) |
+| Event emitted | `ErasureCompleted { timestamp, patient_hash }` |
+| Read after erasure | Returns `DataErased` error |
+
+> **Note:** This satisfies GDPR Article 17 because encrypted data becomes permanently
+> unreadable without the encryption key.

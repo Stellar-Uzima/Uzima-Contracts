@@ -12,8 +12,7 @@ mod tests {
         let contract_id = env.register_contract(None, DeprecationFramework);
         let client = DeprecationFrameworkClient::new(&env, &contract_id);
 
-        let result = client.initialize(&admin);
-        assert_eq!(result, ());
+        client.initialize(&admin);
     }
 
     #[test]
@@ -31,14 +30,13 @@ mod tests {
         let contract_name = String::from_str(&env, "Old Contract");
         let reason = String::from_str(&env, "Replaced by new version");
 
-        let result = client.mark_for_deprecation(
+        client.mark_for_deprecation(
             &admin,
             &contract_to_deprecate,
             &contract_name,
             &reason,
             &None,
         );
-        assert_eq!(result, ());
     }
 
     #[test]
@@ -97,9 +95,7 @@ mod tests {
             &None,
         );
 
-        let result =
-            client.set_sunset_timeline(&admin, &contract_to_deprecate, &1000, &2000, &3000);
-        assert_eq!(result, ());
+        client.set_sunset_timeline(&admin, &contract_to_deprecate, &1000, &2000, &3000);
     }
 
     #[test]
@@ -157,14 +153,13 @@ mod tests {
         let guide_content = String::from_str(&env, "Follow these steps...");
         let examples = Vec::new(&env);
 
-        let result = client.add_migration_guide(
+        client.add_migration_guide(
             &admin,
             &contract_to_deprecate,
             &guide_title,
             &guide_content,
             &examples,
         );
-        assert_eq!(result, ());
     }
 
     #[test]
@@ -190,12 +185,11 @@ mod tests {
             &None,
         );
 
-        let result = client.update_deprecation_phase(
+        client.update_deprecation_phase(
             &admin,
             &contract_to_deprecate,
             &DeprecationPhase::Supported,
         );
-        assert_eq!(result, ());
     }
 
     #[test]
@@ -256,8 +250,7 @@ mod tests {
         items.push_back(String::from_str(&env, "Migrate data"));
         items.push_back(String::from_str(&env, "Update documentation"));
 
-        let result = client.create_removal_checklist(&admin, &contract_to_deprecate, &items);
-        assert_eq!(result, ());
+        client.create_removal_checklist(&admin, &contract_to_deprecate, &items);
     }
 
     #[test]

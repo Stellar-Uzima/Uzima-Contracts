@@ -6,7 +6,7 @@ extern crate std;
 use std::time::Instant;
 
 use super::*;
-use soroban_sdk::testutils::{budget::Budget as _, Address as _};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, Map, String};
 
 // ── thresholds (CPU instructions) ──────────────────────────────────────────

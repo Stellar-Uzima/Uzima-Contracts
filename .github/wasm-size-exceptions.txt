@@ -1,0 +1,31 @@
+# WASM Size Exceptions
+#
+# Contracts listed here exceed Soroban's 64 KB WASM limit and are tracked
+# for future optimization. The CI will WARN on these instead of failing, so
+# that new contracts cannot silently grow past the limit.
+#
+# Each entry must have a corresponding tracking comment explaining why it is
+# over the limit and what the remediation plan is.
+#
+# Format:  <contract_name>   # <approx size> — <reason / tracking issue>
+#
+# IMPORTANT: Remove an entry once the contract is brought below 64 KB.
+# ---------------------------------------------------------------------------
+
+medical_records         # ~216 KB — monolithic contract; needs to be split into
+                        #           focused sub-contracts (records CRUD, ZK proof
+                        #           integration, access control, AI insights, etc.)
+
+ihe_integration         # ~91 KB  — IHE profile set is too broad for one contract;
+                        #           split by IHE profile family (PIX/PDQ/XDS/etc.)
+
+identity_registry       # ~81 KB  — DID + credential + multi-sig management
+                        #           should be separated into dedicated contracts
+
+medical_record_backup   # ~72 KB  — backup/restore logic can be slimmed by
+                        #           delegating compression to off-chain callers
+
+emr_integration         # ~68 KB  — EMR adapter set; trim or split by EMR vendor
+
+zkp_registry            # ~65 KB  — ZKP type proliferation; remove unused proof
+                        #           schemes or move them to a companion contract

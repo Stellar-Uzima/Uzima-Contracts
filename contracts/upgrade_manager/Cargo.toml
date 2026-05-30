@@ -10,5 +10,9 @@ upgradeability = { path = "../upgradeability" }
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]

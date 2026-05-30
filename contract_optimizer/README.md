@@ -10,12 +10,24 @@ This tool analyzes Soroban smart contracts written in Rust and provides optimiza
 - **Batching Opportunities**: Identifies where operations can be batched to reduce costs
 - **Parallelization Possibilities**: Suggests opportunities for parallel execution where applicable
 
+## Contract complexity scoring (#481)
+
+Score Soroban contracts on cyclomatic complexity, data structures, external calls, state transitions, and permission checks.
+
+```bash
+./scripts/complexity_score.sh
+# or
+cargo run -p contract_optimizer --features cli -- complexity
+```
+
+Output: `dashboard/data/complexity_report.json` and trend history in `dashboard/data/complexity_trends.json`. See [docs/CONTRACT_COMPLEXITY_SCORING.md](../docs/CONTRACT_COMPLEXITY_SCORING.md).
+
 ## Usage
 
 ### Analyze Contracts
 
 ```bash
-cargo run --package contract_optimizer -- analyze
+cargo run --package contract_optimizer --features cli -- analyze
 ```
 
 This will scan all contracts in the `contracts/` directory and output recommendations in text format.
@@ -23,19 +35,19 @@ This will scan all contracts in the `contracts/` directory and output recommenda
 For JSON output:
 
 ```bash
-cargo run --package contract_optimizer -- analyze --format json
+cargo run --package contract_optimizer --features cli -- analyze --format json
 ```
 
 ### Generate Report
 
 ```bash
-cargo run --package contract_optimizer -- report --input optimization_results.json --output report.md
+cargo run --package contract_optimizer --features cli -- report --input optimization_results.json --output report.md
 ```
 
 ### View Metrics
 
 ```bash
-cargo run --package contract_optimizer -- metrics
+cargo run --package contract_optimizer --features cli -- metrics
 ```
 
 This shows the accuracy of recommendations (how many were applied).

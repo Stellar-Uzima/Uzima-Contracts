@@ -110,6 +110,7 @@ pub enum Error {
 #[contract]
 pub struct CrossChainEnhancements;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl CrossChainEnhancements {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
@@ -212,6 +213,7 @@ impl CrossChainEnhancements {
     }
 
     /// Create a data integrity proof using Merkle tree
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn create_data_integrity_proof(
         env: Env,
         caller: Address,
