@@ -10,12 +10,16 @@ use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
+    let admin = Address::generate(env);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
     let client = MedicalRecordsContractClient::new(env, &contract_id);
-    let admin = Address::generate(env);
-    client.initialize(&admin);
+    client.initialize(&admin, &rbac_id);
     (client, admin)
 }
 
@@ -1016,9 +1020,12 @@ mod test_metadata {
         env.register_contract(&contract_id, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(env, &rbac_id);
+        let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
         let doctor = Address::generate(env);
         let patient = Address::generate(env);
-        client.initialize(&admin);
+        client.initialize(&admin, &rbac_id);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         client.manage_user(&admin, &patient, &Role::Patient);
         let data_ref = String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
