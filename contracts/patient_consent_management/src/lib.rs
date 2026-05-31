@@ -32,6 +32,7 @@ pub struct ConsentLog {
 pub enum DataKey {
     Initialized,
     Admin,
+    Paused,
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
 }
@@ -48,6 +49,7 @@ impl PatientConsentManagement {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         events::publish_initialization(&env, &admin);
         Ok(())
     }
@@ -180,6 +182,7 @@ impl PatientConsentManagement {
     pub fn cleanup_expired_consents(env: Env, patient: Address) -> Result<u32, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let now = env.ledger().timestamp();
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         let mut updated = Vec::new(&env);
