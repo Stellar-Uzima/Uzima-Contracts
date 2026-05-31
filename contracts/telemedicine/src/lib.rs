@@ -66,6 +66,7 @@ pub enum ConsentType {
     DigitalTherapeutic = 2,
     EmergencyContact = 3,
     DataSharing = 4,
+    SessionRecording = 5,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -159,6 +160,8 @@ pub struct Consultation {
     pub appointment_id: BytesN<32>,
     pub consultation_type: String,
     pub quality_score: u32,
+    pub recording_consent_granted_at: u64,
+    pub recording_consent_expiry: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -664,6 +667,36 @@ impl TelemedicineContract {
         Ok(false)
     }
 
+    /// Check whether a patient has granted session recording consent.
+    /// Returns (has_consent, expiry) where expiry is 0 if no consent exists.
+    pub fn has_recording_consent(
+        env: &Env,
+        patient_id: BytesN<32>,
+    ) -> Result<(bool, u64), TelemedicineError> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientConsents(patient_id.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        env.storage().persistent().extend_ttl(&DataKey::PatientConsents(patient_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+
+        let now = env.ledger().timestamp();
+        for id in ids.iter() {
+            let consent_key = DataKey::Consent(id.clone());
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ConsentRecord>(&consent_key)
+            {
+                env.storage().persistent().extend_ttl(&consent_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+                if record.granted && record.consent_type == ConsentType::SessionRecording && record.expiry >= now {
+                    return Ok((true, record.expiry));
+                }
+            }
+        }
+        Ok((false, 0))
+    }
+
     // ============================================================
     // CONSULTATION MANAGEMENT
     // ============================================================
@@ -694,6 +727,10 @@ impl TelemedicineContract {
         if !Self::has_valid_consent(env, patient_id.clone(), ConsentType::VideoConsultation)? {
             return Err(TelemedicineError::ConsentNotGiven);
         }
+        // Determine recording consent for audit trail
+        let (recording_consent, recording_expiry) =
+            Self::has_recording_consent(env, patient_id.clone()).unwrap_or((false, 0));
+
         let consultation = Consultation {
             session_id: session_id.clone(),
             patient_id: patient_id.clone(),
@@ -706,6 +743,8 @@ impl TelemedicineContract {
             appointment_id: _appointment_id.clone(),
             consultation_type,
             quality_score: 0,
+            recording_consent_granted_at: if recording_consent { scheduled_time } else { 0 },
+            recording_consent_expiry: recording_expiry,
         };
         env.storage()
             .persistent()
