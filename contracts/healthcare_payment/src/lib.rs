@@ -8,14 +8,15 @@ use soroban_sdk::{
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[contracttype]
+#[contracttype>
 pub enum ClaimStatus {
     Submitted = 0,
     Verified = 1,
     Approved = 2,
-    Rejected = 3,
-    Paid = 4,
-    Disputed = 5,
+    PendingAMLReview = 3,
+    Rejected = 4,
+    Paid = 5,
+    Disputed = 6,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -202,27 +203,34 @@ pub struct PatientResponsibility {
     pub last_updated: u64,
 }
 
-/// ZK proof of insurance coverage submitted by a patient.
-/// Allows patients to prove coverage without revealing sensitive policy details.
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
-pub struct CoverageProof {
-    pub policy_id: u64,
-    pub patient: Address,
-    /// Hash of the ZK proof data (reference to zkp_registry proof_id)
-    pub proof_hash: BytesN<32>,
-    /// Circuit version used for proof generation
-    pub circuit_version: u32,
-    /// Whether the proof has been verified
-    pub is_verified: bool,
-    /// Coverage basis points proven via ZK (0-10000)
-    pub proven_coverage_bps: u32,
-    /// When the proof was submitted
-    pub submitted_at: u64,
-    /// When the proof expires
-    pub expires_at: u64,
-    /// Reference to the zkp_registry proof identifier
-    pub registry_proof_id: Option<BytesN<32>>,
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
 #[derive(Clone)]
@@ -233,6 +241,8 @@ pub struct Config {
     pub escrow_contract: Address,
     pub treasury: Address,
     pub token: Address,
+    pub aml_contract: Address,
+    pub rbac_contract: Address,
 }
 
 #[derive(Clone)]
@@ -278,10 +288,17 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
-        if config.admin != *caller {
-            return Err(Error::Unauthorized);
+        let client = RbacClient::new(env, &config.rbac_contract);
+        match client.has_role(caller, &RbacRole::Admin) {
+            Ok(has) => {
+                if has {
+                    Ok(())
+                } else {
+                    Err(Error::Unauthorized)
+                }
+            }
+            Err(_) => Err(Error::Unauthorized),
         }
-        Ok(())
     }
 
     fn read_counter(env: &Env, key: &DataKey) -> u64 {
@@ -401,6 +418,8 @@ impl HealthcarePayment {
         escrow_contract: Address,
         treasury: Address,
         token: Address,
+        aml_contract: Address,
+        rbac_contract: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -412,6 +431,8 @@ impl HealthcarePayment {
             escrow_contract,
             treasury,
             token,
+            aml_contract,
+            rbac_contract,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);

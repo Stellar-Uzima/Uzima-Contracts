@@ -4,18 +4,23 @@
 // internal
 use super::*;
 use crate::errors::Error;
+use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
 
 // external crates
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
+    let admin = Address::generate(env);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
     let client = MedicalRecordsContractClient::new(env, &contract_id);
-    let admin = Address::generate(env);
-    client.initialize(&admin);
+    client.initialize(&admin, &rbac_id);
     (client, admin)
 }
 
@@ -93,6 +98,56 @@ fn test_add_and_get_record() {
         })
         .count();
     assert_eq!(access_events_count, 1);
+}
+
+#[test]
+fn test_get_record_denied_after_consent_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let consent_contract_id = env.register_contract(None, PatientConsentManagement);
+    let consent_client = PatientConsentManagementClient::new(&env, &consent_contract_id);
+    consent_client.initialize(&admin);
+    client.set_patient_consent_contract(&admin, &consent_contract_id);
+
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    client.grant_permission(&admin, &provider, Permission::ReadRecord, 0, false);
+
+    let diagnosis = String::from_str(&env, "Flu");
+    let treatment = String::from_str(&env, "Rest");
+    let tags = vec![&env, String::from_str(&env, "flu")];
+    let category = String::from_str(&env, "Modern");
+    let treatment_type = String::from_str(&env, "Medication");
+    let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
+
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &diagnosis,
+        &treatment,
+        &false,
+        &tags,
+        &category,
+        &treatment_type,
+        &data_ref,
+    );
+
+    let expires_at = env.ledger().timestamp().saturating_add(10);
+    consent_client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = expires_at.saturating_add(1);
+    });
+
+    let result = client.try_get_record(&provider, &record_id);
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 #[test]
@@ -1016,9 +1071,12 @@ mod test_metadata {
         env.register_contract(&contract_id, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(env, &rbac_id);
+        let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
         let doctor = Address::generate(env);
         let patient = Address::generate(env);
-        client.initialize(&admin);
+        client.initialize(&admin, &rbac_id);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         client.manage_user(&admin, &patient, &Role::Patient);
         let data_ref = String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");

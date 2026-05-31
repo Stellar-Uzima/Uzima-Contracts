@@ -14,7 +14,11 @@ fn setup(env: &Env) -> (MedicalRecordsContractClient<'_>, Address, Address, Addr
     let doctor = Address::generate(env);
     let patient = Address::generate(env);
 
-    client.initialize(&admin);
+    let rbac_id = env.register_contract(None, medical_records::MockRbac);
+    let rbac_client = medical_records::MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &medical_records::RbacRole::Admin);
+
+    client.initialize(&admin, &rbac_id);
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
 
