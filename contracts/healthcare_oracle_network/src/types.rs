@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
+use soroban_sdk::{BytesN, contracterror, contracttype, Address, String, Symbol, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -207,4 +207,12 @@ pub enum DataKey {
     Consensus(FeedKey),
     DisputeCount,
     Dispute(u64),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossContractCallCacheKey {
+    pub contract: Address,
+    pub function_name: Symbol,
+    pub args_hash: BytesN<32>,
 }
