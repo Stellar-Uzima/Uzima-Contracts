@@ -1,8 +1,9 @@
-use soroban_sdk::{symbol_short, Address, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec};
 
 use crate::types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, DrugPriceData, Error,
-    FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData,
+    TreatmentOutcomeData,
 };
 
 pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> String {
@@ -39,6 +40,38 @@ pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn make_cross_contract_cache_key(
+    env: &Env,
+    contract: &Address,
+    function_name: Symbol,
+    args: &Vec<RawVal>,
+) -> CallCacheKey {
+    let args_hash: BytesN<32> = env.crypto().sha256(&args.to_xdr(env)).into();
+    CallCacheKey {
+        contract: contract.clone(),
+        function_name,
+        args_hash,
+    }
+}
+
+pub fn invoke_contract_cached<
+    T: TryFromVal<Env, Val> + IntoVal<Env, Val> + Clone,
+>(
+    env: &Env,
+    contract: Address,
+    function_name: Symbol,
+    args: Vec<RawVal>,
+) -> T {
+    let cache_key = make_cross_contract_cache_key(env, &contract, function_name.clone(), &args);
+    if let Some(value) = env.storage().temporary().get(&cache_key) {
+        return value;
+    }
+
+    let result: T = env.invoke_contract(&contract, &function_name, args.clone());
+    env.storage().temporary().set(&cache_key, &result);
+    result
 }
 
 pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, Error> {
