@@ -261,6 +261,7 @@ pub enum DataKey {
     Initialized,
     NetworkId,
     RbacContract,
+    Paused,
 
     // Verifier Management
     Verifier(Address),
@@ -328,6 +329,7 @@ impl IdentityRegistryContract {
         env.storage()
             .instance()
             .set(&DataKey::NetworkId, &network_id);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
@@ -363,6 +365,55 @@ impl IdentityRegistryContract {
         (status, 1, env.ledger().timestamp())
     }
 
+    /// Returns true if the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn is_admin(env: &Env, caller: &Address) -> bool {
+        if let Some(owner) = env.storage().instance().get::<DataKey, Address>(&DataKey::Owner) {
+            if &owner == caller {
+                return true;
+            }
+        }
+        if let Some(rbac_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::RbacContract) {
+            let client = RbacClient::new(env, &rbac_addr);
+            return client.has_role(caller, &RbacRole::Admin).unwrap_or(false);
+        }
+        false
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        if Self::is_admin(env, caller) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish((Symbol::new(&env, "Paused"),), (caller.clone(), env.ledger().timestamp()));
+        Ok(true)
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish((Symbol::new(&env, "Unpaused"),), (caller.clone(), env.ledger().timestamp()));
+        Ok(true)
+    }
+
     /// Legacy initialize for backward compatibility
     pub fn initialize_legacy(env: Env, owner: Address, rbac_contract: Address) {
         owner.require_auth();
@@ -394,6 +445,7 @@ impl IdentityRegistryContract {
         services: Vec<ServiceEndpoint>,
     ) -> Result<String, Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Check if DID already exists
         if env
@@ -1040,6 +1092,7 @@ impl IdentityRegistryContract {
         guardian: Address,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let guardians: Vec<RecoveryGuardian> = env
             .storage()
@@ -1067,6 +1120,7 @@ impl IdentityRegistryContract {
     /// Set recovery threshold
     pub fn set_recovery_threshold(env: Env, subject: Address, threshold: u32) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         env.storage()
             .persistent()
@@ -1164,6 +1218,7 @@ impl IdentityRegistryContract {
     /// Approve a recovery request
     pub fn approve_recovery(env: Env, guardian: Address, request_id: u64) -> Result<(), Error> {
         guardian.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut request: RecoveryRequest = env
             .storage()
@@ -1310,6 +1365,7 @@ impl IdentityRegistryContract {
     /// Cancel a recovery request (only subject with existing key)
     pub fn cancel_recovery(env: Env, subject: Address) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let request_id: u64 = env
             .storage()
@@ -1404,6 +1460,7 @@ impl IdentityRegistryContract {
     /// Remove/deactivate a service endpoint
     pub fn remove_service(env: Env, subject: Address, service_id: String) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut did_doc: DIDDocument = env
             .storage()
@@ -1553,6 +1610,7 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
             panic!("invalid meta");
@@ -1575,6 +1633,7 @@ impl IdentityRegistryContract {
     /// Create an attestation (legacy - only verifiers can do this)
     pub fn attest(env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32>) {
         verifier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
@@ -1619,6 +1678,7 @@ impl IdentityRegistryContract {
         claim_hash: BytesN<32>,
     ) {
         verifier.require_auth();
+        Self::require_not_paused(&env)?;
 
         let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
@@ -1820,6 +1880,7 @@ impl IdentityRegistryContract {
         public_key_hash: BytesN<32>,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Silently succeed when no DID document exists yet.
         let mut did_doc: DIDDocument = match env
