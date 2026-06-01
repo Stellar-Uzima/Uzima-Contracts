@@ -2143,11 +2143,15 @@ impl CrossChainBridgeContract {
         signature: &BytesN<64>,
     ) -> Result<(), Error> {
         use soroban_sdk::Bytes;
-        let mut msg_data = Bytes::new(env);
+        
         // Serialize Data + Nonce for Ed25519 verification
-        msg_data.append(&Bytes::from_array(env, &data.to_array()));
-        msg_data.append(&Bytes::from_array(env, &nonce.to_be_bytes()));
+        // Using a more efficient construction for the message payload
+        let mut msg_data = Bytes::from_array(env, &data.to_array());
+        msg_data.extend_from_array(&nonce.to_be_bytes());
 
+        // Note: ed25519_verify will panic/trap if verification fails.
+        // This is standard for Soroban auth, but ensure callers are aware 
+        // that Error::InvalidSignature is primarily a placeholder for off-chain hints.
         let message_hash = env.crypto().sha256(&msg_data);
         env.crypto().ed25519_verify(validator_pubkey, &message_hash.into(), signature);
 
