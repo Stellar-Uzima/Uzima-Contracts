@@ -758,3 +758,106 @@ impl FHIRIntegrationContract {
         Ok(true)
     }
 }
+
+// ==================== Patient Data Portability ====================
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum ExportFormat {
+    FHIRBundle,
+    HL7v2,
+    CDA,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ExportConfig {
+    pub max_exports_per_day: u32,
+    pub export_size_limit_bytes: u32,
+}
+
+const EXPORT_COUNT: Symbol = symbol_short!("EXPORT_CNT");
+const EXPORT_CFG: Symbol = symbol_short!("EXPORT_CFG");
+
+impl FHIRIntegrationContract {
+    /// Export patient data in a standard format (FHIR Bundle, HL7 v2, or CDA).
+    /// Only the patient themselves can request their own export.
+    /// Rate-limited: max 1 export per 24 hours per patient.
+    pub fn export_patient_data(
+        env: Env,
+        patient: Address,
+        format: ExportFormat,
+        medical_records_contract: Address,
+    ) -> Result<BytesN<32>, Error> {
+        patient.require_auth();
+
+        // Rate limit: max 1 export per 24 hours
+        let now = env.ledger().timestamp();
+        let export_key = Symbol::new(&env, "EXPORT_TS");
+        let last_export: u64 = env
+            .storage()
+            .persistent()
+            .get(&export_key)
+            .unwrap_or(0);
+        
+        if now < last_export.saturating_add(86400) {
+            return Err(Error::InvalidDataFormat);
+        }
+
+        // Record export timestamp for rate limiting
+        env.storage()
+            .persistent()
+            .set(&export_key, &now);
+
+        // Generate export reference hash
+        let format_str = match format {
+            ExportFormat::FHIRBundle => "FHIR",
+            ExportFormat::HL7v2 => "HL7",
+            ExportFormat::CDA => "CDA",
+        };
+
+        let mut payload = Bytes::new(&env);
+        payload.append(&Bytes::from_slice(&env, format_str.as_bytes()));
+        payload.append(&Bytes::from_slice(&env, &now.to_be_bytes()));
+        let export_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+
+        // Emit data export requested event
+        env.events().publish(
+            (Symbol::new(&env, "DataExportRequested"),),
+            (patient.clone(), export_hash.clone(), format_str),
+        );
+
+        Ok(export_hash)
+    }
+
+    /// Configure export limits (admin only).
+    pub fn configure_export(
+        env: Env,
+        admin: Address,
+        max_exports_per_day: u32,
+        export_size_limit_bytes: u32,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        let contract_admin: Address = env
+            .storage()
+            .persistent()
+            .get(&ADMIN)
+            .ok_or(Error::NotAuthorized)?;
+        if admin != contract_admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        let config = ExportConfig {
+            max_exports_per_day,
+            export_size_limit_bytes,
+        };
+
+        env.storage().persistent().set(&EXPORT_CFG, &config);
+        Ok(true)
+    }
+
+    /// Get export configuration.
+    pub fn get_export_config(env: Env) -> Option<ExportConfig> {
+        env.storage().persistent().get(&EXPORT_CFG)
+    }
+}

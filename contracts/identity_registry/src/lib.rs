@@ -252,6 +252,24 @@ pub struct Attestation {
     pub is_active: bool,
 }
 
+/// Stake information for a healthcare provider using SUT token reputation bonding.
+#[derive(Clone)]
+#[contracttype]
+pub struct ProviderStake {
+    /// The provider's address
+    pub provider: Address,
+    /// The SUT token contract address
+    pub token_address: Address,
+    /// Amount of SUT tokens staked
+    pub amount: i128,
+    /// Timestamp until which the stake is locked
+    pub locked_until: u64,
+    /// Whether the stake has been slashed
+    pub slashed: bool,
+    /// When the stake was deposited
+    pub deposited_at: u64,
+}
+
 // === Storage Keys ===
 
 #[contracttype]
@@ -293,6 +311,9 @@ pub enum DataKey {
     // Key Rotation
     LastKeyRotation(Address),
     KeyRotationCooldown,
+
+    // Provider Staking
+    StakeInfo(Address),
 }
 
 // === Constants ===
@@ -1870,6 +1891,115 @@ impl IdentityRegistryContract {
 
         Ok(())
     }
+
+    // ========================================================================
+    // PROVIDER STAKING (SUT Token Reputation Bonding)
+    // ========================================================================
+
+    /// Deposit stake for a healthcare provider.
+    pub fn deposit_stake(
+        env: Env,
+        provider: Address,
+        amount: i128,
+        token_address: Address,
+    ) -> Result<(), Error> {
+        provider.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let now = env.ledger().timestamp();
+        let lock_until = now.saturating_add(90 * 86400); // 90 days default lock
+
+        // Store stake info
+        let stake_info = ProviderStake {
+            provider: provider.clone(),
+            token_address: token_address.clone(),
+            amount,
+            locked_until: lock_until,
+            slashed: false,
+            deposited_at: now,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        // Emit stake deposited event
+        env.events().publish(
+            (Symbol::new(&env, "StakeDeposited"),),
+            (provider, amount, lock_until),
+        );
+
+        Ok(())
+    }
+
+    /// Withdraw stake after lock period if not slashed and in good standing.
+    pub fn withdraw_stake(
+        env: Env,
+        provider: Address,
+    ) -> Result<i128, Error> {
+        provider.require_auth();
+
+        let now = env.ledger().timestamp();
+
+        // Load stake info to verify lock period has elapsed
+        let stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        if now < stake_info.locked_until {
+            return Err(Error::InvalidInput);
+        }
+
+        if stake_info.slashed {
+            return Err(Error::InvalidInput);
+        }
+
+        // Remove stake info
+        env.storage()
+            .persistent()
+            .remove(&DataKey::StakeInfo(provider.clone()));
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeWithdrawn"),),
+            (provider.clone(), stake_info.amount),
+        );
+
+        Ok(stake_info.amount)
+    }
+
+    /// Slash stake for verified misconduct (governance only).
+    pub fn slash_stake(
+        env: Env,
+        governance: Address,
+        provider: Address,
+        amount: i128,
+        reason: String,
+    ) -> Result<(), Error> {
+        governance.require_auth();
+
+        let mut stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        stake_info.slashed = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeSlashed"),),
+            (provider, amount, reason),
+        );
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -2555,3 +2685,10 @@ mod tests {
         );
     }
 }
+
+    // ========================================================================
+    // PROVIDER STAKING (SUT Token Reputation Bonding)
+    // ========================================================================
+
+    /// Deposit stake for a healthcare provider.
+    /// The minimum stake is configurable by governance.

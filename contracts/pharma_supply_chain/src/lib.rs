@@ -16,6 +16,7 @@ pub enum Error {
     BatchNotFound = 6,
     ShipmentNotFound = 7,
     InvalidInput = 8,
+    BatchAlreadyExists = 9,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -122,6 +123,7 @@ pub enum DataKey {
     Medication(u64),
     BatchCount,
     Batch(u64),
+    BatchByLotNumber(String),
     ShipmentCount,
     Shipment(u64),
 }
@@ -265,11 +267,16 @@ impl PharmaSupplyChainContract {
             return Err(Error::Unauthorized);
         }
 
+        // Check for duplicate lot number
+        if env.storage().persistent().has(&DataKey::BatchByLotNumber(lot_number.clone())) {
+            return Err(Error::BatchAlreadyExists);
+        }
+
         let id = Self::next_counter(&env, &DataKey::BatchCount);
         let batch = Batch {
             id,
             medication_id,
-            lot_number,
+            lot_number: lot_number.clone(),
             quantity,
             auth_hash,
             manufactured_at: env.ledger().timestamp(),
@@ -279,6 +286,7 @@ impl PharmaSupplyChainContract {
             compliance_ok: true,
         };
         env.storage().persistent().set(&DataKey::Batch(id), &batch);
+        env.storage().persistent().set(&DataKey::BatchByLotNumber(lot_number.clone()), &true);
         Ok(id)
     }
 
