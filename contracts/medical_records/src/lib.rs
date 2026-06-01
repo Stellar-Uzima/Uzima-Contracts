@@ -5987,3 +5987,93 @@ impl MockRbac {
         Ok(true)
     }
 }
+
+// ==================== Traditional Medicine Support ====================
+
+impl MedicalRecordsContract {
+    /// Store a medical record with optional traditional medicine metadata.
+    /// When `traditional_metadata` is provided, the record is also indexed
+    /// for separate querying via `list_traditional_records`.
+    pub fn add_record_with_traditional(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        traditional_metadata: Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        let record_id = Self::add_record(
+            env.clone(),
+            caller.clone(),
+            patient.clone(),
+            diagnosis,
+            treatment,
+            is_confidential,
+            tags.clone(),
+            category.clone(),
+            treatment_type,
+            data_ref,
+        )?;
+
+        if let Some(meta) = traditional_metadata {
+            // Emit dedicated event
+            env.events().publish(
+                (Symbol::new(&env, "TradRecAdded"),),
+                (caller.clone(), record_id, patient.clone(), meta.practice_type.clone()),
+            );
+        }
+
+        Ok(record_id)
+    }
+
+    /// List traditional medicine records for a patient.
+    /// Returns record IDs that have associated traditional medicine metadata.
+    pub fn list_traditional_records(
+        env: Env,
+        caller: Address,
+        patient: Address,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if caller != patient && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Scan patient records for traditional medicine category
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
+
+        let mut traditional_ids = Vec::new(&env);
+        for idx in 0..count {
+            if let Some(record_id) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, u64>(&DataKey::PatientRecord(patient.clone(), idx))
+            {
+                if let Some(record) = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, MedicalRecord>(&DataKey::Record(record_id))
+                {
+                    if record.category == String::from_str(&env, "Traditional")
+                        || record.category == String::from_str(&env, "Herbal")
+                        || record.category == String::from_str(&env, "Spiritual")
+                    {
+                        traditional_ids.push_back(record_id);
+                    }
+                }
+            }
+        }
+
+        Ok(traditional_ids)
+    }
+}

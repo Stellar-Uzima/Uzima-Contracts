@@ -60,6 +60,7 @@ impl Timelock {
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
         let eta = now.saturating_add(cfg.delay_seconds);
+        let current_seq: u32 = env.ledger().sequence();
         let mut q: Map<u64, QueuedTx> = env
             .storage()
             .persistent()
