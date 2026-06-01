@@ -19,23 +19,7 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
 };
-
-// ==================== Traditional Medicine Types ====================
-
-#[derive(Clone)]
-#[contracttype]
-pub struct TraditionalMedicineMetadata {
-    /// Type of traditional practice (e.g., "Ayurveda", "Traditional Chinese Medicine", "Herbalism") 
-    pub practice_type: String,
-    /// The practitioner's tradition lineage or school of practice
-    pub practitioner_tradition: String,
-    /// List of remedies or medicinal substances used
-    pub remedies_used: Vec<String>,
-    /// Cultural context notes (e.g., "Māori rongoā", "Hoodoo folk medicine")
-    pub cultural_context: String,
-    /// Language of the original record (e.g., "sw", "xh", "zu", "en")
-    pub language: String,
-}
+use patient_consent_management::PatientConsentManagementClient;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
@@ -534,6 +518,7 @@ pub enum DataKey {
     // ZK
     ZkVerifierContract,
     CredentialRegistryContract,
+    PatientConsentContract,
     ZkEnforced,
     ZkGrantTtl,
     ZkUsedNullifier(BytesN<32>),
@@ -2148,6 +2133,28 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .get(&DataKey::CredentialRegistryContract)
+    }
+
+    pub fn set_patient_consent_contract(
+        env: Env,
+        caller: Address,
+        consent_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientConsentContract, &consent_contract);
+        Ok(true)
+    }
+
+    pub fn get_patient_consent_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientConsentContract)
     }
 
     pub fn set_zk_enforced(env: Env, caller: Address, enforced: bool) -> Result<bool, Error> {
@@ -5219,10 +5226,25 @@ impl MedicalRecordsContract {
         if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
             return true;
         }
-        if record.is_confidential {
+        let has_permission = if record.is_confidential {
             Self::check_permission(env, caller, Permission::ReadConfidential)
         } else {
             Self::check_permission(env, caller, Permission::ReadRecord)
+        };
+        has_permission && Self::has_patient_consent(env, &record.patient_id, caller)
+    }
+
+    fn has_patient_consent(env: &Env, patient: &Address, provider: &Address) -> bool {
+        if let Some(contract_addr) = env.storage().persistent().get::<_, Address>(
+            &DataKey::PatientConsentContract,
+        ) {
+            let client = PatientConsentManagementClient::new(env, &contract_addr);
+            match client.check_consent(patient.clone(), provider.clone()) {
+                Ok(has_consent) => has_consent,
+                Err(_) => false,
+            }
+        } else {
+            true
         }
     }
 

@@ -16,6 +16,7 @@ pub struct ConsentRecord {
     pub patient: Address,
     pub provider: Address,
     pub granted_at: u64,
+    pub expires_at: u64, // 0 means no expiration
     pub revoked_at: u64,
     pub active: bool,
 }
@@ -31,6 +32,7 @@ pub struct ConsentLog {
 pub enum DataKey {
     Initialized,
     Admin,
+    Paused,
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
 }
@@ -47,6 +49,7 @@ impl PatientConsentManagement {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         events::publish_initialization(&env, &admin);
         Ok(())
     }
@@ -54,6 +57,7 @@ impl PatientConsentManagement {
     pub fn grant_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         if patient == provider {
             return Err(Error::InvalidProvider);
         }
@@ -62,7 +66,44 @@ impl PatientConsentManagement {
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if r.active { return Err(Error::ConsentAlreadyExists); }
         }
-        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, revoked_at: 0, active: true };
+        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true };
+        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
+        log.records.push_back(record.clone());
+        log.record_count += 1;
+        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage().persistent().set(&key, &record);
+        events::publish_consent_granted(&env, &patient, &provider, ts);
+        Ok(())
+    }
+
+    pub fn grant_consent_with_expiry(
+        env: Env,
+        patient: Address,
+        provider: Address,
+        expires_at: u64,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if patient == provider {
+            return Err(Error::InvalidProvider);
+        }
+        let ts = env.ledger().timestamp();
+        if expires_at != 0 && expires_at <= ts {
+            return Err(Error::InvalidExpiry);
+        }
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
+            if r.active { return Err(Error::ConsentAlreadyExists); }
+        }
+        let record = ConsentRecord {
+            patient: patient.clone(),
+            provider: provider.clone(),
+            granted_at: ts,
+            expires_at,
+            revoked_at: 0,
+            active: true,
+        };
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
         log.record_count += 1;
@@ -76,6 +117,7 @@ impl PatientConsentManagement {
     pub fn batch_grant_consent(env: Env, patient: Address, grantees: Vec<Address>) -> Result<u32, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let mut granted: u32 = 0;
         for provider in grantees.iter() {
@@ -84,7 +126,7 @@ impl PatientConsentManagement {
             if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
                 if r.active { continue; }
             }
-            let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, revoked_at: 0, active: true };
+            let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true };
             let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
             log.records.push_back(record.clone());
             log.record_count += 1;
@@ -99,6 +141,7 @@ impl PatientConsentManagement {
     pub fn revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
         let mut record: ConsentRecord = env.storage().persistent().get(&key).ok_or(Error::ConsentNotFound)?;
@@ -118,12 +161,49 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    fn is_consent_expired(env: &Env, record: &ConsentRecord) -> bool {
+        record.expires_at != 0 && env.ledger().timestamp() >= record.expires_at
+    }
+
+    fn is_consent_active(env: &Env, record: &ConsentRecord) -> bool {
+        record.active && !Self::is_consent_expired(env, record)
+    }
+
     pub fn check_consent(env: Env, patient: Address, provider: Address) -> Result<bool, Error> {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
-        let result = env.storage().persistent().get::<_, ConsentRecord>(&key).map(|r| r.active).unwrap_or(false);
+        let mut result = false;
+        if let Some(record) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
+            if Self::is_consent_expired(&env, &record) {
+                events::publish_consent_expired(&env, &patient, &provider, env.ledger().timestamp());
+            }
+            result = Self::is_consent_active(&env, &record);
+        }
         events::publish_consent_checked(&env, &patient, &provider, result);
         Ok(result)
+    }
+
+    pub fn cleanup_expired_consents(env: Env, patient: Address) -> Result<u32, Error> {
+        patient.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        let now = env.ledger().timestamp();
+        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
+        let mut updated = Vec::new(&env);
+        let mut cleaned: u32 = 0;
+        for mut record in log.records.iter() {
+            if record.active && Self::is_consent_expired(&env, &record) {
+                record.active = false;
+                record.revoked_at = now;
+                env.storage().persistent().set(&DataKey::ProviderIndex(patient.clone(), record.provider.clone()), &record);
+                events::publish_consent_expired(&env, &patient, &record.provider, now);
+                cleaned = cleaned.saturating_add(1);
+            }
+            updated.push_back(record);
+        }
+        log.records = updated;
+        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        Ok(cleaned)
     }
 
     pub fn get_patient_consents(env: Env, patient: Address) -> Option<ConsentLog> {
@@ -132,20 +212,61 @@ impl PatientConsentManagement {
 
     pub fn get_active_consent_count(env: Env, patient: Address) -> u32 {
         env.storage().persistent().get::<_, ConsentLog>(&DataKey::ConsentStorage(patient))
-            .map(|log| log.records.iter().filter(|r| r.active).count() as u32)
+            .map(|log| log.records.iter().filter(|r| Self::is_consent_active(&env, r)).count() as u32)
             .unwrap_or(0)
     }
 
     pub fn verify_consent_with_audit(env: Env, patient: Address, provider: Address) -> Result<(bool, u64, u64), Error> {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient, provider);
-        env.storage().persistent().get::<_, ConsentRecord>(&key)
-            .map(|r| (r.active, r.granted_at, r.revoked_at))
-            .ok_or(Error::ConsentNotFound)
+        let record: ConsentRecord = env.storage().persistent().get(&key).ok_or(Error::ConsentNotFound)?;
+        Ok((Self::is_consent_active(&env, &record), record.granted_at, record.revoked_at))
     }
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin = env.storage().instance().get::<DataKey, Address>(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if caller == &admin {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (Symbol::new(&env, "Paused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (Symbol::new(&env, "Unpaused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
     }
 
     fn require_initialized(env: &Env) -> Result<(), Error> {

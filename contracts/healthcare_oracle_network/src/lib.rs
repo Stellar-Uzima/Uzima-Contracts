@@ -9,11 +9,13 @@ mod disputes;
 mod oracles;
 mod submissions;
 #[cfg(test)]
+mod benchmarks;
+#[cfg(test)]
 mod test;
 mod types;
 mod utils;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
 
 pub use types::{
     AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute, DisputeStatus,
@@ -220,6 +222,17 @@ impl HealthcareOracleNetwork {
 
     pub fn get_oracle(env: Env, operator: Address) -> Option<OracleNode> {
         oracles::get_oracle(env, operator)
+    }
+
+    pub fn fetch_external_payload(
+        env: Env,
+        provider: Address,
+        feed_id: String,
+    ) -> Result<FeedPayload, Error> {
+        let symbol = Symbol::new(&env, "get_feed_payload");
+        let args = Vec::from_array(&env, [feed_id.clone().into_val(&env)]);
+        let payload: FeedPayload = utils::invoke_contract_cached(&env, provider, symbol, args);
+        Ok(payload)
     }
 
     pub fn get_dispute(env: Env, dispute_id: u64) -> Option<Dispute> {
