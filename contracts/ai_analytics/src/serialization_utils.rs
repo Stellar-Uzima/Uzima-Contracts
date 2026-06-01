@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, BytesN, Env, Map, String, Vec};
+use soroban_sdk::{Address, BytesN, Env, Map, String, Symbol, Vec};
 
 /// Maximum allowed nesting depth for serialized structures
 #[allow(dead_code)]
@@ -53,8 +53,8 @@ impl SerializationUtils {
 
         // Additional validation for empty collections
         if vec.is_empty() {
-            // Empty collections are valid, but we log this for debugging
-            soroban_sdk::log!(env, "Serializing empty collection");
+            // Empty collections are valid
+            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "VEC")), ());
         }
 
         Ok(())
@@ -65,7 +65,7 @@ impl SerializationUtils {
         Self::validate_map_size(map)?;
 
         if map.is_empty() {
-            soroban_sdk::log!(env, "Serializing empty map");
+            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "MAP")), ());
         }
 
         Ok(())
@@ -76,7 +76,7 @@ impl SerializationUtils {
         Self::validate_string_length(string)?;
 
         if string.is_empty() {
-            soroban_sdk::log!(env, "Serializing empty string");
+            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "STR")), ());
         }
 
         Ok(())
@@ -88,19 +88,15 @@ impl SerializationUtils {
         _bytes: &BytesN<N>,
     ) -> Result<(), SerializationError> {
         // In Soroban, we can't directly index or convert BytesN arrays
-        // We'll use a simple approach - just log that we're validating BytesN
-        soroban_sdk::log!(env, "Validating BytesN");
-
-        // For now, we'll accept all BytesN values as valid
-        // In a real implementation, you might want to add specific checks
-
+        // All BytesN values are accepted as valid
+        env.events().publish((Symbol::new(env, "SER_BYTESN"),), ());
         Ok(())
     }
 
     /// Validates Address for edge cases
     pub fn validate_address(env: &Env, _address: &Address) -> Result<(), SerializationError> {
-        // In Soroban, all addresses are valid, but we can add logging for edge cases
-        soroban_sdk::log!(env, "Serializing address");
+        // In Soroban, all addresses are valid
+        env.events().publish((Symbol::new(env, "SER_ADDR"),), ());
         Ok(())
     }
 }

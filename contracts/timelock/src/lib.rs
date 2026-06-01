@@ -19,6 +19,8 @@ pub struct QueuedTx {
     pub target: Address,
     pub call: BytesN<32>,
     pub eta: u64,
+    pub queued_at_timestamp: u64,
+    pub queued_at_sequence: u32,
 }
 
 const CFG: Symbol = symbol_short!("cfg");
@@ -57,6 +59,7 @@ impl Timelock {
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
         let eta = now.saturating_add(cfg.delay_seconds);
+        let current_seq: u32 = env.ledger().sequence();
         let mut q: Map<u64, QueuedTx> = env
             .storage()
             .persistent()
@@ -65,7 +68,7 @@ impl Timelock {
         if q.contains_key(id) {
             return Err(Error::AlreadyQueued);
         }
-        q.set(id, QueuedTx { target, call, eta });
+        q.set(id, QueuedTx { target, call, eta, queued_at_timestamp: now, queued_at_sequence: current_seq });
         env.storage().persistent().set(&QUEUE, &q);
         env.storage().persistent().extend_ttl(
             &QUEUE,
@@ -89,9 +92,18 @@ impl Timelock {
         );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
+        let current_seq: u32 = env.ledger().sequence();
+        
+        // Dual-check: BOTH timestamp AND ledger sequence must advance
+        const MIN_SEQUENCE_ADVANCE: u32 = 100; // ~100 ledger sequences per hour at 5s/ledger
+        
         if now < tx.eta {
             return Err(Error::NotReady);
         }
+        if current_seq < tx.queued_at_sequence.saturating_add(MIN_SEQUENCE_ADVANCE) {
+            return Err(Error::NotReady);
+        }
+        
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.
         // Here we just emit execution event and remove from queue.
         q.remove(id);
