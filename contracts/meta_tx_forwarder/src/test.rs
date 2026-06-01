@@ -138,6 +138,62 @@ fn test_nonce_increments() {
 }
 
 #[test]
+#[should_panic]
+fn test_replay_same_nonce_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let fee_collector = Address::generate(&env);
+    let user = Address::generate(&env);
+    let relayer = Address::generate(&env);
+    let target = Address::generate(&env);
+    let min_stake = 1000i128;
+
+    let (_, forwarder) = create_forwarder_contract(&env);
+
+    forwarder.initialize(&owner, &fee_collector, &min_stake);
+    forwarder.register_relayer(&owner, &relayer, &100u32);
+
+    let request = ForwardRequest {
+        from: user.clone(),
+        to: target.clone(),
+        value: 0,
+        gas: 100000,
+        nonce: 0,
+        deadline: env.ledger().timestamp() + 3600,
+        data: Bytes::new(&env),
+    };
+
+    let signature = BytesN::from_array(&env, &[0u8; 64]);
+
+    // First execution should succeed and increment user nonce
+    forwarder.execute(&relayer, &request, &signature);
+    // Replay with the same nonce should fail
+    forwarder.execute(&relayer, &request, &signature);
+}
+
+#[test]
+fn test_trusted_forwarder_context_is_consistent() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let fee_collector = Address::generate(&env);
+    let min_stake = 1000i128;
+
+    let (contract_id, forwarder) = create_forwarder_contract(&env);
+
+    forwarder.initialize(&owner, &fee_collector, &min_stake);
+
+    let stored_forwarder = forwarder.get_trusted_forwarder();
+    assert_eq!(stored_forwarder, contract_id);
+    let context_forwarder = crate::erc2771_context::ERC2771ContextImpl::get_trusted_forwarder(&env)
+        .expect("trusted forwarder must be stored in shared context storage");
+    assert_eq!(context_forwarder, contract_id);
+}
+
+#[test]
 fn test_unauthorized_relayer_fails() {
     let env = Env::default();
     env.mock_all_auths();

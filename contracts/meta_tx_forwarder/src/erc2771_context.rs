@@ -8,7 +8,8 @@
 //! `env.current_contract_address()` to get the correct sender address when called through
 //! a trusted forwarder.
 
-use soroban_sdk::{symbol_short, Address, Bytes, Env};
+use crate::DataKey;
+use soroban_sdk::{Address, Bytes, Env};
 
 /// ERC-2771 Context trait for contracts that support meta-transactions
 pub trait ERC2771Context {
@@ -74,21 +75,20 @@ impl ERC2771ContextImpl {
     pub fn set_trusted_forwarder(env: &Env, forwarder: Address) {
         env.storage()
             .instance()
-            .set(&symbol_short!("FORWARDER"), &forwarder);
+            .set(&DataKey::TrustedForwarder, &forwarder);
     }
 
     /// Get the trusted forwarder address
     pub fn get_trusted_forwarder(env: &Env) -> Option<Address> {
-        env.storage().instance().get(&symbol_short!("FORWARDER"))
+        env.storage().instance().get(&DataKey::TrustedForwarder)
     }
 
     /// Extract the original sender from forwarded call data
     ///
     /// In ERC-2771, the forwarder appends the original sender to the call data.
-    /// This function extracts it.
+    /// This function should parse the appended sender address if present.
     pub fn extract_sender_from_data(_env: &Env, _data: &Bytes) -> Option<Address> {
-        // In a real implementation, parse the last 32 bytes as an address
-        // This is a placeholder for the actual implementation
+        // Placeholder: actual sender extraction must decode the forwarded bytes.
         None
     }
 }
