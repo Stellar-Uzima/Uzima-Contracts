@@ -1,5 +1,9 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Symbol};
+
+pub mod types;
+
+pub use types::DataKey;
+use soroban_sdk::{contract, contracterror, contractimpl, Address, Env, Map};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -9,19 +13,16 @@ pub enum Error {
     NotInitialized = 2,
 }
 
-const ADMIN: Symbol = symbol_short!("admin");
-const SCORES: Symbol = symbol_short!("scores");
-
 #[contract]
 pub struct ReputationSystem;
 
 #[contractimpl]
 impl ReputationSystem {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&ADMIN) {
+        if env.storage().instance().has(&DataKey::ReputAdmin) {
             return Err(Error::AlreadyInitialized);
         }
-        env.storage().instance().set(&ADMIN, &admin);
+        env.storage().instance().set(&DataKey::ReputAdmin, &admin);
         Ok(())
     }
 
@@ -30,7 +31,7 @@ impl ReputationSystem {
         let scores: Map<Address, i128> = env
             .storage()
             .persistent()
-            .get(&SCORES)
+            .get(&DataKey::ReputScores)
             .unwrap_or(Map::new(&env));
         scores.get(user).unwrap_or(0)
     }
@@ -40,18 +41,18 @@ impl ReputationSystem {
         let admin: Address = env
             .storage()
             .instance()
-            .get(&ADMIN)
+            .get(&DataKey::ReputAdmin)
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
 
         let mut scores: Map<Address, i128> = env
             .storage()
             .persistent()
-            .get(&SCORES)
+            .get(&DataKey::ReputScores)
             .unwrap_or(Map::new(&env));
         let current = scores.get(user.clone()).unwrap_or(0);
         scores.set(user, current.saturating_add(amount));
-        env.storage().persistent().set(&SCORES, &scores);
+        env.storage().persistent().set(&DataKey::ReputScores, &scores);
         Ok(())
     }
 
@@ -60,19 +61,19 @@ impl ReputationSystem {
         let admin: Address = env
             .storage()
             .instance()
-            .get(&ADMIN)
+            .get(&DataKey::ReputAdmin)
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
 
         let mut scores: Map<Address, i128> = env
             .storage()
             .persistent()
-            .get(&SCORES)
+            .get(&DataKey::ReputScores)
             .unwrap_or(Map::new(&env));
         let current = scores.get(user.clone()).unwrap_or(0);
         let new_score = current.saturating_sub(amount).max(0);
         scores.set(user, new_score);
-        env.storage().persistent().set(&SCORES, &scores);
+        env.storage().persistent().set(&DataKey::ReputScores, &scores);
         Ok(())
     }
 }

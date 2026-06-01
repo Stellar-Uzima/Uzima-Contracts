@@ -1,9 +1,12 @@
 #![no_std]
 
 pub mod errors;
+pub mod types;
+
 pub use errors::Error;
+pub use types::DataKey;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
 };
 
 #[derive(Clone)]
@@ -23,9 +26,6 @@ pub struct QueuedTx {
     pub queued_at_sequence: u32,
 }
 
-const CFG: Symbol = symbol_short!("cfg");
-const QUEUE: Symbol = symbol_short!("queue");
-
 // TTL constants for storage management
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
@@ -36,7 +36,7 @@ pub struct Timelock;
 #[contractimpl]
 impl Timelock {
     pub fn initialize(env: Env, admin: Address, delay_seconds: u64) -> Result<(), Error> {
-        if env.storage().instance().has(&CFG) {
+        if env.storage().instance().has(&DataKey::TimelockConfig) {
             return Err(Error::AlreadyInitialized);
         }
         let cfg = TimelockConfig {
@@ -44,36 +44,35 @@ impl Timelock {
             delay_seconds,
             min_sequence_advance: (delay_seconds / 36) as u32,
         };
-        env.storage().instance().set(&CFG, &cfg);
+        env.storage().instance().set(&DataKey::TimelockConfig, &cfg);
         Ok(())
     }
 
     pub fn get_config(env: Env) -> Option<TimelockConfig> {
-        env.storage().instance().get(&CFG)
+        env.storage().instance().get(&DataKey::TimelockConfig)
     }
 
     pub fn queue(env: Env, id: u64, target: Address, call: BytesN<32>) -> Result<(), Error> {
         let cfg: TimelockConfig = env
             .storage()
             .instance()
-            .get(&CFG)
+            .get(&DataKey::TimelockConfig)
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
         let eta = now.saturating_add(cfg.delay_seconds);
-        let current_seq: u32 = env.ledger().sequence();
         let mut q: Map<u64, QueuedTx> = env
             .storage()
             .persistent()
-            .get(&QUEUE)
+            .get(&DataKey::TimelockQueue)
             .unwrap_or(Map::new(&env));
         if q.contains_key(id) {
             return Err(Error::AlreadyQueued);
         }
         let seq: u32 = env.ledger().sequence();
         q.set(id, QueuedTx { target, call, eta, queued_at_sequence: seq });
-        env.storage().persistent().set(&QUEUE, &q);
+        env.storage().persistent().set(&DataKey::TimelockQueue, &q);
         env.storage().persistent().extend_ttl(
-            &QUEUE,
+            &DataKey::TimelockQueue,
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
@@ -85,10 +84,10 @@ impl Timelock {
         let mut q: Map<u64, QueuedTx> = env
             .storage()
             .persistent()
-            .get(&QUEUE)
+            .get(&DataKey::TimelockQueue)
             .unwrap_or(Map::new(&env));
         env.storage().persistent().extend_ttl(
-            &QUEUE,
+            &DataKey::TimelockQueue,
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
@@ -97,7 +96,7 @@ impl Timelock {
         let cfg: TimelockConfig = env
             .storage()
             .instance()
-            .get(&CFG)
+            .get(&DataKey::TimelockConfig)
             .ok_or(Error::NotInitialized)?;
         if now < tx.eta {
             return Err(Error::NotReady);
@@ -109,9 +108,9 @@ impl Timelock {
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.
         // Here we just emit execution event and remove from queue.
         q.remove(id);
-        env.storage().persistent().set(&QUEUE, &q);
+        env.storage().persistent().set(&DataKey::TimelockQueue, &q);
         env.storage().persistent().extend_ttl(
-            &QUEUE,
+            &DataKey::TimelockQueue,
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
@@ -151,7 +150,7 @@ mod test {
             let q: Map<u64, QueuedTx> = env
                 .storage()
                 .persistent()
-                .get(&QUEUE)
+                .get(&DataKey::TimelockQueue)
                 .unwrap_or(Map::new(&env));
             assert!(!q.contains_key(1));
         });

@@ -11,17 +11,19 @@
 //!    or `refund_escrow`. Instead, a pull-payment pattern (`add_credit`) is used so that
 //!    recipients withdraw funds in a separate transaction, eliminating reentrancy vectors.
 //!
-//! The `REENTRANCY_LOCK` guard provides an additional defense-in-depth layer.
+//! The `DataKey::EscrowReentrancyLock` guard provides an additional defense-in-depth layer.
 #![no_std]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(dead_code)]
 
 pub mod errors;
+pub mod types;
+
 pub use errors::Error;
+pub use types::DataKey;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -81,14 +83,6 @@ pub struct FeeConfig {
     pub fee_receiver: Address,
 }
 
-const ESCROWS: Symbol = symbol_short!("escrow");
-const FEE_CONF: Symbol = symbol_short!("feeconf");
-const REENTRANCY_LOCK: Symbol = symbol_short!("relock");
-const CREDITS: Symbol = symbol_short!("credits");
-const STATS: Symbol = symbol_short!("stats");
-const ADMIN: Symbol = symbol_short!("admin");
-const DAILY_STATS: Symbol = symbol_short!("dlystats");
-
 // TTL constants for storage management
 /// TTL threshold: extend persistent data if remaining TTL falls below this
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
@@ -104,32 +98,32 @@ fn require_not_reentrant(env: &Env) -> Result<(), Error> {
     let locked: bool = env
         .storage()
         .temporary()
-        .get(&REENTRANCY_LOCK)
+        .get(&DataKey::EscrowReentrancyLock)
         .unwrap_or(false);
     if locked {
         return Err(Error::ReentrancyGuard);
     }
-    env.storage().temporary().set(&REENTRANCY_LOCK, &true);
+    env.storage().temporary().set(&DataKey::EscrowReentrancyLock, &true);
     env.storage()
         .temporary()
-        .extend_ttl(&REENTRANCY_LOCK, 0, TEMP_SESSION_TTL);
+        .extend_ttl(&DataKey::EscrowReentrancyLock, 0, TEMP_SESSION_TTL);
     Ok(())
 }
 
 fn clear_reentrancy(env: &Env) {
-    env.storage().temporary().remove(&REENTRANCY_LOCK);
+    env.storage().temporary().remove(&DataKey::EscrowReentrancyLock);
 }
 
 fn add_credit(env: &Env, addr: &Address, delta: i128) {
     let mut credits: Map<Address, i128> = env
         .storage()
         .persistent()
-        .get(&CREDITS)
+        .get(&DataKey::EscrowCredits)
         .unwrap_or(Map::new(&env));
     let current = credits.get(addr.clone()).unwrap_or(0);
     let new_bal = current.saturating_add(delta);
     credits.set(addr.clone(), new_bal);
-    env.storage().persistent().set(&CREDITS, &credits);
+    env.storage().persistent().set(&DataKey::EscrowCredits, &credits);
 }
 
 #[allow(clippy::too_many_arguments)] // All boolean flags represent distinct independent escrow state transitions
@@ -145,7 +139,7 @@ fn update_stats(
     let mut stats: PlatformStats = env
         .storage()
         .instance()
-        .get(&STATS)
+        .get(&DataKey::EscrowStats)
         .unwrap_or(PlatformStats {
             total_volume: 0,
             total_escrows: 0,
@@ -164,7 +158,7 @@ fn update_stats(
         let mut daily_map: Map<u64, DailyStats> = env
             .storage()
             .persistent()
-            .get(&DAILY_STATS)
+            .get(&DataKey::EscrowDailyStats)
             .unwrap_or(Map::new(env));
         let mut daily = daily_map.get(day_id).unwrap_or(DailyStats {
             day_id,
@@ -174,7 +168,7 @@ fn update_stats(
         daily.volume = daily.volume.saturating_add(volume);
         daily.count += 1;
         daily_map.set(day_id, daily);
-        env.storage().persistent().set(&DAILY_STATS, &daily_map);
+        env.storage().persistent().set(&DataKey::EscrowDailyStats, &daily_map);
     }
     if settled {
         stats.settled_count += 1;
@@ -194,16 +188,16 @@ fn update_stats(
             .saturating_sub(active_delta.unsigned_abs().into());
     }
 
-    env.storage().instance().set(&STATS, &stats);
+    env.storage().instance().set(&DataKey::EscrowStats, &stats);
 }
 
 #[contractimpl]
 impl EscrowContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&ADMIN) {
+        if env.storage().instance().has(&DataKey::EscrowAdmin) {
             return Err(Error::Unauthorized);
         }
-        env.storage().instance().set(&ADMIN, &admin);
+        env.storage().instance().set(&DataKey::EscrowAdmin, &admin);
         Ok(())
     }
 
@@ -217,7 +211,7 @@ impl EscrowContract {
         let admin: Address = env
             .storage()
             .instance()
-            .get(&ADMIN)
+            .get(&DataKey::EscrowAdmin)
             .ok_or(Error::NotAdmin)?;
         if caller != admin {
             return Err(Error::NotAdmin);
@@ -230,12 +224,12 @@ impl EscrowContract {
             fee_receiver,
             platform_fee_bps,
         };
-        env.storage().instance().set(&FEE_CONF, &conf);
+        env.storage().instance().set(&DataKey::EscrowFeeConfig, &conf);
         Ok(())
     }
 
     pub fn get_fee_config(env: Env) -> Option<FeeConfig> {
-        env.storage().instance().get(&FEE_CONF)
+        env.storage().instance().get(&DataKey::EscrowFeeConfig)
     }
 
     pub fn create_escrow(
@@ -253,7 +247,7 @@ impl EscrowContract {
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         if escrows.contains_key(order_id) {
             return Err(Error::EscrowExists);
@@ -271,7 +265,7 @@ impl EscrowContract {
             reason: String::from_str(&env, ""),
         };
         escrows.set(order_id, e);
-        env.storage().persistent().set(&ESCROWS, &escrows);
+        env.storage().persistent().set(&DataKey::EscrowEscrows, &escrows);
 
         update_stats(&env, amount, true, false, false, false, 0);
 
@@ -286,7 +280,7 @@ impl EscrowContract {
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
 
@@ -296,7 +290,7 @@ impl EscrowContract {
 
         e.status = EscrowStatus::Disputed;
         escrows.set(order_id, e.clone());
-        env.storage().persistent().set(&ESCROWS, &escrows);
+        env.storage().persistent().set(&DataKey::EscrowEscrows, &escrows);
 
         update_stats(&env, 0, false, false, false, true, 0);
 
@@ -310,7 +304,7 @@ impl EscrowContract {
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
 
@@ -331,7 +325,7 @@ impl EscrowContract {
         }
 
         escrows.set(order_id, e);
-        env.storage().persistent().set(&ESCROWS, &escrows);
+        env.storage().persistent().set(&DataKey::EscrowEscrows, &escrows);
         Ok(())
     }
 
@@ -341,13 +335,13 @@ impl EscrowContract {
         let fee_conf: FeeConfig = env
             .storage()
             .instance()
-            .get(&FEE_CONF)
+            .get(&DataKey::EscrowFeeConfig)
             .ok_or(Error::FeeNotSet)?;
 
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
 
@@ -367,7 +361,7 @@ impl EscrowContract {
         // effects: mark settled
         e.status = EscrowStatus::Settled;
         escrows.set(order_id, e.clone());
-        env.storage().persistent().set(&ESCROWS, &escrows);
+        env.storage().persistent().set(&DataKey::EscrowEscrows, &escrows);
 
         // interactions: credit balances via pull-payment pattern
         let fee = e
@@ -401,7 +395,7 @@ impl EscrowContract {
         let mut escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         let mut e = escrows.get(order_id).ok_or(Error::EscrowNotFound)?;
 
@@ -417,7 +411,7 @@ impl EscrowContract {
         e.status = EscrowStatus::Refunded;
         e.reason = reason.clone();
         escrows.set(order_id, e.clone());
-        env.storage().persistent().set(&ESCROWS, &escrows);
+        env.storage().persistent().set(&DataKey::EscrowEscrows, &escrows);
 
         // credit payer for refund
         add_credit(&env, &e.payer, e.amount);
@@ -445,7 +439,7 @@ impl EscrowContract {
         let escrows: Map<u64, Escrow> = env
             .storage()
             .persistent()
-            .get(&ESCROWS)
+            .get(&DataKey::EscrowEscrows)
             .unwrap_or(Map::new(&env));
         escrows.get(order_id)
     }
@@ -454,7 +448,7 @@ impl EscrowContract {
         let credits: Map<Address, i128> = env
             .storage()
             .persistent()
-            .get(&CREDITS)
+            .get(&DataKey::EscrowCredits)
             .unwrap_or(Map::new(&env));
         credits.get(addr).unwrap_or(0)
     }
@@ -468,14 +462,14 @@ impl EscrowContract {
         let mut credits: Map<Address, i128> = env
             .storage()
             .persistent()
-            .get(&CREDITS)
+            .get(&DataKey::EscrowCredits)
             .unwrap_or(Map::new(&env));
         let amount = credits.get(to.clone()).unwrap_or(0);
         if amount <= 0 {
             return Err(Error::NoCredit);
         }
         credits.set(to.clone(), 0);
-        env.storage().persistent().set(&CREDITS, &credits);
+        env.storage().persistent().set(&DataKey::EscrowCredits, &credits);
         env.events()
             .publish((symbol_short!("Withdrawn"),), (to.clone(), amount, token));
         clear_reentrancy(&env);
@@ -486,7 +480,7 @@ impl EscrowContract {
     pub fn get_total_volume(env: Env) -> i128 {
         env.storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .map(|s: PlatformStats| s.total_volume)
             .unwrap_or(0)
     }
@@ -494,7 +488,7 @@ impl EscrowContract {
     pub fn get_total_escrows(env: Env) -> u64 {
         env.storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .map(|s: PlatformStats| s.total_escrows)
             .unwrap_or(0)
     }
@@ -503,7 +497,7 @@ impl EscrowContract {
         let stats: PlatformStats = env
             .storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
@@ -522,7 +516,7 @@ impl EscrowContract {
         let stats: PlatformStats = env
             .storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
@@ -541,7 +535,7 @@ impl EscrowContract {
         let stats: PlatformStats = env
             .storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
@@ -559,7 +553,7 @@ impl EscrowContract {
     pub fn get_active_escrows_count(env: Env) -> u64 {
         env.storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .map(|s: PlatformStats| s.active_count)
             .unwrap_or(0)
     }
@@ -567,7 +561,7 @@ impl EscrowContract {
     pub fn get_stats_summary(env: Env) -> PlatformStats {
         env.storage()
             .instance()
-            .get(&STATS)
+            .get(&DataKey::EscrowStats)
             .unwrap_or(PlatformStats {
                 total_volume: 0,
                 total_escrows: 0,
@@ -607,7 +601,7 @@ impl EscrowContract {
         let daily_map: Map<u64, DailyStats> = env
             .storage()
             .persistent()
-            .get(&DAILY_STATS)
+            .get(&DataKey::EscrowDailyStats)
             .unwrap_or(Map::new(&env));
         daily_map.get(day_id)
     }
@@ -777,19 +771,21 @@ mod test {
         // Manually trip the reentrancy lock to simulate a reentrant call mid-execution
         env.storage()
             .temporary()
-            .set(&symbol_short!("relock"), &true);
+            .set(&DataKey::EscrowReentrancyLock, &true);
 
         // Any state-changing call should now be rejected with ReentrancyGuard error
         let res = client.try_release_escrow(&10u64);
         assert!(res.is_err());
 
         // Clear the lock and verify normal operation resumes
-        env.storage().temporary().remove(&symbol_short!("relock"));
+        env.storage()
+            .temporary()
+            .remove(&DataKey::EscrowReentrancyLock);
         // (escrow already settled above would fail for a different reason, so just verify lock cleared)
         let lock_val: bool = env
             .storage()
             .temporary()
-            .get(&symbol_short!("relock"))
+            .get(&DataKey::EscrowReentrancyLock)
             .unwrap_or(false);
         assert!(!lock_val);
     }
