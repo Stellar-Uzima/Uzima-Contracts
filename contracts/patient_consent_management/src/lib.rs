@@ -32,6 +32,7 @@ pub struct ConsentLog {
 pub enum DataKey {
     Initialized,
     Admin,
+    Paused,
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
 }
@@ -48,6 +49,7 @@ impl PatientConsentManagement {
         }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
         events::publish_initialization(&env, &admin);
         Ok(())
     }
@@ -55,6 +57,7 @@ impl PatientConsentManagement {
     pub fn grant_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         if patient == provider {
             return Err(Error::InvalidProvider);
         }
@@ -63,7 +66,7 @@ impl PatientConsentManagement {
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if r.active { return Err(Error::ConsentAlreadyExists); }
         }
-        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, expires_at: 0, revoked_at: 0, active: true };
+        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true };
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
         log.record_count += 1;
@@ -81,6 +84,7 @@ impl PatientConsentManagement {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         if patient == provider {
             return Err(Error::InvalidProvider);
         }
@@ -113,6 +117,7 @@ impl PatientConsentManagement {
     pub fn batch_grant_consent(env: Env, patient: Address, grantees: Vec<Address>) -> Result<u32, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let mut granted: u32 = 0;
         for provider in grantees.iter() {
@@ -136,6 +141,7 @@ impl PatientConsentManagement {
     pub fn revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
         let mut record: ConsentRecord = env.storage().persistent().get(&key).ok_or(Error::ConsentNotFound)?;
@@ -180,6 +186,7 @@ impl PatientConsentManagement {
     pub fn cleanup_expired_consents(env: Env, patient: Address) -> Result<u32, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
         let now = env.ledger().timestamp();
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         let mut updated = Vec::new(&env);
@@ -218,6 +225,48 @@ impl PatientConsentManagement {
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)
+    }
+
+    pub fn is_paused(env: Env) -> bool {
+        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin = env.storage().instance().get::<DataKey, Address>(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        if caller == &admin {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (Symbol::new(&env, "Paused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (Symbol::new(&env, "Unpaused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
     }
 
     fn require_initialized(env: &Env) -> Result<(), Error> {
