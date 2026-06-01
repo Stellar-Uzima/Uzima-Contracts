@@ -11,6 +11,7 @@ use soroban_sdk::{
 pub struct TimelockConfig {
     pub admin: Address,
     pub delay_seconds: u64,
+    pub min_sequence_advance: u32,
 }
 
 #[derive(Clone)]
@@ -19,7 +20,6 @@ pub struct QueuedTx {
     pub target: Address,
     pub call: BytesN<32>,
     pub eta: u64,
-    pub queued_at_timestamp: u64,
     pub queued_at_sequence: u32,
 }
 
@@ -42,6 +42,7 @@ impl Timelock {
         let cfg = TimelockConfig {
             admin,
             delay_seconds,
+            min_sequence_advance: (delay_seconds / 36) as u32,
         };
         env.storage().instance().set(&CFG, &cfg);
         Ok(())
@@ -68,7 +69,8 @@ impl Timelock {
         if q.contains_key(id) {
             return Err(Error::AlreadyQueued);
         }
-        q.set(id, QueuedTx { target, call, eta, queued_at_timestamp: now, queued_at_sequence: current_seq });
+        let seq: u32 = env.ledger().sequence();
+        q.set(id, QueuedTx { target, call, eta, queued_at_sequence: seq });
         env.storage().persistent().set(&QUEUE, &q);
         env.storage().persistent().extend_ttl(
             &QUEUE,
@@ -92,18 +94,18 @@ impl Timelock {
         );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
-        let current_seq: u32 = env.ledger().sequence();
-        
-        // Dual-check: BOTH timestamp AND ledger sequence must advance
-        const MIN_SEQUENCE_ADVANCE: u32 = 100; // ~100 ledger sequences per hour at 5s/ledger
-        
+        let cfg: TimelockConfig = env
+            .storage()
+            .instance()
+            .get(&CFG)
+            .ok_or(Error::NotInitialized)?;
         if now < tx.eta {
             return Err(Error::NotReady);
         }
-        if current_seq < tx.queued_at_sequence.saturating_add(MIN_SEQUENCE_ADVANCE) {
+        let current_seq: u32 = env.ledger().sequence();
+        if current_seq < tx.queued_at_sequence.saturating_add(cfg.min_sequence_advance) {
             return Err(Error::NotReady);
         }
-        
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.
         // Here we just emit execution event and remove from queue.
         q.remove(id);

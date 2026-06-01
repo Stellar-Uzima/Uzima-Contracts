@@ -267,7 +267,6 @@ impl PharmaSupplyChainContract {
             return Err(Error::Unauthorized);
         }
 
-        // Check for duplicate lot number
         if env.storage().persistent().has(&DataKey::BatchByLotNumber(lot_number.clone())) {
             return Err(Error::BatchAlreadyExists);
         }
@@ -286,7 +285,11 @@ impl PharmaSupplyChainContract {
             compliance_ok: true,
         };
         env.storage().persistent().set(&DataKey::Batch(id), &batch);
-        env.storage().persistent().set(&DataKey::BatchByLotNumber(lot_number.clone()), &true);
+        env.storage().persistent().set(&DataKey::BatchByLotNumber(lot_number.clone()), &id);
+        env.events().publish(
+            (symbol_short!("BATCH"), symbol_short!("CREATE")),
+            (id, lot_number, env.ledger().timestamp()),
+        );
         Ok(id)
     }
 
@@ -596,6 +599,58 @@ mod test {
         let recommendation = client.optimize_inventory(&distributor, &140u32);
         assert!(recommendation.reorder_needed);
         assert_eq!(recommendation.recommended_reorder_units, 40u32);
+    }
+
+    #[test]
+    fn test_duplicate_batch_lot_number_rejected() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PharmaSupplyChainContract);
+        let client = PharmaSupplyChainContractClient::new(&env, &contract_id);
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let manufacturer_operator = Address::generate(&env);
+
+        client.initialize(&admin);
+        let manufacturer_id = client.register_manufacturer(
+            &admin,
+            &manufacturer_operator,
+            &String::from_str(&env, "Test Pharma"),
+            &String::from_str(&env, "LIC-001"),
+        );
+        let medication_id = client.register_medication(
+            &manufacturer_operator,
+            &manufacturer_id,
+            &String::from_str(&env, "Test Drug"),
+            &String::from_str(&env, "NDC-001"),
+            &false,
+            &0i32,
+            &0i32,
+            &String::from_str(&env, "FDA"),
+        );
+
+        let lot = &String::from_str(&env, "BATCH-001");
+        let auth = &BytesN::from_array(&env, &[1u8; 32]);
+
+        let first = client.try_create_batch(
+            &manufacturer_operator,
+            &medication_id,
+            lot,
+            &100u32,
+            auth,
+            &9_999_999u64,
+        );
+        assert!(first.is_ok());
+
+        let second = client.try_create_batch(
+            &manufacturer_operator,
+            &medication_id,
+            lot,
+            &200u32,
+            auth,
+            &9_999_999u64,
+        );
+        assert_eq!(second, Err(Ok(Error::BatchAlreadyExists)));
     }
 
     #[test]
