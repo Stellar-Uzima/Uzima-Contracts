@@ -2,10 +2,10 @@
 #![allow(clippy::expect_used)]
 use crate::{
     AtomicTxStatus, ChainId, CrossChainBridgeContract, CrossChainBridgeContractClient,
-    CrossChainEventType, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
+    CrossChainEventType, DataKey, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
     RollbackOpType, RollbackStatus, SyncStatus,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 fn create_contract(
     env: &Env,
@@ -1136,6 +1136,167 @@ fn test_nonce_replay_protection() {
     );
 
     assert_eq!(result, Err(Ok(Error::InvalidNonce)));
+}
+
+// ==================== Chaos / Resilience Tests ====================
+
+/// Chaos test: message sent but acknowledgment lost — verify idempotent retry works
+#[test]
+fn test_chaos_lost_acknowledgment_retry() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let message_id = BytesN::from_array(&env, &[0xca_u8; 32]);
+    client.submit_message(
+        &validator,
+        &message_id,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xSENDER"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"record_id\":42}"),
+        &1,
+        &generate_signature(&env),
+    );
+
+    let msg = client.get_message(&message_id).unwrap();
+    assert_eq!(msg.status, MessageStatus::Pending);
+
+    // Acknowledge (confirm) once
+    client.confirm_message(&validator, &message_id);
+
+    // Second confirm by the same validator must be rejected (idempotency guard)
+    let dup = client.try_confirm_message(&validator, &message_id);
+    assert_eq!(dup, Err(Ok(Error::DuplicateConfirmation)));
+
+    // Message should still be manageable
+    let msg = client.get_message(&message_id).unwrap();
+    assert!(msg.status == MessageStatus::Pending || msg.status == MessageStatus::Verified);
+}
+
+/// Chaos test: partial message delivery — verify atomic all-or-nothing
+#[test]
+fn test_chaos_partial_delivery_atomicity() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // Create an atomic transaction with two message IDs
+    let tx_id = BytesN::from_array(&env, &[0xbb_u8; 32]);
+    let msg_id_a = BytesN::from_array(&env, &[0xbc_u8; 32]);
+    let msg_id_b = BytesN::from_array(&env, &[0xbd_u8; 32]);
+
+    client.submit_message(
+        &validator,
+        &msg_id_a,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xA"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"data\":\"a\"}"),
+        &1,
+        &generate_signature(&env),
+    );
+    client.submit_message(
+        &validator,
+        &msg_id_b,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xB"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"data\":\"b\"}"),
+        &2,
+        &generate_signature(&env),
+    );
+
+    let message_ids = soroban_sdk::vec![&env, msg_id_a.clone(), msg_id_b.clone()];
+    client.initiate_atomic_tx(&recipient, &tx_id, &message_ids);
+
+    // Only confirm message A, not B
+    client.confirm_message(&validator, &msg_id_a);
+
+    // Atomic tx should NOT be committable — partial state
+    let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
+    assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
+
+    // Abort the atomic tx — clean rollback
+    client.abort_atomic_tx(&recipient, &tx_id);
+    let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
+    assert_eq!(atomic_tx.status, AtomicTxStatus::Aborted);
+
+    // Individual messages should still be in their own states
+    let msg_a = client.get_message(&msg_id_a).unwrap();
+    let msg_b = client.get_message(&msg_id_b).unwrap();
+    assert_eq!(msg_a.status, MessageStatus::Pending);
+    assert_eq!(msg_b.status, MessageStatus::Pending);
+}
+
+/// Chaos test: relayer goes offline mid-batch — verify pending messages are recoverable
+#[test]
+fn test_chaos_relayer_offline_recovery() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let mut ids = soroban_sdk::vec![&env];
+    for i in 0..5u64 {
+        let mut arr = [0u8; 32];
+        arr[31] = i as u8;
+        let msg_id = BytesN::from_array(&env, &arr);
+        client.submit_message(
+            &validator,
+            &msg_id,
+            &ChainId::Ethereum,
+            &ChainId::Stellar,
+            &String::from_str(&env, "0xRELAY"),
+            &recipient,
+            &MessageType::RecordSync,
+            &String::from_str(&env, "{\"seq\":"),
+            &(i + 1),
+            &generate_signature(&env),
+        );
+        ids.push_back(msg_id);
+    }
+
+    // Confirm only first 2 (simulating relayer going offline)
+    client.confirm_message(&validator, &ids.get(0).unwrap());
+    client.confirm_message(&validator, &ids.get(1).unwrap());
+
+    // Remaining messages should still be Pending (recoverable)
+    for i in 2..5 {
+        let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
+        assert_eq!(msg.status, MessageStatus::Pending, "Message {} should be recoverable", i);
+    }
+
+    // After relayer comes back online, confirm remaining
+    for i in 2..5 {
+        client.confirm_message(&validator, &ids.get(i).unwrap());
+    }
+
+    // All messages remain Pending with single validator (min_confirmations=2)
+    for i in 0..5 {
+        let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
+        assert_eq!(msg.status, MessageStatus::Pending, "Message {} is still recoverable", i);
+    }
 }
 
 #[test]

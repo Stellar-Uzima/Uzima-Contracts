@@ -905,7 +905,7 @@ impl CrossChainBridgeContract {
 
         let min_confirmations: u32 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
@@ -1130,7 +1130,7 @@ impl CrossChainBridgeContract {
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::OracleCount)
             .unwrap_or(0);
         let report_id = count.checked_add(1).ok_or(Error::Overflow)?;
@@ -1151,7 +1151,7 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::OracleReport(report_id), &report);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::OracleCount, &report_id);
 
         // Update oracle stats
@@ -1288,7 +1288,7 @@ impl CrossChainBridgeContract {
         // Proof is verified once enough validators attest
         let min_conf: u32 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
@@ -1360,7 +1360,7 @@ impl CrossChainBridgeContract {
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::EventCount)
             .unwrap_or(0);
         let event_id = count.checked_add(1).ok_or(Error::Overflow)?;
@@ -1380,7 +1380,7 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::Event(event_id), &event);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::EventCount, &event_id);
 
         env.events().publish(
@@ -1630,11 +1630,11 @@ impl CrossChainBridgeContract {
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::RollbackCount)
             .unwrap_or(0);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::RollbackCount, &(count.saturating_add(1)));
 
         env.events().publish(
@@ -1969,7 +1969,7 @@ impl CrossChainBridgeContract {
     fn require_chain_supported(env: &Env, chain: &ChainId) -> Result<(), Error> {
         let chains: Vec<ChainId> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::SupportedChains)
             .unwrap_or(Vec::new(&env));
 
