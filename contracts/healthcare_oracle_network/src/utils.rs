@@ -6,17 +6,17 @@ use crate::types::{
     TreatmentOutcomeData,
 };
 
-pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::ClinicalTrial(data) => data.trial_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::ClinicalTrial(data) => Ok(data.trial_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
-pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::TreatmentOutcome(data) => data.outcome_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::TreatmentOutcome(data) => Ok(data.outcome_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 

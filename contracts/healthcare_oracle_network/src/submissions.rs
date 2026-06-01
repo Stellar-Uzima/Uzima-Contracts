@@ -85,7 +85,7 @@ pub fn submit_clinical_trial(
         published_at,
     });
 
-    let feed_id = utils::payload_feed_id_from_trial(&payload);
+    let feed_id = utils::payload_feed_id_from_trial(&payload)?;
     utils::submit_payload(
         env,
         operator,
@@ -170,7 +170,7 @@ pub fn submit_treatment_outcome(
         reported_at,
     });
 
-    let feed_id = utils::payload_feed_id_from_outcome(&payload);
+    let feed_id = utils::payload_feed_id_from_outcome(&payload)?;
     utils::submit_payload(
         env,
         operator,
