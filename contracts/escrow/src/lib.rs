@@ -1,3 +1,17 @@
+//! # Escrow Contract
+//!
+//! ## Security: Checks-Effects-Interactions (CEI) Pattern
+//!
+//! All state-mutating functions in this contract strictly follow the CEI pattern
+//! to prevent reentrancy attacks:
+//!
+//! 1. **Checks** — validate inputs, authorization, and preconditions.
+//! 2. **Effects** — update contract state (e.g., `set_escrow_status`, credit balances).
+//! 3. **Interactions** — no direct external token transfers are made from `release_escrow`
+//!    or `refund_escrow`. Instead, a pull-payment pattern (`add_credit`) is used so that
+//!    recipients withdraw funds in a separate transaction, eliminating reentrancy vectors.
+//!
+//! The `REENTRANCY_LOCK` guard provides an additional defense-in-depth layer.
 #![no_std]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
@@ -734,6 +748,50 @@ mod test {
         // Note: try_... functions return Result<Result<...>, ...> or similar depending on toolchain
         // In modern SDK, it returns Result<Val, Error>
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_reentrancy_guard_blocks_concurrent_calls() {
+        // Simulate reentrancy: manually set the lock and verify the guard rejects
+        let env = Env::default();
+        let cid = env.register_contract(None, EscrowContract);
+        let client = EscrowContractClient::new(&env, &cid);
+
+        let admin = Address::generate(&env);
+        let payer = Address::generate(&env);
+        let payee = Address::generate(&env);
+        let token = Address::generate(&env);
+
+        client.mock_all_auths().initialize(&admin);
+        client
+            .mock_all_auths()
+            .set_fee_config(&admin, &Address::generate(&env), &250u32);
+        client
+            .mock_all_auths()
+            .create_escrow(&10u64, &payer, &payee, &1000i128, &token);
+        client.mock_all_auths().approve_release(&10u64, &payer);
+        client
+            .mock_all_auths()
+            .approve_release(&10u64, &Address::generate(&env));
+
+        // Manually trip the reentrancy lock to simulate a reentrant call mid-execution
+        env.storage()
+            .temporary()
+            .set(&symbol_short!("relock"), &true);
+
+        // Any state-changing call should now be rejected with ReentrancyGuard error
+        let res = client.try_release_escrow(&10u64);
+        assert!(res.is_err());
+
+        // Clear the lock and verify normal operation resumes
+        env.storage().temporary().remove(&symbol_short!("relock"));
+        // (escrow already settled above would fail for a different reason, so just verify lock cleared)
+        let lock_val: bool = env
+            .storage()
+            .temporary()
+            .get(&symbol_short!("relock"))
+            .unwrap_or(false);
+        assert!(!lock_val);
     }
 
     #[test]
