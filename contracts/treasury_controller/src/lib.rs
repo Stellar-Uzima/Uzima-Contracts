@@ -548,11 +548,17 @@ impl TreasuryController {
     }
 
     /// Get total number of proposals
-    pub fn get_proposal_count(env: Env) -> u64 {
+    pub fn get_proposal_count(env: Env) -> Result<u64, Error> {
+        // Verify config exists (contract is initialized)
         env.storage()
             .instance()
+            .get::<DataKey, TreasuryConfig>(&DataKey::Config)
+            .ok_or(Error::ConfigNotFound)?;
+        Ok(env
+            .storage()
+            .instance()
             .get(&DataKey::ProposalCount)
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
 
     /// Check if proposal is ready for execution
