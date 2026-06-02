@@ -1,5 +1,6 @@
 // Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::manual_range_contains)]

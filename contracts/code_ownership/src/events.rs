@@ -1,28 +1,108 @@
-use crate::types::{ModuleOwnership, ReviewRoute};
-use soroban_sdk::{symbol_short, Address, Env};
+//! # CodeOwnership Events Module
+//!
+//! Standardized event emissions for the code_ownership contract.
+//! Topic naming convention: (CODE, ACTION)
 
-pub fn publish_initialization(env: &Env, admin: &Address) {
+#![allow(dead_code)]
+
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum EventType {
+    Initialized,
+    Action,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum OperationCategory {
+    Administrative,
+    Operations,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CodeOwnershipEventData {
+    pub user: Address,
+    pub action: String,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CodeOwnershipEvent {
+    pub event_type: EventType,
+    pub category: OperationCategory,
+    pub timestamp: u64,
+    pub user_id: Address,
+    pub block_height: u64,
+    pub data: CodeOwnershipEventData,
+}
+
+/// Emitted when initialize is called.
+pub fn emit_initialize(env: &Env, caller: &Address) {
+    let event = CodeOwnershipEvent {
+        event_type: EventType::Initialized,
+        category: OperationCategory::Administrative,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: CodeOwnershipEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "initialize"),
+        },
+    };
     env.events()
-        .publish((symbol_short!("OWNER"), symbol_short!("INIT")), admin);
+        .publish((symbol_short!("CODE"), symbol_short!("INIT")), event);
 }
 
-pub fn publish_module_registered(env: &Env, ownership: &ModuleOwnership) {
-    env.events().publish(
-        (symbol_short!("OWNER"), symbol_short!("REG")),
-        (ownership.module_id.clone(), ownership.primary_owner.clone()),
-    );
+/// Emitted when register_module is called.
+pub fn emit_register_module(env: &Env, caller: &Address) {
+    let event = CodeOwnershipEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: CodeOwnershipEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "register_module"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CODE"), symbol_short!("REGISTER_")), event);
 }
 
-pub fn publish_ownership_updated(env: &Env, ownership: &ModuleOwnership) {
-    env.events().publish(
-        (symbol_short!("OWNER"), symbol_short!("UPD")),
-        (ownership.module_id.clone(), ownership.primary_owner.clone()),
-    );
+/// Emitted when update_module_ownership is called.
+pub fn emit_update_module_ownership(env: &Env, caller: &Address) {
+    let event = CodeOwnershipEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: CodeOwnershipEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "update_module_ownership"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CODE"), symbol_short!("UPDATE_MO")), event);
 }
 
-pub fn publish_review_route_configured(env: &Env, route: &ReviewRoute) {
-    env.events().publish(
-        (symbol_short!("OWNER"), symbol_short!("ROUTE")),
-        (route.module_id.clone(), route.required_reviewers),
-    );
+/// Emitted when configure_review_route is called.
+pub fn emit_configure_review_route(env: &Env, caller: &Address) {
+    let event = CodeOwnershipEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: CodeOwnershipEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "configure_review_route"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CODE"), symbol_short!("CONFIGURE")), event);
 }

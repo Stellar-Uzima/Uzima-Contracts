@@ -1,5 +1,6 @@
 // Public Health Surveillance Platform - Privacy-Preserving Disease Monitoring and Response
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 

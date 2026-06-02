@@ -1,5 +1,6 @@
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
+pub mod events;
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]

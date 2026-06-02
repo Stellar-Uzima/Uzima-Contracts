@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 pub mod detection;
 pub mod enforcement;

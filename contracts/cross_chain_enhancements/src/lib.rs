@@ -1,5 +1,6 @@
 // Cross-Chain Bridge Enhancements - ZK Proofs and Advanced Security Features
 #![no_std]
+pub mod events;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec,

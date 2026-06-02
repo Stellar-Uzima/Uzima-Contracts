@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 //! # Meta-Transaction Forwarder (ERC-2771 Compatible)
 //!

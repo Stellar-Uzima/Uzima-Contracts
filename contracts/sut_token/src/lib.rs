@@ -1,5 +1,6 @@
 // SUT Token - Stellar Utility Token with checked arithmetic throughout
 #![no_std]
+pub mod events;
 #![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{

@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 // #[cfg(test)]
 // mod test;

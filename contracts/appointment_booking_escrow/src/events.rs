@@ -1,137 +1,176 @@
-use soroban_sdk::{symbol_short, Address, Env};
+//! # AppointmentBookingEscrow Events Module
+//!
+//! Standardized event emissions for the appointment_booking_escrow contract.
+//! Topic naming convention: (ABESC, ACTION)
 
-pub fn publish_appointment_booked(
-    env: &Env,
-    appointment_id: u64,
-    patient: &Address,
-    provider: &Address,
-    amount: i128,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("BOOK")),
-        (appointment_id, patient, provider, amount, timestamp),
-    );
+#![allow(dead_code)]
+
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum EventType {
+    Initialized,
+    Action,
 }
 
-pub fn publish_appointment_confirmed(
-    env: &Env,
-    appointment_id: u64,
-    provider: &Address,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("CONF")),
-        (appointment_id, provider, timestamp),
-    );
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum OperationCategory {
+    Administrative,
+    Operations,
 }
 
-pub fn publish_appointment_refunded(
-    env: &Env,
-    appointment_id: u64,
-    patient: &Address,
-    amount: i128,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("REFUND")),
-        (appointment_id, patient, amount, timestamp),
-    );
+#[derive(Clone)]
+#[contracttype]
+pub struct AppointmentBookingEscrowEventData {
+    pub user: Address,
+    pub action: String,
 }
 
-pub fn publish_funds_released(
-    env: &Env,
-    appointment_id: u64,
-    provider: &Address,
-    amount: i128,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("RELEASE")),
-        (appointment_id, provider, amount, timestamp),
-    );
+#[derive(Clone)]
+#[contracttype]
+pub struct AppointmentBookingEscrowEvent {
+    pub event_type: EventType,
+    pub category: OperationCategory,
+    pub timestamp: u64,
+    pub user_id: Address,
+    pub block_height: u64,
+    pub data: AppointmentBookingEscrowEventData,
 }
 
-pub fn publish_marked_no_show(
-    env: &Env,
-    appointment_id: u64,
-    provider: &Address,
-    patient: &Address,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("NOSHOW")),
-        (appointment_id, provider, patient, timestamp),
-    );
-}
-
-pub fn publish_reminder_sent(
-    env: &Env,
-    appointment_id: u64,
-    provider: &Address,
-    patient: &Address,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("APPT"), symbol_short!("REMINDR")),
-        (appointment_id, provider, patient, timestamp),
-    );
-}
-
-pub fn publish_initialization(env: &Env, admin: &Address) {
+/// Emitted when initialize is called.
+pub fn emit_initialize(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Initialized,
+        category: OperationCategory::Administrative,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "initialize"),
+        },
+    };
     env.events()
-        .publish((symbol_short!("APPT"), symbol_short!("INIT")), admin);
+        .publish((symbol_short!("ABESC"), symbol_short!("INIT")), event);
 }
 
-// ==================== Diagnostic Events ====================
-
-/// Emitted when a function is entered (DEBUG level)
-pub fn diag_fn_enter(env: &Env, fn_name: &'static str) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("ENTER")),
-        soroban_sdk::String::from_str(env, fn_name),
-    );
+/// Emitted when book_appointment is called.
+pub fn emit_book_appointment(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "book_appointment"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("BOOK_APPO")), event);
 }
 
-/// Emitted when a function exits successfully (DEBUG level)
-pub fn diag_fn_exit(env: &Env, fn_name: &'static str) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("EXIT")),
-        soroban_sdk::String::from_str(env, fn_name),
-    );
+/// Emitted when confirm_appointment is called.
+pub fn emit_confirm_appointment(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "confirm_appointment"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("CONFIRM_A")), event);
 }
 
-/// Emitted on state change (INFO level)
-pub fn diag_state_change(env: &Env, appointment_id: u64, old_status: u32, new_status: u32) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("STATE")),
-        (appointment_id, old_status, new_status),
-    );
+/// Emitted when refund_appointment is called.
+pub fn emit_refund_appointment(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "refund_appointment"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("REFUND_AP")), event);
 }
 
-/// Emitted on validation failure (WARN level)
-pub fn diag_validation_fail(env: &Env, fn_name: &'static str, reason: &'static str) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("VALFAIL")),
-        (
-            soroban_sdk::String::from_str(env, fn_name),
-            soroban_sdk::String::from_str(env, reason),
-        ),
-    );
+/// Emitted when mark_no_show is called.
+pub fn emit_mark_no_show(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "mark_no_show"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("MARK_NO_S")), event);
 }
 
-/// Emitted on authorization check failure (WARN level)
-pub fn diag_auth_fail(env: &Env, fn_name: &'static str) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("AUTHFAIL")),
-        soroban_sdk::String::from_str(env, fn_name),
-    );
+/// Emitted when send_reminder is called.
+pub fn emit_send_reminder(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "send_reminder"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("SEND_REMI")), event);
 }
 
-/// Emitted on error condition (ERROR level)
-pub fn diag_error(env: &Env, fn_name: &'static str, error_code: u32) {
-    env.events().publish(
-        (symbol_short!("DIAG"), symbol_short!("ERR")),
-        (soroban_sdk::String::from_str(env, fn_name), error_code),
-    );
+/// Emitted when health_check is called.
+pub fn emit_health_check(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "health_check"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("HEALTH_CH")), event);
+}
+
+/// Emitted when set_paused is called.
+pub fn emit_set_paused(env: &Env, caller: &Address) {
+    let event = AppointmentBookingEscrowEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: AppointmentBookingEscrowEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "set_paused"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("ABESC"), symbol_short!("SET_PAUSE")), event);
 }

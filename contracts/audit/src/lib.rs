@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 pub mod querying;
 pub mod storage;

@@ -1,5 +1,6 @@
 // Predictive Analytics Contract - Health predictions with proper validation
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]

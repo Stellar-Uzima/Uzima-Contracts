@@ -12,6 +12,7 @@
 //! * Alert thresholds are configurable; when breached an `ALERT` event is emitted.
 
 #![no_std]
+pub mod events;
 
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String};
 

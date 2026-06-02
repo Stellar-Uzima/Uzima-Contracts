@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 extern crate fp_math;
 

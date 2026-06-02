@@ -1,56 +1,176 @@
-use crate::types::{DeprecationStatus, MigrationGuide, SunsetTimeline};
-use soroban_sdk::{symbol_short, Address, Env, String};
+//! # DeprecationFramework Events Module
+//!
+//! Standardized event emissions for the deprecation_framework contract.
+//! Topic naming convention: (DEPR, ACTION)
 
-pub fn publish_initialization(env: &Env, admin: &Address) {
+#![allow(dead_code)]
+
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum EventType {
+    Initialized,
+    Action,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum OperationCategory {
+    Administrative,
+    Operations,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DeprecationFrameworkEventData {
+    pub user: Address,
+    pub action: String,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct DeprecationFrameworkEvent {
+    pub event_type: EventType,
+    pub category: OperationCategory,
+    pub timestamp: u64,
+    pub user_id: Address,
+    pub block_height: u64,
+    pub data: DeprecationFrameworkEventData,
+}
+
+/// Emitted when initialize is called.
+pub fn emit_initialize(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Initialized,
+        category: OperationCategory::Administrative,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "initialize"),
+        },
+    };
     env.events()
-        .publish((symbol_short!("DEPREC"), symbol_short!("INIT")), admin);
+        .publish((symbol_short!("DEPR"), symbol_short!("INIT")), event);
 }
 
-pub fn publish_deprecation_marked(env: &Env, status: &DeprecationStatus) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("MARKED")),
-        (status.contract_id.clone(), status.contract_name.clone()),
-    );
+/// Emitted when mark_for_deprecation is called.
+pub fn emit_mark_for_deprecation(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "mark_for_deprecation"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("MARK_FOR_")), event);
 }
 
-pub fn publish_sunset_timeline_set(env: &Env, timeline: &SunsetTimeline) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("TIMELINE")),
-        (timeline.contract_id.clone(), timeline.removal_date),
-    );
+/// Emitted when set_sunset_timeline is called.
+pub fn emit_set_sunset_timeline(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "set_sunset_timeline"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("SET_SUNSE")), event);
 }
 
-pub fn publish_migration_guide_added(env: &Env, guide: &MigrationGuide) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("GUIDE")),
-        (guide.contract_id.clone(), guide.guide_title.clone()),
-    );
+/// Emitted when add_migration_guide is called.
+pub fn emit_add_migration_guide(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "add_migration_guide"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("ADD_MIGRA")), event);
 }
 
-pub fn publish_phase_updated(env: &Env, status: &DeprecationStatus) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("PHASE")),
-        (status.contract_id.clone(), status.phase as u32),
-    );
+/// Emitted when update_deprecation_phase is called.
+pub fn emit_update_deprecation_phase(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "update_deprecation_phase"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("UPDATE_DE")), event);
 }
 
-pub fn publish_communication_sent(env: &Env, contract_id: &String, comm_id: u64) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("COMM")),
-        (contract_id.clone(), comm_id),
-    );
+/// Emitted when publish_user_communication is called.
+pub fn emit_publish_user_communication(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "publish_user_communication"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("PUBLISH_U")), event);
 }
 
-pub fn publish_removal_checklist_created(env: &Env, contract_id: &String) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("CHECKLIST")),
-        contract_id.clone(),
-    );
+/// Emitted when create_removal_checklist is called.
+pub fn emit_create_removal_checklist(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "create_removal_checklist"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("CREATE_RE")), event);
 }
 
-pub fn publish_checklist_item_completed(env: &Env, contract_id: &String, item_index: u32) {
-    env.events().publish(
-        (symbol_short!("DEPREC"), symbol_short!("DONE")),
-        (contract_id.clone(), item_index),
-    );
+/// Emitted when mark_checklist_item_complete is called.
+pub fn emit_mark_checklist_item_complete(env: &Env, caller: &Address) {
+    let event = DeprecationFrameworkEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: DeprecationFrameworkEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "mark_checklist_item_complete"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DEPR"), symbol_short!("MARK_CHEC")), event);
 }

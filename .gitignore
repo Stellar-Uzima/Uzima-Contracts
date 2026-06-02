@@ -56,6 +56,10 @@ dashboard/data/complexity_trends.json
 *.temp
 *.bak
 *.orig
+contracts_audit.txt
+contracts_with_events.txt
+contracts_without_events.txt
+event_analysis_report.json
 
 # Node.js (if using any JS tools)
 node_modules/

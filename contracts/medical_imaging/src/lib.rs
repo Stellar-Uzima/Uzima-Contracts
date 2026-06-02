@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]

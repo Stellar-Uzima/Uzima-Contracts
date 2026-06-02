@@ -1,158 +1,176 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
+//! # ClinicalNlp Events Module
+//!
+//! Standardized event emissions for the clinical_nlp contract.
+//! Topic naming convention: (CN, ACTION)
 
-// ==================== Event Schema Definitions ====================
+#![allow(dead_code)]
+
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum EventType {
-    // NLP Processing Events
-    ClinicalNoteProcessed,
-    EntityExtractionCompleted,
-    ConceptExtractionCompleted,
-    SentimentAnalysisCompleted,
-    CodingSuggestionGenerated,
-
-    // Configuration Events
-    NLPConfigUpdated,
-    MedicalTermsLoaded,
-    CodingDatabaseUpdated,
-
-    // Integration Events
-    MedicalRecordLinked,
-    BatchProcessingStarted,
-    BatchProcessingCompleted,
-
-    // System Events
-    ContractInitialized,
-    ContractPaused,
-    ContractUnpaused,
-
-    // Performance Events
-    ProcessingTimeRecorded,
-    AccuracyMetricsUpdated,
+    Initialized,
+    Action,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum OperationCategory {
-    NLPProcessing,
-    EntityExtraction,
-    ConceptExtraction,
-    SentimentAnalysis,
-    CodingSuggestions,
-    Configuration,
-    Integration,
-    System,
-    Performance,
+    Administrative,
+    Operations,
 }
 
 #[derive(Clone)]
 #[contracttype]
-pub struct EventMetadata {
+pub struct ClinicalNlpEventData {
+    pub user: Address,
+    pub action: String,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ClinicalNlpEvent {
     pub event_type: EventType,
     pub category: OperationCategory,
     pub timestamp: u64,
     pub user_id: Address,
-    pub session_id: Option<String>,
-    pub processing_time_ms: Option<u64>,
     pub block_height: u64,
+    pub data: ClinicalNlpEventData,
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub struct NLPProcessingEventData {
-    pub note_id: BytesN<32>,
-    pub patient_id: Option<Address>,
-    pub record_id: Option<BytesN<32>>,
-    pub language: String,
-    pub entities_count: u32,
-    pub concepts_count: u32,
-    pub processing_time_ms: u64,
-    pub accuracy_score_bps: u32, // basis points (100 = 1%)
+/// Emitted when initialize is called.
+pub fn emit_initialize(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Initialized,
+        category: OperationCategory::Administrative,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "initialize"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("INIT")), event);
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub struct EntityExtractionEventData {
-    pub note_id: BytesN<32>,
-    pub entity_type: String,
-    pub entity_value: String,
-    pub confidence_bps: u32,
-    pub start_position: u32,
-    pub end_position: u32,
+/// Emitted when process_clinical_note is called.
+pub fn emit_process_clinical_note(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "process_clinical_note"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("PROCESS_C")), event);
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub struct SentimentAnalysisEventData {
-    pub note_id: BytesN<32>,
-    pub sentiment_score: i32, // -100 to 100
-    pub sentiment_label: String,
-    pub confidence_bps: u32,
-    pub emotional_indicators: Vec<String>,
+/// Emitted when extract_entities is called.
+pub fn emit_extract_entities(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "extract_entities"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("EXTRACT_E")), event);
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub struct CodingSuggestionEventData {
-    pub note_id: BytesN<32>,
-    pub code_type: String, // "ICD-10" or "CPT"
-    pub suggested_code: String,
-    pub description: String,
-    pub confidence_bps: u32,
-    pub supporting_evidence: Vec<String>,
+/// Emitted when analyze_sentiment is called.
+pub fn emit_analyze_sentiment(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "analyze_sentiment"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("ANALYZE_S")), event);
 }
 
-#[derive(Clone)]
-#[contracttype]
-pub struct BatchProcessingEventData {
-    pub batch_id: BytesN<32>,
-    pub total_notes: u32,
-    pub processed_notes: u32,
-    pub failed_notes: u32,
-    pub total_processing_time_ms: u64,
-    pub average_accuracy_bps: u32,
+/// Emitted when generate_coding_suggestions is called.
+pub fn emit_generate_coding_suggestions(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "generate_coding_suggestions"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("GENERATE_")), event);
 }
 
-// ==================== Event Emission Functions ====================
-
-pub fn emit_nlp_processing_event(env: &Env, metadata: EventMetadata, data: NLPProcessingEventData) {
-    let topics = (symbol_short!("NLP_PROC"), metadata.event_type);
-    env.events().publish(topics, (metadata, data));
+/// Emitted when update_config is called.
+pub fn emit_update_config(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "update_config"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("UPDATE_CO")), event);
 }
 
-pub fn emit_entity_extraction_event(
-    env: &Env,
-    metadata: EventMetadata,
-    data: EntityExtractionEventData,
-) {
-    let topics = (symbol_short!("ENTITY"), metadata.event_type);
-    env.events().publish(topics, (metadata, data));
+/// Emitted when process_batch is called.
+pub fn emit_process_batch(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "process_batch"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("PROCESS_B")), event);
 }
 
-pub fn emit_sentiment_analysis_event(
-    env: &Env,
-    metadata: EventMetadata,
-    data: SentimentAnalysisEventData,
-) {
-    let topics = (symbol_short!("SENTIM"), metadata.event_type);
-    env.events().publish(topics, (metadata, data));
-}
-
-pub fn emit_coding_suggestion_event(
-    env: &Env,
-    metadata: EventMetadata,
-    data: CodingSuggestionEventData,
-) {
-    let topics = (symbol_short!("CODING"), metadata.event_type);
-    env.events().publish(topics, (metadata, data));
-}
-
-pub fn emit_batch_processing_event(
-    env: &Env,
-    metadata: EventMetadata,
-    data: BatchProcessingEventData,
-) {
-    let topics = (symbol_short!("BATCH"), metadata.event_type);
-    env.events().publish(topics, (metadata, data));
+/// Emitted when version is called.
+pub fn emit_version(env: &Env, caller: &Address) {
+    let event = ClinicalNlpEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: ClinicalNlpEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "version"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("CN"), symbol_short!("VERSION")), event);
 }

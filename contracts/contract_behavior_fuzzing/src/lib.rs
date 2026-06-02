@@ -1,3 +1,4 @@
+pub mod events;
 use core::fmt::Debug;
 use std::panic::{self, AssertUnwindSafe};
 use std::vec::Vec;

@@ -1,5 +1,6 @@
 // Explainable AI Contract - Enhanced with SHAP Integration and Counterfactual Explanations
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]

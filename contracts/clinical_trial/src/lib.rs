@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 #![allow(dead_code)]
 
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec};

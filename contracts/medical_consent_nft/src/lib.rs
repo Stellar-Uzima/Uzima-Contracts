@@ -1,5 +1,6 @@
 // Medical Consent NFT - Advanced Patient consent management with dynamic features
 #![no_std]
+pub mod events;
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]

@@ -1,37 +1,91 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env};
+//! # MedicalRecordHashRegistry Events Module
+//!
+//! Standardized event emissions for the medical_record_hash_registry contract.
+//! Topic naming convention: (MHR, ACTION)
 
-pub fn publish_record_stored(
-    env: &Env,
-    patient_id: &Address,
-    record_hash: &BytesN<32>,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("MEDREG"), symbol_short!("STORE")),
-        (patient_id, record_hash.clone(), timestamp),
-    );
+#![allow(dead_code)]
+
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum EventType {
+    Initialized,
+    Action,
 }
 
-pub fn publish_record_verified(
-    env: &Env,
-    patient_id: &Address,
-    record_hash: &BytesN<32>,
-    verified: bool,
-) {
-    env.events().publish(
-        (symbol_short!("MEDREG"), symbol_short!("VERIFY")),
-        (patient_id, record_hash.clone(), verified),
-    );
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum OperationCategory {
+    Administrative,
+    Operations,
 }
 
-pub fn publish_initialization(env: &Env, admin: &Address) {
+#[derive(Clone)]
+#[contracttype]
+pub struct MedicalRecordHashRegistryEventData {
+    pub user: Address,
+    pub action: String,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct MedicalRecordHashRegistryEvent {
+    pub event_type: EventType,
+    pub category: OperationCategory,
+    pub timestamp: u64,
+    pub user_id: Address,
+    pub block_height: u64,
+    pub data: MedicalRecordHashRegistryEventData,
+}
+
+/// Emitted when initialize is called.
+pub fn emit_initialize(env: &Env, caller: &Address) {
+    let event = MedicalRecordHashRegistryEvent {
+        event_type: EventType::Initialized,
+        category: OperationCategory::Administrative,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: MedicalRecordHashRegistryEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "initialize"),
+        },
+    };
     env.events()
-        .publish((symbol_short!("MEDREG"), symbol_short!("INIT")), admin);
+        .publish((symbol_short!("MHR"), symbol_short!("INIT")), event);
 }
 
-pub fn publish_duplicate_rejected(env: &Env, patient_id: &Address, record_hash: &BytesN<32>) {
-    env.events().publish(
-        (symbol_short!("MEDREG"), symbol_short!("DUP")),
-        (patient_id, record_hash.clone()),
-    );
+/// Emitted when store_record is called.
+pub fn emit_store_record(env: &Env, caller: &Address) {
+    let event = MedicalRecordHashRegistryEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: MedicalRecordHashRegistryEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "store_record"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("MHR"), symbol_short!("STORE_REC")), event);
+}
+
+/// Emitted when verify_record is called.
+pub fn emit_verify_record(env: &Env, caller: &Address) {
+    let event = MedicalRecordHashRegistryEvent {
+        event_type: EventType::Action,
+        category: OperationCategory::Operations,
+        timestamp: env.ledger().timestamp(),
+        user_id: caller.clone(),
+        block_height: env.ledger().sequence() as u64,
+        data: MedicalRecordHashRegistryEventData {
+            user: caller.clone(),
+            action: String::from_str(env, "verify_record"),
+        },
+    };
+    env.events()
+        .publish((symbol_short!("MHR"), symbol_short!("VERIFY_RE")), event);
 }

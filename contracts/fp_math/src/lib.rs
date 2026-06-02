@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 
 /// Multiply `amount` by basis points (1 bps = 0.01%) using floor division.
 ///

@@ -1,4 +1,5 @@
 #![no_std]
+pub mod events;
 #![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{

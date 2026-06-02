@@ -5,6 +5,7 @@
 //! operations are implemented by integrators reacting to notifications and events.
 
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]

@@ -22,6 +22,7 @@
 //! via `add_fido2_device` on the identity registry.
 
 #![no_std]
+pub mod events;
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 
