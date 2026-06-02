@@ -39,6 +39,9 @@ pub enum EventType {
     PermissionRevoked,
     MetadataUpdated,
     DataQualityValidated,
+    /// Emitted when a traditional-medicine record is written; contains only
+    /// non-sensitive practice_type to preserve patient privacy.
+    TraditionalRecordAdded,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -994,4 +997,42 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         events_by_user,
         time_range: (min_time, max_time),
     }
+}
+
+/// Emit `TraditionalRecordAdded` – exposes only the non-sensitive `practice_type`.
+/// Fields like `remedies_used` or `cultural_context` must NEVER appear in events.
+pub fn emit_traditional_record_added(
+    env: &Env,
+    doctor: Address,
+    record_id: u64,
+    patient: Address,
+    practice_type: String,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::TraditionalRecordAdded,
+            category: OperationCategory::RecordOperations,
+            timestamp: env.ledger().timestamp(),
+            user_id: doctor.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::RecordEvent(RecordEventData {
+            record_id,
+            patient_id: patient.clone(),
+            doctor_id: Some(doctor.clone()),
+            is_confidential: true, // traditional records are always treated as confidential
+            category: String::from_str(env, "Traditional"),
+            // practice_type is safe to surface; all other fields remain off-chain.
+            tags: {
+                let mut t = soroban_sdk::Vec::new(env);
+                t.push_back(practice_type);
+                t
+            },
+        }),
+    };
+    env.events()
+        .publish((symbol_short!("TRAD_NEW"), doctor, patient), event);
 }

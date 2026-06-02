@@ -379,6 +379,68 @@ impl ClinicalTrial {
         Ok((proto.id, proto.current_participants, proto.max_participants))
     }
 
+    /// Enroll a participant in a clinical trial.
+    ///
+    /// Enforces the `max_participants` cap: if the trial is already at capacity
+    /// this returns `Err(Error::TrialFull)`.  When the last available slot is
+    /// filled a `TrialCapacityReached` event is emitted in addition to the
+    /// standard `ParticipantEnrolled` event.
+    pub fn enroll_participant(
+        env: Env,
+        site: Address,
+        participant: Address,
+        protocol_id: u64,
+    ) -> Result<(), Error> {
+        site.require_auth();
+
+        // Load the protocol; fail if it doesn't exist.
+        let mut protocol: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+
+        // Enforce enrollment cap (max_participants == 0 means unlimited).
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            return Err(Error::TrialFull);
+        }
+
+        // Record participant enrollment.
+        let key = DataKey::ParticipantRecords(participant.clone());
+        let mut enrolled: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        enrolled.push_back(protocol_id);
+        env.storage().persistent().set(&key, &enrolled);
+
+        // Increment the protocol's enrollment counter.
+        protocol.current_participants = protocol.current_participants.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Protocol(protocol_id), &protocol);
+
+        // Emit TrialCapacityReached when the last slot is now filled.
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            env.events().publish(
+                (Symbol::new(&env, "TrialCapacityReached"),),
+                (protocol_id, protocol.max_participants),
+            );
+        }
+
+        env.events().publish(
+            (Symbol::new(&env, "ParticipantEnrolled"),),
+            (participant, protocol_id, site),
+        );
+
+        Ok(())
+    }
+
     // Simple audit: return whether a consent exists for a patient/protocol
     pub fn has_consent(env: Env, patient: Address, protocol_id: u64) -> bool {
         let mut i: u64 = 1;
@@ -400,5 +462,80 @@ impl ClinicalTrial {
             i = i.saturating_add(1);
         }
         false
+    }
+}
+
+// ==================== Tests ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Env, String};
+
+    fn setup(env: &Env) -> (ClinicalTrialClient<'_>, Address, Address) {
+        let admin = Address::generate(env);
+        let contract_id = env.register_contract(None, ClinicalTrial);
+        let client = ClinicalTrialClient::new(env, &contract_id);
+        client.initialize(&admin);
+        (client, contract_id, admin)
+    }
+
+    #[test]
+    fn test_enroll_up_to_max_succeeds() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _contract_id, admin) = setup(&env);
+
+        let protocol_id = client.create_protocol(
+            &admin,
+            &String::from_str(&env, "Phase I Trial"),
+            &String::from_str(&env, "QmMetadataRef1234567890ABCDEF"),
+            &3u64, // max 3 participants
+        );
+
+        let site = Address::generate(&env);
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let p3 = Address::generate(&env);
+
+        // Enrolling up to capacity should all succeed
+        assert!(client.enroll_participant(&site, &p1, &protocol_id).is_ok());
+        assert!(client.enroll_participant(&site, &p2, &protocol_id).is_ok());
+        assert!(client.enroll_participant(&site, &p3, &protocol_id).is_ok());
+
+        let (_, enrolled, max) = client.get_trial_status(&protocol_id).unwrap();
+        assert_eq!(enrolled, 3);
+        assert_eq!(max, 3);
+    }
+
+    #[test]
+    fn test_enroll_beyond_max_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _contract_id, admin) = setup(&env);
+
+        let protocol_id = client.create_protocol(
+            &admin,
+            &String::from_str(&env, "Phase II Trial"),
+            &String::from_str(&env, "QmMetadataRef1234567890ABCDEF"),
+            &2u64, // max 2 participants
+        );
+
+        let site = Address::generate(&env);
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let p3 = Address::generate(&env); // would exceed cap
+
+        client.enroll_participant(&site, &p1, &protocol_id).unwrap();
+        client.enroll_participant(&site, &p2, &protocol_id).unwrap();
+
+        // Third enrollment must return TrialFull
+        let result = client.try_enroll_participant(&site, &p3, &protocol_id);
+        assert_eq!(result, Err(Ok(Error::TrialFull)));
+
+        // Enrollment count must remain at 2
+        let (_, enrolled, _) = client.get_trial_status(&protocol_id).unwrap();
+        assert_eq!(enrolled, 2);
     }
 }

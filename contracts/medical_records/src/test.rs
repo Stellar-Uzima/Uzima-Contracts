@@ -1453,3 +1453,185 @@ fn test_get_suggestion_returns_expected_hint() {
         symbol_short!("RE_TRY_L")
     );
 }
+
+// ==================== Traditional Medicine Tests ====================
+
+/// Helper: create a populated TraditionalMedicineMetadata for tests.
+fn make_traditional_metadata(env: &Env) -> TraditionalMedicineMetadata {
+    TraditionalMedicineMetadata {
+        practice_type: String::from_str(env, "African Traditional Medicine"),
+        practitioner_tradition: String::from_str(env, "Yoruba"),
+        // In production this field would be an encrypted ciphertext reference.
+        remedies_used: String::from_str(env, "QmEncryptedRemediesRef1234567890"),
+        cultural_context: String::from_str(env, "Healing ceremony"),
+        language: String::from_str(env, "yo"),
+    }
+}
+
+#[test]
+fn test_write_record_with_traditional_metadata() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let meta = make_traditional_metadata(&env);
+    let initial_events = env.events().all().len();
+
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Headache"),
+        &String::from_str(&env, "Herbal steam therapy"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(meta),
+    );
+
+    // Record should be retrievable
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.category, String::from_str(&env, "Traditional"));
+
+    // TraditionalRecordAdded event must have been emitted
+    let events_after = env.events().all();
+    assert!(events_after.len() > initial_events);
+    let trad_events = events_after
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 1, "TraditionalRecordAdded event not emitted");
+}
+
+#[test]
+fn test_list_traditional_records() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // No traditional records yet
+    let ids_before = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids_before.len(), 0);
+
+    // Add a plain record (no metadata) – should NOT appear in traditional index
+    let _plain_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Flu"),
+        &String::from_str(&env, "Rest"),
+        &false,
+        &vec![&env, String::from_str(&env, "flu")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    // Add two traditional records
+    let trad_id1 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Fever"),
+        &String::from_str(&env, "Herbal bath"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let trad_id2 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Back pain"),
+        &String::from_str(&env, "Acupressure"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Acupressure"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&trad_id1));
+    assert!(ids.contains(&trad_id2));
+    // Plain record must NOT be in the list
+    assert!(!ids.contains(&_plain_id));
+}
+
+#[test]
+fn test_write_record_without_metadata_backward_compat() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Calling write_record with None should behave exactly like add_record
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Common cold"),
+        &String::from_str(&env, "Rest and fluids"),
+        &false,
+        &vec![&env, String::from_str(&env, "respiratory")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.diagnosis, String::from_str(&env, "Common cold"));
+
+    // No traditional records should exist for the patient
+    let trad_ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(trad_ids.len(), 0, "No traditional records should exist");
+
+    // No TRAD_NEW event should have been emitted
+    let trad_events = env
+        .events()
+        .all()
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 0, "TRAD_NEW must not be emitted when no metadata");
+}
