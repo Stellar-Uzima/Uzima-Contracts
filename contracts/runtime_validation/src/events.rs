@@ -4,10 +4,8 @@ use crate::types::{
 use soroban_sdk::{symbol_short, Address, Env, String};
 
 pub fn publish_initialization(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("VALID"), symbol_short!("INIT")),
-        admin,
-    );
+    env.events()
+        .publish((symbol_short!("VALID"), symbol_short!("INIT")), admin);
 }
 
 pub fn publish_invariant_registered(env: &Env, check: &InvariantCheck) {

@@ -1123,7 +1123,7 @@ impl NotificationContract {
                     }
                 }
                 NotificationStatus::Pending
-            }
+            },
         }
     }
 

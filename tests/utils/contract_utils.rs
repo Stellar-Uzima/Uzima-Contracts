@@ -1,9 +1,10 @@
+#![allow(clippy::new_without_default)]
+
 /// Contract utilities for common testing operations
 use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 
 #[allow(clippy::expect_used)]
 #[allow(clippy::panic)]
-
 /// Result type for contract operations
 pub type ContractResult<T> = Result<T, String>;
 
@@ -18,8 +19,8 @@ impl ContractSetup {
     /// Create a new contract setup with test environment
     pub fn new() -> Self {
         let env = Env::default();
-        let admin = Address::generate(&env);
-        
+        let admin = generate_test_address(&env);
+
         Self {
             env,
             admin,
@@ -28,14 +29,14 @@ impl ContractSetup {
     }
 
     /// Add mock authentication for all calls
-    pub fn with_mock_auth(mut self) -> Self {
+    pub fn with_mock_auth(self) -> Self {
         self.env.mock_all_auths();
         self
     }
 
     /// Generate a random test address
     pub fn generate_address(&self) -> Address {
-        Address::generate(&self.env)
+        generate_test_address(&self.env)
     }
 
     /// Create N test users

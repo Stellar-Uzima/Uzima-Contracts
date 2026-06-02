@@ -2,6 +2,31 @@ use super::{ClaimSubmissionStatus, Error, HealthcarePayment, HealthcarePaymentCl
 use soroban_sdk::{contract, contractimpl, testutils::Address as _, token, Address, Env, String};
 
 #[contract]
+struct MockRbac;
+
+#[contractimpl]
+impl MockRbac {
+    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+
+    pub fn has_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    pub fn assign_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    pub fn remove_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
+}
+
+#[contract]
 struct MockPaymentRouter;
 
 #[contractimpl]
@@ -56,11 +81,14 @@ fn setup_env_and_clients() -> (
 
     let router_id = env.register_contract(None, MockPaymentRouter);
     let escrow_id = env.register_contract(None, MockEscrow);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &0u32);
 
     let contract_id = env.register_contract(None, HealthcarePayment);
     let client = HealthcarePaymentClient::new(&env, &contract_id);
 
-    client.initialize(&admin, &router_id, &escrow_id, &treasury, &token_id);
+    client.initialize(&admin, &router_id, &escrow_id, &treasury, &token_id, &rbac_id);
 
     token_admin_client.mint(&contract_id, &100_000_000);
     token_admin_client.mint(&patient, &100_000_000);
@@ -342,4 +370,26 @@ fn test_get_suggestion_returns_expected_hint() {
         super::errors::get_suggestion(Error::ClaimNotFound),
         symbol_short!("CHK_ID")
     );
+}
+
+#[test]
+fn test_reentrancy_guard_blocks_concurrent_call() {
+    use crate::{DataKey, Error, HealthcarePayment, HealthcarePaymentClient};
+    let env = Env::default();
+    env.mock_all_auths();
+
+    // Manually set the lock to simulate a reentrant call in progress
+    let contract_id = env.register_contract(None, HealthcarePayment);
+    env.as_contract(&contract_id, || {
+        env.storage().instance().set(&DataKey::Locked, &true);
+    });
+
+    let client = HealthcarePaymentClient::new(&env, &contract_id);
+    let result = client.try_process_payment(&1u64);
+    assert_eq!(result, Err(Ok(Error::Reentrancy)));
+}
+
+#[test]
+fn test_reentrancy_error_code_is_stable() {
+    assert_eq!(Error::Reentrancy as u32, 800);
 }

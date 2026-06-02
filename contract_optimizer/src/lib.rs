@@ -1,16 +1,16 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::path::Path;
-use syn::{visit::Visit, File, ItemFn, ExprCall, ExprMethodCall, Expr};
+use syn::{visit::Visit, Expr, ExprCall, ItemFn};
 use walkdir::WalkDir;
 
+pub mod complexity;
 pub mod metrics;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OptimizationRecommendation {
     pub category: String,
     pub description: String,
-    pub severity: String, // "low", "medium", "high"
+    pub severity: String,         // "low", "medium", "high"
     pub location: Option<String>, // file:line
     pub suggestion: String,
 }
@@ -21,12 +21,22 @@ pub struct ContractAnalysis {
     pub optimizations: Vec<OptimizationRecommendation>,
 }
 
-pub fn analyze_contracts(contracts_path: &Path) -> Result<Vec<ContractAnalysis>, Box<dyn std::error::Error>> {
+pub fn analyze_contracts(
+    contracts_path: &Path,
+) -> Result<Vec<ContractAnalysis>, Box<dyn std::error::Error>> {
     let mut analyses = Vec::new();
 
-    for entry in WalkDir::new(contracts_path).into_iter().filter_map(|e| e.ok()) {
+    for entry in WalkDir::new(contracts_path)
+        .into_iter()
+        .filter_map(|e| e.ok())
+    {
         if entry.file_type().is_file() && entry.path().extension().unwrap_or_default() == "rs" {
-            if let Some(contract_name) = entry.path().parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) {
+            if let Some(contract_name) = entry
+                .path()
+                .parent()
+                .and_then(|p| p.file_name())
+                .and_then(|n| n.to_str())
+            {
                 if let Ok(content) = std::fs::read_to_string(entry.path()) {
                     let optimizations = analyze_file(&content, entry.path());
                     if !optimizations.is_empty() {
@@ -41,7 +51,8 @@ pub fn analyze_contracts(contracts_path: &Path) -> Result<Vec<ContractAnalysis>,
     }
 
     // Record metrics
-    let mut metrics = metrics::AccuracyMetrics::load(Path::new("optimization_metrics.json")).unwrap_or_default();
+    let mut metrics =
+        metrics::AccuracyMetrics::load(Path::new("optimization_metrics.json")).unwrap_or_default();
     metrics.record_recommendations(&analyses);
     metrics.save(Path::new("optimization_metrics.json"))?;
 
@@ -81,46 +92,48 @@ impl<'a> OptimizationVisitor<'a> {
 impl<'a> Visit<'a> for OptimizationVisitor<'a> {
     fn visit_item_fn(&mut self, node: &'a ItemFn) {
         // Check for gas-intensive operations
-        if let Some(block) = &node.block {
-            self.analyze_function_body(block, &node.sig.ident.to_string());
-        }
+        self.analyze_function_body(&node.block, &node.sig.ident.to_string());
     }
 
     fn visit_expr_call(&mut self, node: &'a ExprCall) {
         // Check for expensive function calls
         if let Expr::Path(path) = &*node.func {
             if let Some(ident) = path.path.get_ident() {
-                match ident.to_string().as_str() {
-                    "env" => {
-                        if let Some(arg) = node.args.first() {
-                            if let Expr::MethodCall(method_call) = arg {
-                                if let Some(method_ident) = &method_call.method.get_ident() {
-                                    match method_ident.to_string().as_str() {
-                                        "storage" => {
-                                            self.recommendations.push(OptimizationRecommendation {
-                                                category: "Storage Efficiency".to_string(),
-                                                description: "Frequent storage operations detected".to_string(),
-                                                severity: "medium".to_string(),
-                                                location: Some(format!("{}:{}", self.path.display(), line_number(node))),
-                                                suggestion: "Consider batching storage operations or using temporary variables".to_string(),
-                                            });
-                                        }
-                                        "events" => {
-                                            self.recommendations.push(OptimizationRecommendation {
-                                                category: "Gas Optimization".to_string(),
-                                                description: "Event emission in loop or frequent call".to_string(),
-                                                severity: "low".to_string(),
-                                                location: Some(format!("{}:{}", self.path.display(), line_number(node))),
-                                                suggestion: "Emit events outside of loops when possible".to_string(),
-                                            });
-                                        }
-                                        _ => {}
-                                    }
-                                }
+                if ident == "env" {
+                    if let Some(Expr::MethodCall(method_call)) = node.args.first() {
+                        match method_call.method.to_string().as_str() {
+                            "storage" => {
+                                self.recommendations.push(OptimizationRecommendation {
+                                    category: "Storage Efficiency".to_string(),
+                                    description: "Frequent storage operations detected"
+                                        .to_string(),
+                                    severity: "medium".to_string(),
+                                    location: Some(format!(
+                                        "{}:{}",
+                                        self.path.display(),
+                                        line_number(node)
+                                    )),
+                                    suggestion: "Consider batching storage operations or using temporary variables".to_string(),
+                                });
                             }
+                            "events" => {
+                                self.recommendations.push(OptimizationRecommendation {
+                                    category: "Gas Optimization".to_string(),
+                                    description: "Event emission in loop or frequent call"
+                                        .to_string(),
+                                    severity: "low".to_string(),
+                                    location: Some(format!(
+                                        "{}:{}",
+                                        self.path.display(),
+                                        line_number(node)
+                                    )),
+                                    suggestion: "Emit events outside of loops when possible"
+                                        .to_string(),
+                                });
+                            }
+                            _ => {}
                         }
                     }
-                    _ => {}
                 }
             }
         }
@@ -137,7 +150,8 @@ impl<'a> OptimizationVisitor<'a> {
                     description: format!("Loop detected in function '{}'", fn_name),
                     severity: "medium".to_string(),
                     location: Some(format!("{}:{}", self.path.display(), line_number(for_loop))),
-                    suggestion: "Consider if loop iterations can be reduced or operations batched".to_string(),
+                    suggestion: "Consider if loop iterations can be reduced or operations batched"
+                        .to_string(),
                 });
             }
         }
@@ -158,7 +172,8 @@ fn analyze_text_patterns(content: &str, path: &Path) -> Vec<OptimizationRecommen
                 description: "Dynamic vector allocation detected".to_string(),
                 severity: "low".to_string(),
                 location: Some(format!("{}:{}", path.display(), line_num)),
-                suggestion: "Consider using fixed-size arrays or pre-allocating capacity".to_string(),
+                suggestion: "Consider using fixed-size arrays or pre-allocating capacity"
+                    .to_string(),
             });
         }
 
@@ -180,7 +195,8 @@ fn analyze_text_patterns(content: &str, path: &Path) -> Vec<OptimizationRecommen
                 description: "Storage write in loop detected".to_string(),
                 severity: "high".to_string(),
                 location: Some(format!("{}:{}", path.display(), line_num)),
-                suggestion: "Consider batching multiple storage writes into a single operation".to_string(),
+                suggestion: "Consider batching multiple storage writes into a single operation"
+                    .to_string(),
             });
         }
 
@@ -191,7 +207,9 @@ fn analyze_text_patterns(content: &str, path: &Path) -> Vec<OptimizationRecommen
                 description: "Cross-chain or multi-region operation detected".to_string(),
                 severity: "medium".to_string(),
                 location: Some(format!("{}:{}", path.display(), line_num)),
-                suggestion: "Consider asynchronous processing or parallel execution where applicable".to_string(),
+                suggestion:
+                    "Consider asynchronous processing or parallel execution where applicable"
+                        .to_string(),
             });
         }
     }
@@ -199,7 +217,7 @@ fn analyze_text_patterns(content: &str, path: &Path) -> Vec<OptimizationRecommen
     recommendations
 }
 
-fn line_number<T>(node: &T) -> usize {
+fn line_number<T>(_node: &T) -> usize {
     // Simplified: in practice, use node.span().start().line
     // But for this demo, return 0
     0
@@ -215,7 +233,11 @@ pub fn generate_report(input_path: &Path) -> Result<String, Box<dyn std::error::
     for analysis in analyses {
         report.push_str(&format!("## {}\n\n", analysis.contract_name));
         for opt in analysis.optimizations {
-            report.push_str(&format!("### {} ({})\n", opt.category, opt.severity.to_uppercase()));
+            report.push_str(&format!(
+                "### {} ({})\n",
+                opt.category,
+                opt.severity.to_uppercase()
+            ));
             report.push_str(&format!("**Description:** {}\n\n", opt.description));
             report.push_str(&format!("**Suggestion:** {}\n\n", opt.suggestion));
             if let Some(loc) = &opt.location {
@@ -228,10 +250,17 @@ pub fn generate_report(input_path: &Path) -> Result<String, Box<dyn std::error::
     Ok(report)
 }
 
-pub async fn integrate_pr_review(repo: &str, pr_number: u64, token: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn integrate_pr_review(
+    repo: &str,
+    pr_number: u64,
+    _token: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     // This would integrate with GitHub API to post comments on PR
     // For now, just a placeholder
-    println!("Integrating analysis into PR review for {}/{}", repo, pr_number);
+    println!(
+        "Integrating analysis into PR review for {}/{}",
+        repo, pr_number
+    );
     // Use octocrab to create PR comments with recommendations
     Ok(())
 }

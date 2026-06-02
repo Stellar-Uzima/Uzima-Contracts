@@ -291,9 +291,10 @@ impl CredentialRegistryContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::RootRecord(issuer.clone(), current), &rec);
-            env.storage()
-                .persistent()
-                .set(&DataKey::RootToVersion(issuer.clone(), root.clone()), &current);
+            env.storage().persistent().set(
+                &DataKey::RootToVersion(issuer.clone(), root.clone()),
+                &current,
+            );
             versions.push_back(current);
         }
 

@@ -147,7 +147,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::AddService {
                 subject,
                 service_slot,
@@ -175,7 +175,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::RemoveService {
                 subject,
                 service_slot,
@@ -205,7 +205,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::AddVerificationMethod {
                 subject,
                 method_slot,
@@ -242,7 +242,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::RotateKey {
                 subject,
                 method_slot,
@@ -271,7 +271,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::RevokeVerificationMethod {
                 subject,
                 method_slot,
@@ -308,7 +308,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
             IdentityOp::DeactivateDid { subject } => {
                 let subject_index = *subject as usize % self.subjects.len();
                 let success = self.models[subject_index].exists;
@@ -322,7 +322,7 @@ impl BehaviorHarness for IdentityHarness {
                 }
 
                 OperationOutcome::new(usize::from(success))
-            }
+            },
         }
     }
 
@@ -362,7 +362,7 @@ impl BehaviorHarness for IdentityHarness {
                 .verification_methods
                 .iter()
                 .filter(|method| method.is_active)
-                .count() as usize;
+                .count();
             assert_eq!(did.verification_methods.len() as usize, total_methods);
             assert_eq!(
                 active_methods,

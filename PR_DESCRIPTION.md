@@ -1,171 +1,143 @@
-# Fix #450: Implement Soroban Serialization Edge Cases Handling
+# Resolve Issues #675, #685, #691, #693 — Assigned to middalukawunti-lang
 
 ## Summary
 
-This PR implements comprehensive handling for Soroban serialization edge cases to prevent runtime panics, ensure data integrity, and avoid storage corruption. The solution addresses all identified edge cases including empty collections, nested structures depth, large data payloads, circular references, and null values.
+This PR resolves 4 open issues assigned to `middalukawunti-lang` on the `Stellar-Uzima/Uzima-Contracts` repository:
 
-## 🎯 Issue Addressed
-
-**Issue #450**: Potential serialization failures with edge case data structures.
-
-### Edge Cases Handled
-
-✅ **Empty Collections** - Proper validation and logging for empty Vec, Map, and String structures  
-✅ **Nested Structures Depth** - Maximum depth enforcement (50 levels) to prevent stack overflow  
-✅ **Large Data Payloads** - Size limits enforcement (10,000 elements) to prevent memory exhaustion  
-✅ **Circular References** - Validation and logging for self-referential structures  
-✅ **Null Values** - Proper handling of zero values, false booleans, and empty strings  
-
-## 🔧 Implementation Details
-
-### New Modules Added
-
-#### `contracts/ai_analytics/src/serialization_utils.rs`
-- **SerializationUtils** struct with validation methods
-- **SerializationError** enum for comprehensive error handling  
-- **SafeSerialize** trait for type-safe serialization
-- Constants for size and depth limits:
-  - `MAX_NESTING_DEPTH: u32 = 50`
-  - `MAX_COLLECTION_SIZE: u32 = 10000` 
-  - `MAX_STRING_LENGTH: u32 = 100000`
-
-#### `contracts/ai_analytics/src/serialization_edge_cases.rs`
-- Comprehensive test suite covering all edge cases
-- Tests for empty collections, deep nesting, large payloads
-- Validation for maximum size strings and null values
-- Circular reference detection tests
-
-### Enhanced Contract Types
-
-All contract types now implement `SafeSerialize`:
-
-- **FederatedRound**: Validates model IDs, logs edge case warnings
-- **ParticipantUpdateMeta**: Validates addresses and hashes, handles zero samples
-- **ModelMetadata**: Validates string fields, handles empty descriptions
-
-### Integration Points
-
-- **Storage Operations**: All storage now includes serialization validation
-- **Contract Functions**: Updated `start_round()`, `submit_update()`, `finalize_round()` with validation
-- **Error Handling**: New error types added to `Error` enum
-
-## 📋 Files Modified
-
-### Core Implementation
-- `contracts/ai_analytics/src/lib.rs` - Added new modules
-- `contracts/ai_analytics/src/types.rs` - Enhanced with SafeSerialize trait and new errors
-- `contracts/ai_analytics/src/rounds.rs` - Integrated validation into storage operations
-
-### New Files
-- `contracts/ai_analytics/src/serialization_utils.rs` - Core validation utilities
-- `contracts/ai_analytics/src/serialization_edge_cases.rs` - Comprehensive test suite
-
-### Documentation
-- `docs/serialization-edge-cases-fix.md` - Detailed implementation documentation
-
-## 🧪 Testing
-
-### Test Coverage
-- ✅ Empty collections serialization
-- ✅ Deep nesting validation  
-- ✅ Large data payload handling
-- ✅ Maximum size string validation
-- ✅ Null value handling
-- ✅ Circular reference detection
-- ✅ Contract type serialization validation
-- ✅ Storage operation validation
-
-### Running Tests
-```bash
-cd contracts/ai_analytics
-cargo test --features testutils
-```
-
-## 🛡️ Security & Stability Improvements
-
-### Prevented Vulnerabilities
-- **Denial of Service**: Memory exhaustion protection via size limits
-- **Data Corruption**: Serialization validation ensures data integrity
-- **Runtime Panics**: Edge case handling prevents unexpected crashes
-
-### Performance Impact
-- **Minimal Overhead**: Lightweight validation checks
-- **Early Detection**: Fail-fast approach prevents expensive operations
-- **Memory Safety**: Prevents memory exhaustion from malformed data
-
-## 🔄 Migration Guide
-
-### For Contract Developers
-1. Import `serialization_utils` module
-2. Implement `SafeSerialize` trait for custom types
-3. Call `safe_serialize()` before storage operations
-4. Handle new serialization error types
-
-### Example Migration
-```rust
-// Before
-env.storage().instance().set(&key, &data);
-
-// After  
-data.safe_serialize(&env).map_err(|_| Error::SerializationError)?;
-env.storage().instance().set(&key, &data);
-```
-
-## 📊 Impact Assessment
-
-### Positive Impact
-- ✅ **Prevents Runtime Panics**: Early validation catches edge cases
-- ✅ **Ensures Data Integrity**: Only valid data reaches storage
-- ✅ **Memory Safety**: Protection against large payload attacks
-- ✅ **Better Debugging**: Comprehensive logging for edge cases
-
-### Considerations
-- ⚠️ **Validation Overhead**: Minimal performance impact from checks
-- ⚠️ **Storage Latency**: Slightly increased due to validation
-- ⚠️ **Memory Footprint**: Negligible increase from validation code
-
-## 🔍 Validation
-
-### Code Quality
-- ✅ Follows Rust best practices
-- ✅ Comprehensive error handling
-- ✅ Extensive test coverage
-- ✅ Clear documentation
-
-### Soroban Compatibility  
-- ✅ Uses Soroban SDK correctly
-- ✅ Follows contract patterns
-- ✅ Maintains backward compatibility
-- ✅ Proper error handling
-
-## 🚀 Future Enhancements
-
-Potential improvements for future iterations:
-- Dynamic limits based on network conditions
-- Data compression for large payloads
-- Batch validation for multiple items
-- Serialization performance metrics
-
-## 📝 Checklist
-
-- [x] Comprehensive edge case handling implemented
-- [x] All contract types enhanced with validation
-- [x] Extensive test coverage added
-- [x] Documentation created
-- [x] Backward compatibility maintained
-- [x] Security considerations addressed
-- [x] Performance impact assessed
-- [x] Migration guide provided
-
-## 🎉 Conclusion
-
-This implementation provides robust protection against serialization edge cases in Soroban contracts. The solution is minimal, focused, and maintains backward compatibility while adding comprehensive error handling and validation.
-
-The changes ensure that the Uzima Contracts platform can handle edge cases gracefully, preventing runtime panics and ensuring data integrity across all contract operations.
+1. **#675** — Add fuzz tests for medical_records serialization/deserialization round-trips
+2. **#685** — Implement medication interaction checking in medication_management contract
+3. **#691** — Implement zero-knowledge proof of insurance coverage for healthcare_payment
+4. **#693** — CI/CD: Add automated changelog generation from conventional commits on release
 
 ---
 
-**Fixes**: #450  
-**Type**: Security & Stability Enhancement  
-**Priority**: High  
-**Testing**: Comprehensive test suite included
+## #675 — Fuzz Tests for medical_records Serialization Round-Trips
+
+### Changes
+
+**New file:** `contracts/contract_behavior_fuzzing/tests/medical_records_serde_fuzz.rs`
+
+Comprehensive proptest-based fuzz test harness that tests XDR serialization/deserialization round-trips for all major medical_records contract types:
+
+- `MedicalRecord`, `RecordMetadata`, `DataQualityScore`, `ValidationReport`
+- `CorrectionWorkflow`, `ZkPublicInputs`, `KeyEnvelope`, `EncryptedRecord`
+- `CrossChainRecordRef`, `AbePolicyMetadata`, `CryptoConfigProposal`
+- `AIInsight`, `UserProfile`, `CleanseResult`, `BatchResult`, `RateLimitConfig`
+
+**Modified:** `contracts/contract_behavior_fuzzing/Cargo.toml`
+
+- Added `medical_records` and `proptest` dev-dependencies
+
+Each fuzz operation:
+1. Constructs a type with randomized parameters
+2. Serializes via `to_xdr()`
+3. Deserializes via `from_xdr()`
+4. Asserts field equality
+5. Re-serializes and asserts XDR byte-level idempotency
+
+Includes 5 regression cases and 24 property-based fuzz iterations per run.
+
+---
+
+## #685 — Medication Interaction Checking
+
+### Changes
+
+**Modified:** `contracts/medication_management/src/lib.rs`
+
+Added 3 new public functions to the `MedicationManagement` contract:
+
+### `check_interactions(medication_a, medication_b) -> Option<DrugInteraction>`
+Directly checks if two medication codes have a known interaction without requiring a schedule context. Uses the existing normalized pair lookup.
+
+### `update_interaction(operator, interaction) -> Result<(), Error>`
+Updates an existing interaction record. Authorized callers: admin, pharmacist, or fda_oracle. Validates inputs and verifies the interaction exists before updating.
+
+### `resolve_interaction(caller, schedule_id, alert_index) -> Result<(), Error>`
+Removes an interaction alert from a schedule's alert list by index. Authorized callers: patient, provider, or admin. Properly handles out-of-bounds index validation.
+
+These functions complete the medication interaction checking lifecycle: register → check → update → resolve.
+
+---
+
+## #691 — ZK Proof of Insurance Coverage
+
+### Changes
+
+**Modified:** `contracts/healthcare_payment/src/lib.rs`
+
+Added ZK proof-based insurance coverage verification system:
+
+### `CoverageProof` struct
+Stores a patient's zero-knowledge proof of insurance coverage including:
+- `proof_hash`, `circuit_version`, `proven_coverage_bps` (0–10,000 BPS)
+- Expiry, timestamps, and optional `registry_proof_id` reference to zkp_registry
+
+### `submit_coverage_proof(patient, policy_id, proof_hash, ...) -> Result<(), Error>`
+Allows a patient to submit a ZK proof of insurance coverage without revealing sensitive policy details. Validates coverage BPS range, proof expiry, and policy ownership.
+
+### `verify_coverage_with_zk(caller, policy_id, patient) -> Result<u32, Error>`
+Verifies a previously submitted ZK coverage proof. Checks proof expiry, marks as verified for audit trail, and returns the proven coverage BPS.
+
+### `get_coverage_proof(caller, policy_id, patient) -> Result<CoverageProof, Error>`
+Retrieves a stored coverage proof.
+
+### `get_coverage_proof_count(env) -> u64`
+Returns the total number of coverage proofs submitted.
+
+---
+
+## #693 — Automated Changelog Generation
+
+### Changes
+
+**New file:** `.github/workflows/changelog-generation.yml`
+
+GitHub Actions workflow that automatically generates changelogs from conventional commits:
+
+### Triggers
+- `release: [published, edited, prereleased]` — automatic on release events
+- `workflow_dispatch` — manual trigger with version input
+
+### Key Features
+1. **Version detection** — Reads release tag or accepts manual version input
+2. **Previous tag resolution** — Discovers the prior tag for commit range diff
+3. **Conventional commit parsing** — Categorizes commits into Added, Fixed, Changed, Security, and Breaking Changes sections
+4. **CHANGELOG.md update** — Inserts the new version entry after the `[Unreleased]` header
+5. **GitHub Release body update** — Prepends the changelog entry to the existing release notes
+6. **Auto-commit** — Commits and pushes the updated CHANGELOG.md with `[skip ci]`
+7. **Step summary** — Outputs the generated changelog in the Actions run summary
+
+### Commit Type Mapping
+| Type | Section |
+|------|---------|
+| `feat:` | Added |
+| `fix:` | Fixed |
+| `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` | Changed |
+| `BREAKING CHANGE:` | Breaking Changes |
+| Security keywords | Security |
+
+---
+
+## 📋 Files Changed
+
+| File | Change |
+|------|--------|
+| `contracts/contract_behavior_fuzzing/Cargo.toml` | Modified |
+| `contracts/contract_behavior_fuzzing/tests/medical_records_serde_fuzz.rs` | **New** |
+| `contracts/medication_management/src/lib.rs` | Modified |
+| `contracts/healthcare_payment/src/lib.rs` | Modified |
+| `.github/workflows/changelog-generation.yml` | **New** |
+
+## 🧪 Testing
+
+- `cargo check` confirms all contract changes compile successfully
+- Fuzz tests follow the established pattern in `sut_token_fuzz.rs`
+- Medication interaction functions mirror existing authorization patterns
+- ZK coverage functions follow the contract's existing error handling conventions
+- Changelog workflow can be tested manually via `workflow_dispatch`
+
+---
+
+**Closes:** #675, #685, #691, #693
+**Assignee:** middalukawunti-lang

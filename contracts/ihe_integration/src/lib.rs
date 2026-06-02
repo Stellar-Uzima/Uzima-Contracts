@@ -1366,7 +1366,7 @@ impl IHEIntegrationContract {
         match consent.consent_status {
             ConsentStatus::Revoked => return Err(Error::ConsentRevoked),
             ConsentStatus::Expired => return Err(Error::ConsentExpired),
-            ConsentStatus::Active => {}
+            ConsentStatus::Active => {},
         }
 
         if consent.expiry_time > 0 && env.ledger().timestamp() > consent.expiry_time {

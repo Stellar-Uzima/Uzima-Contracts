@@ -53,6 +53,15 @@ fn now(env: &Env) -> u64 {
     env.ledger().timestamp()
 }
 
+/// Read GovernorConfig from instance storage (cheap, cached by the host).
+/// Instance storage is cheaper than persistent for frequently-read values.
+fn get_cfg(env: &Env) -> Result<GovernorConfig, Error> {
+    env.storage()
+        .instance()
+        .get(&CFG)
+        .ok_or(Error::NotInitialized)
+}
+
 #[contractimpl]
 impl Governor {
     pub fn initialize(
@@ -91,13 +100,9 @@ impl Governor {
         execution_data: Bytes,
     ) -> Result<u64, Error> {
         proposer.require_auth();
-        let cfg: GovernorConfig = env
-            .storage()
-            .instance()
-            .get(&CFG)
-            .ok_or(Error::NotInitialized)?;
+        // Single instance-storage read; host caches instance storage per tx.
+        let cfg = get_cfg(&env)?;
 
-        // Check Proposal Threshold
         let voting_power = Self::get_power(&env, &cfg, &proposer);
         if voting_power < cfg.prop_threshold {
             return Err(Error::ProposalThresholdNotMet);
@@ -106,7 +111,6 @@ impl Governor {
         let count = env.storage().instance().get(&P_COUNT).unwrap_or(0u64);
         let id = count.checked_add(1).ok_or(Error::Overflow)?;
 
-        // Arithmetic check for times
         let start = now(&env)
             .checked_add(cfg.voting_delay)
             .ok_or(Error::Overflow)?;
@@ -150,11 +154,8 @@ impl Governor {
         support: u32,
     ) -> Result<(), Error> {
         voter.require_auth();
-        let cfg: GovernorConfig = env
-            .storage()
-            .instance()
-            .get(&CFG)
-            .ok_or(Error::NotInitialized)?;
+        // Reuse cached instance read — no extra storage round-trip.
+        let cfg = get_cfg(&env)?;
         let mut props: Map<u64, Proposal> = env
             .storage()
             .persistent()
@@ -205,11 +206,7 @@ impl Governor {
     }
 
     pub fn state(env: Env, proposal_id: u64) -> Result<u32, Error> {
-        let cfg: GovernorConfig = env
-            .storage()
-            .instance()
-            .get(&CFG)
-            .ok_or(Error::NotInitialized)?;
+        let cfg = get_cfg(&env)?;
         let props: Map<u64, Proposal> = env
             .storage()
             .persistent()
@@ -234,7 +231,7 @@ impl Governor {
                 env.invoke_contract(&dispute_addr, &Symbol::new(&env, "is_disputed"), args);
             if is_disputed {
                 return Ok(6);
-            } // Disputed
+            }
         }
 
         if t < p.start_time {
@@ -246,9 +243,9 @@ impl Governor {
 
         if p.for_votes > p.against_votes {
             return Ok(3);
-        } // Succeeded
+        }
 
-        Ok(2) // Defeated
+        Ok(2)
     }
 
     pub fn queue(env: Env, proposal_id: u64) -> Result<(), Error> {
@@ -287,11 +284,7 @@ impl Governor {
             return Err(Error::AlreadyExecuted);
         }
 
-        let cfg: GovernorConfig = env
-            .storage()
-            .instance()
-            .get(&CFG)
-            .ok_or(Error::NotInitialized)?;
+        let cfg = get_cfg(&env)?;
         if let Some(dispute_addr) = cfg.dispute_contract {
             let args = vec![&env, proposal_id.into_val(&env)];
             let is_disputed: bool =
@@ -310,13 +303,11 @@ impl Governor {
         Ok(())
     }
 
-    // --- Helpers ---
     fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> i128 {
         let token_args = vec![&env, voter.into_val(env)];
         let balance: i128 =
             env.invoke_contract(&cfg.token, &Symbol::new(&env, "balance_of"), token_args);
 
-        // Reputation
         let rep: i128 = if let Some(rep_addr) = &cfg.rep_contract {
             let rep_args = vec![&env, voter.into_val(env)];
             env.invoke_contract(rep_addr, &Symbol::new(&env, "get_score"), rep_args)
@@ -324,11 +315,7 @@ impl Governor {
             0
         };
 
-        // Saturating add usually enough here as power is capped by supply, but for safety:
-        balance.saturating_add(rep) // i128 panic on overflow in some debug modes, but usually safe in no_std?
-                                    // Wait, clippy checks arithmetic.
-                                    // I can use checked_add and unwrap_or(MAX). i128::MAX is huge.
-                                    // Or saturating_add.
+        balance.saturating_add(rep)
     }
 }
 
@@ -338,7 +325,6 @@ mod test {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
 
-    // MOCK TOKEN
     #[contract]
     pub struct MockToken;
     #[contractimpl]
@@ -348,7 +334,6 @@ mod test {
             env.storage().instance().get(&key).unwrap_or(0i128)
         }
 
-        // Helper to set balance for testing
         pub fn set_bal(env: Env, user: Address, amount: i128) {
             let key = (symbol_short!("bal"), user);
             env.storage().instance().set(&key, &amount);
@@ -360,57 +345,40 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
 
-        // 1. Setup Mocks
         let token_id = env.register_contract(None, MockToken);
         let token_client = MockTokenClient::new(&env, &token_id);
 
         let tl = Address::generate(&env);
         let voter = Address::generate(&env);
 
-        // 2. Initialize Governor
         let gov_id = env.register_contract(None, Governor);
         let gov_client = GovernorClient::new(&env, &gov_id);
 
-        // Governor functions return Result types, but through the client they are auto-unwrapped
-        // If they fail, they panic. We don't need .unwrap() here.
         gov_client.initialize(
-            &token_id, &tl, &5,    // voting_delay
-            &10,   // voting_period
-            &100,  // quorum_bps
-            &1,    // proposal_threshold
-            &None, // no reputation contract
-            &None, // no dispute contract
+            &token_id, &tl, &5, &10, &100, &1, &None, &None,
         );
 
-        // 3. Give Voter Weight
-        // We use our helper 'set_bal' to simulate the user having tokens
         token_client.set_bal(&voter, &200);
 
-        // 4. Propose
         let prop_id = gov_client.propose(
             &voter,
-            &Bytes::from_array(&env, &[1, 2, 3]), // Description Hash
-            &Bytes::from_array(&env, &[0]),       // Execution Data
+            &Bytes::from_array(&env, &[1, 2, 3]),
+            &Bytes::from_array(&env, &[0]),
         );
 
-        // 5. Move Time -> Active
         env.ledger().set_timestamp(env.ledger().timestamp() + 6);
-        assert_eq!(gov_client.state(&prop_id), 1); // 1 = Active
+        assert_eq!(gov_client.state(&prop_id), 1);
 
-        // 6. Vote
-        gov_client.cast_vote(&prop_id, &voter, &1); // 1 = For
+        gov_client.cast_vote(&prop_id, &voter, &1);
 
-        // 7. Move Time -> Ended
         env.ledger().set_timestamp(env.ledger().timestamp() + 20);
-
-        // 8. Queue & Execute
-        assert_eq!(gov_client.state(&prop_id), 3); // 3 = Succeeded
+        assert_eq!(gov_client.state(&prop_id), 3);
 
         gov_client.queue(&prop_id);
-        assert_eq!(gov_client.state(&prop_id), 4); // 4 = Queued
+        assert_eq!(gov_client.state(&prop_id), 4);
 
         gov_client.execute(&prop_id);
-        assert_eq!(gov_client.state(&prop_id), 5); // 5 = Executed
+        assert_eq!(gov_client.state(&prop_id), 5);
     }
 
     #[test]

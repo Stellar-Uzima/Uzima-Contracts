@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 //! Comprehensive Integration Test Suite for IHE/FHIR Standard Compliance
-//! 
+//!
 //! This test suite validates:
 //! - FHIR resource validation
 //! - IHE profile compliance
@@ -43,17 +43,16 @@ mod fhir_types {
     }
 }
 
-
 // ==================== Test Helper Functions ====================
 
 fn create_test_env() -> (Env, Address, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let admin = Address::generate(&env);
     let provider = Address::generate(&env);
     let patient = Address::generate(&env);
-    
+
     (env, admin, provider, patient)
 }
 
@@ -115,7 +114,7 @@ use fhir_types::FHIRResourceType;
 #[test]
 fn test_fhir_patient_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let patient = create_fhir_patient(&env);
     
     assert!(!patient.identifiers.is_empty());
@@ -130,7 +129,7 @@ fn test_fhir_patient_resource() {
 #[test]
 fn test_fhir_observation_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let observation = FHIRObservation {
         identifier: String::from_str(&env, "obs-001"),
         status: String::from_str(&env, "final"),
@@ -152,11 +151,16 @@ fn test_fhir_observation_resource() {
 #[test]
 fn test_fhir_condition_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let condition = FHIRCondition {
         identifier: String::from_str(&env, "cond-001"),
         clinical_status: String::from_str(&env, "active"),
-        code: create_fhir_code(&env, CodingSystem::ICD10, "E11.9", "Type 2 diabetes mellitus"),
+        code: create_fhir_code(
+            &env,
+            CodingSystem::ICD10,
+            "E11.9",
+            "Type 2 diabetes mellitus",
+        ),
         subject_reference: String::from_str(&env, "Patient/MRN-12345"),
         onset_date_time: String::from_str(&env, "2020-06-15T00:00:00Z"),
         recorded_date: String::from_str(&env, "2020-06-15T00:00:00Z"),
@@ -171,7 +175,7 @@ fn test_fhir_condition_resource() {
 #[test]
 fn test_fhir_medication_statement_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let medication = FHIRMedicationStatement {
         identifier: String::from_str(&env, "med-001"),
         status: String::from_str(&env, "active"),
@@ -184,10 +188,14 @@ fn test_fhir_medication_statement_resource() {
     };
     
     assert_eq!(medication.status, String::from_str(&env, "active"));
-    assert_eq!(medication.dosage, String::from_str(&env, "500mg twice daily"));
-    assert!(validate_fhir_resource(FHIRResourceType::MedicationStatement));
+    assert_eq!(
+        medication.dosage,
+        String::from_str(&env, "500mg twice daily")
+    );
+    assert!(validate_fhir_resource(
+        FHIRResourceType::MedicationStatement
+    ));
 }
-
 
 #[test]
 fn test_fhir_procedure_resource() {
@@ -211,7 +219,7 @@ fn test_fhir_procedure_resource() {
 #[test]
 fn test_fhir_allergy_intolerance_resource() {
     let (env, _admin, _provider, _patient) = create_test_env();
-    
+
     let allergy = FHIRAllergyIntolerance {
         identifier: String::from_str(&env, "allergy-001"),
         clinical_status: String::from_str(&env, "active"),
@@ -258,7 +266,6 @@ fn test_ihe_xds_profile_compliance() {
     assert_eq!(document_entry.status, DocumentStatus::Approved);
     assert!(!document_entry.format_code.is_empty());
 }
-
 
 #[test]
 fn test_ihe_pix_profile_compliance() {
@@ -318,7 +325,10 @@ fn test_ihe_pdq_profile_compliance() {
     
     assert_eq!(demographics.given_name, String::from_str(&env, "John"));
     assert_eq!(demographics.family_name, String::from_str(&env, "Doe"));
-    assert_eq!(demographics.administrative_gender, String::from_str(&env, "M"));
+    assert_eq!(
+        demographics.administrative_gender,
+        String::from_str(&env, "M")
+    );
 }
 
 #[test]
@@ -351,7 +361,6 @@ fn test_ihe_atna_profile_compliance() {
     assert_eq!(audit_event.event_outcome, ATNAEventOutcome::Success);
     assert!(!audit_event.active_participants.is_empty());
 }
-
 
 // ==================== HL7 Message Format Tests ====================
 
@@ -433,7 +442,6 @@ fn test_patient_record_exchange_interoperability() {
     assert_eq!(demographics.date_of_birth, fhir_patient.birth_date);
 }
 
-
 #[test]
 fn test_fhir_to_xds_document_conversion() {
     let (env, _admin, _provider, _patient) = create_test_env();
@@ -475,13 +483,13 @@ fn test_cross_system_patient_identifier_mapping() {
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let system_b_id = PatientIdentifier {
         id_value: String::from_str(&env, "PID-67890"),
         assigning_authority: String::from_str(&env, "Hospital-B"),
         identifier_type_code: String::from_str(&env, "PI"),
     };
-    
+
     let system_c_id = PatientIdentifier {
         id_value: String::from_str(&env, "EID-ABCDE"),
         assigning_authority: String::from_str(&env, "Clinic-C"),
@@ -518,7 +526,7 @@ fn test_scenario_patient_record_exchange() {
         assigning_authority: String::from_str(&env, "Hospital-A"),
         identifier_type_code: String::from_str(&env, "MR"),
     };
-    
+
     let pix_ref = PIXCrossReference {
         reference_id: 1,
         local_id,
@@ -527,7 +535,7 @@ fn test_scenario_patient_record_exchange() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     assert_eq!(pix_ref.reference_id, 1);
     
     let demographics = PatientDemographics {
@@ -551,9 +559,11 @@ fn test_scenario_patient_record_exchange() {
         last_updated: env.ledger().timestamp(),
         assigning_authority: String::from_str(&env, "Hospital-A"),
     };
-    
+
     assert_eq!(demographics.given_name, fhir_patient.given_name);
     
+
+    // Step 4: Create XDS document entry
     let xds_entry = XDSDocumentEntry {
         document_id: String::from_str(&env, "doc-001"),
         patient_id: demographics.patient_id.clone(),
@@ -573,10 +583,9 @@ fn test_scenario_patient_record_exchange() {
         submission_set_id: String::from_str(&env, "ss-001"),
         mime_type: String::from_str(&env, "application/pdf"),
     };
-    
+
     assert_eq!(xds_entry.status, DocumentStatus::Approved);
 }
-
 
 #[test]
 fn test_scenario_consent_management_flow() {
@@ -598,7 +607,7 @@ fn test_scenario_consent_management_flow() {
         author: _patient.clone(),
         document_ref: String::from_str(&env, "consent-doc-001"),
     };
-    
+
     assert_eq!(consent.consent_status, ConsentStatus::Active);
     assert_eq!(consent.access_consent_list.len(), 2);
     
@@ -621,7 +630,7 @@ fn test_scenario_consent_management_flow() {
         hl7_message_id: String::from_str(&env, "MSG-CONSENT-001"),
         profile: IHEProfile::BPPC,
     };
-    
+
     assert_eq!(audit_event.event_outcome, ATNAEventOutcome::Success);
     assert_eq!(audit_event.profile, IHEProfile::BPPC);
     
@@ -662,7 +671,7 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(access_event.event_type, ATNAEventType::PatientRecordAccess);
     assert_eq!(access_event.event_outcome, ATNAEventOutcome::Success);
     
@@ -679,7 +688,7 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-002"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(update_event.event_type, ATNAEventType::PatientRecordUpdate);
     
     let export_event = ATNAAuditEvent {
@@ -695,14 +704,13 @@ fn test_scenario_audit_trail_compliance() {
         hl7_message_id: String::from_str(&env, "MSG-003"),
         profile: IHEProfile::XDS,
     };
-    
+
     assert_eq!(export_event.event_type, ATNAEventType::DocumentExport);
     
     assert_eq!(access_event.event_id, 1);
     assert_eq!(update_event.event_id, 2);
     assert_eq!(export_event.event_id, 3);
 }
-
 
 #[test]
 fn test_scenario_security_profile_testing() {
@@ -727,7 +735,7 @@ fn test_scenario_security_profile_testing() {
         hl7_message_id: String::from_str(&env, "AUTH-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(auth_event.event_type, ATNAEventType::UserAuthentication);
     assert_eq!(auth_event.event_outcome, ATNAEventOutcome::Success);
     
@@ -742,7 +750,7 @@ fn test_scenario_security_profile_testing() {
         signature_purpose: String::from_str(&env, "author"),
         is_valid: true,
     };
-    
+
     assert!(signature.is_valid);
     assert_eq!(signature.signature_algorithm, String::from_str(&env, "RS256"));
     
@@ -765,7 +773,7 @@ fn test_scenario_security_profile_testing() {
         hl7_message_id: String::from_str(&env, "ALERT-001"),
         profile: IHEProfile::ATNA,
     };
-    
+
     assert_eq!(alert_event.event_type, ATNAEventType::SecurityAlert);
     assert_eq!(alert_event.event_outcome, ATNAEventOutcome::MinorFailure);
 }
@@ -803,11 +811,10 @@ fn test_fhir_bundle_operations() {
         bundle_type: String::from_str(&env, "transaction"),
         total: 5,
     };
-    
+
     assert_eq!(bundle.bundle_type, String::from_str(&env, "transaction"));
     assert_eq!(bundle.total, 5);
 }
-
 
 // ==================== IHE Connectathon Compliance Tests ====================
 
@@ -825,7 +832,7 @@ fn test_ihe_connectathon_xds_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "All tests passed"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::XDS);
 }
@@ -844,7 +851,7 @@ fn test_ihe_connectathon_pix_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Identity cross-referencing validated"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::PIX);
 }
@@ -863,7 +870,7 @@ fn test_ihe_connectathon_pdq_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Demographics query successful"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::PDQ);
 }
@@ -882,7 +889,7 @@ fn test_ihe_connectathon_atna_compliance() {
         tested_by: Address::generate(&env),
         notes: String::from_str(&env, "Audit logging compliant"),
     };
-    
+
     assert!(test_result.passed);
     assert_eq!(test_result.profile, IHEProfile::ATNA);
 }
@@ -908,7 +915,7 @@ fn test_ihe_hpd_provider_registration() {
         registration_time: env.ledger().timestamp(),
         is_active: true,
     };
-    
+
     assert_eq!(hpd_provider.provider_type, ProviderType::Individual);
     assert!(hpd_provider.is_active);
     assert_eq!(hpd_provider.npi, String::from_str(&env, "1234567890"));
@@ -939,11 +946,10 @@ fn test_ihe_svs_value_set_sharing() {
         source_url: String::from_str(&env, "https://vsac.nlm.nih.gov/"),
         registered_by: Address::generate(&env),
     };
-    
+
     assert_eq!(value_set.status, String::from_str(&env, "active"));
     assert!(!value_set.concepts.is_empty());
 }
-
 
 // ==================== Cross-Community Access Tests ====================
 
@@ -960,10 +966,13 @@ fn test_ihe_xca_gateway_registration() {
         registration_time: env.ledger().timestamp(),
         is_active: true,
     };
-    
+
     assert!(xca_gateway.is_active);
     assert_eq!(xca_gateway.supported_profiles.len(), 3);
-    assert_eq!(xca_gateway.community_id, String::from_str(&env, "community-a"));
+    assert_eq!(
+        xca_gateway.community_id,
+        String::from_str(&env, "community-a")
+    );
 }
 
 // ==================== Master Patient Index Tests ====================
@@ -1012,10 +1021,13 @@ fn test_ihe_mpi_master_patient_record() {
         updated_at: env.ledger().timestamp(),
         confidence_score: 95,
     };
-    
+
     assert_eq!(mpi_master.linked_identifiers.len(), 2);
     assert_eq!(mpi_master.confidence_score, 95);
-    assert_eq!(mpi_master.global_patient_id, String::from_str(&env, "GLOBAL-001"));
+    assert_eq!(
+        mpi_master.global_patient_id,
+        String::from_str(&env, "GLOBAL-001")
+    );
 }
 
 // ==================== Document Submission Set Tests ====================
@@ -1038,9 +1050,12 @@ fn test_xds_submission_set() {
         ],
         intended_recipient: String::from_str(&env, "Hospital-B"),
     };
-    
+
     assert_eq!(submission_set.document_ids.len(), 3);
-    assert_eq!(submission_set.patient_id, String::from_str(&env, "MRN-12345"));
+    assert_eq!(
+        submission_set.patient_id,
+        String::from_str(&env, "MRN-12345")
+    );
 }
 
 // ==================== Comprehensive Integration Test ====================
@@ -1070,7 +1085,7 @@ fn test_comprehensive_ihe_fhir_integration() {
         updated_at: env.ledger().timestamp(),
         is_merged: false,
     };
-    
+
     assert_eq!(pix_ref.reference_id, 1);
     
     let demographics = PatientDemographics {

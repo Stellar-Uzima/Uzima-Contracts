@@ -32,7 +32,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::NotInitialized => symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized | Error::AlreadyVoted | Error::AlreadyExecuted => {
             symbol_short!("ALREADY")
-        }
+        },
         Error::ProposalNotFound | Error::ProposalNotSuccessful => symbol_short!("CHK_ID"),
         Error::VotingClosed | Error::NotQueued => symbol_short!("RE_TRY_L"),
         _ => symbol_short!("CONTACT"),

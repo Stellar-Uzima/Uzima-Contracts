@@ -1,10 +1,10 @@
+use std::collections::HashMap;
 /// Performance testing utilities for contracts.
 ///
 /// For Soroban-specific benchmarks see the per-contract `benchmarks.rs` test
 /// modules, which use `env.budget().cpu_instruction_cost()` /
 /// `env.budget().memory_bytes_cost()` from `soroban_sdk::testutils::budget`.
 use std::time::Instant;
-use std::collections::HashMap;
 
 // ── Soroban budget result ────────────────────────────────────────────────────
 
@@ -42,9 +42,17 @@ pub struct SorobanBenchmarkSuite {
     results: Vec<SorobanBenchmarkResult>,
 }
 
+impl Default for SorobanBenchmarkSuite {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SorobanBenchmarkSuite {
     pub fn new() -> Self {
-        Self { results: Vec::new() }
+        Self {
+            results: Vec::new(),
+        }
     }
 
     pub fn add(&mut self, result: SorobanBenchmarkResult) {
@@ -115,6 +123,7 @@ impl PerformanceResult {
 }
 
 /// Performance benchmark runner
+#[allow(dead_code)]
 pub struct BenchmarkRunner {
     name: String,
     iterations: u32,
@@ -156,8 +165,15 @@ impl BenchmarkRunner {
 }
 
 /// Performance test suite
+#[allow(dead_code)]
 pub struct PerformanceSuite {
     tests: HashMap<String, PerformanceResult>,
+}
+
+impl Default for PerformanceSuite {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PerformanceSuite {
@@ -211,20 +227,9 @@ impl PerformanceSuite {
 }
 
 /// Load test utilities
-pub struct LoadTest {
-    name: String,
-    concurrent_operations: usize,
-}
+pub struct LoadTest;
 
 impl LoadTest {
-    /// Create new load test
-    pub fn new(name: &str, concurrent_ops: usize) -> Self {
-        Self {
-            name: name.to_string(),
-            concurrent_operations: concurrent_ops,
-        }
-    }
-
     /// Calculate throughput (operations per second)
     pub fn calculate_throughput(operations: usize, duration_secs: f64) -> f64 {
         operations as f64 / duration_secs
@@ -271,26 +276,22 @@ impl StressTest {
 
 /// Memory usage tracker
 pub struct MemoryTracker {
-    initial: Option<usize>,
+    tracking: bool,
 }
 
 impl MemoryTracker {
     pub fn new() -> Self {
-        Self { initial: None }
+        Self { tracking: false }
     }
 
     /// Start tracking memory
     pub fn start(&mut self) {
-        // Note: This is a simplified tracker. Real implementation would use system APIs
-        self.initial = Some(0);
+        self.tracking = true;
     }
 
-    /// Calculate memory delta
+    /// Calculate memory delta (placeholder — real impl would use system APIs)
     pub fn delta(&self) -> Option<usize> {
-        self.initial.map(|_initial| {
-            // Simplified: return a placeholder value
-            0
-        })
+        if self.tracking { Some(0) } else { None }
     }
 }
 

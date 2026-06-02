@@ -1,492 +1,303 @@
-# Uzima Contracts — Error Code Registry
+# Error Codes Reference
 
-## Convention
+> Comprehensive reference of all contract error codes across the Uzima Contracts ecosystem.
+> Auto-generated from contract source. Keep this file in sync with contract changes.
 
-- All error enums must be named `Error` (not `IoTError`, `ZkError`, etc.)
-- All must carry `#[contracterror]`, `#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]`, and `#[repr(u32)]`
-- Each contract must expose `pub fn get_suggestion(error: Error) -> Symbol`
-- Codes `x00–x09` within each range are reserved for canonical/shared errors
-- Contract-specific codes start at `x10+`
-- Gaps within a range are allowed — do not renumber when adding new variants
+## Overview
 
-## Category Ranges
+All Uzima contracts use numeric error codes organized by category:
 
-| Range   | Category                        |
-|---------|---------------------------------|
-| 100–199 | Access Control & Authorization  |
-| 200–299 | Input Validation                |
-| 300–399 | Lifecycle & State               |
-| 400–499 | Entity Existence                |
-| 500–599 | Financial & Resource            |
-| 600–699 | Cryptography & ZK               |
-| 700–799 | Cross-Chain & Integration       |
-| 800–899 | Domain-Specific (AI/Medical/IoT)|
-| 900–999 | Reserved                        |
+| Range | Category | Description |
+|-------|----------|-------------|
+| 1–99 | Contract-specific | Per-contract errors (unique to each contract) |
+| 100–199 | Access Control | Authorization, authentication, permissions |
+| 200–299 | Input Validation | Invalid arguments, format errors |
+| 300–399 | Lifecycle & State | Initialization, pause, status transitions |
+| 400–499 | Entity Existence | Not found, already exists |
+| 500–599 | Financial & Resource | Funds, storage, limits |
+| 600–699 | Cryptography | Key management, proofs |
+| 700–799 | Cross-Chain | Bridge, oracle, chain operations |
+| 800–899 | Reentrancy & Safety | Locking, circuit breaker |
 
-## Canonical (Shared) Errors
+---
 
-| Code | Name                    | Suggestion    | Meaning                                    | Contracts Using It                                                                 |
-|------|-------------------------|---------------|--------------------------------------------|------------------------------------------------------------------------------------|
-| 100  | `Unauthorized`          | `CHK_AUTH`    | Caller lacks authorization                 | emergency_access_override, patient_consent_management, appointment_booking_escrow, medical_record_hash_registry, notification_system, clinical_nlp, iot_device_management, medical_records |
-| 101  | `InsufficientPermissions` | `CHK_AUTH`  | Caller has insufficient permissions        | clinical_nlp                                                                       |
-| 102  | `NotAdmin`              | `CHK_AUTH`    | Caller is not admin                        | iot_device_management                                                              |
-| 104  | `HIPAAComplianceViolation` | `CHK_PHI`  | HIPAA compliance failure                   | clinical_nlp                                                                       |
-| 200  | `InvalidInput`          | `CHK_LEN`     | Generic invalid input                      | medical_records                                                                    |
-| 201  | `InputTooLong`          | `CHK_LEN`     | Input exceeds maximum length               | iot_device_management, clinical_nlp                                                |
-| 202  | `InputTooShort`         | `CHK_LEN`     | Input below minimum length                 | iot_device_management                                                              |
-| 205  | `InvalidAmount`         | `CHK_AMT`     | Invalid monetary amount                    | appointment_booking_escrow                                                         |
-| 206  | `InvalidId`             | `CHK_ID`      | Invalid identifier                         | medical_record_hash_registry, iot_device_management                                |
-| 207  | `InvalidSignature`      | `CONTACT`     | Signature verification failed              | medical_record_hash_registry                                                       |
-| 208  | `BatchTooLarge`         | `REDUCE`      | Batch size exceeds limit                   | notification_system, clinical_nlp, medical_records                                 |
-| 209  | `EmptyField`            | `ADD_TEXT`    | Required field is empty                    | notification_system (RecipientsEmpty)                                              |
-| 300  | `NotInitialized`        | `INIT_CTR`    | Contract has not been initialized          | All contracts                                                                      |
-| 301  | `AlreadyInitialized`    | `ALREADY`     | Contract already initialized               | All contracts                                                                      |
-| 302  | `ContractPaused`        | `RE_TRY_L`    | Contract is paused                         | medical_record_hash_registry, clinical_nlp, iot_device_management, medical_records |
-| 303  | `NotPaused`             | `CONTACT`     | Contract is not paused                     | iot_device_management                                                              |
-| 304  | `InvalidState`          | `CONTACT`     | Operation invalid in current state         | appointment_booking_escrow, medical_records                                        |
-| 306  | `DeadlineExceeded`      | `RE_TRY_L`    | Operation past deadline                    | medical_record_hash_registry                                                       |
-| 307  | `RateLimitExceeded`     | `RE_TRY_L`    | Too many requests                          | notification_system, clinical_nlp                                                  |
-| 308  | `Timeout`               | `RE_TRY_L`    | Processing timed out                       | clinical_nlp                                                                       |
-| 402  | `DuplicateRecord`       | `CHK_ID`      | Record already exists                      | medical_record_hash_registry                                                       |
-| 403  | `RecordNotFound`        | `CHK_ID`      | Record does not exist                      | emergency_access_override, medical_record_hash_registry, clinical_nlp, medical_records |
-| 500  | `InsufficientFunds`     | `ADD_FUND`    | Insufficient funds for operation           | appointment_booking_escrow, medical_record_hash_registry                           |
-| 501  | `TokenTransferFailed`   | `CONTACT`     | Token transfer failed                      | appointment_booking_escrow                                                         |
-| 502  | `StorageFull`           | `CLN_OLD`     | Storage capacity reached                   | medical_record_hash_registry                                                       |
-| 600  | `InvalidProof`          | `CONTACT`     | ZK proof is invalid                        | zk_verifier                                                                        |
-| 601  | `VerificationFailed`    | `CONTACT`     | ZK verification failed                     | zk_verifier                                                                        |
-| 602  | `InvalidEncryptionKey`  | `CONTACT`     | Encryption key is invalid                  | iot_device_management                                                              |
-| 605  | `CredentialExpired`     | `CONTACT`     | Credential has expired                     | medical_records                                                                    |
-| 606  | `CredentialRevoked`     | `CONTACT`     | Credential has been revoked                | medical_records                                                                    |
-| 700  | `CrossChainAccessDenied`| `CHK_AUTH`    | Cross-chain access was denied              | medical_records                                                                    |
-| 702  | `CrossChainTimeout`     | `RE_TRY_L`    | Cross-chain operation timed out            | medical_record_hash_registry                                                       |
-| 703  | `InvalidChain`          | `CONTACT`     | Chain identifier is invalid                | medical_records                                                                    |
-| 704  | `IntegrationFailed`     | `CONTACT`     | External integration failed                | clinical_nlp                                                                       |
-| 705  | `ExternalContractNotSet`| `SET_CNTR`    | Required external contract not configured  | clinical_nlp                                                                       |
+## Access Control (100–199)
 
-## Recovery Suggestion Symbols
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 100 | `Unauthorized` | All | Caller lacks permission for this action | Invalid role, expired authorization, not authenticated | Verify caller identity, check role assignments, ensure authentication |
+| 101 | `UnauthorizedCaller` | healthcare_payment | Specific caller not authorized | Wrong address calling restricted function | Check caller address matches expected admin/operator |
+| 102 | `NotAuthorizedPauser` | healthcare_payment | Not authorized to pause | Caller is not admin or authorized pauser | Add address to authorized pausers list |
+| 110 | `NotVerifier` | identity_registry | Caller is not a registered verifier | Address not in verifier registry | Register address as verifier first |
+| 111 | `CannotRemoveOwner` | identity_registry | Cannot remove the owner as verifier | Attempt to remove the contract owner | Owner must remain a verifier |
+| 120 | `InsufficientConfirmations` | cross_chain_bridge | Not enough validator confirmations | Message/operation has fewer confirmations than required threshold | Wait for more validators to confirm |
+| 121 | `InsufficientOracleReports` | cross_chain_bridge | Insufficient oracle reports for consensus | Fewer reports received than MIN_ORACLE_REPORTS | Submit more oracle reports |
+| 122 | `DuplicateOracleReport` | cross_chain_bridge | Oracle has already submitted a report | Duplicate submission from same oracle | Wait for other oracles to submit |
 
-| Symbol    | Meaning                                             |
-|-----------|-----------------------------------------------------|
-| `CHK_AUTH`| Check caller authorization                          |
-| `INIT_CTR`| Initialize the contract first                       |
-| `ALREADY` | Already initialized — no action needed              |
-| `RE_TRY_L`| Retry later (contract paused / rate limited)        |
-| `CHK_LEN` | Check input length                                  |
-| `ADD_FUND`| Add sufficient funds                                |
-| `CHK_ID`  | Verify the referenced ID exists                     |
-| `CLN_OLD` | Clean up old entries to free storage                |
-| `ADD_TEXT`| Input must not be empty                             |
-| `FIX_LANG`| Use a supported language code                       |
-| `SET_CNTR`| Admin must configure external contract address      |
-| `CHK_PHI` | PHI/HIPAA compliance failure — check data handling  |
-| `CONTACT` | Contact support / admin                             |
+## Input Validation (200–299)
 
-## Per-Contract Error Codes
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 205 | `InvalidAmount` | escrow, healthcare_payment | Invalid amount (zero or negative) | Amount <= 0 | Provide a positive amount |
+| 207 | `InvalidSignature` | cross_chain_bridge, timelock | Cryptographic signature validation failed | Corrupted signature, wrong key | Verify signing key and regenerate signature |
+| 280 | `InvalidCoverage` | healthcare_payment | Coverage policy validation failed | Missing policy data, invalid coverage BPS | Check policy parameters |
+| 281 | `InvalidNonce` | cross_chain_bridge | Nonce replay protection triggered | Duplicate nonce or nonce too low | Use a higher nonce value |
+| 282 | `InvalidPayload` | cross_chain_bridge | Message payload is invalid | Malformed data | Check payload format |
+| 290 | `InvalidAddress` | cross_chain_bridge | Chain address format is invalid | Wrong length or prefix | Use correct chain-specific address format |
+| 281 | `PolicyMismatch` | healthcare_payment | Policy ID doesn't match claim | Claim policy mismatch | Verify policy ID |
 
-### appointment_booking_escrow
+## Lifecycle & State (300–399)
 
-| Code | Name                        | Suggestion  | Description                          |
-|------|-----------------------------|-------------|--------------------------------------|
-| 100  | `Unauthorized`              | `CHK_AUTH`  | Caller not authorized                |
-| 110  | `OnlyPatientCanRefund`      | `CHK_AUTH`  | Only patient can initiate refund     |
-| 111  | `OnlyProviderCanConfirm`    | `CHK_AUTH`  | Only provider can confirm            |
-| 205  | `InvalidAmount`             | `CHK_LEN`   | Payment amount invalid               |
-| 210  | `InvalidPatient`            | `CHK_ID`    | Patient address invalid              |
-| 211  | `InvalidProvider`           | `CHK_ID`    | Provider address invalid             |
-| 300  | `NotInitialized`            | `INIT_CTR`  | Contract not initialized             |
-| 301  | `AlreadyInitialized`        | `ALREADY`   | Contract already initialized         |
-| 304  | `InvalidState`              | `CONTACT`   | Appointment in wrong state           |
-| 410  | `AppointmentNotFound`       | `CHK_ID`    | Appointment does not exist           |
-| 411  | `AppointmentAlreadyConfirmed`| `ALREADY`  | Appointment already confirmed        |
-| 412  | `AppointmentAlreadyRefunded` | `ALREADY`  | Appointment already refunded         |
-| 500  | `InsufficientFunds`         | `ADD_FUND`  | Insufficient funds                   |
-| 501  | `TokenTransferFailed`       | `CONTACT`   | Token transfer failed                |
-| 505  | `DoubleWithdrawal`          | `CONTACT`   | Withdrawal already processed         |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 300 | `NotInitialized` | All | Contract has not been initialized | Missing `initialize()` call | Call `initialize()` first |
+| 301 | `AlreadyInitialized` | All | Contract already initialized | Duplicate initialization attempt | Contract can only be initialized once |
+| 302 | `ContractPaused` | All | Contract is paused; no state-changing calls allowed | Emergency pause or maintenance | Wait for unpause or contact admin |
+| 303 | `CircuitOpen` | healthcare_payment | Circuit breaker is open | Too many recent failures | Wait for recovery or admin intervention |
+| 304 | `InvalidStatus` | healthcare_payment | Claim/entity in wrong status for this operation | Wrong workflow step | Check current status and required transition |
+| 305 | `AlreadyInState` | healthcare_payment | Already in the requested state | Redundant state transition | No action needed |
+| 306 | `DeadlineExceeded` | healthcare_payment, timelock | Operation deadline/timelock has passed | Operation timed out | Retry with fresh operation |
+| 372 | `NotQueued` | timelock | Transaction not in timelock queue | Wrong ID or already executed | Check queue ID |
+| 375 | `AlreadyQueued` | timelock | Transaction already queued | Duplicate queue attempt | Use a different ID |
+| 376 | `NotReady` | timelock | Timelock delay not yet elapsed | Too early to execute | Wait until ETA has passed |
 
-### clinical_nlp
+## Entity Existence (400–499)
 
-| Code | Name                        | Suggestion  | Description                          |
-|------|-----------------------------|-------------|--------------------------------------|
-| 100  | `Unauthorized`              | `CHK_AUTH`  | Caller not authorized                |
-| 101  | `InsufficientPermissions`   | `CHK_AUTH`  | Caller has insufficient permissions  |
-| 104  | `HIPAAComplianceViolation`  | `CHK_PHI`   | HIPAA violation detected             |
-| 112  | `RecordAccessDenied`        | `CHK_AUTH`  | Access to record denied              |
-| 201  | `InputTooLong`              | `CHK_LEN`   | Input exceeds maximum length         |
-| 208  | `BatchTooLarge`             | `REDUCE`    | Batch size too large                 |
-| 209  | `EmptyClinicalNote`         | `ADD_TEXT`  | Clinical note must not be empty      |
-| 300  | `NotInitialized`            | `INIT_CTR`  | Contract not initialized             |
-| 301  | `AlreadyInitialized`        | `ALREADY`   | Contract already initialized         |
-| 302  | `ContractPaused`            | `RE_TRY_L`  | Contract is paused                   |
-| 307  | `RateLimitExceeded`         | `RE_TRY_L`  | Rate limit exceeded                  |
-| 308  | `Timeout`                   | `RE_TRY_L`  | Processing timed out                 |
-| 310  | `InvalidConfiguration`      | `CONTACT`   | Configuration invalid                |
-| 403  | `RecordNotFound`            | `CHK_ID`    | Record does not exist                |
-| 704  | `IntegrationFailed`         | `CONTACT`   | External integration failed          |
-| 705  | `ExternalContractNotSet`    | `SET_CNTR`  | Medical records contract not set     |
-| 800  | `NLPEngineNotInitialized`   | `INIT_CTR`  | NLP engine not initialized           |
-| 801  | `EntityExtractionFailed`    | `CONTACT`   | Entity extraction failed             |
-| 810  | `ICD10CodeNotFound`         | `CONTACT`   | ICD-10 code not found                |
-| 811  | `CPTCodeNotFound`           | `CONTACT`   | CPT code not found                   |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 470 | `DIDNotFound` | identity_registry | DID document not found | Address has no DID | Create DID first |
+| 471 | `DIDAlreadyExists` | identity_registry | DID already registered | Duplicate DID creation | Use existing DID |
+| 472 | `DIDDeactivated` | identity_registry | DID has been deactivated | DID was intentionally deactivated | Cannot use deactivated DID |
+| 480 | `ClaimNotFound` | healthcare_payment | Claim not found | Wrong claim ID | Verify claim ID |
+| 481 | `MessageNotFound` | cross_chain_bridge | Cross-chain message not found | Wrong message ID | Verify message ID |
+| 482 | `PreAuthNotFound` | healthcare_payment | Pre-authorization not found | Wrong pre-auth ID | Verify pre-auth ID |
+| 483 | `PaymentPlanNotFound` | healthcare_payment | Payment plan not found | Wrong plan ID | Verify plan ID |
+| 484 | `InsuranceProviderNotFound` | healthcare_payment | Insurance provider not found | Wrong provider ID | Verify provider ID |
+| 485 | `CoveragePolicyNotFound` | healthcare_payment | Coverage policy not found | Wrong policy ID | Verify policy ID |
+| 486 | `EligibilityCheckNotFound` | healthcare_payment | Eligibility check not found | No eligibility check performed | Run eligibility check first |
+| 487 | `EobNotFound` | healthcare_payment | Explanation of benefits not found | EOB not processed yet | Process claim to generate EOB |
+| 488 | `AtomicTxNotFound` | cross_chain_bridge | Atomic transaction not found | Wrong transaction ID | Verify tx ID |
+| 489 | `RecordRefNotFound` | cross_chain_bridge | Cross-chain record reference not found | Wrong record/chain pair | Register record reference first |
+| 490 | `RollbackNotFound` | cross_chain_bridge | Rollback record not found | Wrong operation ID | Verify operation ID |
+| 491 | `RollbackAlreadyProcessed` | cross_chain_bridge | Rollback already completed | Duplicate rollback | No action needed |
+| 492 | `EventNotFound` | cross_chain_bridge | Cross-chain event not found | Wrong event ID | Verify event ID |
+| 481 | `ClaimSubmissionNotFound` | healthcare_payment | Claim submission not found | No EDI submission for this claim | Submit insurance claim first |
+| 481 | `EscrowNotFound` | escrow | Escrow not found | Wrong order ID | Verify escrow order ID |
+| 482 | `AlreadySettled` | escrow | Escrow already settled | Duplicate settlement attempt | No action needed |
+| 471 | `EscrowExists` | escrow | Escrow order already exists | Duplicate order ID | Use unique order ID |
+| 404 | `DIDNotFound` | identity_registry | DID not found | Address has no DID | Create DID first |
 
-### emergency_access_override
+## Financial & Resource (500–599)
 
-| Code | Name                | Suggestion  | Description                    |
-|------|---------------------|-------------|--------------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized          |
-| 230  | `InvalidThreshold`  | `CHK_LEN`   | Threshold value invalid        |
-| 231  | `InvalidDuration`   | `CHK_LEN`   | Duration value invalid         |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized       |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized   |
-| 403  | `RecordNotFound`    | `CHK_ID`    | Record does not exist          |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 500 | `InsufficientFunds` | healthcare_payment, timelock | Insufficient funds for operation | Not enough tokens | Add funds |
+| 502 | `StorageFull` | healthcare_payment, timelock | Storage capacity limit reached | Too much data stored | Clean up old data |
+| 580 | `FraudDetected` | healthcare_payment | Fraud report exists for this claim | Claim flagged as fraudulent | Resolve fraud report |
+| 581 | `EscrowFailed` | healthcare_payment | Escrow creation failed | Escrow contract rejected | Check escrow parameters |
+| 582 | `UnsupportedTransaction` | healthcare_payment | Unsupported transaction code | Wrong EDI format | Use supported transaction code |
 
-### iot_device_management
+## Cryptography (600–699)
 
-| Code | Name                        | Suggestion  | Description                          |
-|------|-----------------------------|-------------|--------------------------------------|
-| 100  | `Unauthorized`              | `CHK_AUTH`  | Caller not authorized                |
-| 102  | `NotAdmin`                  | `CHK_AUTH`  | Caller is not admin                  |
-| 115  | `NotDeviceOperator`         | `CHK_AUTH`  | Caller is not a device operator      |
-| 116  | `NotManufacturer`           | `CHK_AUTH`  | Caller is not a manufacturer         |
-| 201  | `InputTooLong`              | `CHK_LEN`   | String input too long                |
-| 202  | `InputTooShort`             | `CHK_LEN`   | String input too short               |
-| 240  | `InvalidDeviceType`         | `CONTACT`   | Device type unknown                  |
-| 250  | `InvalidFirmwareHash`       | `CONTACT`   | Firmware hash invalid                |
-| 260  | `InvalidMetricValue`        | `CONTACT`   | Metric value out of range            |
-| 270  | `InvalidTimestamp`          | `CONTACT`   | Timestamp is invalid                 |
-| 300  | `NotInitialized`            | `INIT_CTR`  | Contract not initialized             |
-| 301  | `AlreadyInitialized`        | `ALREADY`   | Contract already initialized         |
-| 302  | `ContractPaused`            | `RE_TRY_L`  | Contract is paused                   |
-| 303  | `NotPaused`                 | `CONTACT`   | Contract is not paused               |
-| 405  | `DeviceNotFound`            | `CHK_ID`    | Device does not exist                |
-| 420  | `DeviceAlreadyRegistered`   | `ALREADY`   | Device already registered            |
-| 425  | `ManufacturerNotRegistered` | `CHK_ID`    | Manufacturer not found               |
-| 426  | `ManufacturerAlreadyRegistered`| `ALREADY`| Manufacturer already registered      |
-| 430  | `FirmwareVersionNotFound`   | `CHK_ID`    | Firmware version not found           |
-| 431  | `FirmwareAlreadyExists`     | `ALREADY`   | Firmware already exists              |
-| 440  | `ChannelNotFound`           | `CHK_ID`    | Communication channel not found      |
-| 602  | `InvalidEncryptionKey`      | `CONTACT`   | Encryption key is invalid            |
-| 603  | `KeyRotationTooFrequent`    | `RE_TRY_L`  | Key rotation too frequent            |
-| 820  | `DeviceDecommissioned`      | `CONTACT`   | Device has been decommissioned       |
-| 821  | `FirmwareNotApproved`       | `CONTACT`   | Firmware not approved                |
-| 822  | `HeartbeatTooFrequent`      | `RE_TRY_L`  | Heartbeat sent too frequently        |
-| 823  | `DeviceNotActive`           | `CONTACT`   | Device is not active                 |
-| 824  | `DeviceSuspended`           | `CONTACT`   | Device is suspended                  |
-| 825  | `DowngradeNotAllowed`       | `CONTACT`   | Firmware downgrade not allowed       |
-| 826  | `DeviceOffline`             | `CONTACT`   | Device is offline                    |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 600 | `InvalidKey` | crypto_registry | Invalid key format | Key is empty or malformed | Provide valid key data |
+| 601 | `KeyNotFound` | crypto_registry | Key not found in registry | Wrong owner/version | Verify key owner and version |
+| 602 | `KeyAlreadyRevoked` | crypto_registry | Key already revoked | Duplicate revocation | No action needed |
+| 603 | `InvalidKeyLength` | crypto_registry | Key length doesn't match algorithm | Wrong key size for algorithm | Use correct key length |
+| 604 | `CredentialNotFound` | identity_registry | Credential not found | Wrong credential ID | Verify credential ID |
+| 605 | `CredentialExpired` | identity_registry | Credential has expired | Past expiration date | Renew credential |
+| 610 | `ProofNotFound` | cross_chain_bridge | Cryptographic proof not found | Wrong proof ID | Verify proof ID |
+| 611 | `ProofAlreadyVerified` | cross_chain_bridge | Proof already verified | Duplicate verification | No action needed |
 
-### medical_record_hash_registry
+## Cross-Chain (700–799)
 
-| Code | Name                | Suggestion  | Description                    |
-|------|---------------------|-------------|--------------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized          |
-| 206  | `InvalidId`         | `CHK_ID`    | Patient ID invalid             |
-| 207  | `InvalidSignature`  | `CONTACT`   | Signature verification failed  |
-| 251  | `InvalidRecordHash` | `CONTACT`   | Record hash invalid            |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized       |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized   |
-| 302  | `ContractPaused`    | `RE_TRY_L`  | Contract is paused             |
-| 306  | `DeadlineExceeded`  | `RE_TRY_L`  | Operation past deadline        |
-| 402  | `DuplicateRecord`   | `CHK_ID`    | Record already exists          |
-| 403  | `RecordNotFound`    | `CHK_ID`    | Record does not exist          |
-| 500  | `InsufficientFunds` | `ADD_FUND`  | Insufficient funds             |
-| 502  | `StorageFull`       | `CLN_OLD`   | Storage capacity reached       |
-| 702  | `CrossChainTimeout` | `RE_TRY_L`  | Cross-chain timeout            |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 702 | `CrossChainTimeout` | healthcare_payment, timelock | Cross-chain operation timed out | Message not delivered in time | Retry or escalate |
+| 703 | `InvalidChain` | cross_chain_bridge | Invalid chain identifier | Chain not recognized | Check chain ID |
+| 720 | `ChainNotSupported` | cross_chain_bridge | Chain not in supported list | Chain not configured | Add chain to supported list |
+| 721 | `OracleNotFound` | cross_chain_bridge | Oracle node not found | Wrong oracle address | Verify oracle address |
+| 722 | `OracleNotActive` | cross_chain_bridge | Oracle not active | Oracle deactivated | Contact admin to reactivate |
 
-### notification_system
+## Reentrancy & Safety (800–899)
 
-| Code | Name                    | Suggestion  | Description                        |
-|------|-------------------------|-------------|------------------------------------|
-| 100  | `Unauthorized`          | `CHK_AUTH`  | Caller not authorized              |
-| 120  | `SenderNotAuthorized`   | `CHK_AUTH`  | Sender not authorized              |
-| 208  | `BatchTooLarge`         | `REDUCE`    | Batch too large                    |
-| 209  | `RecipientsEmpty`       | `ADD_TEXT`  | Recipients list is empty           |
-| 221  | `TitleTooLong`          | `SHORTEN`   | Title exceeds max length           |
-| 222  | `MessageTooLong`        | `SHORTEN`   | Message exceeds max length         |
-| 223  | `NameTooLong`           | `SHORTEN`   | Name exceeds max length            |
-| 224  | `LocaleTooLong`         | `FIX_LANG`  | Locale string too long             |
-| 241  | `InvalidNotifType`      | `CONTACT`   | Notification type invalid          |
-| 242  | `TooManyEnabledTypes`   | `REDUCE`    | Too many enabled notification types|
-| 300  | `NotInitialized`        | `INIT_CTR`  | Contract not initialized           |
-| 301  | `AlreadyInitialized`    | `ALREADY`   | Contract already initialized       |
-| 307  | `RateLimitExceeded`     | `RE_TRY_L`  | Rate limit exceeded                |
-| 330  | `AlreadyRead`           | `ALREADY`   | Notification already read          |
-| 331  | `AlreadyArchived`       | `ALREADY`   | Notification already archived      |
-| 450  | `NotificationNotFound`  | `CHK_ID`    | Notification not found             |
-| 451  | `AlertRuleNotFound`     | `CHK_ID`    | Alert rule not found               |
-| 452  | `TemplateNotFound`      | `CHK_ID`    | Template not found                 |
-| 453  | `SenderNotFound`        | `CHK_ID`    | Sender not found                   |
-| 510  | `MaxSendersReached`     | `CLN_OLD`   | Maximum senders reached            |
-| 511  | `MaxRulesReached`       | `CLN_OLD`   | Maximum rules reached              |
-| 512  | `MaxNotificationsReached`| `CLN_OLD`  | Maximum notifications reached      |
-| 513  | `MaxTemplatesReached`   | `CLN_OLD`   | Maximum templates reached          |
+| Code | Symbol | Contract(s) | Description | Common Causes | Remediation |
+|------|--------|-------------|-------------|---------------|-------------|
+| 800 | `Reentrancy` | healthcare_payment | Reentrancy guard triggered | Concurrent call detected | Retry after current operation completes |
+| 801 | `OperationNotFound` | cross_chain_bridge | Cross-chain operation not found | Wrong operation ID | Verify operation ID |
+| 802 | `OperationExpired` | cross_chain_bridge | Operation has expired | Deadline passed | Create new operation |
+| 803 | `OperationAlreadyCompleted` | cross_chain_bridge | Operation already completed | Duplicate completion | No action needed |
+| 804 | `MaxExtensionsReached` | cross_chain_bridge | Max timeout extensions reached | Too many extensions | Create new operation |
+| 804 | `RefundFailed` | cross_chain_bridge | Refund processing failed | Cannot transfer refund | Check balance and retry |
 
-### patient_consent_management
+## Per-Contract Error Codes (1–99)
 
-| Code | Name                  | Suggestion  | Description                      |
-|------|-----------------------|-------------|----------------------------------|
-| 100  | `Unauthorized`        | `CHK_AUTH`  | Caller not authorized            |
-| 210  | `InvalidPatient`      | `CHK_ID`    | Patient address invalid          |
-| 211  | `InvalidProvider`     | `CHK_ID`    | Provider address invalid         |
-| 300  | `NotInitialized`      | `INIT_CTR`  | Contract not initialized         |
-| 301  | `AlreadyInitialized`  | `ALREADY`   | Contract already initialized     |
-| 406  | `ConsentNotFound`     | `CHK_ID`    | Consent record not found         |
-| 460  | `ConsentAlreadyExists`| `ALREADY`   | Consent already exists           |
+### clinical_trial
 
-### zk_verifier
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 1 | `ProtocolNotFound` | Protocol ID not found | Check protocol ID |
+| 2 | `TrialFull` | Trial enrollment cap reached | Cannot exceed max_participants |
 
-| Code | Name                | Suggestion  | Description                 |
-|------|---------------------|-------------|-----------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized       |
-| 200  | `InvalidInput`      | `CHK_LEN`   | Generic invalid input       |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized    |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized|
-| 430  | `VersionNotFound`   | `CHK_ID`    | Version does not exist      |
-| 600  | `InvalidProof`      | `CONTACT`   | ZK proof is invalid         |
-| 601  | `VerificationFailed`| `CONTACT`   | ZK verification failed      |
+### pharma_supply_chain
 
-### medical_records
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 1 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 2 | `NotInitialized` | Not initialized | Call initialize first |
+| 3 | `Unauthorized` | Unauthorized caller | Check permissions |
+| 4 | `ManufacturerNotFound` | Manufacturer not found | Verify manufacturer ID |
+| 5 | `MedicationNotFound` | Medication not found | Verify medication ID |
+| 6 | `BatchNotFound` | Batch not found | Verify batch ID |
+| 7 | `ShipmentNotFound` | Shipment not found | Verify shipment ID |
+| 8 | `InvalidInput` | Invalid input parameters | Check parameter values |
+| 9 | `BatchAlreadyExists` | Batch ID already exists | Use unique batch ID |
 
-| Code | Name                          | Suggestion  | Description                                  |
-|------|-------------------------------|-------------|----------------------------------------------|
-| 100  | `Unauthorized`                | `CHK_AUTH`  | Caller not authorized                        |
-| 150  | `NotAICoordinator`            | `CHK_AUTH`  | Caller is not the AI coordinator             |
-| 160  | `EmergencyAccessExpired`      | `NEW_EMER`  | Emergency access has expired                 |
-| 200  | `InvalidInput`                | `CONTACT`   | Generic invalid input                        |
-| 201  | `InputTooLong`                | `CHK_LEN`   | Input exceeds maximum length                 |
-| 207  | `InvalidSignature`            | `CONTACT`   | Signature invalid                            |
-| 208  | `BatchTooLarge`               | `REDUCE`    | Batch size too large                         |
-| 250  | `InvalidDataRefLength`        | `CHK_LEN`   | Data reference length invalid                |
-| 251  | `InvalidDataRefCharset`       | `CHK_LEN`   | Data reference charset invalid               |
-| 252  | `InvalidDiagnosisLength`      | `CHK_LEN`   | Diagnosis field too long                     |
-| 253  | `InvalidTreatmentLength`      | `CHK_LEN`   | Treatment field too long                     |
-| 254  | `InvalidPurposeLength`        | `CHK_LEN`   | Purpose field too long                       |
-| 255  | `InvalidTagLength`            | `CHK_LEN`   | Tag field too long                           |
-| 256  | `InvalidModelVersionLength`   | `CHK_LEN`   | Model version field too long                 |
-| 257  | `InvalidExplanationLength`    | `CHK_LEN`   | Explanation field too long                   |
-| 258  | `InvalidTreatmentTypeLength`  | `CHK_LEN`   | Treatment type field too long                |
-| 280  | `InvalidCategory`             | `FIX_CAT`   | Category is invalid                          |
-| 281  | `EmptyTreatment`              | `FILL_FLD`  | Treatment field must not be empty            |
-| 282  | `EmptyDiagnosis`              | `FILL_FLD`  | Diagnosis field must not be empty            |
-| 283  | `EmptyTag`                    | `CONTACT`   | Tag must not be empty                        |
-| 284  | `EmptyDataRef`                | `CONTACT`   | Data reference must not be empty             |
-| 290  | `InvalidAddress`              | `CONTACT`   | Address is invalid                           |
-| 291  | `SameAddress`                 | `CONTACT`   | Source and destination are the same          |
-| 292  | `InvalidBatch`                | `CHK_DATA`  | Batch data is invalid                        |
-| 293  | `NumberOutOfBounds`           | `CONTACT`   | Number is out of bounds                      |
-| 300  | `NotInitialized`              | `INIT_CTR`  | Contract not initialized                     |
-| 302  | `ContractPaused`              | `RE_TRY_L`  | Contract is paused                           |
-| 306  | `DeadlineExceeded`            | `CONTACT`   | Operation past deadline                      |
-| 307  | `RateLimitExceeded`           | `RE_TRY_L`  | Rate limit exceeded                          |
-| 320  | `ProposalAlreadyExecuted`     | `ALREADY`   | Proposal already executed                    |
-| 321  | `TimelockNotElapsed`          | `RE_TRY_L`  | Timelock period has not elapsed              |
-| 322  | `NotEnoughApproval`           | `CONTACT`   | Insufficient approvals for execution         |
-| 340  | `CryptoRegistryNotSet`        | `SET_CNTR`  | Crypto registry contract not configured      |
-| 341  | `EncryptionRequired`          | `CONTACT`   | Record requires encryption                   |
-| 342  | `IdentityRegistryNotSet`      | `SET_CNTR`  | Identity registry contract not configured    |
-| 403  | `RecordNotFound`              | `CHK_ID`    | Record does not exist                        |
-| 460  | `EmergencyAccessNotFound`     | `CHK_ID`    | Emergency access not found                   |
-| 470  | `DIDNotFound`                 | `CHK_ID`    | DID does not exist                           |
-| 471  | `DIDNotActive`                | `CONTACT`   | DID is not active                            |
-| 480  | `RecordAlreadySynced`         | `ALREADY`   | Record already synced cross-chain            |
-| 500  | `InsufficientFunds`           | `ADD_FUND`  | Insufficient funds                           |
-| 502  | `StorageFull`                 | `CLN_OLD`   | Storage capacity reached                     |
-| 605  | `CredentialExpired`           | `CONTACT`   | Credential has expired                       |
-| 606  | `CredentialRevoked`           | `CONTACT`   | Credential has been revoked                  |
-| 640  | `InvalidCredential`           | `CONTACT`   | Credential is invalid                        |
-| 641  | `MissingRequiredCredential`   | `CONTACT`   | Required credential missing                  |
-| 700  | `CrossChainAccessDenied`      | `CHK_AUTH`  | Cross-chain access denied                    |
-| 702  | `CrossChainTimeout`           | `RE_TRY_L`  | Cross-chain operation timed out              |
-| 703  | `InvalidChain`                | `CONTACT`   | Chain identifier is invalid                  |
-| 710  | `CrossChainNotEnabled`        | `CONTACT`   | Cross-chain is not enabled                   |
-| 711  | `CrossChainContractsNotSet`   | `SET_CNTR`  | Cross-chain contracts not configured         |
-| 830  | `AIConfigNotSet`              | `SET_CNTR`  | AI configuration not set                     |
-| 831  | `InvalidAIScore`              | `CONTACT`   | AI score is invalid                          |
-| 832  | `InvalidScore`                | `CONTACT`   | Score is invalid                             |
-| 833  | `InvalidDPEpsilon`            | `CONTACT`   | Differential privacy epsilon invalid         |
-| 834  | `InvalidParticipantCount`     | `CONTACT`   | Participant count invalid                    |
+### ai_analytics
 
-### audit
-
-| Code | Name                | Suggestion  | Description                  |
-|------|---------------------|-------------|------------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized        |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized     |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized |
-| 403  | `RecordNotFound`    | `CHK_ID`    | Audit record does not exist  |
-
-### rbac
-
-| Code | Name                | Suggestion  | Description                  |
-|------|---------------------|-------------|------------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized        |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized     |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized |
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 1 | `NotAuthorized` | Caller not authorized | Check admin/permissions |
+| 2 | `RoundNotFound` | Round ID not found | Verify round ID |
+| 3 | `RoundFinalized` | Round already finalized | Cannot modify finalized round |
+| 4 | `NotEnoughParticipants` | Insufficient participants to finalize | Wait for more participants |
+| 5 | `DuplicateUpdate` | Duplicate participant update | Each participant submits once per round |
+| 6 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 7 | `AdminNotSet` | Admin not yet configured | Call initialize first |
+| 8 | `SerializationError` | General serialization error | Check data format |
+| 9 | `CollectionTooLarge` | Collection exceeds max size | Reduce collection size |
+| 10 | `StringTooLong` | String exceeds max length | Shorten string |
+| 11 | `NestingTooDeep` | Structure nesting too deep | Flatten data structure |
 
 ### identity_registry
 
-| Code | Name                          | Suggestion  | Description                               |
-|------|-------------------------------|-------------|-------------------------------------------|
-| 100  | `Unauthorized`                | `CHK_AUTH`  | Caller not authorized                     |
-| 110  | `NotVerifier`                 | `CHK_AUTH`  | Caller is not a verifier                  |
-| 111  | `CannotRemoveOwner`           | `CHK_AUTH`  | Cannot remove contract owner              |
-| 120  | `InvalidRecoveryGuardian`     | `CHK_AUTH`  | Recovery guardian is invalid              |
-| 121  | `InsufficientGuardianApprovals`| `CHK_AUTH` | Insufficient guardian approvals           |
-| 250  | `InvalidVerificationMethod`   | `CONTACT`   | Verification method is invalid            |
-| 251  | `InvalidCredentialType`       | `CONTACT`   | Credential type is invalid                |
-| 252  | `InvalidServiceEndpoint`      | `CONTACT`   | Service endpoint is invalid               |
-| 300  | `NotInitialized`              | `INIT_CTR`  | Contract not initialized                  |
-| 301  | `AlreadyInitialized`          | `ALREADY`   | Contract already initialized              |
-| 360  | `RecoveryNotInitiated`        | `CONTACT`   | Recovery has not been initiated           |
-| 361  | `RecoveryAlreadyPending`      | `ALREADY`   | Recovery is already pending               |
-| 362  | `RecoveryTimelockNotElapsed`  | `RE_TRY_L`  | Recovery timelock not elapsed             |
-| 450  | `VerificationMethodNotFound`  | `CHK_ID`    | Verification method not found             |
-| 460  | `CredentialNotFound`          | `CHK_ID`    | Credential not found                      |
-| 461  | `AttestationNotFound`         | `CHK_ID`    | Attestation not found                     |
-| 462  | `ServiceNotFound`             | `CHK_ID`    | Service endpoint not found                |
-| 470  | `DIDNotFound`                 | `CHK_ID`    | DID does not exist                        |
-| 471  | `DIDAlreadyExists`            | `ALREADY`   | DID already exists                        |
-| 472  | `DIDDeactivated`              | `CONTACT`   | DID has been deactivated                  |
-| 603  | `KeyRotationCooldown`         | `RE_TRY_L`  | Key rotation cooldown in effect           |
-| 605  | `CredentialExpired`           | `CONTACT`   | Credential has expired                    |
-| 606  | `CredentialRevoked`           | `CONTACT`   | Credential has been revoked               |
-
-### governor
-
-| Code | Name                    | Suggestion  | Description                          |
-|------|-------------------------|-------------|--------------------------------------|
-| 280  | `InvalidVoteType`       | `CONTACT`   | Vote type is invalid                 |
-| 300  | `NotInitialized`        | `INIT_CTR`  | Contract not initialized             |
-| 301  | `AlreadyInitialized`    | `ALREADY`   | Contract already initialized         |
-| 304  | `InvalidState`          | `CONTACT`   | Proposal in wrong state              |
-| 370  | `VotingClosed`          | `RE_TRY_L`  | Voting period is closed              |
-| 371  | `AlreadyVoted`          | `ALREADY`   | Caller has already voted             |
-| 372  | `NotQueued`             | `RE_TRY_L`  | Proposal is not queued               |
-| 373  | `ProposalDisputed`      | `CONTACT`   | Proposal is disputed                 |
-| 450  | `ProposalNotFound`      | `CHK_ID`    | Proposal does not exist              |
-| 451  | `ProposalNotSuccessful` | `CHK_ID`    | Proposal did not succeed             |
-| 452  | `AlreadyExecuted`       | `ALREADY`   | Proposal already executed            |
-| 530  | `ProposalThresholdNotMet`| `CONTACT`  | Proposal threshold not reached       |
-| 531  | `NoVotingPower`         | `CONTACT`   | Caller has no voting power           |
-| 580  | `Overflow`              | `CONTACT`   | Arithmetic overflow                  |
-
-### timelock
-
-| Code | Name                | Suggestion  | Description                       |
-|------|---------------------|-------------|-----------------------------------|
-| 100  | `Unauthorized`      | `CHK_AUTH`  | Caller not authorized             |
-| 207  | `InvalidSignature`  | `CONTACT`   | Signature verification failed     |
-| 300  | `NotInitialized`    | `INIT_CTR`  | Contract not initialized          |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized      |
-| 302  | `ContractPaused`    | `RE_TRY_L`  | Contract is paused                |
-| 306  | `DeadlineExceeded`  | `RE_TRY_L`  | Operation past deadline           |
-| 372  | `NotQueued`         | `CONTACT`   | Operation is not queued           |
-| 375  | `AlreadyQueued`     | `ALREADY`   | Operation already queued          |
-| 376  | `NotReady`          | `RE_TRY_L`  | Timelock not yet elapsed          |
-| 500  | `InsufficientFunds` | `ADD_FUND`  | Insufficient funds                |
-| 502  | `StorageFull`       | `CLN_OLD`   | Storage capacity reached          |
-| 702  | `CrossChainTimeout` | `RE_TRY_L`  | Cross-chain operation timed out   |
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 100 | `Unauthorized` | Caller not authorized | Check roles |
+| 101 | `InputTooLong` | Input exceeds max length | Shorten input |
+| 102 | `InvalidInput` | Invalid input parameters | Check parameter values |
+| 103 | `InvalidServiceEndpoint` | Invalid service endpoint URL | Use valid URL format |
+| 104 | `VerificationMethodNotFound` | Verification method not found | Check method ID |
+| 105 | `InvalidVerificationMethod` | Invalid or last active method | Add more methods first |
+| 106 | `GuardianNotFound` | Guardian not found | Check guardian address |
+| 107 | `ServiceNotFound` | Service endpoint not found | Check service ID |
+| 108 | `KeyRotationCooldown` | Key rotation too soon | Wait for cooldown period |
+| 110 | `NotVerifier` | Not a verifier | Must be registered as verifier |
+| 111 | `CannotRemoveOwner` | Cannot remove owner as verifier | Owner retains verifier status |
+| 300 | `NotInitialized` | Not initialized | Call initialize |
+| 301 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 470 | `DIDNotFound` | DID not found | Create DID first |
+| 471 | `DIDAlreadyExists` | DID already exists | Use existing DID |
+| 472 | `DIDDeactivated` | DID deactivated | Reactivate or use different |
+| 473 | `CredentialNotFound` | Credential not found | Verify credential ID |
+| 474 | `CredentialRevoked` | Credential has been revoked | Cannot use revoked credential |
+| 475 | `CredentialExpired` | Credential expired | Renew credential |
+| 476 | `RecoveryAlreadyPending` | Recovery already in progress | Wait for completion |
+| 477 | `RecoveryNotInitiated` | No recovery initiated | Start recovery first |
+| 478 | `InvalidRecoveryGuardian` | Not a guardian for this DID | Only guardians can initiate recovery |
+| 479 | `RecoveryTimelockNotElapsed` | Recovery timelock not elapsed | Wait for timelock period |
+| 480 | `InsufficientGuardianApprovals` | Insufficient guardian approvals | Get more guardian approvals |
+| 481 | `ServiceNotFound` | Service endpoint not found | Check service ID |
 
 ### escrow
 
-| Code | Name                    | Suggestion  | Description                        |
-|------|-------------------------|-------------|------------------------------------|
-| 100  | `Unauthorized`          | `CHK_AUTH`  | Caller not authorized              |
-| 102  | `NotAdmin`              | `CHK_AUTH`  | Caller is not admin                |
-| 120  | `InsufficientApprovals` | `CHK_AUTH`  | Insufficient approvals             |
-| 205  | `InvalidAmount`         | `CHK_LEN`   | Amount is invalid                  |
-| 260  | `InvalidFeeBps`         | `CHK_LEN`   | Fee basis points invalid           |
-| 380  | `FeeNotSet`             | `CONTACT`   | Fee has not been configured        |
-| 381  | `ReentrancyGuard`       | `CONTACT`   | Reentrancy detected                |
-| 382  | `InvalidStateTransition`| `CONTACT`   | Invalid state transition           |
-| 480  | `EscrowExists`          | `ALREADY`   | Escrow already exists              |
-| 481  | `EscrowNotFound`        | `CHK_ID`    | Escrow does not exist              |
-| 482  | `AlreadySettled`        | `ALREADY`   | Escrow already settled             |
-| 560  | `NoBasisToRefund`       | `CONTACT`   | No basis to issue refund           |
-| 561  | `NoCredit`              | `CONTACT`   | No credit available                |
-
-### healthcare_payment
-
-| Code | Name                        | Suggestion  | Description                            |
-|------|-----------------------------|-------------|----------------------------------------|
-| 100  | `Unauthorized`              | `CHK_AUTH`  | Caller not authorized                  |
-| 205  | `InvalidAmount`             | `CHK_LEN`   | Amount is invalid                      |
-| 207  | `InvalidSignature`          | `CONTACT`   | Signature verification failed          |
-| 280  | `InvalidCoverage`           | `CONTACT`   | Coverage is invalid                    |
-| 281  | `PolicyMismatch`            | `CONTACT`   | Policy does not match claim            |
-| 300  | `NotInitialized`            | `INIT_CTR`  | Contract not initialized               |
-| 301  | `AlreadyInitialized`        | `ALREADY`   | Contract already initialized           |
-| 302  | `ContractPaused`            | `RE_TRY_L`  | Contract is paused                     |
-| 304  | `InvalidStatus`             | `CONTACT`   | Claim status is invalid                |
-| 306  | `DeadlineExceeded`          | `RE_TRY_L`  | Operation past deadline                |
-| 480  | `ClaimNotFound`             | `CHK_ID`    | Claim does not exist                   |
-| 481  | `PreAuthNotFound`           | `CHK_ID`    | Pre-authorization not found            |
-| 482  | `PaymentPlanNotFound`       | `CHK_ID`    | Payment plan not found                 |
-| 483  | `InsuranceProviderNotFound` | `CHK_ID`    | Insurance provider not found           |
-| 484  | `CoveragePolicyNotFound`    | `CHK_ID`    | Coverage policy not found              |
-| 485  | `EligibilityCheckNotFound`  | `CHK_ID`    | Eligibility check not found            |
-| 486  | `ClaimSubmissionNotFound`   | `CHK_ID`    | Claim submission not found             |
-| 487  | `EobNotFound`               | `CHK_ID`    | Explanation of benefits not found      |
-| 500  | `InsufficientFunds`         | `ADD_FUND`  | Insufficient funds                     |
-| 502  | `StorageFull`               | `CLN_OLD`   | Storage capacity reached               |
-| 580  | `FraudDetected`             | `CONTACT`   | Fraud detected in claim                |
-| 581  | `EscrowFailed`              | `CONTACT`   | Escrow operation failed                |
-| 582  | `UnsupportedTransaction`    | `CONTACT`   | Transaction type not supported         |
-| 702  | `CrossChainTimeout`         | `RE_TRY_L`  | Cross-chain operation timed out        |
-
-### upgrade_manager
-
-| Code | Name                | Suggestion  | Description                        |
-|------|---------------------|-------------|------------------------------------|
-| 110  | `NotAValidator`     | `CHK_AUTH`  | Caller is not a validator          |
-| 120  | `NotEnoughApprovals`| `CHK_AUTH`  | Insufficient validator approvals   |
-| 301  | `AlreadyInitialized`| `ALREADY`   | Contract already initialized       |
-| 304  | `InvalidState`      | `CONTACT`   | Proposal in wrong state            |
-| 376  | `TimelockNotExpired`| `RE_TRY_L`  | Timelock has not expired           |
-| 390  | `ConfigNotFound`    | `CHK_ID`    | Configuration not found            |
-| 450  | `ProposalNotFound`  | `CHK_ID`    | Proposal does not exist            |
-| 451  | `AlreadyApproved`   | `ALREADY`   | Already approved by this validator |
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 100 | `Unauthorized` | Caller not authorized | Check caller permissions |
+| 102 | `NotAdmin` | Only admin can perform this action | Use admin account |
+| 205 | `InvalidAmount` | Amount must be positive | Provide positive amount |
+| 481 | `EscrowNotFound` | Escrow not found | Verify escrow ID |
+| 482 | `AlreadySettled` | Already settled/refunded | Check escrow status |
+| 471 | `EscrowExists` | Escrow already exists | Use unique ID |
+| 483 | `FeeNotSet` | Fee config not set | Configure fee first |
+| 484 | `InvalidFeeBps` | Invalid fee (max 10000 bps) | Use fee <= 10000 |
+| 485 | `InsufficientApprovals` | Not enough approvals | Get more approvals |
+| 486 | `InvalidStateTransition` | Invalid status transition | Follow correct workflow |
+| 487 | `NoBasisToRefund` | No basis to refund | Escrow must have approvals |
+| 490 | `NoCredit` | No credit balance | No funds to withdraw |
+| 800 | `ReentrancyGuard` | Reentrancy guard triggered | Wait for completion |
+| 580 | `Overflow` | Arithmetic overflow | Use smaller values |
 
 ### cross_chain_bridge
 
-| Code | Name                      | Suggestion  | Description                              |
-|------|---------------------------|-------------|------------------------------------------|
-| 100  | `Unauthorized`            | `CHK_AUTH`  | Caller not authorized                    |
-| 120  | `InsufficientConfirmations`| `CHK_AUTH` | Not enough confirmations                 |
-| 121  | `InsufficientOracleReports`| `CHK_AUTH` | Not enough oracle reports                |
-| 122  | `DuplicateOracleReport`   | `ALREADY`   | Oracle already reported                  |
-| 207  | `InvalidSignature`        | `CONTACT`   | Signature verification failed            |
-| 280  | `InvalidMessage`          | `CONTACT`   | Message is invalid                       |
-| 281  | `InvalidNonce`            | `CONTACT`   | Nonce is invalid                         |
-| 282  | `InvalidPayload`          | `CONTACT`   | Payload is invalid                       |
-| 290  | `InvalidAddress`          | `CONTACT`   | Address is invalid                       |
-| 301  | `AlreadyInitialized`      | `ALREADY`   | Contract already initialized             |
-| 302  | `ContractPaused`          | `RE_TRY_L`  | Contract is paused                       |
-| 480  | `MessageNotFound`         | `CHK_ID`    | Message does not exist                   |
-| 481  | `MessageExpired`          | `CONTACT`   | Message has expired                      |
-| 482  | `MessageAlreadyProcessed` | `ALREADY`   | Message already processed                |
-| 483  | `ValidatorNotFound`       | `CHK_ID`    | Validator not found                      |
-| 484  | `ValidatorNotActive`      | `CONTACT`   | Validator is not active                  |
-| 485  | `DuplicateConfirmation`   | `ALREADY`   | Confirmation already submitted           |
-| 486  | `AtomicTxNotFound`        | `CHK_ID`    | Atomic transaction not found             |
-| 487  | `AtomicTxExpired`         | `CONTACT`   | Atomic transaction has expired           |
-| 488  | `AtomicTxAlreadyProcessed`| `ALREADY`   | Atomic transaction already processed     |
-| 489  | `RecordRefNotFound`       | `CHK_ID`    | Record reference not found               |
-| 490  | `RollbackNotFound`        | `CHK_ID`    | Rollback operation not found             |
-| 491  | `RollbackAlreadyProcessed`| `ALREADY`   | Rollback already processed               |
-| 492  | `EventNotFound`           | `CHK_ID`    | Event not found                          |
-| 580  | `Overflow`                | `CONTACT`   | Arithmetic overflow                      |
-| 610  | `ProofNotFound`           | `CHK_ID`    | Proof not found                          |
-| 611  | `ProofAlreadyVerified`    | `ALREADY`   | Proof already verified                   |
-| 703  | `InvalidChain`            | `CONTACT`   | Chain identifier is invalid              |
-| 720  | `ChainNotSupported`       | `CONTACT`   | Chain is not supported                   |
-| 721  | `OracleNotFound`          | `CHK_ID`    | Oracle not found                         |
-| 722  | `OracleNotActive`         | `CONTACT`   | Oracle is not active                     |
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 100 | `Unauthorized` | Caller not authorized | Check permissions |
+| 101 | `UnauthorizedRelayer` | Not an authorized relayer | Register as relayer first |
+| 120 | `InsufficientConfirmations` | Not enough validator confirmations | Wait for more validators |
+| 121 | `InsufficientOracleReports` | Insufficient oracle reports | Submit more reports |
+| 122 | `DuplicateOracleReport` | Oracle already reported | Unique report per oracle |
+| 207 | `InvalidSignature` | Invalid signature | Check signing key |
+| 280 | `InvalidMessage` | Invalid message format | Check message data |
+| 281 | `InvalidNonce` | Invalid nonce (replay protection) | Use higher nonce |
+| 282 | `InvalidPayload` | Invalid payload | Check payload format |
+| 290 | `InvalidAddress` | Invalid chain address | Use correct address format |
+| 301 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 302 | `ContractPaused` | Contract is paused | Wait for unpause |
+| 580 | `Overflow` | Arithmetic overflow | Use reasonable values |
+| 480 | `MessageNotFound` | Message not found | Verify message ID |
+| 481 | `MessageExpired` | Message expired | Submit new message |
+| 482 | `MessageAlreadyProcessed` | Message already processed | Check message status |
+| 483 | `ValidatorNotFound` | Validator not found | Verify validator address |
+| 484 | `ValidatorNotActive` | Validator not active | Contact admin |
+| 485 | `DuplicateConfirmation` | Already confirmed | No action needed |
+| 486 | `AtomicTxNotFound` | Atomic transaction not found | Verify tx ID |
+| 487 | `AtomicTxExpired` | Atomic transaction expired | Create new tx |
+| 488 | `AtomicTxAlreadyProcessed` | Atomic tx already processed | Check status |
+| 489 | `RecordRefNotFound` | Record reference not found | Verify record/chain |
+| 490 | `RollbackNotFound` | Rollback not found | Verify operation ID |
+| 491 | `RollbackAlreadyProcessed` | Rollback already processed | Check status |
+| 492 | `EventNotFound` | Sync event not found | Verify event ID |
+| 610 | `ProofNotFound` | Proof not found | Verify proof ID |
+| 611 | `ProofAlreadyVerified` | Proof already verified | No action needed |
+| 703 | `InvalidChain` | Invalid chain | Check chain ID |
+| 720 | `ChainNotSupported` | Chain not supported | Add chain first |
+| 721 | `OracleNotFound` | Oracle not found | Verify oracle address |
+| 722 | `OracleNotActive` | Oracle not active | Contact admin |
+| 800 | `OperationNotFound` | Operation not found | Verify operation ID |
+| 801 | `OperationExpired` | Operation expired | Create new operation |
+| 802 | `OperationAlreadyCompleted` | Already completed | No action needed |
+| 803 | `MaxExtensionsReached` | Max extensions reached | Create new operation |
+| 804 | `RefundFailed` | Refund failed | Check balance |
 
-## Adding a New Error (step-by-step)
+### medical_records
 
-1. Pick the right range from the Category Ranges table above
-2. Pick the next free code within the range (gaps are allowed)
-3. If the semantics match an existing canonical error, use that code and name
-4. Add a `get_suggestion()` arm returning the most helpful symbol
-5. Update this document in the Per-Contract section
-6. Add a test asserting `Error::YourVariant as u32 == <expected_code>`
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 100 | `Unauthorized` | Not authorized | Check RBAC role |
+| 300 | `NotInitialized` | Not initialized | Call initialize |
+| 301 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 302 | `ContractPaused` | Contract paused | Wait for unpause |
+| 400 | `RecordNotFound` | Record not found | Verify record ID |
+| 401 | `RecordAlreadyExists` | Record already exists | Use unique ID |
+| 500 | `StorageLimit` | Storage limit reached | Clean up old records |
+| 600 | `EncryptionRequired` | Encryption required | Provide encryption proof |
+| 700 | `AccessDenied` | Access denied | Check permissions |
+
+### timelock
+
+| Code | Symbol | Description | Remediation |
+|------|--------|-------------|-------------|
+| 100 | `Unauthorized` | Not authorized | Check caller |
+| 207 | `InvalidSignature` | Invalid signature | Check signing key |
+| 300 | `NotInitialized` | Not initialized | Call initialize |
+| 301 | `AlreadyInitialized` | Already initialized | Cannot reinitialize |
+| 302 | `ContractPaused` | Contract paused | Wait for unpause |
+| 306 | `DeadlineExceeded` | Deadline exceeded | Create new operation |
+| 372 | `NotQueued` | Not in queue | Check queue ID |
+| 375 | `AlreadyQueued` | Already queued | Use different ID |
+| 376 | `NotReady` | Timelock not elapsed | Wait for ETA |
+| 500 | `InsufficientFunds` | Insufficient funds | Add funds |
+| 502 | `StorageFull` | Storage full | Clean up |
+| 702 | `CrossChainTimeout` | Cross-chain timeout | Retry |
+
+## Script Validation
+
+Run the validation script to check that all error codes are documented:
+
+```bash
+./scripts/check_error_codes.sh
+```
+
+This script scans all `contracts/**/src/**/*.rs` files for `#[contracterror]` enums and validates that every error variant is documented in this file.

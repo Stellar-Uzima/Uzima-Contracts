@@ -1,9 +1,9 @@
 #![no_std]
 
 #[cfg(test)]
-mod test;
-#[cfg(test)]
 mod benchmarks;
+#[cfg(test)]
+mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
@@ -127,6 +127,7 @@ pub enum Error {
 #[contract]
 pub struct CryptoRegistry;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl CryptoRegistry {
     /// Initialize the registry with an admin address for policy upgrades.
@@ -148,6 +149,7 @@ impl CryptoRegistry {
     /// Register (or rotate) the caller's key bundle.
     ///
     /// Returns the newly assigned version.
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_key_bundle(
         env: Env,
         owner: Address,
@@ -315,44 +317,45 @@ impl CryptoRegistry {
                 if len != 32 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Secp256k1 => {
                 // Compressed: 33, uncompressed: 65. Allow either.
                 if len != 33 && len != 65 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Kyber768 => {
                 if len != 1184 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Kyber1024 => {
                 if len != 1568 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium2 => {
                 if len != 1312 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium3 => {
                 if len != 1952 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
+            },
             KeyAlgorithm::Dilithium5 => {
                 if len != 2592 {
                     return Err(Error::InvalidKeyLength);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)] // All fields are needed to produce a deterministic bundle ID hash
     fn compute_bundle_id(
         env: &Env,
         version: u32,
@@ -415,5 +418,74 @@ impl CryptoRegistry {
             out.append(&Bytes::from_slice(env, &v.to_be_bytes()));
         }
         out
+    }
+
+    /// Rotate a specific key bundle for an owner with automatic old-key invalidation.
+    /// This implements the envelope encryption pattern: the new key bundle replaces
+    /// the old one atomically, and the old KEK is revoked so it cannot be used for
+    /// future encryption operations.
+    pub fn rotate_key(
+        env: Env,
+        owner: Address,
+        new_encryption_key: PublicKey,
+        new_pq_encryption_key: PublicKey,
+        has_pq_encryption_key: bool,
+        new_signing_key: PublicKey,
+        has_signing_key: bool,
+    ) -> Result<u32, Error> {
+        // Require auth from the owner
+        owner.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Get the current version before rotation
+        let old_version: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CurrentVersion(owner.clone()))
+            .unwrap_or(0);
+
+        // Revoke old key bundle if it exists
+        if old_version > 0 {
+            let old_key = DataKey::Bundle(owner.clone(), old_version);
+            if let Some(mut old_bundle) = env.storage().persistent().get::<DataKey, KeyBundle>(&old_key) {
+                old_bundle.revoked = true;
+                env.storage().persistent().set(&old_key, &old_bundle);
+            }
+        }
+
+        // Register the new key bundle
+        let new_version = Self::register_key_bundle(
+            env.clone(),
+            owner.clone(),
+            new_encryption_key,
+            new_pq_encryption_key,
+            has_pq_encryption_key,
+            new_signing_key,
+            has_signing_key,
+        )?;
+
+        // Emit key rotation event
+        env.events().publish(
+            (Symbol::new(&env, "KeyRotated"),),
+            (owner, old_version, new_version),
+        );
+
+        Ok(new_version)
+    }
+
+    /// Get all key bundle versions for an owner (including revoked ones).
+    pub fn get_all_key_versions(env: Env, owner: Address) -> Result<Vec<u32>, Error> {
+        Self::require_initialized(&env)?;
+        let current: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CurrentVersion(owner.clone()))
+            .unwrap_or(0);
+
+        let mut versions = Vec::new(&env);
+        for v in 1..=current {
+            versions.push_back(v);
+        }
+        Ok(versions)
     }
 }

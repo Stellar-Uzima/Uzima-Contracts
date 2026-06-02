@@ -9,8 +9,10 @@ pub enum Error {
     InvalidProvider = 211,
     NotInitialized = 300,
     AlreadyInitialized = 301,
+    ContractPaused = 302,
     ConsentNotFound = 406,
     ConsentAlreadyExists = 460,
+    InvalidExpiry = 470,
 }
 
 #[allow(dead_code)]

@@ -12,7 +12,7 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-use soroban_sdk::{Address, Env, Map, String, Vec};
+use soroban_sdk::{Address, Bytes, Env, Map, String, Vec};
 
 use crate::errors::Error;
 use crate::{
@@ -504,6 +504,13 @@ pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
 
 /// Constant for maximum emergency access duration (7 days in seconds)
 pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
+
+/// Maximum byte length for encrypted record data
+pub const MAX_ENCRYPTED_DATA_LEN: u32 = 65_536; // 64 KB
+/// Maximum byte length for metadata string
+pub const MAX_METADATA_LEN: u32 = 1_024;
+/// Maximum byte length for patient ID string
+pub const MAX_PATIENT_ID_LEN: u32 = 128;
 
 /// Validates emergency access duration
 ///
@@ -1153,20 +1160,20 @@ pub fn validate_record_by_type(
         MedicalRecordType::General => {
             // Standard validation is sufficient
             Ok(())
-        }
+        },
         MedicalRecordType::Laboratory => {
             // Lab records MUST have a data reference for results
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Prescription => {
             // Prescriptions MUST have treatment and treatment_type
             validate_treatment(&record.treatment)?;
             validate_treatment_type(&record.treatment_type)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Imaging => {
             // Imaging records MUST have a data reference for the images
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
@@ -1174,7 +1181,7 @@ pub fn validate_record_by_type(
             }
             validate_data_ref(env, &record.data_ref)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Surgical => {
             // Surgical records need diagnosis, treatment, AND doctor DID
             validate_diagnosis(&record.diagnosis)?;
@@ -1183,7 +1190,7 @@ pub fn validate_record_by_type(
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Emergency => {
             // Emergency records: timestamp must be recent (within 1 hour)
             let current_time = env.ledger().timestamp();
@@ -1193,7 +1200,7 @@ pub fn validate_record_by_type(
             }
             validate_diagnosis(&record.diagnosis)?;
             Ok(())
-        }
+        },
     }
 }
 
@@ -1457,6 +1464,30 @@ pub fn validate_cleanse_and_report(
     let report = validate_record_with_report(env, record_id, &cleanse_result.record);
     let workflow = build_correction_workflow(env, record_id, &report);
     (cleanse_result, report, workflow)
+}
+
+/// Validate encrypted data length does not exceed the on-chain storage limit.
+pub fn validate_encrypted_data_len(data: &Bytes) -> Result<(), Error> {
+    if data.len() > MAX_ENCRYPTED_DATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate metadata string length.
+pub fn validate_metadata_len(metadata: &String) -> Result<(), Error> {
+    if metadata.len() > MAX_METADATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate patient ID string length.
+pub fn validate_patient_id_len(patient_id: &String) -> Result<(), Error> {
+    if patient_id.len() > MAX_PATIENT_ID_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
