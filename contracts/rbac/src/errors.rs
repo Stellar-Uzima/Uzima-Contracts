@@ -1,12 +1,13 @@
+use common_error::CommonError;
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    Unauthorized = 100,
-    NotInitialized = 300,
-    AlreadyInitialized = 301,
+    Unauthorized = CommonError::Unauthorized as u32,
+    NotInitialized = CommonError::NotInitialized as u32,
+    AlreadyInitialized = CommonError::AlreadyInitialized as u32,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {

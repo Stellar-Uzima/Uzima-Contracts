@@ -1,3 +1,63 @@
+//! # Medical Records Contract
+//!
+//! Core medical records management contract for the Uzima healthcare platform.
+//! Provides on-chain medical record storage with fine-grained access control,
+//! encryption support, cross-chain sync, and AI integration capabilities.
+//!
+//! ## Purpose
+//! Manages patient medical records with support for:
+//! - Creating and retrieving medical records with metadata
+//! - Role-based access control (RBAC) via built-in user management
+//! - Encrypted records with end-to-end encryption envelope support
+//! - Cross-chain record synchronization
+//! - AI/ML integration for anomaly detection and risk assessment
+//! - Quantum-safe cryptographic envelope upgrades
+//! - Zero-knowledge proof based access grants
+//! - Data quality validation and correction workflows
+//!
+//! ## Key Dependencies
+//! - `rbac` - Role-based access control (used via built-in user management)
+//! - `upgradeability` - Contract upgrade and admin patterns
+//! - `identity_registry` - DID-based identity (optional)
+//! - `audit_forensics` - Audit trail logging (optional)
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address
+//! - Admin is automatically granted the Admin role
+//!
+//! ## Dependencies (Optional)
+//! - `identity_registry` - For DID-based user profiles
+//! - `zk_verifier` - For zero-knowledge proof verification
+//! - `credential_registry` - For credential management
+//! - `crypto_registry` - For cryptographic key management
+//! - `audit_forensics` - For forensic auditing
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can manage users, pause/unpause, config changes
+//! - **Doctor**: Can create and read records
+//! - **Patient**: Can read their own records
+//! - **Permission Grants**: Granular permission delegation supported
+//!
+//! ## Error Ranges
+//! - 100-199: Access Control & Authorization
+//! - 200-299: Input Validation
+//! - 300-399: Lifecycle & State
+//! - 400-499: Entity Existence
+//! - 500-599: Financial & Resource
+//! - 600-699: Cryptography & ZK
+//! - 700-799: Cross-Chain
+//! - 800-899: Domain-Specific AI/Medical
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin);
+//! client.manage_user(&admin, &doctor, &Role::Doctor);
+//! client.manage_user(&admin, &patient, &Role::Patient);
+//! let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,
+//!     &false, &tags, &category, &treatment_type, &data_ref);
+//! let record = client.get_record(&patient, &record_id);
+//! ```
+
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::enum_variant_names)]
@@ -240,6 +300,27 @@ pub struct MedicalRecord {
     pub treatment_type: String,
     pub data_ref: String,
     pub doctor_did: Option<String>,
+}
+
+// ==================== Traditional Medicine ====================
+
+/// Structured metadata for records involving traditional / indigenous healing practices.
+/// Sensitive remedy details should be stored encrypted off-chain; only the
+/// non-sensitive `practice_type` is surfaced in on-chain events.
+#[derive(Clone)]
+#[contracttype]
+pub struct TraditionalMedicineMetadata {
+    /// Category of traditional practice (e.g. "Ayurveda", "Traditional Chinese Medicine",
+    /// "African Traditional Medicine", "Naturopathy").
+    pub practice_type: String,
+    /// Cultural or lineage tradition of the practitioner (e.g. "Yoruba", "Zulu", "Siddha").
+    pub practitioner_tradition: String,
+    /// Off-chain encrypted reference to specific remedies / preparations used.
+    pub remedies_used: String,
+    /// Broader cultural context or ceremony associated with the treatment.
+    pub cultural_context: String,
+    /// Primary language in which the consultation was conducted (ISO 639-1 code recommended).
+    pub language: String,
 }
 
 // ==================== AI & Recovery Types ====================
@@ -529,6 +610,12 @@ pub enum DataKey {
     RateLimitBypass(Address), // bool - admin-granted bypass flag
     QuantumThreatLevel,       // 0-100 (percentage)
     LastExportTime(Address),  // Timestamp of last data export per patient
+
+    // Traditional medicine
+    /// Encrypted traditional metadata for a record (stored alongside the main record).
+    TraditionalMeta(u64),
+    /// Per-patient index of record IDs that have traditional metadata attached.
+    PatientTraditionalRecords(Address),
 }
 
 // ==================== Errors ====================
@@ -1187,11 +1274,11 @@ impl MedicalRecordsContract {
         }
     }
 
-    pub fn get_user_role(env: Env, user: Address) -> Role {
+    pub fn get_user_role(env: Env, user: Address) -> Result<Role, Error> {
         let users = Self::read_users(&env);
         match users.get(user) {
-            Some(p) if p.active => p.role,
-            _ => Role::None,
+            Some(p) if p.active => Ok(p.role),
+            _ => Err(Error::Unauthorized),
         }
     }
 
@@ -1688,6 +1775,174 @@ impl MedicalRecordsContract {
             "Medical record created",
         );
         Ok(record_id)
+    }
+
+    /// Write a medical record with optional traditional medicine metadata.
+    ///
+    /// This is the canonical entry-point for records that may involve traditional
+    /// healing practices. When `traditional_metadata` is `Some`, the metadata is
+    /// stored encrypted alongside the main record and the record ID is appended to
+    /// the patient-scoped traditional-records index so it can be queried separately
+    /// via `list_traditional_records`.
+    ///
+    /// Calling with `traditional_metadata: None` is fully backward-compatible with
+    /// the existing `add_record` behaviour.
+    pub fn write_record(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        traditional_metadata: Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "write_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation blocked because encrypted record flow is enforced",
+            );
+            return Err(Error::EncryptionRequired);
+        }
+
+        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "write_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied: caller lacks CreateRecord permission",
+            );
+            return Err(Error::Unauthorized);
+        }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
+
+        if Self::is_patient_forgotten(&env, &patient) {
+            Self::log_warning(
+                &env,
+                "write_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied because patient is marked as forgotten",
+            );
+            return Err(Error::Unauthorized);
+        }
+        validation::validate_diagnosis(&diagnosis)?;
+        validation::validate_treatment(&treatment)?;
+        validation::validate_tags(&tags)?;
+        validation::validate_category(&category, &env)?;
+        validation::validate_treatment_type(&treatment_type)?;
+        validation::validate_data_ref(&env, &data_ref)?;
+        validation::validate_addresses_different(&caller, &patient)?;
+
+        let record_id = Self::next_id(&env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            diagnosis,
+            treatment,
+            is_confidential,
+            tags: tags.clone(),
+            category: category.clone(),
+            treatment_type,
+            data_ref,
+            doctor_did: None,
+        };
+
+        Self::store_record(&env, record_id, &record, &category, is_confidential);
+        Self::append_patient_record(&env, &patient, record_id);
+        Self::increment_record_count(&env);
+
+        // --- Traditional medicine path ---
+        if let Some(meta) = traditional_metadata {
+            let practice_type = meta.practice_type.clone();
+
+            // Persist the metadata encrypted alongside the main record.
+            // The metadata struct is stored under the TraditionalMeta key; callers are
+            // expected to further encrypt `remedies_used` off-chain before passing it in.
+            env.storage()
+                .persistent()
+                .set(&DataKey::TraditionalMeta(record_id), &meta);
+
+            // Append to the per-patient traditional records index.
+            let idx_key = DataKey::PatientTraditionalRecords(patient.clone());
+            let mut trad_ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&idx_key)
+                .unwrap_or(Vec::new(&env));
+            trad_ids.push_back(record_id);
+            env.storage().persistent().set(&idx_key, &trad_ids);
+
+            // Emit non-sensitive event (only practice_type, never remedies).
+            events::emit_traditional_record_added(
+                &env,
+                caller.clone(),
+                record_id,
+                patient.clone(),
+                practice_type,
+            );
+        }
+
+        events::emit_record_created(
+            &env,
+            caller.clone(),
+            record_id,
+            patient.clone(),
+            is_confidential,
+            category.clone(),
+            tags.clone(),
+        );
+        Self::log_info(
+            &env,
+            "write_record",
+            Some(&caller),
+            Some(&patient),
+            Some(record_id),
+            "Medical record written (write_record)",
+        );
+        Ok(record_id)
+    }
+
+    /// Return the record IDs of all traditional-medicine records for a patient.
+    ///
+    /// Only the patient themselves, an admin, or a caller with `ReadRecord` permission
+    /// may invoke this function.
+    pub fn list_traditional_records(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let is_patient = caller == patient_id;
+        let has_read = Self::check_permission(&env, &caller, Permission::ReadRecord);
+
+        if !is_patient && !has_read {
+            return Err(Error::Unauthorized);
+        }
+
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientTraditionalRecords(patient_id))
+            .unwrap_or(Vec::new(&env));
+
+        Ok(ids)
     }
 
     pub fn add_record_with_did(

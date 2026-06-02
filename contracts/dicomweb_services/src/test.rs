@@ -1,14 +1,8 @@
 // DICOMweb Services Tests
-// Note: Tests are currently commented out due to compilation issues
-// with the format! macro in no_std environment. The full test suite
-// is provided below and can be uncommented once the compilation
-// issues are resolved.
-
-/*
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Bytes, Env, String as SorobanString, Vec, Map};
 
 #[test]
 fn test_initialize() {

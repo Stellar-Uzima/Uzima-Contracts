@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{Address, Env, String, symbol_short};
 
 use crate::types::{
     ClinicalTrialData, ConsensusRecord, DataKey, DrugPriceData, Error, FeedKey, FeedKind,
@@ -195,4 +195,42 @@ pub fn finalize_feed(env: Env, kind: FeedKind, feed_id: String) -> Result<Consen
 pub fn get_consensus(env: Env, kind: FeedKind, feed_id: String) -> Option<ConsensusRecord> {
     let key = FeedKey { kind, feed_id };
     env.storage().persistent().get(&DataKey::Consensus(key))
+}
+
+pub fn report_oracle_misbehavior(
+    env: Env,
+    reporter: Address,
+    reported_oracle: Address,
+    kind: FeedKind,
+    feed_id: String,
+    reason: String,
+) -> Result<(), Error> {
+    reporter.require_auth();
+    let _ = utils::require_verified_oracle(&env, reporter.clone())?;
+
+    if reporter == reported_oracle || feed_id.len() == 0 || reason.len() == 0 {
+        return Err(Error::InvalidData);
+    }
+
+    let key = FeedKey { kind, feed_id };
+    let report_key = DataKey::MisbehaviorReport(key.clone(), reported_oracle.clone(), reporter.clone());
+
+    if env.storage().persistent().has(&report_key) {
+        return Err(Error::AlreadyReported);
+    }
+
+    let _ = utils::read_oracle(&env, reported_oracle.clone())?;
+    env.storage().persistent().set(&report_key, &1u32);
+    utils::slash_oracle(
+        &env,
+        reported_oracle.clone(),
+        15,
+        reason.clone(),
+    )?;
+
+    env.events().publish(
+        (symbol_short!("MISBEHAVIOR_REPORTED"),),
+        (reporter, reported_oracle, key.kind, key.feed_id, reason),
+    );
+    Ok(())
 }

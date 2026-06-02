@@ -1,4 +1,4 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec, xdr::ToXdr};
 
 use crate::types::{
     AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
@@ -99,6 +99,50 @@ pub fn read_oracle(env: &Env, operator: Address) -> Result<OracleNode, Error> {
         .ok_or(Error::OracleNotFound)
 }
 
+pub fn hash_payload(env: &Env, payload: &FeedPayload) -> BytesN<32> {
+    env.crypto().sha256(&payload.to_xdr(env)).into()
+}
+
+pub fn slash_oracle(env: &Env, operator: Address, penalty: i128, reason: String) -> Result<(), Error> {
+    adjust_reputation(env, operator.clone(), penalty.saturating_neg(), true)?;
+    env.events().publish(
+        (symbol_short!("ORACLE_SLASHED"),),
+        (operator, penalty, reason),
+    );
+    Ok(())
+}
+
+pub fn detect_duplicate_submission(
+    env: &Env,
+    key: &FeedKey,
+    operator: &Address,
+    payload: &FeedPayload,
+    round_id: u64,
+) -> Result<(), Error> {
+    let current_hash = hash_payload(env, payload);
+    let duplicate_key = DataKey::LastSubmissionHash(key.clone(), operator.clone());
+    let previous_hash: Option<BytesN<32>> = env.storage().persistent().get(&duplicate_key);
+
+    if let Some(previous) = previous_hash {
+        if previous == current_hash {
+            slash_oracle(
+                env,
+                operator.clone(),
+                10,
+                String::from_str(env, "Duplicate submission detected"),
+            )?;
+            env.events().publish(
+                (symbol_short!("DUPLICATE_SUBMISSION"),),
+                (operator.clone(), key.kind, key.feed_id.clone(), round_id),
+            );
+            return Err(Error::SubmissionAlreadyExists);
+        }
+    }
+
+    env.storage().persistent().set(&duplicate_key, &current_hash);
+    Ok(())
+}
+
 pub fn submit_payload(
     env: Env,
     operator: Address,
@@ -109,6 +153,8 @@ pub fn submit_payload(
 ) -> Result<u64, Error> {
     let key = FeedKey { kind, feed_id };
     let round_id = ensure_active_round(&env, key.clone())?;
+
+    detect_duplicate_submission(&env, &key, &operator, &payload, round_id)?;
 
     let submission_key = DataKey::Submission(key.clone(), round_id, operator.clone());
     if env.storage().persistent().has(&submission_key) {

@@ -138,6 +138,20 @@ impl IntegrationTestEnv {
         
         (contract_id, client)
     }
+
+    /// Register the PatientConsentManagement contract
+    pub fn register_patient_consent(&self) -> (Address, patient_consent_management::PatientConsentManagementClient<'static>) {
+        let contract_id = self.env.register_contract(None, patient_consent_management::PatientConsentManagement);
+        let client = patient_consent_management::PatientConsentManagementClient::new(&self.env, &contract_id);
+        (contract_id, client)
+    }
+
+    /// Register the RBAC contract
+    pub fn register_rbac(&self) -> (Address, rbac::RBACClient<'static>) {
+        let contract_id = self.env.register_contract(None, rbac::RBAC);
+        let client = rbac::RBACClient::new(&self.env, &contract_id);
+        (contract_id, client)
+    }
 }
 
 /// Helper to mock a contract call with a specific result
