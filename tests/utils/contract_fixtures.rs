@@ -122,7 +122,7 @@ mod tests {
         assert_eq!(fixture.admin, test_env.admin);
 
         let doctor = &test_env.team.doctors[0].address;
-        assert_eq!(fixture.client.get_user_role(doctor), Role::Doctor);
+        assert_eq!(fixture.client.get_user_role(doctor).unwrap(), Role::Doctor);
     }
 
     #[test]

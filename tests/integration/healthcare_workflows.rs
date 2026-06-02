@@ -20,8 +20,8 @@ fn test_user_registration_workflow() {
     records_client.manage_user(admin, patient, &Role::Patient);
 
     // Verify roles
-    assert_eq!(records_client.get_user_role(doctor), Role::Doctor);
-    assert_eq!(records_client.get_user_role(patient), Role::Patient);
+    assert_eq!(records_client.get_user_role(doctor).unwrap(), Role::Doctor);
+    assert_eq!(records_client.get_user_role(patient).unwrap(), Role::Patient);
 }
 
 #[test]
