@@ -1,3 +1,44 @@
+//! # Role-Based Access Control (RBAC) Contract
+//!
+//! Provides role-based access control for Uzima healthcare contracts.
+//! Supports multiple role types including Admin, Doctor, Patient, Staff,
+//! Insurer, Researcher, Auditor, and Service.
+//!
+//! ## Purpose
+//! Enables fine-grained access control across all Uzima contracts by assigning
+//! roles to addresses. Roles determine what actions an address can perform.
+//!
+//! ## Key Dependencies
+//! - None (standalone contract)
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address and RBACConfig
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can assign/remove roles and update config
+//! - **Anyone**: Can query role information (read-only)
+//!
+//! ## Supported Roles
+//! - `Admin` - System administration
+//! - `Doctor` - Healthcare provider
+//! - `Patient` - Healthcare recipient
+//! - `Staff` - Support staff
+//! - `Insurer` - Insurance provider
+//! - `Researcher` - Medical researcher
+//! - `Auditor` - Compliance auditor
+//! - `Service` - Automated service account
+//!
+//! ## Error Ranges
+//! - 100: Unauthorized
+//! - 300-301: Lifecycle & State
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin, &config);
+//! client.assign_role(&doctor_addr, &Role::Doctor);
+//! let is_doctor = client.has_role(&doctor_addr, &Role::Doctor);
+//! ```
+
 #![no_std]
 
 pub mod errors;
