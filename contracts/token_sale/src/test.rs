@@ -252,3 +252,80 @@ fn test_refund_mechanism() {
         initial_balance + 500
     );
 }
+
+#[test]
+fn test_contribute_overflow_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let (sut_token_address, _sut_token_client, _sut_token_admin) =
+        create_token_contract(&env, &owner);
+    let (payment_token_address, _payment_token_client, payment_token_admin) =
+        create_token_contract(&env, &owner);
+
+    let contract_id = env.register_contract(None, TokenSaleContract);
+    let client = TokenSaleContractClient::new(&env, &contract_id);
+
+    // token_decimals = 0 so tokens_for_payment(amount, 1, 0) = amount (no fp_math overflow)
+    client.initialize(
+        &owner,
+        &sut_token_address,
+        &treasury,
+        &u128::MAX,
+        &u128::MAX,
+        &0u32,
+    );
+    client.add_supported_token(&payment_token_address);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1500;
+    });
+    client.add_sale_phase(&1000, &2000, &1, &u128::MAX, &u128::MAX);
+
+    // Mint only to the contributor; contract_id gets tokens through transfer
+    let max_i128 = i128::MAX;
+    payment_token_admin.mint(&treasury, &max_i128);
+
+    // First contribution (half of MAX) succeeds
+    let half = u128::MAX / 2;
+    assert!(client
+        .try_contribute(&treasury, &0, &payment_token_address, &half)
+        .is_ok());
+
+    // Second contribution that would overflow sold_tokens is rejected
+    let overflow_amount = (u128::MAX / 2) + 2;
+    let result = client.try_contribute(&treasury, &0, &payment_token_address, &overflow_amount);
+    assert_eq!(result, Err(Ok(Error::Overflow)));
+}
+
+#[test]
+fn test_vesting_overflow_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let (token_address, _token_client, token_admin) = create_token_contract(&env, &owner);
+
+    let contract_id = env.register_contract(None, VestingContract);
+    let client = VestingContractClient::new(&env, &contract_id);
+
+    client.initialize_vesting(&owner, &token_address);
+    token_admin.mint(&contract_id, &i128::MAX);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 0;
+    });
+
+    // total_amount = u128::MAX, time_since_cliff = 2 → u128::MAX * 2 overflows
+    let total_amount: u128 = u128::MAX;
+    client.create_vesting_schedule(&owner, &0u64, &u64::MAX, &total_amount);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = 2;
+    });
+
+    let result = client.try_get_vested_amount(&owner, &2u64);
+    assert_eq!(result, Err(Ok(Error::Overflow)));
+}

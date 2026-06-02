@@ -1,6 +1,10 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
-use crate::{MedicalRecordsContract, MedicalRecordsContractClient, Permission};
+
+// internal
+use crate::{MedicalRecordsContract, MedicalRecordsContractClient, Permission, MockRbac, MockRbacClient, RbacRole};
+
+// external crates
 use soroban_sdk::{testutils::Address as _, vec, Address, Env, String};
 
 #[test]
@@ -15,8 +19,12 @@ fn test_permission_grant_revoke_check() {
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
     // Initialize
-    client.initialize(&admin);
+    client.initialize(&admin, &rbac_id);
 
     // Test: User cannot create record without permission
     let res = client.try_add_record(
@@ -80,7 +88,11 @@ fn test_permission_delegation() {
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-    client.initialize(&admin);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
+    client.initialize(&admin, &rbac_id);
 
     // Admin grants DelegatePermission to manager
     client.grant_permission(
@@ -124,7 +136,11 @@ fn test_access_attribute_issue_revoke_and_epoch_rotation() {
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-    client.initialize(&admin);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
+    client.initialize(&admin, &rbac_id);
     client.manage_user(&admin, &doctor, &crate::Role::Doctor);
 
     assert!(client.issue_access_attribute(

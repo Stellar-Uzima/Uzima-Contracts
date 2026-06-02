@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
-use contract_optimizer::{analyze_contracts, generate_report, integrate_pr_review};
+use contract_optimizer::complexity::{
+    analyze_contract_complexity, load_trends, record_trend, save_report,
+};
 use contract_optimizer::metrics::AccuracyMetrics;
+use contract_optimizer::{analyze_contracts, generate_report, integrate_pr_review};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -37,6 +40,33 @@ enum Commands {
         #[arg(short, long, default_value = "optimization_metrics.json")]
         metrics_file: PathBuf,
     },
+    /// Score contract complexity (cyclomatic, data, external calls, state, permissions)
+    Complexity {
+        /// Path to the contracts directory
+        #[arg(short, long, default_value = "contracts")]
+        contracts_path: PathBuf,
+        /// JSON report output path
+        #[arg(short, long, default_value = "dashboard/data/complexity_report.json")]
+        output: PathBuf,
+        /// Trend history file
+        #[arg(long, default_value = "dashboard/data/complexity_trends.json")]
+        trends: PathBuf,
+        /// Skip writing trend snapshot
+        #[arg(long)]
+        no_trend: bool,
+    },
+    /// Integrate analysis into a GitHub PR review
+    PrReview {
+        /// Repository in owner/repo format
+        #[arg(short, long)]
+        repo: String,
+        /// Pull request number
+        #[arg(short, long)]
+        pr_number: u64,
+        /// GitHub token
+        #[arg(short, long)]
+        token: String,
+    },
 }
 
 #[tokio::main]
@@ -44,7 +74,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Analyze { contracts_path, format } => {
+        Commands::Analyze {
+            contracts_path,
+            format,
+        } => {
             let recommendations = analyze_contracts(&contracts_path)?;
             match format.as_str() {
                 "json" => println!("{}", serde_json::to_string_pretty(&recommendations)?),
@@ -56,10 +89,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         println!();
                     }
-                }
+                },
                 _ => eprintln!("Invalid format. Use 'json' or 'text'"),
             }
-        }
+        },
         Commands::Report { input, output } => {
             let report = generate_report(&input)?;
             if let Some(out) = output {
@@ -68,17 +101,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("{}", report);
             }
-        }
-        Commands::PrReview { repo, pr_number, token } => {
+        },
+        Commands::Complexity {
+            contracts_path,
+            output,
+            trends,
+            no_trend,
+        } => {
+            let report = analyze_contract_complexity(&contracts_path)?;
+            save_report(&report, &output)?;
+            if !no_trend {
+                record_trend(&report, &trends)?;
+            }
+            println!(
+                "Complexity report: {} contracts, workspace average {}",
+                report.contracts.len(),
+                report.workspace_average
+            );
+            println!("Written to {}", output.display());
+            if !no_trend {
+                let store = load_trends(&trends)?;
+                println!("Trend snapshots: {}", store.snapshots.len());
+            }
+        },
+        Commands::PrReview {
+            repo,
+            pr_number,
+            token,
+        } => {
             integrate_pr_review(&repo, pr_number, &token).await?;
             println!("PR review integration completed");
-        }
+        },
         Commands::Metrics { metrics_file } => {
             let metrics = AccuracyMetrics::load(&metrics_file)?;
             println!("Optimization Engine Accuracy Metrics");
             println!("====================================");
             println!("Total Recommendations: {}", metrics.total_recommendations);
-            println!("Applied Recommendations: {}", metrics.applied_recommendations);
+            println!(
+                "Applied Recommendations: {}",
+                metrics.applied_recommendations
+            );
             println!("Accuracy Rate: {:.2}%", metrics.accuracy_rate());
             println!("\nBy Category:");
             for (category, cat_metrics) in &metrics.categories {
@@ -87,9 +149,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 } else {
                     0.0
                 };
-                println!("  {}: {}/{} ({:.2}%)", category, cat_metrics.applied, cat_metrics.total, rate);
+                println!(
+                    "  {}: {}/{} ({:.2}%)",
+                    category, cat_metrics.applied, cat_metrics.total, rate
+                );
             }
-        }
+        },
     }
 
     Ok(())

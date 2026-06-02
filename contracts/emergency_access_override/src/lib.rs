@@ -32,9 +32,21 @@ pub enum DataKey {
     ApprovalThreshold,
     TrustedApprover(Address),          // approver -> bool (exists)
     EmergencyAccess(Address, Address), // (patient, provider)
+    Cooldown(Address),                 // approver -> last_used timestamp
+    CooldownPeriod,                    // configurable cooldown in seconds (default 86400 = 24h)
+    GlobalGrantCount,                  // total grants in current window
+    GlobalGrantWindowStart,            // timestamp when current window started
+    CircuitBreakerTripped,             // bool: auto-paused due to rate limit
 }
 
 // ==================== Contract ====================
+
+/// Default cooldown period: 24 hours in seconds.
+const DEFAULT_COOLDOWN_SECONDS: u64 = 86_400;
+/// Global rate limit: max grants per rolling window.
+const GLOBAL_GRANT_LIMIT: u64 = 10;
+/// Rolling window duration for global rate limit: 1 hour.
+const GLOBAL_GRANT_WINDOW_SECONDS: u64 = 3_600;
 
 #[contract]
 pub struct EmergencyAccessOverride;
@@ -60,6 +72,9 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::ApprovalThreshold, &threshold);
+        env.storage()
+            .instance()
+            .set(&DataKey::CooldownPeriod, &DEFAULT_COOLDOWN_SECONDS);
 
         for approver in approvers.iter() {
             env.storage()
@@ -95,6 +110,40 @@ impl EmergencyAccessOverride {
         }
 
         let now = env.ledger().timestamp();
+
+        // Circuit breaker: reject if auto-paused due to rate limit
+        let tripped: bool = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircuitBreakerTripped)
+            .unwrap_or(false);
+        if tripped {
+            return Err(Error::RateLimitExceeded);
+        }
+
+        // Rate limiting: enforce per-caller cooldown
+        let cooldown_period: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::CooldownPeriod)
+            .unwrap_or(DEFAULT_COOLDOWN_SECONDS);
+
+        let last_used: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Cooldown(approver.clone()))
+            .unwrap_or(0);
+
+        let next_allowed_at = last_used.saturating_add(cooldown_period);
+        if now < next_allowed_at {
+            events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
+            return Err(Error::RateLimitExceeded);
+        }
+
+        // Record this invocation timestamp
+        env.storage()
+            .persistent()
+            .set(&DataKey::Cooldown(approver.clone()), &now);
 
         let key = DataKey::EmergencyAccess(patient.clone(), provider.clone());
         let mut record: EmergencyAccessRecord =
@@ -132,7 +181,7 @@ impl EmergencyAccessOverride {
             .storage()
             .instance()
             .get(&DataKey::ApprovalThreshold)
-            .unwrap();
+            .ok_or(Error::NotInitialized)?;
         let current = record.approvers.len();
 
         if current >= threshold {
@@ -140,6 +189,40 @@ impl EmergencyAccessOverride {
             record.granted_at = now;
             record.expiry_at = now.saturating_add(duration_seconds);
             env.storage().persistent().set(&key, &record);
+
+            // Global rate limit: track grants in rolling window
+            let window_start: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::GlobalGrantWindowStart)
+                .unwrap_or(now);
+            let mut grant_count: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::GlobalGrantCount)
+                .unwrap_or(0);
+
+            if now.saturating_sub(window_start) >= GLOBAL_GRANT_WINDOW_SECONDS {
+                // Reset window
+                grant_count = 0;
+                env.storage()
+                    .instance()
+                    .set(&DataKey::GlobalGrantWindowStart, &now);
+            }
+            grant_count = grant_count.saturating_add(1);
+            env.storage()
+                .instance()
+                .set(&DataKey::GlobalGrantCount, &grant_count);
+
+            if grant_count >= GLOBAL_GRANT_LIMIT {
+                // Trip circuit breaker and emit alert
+                env.storage()
+                    .instance()
+                    .set(&DataKey::CircuitBreakerTripped, &true);
+                events::publish_rate_limit_exceeded(&env, &approver, now, now);
+                return Err(Error::RateLimitExceeded);
+            }
+
             events::publish_emergency_access_granted(
                 &env,
                 &patient,
@@ -153,6 +236,64 @@ impl EmergencyAccessOverride {
         env.storage().persistent().set(&key, &record);
         events::publish_emergency_access_approved(&env, &patient, &provider, &approver, now);
         Ok(false)
+    }
+
+    /// Reset the circuit breaker. Only callable by admin after investigation.
+    pub fn reset_circuit_breaker(env: Env, admin: Address) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if stored_admin != admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerTripped, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::GlobalGrantCount, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::GlobalGrantWindowStart, &env.ledger().timestamp());
+        Ok(())
+    }
+
+    /// Update the cooldown period. Only callable by admin (governance-gated).
+    pub fn update_cooldown_period(
+        env: Env,
+        admin: Address,
+        new_period_seconds: u64,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if stored_admin != admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CooldownPeriod, &new_period_seconds);
+
+        events::publish_cooldown_updated(&env, &admin, new_period_seconds);
+        Ok(())
+    }
+
+    /// Get the current cooldown period in seconds.
+    pub fn get_cooldown_period(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CooldownPeriod)
+            .unwrap_or(DEFAULT_COOLDOWN_SECONDS)
     }
 
     pub fn check_emergency_access(
@@ -239,5 +380,240 @@ impl EmergencyAccessOverride {
             return Err(Error::NotInitialized);
         }
         Ok(())
+    }
+
+    /// On-chain health check endpoint.
+    /// Returns true if the contract is initialized and operational.
+    pub fn health_check(env: Env) -> bool {
+        env.storage().instance().has(&DataKey::Initialized)
+    }
+}
+
+
+// ============================================================
+// Issue #655: M-of-N Multi-Sig Emergency Access Override
+// ============================================================
+
+const DEFAULT_EXPIRY_SECONDS: u64 = 3600; // 1 hour
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct EmergencyRequest {
+    pub patient_id: Symbol,
+    pub reason: Symbol,
+    pub requester: Address,
+    pub approvals: Vec<Address>,
+    pub created_at: u64,
+    pub granted: bool,
+}
+
+#[contracttype]
+pub enum EmergencyKey {
+    Request(u64),       // keyed by request_id
+    Config,             // stores (approvers: Vec<Address>, required: u32)
+    RequestCounter,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct MultiSigConfig {
+    pub approvers: Vec<Address>,
+    pub required_approvals: u32,
+    pub expiry_seconds: u64,
+}
+
+/// Governance sets the approver set and required M.
+pub fn configure_multisig(
+    env: Env,
+    admin: Address,
+    approvers: Vec<Address>,
+    required_approvals: u32,
+    expiry_seconds: u64,
+) {
+    admin.require_auth();
+    let config = MultiSigConfig {
+        approvers,
+        required_approvals,
+        expiry_seconds,
+    };
+    env.storage()
+        .persistent()
+        .set(&EmergencyKey::Config, &config);
+}
+
+/// Any party creates a pending emergency access request.
+pub fn request_emergency_access(
+    env: Env,
+    requester: Address,
+    patient_id: Symbol,
+    reason: Symbol,
+) -> u64 {
+    requester.require_auth();
+    let counter: u64 = env
+        .storage()
+        .persistent()
+        .get(&EmergencyKey::RequestCounter)
+        .unwrap_or(0u64);
+    let request_id = counter + 1;
+    let request = EmergencyRequest {
+        patient_id: patient_id.clone(),
+        reason: reason.clone(),
+        requester: requester.clone(),
+        approvals: Vec::new(&env),
+        created_at: env.ledger().timestamp(),
+        granted: false,
+    };
+    env.storage()
+        .persistent()
+        .set(&EmergencyKey::Request(request_id), &request);
+    env.storage()
+        .persistent()
+        .set(&EmergencyKey::RequestCounter, &request_id);
+    env.events().publish(
+        (Symbol::new(&env, "EmergencyRequested"),),
+        (request_id, requester, patient_id),
+    );
+    request_id
+}
+
+/// An approver signs off on a pending request.
+/// Access is granted automatically once M approvals are collected.
+pub fn approve_emergency_access(env: Env, approver: Address, request_id: u64) -> Result<bool, Error> {
+    approver.require_auth();
+    let config: MultiSigConfig = env
+        .storage()
+        .persistent()
+        .get(&EmergencyKey::Config)
+        .ok_or(Error::NotInitialized)?;
+    if !config.approvers.contains(&approver) {
+        return Err(Error::Unauthorized);
+    }
+    let mut request: EmergencyRequest = env
+        .storage()
+        .persistent()
+        .get(&EmergencyKey::Request(request_id))
+        .ok_or(Error::RecordNotFound)?;
+    if request.granted {
+        return Err(Error::AlreadyInitialized); // reuse: already granted
+    }
+    let elapsed = env.ledger().timestamp() - request.created_at;
+    if elapsed > config.expiry_seconds {
+        return Err(Error::InvalidDuration); // reuse: expired
+    }
+    if request.approvals.contains(&approver) {
+        return Err(Error::RateLimitExceeded); // reuse: already signed
+    }
+    request.approvals.push_back(approver.clone());
+    env.events().publish(
+        (Symbol::new(&env, "EmergencyApproval"),),
+        (request_id, approver.clone()),
+    );
+    if request.approvals.len() >= config.required_approvals {
+        request.granted = true;
+        env.events().publish(
+            (Symbol::new(&env, "EmergencyAccessGranted"),),
+            (request_id, request.patient_id.clone()),
+        );
+    }
+    env.storage()
+        .persistent()
+        .set(&EmergencyKey::Request(request_id), &request);
+    Ok(request.granted)
+}
+
+/// Read a request's current state.
+pub fn get_emergency_request(env: Env, request_id: u64) -> Option<EmergencyRequest> {
+    env.storage()
+        .persistent()
+        .get(&EmergencyKey::Request(request_id))
+}
+
+#[cfg(test)]
+mod multisig_tests {
+    use super::*;
+    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use soroban_sdk::{Env, Symbol, Vec};
+
+    fn setup_config(env: &Env, approvers: Vec<Address>, m: u32) -> Address {
+        let admin = Address::generate(env);
+        configure_multisig(
+            env.clone(),
+            admin.clone(),
+            approvers,
+            m,
+            DEFAULT_EXPIRY_SECONDS,
+        );
+        admin
+    }
+
+    #[test]
+    fn test_m_approvals_grant_access() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let a1 = Address::generate(&env);
+        let a2 = Address::generate(&env);
+        let a3 = Address::generate(&env);
+        let mut approvers = Vec::new(&env);
+        approvers.push_back(a1.clone());
+        approvers.push_back(a2.clone());
+        approvers.push_back(a3.clone());
+        setup_config(&env, approvers, 2);
+        let requester = Address::generate(&env);
+        let id = request_emergency_access(
+            env.clone(),
+            requester,
+            Symbol::new(&env, "P001"),
+            Symbol::new(&env, "cardiac_arrest"),
+        );
+        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
+        approve_emergency_access(env.clone(), a2.clone(), id).unwrap();
+        let req = get_emergency_request(env.clone(), id).unwrap();
+        assert!(req.granted);
+    }
+
+    #[test]
+    fn test_m_minus_1_does_not_grant() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let a1 = Address::generate(&env);
+        let a2 = Address::generate(&env);
+        let mut approvers = Vec::new(&env);
+        approvers.push_back(a1.clone());
+        approvers.push_back(a2.clone());
+        setup_config(&env, approvers, 2);
+        let requester = Address::generate(&env);
+        let id = request_emergency_access(
+            env.clone(),
+            requester,
+            Symbol::new(&env, "P002"),
+            Symbol::new(&env, "reason"),
+        );
+        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
+        let req = get_emergency_request(env.clone(), id).unwrap();
+        assert!(!req.granted);
+    }
+
+    #[test]
+    fn test_expired_request_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let a1 = Address::generate(&env);
+        let mut approvers = Vec::new(&env);
+        approvers.push_back(a1.clone());
+        configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10); // 10s expiry
+        let requester = Address::generate(&env);
+        let id = request_emergency_access(
+            env.clone(),
+            requester,
+            Symbol::new(&env, "P003"),
+            Symbol::new(&env, "reason"),
+        );
+        // Fast-forward time past expiry
+        env.ledger().set(LedgerInfo {
+            timestamp: env.ledger().timestamp() + 100,
+            ..env.ledger().get()
+        });
+        let result = approve_emergency_access(env.clone(), a1.clone(), id);
+        assert!(result.is_err());
     }
 }

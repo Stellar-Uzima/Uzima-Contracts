@@ -1,7 +1,15 @@
 #![no_std]
 #![allow(dead_code)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    ProtocolNotFound = 1,
+    TrialFull = 2,
+}
 
 // ------------------ Types ------------------
 
@@ -15,6 +23,8 @@ pub struct Protocol {
     pub created_at: u64,
     pub active: bool,
     pub metadata_ref: String,
+    pub max_participants: u64,
+    pub current_participants: u64,
 }
 
 #[contracttype]
@@ -62,6 +72,7 @@ pub enum DataKey {
     AdverseEventNextId,
     AdverseEvent(u64),
     ParticipantRecords(Address),
+    ProtocolEnrollmentCount(u64),
 }
 
 // ------------------ Contract ------------------
@@ -69,6 +80,7 @@ pub enum DataKey {
 #[contract]
 pub struct ClinicalTrial;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl ClinicalTrial {
     pub fn initialize(env: Env, admin: Address) {
@@ -94,6 +106,7 @@ impl ClinicalTrial {
         proposer: Address,
         title: String,
         metadata_ref: String,
+        max_participants: u64,
     ) -> u64 {
         proposer.require_auth();
         let next: u64 = env
@@ -110,6 +123,8 @@ impl ClinicalTrial {
             created_at: env.ledger().timestamp(),
             active: true,
             metadata_ref,
+            max_participants,
+            current_participants: 0,
         };
         env.storage()
             .persistent()
@@ -149,10 +164,22 @@ impl ClinicalTrial {
         id
     }
 
-    // Patient recruitment / eligibility (simple verifier placeholder)
-    pub fn recruit_patient(env: Env, site: Address, patient: Address, protocol_id: u64) {
+    // Patient recruitment / eligibility with enrollment cap enforcement
+    pub fn recruit_patient(env: Env, site: Address, patient: Address, protocol_id: u64) -> Result<(), Error> {
         site.require_auth();
-        // a real implementation would run eligibility checks and store recruitment state
+        
+        // Check protocol exists and has capacity
+        let mut protocol: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+        
+        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+            return Err(Error::TrialFull);
+        }
+        
+        // Store recruitment state
         let key = DataKey::ParticipantRecords(patient.clone());
         let mut v: Vec<u64> = env
             .storage()
@@ -161,10 +188,25 @@ impl ClinicalTrial {
             .unwrap_or(Vec::new(&env));
         v.push_back(protocol_id);
         env.storage().persistent().set(&key, &v);
+        
+        // Update enrollment count
+        protocol.current_participants = protocol.current_participants.saturating_add(1);
+        env.storage().persistent().set(&DataKey::Protocol(protocol_id), &protocol);
+        
+        // Check if trial is now full and emit event
+        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+            env.events().publish(
+                (Symbol::new(&env, "TrialCapacityReached"),),
+                (protocol_id, protocol.max_participants),
+            );
+        }
+        
         env.events().publish(
             (Symbol::new(&env, "PatientRecruited"),),
             (patient, protocol_id, site),
         );
+        
+        Ok(())
     }
 
     pub fn record_consent(
@@ -196,6 +238,7 @@ impl ClinicalTrial {
         id
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn report_adverse_event(
         env: Env,
         reporter: Address,
@@ -232,6 +275,15 @@ impl ClinicalTrial {
             (id, patient, protocol_id, site_id, severity),
         );
         id
+    }
+
+    pub fn get_trial_status(env: Env, protocol_id: u64) -> Result<(u64, u64, u64), Error> {
+        let proto: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+        Ok((proto.id, proto.current_participants, proto.max_participants))
     }
 
     // Simple audit: return whether a consent exists for a patient/protocol

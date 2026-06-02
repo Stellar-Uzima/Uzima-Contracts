@@ -1,21 +1,22 @@
-use soroban_sdk::{symbol_short, Address, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec};
 
 use crate::types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, DrugPriceData, Error,
-    FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData,
+    TreatmentOutcomeData,
 };
 
-pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::ClinicalTrial(data) => data.trial_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::ClinicalTrial(data) => Ok(data.trial_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
-pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::TreatmentOutcome(data) => data.outcome_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::TreatmentOutcome(data) => Ok(data.outcome_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
@@ -39,6 +40,38 @@ pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn make_cross_contract_cache_key(
+    env: &Env,
+    contract: &Address,
+    function_name: Symbol,
+    args: &Vec<RawVal>,
+) -> CallCacheKey {
+    let args_hash: BytesN<32> = env.crypto().sha256(&args.to_xdr(env)).into();
+    CallCacheKey {
+        contract: contract.clone(),
+        function_name,
+        args_hash,
+    }
+}
+
+pub fn invoke_contract_cached<
+    T: TryFromVal<Env, Val> + IntoVal<Env, Val> + Clone,
+>(
+    env: &Env,
+    contract: Address,
+    function_name: Symbol,
+    args: Vec<RawVal>,
+) -> T {
+    let cache_key = make_cross_contract_cache_key(env, &contract, function_name.clone(), &args);
+    if let Some(value) = env.storage().temporary().get(&cache_key) {
+        return value;
+    }
+
+    let result: T = env.invoke_contract(&contract, &function_name, args.clone());
+    env.storage().temporary().set(&cache_key, &result);
+    result
 }
 
 pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, Error> {
@@ -243,7 +276,7 @@ pub fn aggregate_payload(
                         if value.observed_at > observed_at {
                             observed_at = value.observed_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -256,7 +289,7 @@ pub fn aggregate_payload(
                 availability_units: (availability_weighted / sum_weight) as u32,
                 observed_at,
             }))
-        }
+        },
         FeedKind::ClinicalTrial => {
             let mut phase_weighted = 0i128;
             let mut enrolled_weighted = 0i128;
@@ -284,7 +317,7 @@ pub fn aggregate_payload(
                             published_at = value.published_at;
                             result_hash = value.result_hash.clone();
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -299,7 +332,7 @@ pub fn aggregate_payload(
                 result_hash,
                 published_at,
             }))
-        }
+        },
         FeedKind::RegulatoryUpdate => {
             let mut best_weight = -1i128;
             let mut picked: Option<RegulatoryUpdateData> = None;
@@ -312,7 +345,7 @@ pub fn aggregate_payload(
                             best_weight = weight;
                             picked = Some(value.clone());
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -324,7 +357,7 @@ pub fn aggregate_payload(
             } else {
                 Err(Error::InvalidData)
             }
-        }
+        },
         FeedKind::TreatmentOutcome => {
             let mut improvement_weighted = 0i128;
             let mut readmission_weighted = 0i128;
@@ -357,7 +390,7 @@ pub fn aggregate_payload(
                         if value.reported_at > reported_at {
                             reported_at = value.reported_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -373,7 +406,7 @@ pub fn aggregate_payload(
                 sample_size: (sample_weighted / sum_weight) as u32,
                 reported_at,
             }))
-        }
+        },
     }
 }
 
@@ -415,7 +448,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -3
             }
-        }
+        },
         (FeedPayload::ClinicalTrial(consensus_data), FeedPayload::ClinicalTrial(payload_data)) => {
             let diff = if payload_data.success_rate_bps > consensus_data.success_rate_bps {
                 payload_data
@@ -431,7 +464,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         (
             FeedPayload::RegulatoryUpdate(consensus_data),
             FeedPayload::RegulatoryUpdate(payload_data),
@@ -441,7 +474,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -4
             }
-        }
+        },
         (
             FeedPayload::TreatmentOutcome(consensus_data),
             FeedPayload::TreatmentOutcome(payload_data),
@@ -460,7 +493,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         _ => -5,
     }
 }

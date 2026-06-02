@@ -9,10 +9,13 @@ pub enum Error {
     InvalidProvider = 211,
     NotInitialized = 300,
     AlreadyInitialized = 301,
+    ContractPaused = 302,
     ConsentNotFound = 406,
     ConsentAlreadyExists = 460,
+    InvalidExpiry = 470,
 }
 
+#[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),

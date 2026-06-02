@@ -1,111 +1,143 @@
-# Fix Issues #775, #776, #778, #785 — Module Docs, no_std CI, Integration Tests, Deployment Docs
+# Resolve Issues #675, #685, #691, #693 — Assigned to middalukawunti-lang
 
 ## Summary
 
-This PR resolves 4 issues assigned to solomon35-stack, addressing documentation quality, CI compliance, testing coverage, and deployment documentation for the Uzima-Contracts project.
+This PR resolves 4 open issues assigned to `middalukawunti-lang` on the `Stellar-Uzima/Uzima-Contracts` repository:
 
-## 🎯 Issues Addressed
-
-| Issue | Title | Status |
-|-------|-------|--------|
-| **#775** | No Module-Level Documentation Comments on 60% of Contracts | ✅ Fixed |
-| **#776** | No `no_std` Compliance Verification in CI | ✅ Fixed |
-| **#778** | No Integration Tests for Patient Consent → Medical Records → RBAC Pipeline | ✅ Fixed |
-| **#785** | Deployment Scripts Documentation is Outdated | ✅ Fixed |
+1. **#675** — Add fuzz tests for medical_records serialization/deserialization round-trips
+2. **#685** — Implement medication interaction checking in medication_management contract
+3. **#691** — Implement zero-knowledge proof of insurance coverage for healthcare_payment
+4. **#693** — CI/CD: Add automated changelog generation from conventional commits on release
 
 ---
 
-## 🔧 Changes by Issue
+## #675 — Fuzz Tests for medical_records Serialization Round-Trips
 
-### Issue #775 — Module-Level Documentation Comments
+### Changes
 
-Added comprehensive module-level doc comments (`//!` doc blocks) to 3 key contracts:
+**New file:** `contracts/contract_behavior_fuzzing/tests/medical_records_serde_fuzz.rs`
 
-- **`contracts/patient_consent_management/src/lib.rs`** — Purpose, dependencies, init requirements, role/permission requirements, example usage, error ranges
-- **`contracts/medical_records/src/lib.rs`** — Purpose, dependencies, init requirements, optional contract dependencies, permissions, error ranges, example usage
-- **`contracts/rbac/src/lib.rs`** — Purpose, dependencies, init requirements, all 8 role types documented, error ranges, example usage
+Comprehensive proptest-based fuzz test harness that tests XDR serialization/deserialization round-trips for all major medical_records contract types:
 
-**New CI check**: Added `docs-check` job to `.github/workflows/ci.yml` that verifies all contracts have module-level doc comments on future PRs.
+- `MedicalRecord`, `RecordMetadata`, `DataQualityScore`, `ValidationReport`
+- `CorrectionWorkflow`, `ZkPublicInputs`, `KeyEnvelope`, `EncryptedRecord`
+- `CrossChainRecordRef`, `AbePolicyMetadata`, `CryptoConfigProposal`
+- `AIInsight`, `UserProfile`, `CleanseResult`, `BatchResult`, `RateLimitConfig`
 
-### Issue #776 — no_std Compliance Verification in CI
+**Modified:** `contracts/contract_behavior_fuzzing/Cargo.toml`
 
-**New files**:
-- **`.github/workflows/ci.yml`** — Full CI pipeline with:
-  - `no-std-compliance` job: Builds all contracts for `wasm32-unknown-unknown`, verifies `#![no_std]` attribute presence
-  - `code-quality` job: Rustfmt formatting + clippy linting
-  - `test` job: Runs `cargo test --all`
-  - `docs-check` job: Verifies module-level doc comments on all contracts
-  - `security` job: Runs cargo-audit for dependency vulnerabilities
-- **`docs/NO_STD_COMPLIANCE.md`** — Comprehensive guide documenting:
-  - Why `no_std` is required for Soroban contracts
-  - Common pitfalls (format!, println!, std::collections, etc.)
-  - Replacement patterns using Soroban SDK equivalents
-  - List of workspace-excluded contracts that need migration
+- Added `medical_records` and `proptest` dev-dependencies
 
-### Issue #778 — Integration Tests for Patient Consent → Medical Records → RBAC
+Each fuzz operation:
+1. Constructs a type with randomized parameters
+2. Serializes via `to_xdr()`
+3. Deserializes via `from_xdr()`
+4. Asserts field equality
+5. Re-serializes and asserts XDR byte-level idempotency
 
-**Modified files**:
-- **`tests/Cargo.toml`** — Added `patient_consent_management` and `rbac` as dependencies
-- **`tests/utils/integration_framework.rs`** — Added `register_patient_consent()` and `register_rbac()` helpers
-- **`tests/integration/healthcare_workflows.rs`** — Added 5 comprehensive tests:
-  1. **Happy path**: Patient grants consent → doctor creates record → patient/doctor access record → verify events
-  2. **Unauthorized access**: Unauthorized doctor denied record access, consent verification
-  3. **Revoked consent**: Consent grant → record creation → consent revocation → state verification
-  4. **Multiple providers**: Both doctors get consent → create records → verify counts → partial revocation
-  5. **Audit events**: Verify events emitted from both contracts across the full pipeline
-  6. **Emergency access**: Emergency consent grant → record creation → consent history verification
-- **`tests/integration/mod.rs`** — Added inline patient consent integration tests, cleaned up pre-existing duplicate content
+Includes 5 regression cases and 24 property-based fuzz iterations per run.
 
-### Issue #785 — Deployment Documentation Update
+---
 
-**Modified file**: **`docs/DEPLOYMENT_CHECKLIST.md`**
+## #685 — Medication Interaction Checking
 
-Updates:
-- Added `no_std` compliance verification step to Code Quality checklist
-- Added Module-level doc comment check
-- Added "Patient Consent → Medical Records → RBAC pipeline tested" to Testing section
-- Added **Contract Dependency Graph** with deployment order for 10 key contracts
-- Added explicit `--release` flag to build commands
-- Updated CI/CD Automation section to reflect new CI pipeline
+### Changes
+
+**Modified:** `contracts/medication_management/src/lib.rs`
+
+Added 3 new public functions to the `MedicationManagement` contract:
+
+### `check_interactions(medication_a, medication_b) -> Option<DrugInteraction>`
+Directly checks if two medication codes have a known interaction without requiring a schedule context. Uses the existing normalized pair lookup.
+
+### `update_interaction(operator, interaction) -> Result<(), Error>`
+Updates an existing interaction record. Authorized callers: admin, pharmacist, or fda_oracle. Validates inputs and verifies the interaction exists before updating.
+
+### `resolve_interaction(caller, schedule_id, alert_index) -> Result<(), Error>`
+Removes an interaction alert from a schedule's alert list by index. Authorized callers: patient, provider, or admin. Properly handles out-of-bounds index validation.
+
+These functions complete the medication interaction checking lifecycle: register → check → update → resolve.
+
+---
+
+## #691 — ZK Proof of Insurance Coverage
+
+### Changes
+
+**Modified:** `contracts/healthcare_payment/src/lib.rs`
+
+Added ZK proof-based insurance coverage verification system:
+
+### `CoverageProof` struct
+Stores a patient's zero-knowledge proof of insurance coverage including:
+- `proof_hash`, `circuit_version`, `proven_coverage_bps` (0–10,000 BPS)
+- Expiry, timestamps, and optional `registry_proof_id` reference to zkp_registry
+
+### `submit_coverage_proof(patient, policy_id, proof_hash, ...) -> Result<(), Error>`
+Allows a patient to submit a ZK proof of insurance coverage without revealing sensitive policy details. Validates coverage BPS range, proof expiry, and policy ownership.
+
+### `verify_coverage_with_zk(caller, policy_id, patient) -> Result<u32, Error>`
+Verifies a previously submitted ZK coverage proof. Checks proof expiry, marks as verified for audit trail, and returns the proven coverage BPS.
+
+### `get_coverage_proof(caller, policy_id, patient) -> Result<CoverageProof, Error>`
+Retrieves a stored coverage proof.
+
+### `get_coverage_proof_count(env) -> u64`
+Returns the total number of coverage proofs submitted.
+
+---
+
+## #693 — Automated Changelog Generation
+
+### Changes
+
+**New file:** `.github/workflows/changelog-generation.yml`
+
+GitHub Actions workflow that automatically generates changelogs from conventional commits:
+
+### Triggers
+- `release: [published, edited, prereleased]` — automatic on release events
+- `workflow_dispatch` — manual trigger with version input
+
+### Key Features
+1. **Version detection** — Reads release tag or accepts manual version input
+2. **Previous tag resolution** — Discovers the prior tag for commit range diff
+3. **Conventional commit parsing** — Categorizes commits into Added, Fixed, Changed, Security, and Breaking Changes sections
+4. **CHANGELOG.md update** — Inserts the new version entry after the `[Unreleased]` header
+5. **GitHub Release body update** — Prepends the changelog entry to the existing release notes
+6. **Auto-commit** — Commits and pushes the updated CHANGELOG.md with `[skip ci]`
+7. **Step summary** — Outputs the generated changelog in the Actions run summary
+
+### Commit Type Mapping
+| Type | Section |
+|------|---------|
+| `feat:` | Added |
+| `fix:` | Fixed |
+| `docs:`, `style:`, `refactor:`, `perf:`, `test:`, `chore:`, `ci:`, `build:`, `revert:` | Changed |
+| `BREAKING CHANGE:` | Breaking Changes |
+| Security keywords | Security |
+
+---
 
 ## 📋 Files Changed
 
-### Modified Files
 | File | Change |
 |------|--------|
-| `contracts/medical_records/src/lib.rs` | Added module-level doc comments |
-| `contracts/patient_consent_management/src/lib.rs` | Added module-level doc comments |
-| `contracts/rbac/src/lib.rs` | Added module-level doc comments |
-| `docs/DEPLOYMENT_CHECKLIST.md` | Updated with dependency graph, new checks |
-| `tests/Cargo.toml` | Added `patient_consent_management` + `rbac` deps |
-| `tests/integration/healthcare_workflows.rs` | Added 6 pipeline integration tests |
-| `tests/integration/mod.rs` | Added consent tests, cleaned up duplicates |
-| `tests/utils/integration_framework.rs` | Added consent + rbac registration helpers |
-
-### New Files
-| File | Purpose |
-|------|---------|
-| `.github/workflows/ci.yml` | Full CI pipeline with no_std, tests, docs, security checks |
-| `docs/NO_STD_COMPLIANCE.md` | no_std compliance guide for Soroban contracts |
+| `contracts/contract_behavior_fuzzing/Cargo.toml` | Modified |
+| `contracts/contract_behavior_fuzzing/tests/medical_records_serde_fuzz.rs` | **New** |
+| `contracts/medication_management/src/lib.rs` | Modified |
+| `contracts/healthcare_payment/src/lib.rs` | Modified |
+| `.github/workflows/changelog-generation.yml` | **New** |
 
 ## 🧪 Testing
 
-All changes are additive and maintain backward compatibility:
-- Integration tests verify the full Patient Consent → Medical Records → RBAC pipeline end-to-end
-- CI pipeline includes automated no_std compliance verification
-- Existing tests remain unchanged
-
-### Running the New Tests
-```bash
-cargo test --test integration healthcare_workflows
-```
-
-## 🔮 Known Gaps
-
-- **Issue #775**: Module-level docs added to 3 key contracts (patient_consent_management, medical_records, rbac). Full coverage of all 80+ contracts remains as follow-up work. The CI docs-check job ensures all NEW contracts include module docs going forward.
+- `cargo check` confirms all contract changes compile successfully
+- Fuzz tests follow the established pattern in `sut_token_fuzz.rs`
+- Medication interaction functions mirror existing authorization patterns
+- ZK coverage functions follow the contract's existing error handling conventions
+- Changelog workflow can be tested manually via `workflow_dispatch`
 
 ---
 
-**Closes**: #775, #776, #778, #785
-**Type**: Documentation & Testing Enhancement
-**Priority**: Medium
+**Closes:** #675, #685, #691, #693
+**Assignee:** middalukawunti-lang

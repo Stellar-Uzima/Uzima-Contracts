@@ -296,7 +296,7 @@ fn test_recursive_zkp() {
         created_at: env.ledger().timestamp(),
     };
 
-    let aggregated_vk = Bytes::from_slice(&env, b"aggregated_vk");
+    let aggregated_vk = BytesN::from_array(&env, &[15u8; 32]);
 
     client.create_recursive_proof(
         &composer,

@@ -1,9 +1,15 @@
+#![allow(clippy::new_without_default)]
+
 /// Test data generators for various contract scenarios
-use soroban_sdk::{Address, Env, String as SorobanString, Vec};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-#[allow(clippy::unwrap_used)]
+/// Generate a test address using Soroban's test utilities.
+pub fn generate_test_address(env: &Env) -> Address {
+    Address::generate(env)
+}
 
+#[allow(clippy::unwrap_used)]
 /// Medical record data generator
 pub struct MedicalRecordGenerator {
     counter: usize,
@@ -45,14 +51,24 @@ impl MedicalRecordGenerator {
     /// Generate medical data entries
     pub fn generate_medical_entries(env: &Env, count: usize) -> Vec<MedicalEntry> {
         let mut entries = Vec::new();
-        let diagnoses = vec!["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
-        let medications = vec!["Metformin", "Lisinopril", "Albuterol", "Sumatriptan", "Omeprazole"];
+        let diagnoses = ["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
+        let medications = [
+            "Metformin",
+            "Lisinopril",
+            "Albuterol",
+            "Sumatriptan",
+            "Omeprazole",
+        ];
 
         for i in 0..count {
             entries.push(MedicalEntry {
                 entry_type: SorobanString::from_str(
                     env,
-                    if i % 2 == 0 { "diagnosis" } else { "medication" },
+                    if i % 2 == 0 {
+                        "diagnosis"
+                    } else {
+                        "medication"
+                    },
                 ),
                 description: SorobanString::from_str(
                     env,
@@ -92,6 +108,7 @@ pub struct MedicalEntry {
 }
 
 /// Consent data generator
+#[allow(dead_code)]
 pub struct ConsentDataGenerator {
     counter: usize,
 }
@@ -154,7 +171,12 @@ impl TransactionDataGenerator {
     }
 
     /// Generate transaction record
-    pub fn generate_transaction(env: &Env, from: &Address, to: &Address, amount: u128) -> Transaction {
+    pub fn generate_transaction(
+        env: &Env,
+        from: &Address,
+        to: &Address,
+        amount: u128,
+    ) -> Transaction {
         Transaction {
             tx_id: Self::generate_tx_id(env),
             from: from.clone(),
@@ -191,7 +213,12 @@ impl AccessLogGenerator {
     }
 
     /// Generate access log entry
-    pub fn generate_access_log(env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
+    pub fn generate_access_log(
+        &mut self,
+        env: &Env,
+        accessor: &Address,
+        resource_id: u64,
+    ) -> AccessLog {
         self.counter += 1;
         AccessLog {
             log_id: self.counter as u64,
@@ -236,11 +263,11 @@ impl PropertyTestDataGenerator {
     /// Generate edge case amounts
     pub fn generate_edge_case_amounts() -> Vec<u128> {
         vec![
-            0,                                   // Zero
-            1,                                   // Minimum
-            u128::MAX,                           // Maximum
-            u128::MAX / 2,                       // Half max
-            1_000_000_000_000_000_000,          // Large amount
+            0,                         // Zero
+            1,                         // Minimum
+            u128::MAX,                 // Maximum
+            u128::MAX / 2,             // Half max
+            1_000_000_000_000_000_000, // Large amount
         ]
     }
 
@@ -252,23 +279,17 @@ impl PropertyTestDataGenerator {
             .as_secs();
 
         vec![
-            0,              // Unix epoch
-            now,            // Current time
-            now + 86400,    // Tomorrow
-            now - 86400,    // Yesterday
-            u64::MAX / 2,   // Far future
+            0,            // Unix epoch
+            now,          // Current time
+            now + 86400,  // Tomorrow
+            now - 86400,  // Yesterday
+            u64::MAX / 2, // Far future
         ]
     }
 
     /// Generate boundary test values
     pub fn generate_boundary_values(min: u32, max: u32) -> Vec<u32> {
-        vec![
-            min,
-            max,
-            min + 1,
-            max - 1,
-            (min + max) / 2,
-        ]
+        vec![min, max, min + 1, max - 1, (min + max) / 2]
     }
 }
 
@@ -294,8 +315,8 @@ mod tests {
     #[test]
     fn test_consent_data_generator() {
         let env = Env::default();
-        let addr1 = Address::generate(&env);
-        let addr2 = Address::generate(&env);
+        let addr1 = generate_test_address(&env);
+        let addr2 = generate_test_address(&env);
         let grant = ConsentDataGenerator::generate_consent_grant(&env, &addr1, &addr2);
         assert_eq!(grant.grantor, addr1);
         assert_eq!(grant.grantee, addr2);
@@ -304,8 +325,8 @@ mod tests {
     #[test]
     fn test_transaction_generator() {
         let env = Env::default();
-        let addr1 = Address::generate(&env);
-        let addr2 = Address::generate(&env);
+        let addr1 = generate_test_address(&env);
+        let addr2 = generate_test_address(&env);
         let tx = TransactionDataGenerator::generate_transaction(&env, &addr1, &addr2, 1000);
         assert_eq!(tx.amount, 1000);
     }
@@ -314,7 +335,7 @@ mod tests {
     fn test_access_log_generator() {
         let env = Env::default();
         let mut gen = AccessLogGenerator::new();
-        let addr = Address::generate(&env);
+        let addr = generate_test_address(&env);
         let log = gen.generate_access_log(&env, &addr, 123);
         assert_eq!(log.resource_id, 123);
     }

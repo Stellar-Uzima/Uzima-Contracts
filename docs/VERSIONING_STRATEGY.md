@@ -333,3 +333,43 @@ The CI pipeline enforces version consistency:
 ---
 
 This versioning strategy ensures predictable, maintainable releases that clearly communicate the impact of changes to all stakeholders.
+
+# Versioning Strategy
+
+## Format
+
+All contracts follow [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
+
+| Bump   | When                                                     |
+|--------|----------------------------------------------------------|
+| MAJOR  | Breaking change to the public interface or storage layout|
+| MINOR  | New backwards-compatible function or behaviour           |
+| PATCH  | Bug fix with no interface or storage change              |
+
+## Source of truth
+
+The version in `Cargo.toml` is the single source of truth. The `version()` 
+function is generated at compile time via `env!("CARGO_PKG_VERSION")`, so the 
+on-chain version and the crate version are always identical — no manual 
+synchronisation.
+
+## Storage
+
+The version string is written to instance storage under `DataKey::Version` 
+during `initialize()`. It can be read at any time by calling `version()`.
+
+## Deployment verification
+
+After deploying, run:
+```bash
+./scripts/deployment_status.sh
+```
+The script invokes `version()` on every deployed contract and prints the 
+result alongside the contract ID and WASM hash, giving operators a 
+human-readable confirmation that the correct build is live.
+
+## Upgrade policy
+
+When a MAJOR version is deployed, a migration path must be documented in 
+`docs/migrations/vX.md` before the PR is merged. MINOR and PATCH upgrades 
+require no migration document.

@@ -12,7 +12,7 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-use soroban_sdk::{Address, Env, Map, String, Vec};
+use soroban_sdk::{Address, Bytes, Env, Map, String, Vec};
 
 use crate::errors::Error;
 use crate::{
@@ -70,11 +70,13 @@ pub const MIN_PURPOSE_LENGTH: u32 = 5;
 pub const MAX_PURPOSE_LENGTH: u32 = 256;
 
 /// Minimum length for explanation summary
+#[allow(dead_code)]
 pub const MIN_EXPLANATION_LENGTH: u32 = 10;
 /// Maximum length for explanation summary
 pub const MAX_EXPLANATION_LENGTH: u32 = 512;
 
 /// Minimum length for model version string
+#[allow(dead_code)]
 pub const MIN_MODEL_VERSION_LENGTH: u32 = 1;
 /// Maximum length for model version string
 pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
@@ -83,6 +85,7 @@ pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
 pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
+#[allow(dead_code)]
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
 
 /// Maximum number of custom metadata fields per record
@@ -421,6 +424,7 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
@@ -500,6 +504,13 @@ pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
 
 /// Constant for maximum emergency access duration (7 days in seconds)
 pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
+
+/// Maximum byte length for encrypted record data
+pub const MAX_ENCRYPTED_DATA_LEN: u32 = 65_536; // 64 KB
+/// Maximum byte length for metadata string
+pub const MAX_METADATA_LEN: u32 = 1_024;
+/// Maximum byte length for patient ID string
+pub const MAX_PATIENT_ID_LEN: u32 = 128;
 
 /// Validates emergency access duration
 ///
@@ -655,6 +666,7 @@ pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_ai_explanation(
     explanation_summary: &String,
     model_version: &String,
@@ -685,6 +697,7 @@ pub fn validate_ai_explanation(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> Result<(), Error> {
     // Check count
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
@@ -748,6 +761,7 @@ pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result
 // ==================== DATA QUALITY ASSESSMENT ====================
 
 /// Minimum quality score threshold for a record to be considered acceptable (60%).
+#[allow(dead_code)]
 pub const MIN_QUALITY_THRESHOLD_BPS: u32 = 6_000;
 
 /// Weight constants for quality sub-scores (out of 10_000 total).
@@ -1146,20 +1160,20 @@ pub fn validate_record_by_type(
         MedicalRecordType::General => {
             // Standard validation is sufficient
             Ok(())
-        }
+        },
         MedicalRecordType::Laboratory => {
             // Lab records MUST have a data reference for results
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Prescription => {
             // Prescriptions MUST have treatment and treatment_type
             validate_treatment(&record.treatment)?;
             validate_treatment_type(&record.treatment_type)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Imaging => {
             // Imaging records MUST have a data reference for the images
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
@@ -1167,7 +1181,7 @@ pub fn validate_record_by_type(
             }
             validate_data_ref(env, &record.data_ref)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Surgical => {
             // Surgical records need diagnosis, treatment, AND doctor DID
             validate_diagnosis(&record.diagnosis)?;
@@ -1176,7 +1190,7 @@ pub fn validate_record_by_type(
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Emergency => {
             // Emergency records: timestamp must be recent (within 1 hour)
             let current_time = env.ledger().timestamp();
@@ -1186,7 +1200,7 @@ pub fn validate_record_by_type(
             }
             validate_diagnosis(&record.diagnosis)?;
             Ok(())
-        }
+        },
     }
 }
 
@@ -1199,6 +1213,7 @@ pub fn validate_record_by_type(
 ///
 /// Returns a potentially cleaned `String`. Whitespace-only strings are returned
 /// as-is because the downstream length validators will reject them.
+#[allow(dead_code)]
 pub fn normalize_medical_string(env: &Env, input: &String) -> String {
     // In Soroban no_std, String doesn't expose slice/trim operations directly.
     // We can at least detect empty or whitespace-only strings.
@@ -1439,6 +1454,7 @@ pub fn auto_cleanse_record(env: &Env, record: &MedicalRecord) -> CleanseResult {
 ///
 /// The workflow is built from the *post-cleanse* report so that any issues
 /// resolved by auto-normalisation are not included in the correction items.
+#[allow(dead_code)]
 pub fn validate_cleanse_and_report(
     env: &Env,
     record_id: u64,
@@ -1448,6 +1464,30 @@ pub fn validate_cleanse_and_report(
     let report = validate_record_with_report(env, record_id, &cleanse_result.record);
     let workflow = build_correction_workflow(env, record_id, &report);
     (cleanse_result, report, workflow)
+}
+
+/// Validate encrypted data length does not exceed the on-chain storage limit.
+pub fn validate_encrypted_data_len(data: &Bytes) -> Result<(), Error> {
+    if data.len() > MAX_ENCRYPTED_DATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate metadata string length.
+pub fn validate_metadata_len(metadata: &String) -> Result<(), Error> {
+    if metadata.len() > MAX_METADATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate patient ID string length.
+pub fn validate_patient_id_len(patient_id: &String) -> Result<(), Error> {
+    if patient_id.len() > MAX_PATIENT_ID_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

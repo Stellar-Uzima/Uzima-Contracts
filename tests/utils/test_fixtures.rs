@@ -1,4 +1,5 @@
 /// Test fixtures for different user roles and scenarios
+use crate::utils::generate_test_address;
 use soroban_sdk::{Address, Env};
 
 /// User role fixture
@@ -26,7 +27,7 @@ pub struct UserFixture {
 
 impl UserFixture {
     /// Create a new user fixture
-    pub fn new(env: &Env, address: Address, role: UserRole, name: &str, email: &str) -> Self {
+    pub fn new(_env: &Env, address: Address, role: UserRole, name: &str, email: &str) -> Self {
         Self {
             address,
             role,
@@ -49,21 +50,35 @@ pub struct UserFixtureFactory;
 impl UserFixtureFactory {
     /// Create admin fixture
     pub fn create_admin(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Admin, "Admin User", "admin@hospital.com").verified()
+        let address = generate_test_address(env);
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Admin,
+            "Admin User",
+            "admin@hospital.com",
+        )
+        .verified()
     }
 
     /// Create doctor fixture
     pub fn create_doctor(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Doctor, "Dr. Smith", "smith@hospital.com").verified()
+        let address = generate_test_address(env);
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Doctor,
+            "Dr. Smith",
+            "smith@hospital.com",
+        )
+        .verified()
     }
 
     /// Create multiple doctors
     pub fn create_doctors(env: &Env, count: usize) -> Vec<UserFixture> {
         (0..count)
             .map(|i| {
-                let address = Address::generate(env);
+                let address = generate_test_address(env);
                 UserFixture::new(
                     env,
                     address,
@@ -78,16 +93,22 @@ impl UserFixtureFactory {
 
     /// Create patient fixture
     pub fn create_patient(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Patient, "John Patient", "patient@example.com")
-            .verified()
+        let address = generate_test_address(env);
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Patient,
+            "John Patient",
+            "patient@example.com",
+        )
+        .verified()
     }
 
     /// Create multiple patients
     pub fn create_patients(env: &Env, count: usize) -> Vec<UserFixture> {
         (0..count)
             .map(|i| {
-                let address = Address::generate(env);
+                let address = generate_test_address(env);
                 UserFixture::new(
                     env,
                     address,
@@ -102,14 +123,20 @@ impl UserFixtureFactory {
 
     /// Create nurse fixture
     pub fn create_nurse(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
-        UserFixture::new(env, address, UserRole::Nurse, "Nurse Jane", "nurse@hospital.com")
-            .verified()
+        let address = generate_test_address(env);
+        UserFixture::new(
+            env,
+            address,
+            UserRole::Nurse,
+            "Nurse Jane",
+            "nurse@hospital.com",
+        )
+        .verified()
     }
 
     /// Create pharmacist fixture
     pub fn create_pharmacist(env: &Env) -> UserFixture {
-        let address = Address::generate(env);
+        let address = generate_test_address(env);
         UserFixture::new(
             env,
             address,
@@ -251,8 +278,14 @@ mod tests {
     #[test]
     fn test_user_fixture_creation() {
         let env = soroban_sdk::Env::default();
-        let addr = Address::generate(&env);
-        let user = UserFixture::new(&env, addr.clone(), UserRole::Doctor, "Test", "test@test.com");
+        let addr = generate_test_address(&env);
+        let user = UserFixture::new(
+            &env,
+            addr.clone(),
+            UserRole::Doctor,
+            "Test",
+            "test@test.com",
+        );
         assert_eq!(user.role, UserRole::Doctor);
         assert!(!user.verified);
     }
@@ -260,8 +293,9 @@ mod tests {
     #[test]
     fn test_user_fixture_verified() {
         let env = soroban_sdk::Env::default();
-        let addr = Address::generate(&env);
-        let user = UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
+        let addr = generate_test_address(&env);
+        let user =
+            UserFixture::new(&env, addr, UserRole::Patient, "Test", "test@test.com").verified();
         assert!(user.verified);
     }
 
@@ -289,14 +323,57 @@ mod tests {
         let team = UserFixtureFactory::create_healthcare_team(&env);
         assert_eq!(team.doctors.len(), 3);
         assert_eq!(team.patients.len(), 5);
-        assert!(team.all_users().len() > 0);
+        assert!(!team.all_users().is_empty());
+    }
+
+    #[test]
+    fn test_healthcare_team_integrity() {
+        let env = soroban_sdk::Env::default();
+        let team = UserFixtureFactory::create_healthcare_team(&env);
+
+        assert_eq!(team.doctors.len(), 3);
+        assert_eq!(team.patients.len(), 5);
+        assert_eq!(team.nurses.len(), 2);
+        assert_eq!(team.pharmacists.len(), 1);
+        assert!(team.admin.verified);
+
+        let addresses = team.all_addresses();
+        let unique_addresses: std::collections::HashSet<_> =
+            addresses.iter().collect();
+        assert_eq!(unique_addresses.len(), addresses.len());
+
+        for doctor in team.doctors.iter() {
+            assert_eq!(doctor.role, UserRole::Doctor);
+            assert!(doctor.verified);
+        }
+        for patient in team.patients.iter() {
+            assert_eq!(patient.role, UserRole::Patient);
+            assert!(patient.verified);
+        }
+    }
+
+    #[test]
+    fn test_shared_scenario_fixtures() {
+        let scenarios = vec![
+            scenarios::patient_record_creation(),
+            scenarios::record_sharing(),
+            scenarios::consent_management(),
+            scenarios::cross_hospital_access(),
+        ];
+
+        for scenario in scenarios {
+            assert!(!scenario.name.is_empty());
+            assert!(!scenario.description.is_empty());
+            assert!(!scenario.preconditions.is_empty());
+            assert!(!scenario.expected_outcomes.is_empty());
+        }
     }
 
     #[test]
     fn test_scenario_fixture() {
         let scenario = scenarios::patient_record_creation();
         assert_eq!(scenario.name, "Patient Creates Medical Record");
-        assert!(scenario.preconditions.len() > 0);
-        assert!(scenario.expected_outcomes.len() > 0);
+        assert!(!scenario.preconditions.is_empty());
+        assert!(!scenario.expected_outcomes.is_empty());
     }
 }

@@ -1,4 +1,5 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
@@ -290,9 +291,10 @@ impl CredentialRegistryContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::RootRecord(issuer.clone(), current), &rec);
-            env.storage()
-                .persistent()
-                .set(&DataKey::RootToVersion(issuer.clone(), root.clone()), &current);
+            env.storage().persistent().set(
+                &DataKey::RootToVersion(issuer.clone(), root.clone()),
+                &current,
+            );
             versions.push_back(current);
         }
 

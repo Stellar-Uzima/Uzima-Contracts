@@ -44,10 +44,10 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
         Error::TitleTooLong | Error::MessageTooLong | Error::NameTooLong => {
             symbol_short!("SHORTEN")
-        }
+        },
         Error::NotificationNotFound | Error::AlertRuleNotFound | Error::TemplateNotFound => {
             symbol_short!("CHK_ID")
-        }
+        },
         Error::MaxSendersReached
         | Error::MaxRulesReached
         | Error::MaxNotificationsReached
@@ -56,7 +56,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::NotInitialized => symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized | Error::AlreadyRead | Error::AlreadyArchived => {
             symbol_short!("ALREADY")
-        }
+        },
         Error::RecipientsEmpty => symbol_short!("ADD_TEXT"),
         Error::LocaleTooLong => symbol_short!("FIX_LANG"),
         _ => symbol_short!("CONTACT"),

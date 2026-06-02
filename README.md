@@ -25,6 +25,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Contract Review Checklist](#contract-review-checklist)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#frequently-asked-questions-faq)
 - [License](#license)
@@ -693,7 +694,9 @@ We welcome contributions from the community! Please follow these guidelines to e
    - Run `cargo clippy` for linting
    - Ensure all tests pass: `cargo test`
 
-3. **Test thoroughly**:
+3. **Review the contract review checklist** in [docs/contract-review-checklist.md](docs/contract-review-checklist.md)
+
+4. **Test thoroughly**:
    ```bash
    make test          # Run all tests
    make check         # Run formatting, linting, and tests
@@ -729,6 +732,9 @@ All PRs undergo:
 2. **Code review** by maintainers
 3. **Integration testing** on testnet
 4. **Security audit** for significant changes
+
+## Contract Review Checklist
+Review contract submissions using the shared checklist at [docs/contract-review-checklist.md](docs/contract-review-checklist.md).
 
 ### Definition of Done
 

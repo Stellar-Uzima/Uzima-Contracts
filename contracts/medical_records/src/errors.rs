@@ -11,6 +11,7 @@ pub enum Error {
 
     // --- Input Validation (200–299) ---
     InvalidInput = 200,
+    InvalidPagination = 202,
     InputTooLong = 201,
     BatchTooLarge = 208,
     InvalidSignature = 207,
@@ -77,9 +78,11 @@ pub enum Error {
     InvalidParticipantCount = 834,
 }
 
+#[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
+        Error::InvalidPagination => symbol_short!("CHK_DATA"),
         Error::Unauthorized | Error::NotAICoordinator => symbol_short!("CHK_AUTH"),
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),

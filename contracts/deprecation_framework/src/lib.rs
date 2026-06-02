@@ -8,13 +8,9 @@ mod types;
 mod test;
 
 pub use errors::Error;
-pub use types::{
-    DataKey, DeprecationPhase, DeprecationStatus, MigrationGuide, SunsetTimeline,
-};
+pub use types::{DataKey, DeprecationPhase, DeprecationStatus, MigrationGuide, SunsetTimeline};
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 #[contract]
 pub struct DeprecationFramework;
@@ -30,9 +26,7 @@ impl DeprecationFramework {
         }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::ContractCount, &0u32);
+        env.storage().instance().set(&DataKey::ContractCount, &0u32);
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -252,9 +246,10 @@ impl DeprecationFramework {
             .get(&DataKey::DeprecatedContract(contract_id.clone()))
             .ok_or(Error::ContractNotFound)?;
 
-        env.storage()
-            .persistent()
-            .set(&DataKey::RemovalChecklist(contract_id.clone()), &checklist_items);
+        env.storage().persistent().set(
+            &DataKey::RemovalChecklist(contract_id.clone()),
+            &checklist_items,
+        );
 
         events::publish_removal_checklist_created(&env, &contract_id);
         Ok(())
@@ -277,9 +272,10 @@ impl DeprecationFramework {
             .ok_or(Error::ChecklistNotFound)?;
 
         // Store completion status separately
-        env.storage()
-            .persistent()
-            .set(&DataKey::ChecklistItemComplete(contract_id.clone(), item_index), &true);
+        env.storage().persistent().set(
+            &DataKey::ChecklistItemComplete(contract_id.clone(), item_index),
+            &true,
+        );
 
         events::publish_checklist_item_completed(&env, &contract_id, item_index);
         Ok(())
