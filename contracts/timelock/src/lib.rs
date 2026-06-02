@@ -11,7 +11,6 @@ use soroban_sdk::{
 pub struct TimelockConfig {
     pub admin: Address,
     pub delay_seconds: u64,
-    pub min_sequence_advance: u32,
 }
 
 #[derive(Clone)]
@@ -20,7 +19,6 @@ pub struct QueuedTx {
     pub target: Address,
     pub call: BytesN<32>,
     pub eta: u64,
-    pub queued_at_sequence: u32,
 }
 
 const CFG: Symbol = symbol_short!("cfg");
@@ -39,11 +37,7 @@ impl Timelock {
         if env.storage().instance().has(&CFG) {
             return Err(Error::AlreadyInitialized);
         }
-        let cfg = TimelockConfig {
-            admin,
-            delay_seconds,
-            min_sequence_advance: (delay_seconds / 36) as u32,
-        };
+        let cfg = TimelockConfig { admin, delay_seconds };
         env.storage().instance().set(&CFG, &cfg);
         Ok(())
     }
@@ -60,7 +54,6 @@ impl Timelock {
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
         let eta = now.saturating_add(cfg.delay_seconds);
-        let current_seq: u32 = env.ledger().sequence();
         let mut q: Map<u64, QueuedTx> = env
             .storage()
             .persistent()
@@ -69,8 +62,7 @@ impl Timelock {
         if q.contains_key(id) {
             return Err(Error::AlreadyQueued);
         }
-        let seq: u32 = env.ledger().sequence();
-        q.set(id, QueuedTx { target, call, eta, queued_at_sequence: seq });
+        q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
         env.storage().persistent().extend_ttl(
             &QUEUE,
@@ -100,10 +92,6 @@ impl Timelock {
             .get(&CFG)
             .ok_or(Error::NotInitialized)?;
         if now < tx.eta {
-            return Err(Error::NotReady);
-        }
-        let current_seq: u32 = env.ledger().sequence();
-        if current_seq < tx.queued_at_sequence.saturating_add(cfg.min_sequence_advance) {
             return Err(Error::NotReady);
         }
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.

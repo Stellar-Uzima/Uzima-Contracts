@@ -3,6 +3,7 @@
 
 // internal
 use super::*;
+use common_error::CommonError;
 use crate::errors::Error;
 use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
 

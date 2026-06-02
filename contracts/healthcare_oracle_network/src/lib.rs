@@ -220,6 +220,24 @@ impl HealthcareOracleNetwork {
         submissions::get_consensus(env, kind, feed_id)
     }
 
+    pub fn report_oracle_misbehavior(
+        env: Env,
+        reporter: Address,
+        reported_oracle: Address,
+        kind: FeedKind,
+        feed_id: String,
+        reason: String,
+    ) -> Result<(), Error> {
+        submissions::report_oracle_misbehavior(
+            env,
+            reporter,
+            reported_oracle,
+            kind,
+            feed_id,
+            reason,
+        )
+    }
+
     pub fn get_oracle(env: Env, operator: Address) -> Option<OracleNode> {
         oracles::get_oracle(env, operator)
     }

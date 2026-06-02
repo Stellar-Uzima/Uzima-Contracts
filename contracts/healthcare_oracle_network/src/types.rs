@@ -22,6 +22,7 @@ pub enum Error {
     InvalidDisputeState = 16,
     InvalidFeedType = 17,
     ArbiterExists = 18,
+    AlreadyReported = 19,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -204,6 +205,8 @@ pub enum DataKey {
     RoundCounter(FeedKey),
     Round(FeedKey, u64),
     Submission(FeedKey, u64, Address),
+    LastSubmissionHash(FeedKey, Address),
+    MisbehaviorReport(FeedKey, Address, Address),
     Consensus(FeedKey),
     DisputeCount,
     Dispute(u64),
