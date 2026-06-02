@@ -1,33 +1,16 @@
-pub mod ihe_fhir_integration_tests;
-pub mod multi_region_dr_integration;
-
-// tests/unit/mod.rs
-#[cfg(test)]
-mod unit_tests {
-    use soroban_sdk::{Env, String};
-
-    #[test]
-    fn test_string_operations() {
-        let env = Env::default();
-        let test_string = String::from_str(&env, "test_patient_id");
-        assert_eq!(test_string.len(), 15);
-    }
-
-    #[test]
-    fn test_environment_setup() {
-        let env = Env::default();
-        assert!(env.ledger().timestamp() > 0);
-        assert!(env.ledger().sequence() > 0);
-    }
-}
-// tests/integration/mod.rs
-use soroban_sdk::{vec, Address, Env, String};
-
+pub mod cross_chain_tests;
+pub mod framework_tests;
 pub mod healthcare_workflows;
 pub mod ihe_fhir_integration_tests;
+pub mod medical_records_integration;
+pub mod multi_region_dr_integration;
 
+// ============================================================================
+// Inline integration tests for Medical Records
+// ============================================================================
+#[cfg(test)]
 pub mod medical_records_tests {
-    use super::*;
+    use soroban_sdk::{vec, Address, Env, String};
     use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
     use soroban_sdk::{
         testutils::{Address as _, MockAuth, MockAuthInvoke},
@@ -149,7 +132,86 @@ pub mod medical_records_tests {
     }
 }
 
-// tests/unit/mod.rs
+// ============================================================================
+// Inline integration tests for Patient Consent Management
+// ============================================================================
+#[cfg(test)]
+mod patient_consent_tests {
+    use super::*;
+    use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
+    use soroban_sdk::{
+        testutils::{Address as _, MockAuth, MockAuthInvoke},
+    };
+
+    #[test]
+    fn test_consent_grant_and_check_integration() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PatientConsentManagement);
+        let client = PatientConsentManagementClient::new(&env, &contract_id);
+
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        client.initialize(&admin);
+        client.grant_consent(&patient, &provider);
+
+        assert!(client.check_consent(&patient, &provider));
+    }
+
+    #[test]
+    fn test_consent_revoke_and_recheck() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PatientConsentManagement);
+        let client = PatientConsentManagementClient::new(&env, &contract_id);
+
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        client.initialize(&admin);
+        client.grant_consent(&patient, &provider);
+        assert!(client.check_consent(&patient, &provider));
+
+        client.revoke_consent(&patient, &provider);
+        assert!(!client.check_consent(&patient, &provider));
+    }
+
+    #[test]
+    fn test_consent_with_audit_trail() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PatientConsentManagement);
+        let client = PatientConsentManagementClient::new(&env, &contract_id);
+
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        client.initialize(&admin);
+        client.grant_consent(&patient, &provider);
+
+        let (has_consent, granted_at, revoked_at) = client.verify_consent_with_audit(&patient, &provider);
+        assert!(has_consent);
+        assert!(granted_at > 0);
+        assert_eq!(revoked_at, 0);
+
+        client.revoke_consent(&patient, &provider);
+
+        let (has_consent, _granted_at, revoked_at) = client.verify_consent_with_audit(&patient, &provider);
+        assert!(!has_consent);
+        assert!(revoked_at > 0);
+    }
+}
+
+// ============================================================================
+// Basic unit tests
+// ============================================================================
 #[cfg(test)]
 mod unit_tests {
     use soroban_sdk::{Env, String};
@@ -168,4 +230,3 @@ mod unit_tests {
         assert!(env.ledger().sequence() > 0);
     }
 }
-pub mod cross_chain_tests;

@@ -1,3 +1,63 @@
+//! # Medical Records Contract
+//!
+//! Core medical records management contract for the Uzima healthcare platform.
+//! Provides on-chain medical record storage with fine-grained access control,
+//! encryption support, cross-chain sync, and AI integration capabilities.
+//!
+//! ## Purpose
+//! Manages patient medical records with support for:
+//! - Creating and retrieving medical records with metadata
+//! - Role-based access control (RBAC) via built-in user management
+//! - Encrypted records with end-to-end encryption envelope support
+//! - Cross-chain record synchronization
+//! - AI/ML integration for anomaly detection and risk assessment
+//! - Quantum-safe cryptographic envelope upgrades
+//! - Zero-knowledge proof based access grants
+//! - Data quality validation and correction workflows
+//!
+//! ## Key Dependencies
+//! - `rbac` - Role-based access control (used via built-in user management)
+//! - `upgradeability` - Contract upgrade and admin patterns
+//! - `identity_registry` - DID-based identity (optional)
+//! - `audit_forensics` - Audit trail logging (optional)
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address
+//! - Admin is automatically granted the Admin role
+//!
+//! ## Dependencies (Optional)
+//! - `identity_registry` - For DID-based user profiles
+//! - `zk_verifier` - For zero-knowledge proof verification
+//! - `credential_registry` - For credential management
+//! - `crypto_registry` - For cryptographic key management
+//! - `audit_forensics` - For forensic auditing
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can manage users, pause/unpause, config changes
+//! - **Doctor**: Can create and read records
+//! - **Patient**: Can read their own records
+//! - **Permission Grants**: Granular permission delegation supported
+//!
+//! ## Error Ranges
+//! - 100-199: Access Control & Authorization
+//! - 200-299: Input Validation
+//! - 300-399: Lifecycle & State
+//! - 400-499: Entity Existence
+//! - 500-599: Financial & Resource
+//! - 600-699: Cryptography & ZK
+//! - 700-799: Cross-Chain
+//! - 800-899: Domain-Specific AI/Medical
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin);
+//! client.manage_user(&admin, &doctor, &Role::Doctor);
+//! client.manage_user(&admin, &patient, &Role::Patient);
+//! let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,
+//!     &false, &tags, &category, &treatment_type, &data_ref);
+//! let record = client.get_record(&patient, &record_id);
+//! ```
+
 #![no_std]
 #![allow(dead_code)]
 #![allow(clippy::too_many_arguments)]

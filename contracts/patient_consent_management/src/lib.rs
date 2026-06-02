@@ -1,3 +1,37 @@
+//! # Patient Consent Management Contract
+//!
+//! Manages patient consent for healthcare data access on the Stellar blockchain.
+//! Patients can grant, revoke, and check consent for healthcare providers.
+//!
+//! ## Purpose
+//! This contract enables patients to control who can access their medical data.
+//! Consent is managed on a per-provider basis with full audit trail.
+//!
+//! ## Key Dependencies
+//! - `upgradeability` - For upgrade/admin pattern
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can initialize the contract
+//! - **Patient**: Can grant/revoke their own consent
+//! - **Anyone**: Can check consent status (read-only)
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin);
+//! client.grant_consent(&patient, &provider);
+//! let has_consent = client.check_consent(&patient, &provider);
+//! client.revoke_consent(&patient, &provider);
+//! ```
+//!
+//! ## Error Ranges
+//! - 100-199: Access Control & Authorization
+//! - 200-299: Input Validation
+//! - 300-399: Lifecycle & State
+//! - 400-499: Entity Existence
+
 #![no_std]
 #![allow(dead_code)]
 
