@@ -1,5 +1,5 @@
 /// Contract utilities for common testing operations
-use soroban_sdk::{Address, Env, String as SorobanString};
+use soroban_sdk::{testutils::Address as _, Address, Env, String as SorobanString};
 
 #[allow(clippy::expect_used)]
 #[allow(clippy::panic)]

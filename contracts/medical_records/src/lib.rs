@@ -745,7 +745,7 @@ const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 pub enum LogLevel {
     Info,
     Warning,
-    Error,
+    LogError,
 }
 
 #[derive(Clone)]
@@ -784,7 +784,7 @@ impl MedicalRecordsContract {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
-            LogLevel::Error => symbol_short!("LOG_ERROR"),
+            LogLevel::LogError => symbol_short!("LOG_ERROR"),
         };
 
         let entry = StructuredLog {
@@ -848,7 +848,7 @@ impl MedicalRecordsContract {
     ) {
         Self::emit_structured_log(
             env,
-            LogLevel::Error,
+            LogLevel::LogError,
             operation,
             actor,
             target_id,

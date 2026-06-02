@@ -1,5 +1,5 @@
 /// Test data generators for various contract scenarios
-use soroban_sdk::{Address, Env, String as SorobanString, Vec};
+use soroban_sdk::{testutils::Address as _, vec, Address, Env, String as SorobanString, Vec};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[allow(clippy::unwrap_used)]
@@ -43,10 +43,10 @@ impl MedicalRecordGenerator {
     }
 
     /// Generate medical data entries
-    pub fn generate_medical_entries(env: &Env, count: usize) -> Vec<MedicalEntry> {
-        let mut entries = Vec::new();
-        let diagnoses = vec!["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
-        let medications = vec!["Metformin", "Lisinopril", "Albuterol", "Sumatriptan", "Omeprazole"];
+    pub fn generate_medical_entries(env: &Env, count: usize) -> std::vec::Vec<MedicalEntry> {
+        let mut entries = std::vec::Vec::new();
+        let diagnoses = ["Diabetes", "Hypertension", "Asthma", "Migraine", "GERD"];
+        let medications = ["Metformin", "Lisinopril", "Albuterol", "Sumatriptan", "Omeprazole"];
 
         for i in 0..count {
             entries.push(MedicalEntry {
@@ -122,7 +122,7 @@ impl ConsentDataGenerator {
         env: &Env,
         grantor: &Address,
         grantees: &[Address],
-    ) -> Vec<ConsentGrant> {
+    ) -> std::vec::Vec<ConsentGrant> {
         grantees
             .iter()
             .map(|grantee| Self::generate_consent_grant(env, grantor, grantee))
@@ -191,7 +191,7 @@ impl AccessLogGenerator {
     }
 
     /// Generate access log entry
-    pub fn generate_access_log(env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
+    pub fn generate_access_log(&mut self, env: &Env, accessor: &Address, resource_id: u64) -> AccessLog {
         self.counter += 1;
         AccessLog {
             log_id: self.counter as u64,
@@ -211,7 +211,7 @@ impl AccessLogGenerator {
         env: &Env,
         accessor: &Address,
         resource_ids: &[u64],
-    ) -> Vec<AccessLog> {
+    ) -> std::vec::Vec<AccessLog> {
         resource_ids
             .iter()
             .map(|&id| self.generate_access_log(env, accessor, id))
@@ -234,8 +234,8 @@ pub struct PropertyTestDataGenerator;
 
 impl PropertyTestDataGenerator {
     /// Generate edge case amounts
-    pub fn generate_edge_case_amounts() -> Vec<u128> {
-        vec![
+    pub fn generate_edge_case_amounts() -> std::vec::Vec<u128> {
+        std::vec![
             0,                                   // Zero
             1,                                   // Minimum
             u128::MAX,                           // Maximum
@@ -245,13 +245,13 @@ impl PropertyTestDataGenerator {
     }
 
     /// Generate various timestamp values
-    pub fn generate_timestamps() -> Vec<u64> {
+    pub fn generate_timestamps() -> std::vec::Vec<u64> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        vec![
+        std::vec![
             0,              // Unix epoch
             now,            // Current time
             now + 86400,    // Tomorrow
@@ -261,8 +261,8 @@ impl PropertyTestDataGenerator {
     }
 
     /// Generate boundary test values
-    pub fn generate_boundary_values(min: u32, max: u32) -> Vec<u32> {
-        vec![
+    pub fn generate_boundary_values(min: u32, max: u32) -> std::vec::Vec<u32> {
+        std::vec![
             min,
             max,
             min + 1,

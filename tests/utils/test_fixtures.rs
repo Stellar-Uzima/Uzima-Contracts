@@ -1,5 +1,5 @@
 /// Test fixtures for different user roles and scenarios
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 /// User role fixture
 #[derive(Clone, Copy, Debug, PartialEq)]

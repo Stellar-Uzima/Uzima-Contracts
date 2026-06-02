@@ -12,7 +12,7 @@ mod multi_region_dr_tests {
     #[test]
     fn test_multi_region_deployment() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
 
         // This test verifies that all 4 DR contracts can be deployed
         // In a real scenario, these would be deployed to the blockchain
