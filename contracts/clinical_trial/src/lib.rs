@@ -9,6 +9,80 @@ use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, 
 pub enum Error {
     ProtocolNotFound = 1,
     TrialFull = 2,
+    InvalidTitle = 3,
+    InvalidMetadataRef = 4,
+    InvalidName = 5,
+    InvalidConsentRef = 6,
+    InvalidMaxParticipants = 7,
+    InvalidDescriptionRef = 8,
+    InvalidSeverity = 9,
+}
+
+// ==================== VALIDATION CONSTANTS ====================
+
+/// Minimum length for protocol title
+const MIN_TITLE_LENGTH: u32 = 3;
+/// Maximum length for protocol title
+const MAX_TITLE_LENGTH: u32 = 256;
+
+/// Minimum length for site name
+const MIN_NAME_LENGTH: u32 = 2;
+/// Maximum length for site name
+const MAX_NAME_LENGTH: u32 = 128;
+
+/// Minimum length for reference strings (IPFS CID or similar)
+const MIN_REF_LENGTH: u32 = 10;
+/// Maximum length for reference strings
+const MAX_REF_LENGTH: u32 = 256;
+
+/// Minimum severity level (0)
+const MIN_SEVERITY: u32 = 0;
+/// Maximum severity level (10)
+const MAX_SEVERITY: u32 = 10;
+
+// ==================== VALIDATION FUNCTIONS ====================
+
+/// Validates that a title string has appropriate length
+fn validate_title(title: &String) -> Result<(), Error> {
+    let len = title.len();
+    if len == 0 || len < MIN_TITLE_LENGTH || len > MAX_TITLE_LENGTH {
+        return Err(Error::InvalidTitle);
+    }
+    Ok(())
+}
+
+/// Validates that a name string has appropriate length
+fn validate_name(name: &String) -> Result<(), Error> {
+    let len = name.len();
+    if len == 0 || len < MIN_NAME_LENGTH || len > MAX_NAME_LENGTH {
+        return Err(Error::InvalidName);
+    }
+    Ok(())
+}
+
+/// Validates that a reference string (IPFS CID, etc.) has appropriate length
+fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error> {
+    let len = reference.len();
+    if len == 0 || len < MIN_REF_LENGTH || len > MAX_REF_LENGTH {
+        return Err(error_type);
+    }
+    Ok(())
+}
+
+/// Validates that max_participants is positive
+fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
+    if max_participants == 0 {
+        return Err(Error::InvalidMaxParticipants);
+    }
+    Ok(())
+}
+
+/// Validates severity level is within acceptable range
+fn validate_severity(severity: u32) -> Result<(), Error> {
+    if severity < MIN_SEVERITY || severity > MAX_SEVERITY {
+        return Err(Error::InvalidSeverity);
+    }
+    Ok(())
 }
 
 // ------------------ Types ------------------
@@ -107,8 +181,14 @@ impl ClinicalTrial {
         title: String,
         metadata_ref: String,
         max_participants: u64,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         proposer.require_auth();
+        
+        // Validate inputs
+        validate_title(&title)?;
+        validate_reference(&metadata_ref, Error::InvalidMetadataRef)?;
+        validate_max_participants(max_participants)?;
+        
         let next: u64 = env
             .storage()
             .instance()
@@ -134,15 +214,19 @@ impl ClinicalTrial {
             .set(&DataKey::ProtocolNextId, &next.saturating_add(1));
         env.events()
             .publish((Symbol::new(&env, "ProtocolCreated"),), (id, proposer));
-        id
+        Ok(id)
     }
 
     pub fn get_protocol(env: Env, id: u64) -> Option<Protocol> {
         env.storage().persistent().get(&DataKey::Protocol(id))
     }
 
-    pub fn register_site(env: Env, registrar: Address, name: String) -> u64 {
+    pub fn register_site(env: Env, registrar: Address, name: String) -> Result<u64, Error> {
         registrar.require_auth();
+        
+        // Validate inputs
+        validate_name(&name)?;
+        
         let next: u64 = env
             .storage()
             .instance()
@@ -161,7 +245,7 @@ impl ClinicalTrial {
             .set(&DataKey::SiteNextId, &next.saturating_add(1));
         env.events()
             .publish((Symbol::new(&env, "SiteRegistered"),), (id, registrar));
-        id
+        Ok(id)
     }
 
     // Patient recruitment / eligibility with enrollment cap enforcement
@@ -214,8 +298,12 @@ impl ClinicalTrial {
         patient: Address,
         protocol_id: u64,
         consent_ref: String,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         patient.require_auth();
+        
+        // Validate inputs
+        validate_reference(&consent_ref, Error::InvalidConsentRef)?;
+        
         let count: u64 = env
             .storage()
             .instance()
@@ -235,7 +323,7 @@ impl ClinicalTrial {
             (Symbol::new(&env, "ConsentRecorded"),),
             (id, patient, protocol_id),
         );
-        id
+        Ok(id)
     }
 
     #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
@@ -247,8 +335,13 @@ impl ClinicalTrial {
         site_id: u64,
         severity: u32,
         description_ref: String,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         reporter.require_auth();
+        
+        // Validate inputs
+        validate_severity(severity)?;
+        validate_reference(&description_ref, Error::InvalidDescriptionRef)?;
+        
         let next: u64 = env
             .storage()
             .instance()
@@ -274,7 +367,7 @@ impl ClinicalTrial {
             (Symbol::new(&env, "AdverseEvent"),),
             (id, patient, protocol_id, site_id, severity),
         );
-        id
+        Ok(id)
     }
 
     pub fn get_trial_status(env: Env, protocol_id: u64) -> Result<(u64, u64, u64), Error> {
