@@ -1,6 +1,7 @@
 #![no_std]
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::xdr::ToXdr;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 const MAX_DEVICE_TYPES: u32 = 64;
