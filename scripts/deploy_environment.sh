@@ -114,6 +114,14 @@ else
     mapfile -t CONTRACT_ARRAY < <(find contracts -maxdepth 1 -mindepth 1 -type d -exec basename {} \;)
 fi
 
+# Ensure registry deploys first if present
+for i in "${!CONTRACT_ARRAY[@]}"; do
+    if [ "${CONTRACT_ARRAY[$i]}" = "contract_registry" ]; then
+        CONTRACT_ARRAY=("contract_registry" "${CONTRACT_ARRAY[@]:0:$i}" "${CONTRACT_ARRAY[@]:$((i + 1))}")
+        break
+    fi
+ done
+
 print_status "Deploying contracts: ${CONTRACT_ARRAY[*]}"
 
 # Deploy each contract

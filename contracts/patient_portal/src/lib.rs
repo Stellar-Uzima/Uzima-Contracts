@@ -13,6 +13,7 @@
 #[cfg(test)]
 mod test;
 
+use contract_registry::ContractRegistryClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, log, Address, BytesN, Env, String, Vec,
 };
@@ -102,6 +103,7 @@ pub enum DataKey {
     Paused,
     MedicalRecords,
     IdentityRegistry,
+    ContractRegistry,
     NextAppointmentId,
     Appointment(u64),
     NextAdherenceId,
@@ -150,12 +152,39 @@ impl PatientPortalContract {
 
     pub fn get_medical_records_contract(env: Env) -> Result<Option<Address>, PatientPortalError> {
         Self::require_init(&env)?;
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(&env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(&env, "medical_records")) {
+                return Ok(Some(address));
+            }
+        }
         Ok(env.storage().instance().get(&DataKey::MedicalRecords))
     }
 
     pub fn get_identity_registry_contract(env: Env) -> Result<Option<Address>, PatientPortalError> {
         Self::require_init(&env)?;
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(&env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(&env, "identity_registry")) {
+                return Ok(Some(address));
+            }
+        }
         Ok(env.storage().instance().get(&DataKey::IdentityRegistry))
+    }
+
+    pub fn set_contract_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<(), PatientPortalError> {
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::ContractRegistry, &registry);
+        Ok(())
+    }
+
+    pub fn get_contract_registry(env: Env) -> Result<Option<Address>, PatientPortalError> {
+        Self::require_init(&env)?;
+        Ok(env.storage().instance().get(&DataKey::ContractRegistry))
     }
 
     pub fn pause(env: Env, caller: Address) -> Result<(), PatientPortalError> {

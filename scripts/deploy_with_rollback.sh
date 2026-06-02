@@ -138,6 +138,32 @@ verify_deployment() {
     fi
 }
 
+# Function to register contract with the contract registry if available
+register_with_contract_registry() {
+    if [ "$CONTRACT_NAME" = "contract_registry" ]; then
+        return 0
+    fi
+
+    local registry_file="$DEPLOYMENTS_DIR/${NETWORK}_contract_registry.json"
+    if [ ! -f "$registry_file" ]; then
+        return 0
+    fi
+
+    local registry_id
+    registry_id=$(jq -r '.contract_id' "$registry_file" 2>/dev/null || echo "")
+    if [ -z "$registry_id" ] || [ "$registry_id" = "null" ]; then
+        print_warning "Contract registry deployment file is invalid or missing contract_id"
+        return 0
+    fi
+
+    print_step "Registering '$CONTRACT_NAME' with contract registry..."
+    if soroban contract invoke --id "$registry_id" --source "$IDENTITY" --network "$NETWORK" -- register_contract "$CONTRACT_NAME" "$CONTRACT_ID"; then
+        print_status "Contract '$CONTRACT_NAME' registered in registry"
+    else
+        print_warning "Failed to register '$CONTRACT_NAME' in contract registry"
+    fi
+}
+
 # Main deployment function
 main() {
     print_status "Starting deployment of '$CONTRACT_NAME' to '$NETWORK' network"
@@ -268,6 +294,7 @@ main() {
 EOF
     
     print_status "Deployment info saved to: $DEPLOYMENT_FILE"
+    register_with_contract_registry
     print_status "Deployment complete! 🚀"
     
     # Clean up old backups (keep last 5)

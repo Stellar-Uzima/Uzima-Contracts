@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+contract_registry = { path = "../contract_registry" }
 patient_consent_management = { path = "../patient_consent_management" }
 upgradeability = { path = "../upgradeability" }
 

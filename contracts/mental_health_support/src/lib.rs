@@ -10,6 +10,7 @@
 #[cfg(test)]
 mod test;
 
+use contract_registry::ContractRegistryClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, log, Address, BytesN, Env, String, Vec,
 };
@@ -101,6 +102,7 @@ pub enum DataKey {
     Paused,
     Telemedicine,
     Notification,
+    ContractRegistry,
     EmergencyMetaHash,
     NextMoodId,
     Mood(u64),
@@ -155,6 +157,23 @@ impl MentalHealthSupportContract {
         Ok(())
     }
 
+    pub fn set_contract_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<(), MentalHealthError> {
+        Self::require_admin(&env, &caller)?;
+        env.storage()
+            .instance()
+            .set(&DataKey::ContractRegistry, &registry);
+        Ok(())
+    }
+
+    pub fn get_contract_registry(env: Env) -> Result<Option<Address>, MentalHealthError> {
+        Self::require_init(&env)?;
+        Ok(env.storage().instance().get(&DataKey::ContractRegistry))
+    }
+
     pub fn set_emergency_routing_commitment(
         env: Env,
         caller: Address,
@@ -169,11 +188,23 @@ impl MentalHealthSupportContract {
 
     pub fn get_telemedicine_contract(env: Env) -> Result<Option<Address>, MentalHealthError> {
         Self::require_init(&env)?;
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(&env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(&env, "telemedicine")) {
+                return Ok(Some(address));
+            }
+        }
         Ok(env.storage().instance().get(&DataKey::Telemedicine))
     }
 
     pub fn get_notification_contract(env: Env) -> Result<Option<Address>, MentalHealthError> {
         Self::require_init(&env)?;
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(&env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(&env, "notification_system")) {
+                return Ok(Some(address));
+            }
+        }
         Ok(env.storage().instance().get(&DataKey::Notification))
     }
 

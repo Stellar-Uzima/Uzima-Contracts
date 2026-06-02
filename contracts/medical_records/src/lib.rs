@@ -15,6 +15,7 @@ mod validation;
 
 pub use errors::Error;
 
+use contract_registry::ContractRegistryClient;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
@@ -452,6 +453,7 @@ pub enum DataKey {
     Paused,
     ContractVersion,
     RbacContract,
+    ContractRegistry,
 
     // Users / DID
     Users,
@@ -3652,7 +3654,30 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
+    pub fn set_contract_registry(
+        env: Env,
+        caller: Address,
+        registry: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::ContractRegistry, &registry);
+        Ok(true)
+    }
+
+    pub fn get_contract_registry(env: Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::ContractRegistry)
+    }
+
     pub fn get_identity_registry(env: Env) -> Option<Address> {
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(&env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(&env, "identity_registry")) {
+                return Some(address);
+            }
+        }
         env.storage().persistent().get(&DataKey::IdentityRegistry)
     }
 
@@ -4740,8 +4765,18 @@ impl MedicalRecordsContract {
             .unwrap_or(Map::new(env))
     }
 
+    fn get_rbac_contract(env: &Env) -> Option<Address> {
+        if let Some(registry_address) = env.storage().instance().get(&DataKey::ContractRegistry) {
+            let registry = ContractRegistryClient::new(env, &registry_address);
+            if let Ok(Some(address)) = registry.get_contract(String::from_str(env, "rbac")) {
+                return Some(address);
+            }
+        }
+        env.storage().instance().get(&DataKey::RbacContract)
+    }
+
     fn check_rbac_role(env: &Env, address: &Address, role: RbacRole) -> bool {
-        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+        let rbac_addr: Address = match Self::get_rbac_contract(env) {
             Some(v) => v,
             None => return false, // fail closed
         };

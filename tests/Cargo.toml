@@ -6,7 +6,10 @@ publish = false
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+contract_registry = { path = "../contracts/contract_registry" }
 medical_records = { path = "../contracts/medical_records" }
+patient_portal = { path = "../contracts/patient_portal" }
+mental_health_support = { path = "../contracts/mental_health_support" }
 sut_token = { path = "../contracts/sut_token" }
 multi_region_orchestrator = { path = "../contracts/multi_region_orchestrator", package = "multi-region-orchestrator", features = ["testutils"] }
 failover_detector = { path = "../contracts/failover_detector", package = "failover-detector", features = ["testutils"] }

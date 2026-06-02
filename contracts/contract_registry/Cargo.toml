@@ -1,5 +1,5 @@
 [package]
-name = "patient_portal"
+name = "contract_registry"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,15 +7,15 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-contract_registry = { path = "../contract_registry" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+medical_records = { path = "../medical_records" }
+patient_portal = { path = "../patient_portal" }
 
 [features]
 default = []
-testutils = ["soroban-sdk/testutils"]
