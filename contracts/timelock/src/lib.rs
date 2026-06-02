@@ -110,6 +110,9 @@ impl Timelock {
 }
 
 #[cfg(all(test, feature = "testutils"))]
+mod time_dependent_tests;
+
+#[cfg(all(test, feature = "testutils"))]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod test {
     use super::*;
