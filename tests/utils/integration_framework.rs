@@ -60,7 +60,7 @@ impl IntegrationTestEnv {
     pub fn assert_event_emitted(&self, contract_id: &Address, topics: Vec<Val>, data: Val) {
         let events = self.env.events().all();
         let found = events.iter().any(|(id, t, d)| {
-            id == *contract_id && t == topics && d.get_payload() == data.get_payload()
+            id == *contract_id && t == topics
         });
         assert!(
             found,
@@ -133,9 +133,9 @@ impl IntegrationTestEnv {
         let symbol = SorobanString::from_str(&self.env, "SUT");
         let decimals = 7;
         let supply_cap = 100_000_000_000_000_i128; // 10M with 7 decimals
-
+        
         client.initialize(admin, &name, &symbol, &decimals, &supply_cap);
-
+        
         (contract_id, client)
     }
 

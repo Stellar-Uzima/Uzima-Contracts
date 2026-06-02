@@ -21,10 +21,10 @@ impl MedicalRecordsFixture {
 
         // Configure standard roles for the team
         for doctor in &test_env.team.doctors {
-            client.manage_user(admin, &doctor.address, &Role::Doctor);
+            assert!(client.manage_user(admin, &doctor.address, &Role::Doctor), "Failed to manage user");
         }
         for patient in &test_env.team.patients {
-            client.manage_user(admin, &patient.address, &Role::Patient);
+            assert!(client.manage_user(admin, &patient.address, &Role::Patient), "Failed to manage user");
         }
 
         Self {
@@ -45,18 +45,19 @@ impl MedicalRecordsFixture {
         for i in 0..5 {
             let diagnosis = String::from_str(env, &format!("Sample Diagnosis {}", i));
             let treatment = String::from_str(env, &format!("Sample Treatment {}", i));
-
-            self.client.add_record(
+            
+            let record_id = self.client.add_record(
                 doctor,
                 patient,
                 &diagnosis,
                 &treatment,
                 &false,
                 &vec![env, String::from_str(env, "sample")],
-                &String::from_str(env, "General"),
-                &String::from_str(env, "Routine"),
-                &String::from_str(env, &format!("QmHash{}", i)),
+                &String::from_str(env, "Modern"),
+                &String::from_str(env, "Medication"),
+                &String::from_str(env, &format!("QmHash{:0>8}", i)),
             );
+            assert!(record_id > 0, "Failed to add record");
         }
 
         self
@@ -122,7 +123,7 @@ mod tests {
         assert_eq!(fixture.admin, test_env.admin);
 
         let doctor = &test_env.team.doctors[0].address;
-        assert_eq!(fixture.client.get_user_role(doctor).unwrap(), Role::Doctor);
+        assert!(fixture.client.get_user_role(doctor) == Role::Doctor);
     }
 
     #[test]

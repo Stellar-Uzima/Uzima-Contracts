@@ -8,8 +8,9 @@ publish = false
 soroban-sdk = { workspace = true, features = ["testutils"] }
 medical_records = { path = "../contracts/medical_records" }
 sut_token = { path = "../contracts/sut_token" }
-patient_consent_management = { path = "../contracts/patient_consent_management" }
-rbac = { path = "../contracts/rbac" }
+healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
+reputation = { path = "../contracts/reputation" }
+healthcare_payment = { path = "../contracts/healthcare_payment" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
