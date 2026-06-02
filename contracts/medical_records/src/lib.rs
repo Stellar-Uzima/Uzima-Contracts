@@ -1187,11 +1187,11 @@ impl MedicalRecordsContract {
         }
     }
 
-    pub fn get_user_role(env: Env, user: Address) -> Role {
+    pub fn get_user_role(env: Env, user: Address) -> Result<Role, Error> {
         let users = Self::read_users(&env);
         match users.get(user) {
-            Some(p) if p.active => p.role,
-            _ => Role::None,
+            Some(p) if p.active => Ok(p.role),
+            _ => Err(Error::Unauthorized),
         }
     }
 
