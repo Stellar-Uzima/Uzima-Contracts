@@ -14,13 +14,20 @@ Thank you for your interest in contributing to Uzima Contracts! This document pr
 ## Code Quality Standards
 
 ### Naming Conventions
-All code must follow the naming conventions defined in [CODING_STANDARDS.md](./docs/CODING_STANDARDS.md):
+All code must follow the naming conventions defined in [CODING_STANDARDS.md](./docs/CODING_STANDARDS.md) and [CONTRACT_NAMING_CONVENTIONS.md](./docs/CONTRACT_NAMING_CONVENTIONS.md):
 
 - **Functions**: `snake_case`
 - **Types**: `PascalCase`  
 - **Constants**: `SCREAMING_SNAKE_CASE`
 - **Modules**: `snake_case`
 - **Error enums**: Always use `Error`, never `Err`
+- **File names**: `snake_case` (e.g., `lib.rs`, `errors.rs`, `types.rs`, `events.rs`, `test.rs`)
+- **Contract directories**: `snake_case`
+
+Run the naming check script before submitting PRs:
+```bash
+bash scripts/check-naming.sh
+```
 
 ### Code Style
 - Use Rust 2021 edition

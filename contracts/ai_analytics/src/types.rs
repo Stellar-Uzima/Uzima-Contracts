@@ -1,5 +1,5 @@
 use crate::serialization_utils::{SafeSerialize, SerializationError};
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
@@ -21,11 +21,11 @@ impl SafeSerialize for FederatedRound {
 
         // Validate edge cases
         if self.min_participants == 0 {
-            soroban_sdk::log!(&env, "Warning: FederatedRound with zero minimum participants");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_MIN")), ());
         }
 
         if self.total_updates == 0 && !self.is_finalized {
-            soroban_sdk::log!(&env, "Warning: Unfinalized round with zero updates");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_UPDATES")), ());
         }
 
         Ok(())
@@ -49,7 +49,7 @@ impl SafeSerialize for ParticipantUpdateMeta {
 
         // Validate edge cases
         if self.num_samples == 0 {
-            soroban_sdk::log!(&env, "Warning: ParticipantUpdateMeta with zero samples");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_SAMP")), ());
         }
 
         Ok(())
@@ -77,15 +77,15 @@ impl SafeSerialize for ModelMetadata {
 
         // Validate edge cases
         if self.description.is_empty() {
-            soroban_sdk::log!(&env, "Warning: ModelMetadata with empty description");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "EMPTY_DESC")), ());
         }
 
         if self.metrics_ref.is_empty() && self.fairness_report_ref.is_empty() {
-            soroban_sdk::log!(&env, "Warning: ModelMetadata with no references");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_REFS")), ());
         }
 
         if self.created_at == 0 {
-            soroban_sdk::log!(&env, "Warning: ModelMetadata with zero timestamp");
+            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_TS")), ());
         }
 
         Ok(())

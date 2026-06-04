@@ -1,0 +1,32 @@
+{
+  "contract": "healthcare_payment",
+  "events": [
+    {
+      "name": "CLAIM_SUB",
+      "topics": ["CLAIM_SUB"],
+      "data": {
+        "claim_id": "u64",
+        "provider": "Address",
+        "amount": "i128"
+      }
+    },
+    {
+      "name": "CLAIM_PD",
+      "topics": ["CLAIM_PD"],
+      "data": {
+        "claim_id": "u64",
+        "provider": "Address",
+        "amount": "i128"
+      }
+    },
+    {
+      "name": "FRAUD",
+      "topics": ["FRAUD"],
+      "data": {
+        "claim_id": "u64",
+        "reporter": "Address",
+        "reason": "String"
+      }
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, contracttype, Address, String, Vec};
+use soroban_sdk::{BytesN, contracterror, contracttype, Address, String, Symbol, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -22,6 +22,7 @@ pub enum Error {
     InvalidDisputeState = 16,
     InvalidFeedType = 17,
     ArbiterExists = 18,
+    AlreadyReported = 19,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -204,7 +205,17 @@ pub enum DataKey {
     RoundCounter(FeedKey),
     Round(FeedKey, u64),
     Submission(FeedKey, u64, Address),
+    LastSubmissionHash(FeedKey, Address),
+    MisbehaviorReport(FeedKey, Address, Address),
     Consensus(FeedKey),
     DisputeCount,
     Dispute(u64),
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossContractCallCacheKey {
+    pub contract: Address,
+    pub function_name: Symbol,
+    pub args_hash: BytesN<32>,
 }

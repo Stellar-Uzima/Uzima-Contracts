@@ -3,7 +3,7 @@ mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
-        Address, Env,
+        symbol_short, Address, Env, Symbol,
     };
 
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
@@ -50,6 +50,61 @@ mod tests {
         client.grant_consent(&patient, &provider);
         let result = client.check_consent(&patient, &provider);
         assert!(result);
+    }
+
+    #[test]
+    fn test_check_consent_after_expiry() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let expires_at = env.ledger().timestamp().saturating_add(10);
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+        assert!(client.check_consent(&patient, &provider));
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at.saturating_add(1);
+        });
+
+        let result = client.check_consent(&patient, &provider);
+        assert!(!result);
+
+        let expired_event_count = env
+            .events()
+            .all()
+            .iter()
+            .filter(|e| {
+                e.1.get(0)
+                    .and_then(|topic| Symbol::try_from_val(&env, topic).ok())
+                    == Some(symbol_short!("CONSENT"))
+                    && e.1.get(1)
+                        .and_then(|sub| Symbol::try_from_val(&env, sub).ok())
+                        == Some(symbol_short!("EXPIRED"))
+            })
+            .count();
+        assert!(expired_event_count >= 1);
+    }
+
+    #[test]
+    fn test_cleanup_expired_consents() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let expires_at = env.ledger().timestamp().saturating_add(10);
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at.saturating_add(1);
+        });
+
+        let cleaned = client.cleanup_expired_consents(&patient);
+        assert_eq!(cleaned, 1);
+        assert!(!client.check_consent(&patient, &provider));
+
+        let audit = client.verify_consent_with_audit(&patient, &provider);
+        assert!(!audit.0);
+        assert!(audit.2 > 0);
     }
 
     #[test]
@@ -264,6 +319,142 @@ mod tests {
         // Second revocation should fail
         let result = client.try_revoke_consent(&patient, &provider);
         assert!(result.is_err());
+    }
+
+    // ── Timestamp / Time-dependent edge case tests ──────────────────
+
+    /// Test: consent expiry boundary - exactly at expiry
+    #[test]
+    fn test_consent_expires_exactly_at_boundary() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let expires_at = now + 100;
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        // Exactly at expiry - should be expired
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(!result, "Consent should be expired at expiry boundary");
+    }
+
+    /// Test: consent expiry - 1 second before expiry
+    #[test]
+    fn test_consent_one_second_before_expiry() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let expires_at = now + 100;
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        // 1 second before expiry - should still be active
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at - 1;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(result, "Consent should be active 1 second before expiry");
+    }
+
+    /// Test: consent expiry - 1 second after expiry
+    #[test]
+    fn test_consent_one_second_after_expiry() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let expires_at = now + 100;
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        // 1 second after expiry - should be expired
+        env.ledger().with_mut(|li| {
+            li.timestamp = expires_at + 1;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(!result, "Consent should be expired 1 second after expiry");
+    }
+
+    /// Test: time manipulation - far future timestamp
+    #[test]
+    fn test_far_future_timestamp_consent_expired() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let expires_at = now + 100;
+        client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+        // Far future - consent should be expired
+        env.ledger().with_mut(|li| {
+            li.timestamp = 9_999_999_999;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(!result, "Consent should be expired in far future");
+    }
+
+    /// Test: consent with no expiry (expires_at = 0) never expires
+    #[test]
+    fn test_consent_with_no_expiry_never_expires() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+
+        // Far future - consent should still be active (no expiry)
+        env.ledger().with_mut(|li| {
+            li.timestamp = 9_999_999_999;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(result, "Consent without expiry should never expire");
+    }
+
+    /// Test: large time jump (epoch overflow edge case)
+    #[test]
+    fn test_large_time_jump_no_expiry() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        client.grant_consent(&patient, &provider);
+
+        // Very large timestamp - should still work (no expiry)
+        env.ledger().with_mut(|li| {
+            li.timestamp = u64::MAX - 1;
+        });
+        let result = client.check_consent(&patient, &provider);
+        assert!(result, "Consent without expiry should work at u64::MAX");
+    }
+
+    /// Test: grant_consent_with_expiry with expires_at == now fails
+    #[test]
+    fn test_expiry_at_current_time_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let result = client.try_grant_consent_with_expiry(&patient, &provider, &now);
+        assert_eq!(result, Err(Ok(Error::InvalidExpiry)));
+    }
+
+    /// Test: grant_consent_with_expiry with expires_at in past fails
+    #[test]
+    fn test_expiry_in_past_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let now = env.ledger().timestamp();
+        let result = client.try_grant_consent_with_expiry(&patient, &provider, &(now - 1));
+        assert_eq!(result, Err(Ok(Error::InvalidExpiry)));
     }
 
     #[test]

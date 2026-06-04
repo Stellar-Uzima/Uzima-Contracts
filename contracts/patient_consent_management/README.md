@@ -64,6 +64,30 @@ Grants consent for a provider to access the patient's medical data.
 
 ---
 
+#### `grant_consent_with_expiry(env: Env, patient: Address, provider: Address, expires_at: u64) -> Result<(), Error>`
+Grants consent for a provider with an explicit expiration timestamp.
+
+**Parameters:**
+- `patient`: The patient's address (must match caller for authorization)
+- `provider`: The provider/app address to grant access to
+- `expires_at`: Unix timestamp when the consent should expire (0 means no expiration)
+
+**Returns:** Success or one of the following errors:
+- `NotInitialized`: Contract not yet initialized
+- `InvalidProvider`: Patient attempted to grant consent to themselves
+- `InvalidExpiry`: Expiration timestamp must be in the future or zero
+- `ConsentAlreadyExists`: Active consent already exists for this patient-provider pair
+- `UnauthorizedAccess`: Caller is not the patient
+
+**Requirements:**
+- `patient` must have authorization (only patient can grant their own consent)
+- `provider` must be different from `patient`
+- `expires_at` must be zero or a future timestamp
+
+**Events:** Publishes `GRANT` event with (patient, provider, timestamp)
+
+---
+
 #### `revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error>`
 Revokes patient's consent for a provider to access their medical data.
 
@@ -91,11 +115,27 @@ Checks if a provider has active consent from a patient. Read-only operation, no 
 - `patient`: The patient's address
 - `provider`: The provider's address to check
 
-**Returns:** `Ok(true)` if consent is active, `Ok(false)` if not found or revoked
+**Returns:** `Ok(true)` if consent is active, `Ok(false)` if not found, revoked, or expired
 
 **Usage:** Third parties can call this to verify they have consent before accessing patient data
 
 **Events:** Publishes `CHECK` event with (patient, provider, has_consent)
+- Publishes `EXPIRED` event when an expired consent is encountered during verification
+
+---
+
+#### `cleanup_expired_consents(env: Env, patient: Address) -> Result<u32, Error>`
+Walks the patient's consent history and marks any expired entries as inactive.
+
+**Parameters:**
+- `patient`: The patient's address (must match caller for authorization)
+
+**Returns:** Number of expired consents cleaned up
+
+**Requirements:**
+- `patient` must have authorization (only patient can perform cleanup)
+
+**Events:** Publishes `EXPIRED` event for every consent cleaned up
 
 ---
 
@@ -162,6 +202,7 @@ pub struct ConsentRecord {
     pub patient: Address,           // Patient's address
     pub provider: Address,          // Provider/app address
     pub granted_at: u64,            // Block timestamp when granted
+    pub expires_at: u64,            // Block timestamp when consent expires (0 if no expiry)
     pub revoked_at: u64,            // Block timestamp when revoked (0 if active)
     pub active: bool,               // Current consent status
 }
@@ -186,7 +227,8 @@ pub struct ConsentLog {
 | `InvalidProvider` | 5 | Invalid provider address (e.g., same as patient) |
 | `ConsentNotFound` | 6 | Consent record does not exist or is revoked |
 | `ConsentAlreadyExists` | 7 | Active consent already exists for this pair |
-| `UnauthorizedAccess` | 8 | Attempt to access/modify another patient's consent |
+| `InvalidExpiry` | 8 | Expiration timestamp must be in the future or zero |
+| `UnauthorizedAccess` | 9 | Attempt to access/modify another patient's consent |
 
 ## Events
 

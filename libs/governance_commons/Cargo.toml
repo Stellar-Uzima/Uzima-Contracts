@@ -1,0 +1,10 @@
+[package]
+name = "governance_commons"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { version = "20.5.0", features = ["docs"] }
+
+[lib]
+crate-type = ["rlib"]

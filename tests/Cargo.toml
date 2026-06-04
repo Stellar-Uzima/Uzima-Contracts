@@ -8,10 +8,9 @@ publish = false
 soroban-sdk = { workspace = true, features = ["testutils"] }
 medical_records = { path = "../contracts/medical_records" }
 sut_token = { path = "../contracts/sut_token" }
-multi_region_orchestrator = { path = "../contracts/multi_region_orchestrator", package = "multi-region-orchestrator", features = ["testutils"] }
-failover_detector = { path = "../contracts/failover_detector", package = "failover-detector", features = ["testutils"] }
-sync_manager = { path = "../contracts/sync_manager", package = "sync-manager", features = ["testutils"] }
-regional_node_manager = { path = "../contracts/regional_node_manager", package = "regional-node-manager", features = ["testutils"] }
+healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
+reputation = { path = "../contracts/reputation" }
+healthcare_payment = { path = "../contracts/healthcare_payment" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

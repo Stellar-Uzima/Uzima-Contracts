@@ -7,6 +7,8 @@ use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, 
 pub enum Error {
     AlreadyInitialized = 1,
     NotInitialized = 2,
+    NegativeAmount = 3,
+    InvalidAmount = 4,
 }
 
 const ADMIN: Symbol = symbol_short!("admin");
@@ -44,6 +46,14 @@ impl ReputationSystem {
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
 
+        // Validate amount is non-negative and non-zero
+        if amount < 0 {
+            return Err(Error::NegativeAmount);
+        }
+        if amount == 0 {
+            return Err(Error::InvalidAmount);
+        }
+
         let mut scores: Map<Address, i128> = env
             .storage()
             .persistent()
@@ -63,6 +73,14 @@ impl ReputationSystem {
             .get(&ADMIN)
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
+
+        // Validate amount is non-negative and non-zero
+        if amount < 0 {
+            return Err(Error::NegativeAmount);
+        }
+        if amount == 0 {
+            return Err(Error::InvalidAmount);
+        }
 
         let mut scores: Map<Address, i128> = env
             .storage()

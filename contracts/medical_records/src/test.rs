@@ -3,19 +3,25 @@
 
 // internal
 use super::*;
+use common_error::CommonError;
 use crate::errors::Error;
+use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
 
 // external crates
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
+    let admin = Address::generate(env);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
     let client = MedicalRecordsContractClient::new(env, &contract_id);
-    let admin = Address::generate(env);
-    client.initialize(&admin);
+    client.initialize(&admin, &rbac_id);
     (client, admin)
 }
 
@@ -93,6 +99,56 @@ fn test_add_and_get_record() {
         })
         .count();
     assert_eq!(access_events_count, 1);
+}
+
+#[test]
+fn test_get_record_denied_after_consent_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let consent_contract_id = env.register_contract(None, PatientConsentManagement);
+    let consent_client = PatientConsentManagementClient::new(&env, &consent_contract_id);
+    consent_client.initialize(&admin);
+    client.set_patient_consent_contract(&admin, &consent_contract_id);
+
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    client.grant_permission(&admin, &provider, Permission::ReadRecord, 0, false);
+
+    let diagnosis = String::from_str(&env, "Flu");
+    let treatment = String::from_str(&env, "Rest");
+    let tags = vec![&env, String::from_str(&env, "flu")];
+    let category = String::from_str(&env, "Modern");
+    let treatment_type = String::from_str(&env, "Medication");
+    let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
+
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &diagnosis,
+        &treatment,
+        &false,
+        &tags,
+        &category,
+        &treatment_type,
+        &data_ref,
+    );
+
+    let expires_at = env.ledger().timestamp().saturating_add(10);
+    consent_client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = expires_at.saturating_add(1);
+    });
+
+    let result = client.try_get_record(&provider, &record_id);
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 #[test]
@@ -1016,9 +1072,12 @@ mod test_metadata {
         env.register_contract(&contract_id, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(env, &rbac_id);
+        let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
         let doctor = Address::generate(env);
         let patient = Address::generate(env);
-        client.initialize(&admin);
+        client.initialize(&admin, &rbac_id);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         client.manage_user(&admin, &patient, &Role::Patient);
         let data_ref = String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
@@ -1393,4 +1452,186 @@ fn test_get_suggestion_returns_expected_hint() {
         get_suggestion(Error::ContractPaused),
         symbol_short!("RE_TRY_L")
     );
+}
+
+// ==================== Traditional Medicine Tests ====================
+
+/// Helper: create a populated TraditionalMedicineMetadata for tests.
+fn make_traditional_metadata(env: &Env) -> TraditionalMedicineMetadata {
+    TraditionalMedicineMetadata {
+        practice_type: String::from_str(env, "African Traditional Medicine"),
+        practitioner_tradition: String::from_str(env, "Yoruba"),
+        // In production this field would be an encrypted ciphertext reference.
+        remedies_used: String::from_str(env, "QmEncryptedRemediesRef1234567890"),
+        cultural_context: String::from_str(env, "Healing ceremony"),
+        language: String::from_str(env, "yo"),
+    }
+}
+
+#[test]
+fn test_write_record_with_traditional_metadata() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let meta = make_traditional_metadata(&env);
+    let initial_events = env.events().all().len();
+
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Headache"),
+        &String::from_str(&env, "Herbal steam therapy"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(meta),
+    );
+
+    // Record should be retrievable
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.category, String::from_str(&env, "Traditional"));
+
+    // TraditionalRecordAdded event must have been emitted
+    let events_after = env.events().all();
+    assert!(events_after.len() > initial_events);
+    let trad_events = events_after
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 1, "TraditionalRecordAdded event not emitted");
+}
+
+#[test]
+fn test_list_traditional_records() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // No traditional records yet
+    let ids_before = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids_before.len(), 0);
+
+    // Add a plain record (no metadata) – should NOT appear in traditional index
+    let _plain_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Flu"),
+        &String::from_str(&env, "Rest"),
+        &false,
+        &vec![&env, String::from_str(&env, "flu")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    // Add two traditional records
+    let trad_id1 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Fever"),
+        &String::from_str(&env, "Herbal bath"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let trad_id2 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Back pain"),
+        &String::from_str(&env, "Acupressure"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Acupressure"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&trad_id1));
+    assert!(ids.contains(&trad_id2));
+    // Plain record must NOT be in the list
+    assert!(!ids.contains(&_plain_id));
+}
+
+#[test]
+fn test_write_record_without_metadata_backward_compat() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Calling write_record with None should behave exactly like add_record
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Common cold"),
+        &String::from_str(&env, "Rest and fluids"),
+        &false,
+        &vec![&env, String::from_str(&env, "respiratory")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.diagnosis, String::from_str(&env, "Common cold"));
+
+    // No traditional records should exist for the patient
+    let trad_ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(trad_ids.len(), 0, "No traditional records should exist");
+
+    // No TRAD_NEW event should have been emitted
+    let trad_events = env
+        .events()
+        .all()
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 0, "TRAD_NEW must not be emitted when no metadata");
 }

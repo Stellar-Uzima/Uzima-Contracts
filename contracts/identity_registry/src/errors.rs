@@ -21,6 +21,7 @@ pub enum Error {
     // --- Lifecycle & State (300–399) ---
     NotInitialized = 300,
     AlreadyInitialized = 301,
+    ContractPaused = 302,
     RecoveryNotInitiated = 360,
     RecoveryAlreadyPending = 361,
     RecoveryTimelockNotElapsed = 362,
@@ -47,6 +48,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         },
         Error::NotInitialized => symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized => symbol_short!("ALREADY"),
+        Error::ContractPaused => symbol_short!("RE_TRY_L"),
         Error::DIDNotFound
         | Error::CredentialNotFound
         | Error::AttestationNotFound

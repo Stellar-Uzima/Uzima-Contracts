@@ -43,3 +43,15 @@ pub fn publish_consent_checked(
         (patient, provider, has_consent),
     );
 }
+
+pub fn publish_consent_expired(
+    env: &Env,
+    patient: &Address,
+    provider: &Address,
+    timestamp: u64,
+) {
+    env.events().publish(
+        (symbol_short!("CONSENT"), symbol_short!("EXPIRED")),
+        (patient, provider, timestamp),
+    );
+}

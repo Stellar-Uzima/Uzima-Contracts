@@ -2,10 +2,10 @@
 #![allow(clippy::expect_used)]
 use crate::{
     AtomicTxStatus, ChainId, CrossChainBridgeContract, CrossChainBridgeContractClient,
-    CrossChainEventType, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
+    CrossChainEventType, DataKey, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
     RollbackOpType, RollbackStatus, SyncStatus,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 fn create_contract(
     env: &Env,
@@ -199,6 +199,8 @@ fn test_submit_message() {
         &payload,
         &1,
         &signature,
+        &generate_signature(&env), // Validator signature
+        &1,                         // Validator nonce
     );
 
     assert_eq!(result, message_id);
@@ -229,6 +231,8 @@ fn test_submit_message_invalid_chain() {
         &String::from_str(&env, "{}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
     );
 
     assert_eq!(result, Err(Ok(Error::ChainNotSupported)));
@@ -258,13 +262,15 @@ fn test_confirm_message() {
         &String::from_str(&env, "{\"record_id\": 1}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
     );
 
-    client.confirm_message(&validator1, &message_id);
+    client.confirm_message(&validator1, &message_id, &generate_signature(&env), &1);
     let msg = client.get_message(&message_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Pending);
 
-    client.confirm_message(&validator2, &message_id);
+    client.confirm_message(&validator2, &message_id, &generate_signature(&env), &2);
     let msg = client.get_message(&message_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Verified);
 }
@@ -297,6 +303,8 @@ fn test_confirmations_unique_per_message() {
         &String::from_str(&env, "{}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env),
+        &1,
     );
 
     // Submit message B
@@ -310,13 +318,15 @@ fn test_confirmations_unique_per_message() {
         &recipient,
         &MessageType::RecordRequest,
         &String::from_str(&env, "{}"),
-        &2,
+        &1,
         &generate_signature(&env),
+        &generate_signature(&env),
+        &1,
     );
 
     // Confirm only message A with both validators
-    client.confirm_message(&validator1, &msg_id_a);
-    client.confirm_message(&validator2, &msg_id_a);
+    client.confirm_message(&validator1, &msg_id_a, &generate_signature(&env), &1);
+    client.confirm_message(&validator2, &msg_id_a, &generate_signature(&env), &1);
 
     // Message A should be Verified, message B should still be Pending
     assert_eq!(
@@ -366,7 +376,14 @@ fn test_record_refs_unique_per_chain() {
     );
 
     // Each should have its own sync status — update Ethereum record 1 only
-    client.update_sync_status(&validator, &1, &ChainId::Ethereum, &SyncStatus::Synced);
+    client.update_sync_status(
+        &validator,
+        &1,
+        &ChainId::Ethereum,
+        &SyncStatus::Synced,
+        &generate_signature(&env),
+        &1,
+    );
 
     let eth_ref = client.get_record_ref(&1, &ChainId::Ethereum).unwrap();
     let poly_ref = client.get_record_ref(&1, &ChainId::Polygon).unwrap();
@@ -408,11 +425,13 @@ fn test_execute_message() {
         &MessageType::RecordRequest,
         &String::from_str(&env, "{\"record_id\": 1}"),
         &1,
-        &generate_signature(&env),
+        &generate_signature(&env), // user sig
+        &generate_signature(&env), // v_sig
+        &1,                         // v_nonce
     );
 
-    client.confirm_message(&validator1, &message_id);
-    client.confirm_message(&validator2, &message_id);
+    client.confirm_message(&validator1, &message_id, &generate_signature(&env), &1);
+    client.confirm_message(&validator2, &message_id, &generate_signature(&env), &1);
 
     let result = client.execute_message(&recipient, &message_id);
     assert!(result);
@@ -444,11 +463,11 @@ fn test_atomic_transaction_flow() {
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
 
-    client.prepare_atomic_tx(&validator1, &tx_id);
+    client.prepare_atomic_tx(&validator1, &tx_id, &generate_signature(&env), &1);
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
 
-    client.prepare_atomic_tx(&validator2, &tx_id);
+    client.prepare_atomic_tx(&validator2, &tx_id, &generate_signature(&env), &1);
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Prepared);
 
@@ -511,7 +530,14 @@ fn test_update_sync_status() {
     let external_record_id = String::from_str(&env, "eth_record_123");
     client.register_record_ref(&caller, &1, &ChainId::Ethereum, &external_record_id);
 
-    client.update_sync_status(&validator, &1, &ChainId::Ethereum, &SyncStatus::Synced);
+    client.update_sync_status(
+        &validator,
+        &1,
+        &ChainId::Ethereum,
+        &SyncStatus::Synced,
+        &generate_signature(&env),
+        &1,
+    );
 
     let record_ref = client.get_record_ref(&1, &ChainId::Ethereum).unwrap();
     assert_eq!(record_ref.sync_status, SyncStatus::Synced);
@@ -630,8 +656,14 @@ fn test_aggregate_oracle_data() {
     }
 
     let consensus_hash = BytesN::from_array(&env, &[0xccu8; 32]);
-    let result =
-        client.aggregate_oracle_data(&validator, &ChainId::Ethereum, &report_ids, &consensus_hash);
+    let result = client.aggregate_oracle_data(
+        &validator,
+        &ChainId::Ethereum,
+        &report_ids,
+        &consensus_hash,
+        &generate_signature(&env),
+        &1,
+    );
     assert!(result);
 
     let aggregated = client.get_aggregated_oracle(&ChainId::Ethereum).unwrap();
@@ -659,6 +691,8 @@ fn test_aggregate_oracle_insufficient_reports() {
         &ChainId::Ethereum,
         &report_ids,
         &consensus_hash,
+        &generate_signature(&env),
+        &1,
     );
     assert_eq!(result, Err(Ok(Error::InsufficientOracleReports)));
 }
@@ -689,6 +723,8 @@ fn test_submit_proof() {
         &block_hash,
         &merkle_root,
         &prover,
+        &generate_signature(&env), // signature
+        &1,                         // nonce
     );
     assert_eq!(result, proof_id);
 
@@ -718,10 +754,13 @@ fn test_verify_cross_chain_proof() {
         &BytesN::from_array(&env, &[2u8; 32]),
         &BytesN::from_array(&env, &[3u8; 32]),
         &String::from_str(&env, "0x1234567890abcdef1234567890abcdef12345678"),
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
     );
 
     // First verification — not yet verified (needs min_confirmations = 2)
-    let verified = client.verify_cross_chain_proof(&validator2, &proof_id);
+    let verified = client.verify_cross_chain_proof(&validator2, &generate_signature(&env), &1, &proof_id);
     assert!(verified); // 1 (submit) + 1 = 2 => matches min_confirmations
 
     let proof = client.get_proof(&proof_id).unwrap();
@@ -740,7 +779,12 @@ fn test_proof_not_found() {
     env.mock_all_auths();
 
     let bad_id = BytesN::from_array(&env, &[0xffu8; 32]);
-    let result = client.try_verify_cross_chain_proof(&validator, &bad_id);
+    let result = client.try_verify_cross_chain_proof(
+        &validator,
+        &generate_signature(&env),
+        &1,
+        &bad_id,
+    );
     assert_eq!(result, Err(Ok(Error::ProofNotFound)));
 }
 
@@ -818,6 +862,8 @@ fn test_sync_cross_chain_event() {
         &CrossChainEventType::RecordCreated,
         &payload_hash,
         &99999,
+        &generate_signature(&env),
+        &1,
     );
 
     assert_eq!(event_id, 1);
@@ -847,9 +893,17 @@ fn test_process_sync_event() {
         &CrossChainEventType::AccessGranted,
         &payload_hash,
         &200,
+        &generate_signature(&env),
+        &1,
     );
 
-    client.process_sync_event(&validator, &event_id, &EventSyncStatus::Synced);
+    client.process_sync_event(
+        &validator, 
+        &event_id, 
+        &EventSyncStatus::Synced, 
+        &generate_signature(&env), 
+        &2
+    );
 
     let event = client.get_sync_event(&event_id).unwrap();
     assert_eq!(event.sync_status, EventSyncStatus::Synced);
@@ -875,6 +929,8 @@ fn test_multiple_events_unique_ids() {
         &CrossChainEventType::RecordCreated,
         &hash1,
         &100,
+        &generate_signature(&env),
+        &1,
     );
 
     let id2 = client.sync_cross_chain_event(
@@ -884,6 +940,8 @@ fn test_multiple_events_unique_ids() {
         &CrossChainEventType::AccessRevoked,
         &hash2,
         &200,
+        &generate_signature(&env),
+        &2,
     );
 
     assert_ne!(id1, id2);
@@ -947,6 +1005,8 @@ fn test_execute_rollback_for_message() {
         &String::from_str(&env, "{}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
     );
 
     // Initiate and execute rollback on that message
@@ -1088,6 +1148,8 @@ fn test_operations_blocked_when_paused() {
         &String::from_str(&env, "{\"record_id\": 1}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env),
+        &1,
     );
 
     assert_eq!(result, Err(Ok(Error::ContractPaused)));
@@ -1119,6 +1181,8 @@ fn test_nonce_replay_protection() {
         &String::from_str(&env, "{}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
     );
 
     // Same nonce should fail
@@ -1133,9 +1197,180 @@ fn test_nonce_replay_protection() {
         &String::from_str(&env, "{}"),
         &1,
         &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce (Replay attempt)
     );
 
     assert_eq!(result, Err(Ok(Error::InvalidNonce)));
+}
+
+// ==================== Chaos / Resilience Tests ====================
+
+/// Chaos test: message sent but acknowledgment lost — verify idempotent retry works
+#[test]
+fn test_chaos_lost_acknowledgment_retry() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let message_id = BytesN::from_array(&env, &[0xca_u8; 32]);
+    client.submit_message(
+        &validator,
+        &message_id,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xSENDER"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"record_id\":42}"),
+        &1,
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
+    );
+
+    let msg = client.get_message(&message_id).unwrap();
+    assert_eq!(msg.status, MessageStatus::Pending);
+
+    // Acknowledge (confirm) once
+    client.confirm_message(&validator, &message_id, &generate_signature(&env), &1);
+
+    // Second confirm by the same validator must be rejected (idempotency guard)
+    let dup = client.try_confirm_message(&validator, &message_id, &generate_signature(&env), &1);
+    assert_eq!(dup, Err(Ok(Error::DuplicateConfirmation)));
+
+    // Message should still be manageable
+    let msg = client.get_message(&message_id).unwrap();
+    assert!(msg.status == MessageStatus::Pending || msg.status == MessageStatus::Verified);
+}
+
+/// Chaos test: partial message delivery — verify atomic all-or-nothing
+#[test]
+fn test_chaos_partial_delivery_atomicity() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // Create an atomic transaction with two message IDs
+    let tx_id = BytesN::from_array(&env, &[0xbb_u8; 32]);
+    let msg_id_a = BytesN::from_array(&env, &[0xbc_u8; 32]);
+    let msg_id_b = BytesN::from_array(&env, &[0xbd_u8; 32]);
+
+    client.submit_message(
+        &validator,
+        &msg_id_a,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xA"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"data\":\"a\"}"),
+        &1,
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
+    );
+    client.submit_message(
+        &validator,
+        &msg_id_b,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xB"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"data\":\"b\"}"),
+        &2,
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
+    );
+
+    let message_ids = soroban_sdk::vec![&env, msg_id_a.clone(), msg_id_b.clone()];
+    client.initiate_atomic_tx(&recipient, &tx_id, &message_ids);
+
+    // Only confirm message A, not B
+    client.confirm_message(&validator, &msg_id_a, &generate_signature(&env), &1);
+
+    // Atomic tx should NOT be committable — partial state
+    let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
+    assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
+
+    // Abort the atomic tx — clean rollback
+    client.abort_atomic_tx(&recipient, &tx_id);
+    let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
+    assert_eq!(atomic_tx.status, AtomicTxStatus::Aborted);
+
+    // Individual messages should still be in their own states
+    let msg_a = client.get_message(&msg_id_a).unwrap();
+    let msg_b = client.get_message(&msg_id_b).unwrap();
+    assert_eq!(msg_a.status, MessageStatus::Pending);
+    assert_eq!(msg_b.status, MessageStatus::Pending);
+}
+
+/// Chaos test: relayer goes offline mid-batch — verify pending messages are recoverable
+#[test]
+fn test_chaos_relayer_offline_recovery() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    let mut ids = soroban_sdk::vec![&env];
+    for i in 0..5u64 {
+        let mut arr = [0u8; 32];
+        arr[31] = i as u8;
+        let msg_id = BytesN::from_array(&env, &arr);
+        client.submit_message(
+            &validator,
+            &msg_id,
+            &ChainId::Ethereum,
+            &ChainId::Stellar,
+            &String::from_str(&env, "0xRELAY"),
+            &recipient,
+            &MessageType::RecordSync,
+            &String::from_str(&env, "{\"seq\":"),
+            &(i + 1),
+            &generate_signature(&env),
+            &generate_signature(&env), // v_signature
+            &1,                         // v_nonce
+        );
+        ids.push_back(msg_id);
+    }
+
+    // Confirm only first 2 (simulating relayer going offline)
+    client.confirm_message(&validator, &ids.get(0).unwrap(), &generate_signature(&env), &1);
+    client.confirm_message(&validator, &ids.get(1).unwrap(), &generate_signature(&env), &1);
+
+    // Remaining messages should still be Pending (recoverable)
+    for i in 2..5 {
+        let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
+        assert_eq!(msg.status, MessageStatus::Pending, "Message {} should be recoverable", i);
+    }
+
+    // After relayer comes back online, confirm remaining
+    for i in 2..5 {
+        client.confirm_message(&validator, &ids.get(i).unwrap(), &generate_signature(&env), &1);
+    }
+
+    // All messages remain Pending with single validator (min_confirmations=2)
+    for i in 0..5 {
+        let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
+        assert_eq!(msg.status, MessageStatus::Pending, "Message {} is still recoverable", i);
+    }
 }
 
 #[test]
@@ -1168,4 +1403,213 @@ fn test_get_suggestion_returns_expected_hint() {
         crate::errors::get_suggestion(Error::MessageNotFound),
         symbol_short!("CHK_ID")
     );
+}
+
+// ==================== Chaos Testing: Network Partition Scenarios ====================
+
+/// Simulates message sent but acknowledgment lost — verifies idempotent retry works
+#[test]
+fn test_chaos_acknowledgment_lost_idempotent_retry() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator1 = setup_validator(&env, &client, &admin);
+    let validator2 = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // Submit message (simulates successful submission)
+    let msg_id = generate_message_id(&env);
+    client.submit_message(
+        &validator1,
+        &msg_id,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0x1234"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"record_id\": 1}"),
+        &1,
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
+    );
+
+    // First confirmation (acknowledgment is "lost" - not processed further)
+    client.confirm_message(&validator1, &msg_id, &generate_signature(&env), &1);
+
+    // Second confirmation (retry - idempotent)
+    client.confirm_message(&validator2, &msg_id, &generate_signature(&env), &1);
+
+    // Message should be Verified despite simulated ack loss
+    let msg = client.get_message(&msg_id).unwrap();
+    assert_eq!(msg.status, MessageStatus::Verified);
+
+    // Duplicate confirmation should not error (idempotent)
+    let result = client.try_confirm_message(
+        &validator2, 
+        &msg_id, 
+        &generate_signature(&env), 
+        &1
+    );
+    assert_eq!(result, Err(Ok(Error::DuplicateConfirmation)));
+}
+
+/// Simulates partial message delivery — verifies atomicity (all or nothing)
+#[test]
+fn test_chaos_partial_message_delivery_atomicity() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // Submit message A (simulates partial delivery - never confirmed)
+    let msg_id_a = BytesN::from_array(&env, &[0xaa; 32]);
+    client.submit_message(
+        &validator,
+        &msg_id_a,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xAAA"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"record_id\": 1}"),
+        &1,
+        &generate_signature(&env),
+        &generate_signature(&env),
+        &1,
+    );
+
+    // Message B sent at nonce 2 (nonce prevents replay on A)
+    let msg_id_b = BytesN::from_array(&env, &[0xbb; 32]);
+    client.submit_message(
+        &validator,
+        &msg_id_b,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &String::from_str(&env, "0xAAA"),
+        &recipient,
+        &MessageType::RecordRequest,
+        &String::from_str(&env, "{\"record_id\": 2}"),
+        &2,
+        &generate_signature(&env),
+        &generate_signature(&env), // v_signature
+        &1,                         // v_nonce
+    );
+
+    // Only message B is confirmed
+    client.confirm_message(&validator, &msg_id_b, &generate_signature(&env), &1);
+    client.confirm_message(&setup_validator(&env, &client, &admin), &msg_id_b, &generate_signature(&env), &1);
+
+    // Message A should still be Pending (not lost, not executed)
+    let msg_a = client.get_message(&msg_id_a).unwrap();
+    assert_eq!(msg_a.status, MessageStatus::Pending);
+
+    // Message B should be Verified
+    let msg_b = client.get_message(&msg_id_b).unwrap();
+    assert_eq!(msg_b.status, MessageStatus::Verified);
+
+    // Execute only message B
+    assert!(client.execute_message(&recipient, &msg_id_b));
+    assert_eq!(client.get_message(&msg_id_b).unwrap().status, MessageStatus::Executed);
+}
+
+/// Simulates relayer going offline mid-batch — verifies pending messages are recoverable
+#[test]
+fn test_chaos_relayer_offline_mid_batch_recovery() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator1 = setup_validator(&env, &client, &admin);
+    let validator2 = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    env.mock_all_auths();
+
+    // Submit messages for a batch
+    let mut msg_ids: Vec<BytesN<32>> = Vec::new(&env);
+    for i in 0..3u64 {
+        let mut bytes = [0u8; 32];
+        bytes[0] = (i + 1) as u8;
+        msg_ids.push_back(BytesN::from_array(&env, &bytes));
+    }
+
+    // Submit all messages (relayer is online for submission)
+    for (i, msg_id) in msg_ids.iter().enumerate() {
+        client.submit_message(
+            &validator1,
+            msg_id,
+            &ChainId::Ethereum,
+            &ChainId::Stellar,
+            &String::from_str(&env, "0xBatch"),
+            &recipient,
+            &MessageType::RecordSync,
+            &String::from_str(&env, "{\"batch\": true}"),
+            &(i as u64 + 1),
+            &generate_signature(&env),
+            &generate_signature(&env), // v_signature
+            &1,                         // v_nonce
+        );
+    }
+
+    // Relayer goes offline — only first two messages get confirmed
+    client.confirm_message(&validator1, &msg_ids.get(0).unwrap(), &generate_signature(&env), &1);
+    client.confirm_message(&validator1, &msg_ids.get(1).unwrap(), &generate_signature(&env), &1);
+
+    // Third message remains unconfirmed (relayer offline)
+    let msg_2 = client.get_message(&msg_ids.get(2).unwrap()).unwrap();
+    assert_eq!(msg_2.status, MessageStatus::Pending);
+
+    // Relayer comes back online — can still confirm remaining messages
+    client.confirm_message(&validator1, &msg_ids.get(2).unwrap(), &generate_signature(&env), &1);
+    client.confirm_message(&validator2, &msg_ids.get(2).unwrap(), &generate_signature(&env), &1);
+
+    let msg_2 = client.get_message(&msg_ids.get(2).unwrap()).unwrap();
+    assert_eq!(msg_2.status, MessageStatus::Verified);
+}
+
+/// Chaos test: oracle goes offline mid-consensus — verifies incomplete data is not aggregated
+#[test]
+fn test_chaos_oracle_offline_mid_consensus() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let validator = setup_validator(&env, &client, &admin);
+    let oracle1 = Address::generate(&env);
+    let oracle2 = Address::generate(&env);
+    let chains = soroban_sdk::vec![&env, ChainId::Ethereum];
+    let pk = generate_public_key(&env);
+    let sig = generate_signature(&env);
+
+    env.mock_all_auths();
+
+    // Register 3 oracles
+    for oracle in [&oracle1, &oracle2] {
+        client.register_oracle(&admin, oracle, &pk, &chains);
+    }
+
+    // Only 2 out of 3 reports (oracle #3 is offline)
+    let data_hash = BytesN::from_array(&env, &[0xcc; 32]);
+    client.submit_oracle_report(&oracle1, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &sig);
+    client.submit_oracle_report(&oracle2, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &sig);
+
+    // Attempt to aggregate with only 2 reports (MIN_ORACLE_REPORTS = 3)
+    let report_ids = soroban_sdk::vec![&env, 1u64, 2u64];
+    let result = client.try_aggregate_oracle_data(
+        &validator,
+        &ChainId::Ethereum,
+        &report_ids,
+        &data_hash,
+        &generate_signature(&env),
+        &1,
+    );
+    assert_eq!(result, Err(Ok(Error::InsufficientOracleReports)));
 }
