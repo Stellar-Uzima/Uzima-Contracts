@@ -45,7 +45,12 @@ jobs:
           for contract in contracts/*/; do
             lib_file="${contract}src/lib.rs"
             if [ -f "$lib_file" ]; then
-              if ! grep -q "#![no_std]" "$lib_file"; then
+              # Skip contract_behavior_fuzzing - it's a std utility, not a Soroban contract
+              if [[ "$contract" == *contract_behavior_fuzzing* ]]; then
+                continue
+              fi
+              # Use -F (fixed string) to avoid interpreting brackets as regex character class
+              if ! grep -qF '#![no_std]' "$lib_file"; then
                 echo "MISSING #![no_std]: $lib_file"
                 FAILED=$((FAILED + 1))
               fi
