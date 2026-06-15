@@ -1,4 +1,5 @@
 #![no_std]
+//! payment_router - Healthcare smart contract on Stellar blockchain.
 
 extern crate fp_math;
 

@@ -1,4 +1,5 @@
 #![no_std]
+//! cross_chain_access - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::match_like_matches_macro)]

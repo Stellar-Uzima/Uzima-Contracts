@@ -1,4 +1,5 @@
 #![no_std]
+//! remote_patient_monitoring - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 use soroban_sdk::xdr::ToXdr;

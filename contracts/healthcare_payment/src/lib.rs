@@ -1,10 +1,12 @@
 #![no_std]
+//! healthcare_payment - Healthcare smart contract on Stellar blockchain.
+#![allow(clippy::too_many_arguments)]
 
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, token::Client as TokenClient,
-    Address, BytesN, Env, IntoVal, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short,
+    token::Client as TokenClient, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -1467,12 +1469,10 @@ impl HealthcarePayment {
         // Mark as verified for audit trail
         let mut updated = proof.clone();
         updated.is_verified = true;
-        env.storage()
-            .persistent()
-            .set(
-                &DataKey::CoverageProof(policy_id, patient.clone()),
-                &updated,
-            );
+        env.storage().persistent().set(
+            &DataKey::CoverageProof(policy_id, patient.clone()),
+            &updated,
+        );
 
         env.events().publish(
             (symbol_short!("COV_VER"),),

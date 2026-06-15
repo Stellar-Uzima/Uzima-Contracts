@@ -80,7 +80,9 @@ const CAP_EXTERNAL: f64 = 40.0;
 const CAP_STATE: f64 = 30.0;
 const CAP_PERMISSION: f64 = 35.0;
 
-pub fn analyze_contract_complexity(contracts_path: &Path) -> Result<ComplexityReport, Box<dyn std::error::Error>> {
+pub fn analyze_contract_complexity(
+    contracts_path: &Path,
+) -> Result<ComplexityReport, Box<dyn std::error::Error>> {
     let mut by_contract: HashMap<String, ComplexityComponents> = HashMap::new();
     let mut function_counts: HashMap<String, u32> = HashMap::new();
     let mut file_counts: HashMap<String, u32> = HashMap::new();
@@ -145,7 +147,10 @@ pub fn analyze_contract_complexity(contracts_path: &Path) -> Result<ComplexityRe
     })
 }
 
-pub fn save_report(report: &ComplexityReport, output: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_report(
+    report: &ComplexityReport,
+    output: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -153,7 +158,10 @@ pub fn save_report(report: &ComplexityReport, output: &Path) -> Result<(), Box<d
     Ok(())
 }
 
-pub fn record_trend(report: &ComplexityReport, trends_path: &Path) -> Result<ComplexityTrendStore, Box<dyn std::error::Error>> {
+pub fn record_trend(
+    report: &ComplexityReport,
+    trends_path: &Path,
+) -> Result<ComplexityTrendStore, Box<dyn std::error::Error>> {
     let mut store = load_trends(trends_path)?;
     let mut contracts = HashMap::new();
     for c in &report.contracts {
@@ -241,10 +249,16 @@ impl ComplexityVisitor {
         self.function_count += 1;
         self.cyclomatic += 1;
         let name = name.to_lowercase();
-        if name.contains("require_auth") || name.contains("only_admin") || name.contains("authorize") {
+        if name.contains("require_auth")
+            || name.contains("only_admin")
+            || name.contains("authorize")
+        {
             self.permission_complexity += 1;
         }
-        if name.contains("transition") || name.contains("set_status") || name.contains("update_status") {
+        if name.contains("transition")
+            || name.contains("set_status")
+            || name.contains("update_status")
+        {
             self.state_transitions += 1;
         }
         self.in_function_depth += 1;
@@ -257,7 +271,7 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
             Item::Struct(ItemStruct { fields, .. }) => {
                 self.data_structure += 2;
                 self.data_structure += fields.len() as u32;
-            }
+            },
             Item::Enum(ItemEnum { variants, .. }) => {
                 self.data_structure += 3;
                 let variant_count = variants.len() as u32;
@@ -266,8 +280,8 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
                 for v in variants {
                     self.data_structure += v.fields.len() as u32;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
         syn::visit::visit_item(self, item);
     }
@@ -330,18 +344,18 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
         match method.as_str() {
             "require_auth" | "require_auth_for_current_contract" => {
                 self.permission_complexity += 2;
-            }
+            },
             "storage" => {
                 if method == "storage" {
                     // env.storage().get/set — counted via method chain below
                 }
-            }
+            },
             "get" | "set" | "update" | "extend_ttl" | "delete" => {
                 self.data_structure += 1;
-            }
+            },
             "invoke_contract" | "invoke_contract_v2" => {
                 self.external_interactions += 2;
-            }
+            },
             _ => {
                 if method.contains("auth") || method.contains("admin") || method.contains("role") {
                     self.permission_complexity += 1;
@@ -349,7 +363,7 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
                 if method.contains("status") || method.contains("transition") {
                     self.state_transitions += 1;
                 }
-            }
+            },
         }
         syn::visit::visit_expr_method_call(self, node);
     }

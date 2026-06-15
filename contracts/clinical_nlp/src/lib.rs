@@ -1,4 +1,5 @@
 #![no_std]
+//! clinical_nlp - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;

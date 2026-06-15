@@ -72,7 +72,11 @@ fn create_sig(env: &Env, signing_key: &SigningKey, data: &BytesN<32>, nonce: u64
     BytesN::from_array(env, &sig.to_bytes())
 }
 
-fn setup_validator(env: &Env, client: &CrossChainBridgeContractClient, admin: &Address) -> (Address, SigningKey) {
+fn setup_validator(
+    env: &Env,
+    client: &CrossChainBridgeContractClient,
+    admin: &Address,
+) -> (Address, SigningKey) {
     let (vk, sk) = generate_keypair();
     let public_key = make_public_key(env, &vk);
     let validator = Address::generate(env);
@@ -957,11 +961,11 @@ fn test_process_sync_event() {
     let target_id = BytesN::from_array(&env, &target_bytes);
     let process_sig = create_sig(&env, &sk, &target_id, 2);
     client.process_sync_event(
-        &validator, 
-        &event_id, 
-        &EventSyncStatus::Synced, 
-        &process_sig, 
-        &2
+        &validator,
+        &event_id,
+        &EventSyncStatus::Synced,
+        &process_sig,
+        &2,
     );
 
     let event = client.get_sync_event(&event_id).unwrap();
@@ -1434,7 +1438,7 @@ fn test_chaos_relayer_offline_recovery() {
                 recipient: recipient.clone(),
                 payload_type: MessageType::RecordSync,
                 payload: String::from_str(&env, "{\"seq\":"),
-                nonce: nonce,
+                nonce,
                 signature: dummy_sig(&env),
                 v_signature: v_sig,
                 v_nonce: nonce,
@@ -1452,19 +1456,34 @@ fn test_chaos_relayer_offline_recovery() {
     // Remaining messages should still be Pending (recoverable)
     for i in 2..5 {
         let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
-        assert_eq!(msg.status, MessageStatus::Pending, "Message {} should be recoverable", i);
+        assert_eq!(
+            msg.status,
+            MessageStatus::Pending,
+            "Message {} should be recoverable",
+            i
+        );
     }
 
     // After relayer comes back online, confirm remaining
     for i in 2..5 {
         let conf_sig = create_sig(&env, &sk, &ids.get(i).unwrap(), (8 + i - 2) as u64);
-        client.confirm_message(&validator, &ids.get(i).unwrap(), &conf_sig, &((8 + i - 2) as u64));
+        client.confirm_message(
+            &validator,
+            &ids.get(i).unwrap(),
+            &conf_sig,
+            &((8 + i - 2) as u64),
+        );
     }
 
     // All messages remain Pending with single validator (min_confirmations=2)
     for i in 0..5 {
         let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
-        assert_eq!(msg.status, MessageStatus::Pending, "Message {} is still recoverable", i);
+        assert_eq!(
+            msg.status,
+            MessageStatus::Pending,
+            "Message {} is still recoverable",
+            i
+        );
     }
 }
 
@@ -1549,12 +1568,7 @@ fn test_chaos_acknowledgment_lost_idempotent_retry() {
 
     // Duplicate confirmation should error (message is already Verified)
     let dup_sig = create_sig(&env, &sk2, &msg_id, 2);
-    let result = client.try_confirm_message(
-        &validator2, 
-        &msg_id, 
-        &dup_sig, 
-        &2
-    );
+    let result = client.try_confirm_message(&validator2, &msg_id, &dup_sig, &2);
     assert_eq!(result, Err(Ok(Error::MessageAlreadyProcessed)));
 }
 
@@ -1627,7 +1641,10 @@ fn test_chaos_partial_message_delivery_atomicity() {
 
     // Execute only message B
     assert!(client.execute_message(&recipient, &msg_id_b));
-    assert_eq!(client.get_message(&msg_id_b).unwrap().status, MessageStatus::Executed);
+    assert_eq!(
+        client.get_message(&msg_id_b).unwrap().status,
+        MessageStatus::Executed
+    );
 }
 
 /// Simulates relayer going offline mid-batch — verifies pending messages are recoverable
@@ -1665,7 +1682,7 @@ fn test_chaos_relayer_offline_mid_batch_recovery() {
                 recipient: recipient.clone(),
                 payload_type: MessageType::RecordSync,
                 payload: String::from_str(&env, "{\"batch\": true}"),
-                nonce: nonce,
+                nonce,
                 signature: dummy_sig(&env),
                 v_signature: v_sig,
                 v_nonce: nonce,
@@ -1715,8 +1732,22 @@ fn test_chaos_oracle_offline_mid_consensus() {
 
     // Only 2 out of 3 reports (oracle #3 is offline)
     let data_hash = BytesN::from_array(&env, &[0xcc; 32]);
-    client.submit_oracle_report(&oracle1, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &dummy_sig(&env));
-    client.submit_oracle_report(&oracle2, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &dummy_sig(&env));
+    client.submit_oracle_report(
+        &oracle1,
+        &ChainId::Ethereum,
+        &data_hash,
+        &String::from_str(&env, "{}"),
+        &100,
+        &dummy_sig(&env),
+    );
+    client.submit_oracle_report(
+        &oracle2,
+        &ChainId::Ethereum,
+        &data_hash,
+        &String::from_str(&env, "{}"),
+        &100,
+        &dummy_sig(&env),
+    );
 
     // Attempt to aggregate with only 2 reports (MIN_ORACLE_REPORTS = 3)
     let report_ids = soroban_sdk::vec![&env, 1u64, 2u64];

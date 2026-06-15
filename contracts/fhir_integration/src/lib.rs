@@ -1,4 +1,5 @@
 #![no_std]
+//! fhir_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(dead_code)]
 
@@ -484,7 +485,10 @@ impl FHIRIntegrationContract {
         }
         // R4 Observation.status is required and must be a valid value
         let valid_statuses = ["registered", "preliminary", "final", "amended", "cancelled"];
-        if !valid_statuses.iter().any(|s| observation.status == String::from_str(&env, s)) {
+        if !valid_statuses
+            .iter()
+            .any(|s| observation.status == String::from_str(&env, s))
+        {
             return Err(Error::InvalidFHIRData);
         }
         // R4 Observation.subject (patient reference) must be present
@@ -793,20 +797,14 @@ impl FHIRIntegrationContract {
         // Rate limit: max 1 export per 24 hours
         let now = env.ledger().timestamp();
         let export_key = Symbol::new(&env, "EXPORT_TS");
-        let last_export: u64 = env
-            .storage()
-            .persistent()
-            .get(&export_key)
-            .unwrap_or(0);
-        
+        let last_export: u64 = env.storage().persistent().get(&export_key).unwrap_or(0);
+
         if now < last_export.saturating_add(86400) {
             return Err(Error::InvalidDataFormat);
         }
 
         // Record export timestamp for rate limiting
-        env.storage()
-            .persistent()
-            .set(&export_key, &now);
+        env.storage().persistent().set(&export_key, &now);
 
         // Generate export reference hash
         let format_str = match format {

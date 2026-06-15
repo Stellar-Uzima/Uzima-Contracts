@@ -1,4 +1,5 @@
 #![no_std]
+//! notification_system - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 #![allow(clippy::too_many_arguments)]
 

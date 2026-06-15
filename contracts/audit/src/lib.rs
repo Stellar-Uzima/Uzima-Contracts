@@ -1,4 +1,5 @@
 #![no_std]
+//! audit - Healthcare smart contract on Stellar blockchain.
 
 pub mod querying;
 pub mod storage;

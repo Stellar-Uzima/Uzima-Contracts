@@ -42,7 +42,9 @@ fn test_start_round() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
 
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &2, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &2, &1);
     assert!(round_id > 0);
 
     let round: FederatedRound = client.get_round(&round_id).unwrap();
@@ -55,7 +57,9 @@ fn test_start_round_unauthorized() {
     let other = Address::generate(&env);
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
 
-    let result = client.mock_all_auths().try_start_round(&other, &base_model, &2, &1);
+    let result = client
+        .mock_all_auths()
+        .try_start_round(&other, &base_model, &2, &1);
     assert!(result.is_err());
 }
 
@@ -81,12 +85,16 @@ fn test_start_multiple_rounds() {
 fn test_submit_update() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &2, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &2, &1);
 
     let participant = Address::generate(&env);
     let update_hash = BytesN::from_array(&env, &[2u8; 32]);
 
-    assert!(client.mock_all_auths().submit_update(&participant, &round_id, &update_hash, &10));
+    assert!(client
+        .mock_all_auths()
+        .submit_update(&participant, &round_id, &update_hash, &10));
 }
 
 #[test]
@@ -95,7 +103,9 @@ fn test_submit_update_nonexistent_round() {
     let participant = Address::generate(&env);
     let update_hash = BytesN::from_array(&env, &[2u8; 32]);
 
-    let result = client.mock_all_auths().try_submit_update(&participant, &999, &update_hash, &10);
+    let result = client
+        .mock_all_auths()
+        .try_submit_update(&participant, &999, &update_hash, &10);
     assert!(result.is_err());
 }
 
@@ -103,15 +113,32 @@ fn test_submit_update_nonexistent_round() {
 fn test_multiple_participants_submit_updates() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &3, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &3, &1);
 
     let p1 = Address::generate(&env);
     let p2 = Address::generate(&env);
     let p3 = Address::generate(&env);
 
-    assert!(client.mock_all_auths().submit_update(&p1, &round_id, &BytesN::from_array(&env, &[10u8; 32]), &10));
-    assert!(client.mock_all_auths().submit_update(&p2, &round_id, &BytesN::from_array(&env, &[20u8; 32]), &20));
-    assert!(client.mock_all_auths().submit_update(&p3, &round_id, &BytesN::from_array(&env, &[30u8; 32]), &15));
+    assert!(client.mock_all_auths().submit_update(
+        &p1,
+        &round_id,
+        &BytesN::from_array(&env, &[10u8; 32]),
+        &10
+    ));
+    assert!(client.mock_all_auths().submit_update(
+        &p2,
+        &round_id,
+        &BytesN::from_array(&env, &[20u8; 32]),
+        &20
+    ));
+    assert!(client.mock_all_auths().submit_update(
+        &p3,
+        &round_id,
+        &BytesN::from_array(&env, &[30u8; 32]),
+        &15
+    ));
 }
 
 // ============================================================================
@@ -122,17 +149,23 @@ fn test_multiple_participants_submit_updates() {
 fn test_finalize_round() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &1, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &1, &1);
 
     let participant = Address::generate(&env);
     client.mock_all_auths().submit_update(
-        &participant, &round_id,
-        &BytesN::from_array(&env, &[2u8; 32]), &10,
+        &participant,
+        &round_id,
+        &BytesN::from_array(&env, &[2u8; 32]),
+        &10,
     );
 
     let new_model = BytesN::from_array(&env, &[99u8; 32]);
     assert!(client.mock_all_auths().finalize_round(
-        &admin, &round_id, &new_model,
+        &admin,
+        &round_id,
+        &new_model,
         &String::from_str(&env, "Final model"),
         &String::from_str(&env, "ipfs://metrics"),
         &String::from_str(&env, "ipfs://fairness"),
@@ -149,18 +182,24 @@ fn test_finalize_round() {
 fn test_finalize_round_unauthorized() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &1, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &1, &1);
 
     let participant = Address::generate(&env);
     client.mock_all_auths().submit_update(
-        &participant, &round_id,
-        &BytesN::from_array(&env, &[2u8; 32]), &10,
+        &participant,
+        &round_id,
+        &BytesN::from_array(&env, &[2u8; 32]),
+        &10,
     );
 
     let other = Address::generate(&env);
     let new_model = BytesN::from_array(&env, &[99u8; 32]);
     let result = client.mock_all_auths().try_finalize_round(
-        &other, &round_id, &new_model,
+        &other,
+        &round_id,
+        &new_model,
         &String::from_str(&env, "Hacked"),
         &String::from_str(&env, ""),
         &String::from_str(&env, ""),
@@ -194,7 +233,9 @@ fn test_full_federated_learning_workflow() {
     let (env, client, admin) = setup();
 
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &2, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &2, &1);
 
     let participant1 = Address::generate(&env);
     let participant2 = Address::generate(&env);
@@ -202,13 +243,19 @@ fn test_full_federated_learning_workflow() {
     let update_hash2 = BytesN::from_array(&env, &[3u8; 32]);
 
     // Submit updates from both participants
-    assert!(client.mock_all_auths().submit_update(&participant1, &round_id, &update_hash1, &10));
-    assert!(client.mock_all_auths().submit_update(&participant2, &round_id, &update_hash2, &20));
+    assert!(client
+        .mock_all_auths()
+        .submit_update(&participant1, &round_id, &update_hash1, &10));
+    assert!(client
+        .mock_all_auths()
+        .submit_update(&participant2, &round_id, &update_hash2, &20));
 
     // Finalize round
     let new_model = BytesN::from_array(&env, &[4u8; 32]);
     assert!(client.mock_all_auths().finalize_round(
-        &admin, &round_id, &new_model,
+        &admin,
+        &round_id,
+        &new_model,
         &String::from_str(&env, "Aggregated model v1"),
         &String::from_str(&env, "ipfs://metrics/v1"),
         &String::from_str(&env, "ipfs://fairness/v1"),
@@ -228,17 +275,23 @@ fn test_finalize_round_insufficient_participants() {
     let (env, client, admin) = setup();
     let base_model = BytesN::from_array(&env, &[1u8; 32]);
     // Require 2 participants but only submit 1
-    let round_id = client.mock_all_auths().start_round(&admin, &base_model, &2, &1);
+    let round_id = client
+        .mock_all_auths()
+        .start_round(&admin, &base_model, &2, &1);
 
     let participant = Address::generate(&env);
     client.mock_all_auths().submit_update(
-        &participant, &round_id,
-        &BytesN::from_array(&env, &[2u8; 32]), &10,
+        &participant,
+        &round_id,
+        &BytesN::from_array(&env, &[2u8; 32]),
+        &10,
     );
 
     let new_model = BytesN::from_array(&env, &[99u8; 32]);
     let result = client.mock_all_auths().try_finalize_round(
-        &admin, &round_id, &new_model,
+        &admin,
+        &round_id,
+        &new_model,
         &String::from_str(&env, "Too early"),
         &String::from_str(&env, ""),
         &String::from_str(&env, ""),

@@ -1,4 +1,5 @@
 #![no_std]
+//! telemedicine - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::fn_params_excessive_bools)]
 #![allow(clippy::needless_pass_by_value)]

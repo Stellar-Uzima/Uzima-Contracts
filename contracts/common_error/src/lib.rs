@@ -1,4 +1,5 @@
 #![no_std]
+//! common_error - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
@@ -37,7 +38,9 @@ pub fn get_suggestion(error: CommonError) -> Symbol {
         CommonError::Unauthorized | CommonError::UnauthorizedCaller => symbol_short!("CHK_AUTH"),
         CommonError::NotInitialized => symbol_short!("INIT_CTR"),
         CommonError::AlreadyInitialized => symbol_short!("ALREADY"),
-        CommonError::InvalidInput | CommonError::InvalidArgument | CommonError::InvalidData => symbol_short!("CHK_DATA"),
+        CommonError::InvalidInput | CommonError::InvalidArgument | CommonError::InvalidData => {
+            symbol_short!("CHK_DATA")
+        },
         CommonError::NotFound => symbol_short!("CHK_ID"),
         CommonError::InsufficientFunds => symbol_short!("ADD_FUND"),
         CommonError::Timeout => symbol_short!("RE_TRY_L"),

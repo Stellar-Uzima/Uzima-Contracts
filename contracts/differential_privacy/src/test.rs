@@ -19,7 +19,7 @@ fn setup() -> (Env, DifferentialPrivacyContractClient<'static>, Address) {
 
 #[test]
 fn test_initialize_sets_admin() {
-    let (env, client, admin) = setup();
+    let (_env, client, admin) = setup();
 
     // Double initialization should fail
     let result = client.try_initialize(&admin);
@@ -52,7 +52,7 @@ fn test_create_budget() {
     let data_owner = Address::generate(&env);
 
     let budget_id = client.create_budget(&admin, &data_owner, &100);
-    assert!(budget_id.len() > 0);
+    assert!(!budget_id.is_empty());
 
     let remaining = client.get_remaining_budget(&budget_id);
     assert_eq!(remaining, 100);

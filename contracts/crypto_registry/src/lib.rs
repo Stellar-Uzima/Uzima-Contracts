@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+
+//! crypto_registry - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod benchmarks;
@@ -447,7 +450,11 @@ impl CryptoRegistry {
         // Revoke old key bundle if it exists
         if old_version > 0 {
             let old_key = DataKey::Bundle(owner.clone(), old_version);
-            if let Some(mut old_bundle) = env.storage().persistent().get::<DataKey, KeyBundle>(&old_key) {
+            if let Some(mut old_bundle) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, KeyBundle>(&old_key)
+            {
                 old_bundle.revoked = true;
                 env.storage().persistent().set(&old_key, &old_bundle);
             }

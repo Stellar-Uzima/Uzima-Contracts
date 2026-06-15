@@ -1,4 +1,5 @@
 #![no_std]
+//! health_check - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contractimpl, contracttype, Env, String, Vec};
 

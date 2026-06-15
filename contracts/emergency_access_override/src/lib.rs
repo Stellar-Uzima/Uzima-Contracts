@@ -1,4 +1,5 @@
 #![no_std]
+//! emergency_access_override - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -393,7 +394,6 @@ impl EmergencyAccessOverride {
     }
 }
 
-
 // ============================================================
 // Issue #655: M-of-N Multi-Sig Emergency Access Override
 // ============================================================
@@ -413,8 +413,8 @@ pub struct EmergencyRequest {
 
 #[contracttype]
 pub enum EmergencyKey {
-    Request(u64),       // keyed by request_id
-    Config,             // stores (approvers: Vec<Address>, required: u32)
+    Request(u64), // keyed by request_id
+    Config,       // stores (approvers: Vec<Address>, required: u32)
     RequestCounter,
 }
 
@@ -482,7 +482,11 @@ pub fn request_emergency_access(
 
 /// An approver signs off on a pending request.
 /// Access is granted automatically once M approvals are collected.
-pub fn approve_emergency_access(env: Env, approver: Address, request_id: u64) -> Result<bool, Error> {
+pub fn approve_emergency_access(
+    env: Env,
+    approver: Address,
+    request_id: u64,
+) -> Result<bool, Error> {
     approver.require_auth();
     let config: MultiSigConfig = env
         .storage()
@@ -640,7 +644,8 @@ mod multisig_tests {
         approvers.push_back(a1.clone());
 
         env.as_contract(&contract_id, || {
-            configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10); // 10s expiry
+            configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10);
+            // 10s expiry
         });
 
         let requester = Address::generate(&env);

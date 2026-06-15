@@ -1,4 +1,5 @@
 #![no_std]
+//! digital_twin - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 

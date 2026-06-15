@@ -1,4 +1,5 @@
 #![no_std]
+//! deprecation_framework - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;

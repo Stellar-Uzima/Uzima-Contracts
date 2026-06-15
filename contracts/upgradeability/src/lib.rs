@@ -1,4 +1,5 @@
 #![no_std]
+//! upgradeability - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec,

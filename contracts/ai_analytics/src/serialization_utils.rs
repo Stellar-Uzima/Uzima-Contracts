@@ -80,7 +80,8 @@ impl SerializationUtils {
     pub fn safe_serialize_vec<T>(env: &Env, vec: &Vec<T>) -> Result<(), SerializationError> {
         Self::validate_vec(vec)?;
         if vec.is_empty() {
-            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "VEC")), ());
+            env.events()
+                .publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "VEC")), ());
         }
         Ok(())
     }
@@ -90,7 +91,8 @@ impl SerializationUtils {
     pub fn safe_serialize_map<K, V>(env: &Env, map: &Map<K, V>) -> Result<(), SerializationError> {
         Self::validate_map(map)?;
         if map.is_empty() {
-            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "MAP")), ());
+            env.events()
+                .publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "MAP")), ());
         }
         Ok(())
     }
@@ -99,7 +101,8 @@ impl SerializationUtils {
     pub fn safe_serialize_string(env: &Env, string: &String) -> Result<(), SerializationError> {
         Self::validate_string(string)?;
         if string.is_empty() {
-            env.events().publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "STR")), ());
+            env.events()
+                .publish((Symbol::new(env, "SER_EMPTY"), Symbol::new(env, "STR")), ());
         }
         Ok(())
     }

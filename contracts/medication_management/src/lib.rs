@@ -1,4 +1,5 @@
 #![no_std]
+//! medication_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
@@ -498,10 +499,7 @@ impl MedicationManagement {
         caller.require_auth();
         let schedule = Self::get_schedule_internal(&env, schedule_id)?;
         let config = Self::get_config(&env)?;
-        if caller != schedule.patient
-            && caller != schedule.provider
-            && caller != config.admin
-        {
+        if caller != schedule.patient && caller != schedule.provider && caller != config.admin {
             return Err(Error::Unauthorized);
         }
 

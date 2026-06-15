@@ -1,4 +1,5 @@
 #![no_std]
+//! upgrade_manager - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;
 pub use errors::Error;

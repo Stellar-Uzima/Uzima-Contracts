@@ -1,3 +1,4 @@
+//! treasury_controller - Healthcare smart contract on Stellar blockchain.
 // Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]

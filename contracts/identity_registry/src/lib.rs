@@ -1,3 +1,4 @@
+//! identity_registry - Healthcare smart contract on Stellar blockchain.
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
@@ -8,8 +9,8 @@ pub mod errors;
 pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
-    Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    String, Symbol, Vec,
 };
 use uzima_sanitization::{
     sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
@@ -336,7 +337,12 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Initialize the contract with an owner and network identifier
-    pub fn initialize(env: Env, owner: Address, network_id: String, rbac_contract: Address) -> Result<(), Error> {
+    pub fn initialize(
+        env: Env,
+        owner: Address,
+        network_id: String,
+        rbac_contract: Address,
+    ) -> Result<(), Error> {
         owner.require_auth();
 
         sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
@@ -346,7 +352,9 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
-        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::NetworkId, &network_id);
@@ -388,16 +396,27 @@ impl IdentityRegistryContract {
 
     /// Returns true if the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
     fn is_admin(env: &Env, caller: &Address) -> bool {
-        if let Some(owner) = env.storage().instance().get::<DataKey, Address>(&DataKey::Owner) {
+        if let Some(owner) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::Owner)
+        {
             if &owner == caller {
                 return true;
             }
         }
-        if let Some(rbac_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::RbacContract) {
+        if let Some(rbac_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::RbacContract)
+        {
             let client = RbacClient::new(env, &rbac_addr);
             return client.has_role(caller, &RbacRole::Admin);
         }
@@ -413,7 +432,12 @@ impl IdentityRegistryContract {
     }
 
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
             return Err(Error::ContractPaused);
         }
         Ok(())
@@ -423,7 +447,10 @@ impl IdentityRegistryContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((Symbol::new(&env, "Paused"),), (caller.clone(), env.ledger().timestamp()));
+        env.events().publish(
+            (Symbol::new(&env, "Paused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
         Ok(true)
     }
 
@@ -431,7 +458,10 @@ impl IdentityRegistryContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((Symbol::new(&env, "Unpaused"),), (caller.clone(), env.ledger().timestamp()));
+        env.events().publish(
+            (Symbol::new(&env, "Unpaused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
         Ok(true)
     }
 
@@ -444,7 +474,9 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
-        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
@@ -1535,7 +1567,11 @@ impl IdentityRegistryContract {
 
         owner.require_auth();
 
-        let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
         let rbac_client = RbacClient::new(&env, &rbac_addr);
         if !rbac_client.has_role(&owner, &RbacRole::Admin) {
             return Err(Error::Unauthorized);
@@ -1567,7 +1603,11 @@ impl IdentityRegistryContract {
             return Err(Error::CannotRemoveOwner);
         }
 
-        let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
         let rbac_client = RbacClient::new(&env, &rbac_addr);
         if !rbac_client.has_role(&owner, &RbacRole::Admin) {
             return Err(Error::Unauthorized);
@@ -1988,10 +2028,7 @@ impl IdentityRegistryContract {
     }
 
     /// Withdraw stake after lock period if not slashed and in good standing.
-    pub fn withdraw_stake(
-        env: Env,
-        provider: Address,
-    ) -> Result<i128, Error> {
+    pub fn withdraw_stake(env: Env, provider: Address) -> Result<i128, Error> {
         provider.require_auth();
 
         let now = env.ledger().timestamp();
@@ -2737,4 +2774,3 @@ mod tests {
         );
     }
 }
-

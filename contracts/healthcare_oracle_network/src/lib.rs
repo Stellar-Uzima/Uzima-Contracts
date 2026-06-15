@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_oracle_network - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::len_zero)]
 #![allow(clippy::unwrap_used)]

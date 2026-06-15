@@ -1,4 +1,5 @@
 #![no_std]
+//! genomic_data - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 
@@ -547,9 +548,11 @@ impl GenomicDataContract {
         let ce_opt = env
             .storage()
             .persistent()
-            .get::<DataKey, ResearchConsentEntry>(
-                &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
-            );
+            .get::<DataKey, ResearchConsentEntry>(&DataKey::ResearchConsent(
+                record_id,
+                grantee.clone(),
+                category.clone(),
+            ));
         let mut entry = if let Some(entry) = ce_opt {
             if entry.patient != patient {
                 return false;
@@ -614,7 +617,8 @@ impl GenomicDataContract {
             granted,
             timestamp: env.ledger().timestamp(),
         };
-        env.events().publish(("GENOMIC_CONSENT", symbol_short!("AUDIT")), audit);
+        env.events()
+            .publish(("GENOMIC_CONSENT", symbol_short!("AUDIT")), audit);
     }
 
     fn track_active_research_project(
@@ -626,8 +630,11 @@ impl GenomicDataContract {
         let mut projects: Vec<Address> = env
             .storage()
             .persistent()
-            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(record_id, category.clone()))
-            .unwrap_or(Vec::new(&env));
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(
+                record_id,
+                category.clone(),
+            ))
+            .unwrap_or(Vec::new(env));
         let mut already_present = false;
         let len = projects.len();
         let mut i = 0;
@@ -656,8 +663,11 @@ impl GenomicDataContract {
         let projects: Vec<Address> = env
             .storage()
             .persistent()
-            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(record_id, category.clone()))
-            .unwrap_or(Vec::new(&env));
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(
+                record_id,
+                category.clone(),
+            ))
+            .unwrap_or(Vec::new(env));
         let len = projects.len();
         let mut i = 0;
         while i < len {
@@ -684,9 +694,14 @@ impl GenomicDataContract {
         grantee: &Address,
         category: &GenomicConsentCategory,
     ) -> bool {
-        let ce = env.storage().persistent().get::<DataKey, ResearchConsentEntry>(
-            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
-        );
+        let ce = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ResearchConsentEntry>(&DataKey::ResearchConsent(
+                record_id,
+                grantee.clone(),
+                category.clone(),
+            ));
         if let Some(c) = ce {
             if c.active && (c.expires_at == 0 || env.ledger().timestamp() <= c.expires_at) {
                 return true;

@@ -1,3 +1,4 @@
+//! differential_privacy - Healthcare smart contract on Stellar blockchain.
 // Differential Privacy Contract - Simplified Working Version
 #![no_std]
 #![allow(clippy::too_many_arguments)]

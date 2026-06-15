@@ -2,9 +2,9 @@
 mod tests {
     use crate::{EmergencyAccessOverride, EmergencyAccessOverrideClient, Error};
     use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, Env, Vec,
-};
+        testutils::{Address as _, Ledger},
+        Address, Env, Vec,
+    };
 
     fn setup() -> (
         Env,

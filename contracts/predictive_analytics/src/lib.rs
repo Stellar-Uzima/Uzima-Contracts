@@ -1,3 +1,4 @@
+//! predictive_analytics - Healthcare smart contract on Stellar blockchain.
 // Predictive Analytics Contract - Health predictions with proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]

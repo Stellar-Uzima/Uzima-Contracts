@@ -1,5 +1,8 @@
 use super::{ClaimSubmissionStatus, Error, HealthcarePayment, HealthcarePaymentClient};
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, testutils::Address as _, token, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, testutils::Address as _, token, Address,
+    Env, String,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -106,7 +109,15 @@ fn setup_env_and_clients() -> (
     let contract_id = env.register_contract(None, HealthcarePayment);
     let client = HealthcarePaymentClient::new(&env, &contract_id);
 
-    client.initialize(&admin, &router_id, &escrow_id, &treasury, &token_id, &aml_contract, &rbac_id);
+    client.initialize(
+        &admin,
+        &router_id,
+        &escrow_id,
+        &treasury,
+        &token_id,
+        &aml_contract,
+        &rbac_id,
+    );
 
     token_admin_client.mint(&contract_id, &100_000_000);
     token_admin_client.mint(&patient, &100_000_000);

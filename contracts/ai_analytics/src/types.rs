@@ -21,11 +21,17 @@ impl SafeSerialize for FederatedRound {
 
         // Validate edge cases
         if self.min_participants == 0 {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_MIN")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_MIN")),
+                (),
+            );
         }
 
         if self.total_updates == 0 && !self.is_finalized {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_UPDATES")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_UPDATES")),
+                (),
+            );
         }
 
         Ok(())
@@ -49,7 +55,10 @@ impl SafeSerialize for ParticipantUpdateMeta {
 
         // Validate edge cases
         if self.num_samples == 0 {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_SAMP")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_SAMP")),
+                (),
+            );
         }
 
         Ok(())
@@ -77,15 +86,24 @@ impl SafeSerialize for ModelMetadata {
 
         // Validate edge cases
         if self.description.is_empty() {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "EMPTY_DESC")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "EMPTY_DESC")),
+                (),
+            );
         }
 
         if self.metrics_ref.is_empty() && self.fairness_report_ref.is_empty() {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_REFS")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_REFS")),
+                (),
+            );
         }
 
         if self.created_at == 0 {
-            env.events().publish((Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_TS")), ());
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_TS")),
+                (),
+            );
         }
 
         Ok(())

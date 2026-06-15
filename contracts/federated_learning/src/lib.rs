@@ -1,4 +1,5 @@
 #![no_std]
+//! federated_learning - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{

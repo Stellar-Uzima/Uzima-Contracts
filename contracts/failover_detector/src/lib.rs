@@ -1,4 +1,5 @@
 #![no_std]
+//! failover_detector - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
 
