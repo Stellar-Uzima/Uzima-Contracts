@@ -9,7 +9,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
 
 // ==================== Data Types ====================
 
@@ -128,16 +128,20 @@ impl EmergencyAccessOverride {
             .get(&DataKey::CooldownPeriod)
             .unwrap_or(DEFAULT_COOLDOWN_SECONDS);
 
-        let last_used: u64 = env
+        // Check cooldown only if the approver has been used before.
+        // Using `Option` distinguishes "never called" (None) from
+        // "called at timestamp 0" (Some(0)), which matters in tests
+        // where the ledger timestamp starts at 0.
+        if let Some(last_used) = env
             .storage()
             .persistent()
-            .get(&DataKey::Cooldown(approver.clone()))
-            .unwrap_or(0);
-
-        let next_allowed_at = last_used.saturating_add(cooldown_period);
-        if now < next_allowed_at {
-            events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
-            return Err(Error::RateLimitExceeded);
+            .get::<_, u64>(&DataKey::Cooldown(approver.clone()))
+        {
+            let next_allowed_at = last_used.saturating_add(cooldown_period);
+            if now < next_allowed_at {
+                events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
+                return Err(Error::RateLimitExceeded);
+            }
         }
 
         // Record this invocation timestamp
@@ -531,24 +535,33 @@ pub fn get_emergency_request(env: Env, request_id: u64) -> Option<EmergencyReque
 #[cfg(test)]
 mod multisig_tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use soroban_sdk::testutils::{Address as _, Ledger};
     use soroban_sdk::{Env, Symbol, Vec};
 
-    fn setup_config(env: &Env, approvers: Vec<Address>, m: u32) -> Address {
+    /// Register a dummy contract and return its ID, so storage-using calls
+    /// can be wrapped in `env.as_contract(&contract_id, || ...)`.
+    fn register_dummy(env: &Env) -> Address {
+        env.register_contract(None, EmergencyAccessOverride)
+    }
+
+    fn setup_config(env: &Env, contract_id: &Address, approvers: Vec<Address>, m: u32) -> Address {
         let admin = Address::generate(env);
-        configure_multisig(
-            env.clone(),
-            admin.clone(),
-            approvers,
-            m,
-            DEFAULT_EXPIRY_SECONDS,
-        );
+        env.as_contract(contract_id, || {
+            configure_multisig(
+                env.clone(),
+                admin.clone(),
+                approvers,
+                m,
+                DEFAULT_EXPIRY_SECONDS,
+            );
+        });
         admin
     }
 
     #[test]
     fn test_m_approvals_grant_access() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let a2 = Address::generate(&env);
@@ -557,63 +570,97 @@ mod multisig_tests {
         approvers.push_back(a1.clone());
         approvers.push_back(a2.clone());
         approvers.push_back(a3.clone());
-        setup_config(&env, approvers, 2);
+        setup_config(&env, &contract_id, approvers, 2);
         let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P001"),
-            Symbol::new(&env, "cardiac_arrest"),
-        );
-        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
-        approve_emergency_access(env.clone(), a2.clone(), id).unwrap();
-        let req = get_emergency_request(env.clone(), id).unwrap();
+
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P001"),
+                Symbol::new(&env, "cardiac_arrest"),
+            )
+        });
+
+        env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
+        });
+
+        let granted = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a2.clone(), id).unwrap()
+        });
+        assert!(granted);
+
+        let req = env.as_contract(&contract_id, || {
+            get_emergency_request(env.clone(), id).unwrap()
+        });
         assert!(req.granted);
     }
 
     #[test]
     fn test_m_minus_1_does_not_grant() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let a2 = Address::generate(&env);
         let mut approvers = Vec::new(&env);
         approvers.push_back(a1.clone());
         approvers.push_back(a2.clone());
-        setup_config(&env, approvers, 2);
+        setup_config(&env, &contract_id, approvers, 2);
         let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P002"),
-            Symbol::new(&env, "reason"),
-        );
-        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
-        let req = get_emergency_request(env.clone(), id).unwrap();
+
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P002"),
+                Symbol::new(&env, "reason"),
+            )
+        });
+
+        let granted = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id).unwrap()
+        });
+        assert!(!granted);
+
+        let req = env.as_contract(&contract_id, || {
+            get_emergency_request(env.clone(), id).unwrap()
+        });
         assert!(!req.granted);
     }
 
     #[test]
     fn test_expired_request_rejected() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let mut approvers = Vec::new(&env);
         approvers.push_back(a1.clone());
-        configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10); // 10s expiry
-        let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P003"),
-            Symbol::new(&env, "reason"),
-        );
-        // Fast-forward time past expiry
-        env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 100,
-            ..env.ledger().get()
+
+        env.as_contract(&contract_id, || {
+            configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10); // 10s expiry
         });
-        let result = approve_emergency_access(env.clone(), a1.clone(), id);
+
+        let requester = Address::generate(&env);
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P003"),
+                Symbol::new(&env, "reason"),
+            )
+        });
+
+        // Fast-forward time past expiry
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(100);
+        });
+
+        let result = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id)
+        });
         assert!(result.is_err());
     }
 }

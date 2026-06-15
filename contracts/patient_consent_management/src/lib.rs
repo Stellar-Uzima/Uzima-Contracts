@@ -481,17 +481,28 @@ impl upgradeability::migration::Migratable for PatientConsentManagement {
 #[cfg(test)]
 mod proxy_tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::testutils::Address as _;
     use soroban_sdk::Env;
+
+    /// Register a dummy contract instance so storage-using free functions
+    /// can be called inside `env.as_contract()`.
+    fn register_dummy(env: &Env) -> Address {
+        env.register_contract(None, PatientConsentManagement)
+    }
 
     #[test]
     fn test_designate_and_get_proxy() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
-        let record = get_proxy(env.clone(), patient).unwrap();
+        env.as_contract(&contract_id, || {
+            designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
+        });
+        let record = env.as_contract(&contract_id, || {
+            get_proxy(env.clone(), patient).unwrap()
+        });
         assert_eq!(record.proxy_address, proxy);
         assert_eq!(record.scope, ProxyScope::FullAuthority);
     }
@@ -499,46 +510,68 @@ mod proxy_tests {
     #[test]
     fn test_revoke_proxy() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
-        revoke_proxy(env.clone(), patient.clone());
-        let record = get_proxy(env.clone(), patient);
+        env.as_contract(&contract_id, || {
+            designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
+        });
+        env.as_contract(&contract_id, || {
+            revoke_proxy(env.clone(), patient.clone());
+        });
+        let record = env.as_contract(&contract_id, || {
+            get_proxy(env.clone(), patient)
+        });
         assert!(record.is_none());
     }
 
     #[test]
     fn test_proxy_grant_consent_full_authority() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
 
     #[test]
     #[should_panic(expected = "Proxy scope does not permit granting consent")]
     fn test_readonly_proxy_cannot_grant() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
 
     #[test]
     fn test_emergency_proxy_can_grant_but_not_revoke() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::EmergencyOnly);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::EmergencyOnly);
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
-    }
+}

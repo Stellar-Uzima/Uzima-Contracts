@@ -7,8 +7,8 @@
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
 };
 
 // ==================== FHIR Data Types ====================
@@ -484,8 +484,7 @@ impl FHIRIntegrationContract {
         }
         // R4 Observation.status is required and must be a valid value
         let valid_statuses = ["registered", "preliminary", "final", "amended", "cancelled"];
-        let status_str = observation.status.to_string();
-        if !valid_statuses.iter().any(|s| status_str == *s) {
+        if !valid_statuses.iter().any(|s| observation.status == String::from_str(&env, s)) {
             return Err(Error::InvalidFHIRData);
         }
         // R4 Observation.subject (patient reference) must be present
@@ -776,8 +775,8 @@ pub struct ExportConfig {
     pub export_size_limit_bytes: u32,
 }
 
-const EXPORT_COUNT: Symbol = symbol_short!("EXPORT_CNT");
-const EXPORT_CFG: Symbol = symbol_short!("EXPORT_CFG");
+const EXPORT_COUNT: Symbol = symbol_short!("XPORT_CNT");
+const EXPORT_CFG: Symbol = symbol_short!("XPORT_CFG");
 
 impl FHIRIntegrationContract {
     /// Export patient data in a standard format (FHIR Bundle, HL7 v2, or CDA).
@@ -787,7 +786,7 @@ impl FHIRIntegrationContract {
         env: Env,
         patient: Address,
         format: ExportFormat,
-        medical_records_contract: Address,
+        _medical_records_contract: Address,
     ) -> Result<BytesN<32>, Error> {
         patient.require_auth();
 

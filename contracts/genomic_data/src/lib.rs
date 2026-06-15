@@ -632,7 +632,7 @@ impl GenomicDataContract {
         let len = projects.len();
         let mut i = 0;
         while i < len {
-            if projects.get(i) == Some(&project) {
+            if projects.get(i) == Some(project.clone()) {
                 already_present = true;
                 break;
             }
@@ -670,7 +670,7 @@ impl GenomicDataContract {
                     timestamp: env.ledger().timestamp(),
                 };
                 env.events().publish(
-                    ("GENOMIC_CONSENT", symbol_short!("WITHDRAWAL")),
+                    ("GENOMIC_CONSENT", Symbol::new(env, "WITHDRAWAL")),
                     notification,
                 );
             }

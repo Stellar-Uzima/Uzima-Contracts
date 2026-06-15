@@ -1,22 +1,22 @@
 [package]
 name = "medical_records"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/soroban-project"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = { workspace = true }
+soroban-sdk = "=21.7.7"
 common_error = { path = "../common_error" }
 patient_consent_management = { path = "../patient_consent_management" }
 upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
 anomaly_detection = { path = "../anomaly_detection" }
 predictive_analytics = { path = "../predictive_analytics" }
 explainable_ai = { path = "../explainable_ai" }

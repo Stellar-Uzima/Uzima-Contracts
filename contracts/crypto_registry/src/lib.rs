@@ -7,7 +7,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    Symbol,
+    Symbol, Vec,
 };
 
 // =============================================================================

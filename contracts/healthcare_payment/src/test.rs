@@ -1,26 +1,42 @@
 use super::{ClaimSubmissionStatus, Error, HealthcarePayment, HealthcarePaymentClient};
-use soroban_sdk::{contract, contractimpl, testutils::Address as _, token, Address, Env, String};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, testutils::Address as _, token, Address, Env, String};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum MockRole {
+    Admin = 0,
+    Staff = 3,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum MockRoleError {
+    Unauthorized = 100,
+}
 
 #[contract]
 struct MockRbac;
 
 #[contractimpl]
 impl MockRbac {
-    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+    pub fn init_mock(_env: Env) {}
 
-    pub fn has_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
-        let key = (address, role);
+    pub fn has_role(env: Env, address: Address, role: MockRole) -> Result<bool, MockRoleError> {
+        let key = (address, role as u32);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
-    pub fn assign_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
-        let key = (address, role);
+    pub fn assign_role(env: Env, address: Address, role: MockRole) -> Result<bool, MockRoleError> {
+        let key = (address, role as u32);
         env.storage().instance().set(&key, &true);
         Ok(true)
     }
 
-    pub fn remove_role(env: Env, address: Address, role: u32) -> Result<bool, u32> {
-        let key = (address, role);
+    pub fn remove_role(env: Env, address: Address, role: MockRole) -> Result<bool, MockRoleError> {
+        let key = (address, role as u32);
         env.storage().instance().set(&key, &false);
         Ok(true)
     }
@@ -82,13 +98,15 @@ fn setup_env_and_clients() -> (
     let router_id = env.register_contract(None, MockPaymentRouter);
     let escrow_id = env.register_contract(None, MockEscrow);
     let rbac_id = env.register_contract(None, MockRbac);
+    let aml_contract = Address::generate(&env);
+
     let rbac_client = MockRbacClient::new(&env, &rbac_id);
-    let _ = rbac_client.assign_role(&admin, &0u32);
+    let _ = rbac_client.assign_role(&admin, &MockRole::Admin);
 
     let contract_id = env.register_contract(None, HealthcarePayment);
     let client = HealthcarePaymentClient::new(&env, &contract_id);
 
-    client.initialize(&admin, &router_id, &escrow_id, &treasury, &token_id, &rbac_id);
+    client.initialize(&admin, &router_id, &escrow_id, &treasury, &token_id, &aml_contract, &rbac_id);
 
     token_admin_client.mint(&contract_id, &100_000_000);
     token_admin_client.mint(&patient, &100_000_000);

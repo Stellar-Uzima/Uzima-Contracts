@@ -3,12 +3,12 @@
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, BytesN,
-    Env, IntoVal, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, token::Client as TokenClient,
+    Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[contracttype>
+#[contracttype]
 pub enum ClaimStatus {
     Submitted = 0,
     Verified = 1,
@@ -195,6 +195,20 @@ pub struct ExplanationOfBenefits {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct CoverageProof {
+    pub policy_id: u64,
+    pub patient: Address,
+    pub proof_hash: BytesN<32>,
+    pub circuit_version: u32,
+    pub is_verified: bool,
+    pub proven_coverage_bps: u32,
+    pub submitted_at: u64,
+    pub expires_at: u64,
+    pub registry_proof_id: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct PatientResponsibility {
     pub patient: Address,
     pub total_copay_tracked: i128,
@@ -289,15 +303,10 @@ impl HealthcarePayment {
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
         let client = RbacClient::new(env, &config.rbac_contract);
-        match client.has_role(caller, &RbacRole::Admin) {
-            Ok(has) => {
-                if has {
-                    Ok(())
-                } else {
-                    Err(Error::Unauthorized)
-                }
-            }
-            Err(_) => Err(Error::Unauthorized),
+        if client.has_role(caller, &RbacRole::Admin) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
         }
     }
 
@@ -1382,7 +1391,7 @@ impl HealthcarePayment {
         circuit_version: u32,
         proven_coverage_bps: u32,
         expires_at: u64,
-        registry_proof_id: Option<BytesN<32>>,
+        registry_proof_id: BytesN<32>,
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_operational(&env)?;
@@ -1418,8 +1427,8 @@ impl HealthcarePayment {
         let proof_count: u64 = env
             .storage()
             .instance()
-            .get(&DataKey::CoverageProofCount)
-            .unwrap_or(0)
+            .get::<DataKey, u64>(&DataKey::CoverageProofCount)
+            .unwrap_or(0u64)
             .saturating_add(1);
         env.storage()
             .instance()

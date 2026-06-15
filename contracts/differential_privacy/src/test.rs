@@ -92,7 +92,7 @@ fn test_add_laplace_noise() {
     let budget_id = client.create_budget(&admin, &data_owner, &100);
 
     let query_id = BytesN::from_array(&env, &[1u8; 32]);
-    let result = client.add_laplace_noise(
+    let query = client.add_laplace_noise(
         &data_owner,
         &budget_id,
         &query_id,
@@ -101,8 +101,6 @@ fn test_add_laplace_noise() {
         &10,
     );
 
-    assert!(result.is_ok());
-    let query = result.unwrap();
     assert_eq!(query.budget_id, budget_id);
 
     // Verify budget was decremented
@@ -163,7 +161,7 @@ fn test_add_gaussian_noise() {
     let budget_id = client.create_budget(&admin, &data_owner, &200);
 
     let query_id = BytesN::from_array(&env, &[2u8; 32]);
-    let result = client.add_gaussian_noise(
+    let query = client.add_gaussian_noise(
         &data_owner,
         &budget_id,
         &query_id,
@@ -172,8 +170,6 @@ fn test_add_gaussian_noise() {
         &10,
     );
 
-    assert!(result.is_ok());
-    let query = result.unwrap();
     assert_eq!(query.mechanism, NoiseMechanism::Gaussian);
 
     // Gaussian cost = 2x sensitivity = 20
@@ -271,7 +267,7 @@ fn test_full_privacy_workflow() {
     // Run multiple queries
     for i in 0..5 {
         let query_id = BytesN::from_array(&env, &[i as u8; 32]);
-        let result = client.add_laplace_noise(
+        let _query = client.add_laplace_noise(
             &researcher,
             &budget_id,
             &query_id,
@@ -279,7 +275,6 @@ fn test_full_privacy_workflow() {
             &(i * 100),
             &5,
         );
-        assert!(result.is_ok());
     }
 
     // Budget should be 100 - (5 * 5) = 75
@@ -295,24 +290,24 @@ fn test_mixed_laplace_gaussian_workflow() {
     let budget_id = client.create_budget(&admin, &researcher, &200);
 
     // Laplace query (cost = 10)
-    client.add_laplace_noise(
+    let _ = client.add_laplace_noise(
         &researcher,
         &budget_id,
         &BytesN::from_array(&env, &[1u8; 32]),
         &DataType::Numerical,
         &100,
         &10,
-    ).unwrap();
+    );
 
     // Gaussian query (cost = 20)
-    client.add_gaussian_noise(
+    let _ = client.add_gaussian_noise(
         &researcher,
         &budget_id,
         &BytesN::from_array(&env, &[2u8; 32]),
         &DataType::Count,
         &200,
         &10,
-    ).unwrap();
+    );
 
     // Budget should be 200 - 10 - 20 = 170
     assert_eq!(client.get_remaining_budget(&budget_id), 170);

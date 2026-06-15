@@ -11,7 +11,6 @@ pub use errors::Error;
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 use soroban_sdk::xdr::ToXdr;
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Data Types ====================
 

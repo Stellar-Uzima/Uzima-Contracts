@@ -8,8 +8,8 @@ pub mod errors;
 pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN,
+    Env, String, Symbol, Vec,
 };
 use uzima_sanitization::{
     sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
@@ -399,7 +399,7 @@ impl IdentityRegistryContract {
         }
         if let Some(rbac_addr) = env.storage().instance().get::<DataKey, Address>(&DataKey::RbacContract) {
             let client = RbacClient::new(env, &rbac_addr);
-            return client.has_role(caller, &RbacRole::Admin).unwrap_or(false);
+            return client.has_role(caller, &RbacRole::Admin);
         }
         false
     }
@@ -1537,12 +1537,11 @@ impl IdentityRegistryContract {
 
         let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
         let rbac_client = RbacClient::new(&env, &rbac_addr);
-        let has_admin = rbac_client.has_role(&owner, &RbacRole::Admin).unwrap_or(false);
-        if !has_admin {
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
             return Err(Error::Unauthorized);
         }
 
-        rbac_client.assign_role(&verifier, &RbacRole::Staff).map_err(|_| Error::Unauthorized)?;
+        rbac_client.assign_role(&verifier, &RbacRole::Staff);
 
         env.storage()
             .instance()
@@ -1570,12 +1569,11 @@ impl IdentityRegistryContract {
 
         let rbac_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
         let rbac_client = RbacClient::new(&env, &rbac_addr);
-        let has_admin = rbac_client.has_role(&owner, &RbacRole::Admin).unwrap_or(false);
-        if !has_admin {
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
             return Err(Error::Unauthorized);
         }
 
-        rbac_client.remove_role(&verifier, &RbacRole::Staff).map_err(|_| Error::Unauthorized)?;
+        rbac_client.remove_role(&verifier, &RbacRole::Staff);
 
         env.storage()
             .instance()
@@ -1594,26 +1592,13 @@ impl IdentityRegistryContract {
             None => return false,
         };
         let client = RbacClient::new(&env, &rbac_addr);
-        match client.has_role(&account, &RbacRole::Staff) {
-            Ok(has_staff) => {
-                if has_staff {
-                    return true;
-                }
-                match client.has_role(&account, &RbacRole::Service) {
-                    Ok(has_service) => {
-                        if has_service {
-                            return true;
-                        }
-                        match client.has_role(&account, &RbacRole::Admin) {
-                            Ok(has_admin) => has_admin,
-                            Err(_) => false,
-                        }
-                    }
-                    Err(_) => false,
-                }
-            }
-            Err(_) => false,
+        if client.has_role(&account, &RbacRole::Staff) {
+            return true;
         }
+        if client.has_role(&account, &RbacRole::Service) {
+            return true;
+        }
+        client.has_role(&account, &RbacRole::Admin)
     }
 
     /// Get the contract owner
@@ -1631,7 +1616,9 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
-        Self::require_not_paused(&env)?;
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
         if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
             panic!("invalid meta");
@@ -1654,7 +1641,9 @@ impl IdentityRegistryContract {
     /// Create an attestation (legacy - only verifiers can do this)
     pub fn attest(env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32>) {
         verifier.require_auth();
-        Self::require_not_paused(&env)?;
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
         let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
@@ -1699,7 +1688,9 @@ impl IdentityRegistryContract {
         claim_hash: BytesN<32>,
     ) {
         verifier.require_auth();
-        Self::require_not_paused(&env)?;
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
         let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
@@ -2077,7 +2068,7 @@ pub struct MockRbac;
 #[cfg(test)]
 #[soroban_sdk::contractimpl]
 impl MockRbac {
-    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+    pub fn init_mock(_env: Env) {}
 
     pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
@@ -2747,9 +2738,3 @@ mod tests {
     }
 }
 
-    // ========================================================================
-    // PROVIDER STAKING (SUT Token Reputation Bonding)
-    // ========================================================================
-
-    /// Deposit stake for a healthcare provider.
-    /// The minimum stake is configurable by governance.

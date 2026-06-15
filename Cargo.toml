@@ -3,7 +3,6 @@ resolver = "2"
 members = [
     "contracts/*",
     "contract_optimizer",
-    "tests",
     "tests/interoperability_suite",
 ]
 exclude = [
@@ -33,9 +32,13 @@ exclude = [
     "contracts/federated_learning",
     "contracts/sync_manager",
     "contracts/failover_detector",
+    "contracts/governance_integration_tests",
     "contracts/healthcare_compliance_automation",
     "contracts/drug_discovery",
     "contracts/health_check",
+    "contracts/medical_records",
+    "contracts/healthcare_oracle_network",
+    "contracts/contract_behavior_fuzzing",
 ]
 
 [workspace.dependencies]

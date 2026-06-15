@@ -1,5 +1,5 @@
-use crate::serialization_utils::{SafeSerialize, SerializationError};
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String, Symbol};
+use crate::serialization_utils::{SafeSerialize, SerializationError, SerializationUtils};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, String, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
@@ -15,9 +15,9 @@ pub struct FederatedRound {
 }
 
 impl SafeSerialize for FederatedRound {
-    fn safe_serialize(&self, env: &soroban_sdk::Env) -> Result<(), SerializationError> {
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
-        self.base_model_id.safe_serialize(env)?;
+        SerializationUtils::validate_bytes_n(env, &self.base_model_id)?;
 
         // Validate edge cases
         if self.min_participants == 0 {
@@ -42,10 +42,10 @@ pub struct ParticipantUpdateMeta {
 }
 
 impl SafeSerialize for ParticipantUpdateMeta {
-    fn safe_serialize(&self, env: &soroban_sdk::Env) -> Result<(), SerializationError> {
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
-        self.participant.safe_serialize(env)?;
-        self.update_hash.safe_serialize(env)?;
+        SerializationUtils::validate_address(env, &self.participant)?;
+        SerializationUtils::validate_bytes_n(env, &self.update_hash)?;
 
         // Validate edge cases
         if self.num_samples == 0 {
@@ -68,12 +68,12 @@ pub struct ModelMetadata {
 }
 
 impl SafeSerialize for ModelMetadata {
-    fn safe_serialize(&self, env: &soroban_sdk::Env) -> Result<(), SerializationError> {
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
-        self.model_id.safe_serialize(env)?;
-        self.description.safe_serialize(env)?;
-        self.metrics_ref.safe_serialize(env)?;
-        self.fairness_report_ref.safe_serialize(env)?;
+        SerializationUtils::validate_bytes_n(env, &self.model_id)?;
+        SerializationUtils::safe_serialize_string(env, &self.description)?;
+        SerializationUtils::safe_serialize_string(env, &self.metrics_ref)?;
+        SerializationUtils::safe_serialize_string(env, &self.fairness_report_ref)?;
 
         // Validate edge cases
         if self.description.is_empty() {

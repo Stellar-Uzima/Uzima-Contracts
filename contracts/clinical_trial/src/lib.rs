@@ -500,11 +500,11 @@ mod tests {
         let p3 = Address::generate(&env);
 
         // Enrolling up to capacity should all succeed
-        assert!(client.enroll_participant(&site, &p1, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p2, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p3, &protocol_id).is_ok());
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
+        client.enroll_participant(&site, &p3, &protocol_id);
 
-        let (_, enrolled, max) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, max) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 3);
         assert_eq!(max, 3);
     }
@@ -527,15 +527,15 @@ mod tests {
         let p2 = Address::generate(&env);
         let p3 = Address::generate(&env); // would exceed cap
 
-        client.enroll_participant(&site, &p1, &protocol_id).unwrap();
-        client.enroll_participant(&site, &p2, &protocol_id).unwrap();
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
 
         // Third enrollment must return TrialFull
         let result = client.try_enroll_participant(&site, &p3, &protocol_id);
         assert_eq!(result, Err(Ok(Error::TrialFull)));
 
         // Enrollment count must remain at 2
-        let (_, enrolled, _) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, _) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 2);
     }
 }

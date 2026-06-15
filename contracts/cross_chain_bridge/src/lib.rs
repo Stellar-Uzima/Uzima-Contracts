@@ -26,6 +26,25 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
 
+// ==================== Submit Message Request ====================
+
+/// Bundled request for submit_message to stay within Soroban's 10-param limit.
+#[derive(Clone)]
+#[contracttype]
+pub struct SubmitMessageRequest {
+    pub message_id: BytesN<32>,
+    pub source_chain: ChainId,
+    pub dest_chain: ChainId,
+    pub sender: String,
+    pub recipient: Address,
+    pub payload_type: MessageType,
+    pub payload: String,
+    pub nonce: u64,
+    pub signature: BytesN<64>,
+    pub v_signature: BytesN<64>,
+    pub v_nonce: u64,
+}
+
 // ==================== Existing Core Types ====================
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -578,55 +597,45 @@ impl CrossChainBridgeContract {
     pub fn submit_message(
         env: Env,
         validator: Address,
-        message_id: BytesN<32>,
-        source_chain: ChainId,
-        dest_chain: ChainId,
-        sender: String,
-        recipient: Address,
-        payload_type: MessageType,
-        payload: String,
-        nonce: u64,
-        signature: BytesN<64>,
-        v_signature: BytesN<64>,
-        v_nonce: u64,
+        request: SubmitMessageRequest,
     ) -> Result<BytesN<32>, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
         let v_info = Self::get_active_validator_info(&env, &validator)?;
-        Self::require_chain_supported(&env, &source_chain)?;
+        Self::require_chain_supported(&env, &request.source_chain)?;
 
-        Self::verify_nonce(&env, &sender, nonce)?;
+        Self::verify_nonce(&env, &request.sender, request.nonce)?;
 
         // Cryptographic verification of the submitting validator
-        Self::verify_validator_nonce(&env, &v_info.public_key, v_nonce)?;
-        Self::verify_validator_signature(&env, &v_info.public_key, &message_id, v_nonce, &v_signature)?;
+        Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &request.message_id, request.v_nonce, &request.v_signature)?;
 
         let timestamp = env.ledger().timestamp();
 
         let message = CrossChainMessage {
-            message_id: message_id.clone(),
-            source_chain,
-            dest_chain,
-            sender: sender.clone(),
-            recipient,
-            payload_type,
-            payload,
-            nonce,
+            message_id: request.message_id.clone(),
+            source_chain: request.source_chain,
+            dest_chain: request.dest_chain,
+            sender: request.sender.clone(),
+            recipient: request.recipient,
+            payload_type: request.payload_type,
+            payload: request.payload,
+            nonce: request.nonce,
             timestamp,
             status: MessageStatus::Pending,
-            signature,
+            signature: request.signature,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Message(message_id.clone()), &message);
+            .set(&DataKey::Message(request.message_id.clone()), &message);
         env.storage().persistent().extend_ttl(
-            &DataKey::Message(message_id.clone()),
+            &DataKey::Message(request.message_id.clone()),
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
 
-        Self::update_nonce(&env, &sender, nonce);
+        Self::update_nonce(&env, &request.sender, request.nonce);
 
         let count: u64 = env
             .storage()
@@ -640,10 +649,10 @@ impl CrossChainBridgeContract {
 
         env.events().publish(
             (Symbol::new(&env, "MessageSubmitted"),),
-            (message_id.clone(), timestamp),
+            (request.message_id.clone(), timestamp),
         );
 
-        Ok(message_id)
+        Ok(request.message_id)
     }
 
     /// Confirm a cross-chain message (validator attestation)
