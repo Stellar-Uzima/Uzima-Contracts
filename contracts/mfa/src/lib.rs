@@ -1,4 +1,5 @@
 #![no_std]
+//! mfa - Healthcare smart contract on Stellar blockchain.
 
 pub mod factors;
 pub mod recovery;

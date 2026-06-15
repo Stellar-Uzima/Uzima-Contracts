@@ -87,7 +87,7 @@ fn test_zkp_submission_and_verification() {
         Bytes::from_slice(&env, b"input1"),
         Bytes::from_slice(&env, b"input2"),
     ];
-    let proof_data = Bytes::from_slice(&env, b"zkp_proof_data");
+    let proof_data = Bytes::from_array(&env, &[0xabu8; 32]);
 
     client.submit_zkp(
         &submitter,
@@ -126,7 +126,7 @@ fn test_medical_record_authenticity_proof() {
         hash_function: ZKPHashFunction::Poseidon,
         circuit_id: String::from_str(&env, "record_authenticity"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"record_hash")],
-        proof_data: Bytes::from_slice(&env, b"authenticity_proof"),
+        proof_data: Bytes::from_array(&env, &[0xabu8; 32]),
         vk_hash: BytesN::from_array(&env, &[5u8; 32]),
         verification_gas: 45000u64,
         created_at: env.ledger().timestamp(),
@@ -137,7 +137,7 @@ fn test_medical_record_authenticity_proof() {
         hash_function: ZKPHashFunction::MiMC,
         circuit_id: String::from_str(&env, "access_control"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"access_rights")],
-        proof_data: Bytes::from_slice(&env, b"access_proof"),
+        proof_data: Bytes::from_array(&env, &[0xbu8; 32]),
         vk_hash: BytesN::from_array(&env, &[6u8; 32]),
         verification_gas: 30000u64,
         created_at: env.ledger().timestamp(),
@@ -210,7 +210,7 @@ fn test_credential_verification() {
         hash_function: ZKPHashFunction::SHA256,
         circuit_id: String::from_str(&env, "credential_validity"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"credential_id")],
-        proof_data: Bytes::from_slice(&env, b"validity_proof"),
+        proof_data: Bytes::from_array(&env, &[0xcu8; 32]),
         vk_hash: BytesN::from_array(&env, &[9u8; 32]),
         verification_gas: 60000u64,
         created_at: env.ledger().timestamp(),
@@ -221,7 +221,7 @@ fn test_credential_verification() {
         hash_function: ZKPHashFunction::Poseidon,
         circuit_id: String::from_str(&env, "credential_attributes"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"attributes_commit")],
-        proof_data: Bytes::from_slice(&env, b"attribute_proof"),
+        proof_data: Bytes::from_array(&env, &[0xdu8; 32]),
         vk_hash: BytesN::from_array(&env, &[10u8; 32]),
         verification_gas: 35000u64,
         created_at: env.ledger().timestamp(),
@@ -271,7 +271,7 @@ fn test_recursive_zkp() {
     );
 
     let base_inputs = vec![&env, Bytes::from_slice(&env, b"base_input")];
-    let base_proof_data = Bytes::from_slice(&env, b"base_proof");
+    let base_proof_data = Bytes::from_array(&env, &[0xeu8; 32]);
     client.submit_zkp(
         &base_prover,
         &base_proof_id,
@@ -290,7 +290,7 @@ fn test_recursive_zkp() {
         hash_function: ZKPHashFunction::Rescue,
         circuit_id: String::from_str(&env, "recursive_circuit"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"recursive_input")],
-        proof_data: Bytes::from_slice(&env, b"recursive_proof_data"),
+        proof_data: Bytes::from_array(&env, &[0xfu8; 32]),
         vk_hash: BytesN::from_array(&env, &[14u8; 32]),
         verification_gas: 85000u64,
         created_at: env.ledger().timestamp(),
@@ -396,7 +396,7 @@ fn test_zkp_hash_function_performance() {
     for (i, hash_function) in hash_functions.iter().enumerate() {
         let proof_id = BytesN::from_array(&env, &[(20 + i as u8); 32]);
         let inputs = vec![&env, Bytes::from_slice(&env, b"input")];
-        let proof_data = Bytes::from_slice(&env, b"proof");
+        let proof_data = Bytes::from_array(&env, &[0x10u8; 32]);
 
         client.submit_zkp(
             &submitter,

@@ -1,3 +1,4 @@
+//! cross_chain_identity - Healthcare smart contract on Stellar blockchain.
 // Cross-Chain Identity Contract - Identity verification across blockchains
 #![no_std]
 #![allow(clippy::too_many_arguments)]

@@ -15,7 +15,10 @@ fn setup() -> (Env, Address, ContractTemplateClient<'static>) {
 fn test_initialize() {
     let (_, _, client) = setup();
     let admin2 = Address::generate(&client.env);
-    assert_eq!(client.try_initialize(&admin2), Err(Ok(Error::AlreadyInitialized)));
+    assert_eq!(
+        client.try_initialize(&admin2),
+        Err(Ok(Error::AlreadyInitialized))
+    );
 }
 
 #[test]
@@ -32,7 +35,10 @@ fn test_update_data_unauthorized() {
     let (env, _, client) = setup();
     let other = Address::generate(&env);
     let data = String::from_str(&env, "hack");
-    assert_eq!(client.try_update_data(&other, &data), Err(Ok(Error::Unauthorized)));
+    assert_eq!(
+        client.try_update_data(&other, &data),
+        Err(Ok(Error::Unauthorized))
+    );
 }
 
 #[test]
@@ -43,5 +49,8 @@ fn test_transfer_admin() {
     assert_eq!(client.get_admin(), new_admin);
 
     let data = String::from_str(&env, "old");
-    assert_eq!(client.try_update_data(&admin, &data), Err(Ok(Error::Unauthorized)));
+    assert_eq!(
+        client.try_update_data(&admin, &data),
+        Err(Ok(Error::Unauthorized))
+    );
 }

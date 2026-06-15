@@ -178,14 +178,14 @@ fn test_sequential_time_progression() {
     });
 }
 
-/// Time-dependent assumptions documented:
-///
-/// 1. `queue()` sets `eta = now + delay_seconds`. The transaction is
-///    executable when `env.ledger().timestamp() >= eta`.
-/// 2. The contract also requires `current_sequence >= queued_at_sequence + min_sequence_advance`
-///    to prevent execution in the same ledger.
-/// 3. Timestamps are assumed to be monotonically non-decreasing (Soroban
-///    Ledger guarantees this).
-/// 4. No upper bound is placed on timestamps — the contract handles
-///    large values via saturating arithmetic.
-/// 5. The `eta` computation uses `saturating_add` to avoid overflow.
+// Time-dependent assumptions documented:
+//
+// 1. `queue()` sets `eta = now + delay_seconds`. The transaction is
+//    executable when `env.ledger().timestamp() >= eta`.
+// 2. The contract also requires `current_sequence >= queued_at_sequence + min_sequence_advance`
+//    to prevent execution in the same ledger.
+// 3. Timestamps are assumed to be monotonically non-decreasing (Soroban
+//    Ledger guarantees this).
+// 4. No upper bound is placed on timestamps — the contract handles
+//    large values via saturating arithmetic.
+// 5. The `eta` computation uses `saturating_add` to avoid overflow.

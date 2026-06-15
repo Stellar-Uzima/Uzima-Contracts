@@ -2,8 +2,9 @@
 mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
     use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        symbol_short, Address, Env, Symbol,
+        symbol_short,
+        testutils::{Address as _, Events, Ledger},
+        Address, Env, Symbol, TryFromVal,
     };
 
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
@@ -75,10 +76,11 @@ mod tests {
             .iter()
             .filter(|e| {
                 e.1.get(0)
-                    .and_then(|topic| Symbol::try_from_val(&env, topic).ok())
+                    .and_then(|topic| Symbol::try_from_val(&env, &topic).ok())
                     == Some(symbol_short!("CONSENT"))
-                    && e.1.get(1)
-                        .and_then(|sub| Symbol::try_from_val(&env, sub).ok())
+                    && e.1
+                        .get(1)
+                        .and_then(|sub| Symbol::try_from_val(&env, &sub).ok())
                         == Some(symbol_short!("EXPIRED"))
             })
             .count();

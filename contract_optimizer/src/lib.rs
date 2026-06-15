@@ -115,7 +115,7 @@ impl<'a> Visit<'a> for OptimizationVisitor<'a> {
                                     )),
                                     suggestion: "Consider batching storage operations or using temporary variables".to_string(),
                                 });
-                            }
+                            },
                             "events" => {
                                 self.recommendations.push(OptimizationRecommendation {
                                     category: "Gas Optimization".to_string(),
@@ -130,8 +130,8 @@ impl<'a> Visit<'a> for OptimizationVisitor<'a> {
                                     suggestion: "Emit events outside of loops when possible"
                                         .to_string(),
                                 });
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
                 }

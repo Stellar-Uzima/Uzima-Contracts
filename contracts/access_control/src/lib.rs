@@ -293,11 +293,24 @@ mod test {
         let admin = Address::generate(&env);
         let staff = Address::generate(&env);
 
-        env.as_contract(&env.register_contract(None, DummyContract), || {
+        let contract_id = env.register_contract(None, DummyContract);
+
+        // Split each mutating operation into its own as_contract block
+        // to avoid Soroban v21 auth frame conflicts with mock_all_auths().
+        env.as_contract(&contract_id, || {
             AccessControlImpl::init(&env, &admin);
             AccessControlImpl::grant_role(&env, &staff, Role::Staff).unwrap();
+        });
+
+        env.as_contract(&contract_id, || {
             assert!(AccessControlImpl::has_role(&env, &staff, Role::Staff));
+        });
+
+        env.as_contract(&contract_id, || {
             AccessControlImpl::revoke_role(&env, &staff).unwrap();
+        });
+
+        env.as_contract(&contract_id, || {
             assert!(!AccessControlImpl::has_role(&env, &staff, Role::Staff));
         });
     }

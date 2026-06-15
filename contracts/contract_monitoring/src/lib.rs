@@ -13,7 +13,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

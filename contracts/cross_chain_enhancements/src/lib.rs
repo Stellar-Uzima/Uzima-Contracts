@@ -1,3 +1,4 @@
+//! cross_chain_enhancements - Healthcare smart contract on Stellar blockchain.
 // Cross-Chain Bridge Enhancements - ZK Proofs and Advanced Security Features
 #![no_std]
 

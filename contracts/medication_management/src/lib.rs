@@ -1,4 +1,5 @@
 #![no_std]
+//! medication_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
@@ -498,27 +499,23 @@ impl MedicationManagement {
         caller.require_auth();
         let schedule = Self::get_schedule_internal(&env, schedule_id)?;
         let config = Self::get_config(&env)?;
-        if caller != schedule.patient
-            && caller != schedule.provider
-            && caller != config.admin
-        {
+        if caller != schedule.patient && caller != schedule.provider && caller != config.admin {
             return Err(Error::Unauthorized);
         }
 
-        let mut alerts: Vec<InteractionAlert> = env
+        let alerts: Vec<InteractionAlert> = env
             .storage()
             .persistent()
             .get(&DataKey::ScheduleAlerts(schedule_id))
             .unwrap_or(Vec::new(&env));
 
-        let idx = alert_index as usize;
-        if idx >= alerts.len() {
+        if alert_index >= alerts.len() {
             return Err(Error::InvalidData);
         }
 
         let mut new_alerts = Vec::new(&env);
         for i in 0..alerts.len() {
-            if i != idx {
+            if i != alert_index {
                 new_alerts.push_back(alerts.get(i).unwrap());
             }
         }

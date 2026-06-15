@@ -1,13 +1,18 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        Error, ProposalStatus, ProposalType, TreasuryController, TreasuryControllerClient,
-        DataKey, TreasuryConfig, MultisigConfig,
+        Error, ProposalStatus, ProposalType, TreasuryConfig, TreasuryController,
+        TreasuryControllerClient,
     };
     use soroban_sdk::testutils::{Address as _, Ledger as _};
     use soroban_sdk::{Address, Bytes, Env, String, Vec};
 
-    fn setup() -> (Env, TreasuryControllerClient<'static>, Address, Vec<Address>) {
+    fn setup() -> (
+        Env,
+        TreasuryControllerClient<'static>,
+        Address,
+        Vec<Address>,
+    ) {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(1_000_000);
@@ -24,9 +29,9 @@ mod tests {
         client.initialize(
             &admin,
             &signers,
-            &2u32, // threshold
-            &3600u64, // 1 hour timelock
-            &3u32, // emergency threshold
+            &2u32,          // threshold
+            &3600u64,       // 1 hour timelock
+            &2u32,          // emergency threshold (must be <= threshold)
             &1_000_000i128, // max withdrawal
         );
 
@@ -106,7 +111,7 @@ mod tests {
 
     #[test]
     fn test_add_supported_token() {
-        let (_env, client, admin, _signers) = setup();
+        let (_env, client, _admin, _signers) = setup();
         let token = Address::generate(&client.env);
 
         assert!(client.try_add_supported_token(&token).is_ok());
@@ -258,8 +263,9 @@ mod tests {
             &Bytes::from_array(&env, &[0u8; 32]),
         );
 
-        // signer1 is proposer, already approved implicitly
-        // signer1 trying to approve again should fail
+        // First approval by signer1 should succeed
+        assert!(client.try_approve_proposal(&signer1, &proposal_id).is_ok());
+        // Second approval by the same signer should fail (AlreadyApproved)
         let result = client.try_approve_proposal(&signer1, &proposal_id);
         assert!(result.is_err());
     }
@@ -288,7 +294,9 @@ mod tests {
             &Bytes::from_array(&env, &[0u8; 32]),
         );
 
-        client.try_approve_proposal(&signer2, &proposal_id).unwrap_or(());
+        let _ = client
+            .try_approve_proposal(&signer2, &proposal_id)
+            .unwrap_or(Ok(()));
 
         // Timelock hasn't expired yet
         let result = client.try_execute_proposal(&signer1, &proposal_id);
@@ -321,7 +329,7 @@ mod tests {
         let (_env, client, admin, _signers) = setup();
 
         // Admin halts
-        client.try_emergency_halt(&admin).unwrap_or(());
+        let _ = client.try_emergency_halt(&admin).unwrap_or(Ok(()));
         // Admin resumes
         assert!(client.try_resume_operations(&admin).is_ok());
     }
@@ -331,7 +339,7 @@ mod tests {
         let (_env, client, admin, signers) = setup();
         let signer = signers.get(0).unwrap();
 
-        client.try_emergency_halt(&admin).unwrap_or(());
+        let _ = client.try_emergency_halt(&admin).unwrap_or(Ok(()));
         let result = client.try_resume_operations(&signer); // Only admin can resume
         assert!(result.is_err());
     }
@@ -381,7 +389,7 @@ mod tests {
 
     #[test]
     fn test_gnosis_get_owners() {
-        let (_env, client, _admin, signers) = setup();
+        let (_env, client, _admin, _signers) = setup();
         let owners = client.gnosis_get_owners();
         assert_eq!(owners.len(), 3);
     }

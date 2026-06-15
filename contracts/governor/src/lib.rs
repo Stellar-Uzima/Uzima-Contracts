@@ -1,4 +1,5 @@
 #![no_std]
+//! governor - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::needless_return)]
@@ -354,9 +355,7 @@ mod test {
         let gov_id = env.register_contract(None, Governor);
         let gov_client = GovernorClient::new(&env, &gov_id);
 
-        gov_client.initialize(
-            &token_id, &tl, &5, &10, &100, &1, &None, &None,
-        );
+        gov_client.initialize(&token_id, &tl, &5, &10, &100, &1, &None, &None);
 
         token_client.set_bal(&voter, &200);
 

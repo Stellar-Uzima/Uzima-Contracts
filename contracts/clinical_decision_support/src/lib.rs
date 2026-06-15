@@ -1,4 +1,5 @@
 #![no_std]
+//! clinical_decision_support - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short as ss, Address, Env, String, Vec,
 };

@@ -1,4 +1,5 @@
 #![no_std]
+//! forensics - Healthcare smart contract on Stellar blockchain.
 
 pub mod analysis;
 pub mod detection;

@@ -188,8 +188,13 @@ fn test_trusted_forwarder_context_is_consistent() {
 
     let stored_forwarder = forwarder.get_trusted_forwarder();
     assert_eq!(stored_forwarder, contract_id);
-    let context_forwarder = crate::erc2771_context::ERC2771ContextImpl::get_trusted_forwarder(&env)
-        .expect("trusted forwarder must be stored in shared context storage");
+
+    // The free function accesses storage, so it must be called inside
+    // env.as_contract() to provide a contract context.
+    let context_forwarder = env.as_contract(&contract_id, || {
+        crate::erc2771_context::ERC2771ContextImpl::get_trusted_forwarder(&env)
+            .expect("trusted forwarder must be stored in shared context storage")
+    });
     assert_eq!(context_forwarder, contract_id);
 }
 

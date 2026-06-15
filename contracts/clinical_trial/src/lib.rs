@@ -1,7 +1,12 @@
 #![no_std]
+//! clinical_trial - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::absurd_extreme_comparisons)]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -183,12 +188,12 @@ impl ClinicalTrial {
         max_participants: u64,
     ) -> Result<u64, Error> {
         proposer.require_auth();
-        
+
         // Validate inputs
         validate_title(&title)?;
         validate_reference(&metadata_ref, Error::InvalidMetadataRef)?;
         validate_max_participants(max_participants)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -223,10 +228,10 @@ impl ClinicalTrial {
 
     pub fn register_site(env: Env, registrar: Address, name: String) -> Result<u64, Error> {
         registrar.require_auth();
-        
+
         // Validate inputs
         validate_name(&name)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -249,20 +254,27 @@ impl ClinicalTrial {
     }
 
     // Patient recruitment / eligibility with enrollment cap enforcement
-    pub fn recruit_patient(env: Env, site: Address, patient: Address, protocol_id: u64) -> Result<(), Error> {
+    pub fn recruit_patient(
+        env: Env,
+        site: Address,
+        patient: Address,
+        protocol_id: u64,
+    ) -> Result<(), Error> {
         site.require_auth();
-        
+
         // Check protocol exists and has capacity
         let mut protocol: Protocol = env
             .storage()
             .persistent()
             .get(&DataKey::Protocol(protocol_id))
             .ok_or(Error::ProtocolNotFound)?;
-        
-        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
             return Err(Error::TrialFull);
         }
-        
+
         // Store recruitment state
         let key = DataKey::ParticipantRecords(patient.clone());
         let mut v: Vec<u64> = env
@@ -272,24 +284,28 @@ impl ClinicalTrial {
             .unwrap_or(Vec::new(&env));
         v.push_back(protocol_id);
         env.storage().persistent().set(&key, &v);
-        
+
         // Update enrollment count
         protocol.current_participants = protocol.current_participants.saturating_add(1);
-        env.storage().persistent().set(&DataKey::Protocol(protocol_id), &protocol);
-        
+        env.storage()
+            .persistent()
+            .set(&DataKey::Protocol(protocol_id), &protocol);
+
         // Check if trial is now full and emit event
-        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
             env.events().publish(
                 (Symbol::new(&env, "TrialCapacityReached"),),
                 (protocol_id, protocol.max_participants),
             );
         }
-        
+
         env.events().publish(
             (Symbol::new(&env, "PatientRecruited"),),
             (patient, protocol_id, site),
         );
-        
+
         Ok(())
     }
 
@@ -300,10 +316,10 @@ impl ClinicalTrial {
         consent_ref: String,
     ) -> Result<u64, Error> {
         patient.require_auth();
-        
+
         // Validate inputs
         validate_reference(&consent_ref, Error::InvalidConsentRef)?;
-        
+
         let count: u64 = env
             .storage()
             .instance()
@@ -337,11 +353,11 @@ impl ClinicalTrial {
         description_ref: String,
     ) -> Result<u64, Error> {
         reporter.require_auth();
-        
+
         // Validate inputs
         validate_severity(severity)?;
         validate_reference(&description_ref, Error::InvalidDescriptionRef)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -500,11 +516,11 @@ mod tests {
         let p3 = Address::generate(&env);
 
         // Enrolling up to capacity should all succeed
-        assert!(client.enroll_participant(&site, &p1, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p2, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p3, &protocol_id).is_ok());
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
+        client.enroll_participant(&site, &p3, &protocol_id);
 
-        let (_, enrolled, max) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, max) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 3);
         assert_eq!(max, 3);
     }
@@ -527,15 +543,15 @@ mod tests {
         let p2 = Address::generate(&env);
         let p3 = Address::generate(&env); // would exceed cap
 
-        client.enroll_participant(&site, &p1, &protocol_id).unwrap();
-        client.enroll_participant(&site, &p2, &protocol_id).unwrap();
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
 
         // Third enrollment must return TrialFull
         let result = client.try_enroll_participant(&site, &p3, &protocol_id);
         assert_eq!(result, Err(Ok(Error::TrialFull)));
 
         // Enrollment count must remain at 2
-        let (_, enrolled, _) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, _) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 2);
     }
 }

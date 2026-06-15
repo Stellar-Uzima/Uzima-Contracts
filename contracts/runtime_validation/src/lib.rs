@@ -1,4 +1,5 @@
 #![no_std]
+//! runtime_validation - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;

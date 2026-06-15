@@ -1,4 +1,5 @@
 #![no_std]
+//! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -401,11 +402,7 @@ impl AppointmentBookingEscrow {
 
     /// Mark an appointment as a no-show (provider only).
     /// Only callable by the appointment's provider. No funds are released.
-    pub fn mark_no_show(
-        env: Env,
-        provider: Address,
-        appointment_id: u64,
-    ) -> Result<(), Error> {
+    pub fn mark_no_show(env: Env, provider: Address, appointment_id: u64) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
         events::diag_fn_enter(&env, "mark_no_show");
@@ -416,9 +413,9 @@ impl AppointmentBookingEscrow {
             .persistent()
             .get(&appointment_key)
             .ok_or_else(|| {
-                Self::record_operation(&env, false);
-                Error::AppointmentNotFound
-            })?;
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Only the assigned provider may mark no-show
         if appointment.provider != provider {
@@ -465,11 +462,7 @@ impl AppointmentBookingEscrow {
 
     /// Send an appointment reminder (provider or admin only).
     /// Records the timestamp when the reminder was last sent.
-    pub fn send_reminder(
-        env: Env,
-        caller: Address,
-        appointment_id: u64,
-    ) -> Result<(), Error> {
+    pub fn send_reminder(env: Env, caller: Address, appointment_id: u64) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         events::diag_fn_enter(&env, "send_reminder");
@@ -480,9 +473,9 @@ impl AppointmentBookingEscrow {
             .persistent()
             .get(&appointment_key)
             .ok_or_else(|| {
-                Self::record_operation(&env, false);
-                Error::AppointmentNotFound
-            })?;
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Only the provider or admin can send a reminder
         let admin: Address = env

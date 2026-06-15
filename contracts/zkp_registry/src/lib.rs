@@ -1,4 +1,5 @@
 #![no_std]
+//! zkp_registry - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -1171,7 +1172,11 @@ impl ZKPRegistry {
             .instance()
             .get(&DataKey::ContractPaused)
             .unwrap_or(false);
-        let multisig_config = match env.storage().instance().get::<_, MultiSigConfig>(&DataKey::MultiSigConfig) {
+        let multisig_config = match env
+            .storage()
+            .instance()
+            .get::<_, MultiSigConfig>(&DataKey::MultiSigConfig)
+        {
             Some(cfg) => OptionalMultiSigConfig::Some(cfg),
             None => OptionalMultiSigConfig::None,
         };

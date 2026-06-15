@@ -1,4 +1,5 @@
 #![no_std]
+//! cross_chain_bridge - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
@@ -14,10 +15,10 @@ mod test;
 mod timeout_simple_test;
 
 /// # Cross-Chain Bridge Signature Scheme
-/// 
-/// To prevent unauthorized relaying and replay attacks, all validator attestations 
+///
+/// To prevent unauthorized relaying and replay attacks, all validator attestations
 /// (submissions, confirmations, and proofs) require a cryptographic signature.
-/// 
+///
 /// **Scheme**: Ed25519 (EdDSA)
 /// **Payload**: `SHA256(Target_ID + Nonce)`
 ///   - `Target_ID`: The unique identifier of the entity being signed (e.g., `message_id`, `proof_id`).
@@ -25,6 +26,25 @@ mod timeout_simple_test;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
+
+// ==================== Submit Message Request ====================
+
+/// Bundled request for submit_message to stay within Soroban's 10-param limit.
+#[derive(Clone)]
+#[contracttype]
+pub struct SubmitMessageRequest {
+    pub message_id: BytesN<32>,
+    pub source_chain: ChainId,
+    pub dest_chain: ChainId,
+    pub sender: String,
+    pub recipient: Address,
+    pub payload_type: MessageType,
+    pub payload: String,
+    pub nonce: u64,
+    pub signature: BytesN<64>,
+    pub v_signature: BytesN<64>,
+    pub v_nonce: u64,
+}
 
 // ==================== Existing Core Types ====================
 
@@ -578,55 +598,51 @@ impl CrossChainBridgeContract {
     pub fn submit_message(
         env: Env,
         validator: Address,
-        message_id: BytesN<32>,
-        source_chain: ChainId,
-        dest_chain: ChainId,
-        sender: String,
-        recipient: Address,
-        payload_type: MessageType,
-        payload: String,
-        nonce: u64,
-        signature: BytesN<64>,
-        v_signature: BytesN<64>,
-        v_nonce: u64,
+        request: SubmitMessageRequest,
     ) -> Result<BytesN<32>, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
         let v_info = Self::get_active_validator_info(&env, &validator)?;
-        Self::require_chain_supported(&env, &source_chain)?;
+        Self::require_chain_supported(&env, &request.source_chain)?;
 
-        Self::verify_nonce(&env, &sender, nonce)?;
+        Self::verify_nonce(&env, &request.sender, request.nonce)?;
 
         // Cryptographic verification of the submitting validator
-        Self::verify_validator_nonce(&env, &v_info.public_key, v_nonce)?;
-        Self::verify_validator_signature(&env, &v_info.public_key, &message_id, v_nonce, &v_signature)?;
+        Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &request.message_id,
+            request.v_nonce,
+            &request.v_signature,
+        )?;
 
         let timestamp = env.ledger().timestamp();
 
         let message = CrossChainMessage {
-            message_id: message_id.clone(),
-            source_chain,
-            dest_chain,
-            sender: sender.clone(),
-            recipient,
-            payload_type,
-            payload,
-            nonce,
+            message_id: request.message_id.clone(),
+            source_chain: request.source_chain,
+            dest_chain: request.dest_chain,
+            sender: request.sender.clone(),
+            recipient: request.recipient,
+            payload_type: request.payload_type,
+            payload: request.payload,
+            nonce: request.nonce,
             timestamp,
             status: MessageStatus::Pending,
-            signature,
+            signature: request.signature,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Message(message_id.clone()), &message);
+            .set(&DataKey::Message(request.message_id.clone()), &message);
         env.storage().persistent().extend_ttl(
-            &DataKey::Message(message_id.clone()),
+            &DataKey::Message(request.message_id.clone()),
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
 
-        Self::update_nonce(&env, &sender, nonce);
+        Self::update_nonce(&env, &request.sender, request.nonce);
 
         let count: u64 = env
             .storage()
@@ -640,10 +656,10 @@ impl CrossChainBridgeContract {
 
         env.events().publish(
             (Symbol::new(&env, "MessageSubmitted"),),
-            (message_id.clone(), timestamp),
+            (request.message_id.clone(), timestamp),
         );
 
-        Ok(message_id)
+        Ok(request.message_id)
     }
 
     /// Confirm a cross-chain message (validator attestation)
@@ -1223,7 +1239,13 @@ impl CrossChainBridgeContract {
 
         // Cryptographic verification of the validator triggering aggregation
         Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
-        Self::verify_validator_signature(&env, &v_info.public_key, &consensus_hash, nonce, &signature)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &consensus_hash,
+            nonce,
+            &signature,
+        )?;
 
         if report_ids.len() < MIN_ORACLE_REPORTS {
             return Err(Error::InsufficientOracleReports);
@@ -1312,7 +1334,9 @@ impl CrossChainBridgeContract {
         let mut verifiers: Vec<Address> = Vec::new(&env);
         verifiers.push_back(validator.clone());
         env.storage().temporary().set(&conf_key, &verifiers);
-        env.storage().temporary().extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
+        env.storage()
+            .temporary()
+            .extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
 
         env.events().publish(
             (Symbol::new(&env, "ProofSubmitted"),),
@@ -1332,17 +1356,23 @@ impl CrossChainBridgeContract {
     ) -> Result<bool, Error> {
         validator_address.require_auth();
         Self::require_not_paused(&env)?;
-        
+
         let v_key = DataKey::Validator(validator_address.clone());
-        let validator = env.storage().persistent().get::<DataKey, Validator>(&v_key)
+        let validator = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Validator>(&v_key)
             .ok_or(Error::ValidatorNotFound)?;
-        
+
         if !validator.is_active {
             return Err(Error::ValidatorNotActive);
         }
 
         let proof_key = DataKey::Proof(proof_id.clone());
-        let mut proof = env.storage().persistent().get::<DataKey, CrossChainProof>(&proof_key)
+        let mut proof = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainProof>(&proof_key)
             .ok_or(Error::ProofNotFound)?;
 
         if proof.verified {
@@ -1351,11 +1381,20 @@ impl CrossChainBridgeContract {
 
         // Replay Protection & Signature Verification
         Self::verify_validator_nonce(&env, &validator.public_key, nonce)?;
-        Self::verify_validator_signature(&env, &validator.public_key, &proof_id, nonce, &signature)?;
+        Self::verify_validator_signature(
+            &env,
+            &validator.public_key,
+            &proof_id,
+            nonce,
+            &signature,
+        )?;
 
         // Track unique confirmations
         let conf_key = DataKey::Confirmations(proof_id.clone());
-        let mut verifiers: Vec<Address> = env.storage().temporary().get(&conf_key)
+        let mut verifiers: Vec<Address> = env
+            .storage()
+            .temporary()
+            .get(&conf_key)
             .unwrap_or(Vec::new(&env));
 
         if verifiers.contains(&validator_address) {
@@ -1364,11 +1403,16 @@ impl CrossChainBridgeContract {
 
         verifiers.push_back(validator_address);
         env.storage().temporary().set(&conf_key, &verifiers);
-        env.storage().temporary().extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
+        env.storage()
+            .temporary()
+            .extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
 
         proof.verifier_count = verifiers.len() as u32;
 
-        let min_conf: u32 = env.storage().instance().get(&DataKey::MinConfirmations)
+        let min_conf: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
         if proof.verifier_count >= min_conf {
@@ -1439,7 +1483,13 @@ impl CrossChainBridgeContract {
 
         // Signature Verification
         Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
-        Self::verify_validator_signature(&env, &v_info.public_key, &payload_hash, nonce, &signature)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &payload_hash,
+            nonce,
+            &signature,
+        )?;
 
         let count: u64 = env
             .storage()
@@ -1541,11 +1591,7 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::CrossChainOp(op_id.clone()), &operation);
 
-        let count: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::OpCount)
-            .unwrap_or(0);
+        let count: u64 = env.storage().instance().get(&DataKey::OpCount).unwrap_or(0);
         let new_count = count.saturating_add(1);
         env.storage().instance().set(&DataKey::OpCount, &new_count);
 
@@ -2014,7 +2060,10 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::AuthorizedRelayer(relayer.clone()), &true);
         env.events().publish(
-            (soroban_sdk::symbol_short!("bridge"), soroban_sdk::symbol_short!("rel_add")),
+            (
+                soroban_sdk::symbol_short!("bridge"),
+                soroban_sdk::symbol_short!("rel_add"),
+            ),
             relayer,
         );
         Ok(())
@@ -2031,7 +2080,10 @@ impl CrossChainBridgeContract {
             .persistent()
             .remove(&DataKey::AuthorizedRelayer(relayer.clone()));
         env.events().publish(
-            (soroban_sdk::symbol_short!("bridge"), soroban_sdk::symbol_short!("rel_rm")),
+            (
+                soroban_sdk::symbol_short!("bridge"),
+                soroban_sdk::symbol_short!("rel_rm"),
+            ),
             relayer,
         );
         Ok(())
@@ -2079,7 +2131,11 @@ impl CrossChainBridgeContract {
     }
 
     fn get_active_validator_info(env: &Env, validator: &Address) -> Result<Validator, Error> {
-        match env.storage().persistent().get::<DataKey, Validator>(&DataKey::Validator(validator.clone())) {
+        match env
+            .storage()
+            .persistent()
+            .get::<DataKey, Validator>(&DataKey::Validator(validator.clone()))
+        {
             Some(v) if v.is_active => Ok(v),
             Some(_) => Err(Error::ValidatorNotActive),
             None => Err(Error::ValidatorNotFound),
@@ -2143,17 +2199,18 @@ impl CrossChainBridgeContract {
         signature: &BytesN<64>,
     ) -> Result<(), Error> {
         use soroban_sdk::Bytes;
-        
+
         // Serialize Data + Nonce for Ed25519 verification
         // Using a more efficient construction for the message payload
         let mut msg_data = Bytes::from_array(env, &data.to_array());
         msg_data.extend_from_array(&nonce.to_be_bytes());
 
         // Note: ed25519_verify will panic/trap if verification fails.
-        // This is standard for Soroban auth, but ensure callers are aware 
+        // This is standard for Soroban auth, but ensure callers are aware
         // that Error::InvalidSignature is primarily a placeholder for off-chain hints.
         let message_hash = env.crypto().sha256(&msg_data);
-        env.crypto().ed25519_verify(validator_pubkey, &message_hash.into(), signature);
+        env.crypto()
+            .ed25519_verify(validator_pubkey, &message_hash.into(), signature);
 
         Ok(())
     }
@@ -2198,7 +2255,11 @@ impl CrossChainBridgeContract {
         operation.status = OperationStatus::Refunded;
         env.events().publish(
             (Symbol::new(&env, "RefundProcessed"),),
-            (operation.id.clone(), operation.refund_address.clone(), operation.op_type),
+            (
+                operation.id.clone(),
+                operation.refund_address.clone(),
+                operation.op_type,
+            ),
         );
         Ok(())
     }

@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_analytics_dashboard - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{

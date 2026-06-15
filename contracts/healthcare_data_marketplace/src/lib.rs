@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_data_marketplace - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]

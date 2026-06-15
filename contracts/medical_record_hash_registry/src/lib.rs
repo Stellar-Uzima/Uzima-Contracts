@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_record_hash_registry - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -9,9 +10,8 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 use soroban_sdk::xdr::ToXdr;
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 
 // ==================== Data Types ====================
 
