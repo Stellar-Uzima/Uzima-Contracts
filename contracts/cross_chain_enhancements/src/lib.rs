@@ -430,7 +430,7 @@ impl CrossChainEnhancements {
     fn verify_zk_proof_structure(env: &Env, proof_data: &BytesN<64>) -> bool {
         // Format-version byte check.
         let bytes: Bytes = proof_data.clone().into();
-        if bytes.len() < 1 {
+        if bytes.is_empty() {
             return false;
         }
         let version = bytes.get_unchecked(0);

@@ -11,9 +11,6 @@ use soroban_sdk::{
     Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
-#[cfg(test)]
-use soroban_sdk::{IntoVal as _, TryFromVal as _};
-
 // =============================================================================
 // Types
 // =============================================================================
@@ -1124,7 +1121,7 @@ impl ZKPRegistry {
             .has(&DataKey::ZKProof(base_proof_id.clone()));
 
         if !has_temp && !has_pers {
-            return Err(Error::ProofNotFound);
+            return Err(Error::BaseProofMissing);
         }
 
         let recursive_proof = RecursiveProof {
@@ -1475,7 +1472,7 @@ impl ZKPRegistry {
         }
 
         // 4. Public-input count binding
-        let supplied = proof.public_inputs.len() as u32;
+        let supplied = proof.public_inputs.len();
         if supplied != circuit_params.num_public_inputs {
             return Err(Error::InconsistentPublicInputCount);
         }
@@ -1492,7 +1489,7 @@ impl ZKPRegistry {
             if input.is_empty() {
                 return Err(Error::MalformedProof);
             }
-            if input.len() as u32 > max_input_bytes {
+            if input.len() > max_input_bytes {
                 return Err(Error::MalformedProof);
             }
         }
@@ -1514,8 +1511,8 @@ impl ZKPRegistry {
         if proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
         }
-        let len = proof.proof_data.len() as u32;
-        if len < PROOF_MIN_BYTES || len > PROOF_MAX_BYTES {
+        let len = proof.proof_data.len();
+        if !(PROOF_MIN_BYTES..=PROOF_MAX_BYTES).contains(&len) {
             return Err(Error::MalformedProof);
         }
 
@@ -1572,8 +1569,8 @@ impl ZKPRegistry {
         if proof.min_value >= proof.max_value {
             return Err(Error::InvalidRange);
         }
-        let len = proof.proof_data.len() as u32;
-        if len < PROOF_MIN_BYTES || len > PROOF_MAX_BYTES {
+        let len = proof.proof_data.len();
+        if !(PROOF_MIN_BYTES..=PROOF_MAX_BYTES).contains(&len) {
             return Err(Error::MalformedProof);
         }
         // Range proofs always use the Bulletproofs format byte.
@@ -1633,8 +1630,8 @@ impl ZKPRegistry {
         if proof.composition_depth > 10 || proof.composition_depth == 0 {
             return Err(Error::RecursiveDepthExceeded);
         }
-        let len = proof.recursive_proof.proof_data.len() as u32;
-        if len < PROOF_MIN_BYTES || len > PROOF_MAX_BYTES {
+        let len = proof.recursive_proof.proof_data.len();
+        if !(PROOF_MIN_BYTES..=PROOF_MAX_BYTES).contains(&len) {
             return Err(Error::MalformedProof);
         }
         if proof.recursive_proof.proof_data.get_unchecked(0) != PROOF_FORMAT_VERSION_RECURSIVE {
@@ -1720,7 +1717,7 @@ impl ZKPRegistry {
         payload.append(&Bytes::from_slice(env, &proof.max_value.to_be_bytes()));
         payload.append(&Bytes::from_slice(
             env,
-            &(proof.encrypted_value.len() as u32).to_be_bytes(),
+            &proof.encrypted_value.len().to_be_bytes(),
         ));
         payload.append(&proof.encrypted_value);
         env.crypto().sha256(&payload).into()
@@ -1795,7 +1792,7 @@ impl ZKPRegistry {
         encrypted_expiration: &Bytes,
         current_time: u64,
     ) -> Result<u64, Error> {
-        if encrypted_expiration.len() as u32 != CRED_EXPIRATION_CIPHERTEXT_LEN {
+        if encrypted_expiration.len() != CRED_EXPIRATION_CIPHERTEXT_LEN {
             return Err(Error::InvalidExpirationCiphertext);
         }
 
@@ -1853,9 +1850,6 @@ fn digits_from_bytes32(env: &Env, b: &BytesN<32>) -> soroban_sdk::String {
         arr[2 * i] = hex_chars[(bytes[i] >> 4) as usize];
         arr[2 * i + 1] = hex_chars[(bytes[i] & 0x0f) as usize];
     }
-    let s = match core::str::from_utf8(&arr) {
-        Ok(v) => v,
-        Err(_) => "",
-    };
+    let s = core::str::from_utf8(&arr).unwrap_or_default();
     soroban_sdk::String::from_str(env, s)
 }

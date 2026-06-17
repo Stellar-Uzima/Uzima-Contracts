@@ -12,13 +12,9 @@ fn make_far_future_expiration(env: &Env, now: u64) -> Bytes {
     use crate::DEFAULT_ISSUER_SALT;
     let future_ts = now.saturating_add(365 * 86_400);
     let mut plaintext = [0u8; 16];
-    for i in 0..8 {
-        plaintext[i] = CRED_EXPIRATION_DOMAIN_TAG[i];
-    }
+    plaintext[..8].copy_from_slice(&CRED_EXPIRATION_DOMAIN_TAG);
     let ts_bytes = future_ts.to_be_bytes();
-    for i in 0..8 {
-        plaintext[8 + i] = ts_bytes[i];
-    }
+    plaintext[8..16].copy_from_slice(&ts_bytes);
     let mut ciphertext = [0u8; 16];
     for i in 0..16 {
         ciphertext[i] = plaintext[i] ^ DEFAULT_ISSUER_SALT[i % DEFAULT_ISSUER_SALT.len()];
@@ -47,16 +43,13 @@ fn build_bulletproof_range_proof_data(
     payload.append(&Bytes::from_slice(env, &max_value.to_be_bytes()));
     payload.append(&Bytes::from_slice(
         env,
-        &(encrypted_value.len() as u32).to_be_bytes(),
+        &encrypted_value.len().to_be_bytes(),
     ));
     payload.append(encrypted_value);
     let commitment: BytesN<32> = env.crypto().sha256(&payload).into();
     let mut out = [0u8; 64];
     out[0] = PROOF_FORMAT_VERSION_BULLETPROOF;
-    let carr = commitment.to_array();
-    for i in 0..32 {
-        out[1 + i] = carr[i];
-    }
+    out[1..33].copy_from_slice(&commitment.to_array());
     Bytes::from_slice(env, &out)
 }
 
@@ -69,6 +62,18 @@ fn build_snark_proof_data(env: &Env, body_len: usize) -> Bytes {
     use crate::PROOF_FORMAT_VERSION_SNARK;
     let _ = body_len;
     let arr = [PROOF_FORMAT_VERSION_SNARK; 64];
+    Bytes::from_slice(env, &arr)
+}
+
+// Construct a properly-formed `proof_data` blob whose byte[0] is the
+// Recursive proof-system version (0x05). The verifier requires byte[0] to
+// match the declared `ZKPType::Recursive` before any other binding check
+// runs, so tests exercising `create_recursive_proof` MUST produce this
+// byte — `build_snark_proof_data` returns 0x01 and would otherwise cause
+// the verifier to return `InvalidProofFormat`.
+fn build_recursive_proof_data(env: &Env) -> Bytes {
+    use crate::PROOF_FORMAT_VERSION_RECURSIVE;
+    let arr = [PROOF_FORMAT_VERSION_RECURSIVE; 64];
     Bytes::from_slice(env, &arr)
 }
 
@@ -278,6 +283,11 @@ fn test_range_proof_age_verification() {
         &encrypted_value,
     );
 
+    // The new `verify_range_proof_internal` resolves the circuit id from
+    // SHA256("UZIMA_RANGE_CIRCUIT_V1" || vk_hash); pre-register it so the
+    // canonical lookup succeeds before the commitment binding check runs.
+    register_bulletproof_circuit_for_test(&client, &env, &admin, &vk_hash, 88);
+
     client.create_range_proof(
         &prover,
         &proof_id,
@@ -322,7 +332,7 @@ fn test_credential_verification() {
     };
 
     let attribute_proof = ZKProof {
-        proof_type: ZKPType::Bulletproof,
+        proof_type: ZKPType::SNARK,
         hash_function: ZKPHashFunction::Poseidon,
         circuit_id: String::from_str(&env, "credential_attributes"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"attributes_commit")],
@@ -347,7 +357,7 @@ fn test_credential_verification() {
     client.register_circuit(
         &admin,
         &attribute_proof.circuit_id,
-        &ZKPType::Bulletproof,
+        &ZKPType::SNARK,
         &1u32,
         &2u32,
         &200u32,
@@ -400,7 +410,11 @@ fn test_recursive_zkp() {
         &false,
     );
 
-    let base_inputs = vec![&env, Bytes::from_slice(&env, b"base_input")];
+    let base_inputs = vec![
+        &env,
+        Bytes::from_slice(&env, b"base_input"),
+        Bytes::from_slice(&env, b"base_input2"),
+    ];
     let base_proof_data = build_snark_proof_data(&env, 64);
     client.submit_zkp(
         &base_prover,
@@ -420,7 +434,7 @@ fn test_recursive_zkp() {
         hash_function: ZKPHashFunction::Rescue,
         circuit_id: String::from_str(&env, "recursive_circuit"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"recursive_input")],
-        proof_data: build_snark_proof_data(&env, 64),
+        proof_data: build_recursive_proof_data(&env),
         vk_hash: BytesN::from_array(&env, &[14u8; 32]),
         verification_gas: 85000u64,
         created_at: env.ledger().timestamp(),
@@ -511,7 +525,7 @@ fn test_zkp_hash_function_performance() {
         &admin,
         &circuit_id,
         &ZKPType::SNARK,
-        &2u32,
+        &1u32,
         &2u32,
         &100u32,
         &128u32,
@@ -617,15 +631,54 @@ fn build_bulletproof_for_zkproof(env: &Env, prover: &Address, vk_hash: &BytesN<3
     payload.append(&Bytes::from_slice(env, &arr));
     payload.append(&Bytes::from_slice(env, &[0u8; 8]));
     payload.append(&Bytes::from_slice(env, &[0u8; 8]));
-    payload.append(&Bytes::from_slice(env, &[0u32.to_be_bytes().to_vec().as_slice()][0]));
+    payload.append(&Bytes::from_slice(env, &[0u8; 4]));
     let commitment: BytesN<32> = env.crypto().sha256(&payload).into();
     let mut out = [0u8; 64];
     out[0] = crate::PROOF_FORMAT_VERSION_BULLETPROOF;
-    let carr = commitment.to_array();
-    for i in 0..32 {
-        out[1 + i] = carr[i];
-    }
+    out[1..33].copy_from_slice(&commitment.to_array());
     Bytes::from_slice(env, &out)
+}
+
+// Mirrors `ZKPRegistry::compute_canonical_range_circuit_id` so tests can
+// pre-register the Bulletproof circuit that the new range-proof verifier
+// insists on (`verify_range_proof_internal` looks up
+// `DataKey::ZKPCircuitParams(<this id>)`).
+fn compute_canonical_range_circuit_id_for_test(env: &Env, vk_hash: &BytesN<32>) -> String {
+    let mut payload = Bytes::new(env);
+    payload.append(&Bytes::from_slice(env, b"UZIMA_RANGE_CIRCUIT_V1"));
+    payload.append(&Bytes::from_slice(env, &vk_hash.to_array()));
+    let digest: BytesN<32> = env.crypto().sha256(&payload).into();
+    let bytes = digest.to_array();
+    let hex_chars = b"0123456789abcdef";
+    let mut arr = [0u8; 64];
+    for i in 0..32 {
+        arr[2 * i] = hex_chars[(bytes[i] >> 4) as usize];
+        arr[2 * i + 1] = hex_chars[(bytes[i] & 0x0f) as usize];
+    }
+    let s = core::str::from_utf8(&arr).unwrap_or("");
+    String::from_str(env, s)
+}
+
+fn register_bulletproof_circuit_for_test(
+    client: &ZKPRegistryClient,
+    env: &Env,
+    admin: &Address,
+    vk_hash: &BytesN<32>,
+    pk_byte: u8,
+) {
+    let canonical_circuit_id = compute_canonical_range_circuit_id_for_test(env, vk_hash);
+    client.register_circuit(
+        admin,
+        &canonical_circuit_id,
+        &ZKPType::Bulletproof,
+        &0u32,
+        &0u32,
+        &100u32,
+        &128u32,
+        vk_hash,
+        &BytesN::from_array(env, &[pk_byte; 32]),
+        &false,
+    );
 }
 
 
@@ -814,6 +867,11 @@ fn test_range_proof_rejects_tampered_commitment() {
     let mut bad_proof = good_proof.clone();
     bad_proof.set(2, 0xFF);
 
+    // Pre-register the canonical Bulletproof circuit so the verifier can
+    // reach the commitment-binding step rather than rejecting on
+    // `CircuitNotFound`.
+    register_bulletproof_circuit_for_test(&client, &env, &admin, &vk_hash, 88);
+
     let result = client.try_create_range_proof(
         &prover,
         &proof_id,
@@ -879,13 +937,9 @@ fn test_credential_rejects_expired_expiration() {
     use crate::DEFAULT_ISSUER_SALT;
     let past_ts: u64 = 1;
     let mut plaintext = [0u8; 16];
-    for i in 0..8 {
-        plaintext[i] = CRED_EXPIRATION_DOMAIN_TAG[i];
-    }
+    plaintext[..8].copy_from_slice(&CRED_EXPIRATION_DOMAIN_TAG);
     let ts_bytes = past_ts.to_be_bytes();
-    for i in 0..8 {
-        plaintext[8 + i] = ts_bytes[i];
-    }
+    plaintext[8..16].copy_from_slice(&ts_bytes);
     let mut ciphertext = [0u8; 16];
     for i in 0..16 {
         ciphertext[i] = plaintext[i] ^ DEFAULT_ISSUER_SALT[i % DEFAULT_ISSUER_SALT.len()];
@@ -903,7 +957,7 @@ fn test_credential_rejects_expired_expiration() {
         created_at: env.ledger().timestamp(),
     };
     let attribute_proof = ZKProof {
-        proof_type: ZKPType::Bulletproof,
+        proof_type: ZKPType::SNARK,
         hash_function: ZKPHashFunction::Poseidon,
         circuit_id: String::from_str(&env, "cred_a"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"id2")],
@@ -928,7 +982,7 @@ fn test_credential_rejects_expired_expiration() {
     client.register_circuit(
         &admin,
         &attribute_proof.circuit_id,
-        &ZKPType::Bulletproof,
+        &ZKPType::SNARK,
         &1u32,
         &2u32,
         &200u32,
@@ -975,7 +1029,7 @@ fn test_credential_rejects_tampered_ciphertext() {
         created_at: env.ledger().timestamp(),
     };
     let attribute_proof = ZKProof {
-        proof_type: ZKPType::Bulletproof,
+        proof_type: ZKPType::SNARK,
         hash_function: ZKPHashFunction::Poseidon,
         circuit_id: String::from_str(&env, "cred_a2"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"id2")],
@@ -999,7 +1053,7 @@ fn test_credential_rejects_tampered_ciphertext() {
     client.register_circuit(
         &admin,
         &attribute_proof.circuit_id,
-        &ZKPType::Bulletproof,
+        &ZKPType::SNARK,
         &1u32,
         &2u32,
         &200u32,
