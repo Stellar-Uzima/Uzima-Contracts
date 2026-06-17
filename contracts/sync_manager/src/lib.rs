@@ -561,12 +561,12 @@ impl SyncManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_initialize() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
 
         let result = SyncManager::initialize(env.clone(), admin.clone());
         assert!(result.is_ok());
@@ -578,8 +578,8 @@ mod test {
     #[test]
     fn test_initiate_sync() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
         SyncManager::initialize(env.clone(), admin.clone()).unwrap();
         SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();

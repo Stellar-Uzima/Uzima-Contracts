@@ -528,12 +528,12 @@ impl FailoverDetector {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_initialize() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
 
         let result = FailoverDetector::initialize(env.clone(), admin.clone());
         assert!(result.is_ok());
@@ -545,8 +545,8 @@ mod test {
     #[test]
     fn test_detect_failure() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
         FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
         FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
@@ -565,13 +565,13 @@ mod test {
     #[test]
     fn test_failover_plan() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
         FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
         FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
 
-        let target_nodes = Vec::new(&env);
+        let _target_nodes = Vec::<u32>::new(&env);
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);

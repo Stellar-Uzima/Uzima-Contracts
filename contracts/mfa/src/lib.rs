@@ -183,7 +183,7 @@ impl MultiFactorAuth {
         env.storage()
             .persistent()
             .set(&DataKey::Recovery(user), &recovery);
-        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY_I"));
+        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY"));
     }
 
     /// Emergency override using admin signatures (multi-sig simulation)

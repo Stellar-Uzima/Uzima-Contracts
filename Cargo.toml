@@ -5,41 +5,43 @@ members = [
     "contract_optimizer",
     "tests/interoperability_suite",
 ]
+
+# Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
+# Audit" section). Entries below are deferred contracts that cannot yet
+# compile against the workspace `soroban-sdk = "=21.7.7"` pin or are
+# non-workspace-member directories (fuzz harnesses, integration test
+# repos). Newly integrated contracts are no longer listed here.
 exclude = [
-    "contracts/credential_notifications",
     "contracts/medical_imaging",
     "contracts/healthcare_compliance",
     "contracts/clinical_nlp",
-    "contracts/clinical_decision_support",
     "contracts/remote_patient_monitoring",
     "contracts/healthcare_analytics_dashboard",
     "contracts/healthcare_data_marketplace",
     "contracts/telemedicine",
-    "contracts/patient_portal",
     "contracts/mental_health_support",
     "contracts/patient_gamification",
     "contracts/medical_imaging_ai",
     "contracts/dicomweb_services",
-    "contracts/health_data_access_logging",
-    "contracts/mfa",
     "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
     "contracts/digital_twin",
     "contracts/aml",
     "contracts/forensics",
-    "contracts/audit",
     "contracts/rbac",
     "contracts/federated_learning",
-    "contracts/sync_manager",
-    "contracts/failover_detector",
-    "contracts/governance_integration_tests",
-    "contracts/healthcare_compliance_automation",
-    "contracts/drug_discovery",
-    "contracts/health_check",
     "contracts/medical_records",
     "contracts/healthcare_oracle_network",
+
+    # Deferred (issue #828 triage): contract compiles against older soroban-sdk
+    # 21 patterns (format! in #[no_std], Vec::with_capacity, BytesN::from_array
+    # arg shape mismatch) that need refactoring beyond current PR scope.
+    "contracts/health_data_access_logging",
+
+    # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/contract_behavior_fuzzing",
-]
+    "contracts/governance_integration_tests",
+] 
 
 [workspace.dependencies]
 soroban-sdk = { version = "=21.7.7" }
