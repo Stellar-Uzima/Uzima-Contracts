@@ -1604,8 +1604,8 @@ impl ZKPRegistry {
         // bound the public fields to the proof payload.
         let expected_commitment = Self::compute_range_commitment(env, proof);
         let mut supplied = [0u8; 32];
-        for i in 0..32 {
-            supplied[i] = proof.proof_data.get_unchecked(1 + i);
+        for i in 0u32..32 {
+            supplied[i as usize] = proof.proof_data.get_unchecked(1 + i);
         }
         let supplied_commitment = BytesN::from_array(env, &supplied);
         if supplied_commitment != expected_commitment {
@@ -1691,25 +1691,6 @@ impl ZKPRegistry {
         Ok(true)
     }
 
-    /// Internal recursive proof verification
-    fn verify_recursive_proof_internal(_env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
-        // In production, this would perform actual recursive proof verification
-        // For demonstration, we do basic validation
-
-        // Check proof data is not empty
-        if proof.recursive_proof.proof_data.is_empty() {
-            return Ok(false);
-        }
-
-        // Check composition depth
-        if proof.composition_depth > 10 {
-            return Ok(false);
-        }
-
-        // Simulate recursive verification
-        Ok(true)
-    }
-
     /// Track gas usage for a user
     fn track_gas_usage(env: &Env, user: &Address, gas_used: u64) {
         let gas_key = DataKey::GasTracker(user.clone());
@@ -1733,7 +1714,7 @@ impl ZKPRegistry {
     fn compute_range_commitment(env: &Env, proof: &RangeProof) -> BytesN<32> {
         let mut payload = Bytes::new(env);
         payload.append(&Bytes::from_slice(env, b"UZIMA_RANGE_V1"));
-        payload.append(&proof.prover.to_xdr(env));
+        payload.append(&proof.prover.clone().to_xdr(env));
         Self::append_bytes32(env, &mut payload, &proof.vk_hash);
         payload.append(&Bytes::from_slice(env, &proof.min_value.to_be_bytes()));
         payload.append(&Bytes::from_slice(env, &proof.max_value.to_be_bytes()));
