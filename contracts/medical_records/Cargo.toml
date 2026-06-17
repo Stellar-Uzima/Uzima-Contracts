@@ -22,6 +22,8 @@ predictive_analytics = { path = "../predictive_analytics" }
 explainable_ai = { path = "../explainable_ai" }
 zk_verifier = { path = "../zk_verifier" }
 credential_registry = { path = "../credential_registry" }
+# Property-based testing for ZK access control invariants (Issue #832).
+proptest = "1.6.0"
 
 [features]
 default = []
