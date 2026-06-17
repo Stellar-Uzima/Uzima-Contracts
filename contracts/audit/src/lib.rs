@@ -12,7 +12,8 @@ mod test;
 use crate::types::{
     ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
     OperationResult, RetentionPolicy,
-};use soroban_sdk::{
+};
+use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
 
@@ -125,7 +126,7 @@ impl AuditTrail {
             ActionType::PermissionGrant
             | ActionType::PermissionRevoke
             | ActionType::RoleAssign
-            | ActionType::RoleRevoke => {}
+            | ActionType::RoleRevoke => {},
             _ => panic!("action must be a permission-related ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -144,7 +145,7 @@ impl AuditTrail {
             ActionType::AuthSuccess
             | ActionType::AuthFailure
             | ActionType::AuthLogout
-            | ActionType::AuthTokenRefresh => {}
+            | ActionType::AuthTokenRefresh => {},
             _ => panic!("action must be an auth-related ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -163,7 +164,7 @@ impl AuditTrail {
             ActionType::CrossChainTransferInitiated
             | ActionType::CrossChainTransferCompleted
             | ActionType::CrossChainTransferFailed
-            | ActionType::CrossChainTransferReverted => {}
+            | ActionType::CrossChainTransferReverted => {},
             _ => panic!("action must be a cross-chain ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -192,12 +193,7 @@ impl AuditTrail {
     }
 
     /// Fetch logs within a timestamp range (requires log access).
-    pub fn get_logs_by_timeframe(
-        env: Env,
-        caller: Address,
-        start: u64,
-        end: u64,
-    ) -> Vec<AuditLog> {
+    pub fn get_logs_by_timeframe(env: Env, caller: Address, start: u64, end: u64) -> Vec<AuditLog> {
         caller.require_auth();
         Self::require_log_access(&env, &caller);
         crate::querying::audit_query::AuditQuery::logs_by_timeframe(&env, start, end)
@@ -225,9 +221,7 @@ impl AuditTrail {
             .get(&DataKey::LogReaderList)
             .unwrap_or(Vec::new(&env));
         list.push_back(reader.clone());
-        env.storage()
-            .instance()
-            .set(&DataKey::LogReaderList, &list);
+        env.storage().instance().set(&DataKey::LogReaderList, &list);
 
         env.events().publish(
             (symbol_short!("AUDIT"), symbol_short!("GRANT")),
@@ -252,9 +246,7 @@ impl AuditTrail {
 
     /// Check whether an address has log-read access.
     pub fn has_log_access(env: Env, reader: Address) -> bool {
-        env.storage()
-            .persistent()
-            .has(&DataKey::LogReader(reader))
+        env.storage().persistent().has(&DataKey::LogReader(reader))
     }
 
     // ─── Retention Policy ────────────────────────────────────────────────────
@@ -392,7 +384,7 @@ impl AuditTrail {
                         | ActionType::PermissionRevoke
                         | ActionType::RoleAssign
                         | ActionType::RoleRevoke => admins += 1,
-                        _ => {}
+                        _ => {},
                     }
                 }
             }

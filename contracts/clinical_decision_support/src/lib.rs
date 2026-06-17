@@ -274,7 +274,7 @@ impl ClinicalDecisionSupport {
                 } else {
                     100 // Add 1% confidence
                 }
-            }
+            },
             _ => 0, // Not enough data to learn yet
         }
     }

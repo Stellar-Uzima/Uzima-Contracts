@@ -9,8 +9,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
-    Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
 };
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -61,10 +60,8 @@ impl CredentialNotificationsContract {
         env.storage()
             .persistent()
             .set(&DataKey::Notifier(notifier.clone()), &true);
-        env.events().publish(
-            (symbol_short!("CRED"), symbol_short!("ADD_NTF")),
-            &notifier,
-        );
+        env.events()
+            .publish((symbol_short!("CRED"), symbol_short!("ADD_NTF")), &notifier);
         Ok(())
     }
 
@@ -82,10 +79,8 @@ impl CredentialNotificationsContract {
         env.storage()
             .persistent()
             .remove(&DataKey::Notifier(notifier.clone()));
-        env.events().publish(
-            (symbol_short!("CRED"), symbol_short!("RM_NTF")),
-            &notifier,
-        );
+        env.events()
+            .publish((symbol_short!("CRED"), symbol_short!("RM_NTF")), &notifier);
         Ok(())
     }
 
