@@ -60,10 +60,15 @@ fn build_bulletproof_range_proof_data(
 }
 
 // Construct a properly-formed version-byte leading `proof_data` for a SNARK.
+// `body_len` is accepted for API stability but the actual byte count is a
+// compile-time constant — Soroban's `vec![x; n]` macro requires a literal
+// repeat count, so we emit a fixed 64-byte buffer unconditionally (SNARK
+// proofs must satisfy `type_specific_min = 64` per `verify_proof_format`).
 fn build_snark_proof_data(env: &Env, body_len: usize) -> Bytes {
     use crate::PROOF_FORMAT_VERSION_SNARK;
-    let mut payload = vec![PROOF_FORMAT_VERSION_SNARK; body_len.max(64)];
-    Bytes::from_slice(env, &payload)
+    let _ = body_len;
+    let arr = [PROOF_FORMAT_VERSION_SNARK; 64];
+    Bytes::from_slice(env, &arr)
 }
 
 #[test]
