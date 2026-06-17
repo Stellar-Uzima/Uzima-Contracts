@@ -1,5 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::Ledger;
 use soroban_sdk::{vec, Address, Bytes, BytesN, Env, String};
 
 // Construct a properly-formed `encrypted_expiration` blob for tests: 16 bytes
@@ -203,13 +204,14 @@ fn test_medical_record_authenticity_proof() {
         created_at: env.ledger().timestamp(),
     };
 
+    let access_vk = BytesN::from_array(&env, &[6u8; 32]);
     let access_proof = ZKProof {
         proof_type: ZKPType::Bulletproof,
         hash_function: ZKPHashFunction::MiMC,
         circuit_id: String::from_str(&env, "access_control"),
         public_inputs: vec![&env, Bytes::from_slice(&env, b"access_rights")],
-        proof_data: build_bulletproof_for_zkproof(&env, &patient, &access_proof.vk_hash, &public_inputs_for_bulletproof(&env)),
-        vk_hash: BytesN::from_array(&env, &[6u8; 32]),
+        proof_data: build_bulletproof_for_zkproof(&env, &patient, &access_vk),
+        vk_hash: access_vk,
         verification_gas: 30000u64,
         created_at: env.ledger().timestamp(),
     };
@@ -603,20 +605,14 @@ fn setup(env: &Env) -> (ZKPRegistryClient<'_>, Address) {
 }
 
 // Helper used by `test_medical_record_authenticity_proof` when constructing
-// a properly-formatted Bulletproof-format proof payload for a `ZKProof`
-// (where the public inputs are an already-formed Vec<Bytes>).
-fn build_bulletproof_for_zkproof(
-    env: &Env,
-    prover: &Address,
-    vk_hash: &BytesN<32>,
-    _public_inputs: &soroban_sdk::Vec<Bytes>,
-) -> Bytes {
-    // For test purposes we reuse the range-formatting helper but with
-    // min=max=0 so the recomputed commitment depends only on the
-    // prover/vk_hash, which is what the bulletproof-format check needs.
+// a properly-formatted Bulletproof-format proof payload for a `ZKProof`.
+// The commitment is computed over (prover, vk_hash) using the same canonical
+// preimage `verify_range_proof_internal` recomputes, so the proof passes the
+// format + commitment binding checks.
+fn build_bulletproof_for_zkproof(env: &Env, prover: &Address, vk_hash: &BytesN<32>) -> Bytes {
     let mut payload = Bytes::new(env);
     payload.append(&Bytes::from_slice(env, b"UZIMA_RANGE_V1"));
-    payload.append(&prover.to_xdr(env));
+    payload.append(&prover.clone().to_xdr(env));
     let arr: [u8; 32] = vk_hash.to_array();
     payload.append(&Bytes::from_slice(env, &arr));
     payload.append(&Bytes::from_slice(env, &[0u8; 8]));
@@ -632,12 +628,7 @@ fn build_bulletproof_for_zkproof(
     Bytes::from_slice(env, &out)
 }
 
-// Empty Vec<Bytes> helper; not actually used directly because we build
-// commitment from prover/vk_hash only.
-fn public_inputs_for_bulletproof(env: &Env) -> soroban_sdk::Vec<Bytes> {
-    let v: soroban_sdk::Vec<Bytes> = vec![env];
-    v
-}
+
 
 // Test helper: compute the aggregated VK hash that
 // `compute_aggregated_vk_hash` would compute given a base VK, recursive VK,
