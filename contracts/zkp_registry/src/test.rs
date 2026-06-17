@@ -274,14 +274,8 @@ fn test_range_proof_age_verification() {
     let proof_id = BytesN::from_array(&env, &[7u8; 32]);
     let encrypted_value = Bytes::from_slice(&env, b"encrypted_age");
     let vk_hash = BytesN::from_array(&env, &[8u8; 32]);
-    let proof_data = build_bulletproof_range_proof_data(
-        &env,
-        &prover,
-        &vk_hash,
-        18,
-        65,
-        &encrypted_value,
-    );
+    let proof_data =
+        build_bulletproof_range_proof_data(&env, &prover, &vk_hash, 18, 65, &encrypted_value);
 
     // The new `verify_range_proof_internal` resolves the circuit id from
     // SHA256("UZIMA_RANGE_CIRCUIT_V1" || vk_hash); pre-register it so the
@@ -681,8 +675,6 @@ fn register_bulletproof_circuit_for_test(
     );
 }
 
-
-
 // Test helper: compute the aggregated VK hash that
 // `compute_aggregated_vk_hash` would compute given a base VK, recursive VK,
 // base proof payload, and composition depth.
@@ -700,10 +692,7 @@ fn compute_aggregated_vk_for_test(
     let arr2: [u8; 32] = recursive_vk.to_array();
     payload.append(&Bytes::from_slice(env, &arr2));
     payload.append(base_proof_data);
-    payload.append(&Bytes::from_slice(
-        env,
-        &composition_depth.to_be_bytes(),
-    ));
+    payload.append(&Bytes::from_slice(env, &composition_depth.to_be_bytes()));
     env.crypto().sha256(&payload).into()
 }
 
@@ -737,7 +726,11 @@ fn test_submit_zkp_rejects_wrong_vk_hash() {
 
     let submitter = Address::generate(&env);
     let proof_id = BytesN::from_array(&env, &[12u8; 32]);
-    let inputs = vec![&env, Bytes::from_slice(&env, b"a"), Bytes::from_slice(&env, b"b")];
+    let inputs = vec![
+        &env,
+        Bytes::from_slice(&env, b"a"),
+        Bytes::from_slice(&env, b"b"),
+    ];
     let proof_data = build_snark_proof_data(&env, 64);
     let rogue_vk = BytesN::from_array(&env, &[99u8; 32]);
 
@@ -781,7 +774,11 @@ fn test_submit_zkp_rejects_wrong_public_input_count() {
     let submitter = Address::generate(&env);
     let proof_id = BytesN::from_array(&env, &[22u8; 32]);
     // Only 2 public inputs supplied; circuit expects 3.
-    let inputs = vec![&env, Bytes::from_slice(&env, b"a"), Bytes::from_slice(&env, b"b")];
+    let inputs = vec![
+        &env,
+        Bytes::from_slice(&env, b"a"),
+        Bytes::from_slice(&env, b"b"),
+    ];
     let proof_data = build_snark_proof_data(&env, 64);
 
     let result = client.try_submit_zkp(
@@ -853,14 +850,8 @@ fn test_range_proof_rejects_tampered_commitment() {
     let proof_id = BytesN::from_array(&env, &[40u8; 32]);
     let encrypted_value = Bytes::from_slice(&env, b"opaque_blob");
     let vk_hash = BytesN::from_array(&env, &[41u8; 32]);
-    let good_proof = build_bulletproof_range_proof_data(
-        &env,
-        &prover,
-        &vk_hash,
-        18,
-        65,
-        &encrypted_value,
-    );
+    let good_proof =
+        build_bulletproof_range_proof_data(&env, &prover, &vk_hash, 18, 65, &encrypted_value);
 
     // Tamper: flip one byte inside proof_data so the embedded commitment
     // no longer matches the recomputed one.
@@ -897,14 +888,8 @@ fn test_range_proof_rejects_unregistered_vk() {
     let proof_id = BytesN::from_array(&env, &[45u8; 32]);
     let encrypted_value = Bytes::from_slice(&env, b"x");
     let vk_hash = BytesN::from_array(&env, &[46u8; 32]);
-    let proof_data = build_bulletproof_range_proof_data(
-        &env,
-        &prover,
-        &vk_hash,
-        1,
-        100,
-        &encrypted_value,
-    );
+    let proof_data =
+        build_bulletproof_range_proof_data(&env, &prover, &vk_hash, 1, 100, &encrypted_value);
 
     // Don't register any circuit first.
     let result = client.try_create_range_proof(

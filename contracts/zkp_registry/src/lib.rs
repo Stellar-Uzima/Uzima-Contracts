@@ -1481,10 +1481,7 @@ impl ZKPRegistry {
         //    bound derived from the circuit's declared constraint count so we
         //    cannot accept arbitrarily-large public inputs that would bloat
         //    memory but produce identical VK bindings.
-        let max_input_bytes = circuit_params
-            .num_constraints
-            .saturating_mul(64)
-            .max(1024);
+        let max_input_bytes = circuit_params.num_constraints.saturating_mul(64).max(1024);
         for input in proof.public_inputs.iter() {
             if input.is_empty() {
                 return Err(Error::MalformedProof);
@@ -1620,10 +1617,7 @@ impl ZKPRegistry {
     /// recursive proof's `aggregated_vk_hash` MUST equal the SHA-256 of the
     /// base proof's vk_hash concatenated with the recursive step's vk_hash.
     /// This prevents reuse of stale base proofs once their VK is rotated.
-    fn verify_recursive_proof_internal(
-        env: &Env,
-        proof: &RecursiveProof,
-    ) -> Result<bool, Error> {
+    fn verify_recursive_proof_internal(env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
         if proof.recursive_proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
         }
@@ -1656,8 +1650,7 @@ impl ZKPRegistry {
             .storage()
             .temporary()
             .get(&DataKey::VerificationResult(proof.base_proof_id.clone()));
-        let base_result: ZKPVerificationResult =
-            base_result.ok_or(Error::BaseProofMissing)?;
+        let base_result: ZKPVerificationResult = base_result.ok_or(Error::BaseProofMissing)?;
         if !base_result.is_valid {
             return Err(Error::BaseProofMissing);
         }
@@ -1743,10 +1736,7 @@ impl ZKPRegistry {
         Self::append_bytes32(env, &mut payload, base_vk);
         Self::append_bytes32(env, &mut payload, recursive_vk);
         payload.append(base_proof_data);
-        payload.append(&Bytes::from_slice(
-            env,
-            &composition_depth.to_be_bytes(),
-        ));
+        payload.append(&Bytes::from_slice(env, &composition_depth.to_be_bytes()));
         env.crypto().sha256(&payload).into()
     }
 
@@ -1828,11 +1818,7 @@ impl ZKPRegistry {
 
     fn read_issuer_salt(env: &Env, issuer: &Address) -> [u8; 32] {
         let key = DataKey::IssuerSalt(issuer.clone());
-        if let Some(stored) = env
-            .storage()
-            .persistent()
-            .get::<_, BytesN<32>>(&key)
-        {
+        if let Some(stored) = env.storage().persistent().get::<_, BytesN<32>>(&key) {
             stored.to_array()
         } else {
             DEFAULT_ISSUER_SALT
