@@ -1,7 +1,5 @@
-#![cfg(test)]
-
 use super::*;
-use crate::types::{AuthStatus, FactorType, MFAConfig};
+use crate::types::{FactorType, MFAConfig};
 use soroban_sdk::testutils::{Address as _, Ledger};
 
 #[test]

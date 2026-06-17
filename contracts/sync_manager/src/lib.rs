@@ -198,7 +198,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_region_ids.len() == 0 {
+        if target_region_ids.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -264,7 +264,7 @@ impl SyncManager {
 
         // Simulate sync execution
         let current_time = env.ledger().timestamp();
-        operation.success_count = targets as u32;
+        operation.success_count = targets;
         operation.failure_count = 0;
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
@@ -309,7 +309,7 @@ impl SyncManager {
         operation.status = SyncStatus::InProgress;
 
         let current_time = env.ledger().timestamp();
-        operation.success_count = operation.target_region_ids.len() as u32;
+        operation.success_count = operation.target_region_ids.len();
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
 
@@ -398,7 +398,7 @@ impl SyncManager {
             .get(&LAGS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if lags.len() == 0 {
+        if lags.is_empty() {
             return None;
         }
 
@@ -423,7 +423,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if conflicting_regions.len() == 0 {
+        if conflicting_regions.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -521,7 +521,7 @@ impl SyncManager {
         env.storage()
             .instance()
             .get(&SYNC_POLICY)
-            .unwrap_or_else(|| SyncPolicy {
+            .unwrap_or(SyncPolicy {
                 sync_interval_ms: 60000,
                 max_lag_ms: 5000,
                 consistency_mode: ConsistencyLevel::Eventual,
@@ -567,11 +567,14 @@ mod test {
     fn test_initialize() {
         let env = Env::default();
         let admin = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        let result = SyncManager::initialize(env.clone(), admin.clone());
+        let result =
+            env.as_contract(&contract, || SyncManager::initialize(env.clone(), admin.clone()));
         assert!(result.is_ok());
 
-        let result = SyncManager::initialize(env, admin);
+        let result =
+            env.as_contract(&contract, || SyncManager::initialize(env.clone(), admin));
         assert!(matches!(result, Err(Error::AlreadyInitialized)));
     }
 
@@ -580,23 +583,29 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
         let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        SyncManager::initialize(env.clone(), admin.clone()).unwrap();
-        SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || SyncManager::initialize(env.clone(), admin.clone()))
+            .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);
 
-        let result = SyncManager::initiate_sync(
-            env,
-            operator,
-            1,
-            targets,
-            12345u64,
-            ConsistencyLevel::Eventual,
-        );
-
+        let result = env.as_contract(&contract, || {
+            SyncManager::initiate_sync(
+                env.clone(),
+                operator,
+                1,
+                targets,
+                12345u64,
+                ConsistencyLevel::Eventual,
+            )
+        });
         assert!(result.is_ok());
     }
 }

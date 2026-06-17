@@ -170,7 +170,7 @@ impl FailoverDetector {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if severity_level < 1 || severity_level > 5 {
+        if !(1..=5).contains(&severity_level) {
             return Err(Error::InvalidInput);
         }
 
@@ -290,7 +290,7 @@ impl FailoverDetector {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_nodes.len() == 0 {
+        if target_nodes.is_empty() {
             return Err(Error::NoAvailableTargets);
         }
 
@@ -534,11 +534,14 @@ mod test {
     fn test_initialize() {
         let env = Env::default();
         let admin = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        let result = FailoverDetector::initialize(env.clone(), admin.clone());
+        let result =
+            env.as_contract(&contract, || FailoverDetector::initialize(env.clone(), admin.clone()));
         assert!(result.is_ok());
 
-        let result = FailoverDetector::initialize(env, admin);
+        let result =
+            env.as_contract(&contract, || FailoverDetector::initialize(env.clone(), admin));
         assert!(matches!(result, Err(Error::AlreadyInitialized)));
     }
 
@@ -547,18 +550,24 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
         let operator = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
-        FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || FailoverDetector::initialize(env.clone(), admin.clone()))
+            .unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
-        let result = FailoverDetector::detect_node_failure(
-            env.clone(),
-            operator,
-            1,
-            FailoverReason::NodeFailure,
-            3,
-        );
-
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::detect_node_failure(
+                env.clone(),
+                operator,
+                1,
+                FailoverReason::NodeFailure,
+                3,
+            )
+        });
         assert!(result.is_ok());
     }
 
@@ -567,16 +576,22 @@ mod test {
         let env = Env::default();
         let admin = Address::generate(&env);
         let operator = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
-        FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || FailoverDetector::initialize(env.clone(), admin.clone()))
+            .unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
-        let _target_nodes = Vec::<u32>::new(&env);
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);
 
-        let result = FailoverDetector::create_failover_plan(env, operator, 1, targets);
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::create_failover_plan(env.clone(), operator, 1, targets)
+        });
         assert!(result.is_ok());
     }
 }

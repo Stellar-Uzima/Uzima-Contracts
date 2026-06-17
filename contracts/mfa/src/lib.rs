@@ -164,7 +164,7 @@ impl MultiFactorAuth {
     }
 
     /// Recovery mechanism for lost factors
-    pub fn initiate_recovery(env: Env, user: Address, secret_hash: BytesN<32>) {
+    pub fn initiate_recovery(env: Env, user: Address, _secret_hash: BytesN<32>) {
         user.require_auth();
 
         let cfg: MFAConfig = env
