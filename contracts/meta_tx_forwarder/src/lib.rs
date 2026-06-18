@@ -3,21 +3,33 @@
 //! # Meta-Transaction Forwarder (ERC-2771 Compatible)
 //!
 //! This contract enables gasless transactions by allowing a relayer to submit
-//! transactions on behalf of users. The forwarder verifies signatures and manages
-//! nonces to prevent replay attacks.
+//! transactions on behalf of users. The forwarder verifies Ed25519 signatures
+//! and manages per-user nonces to prevent replay attacks, then invokes the
+//! target contract on the user's behalf via `env.invoke_contract`.
 //!
 //! ## Key Features
-//! - ERC-2771 compatible for seamless integration
-//! - Signature verification for user authorization
-//! - Nonce-based replay protection
-//! - Support for batch transactions
-//! - Relayer fee management
+//! - ERC-2771-compatible execution flow (original sender is appended as the
+//!   first positional argument of every forwarded invocation).
+//! - Ed25519 signature verification of the `ForwardRequest` payload using
+//!   `env.crypto().ed25519_verify`.
+//! - Per-user, monotonically increasing nonces for replay protection.
+//! - Deadline enforcement against stale / front-run requests.
+//! - Pluggable, registered-active relayer set.
+//! - Optional batch execution.
+//!
+//! ## Soroban-specific ERC-2771 mapping
+//! Unlike the EVM "append 20-byte sender to calldata" variant, Soroban forwards
+//! invoke_contract calls with structured `(Symbol, Vec<Val>)` argument lists.
+//! This contract therefore prepends the original `from` `Address` as the first
+//! positional argument so target contracts can extract it from their
+//! `env.invoker()` lineage or, more reliably, accept it as `arg 0`.
 
 pub mod erc2771_context;
 
+use soroban_sdk::xdr::{FromXdr, ToXdr};
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, Bytes,
+    BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 
 // ============================================================================
@@ -28,31 +40,75 @@ use soroban_sdk::{
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
+    /// The provided Ed25519 signature failed cryptographic verification.
     InvalidSignature = 1,
+    /// The request nonce does not match the user's current nonce.
     InvalidNonce = 2,
+    /// The request deadline is in the past.
     RequestExpired = 3,
+    /// The target contract invocation returned an error.
     ExecutionFailed = 4,
+    /// The caller is not permitted to perform this action.
     Unauthorized = 5,
+    /// The contract has already been initialized.
     AlreadyInitialized = 6,
+    /// No owner has been set on the contract.
     OwnerNotSet = 7,
+    /// Batch `requests` and `signatures` vectors have different lengths.
     BatchLengthMismatch = 8,
+    /// No public key is registered for the request's `from` address.
+    PubKeyNotRegistered = 9,
+    /// The supplied `fee_percentage` exceeds the 100% maximum (10_000 bps).
+    InvalidFeePercentage = 10,
 }
 
 // ============================================================================
 // Data Structures
 // ============================================================================
 
-/// Forward request structure containing all necessary data for meta-transaction
+/// Forward request structure containing all necessary data for a meta-transaction.
+///
+/// The signed payload is the deterministic XDR serialization of this struct
+/// (produced via `to_xdr(env)`). Signers must produce the Ed25519 signature
+/// over these exact bytes after application of the user's public-key.
+///
+/// `target_fn` identifies the Soroban contract function to invoke on `to`,
+/// and `target_args` are the **XDR-encoded positional arguments** to that
+/// function *excluding the original sender* — the forwarder automatically
+/// prepends `from` as the first positional argument so target contracts
+/// recognise the original signer (the ERC-2771 pattern adapted to Soroban).
+///
+/// We store target arguments as `Vec<Bytes>` (each entry the XDR bytes of a
+/// single `Val`) rather than `Vec<Val>` to keep the contracttype layout
+/// rock-solid across SDK upgrades and to make the signed payload byte-for-byte
+/// deterministic across off-chain encoders.
+///
+/// `data` is preserved for backwards compatibility and may carry arbitrary
+/// opaque bytes (currently unused by the on-chain verifier).
 #[derive(Clone)]
 #[contracttype]
 pub struct ForwardRequest {
-    pub from: Address, // Original sender
-    pub to: Address,   // Target contract
-    pub value: i128,   // Value to transfer (if any)
-    pub gas: u32,      // Gas limit for execution
-    pub nonce: u64,    // Nonce for replay protection
-    pub deadline: u64, // Expiration timestamp
-    pub data: Bytes,   // Encoded function call data
+    /// Address of the original signer (whose public key was registered).
+    pub from: Address,
+    /// Target contract address that will be invoked.
+    pub to: Address,
+    /// Value to transfer (currently informational; Soroban token payments are
+    /// dispatched separately by the caller, so this should typically be 0).
+    pub value: i128,
+    /// Optional gas limit hint (informational; the Soroban host enforces its
+    /// own CPU budget).
+    pub gas: u32,
+    /// Per-user nonce. Must equal the user's current on-chain nonce.
+    pub nonce: u64,
+    /// Unix timestamp deadline after which the request is no longer valid.
+    pub deadline: u64,
+    /// Reserved opaque bytes; not part of the on-chain dispatch path.
+    pub data: Bytes,
+    /// Target contract function symbol to invoke on `to`.
+    pub target_fn: Symbol,
+    /// Optional positional arguments for `target_fn` as a list of XDR-encoded
+    /// `Val`s. The original `from` address is always prepended automatically.
+    pub target_args: Vec<Bytes>,
 }
 
 /// Relayer configuration
@@ -68,12 +124,49 @@ pub struct RelayerConfig {
 #[contracttype]
 pub enum DataKey {
     Owner,
-    Nonce(Address),   // User nonces
-    Relayer(Address), // Relayer configurations
-    TrustedForwarder, // This contract's address for ERC-2771
-    FeeCollector,     // Address to collect relay fees
-    MinRelayerStake,  // Minimum stake required for relayers
+    /// Per-user monotonically increasing nonce (replay protection).
+    Nonce(Address),
+    /// Registered relayer configuration.
+    Relayer(Address),
+    /// This contract's own address (the trusted forwarder for ERC-2771).
+    TrustedForwarder,
+    /// Address that receives relay fees.
+    FeeCollector,
+    /// Minimum stake required to be a relayer (informational; not enforced).
+    MinRelayerStake,
+    /// Per-user Ed25519 public key (32 bytes). Required for sig verification.
+    UserPubKey(Address),
 }
+
+/// Forwarding outcome returned by `execute_*`.
+#[derive(Clone)]
+#[contracttype]
+pub struct ForwardOutcome {
+    /// XDR-encoded `Val` returned by the target contract.
+    pub result: Bytes,
+    /// Nonce of the user *after* this execution (== old nonce + 1).
+    pub new_nonce: u64,
+    /// Ledger timestamp at execution time.
+    pub executed_at: u64,
+}
+
+// ============================================================================
+// Domain separator
+// ============================================================================
+
+/// Domain separator prefix prepended to every signed payload.
+///
+/// **Test / SDK consumers MUST use the same byte sequence when constructing
+/// signatures.** A change to this constant is a hard fork of the
+/// signature format — old signed requests will fail verification.
+///
+/// The chosen layout (`"UZM-MTX-v1"` + 6 null padding bytes) deliberately
+/// matches an off-chain EIP-712-style domain and binds signatures to the
+/// `MetaTxForwarder` v1. Whenever the contract is upgraded and the
+/// signature format changes, bump the trailing ASCII character.
+pub const DOMAIN_PREFIX: [u8; 16] = [
+    b'U', b'Z', b'M', b'-', b'M', b'T', b'X', b'-', b'v', b'1', 0, 0, 0, 0, 0, 0,
+];
 
 // ============================================================================
 // Contract Implementation
@@ -88,12 +181,12 @@ impl MetaTxForwarder {
     // Initialization
     // ========================================================================
 
-    /// Initialize the forwarder contract
+    /// Initialize the forwarder contract.
     ///
     /// # Arguments
     /// * `owner` - Contract owner address
-    /// * `fee_collector` - Address to receive relay fees
-    /// * `min_relayer_stake` - Minimum stake required for relayers
+    /// * `fee_collector` - Address to receive relay fees (informational)
+    /// * `min_relayer_stake` - Minimum stake required for relayers (informational)
     pub fn initialize(
         env: Env,
         owner: Address,
@@ -102,30 +195,21 @@ impl MetaTxForwarder {
     ) -> Result<(), Error> {
         owner.require_auth();
 
-        // Check if already initialized
         if env.storage().instance().has(&DataKey::Owner) {
             return Err(Error::AlreadyInitialized);
         }
 
-        // Set owner
         env.storage().instance().set(&DataKey::Owner, &owner);
-
-        // Set fee collector
         env.storage()
             .instance()
             .set(&DataKey::FeeCollector, &fee_collector);
-
-        // Set minimum relayer stake
         env.storage()
             .instance()
             .set(&DataKey::MinRelayerStake, &min_relayer_stake);
-
-        // Store this contract's address as trusted forwarder
         env.storage()
             .instance()
             .set(&DataKey::TrustedForwarder, &env.current_contract_address());
 
-        // Emit initialization event
         env.events().publish(
             (symbol_short!("init"),),
             (owner.clone(), fee_collector.clone(), min_relayer_stake),
@@ -135,15 +219,39 @@ impl MetaTxForwarder {
     }
 
     // ========================================================================
+    // User -> Public Key registration
+    // ========================================================================
+
+    /// Register an Ed25519 public key (32 bytes) for a user.
+    ///
+    /// The public key is required before the user can sign `ForwardRequest`s.
+    /// One-time registration — re-registering overwrites the previous key.
+    pub fn register_user_pub_key(
+        env: Env,
+        user: Address,
+        pub_key: BytesN<32>,
+    ) -> Result<(), Error> {
+        user.require_auth();
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserPubKey(user.clone()), &pub_key);
+        env.events().publish(
+            (symbol_short!("reg_key"),),
+            (user, Bytes::from_slice(&env, &pub_key.to_array())),
+        );
+        Ok(())
+    }
+
+    /// Returns the registered Ed25519 public key for `user`, if any.
+    pub fn get_user_pub_key(env: Env, user: Address) -> Option<BytesN<32>> {
+        env.storage().persistent().get(&DataKey::UserPubKey(user))
+    }
+
+    // ========================================================================
     // Core Forwarding Functions
     // ========================================================================
 
-    /// Execute a meta-transaction on behalf of a user
-    ///
-    /// # Arguments
-    /// * `relayer` - Address of the relayer submitting the transaction
-    /// * `request` - Forward request containing transaction details
-    /// * `signature` - User's signature authorizing the transaction
+    /// Execute a meta-transaction on behalf of a user.
     pub fn execute(
         env: Env,
         relayer: Address,
@@ -152,16 +260,14 @@ impl MetaTxForwarder {
     ) -> Result<Bytes, Error> {
         relayer.require_auth();
         Self::require_active_relayer(&env, &relayer)?;
-        let current_time = env.ledger().timestamp();
-        Self::execute_one(&env, request, signature, current_time, &relayer)
+        Self::execute_one(&env, request, signature, &relayer)
     }
 
-    /// Execute multiple meta-transactions in a batch
+    /// Execute multiple meta-transactions in a batch.
     ///
-    /// # Arguments
-    /// * `relayer` - Address of the relayer submitting the transactions
-    /// * `requests` - Vector of forward requests
-    /// * `signatures` - Vector of corresponding signatures
+    /// All requests must be valid individually; on first failure, the
+    /// already-completed requests have incremented their nonces and
+    /// committed state, and the rest are not executed.
     pub fn execute_batch(
         env: Env,
         relayer: Address,
@@ -175,22 +281,12 @@ impl MetaTxForwarder {
             return Err(Error::BatchLengthMismatch);
         }
 
-        // Read timestamp once for all requests in the batch
-        let current_time = env.ledger().timestamp();
         let mut results = Vec::new(&env);
-
         for i in 0..requests.len() {
             let request = requests.get(i).ok_or(Error::InvalidSignature)?;
             let signature = signatures.get(i).ok_or(Error::InvalidSignature)?;
-            results.push_back(Self::execute_one(
-                &env,
-                request,
-                signature,
-                current_time,
-                &relayer,
-            )?);
+            results.push_back(Self::execute_one(&env, request, signature, &relayer)?);
         }
-
         Ok(results)
     }
 
@@ -198,12 +294,7 @@ impl MetaTxForwarder {
     // Relayer Management
     // ========================================================================
 
-    /// Register a new relayer
-    ///
-    /// # Arguments
-    /// * `owner` - Contract owner
-    /// * `relayer` - Address of the relayer to register
-    /// * `fee_percentage` - Fee percentage in basis points
+    /// Register a new relayer (owner-only).
     pub fn register_relayer(
         env: Env,
         owner: Address,
@@ -211,59 +302,30 @@ impl MetaTxForwarder {
         fee_percentage: u32,
     ) -> Result<(), Error> {
         owner.require_auth();
+        Self::require_owner(&env, &owner)?;
 
-        // Verify caller is owner
-        let stored_owner: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Owner)
-            .ok_or(Error::OwnerNotSet)?;
-
-        if owner != stored_owner {
-            return Err(Error::Unauthorized);
+        if fee_percentage > 10_000 {
+            return Err(Error::InvalidFeePercentage);
         }
 
-        // Create relayer config
         let config = RelayerConfig {
             address: relayer.clone(),
             is_active: true,
             fee_percentage,
         };
-
-        // Store relayer config
         env.storage()
             .instance()
             .set(&DataKey::Relayer(relayer.clone()), &config);
-
-        // Emit event
-        env.events().publish(
-            (symbol_short!("reg_relay"),),
-            (relayer.clone(), fee_percentage),
-        );
-
+        env.events()
+            .publish((symbol_short!("reg_relay"),), (relayer, fee_percentage));
         Ok(())
     }
 
-    /// Deactivate a relayer
-    ///
-    /// # Arguments
-    /// * `owner` - Contract owner
-    /// * `relayer` - Address of the relayer to deactivate
+    /// Deactivate a relayer (owner-only).
     pub fn deactivate_relayer(env: Env, owner: Address, relayer: Address) -> Result<(), Error> {
         owner.require_auth();
+        Self::require_owner(&env, &owner)?;
 
-        // Verify caller is owner
-        let stored_owner: Address = env
-            .storage()
-            .instance()
-            .get(&DataKey::Owner)
-            .ok_or(Error::OwnerNotSet)?;
-
-        if owner != stored_owner {
-            return Err(Error::Unauthorized);
-        }
-
-        // Get and update relayer config
         let mut config: RelayerConfig = env
             .storage()
             .instance()
@@ -273,17 +335,12 @@ impl MetaTxForwarder {
                 is_active: false,
                 fee_percentage: 0,
             });
-
         config.is_active = false;
-
         env.storage()
             .instance()
             .set(&DataKey::Relayer(relayer.clone()), &config);
-
-        // Emit event
         env.events()
-            .publish((symbol_short!("deact_rel"),), relayer.clone());
-
+            .publish((symbol_short!("deact_rel"),), relayer);
         Ok(())
     }
 
@@ -291,10 +348,7 @@ impl MetaTxForwarder {
     // View Functions
     // ========================================================================
 
-    /// Get the current nonce for a user
-    ///
-    /// # Arguments
-    /// * `user` - Address of the user
+    /// Get the current nonce for a user.
     pub fn get_nonce(env: Env, user: Address) -> u64 {
         env.storage()
             .persistent()
@@ -302,49 +356,40 @@ impl MetaTxForwarder {
             .unwrap_or(0)
     }
 
-    /// Check if an address is an active relayer
-    ///
-    /// # Arguments
-    /// * `relayer` - Address to check
+    /// Check if an address is an active relayer.
     pub fn is_relayer(env: Env, relayer: Address) -> bool {
-        let config: Option<RelayerConfig> =
-            env.storage().instance().get(&DataKey::Relayer(relayer));
-
-        match config {
-            Some(cfg) => cfg.is_active,
-            None => false,
-        }
+        let config: Option<RelayerConfig> = env.storage().instance().get(&DataKey::Relayer(relayer));
+        matches!(config, Some(cfg) if cfg.is_active)
     }
 
-    /// Get relayer configuration
-    ///
-    /// # Arguments
-    /// * `relayer` - Address of the relayer
+    /// Get relayer configuration.
     pub fn get_relayer_config(env: Env, relayer: Address) -> Option<RelayerConfig> {
         env.storage().instance().get(&DataKey::Relayer(relayer))
     }
 
-    /// Get the trusted forwarder address (this contract)
+    /// Get the trusted forwarder address (this contract).
     pub fn get_trusted_forwarder(env: Env) -> Address {
         env.storage()
             .instance()
             .get(&DataKey::TrustedForwarder)
-            .unwrap_or(env.current_contract_address())
+            .unwrap_or_else(|| env.current_contract_address())
     }
 
     // ========================================================================
-    // Internal Helper Functions
+    // Internal helpers
     // ========================================================================
 
-    /// Inner execute: deadline + nonce + sig check, then forward. Relayer auth must be done by caller.
+    /// Single-request execution: deadline + nonce + signature check, then
+    /// forward. Relayer authorization must have already been performed by
+    /// the caller.
     fn execute_one(
         env: &Env,
         request: ForwardRequest,
         signature: BytesN<64>,
-        current_time: u64,
         relayer: &Address,
     ) -> Result<Bytes, Error> {
-        if current_time > request.deadline {
+        let now = env.ledger().timestamp();
+        if now > request.deadline {
             return Err(Error::RequestExpired);
         }
         Self::verify_nonce(env, &request.from, request.nonce)?;
@@ -363,104 +408,129 @@ impl MetaTxForwarder {
         Ok(result)
     }
 
-    /// Verify user nonce without incrementing
+    /// Verify user nonce without incrementing.
     fn verify_nonce(env: &Env, user: &Address, expected_nonce: u64) -> Result<(), Error> {
-        let current_nonce: u64 = env
+        let current: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::Nonce(user.clone()))
             .unwrap_or(0);
-
-        if current_nonce != expected_nonce {
+        if current != expected_nonce {
             return Err(Error::InvalidNonce);
         }
-
         Ok(())
     }
 
-    /// Increment user nonce
+    /// Increment user nonce.
     fn increment_nonce(env: &Env, user: &Address) {
-        let current_nonce: u64 = env
+        let current: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::Nonce(user.clone()))
             .unwrap_or(0);
-
-        env.storage().persistent().set(
-            &DataKey::Nonce(user.clone()),
-            &(current_nonce.saturating_add(1)),
-        );
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(user.clone()), &(current.saturating_add(1)));
     }
 
-    /// Verify and increment user nonce (deprecated - use verify_nonce + increment_nonce)
-    #[allow(dead_code)]
-    fn verify_and_increment_nonce(
-        env: &Env,
-        user: &Address,
-        expected_nonce: u64,
-    ) -> Result<(), Error> {
-        Self::verify_nonce(env, user, expected_nonce)?;
-        Self::increment_nonce(env, user);
-        Ok(())
-    }
-
-    /// Verify signature for forward request
+    /// Verify Ed25519 signature over the typed payload of `request`.
+    ///
+    /// The signed message is `DOMAIN_PREFIX || forwarder_address || request.to_xdr(env)`.
+    /// The user's 32-byte Ed25519 public key is looked up from storage.
+    ///
+    /// Panics (host trap) on signature verification failure by design —
+    /// Soroban `ed25519_verify` is fail-fast and there is no error return
+    /// path; we surface `Error::InvalidSignature` for clarification when the
+    /// missing public key is the root cause (vs. a cryptographic mismatch).
     fn verify_signature(
         env: &Env,
         request: &ForwardRequest,
-        _signature: &BytesN<64>,
+        signature: &BytesN<64>,
     ) -> Result<(), Error> {
-        // Create message hash from request data
-        let _message = Self::encode_forward_request(env, request);
+        let pub_key: BytesN<32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserPubKey(request.from.clone()))
+            .ok_or(Error::PubKeyNotRegistered)?;
 
-        // Verify signature using ed25519
-        // Note: This is a simplified implementation
-        // In production, you would need proper signature verification
-        // For now, we'll skip actual verification to avoid compilation errors
+        let mut message = Bytes::new(env);
+        // Domain prefix (16 bytes) — binds signatures to MetaTxForwarder v1.
+        message.append(&Bytes::from_slice(env, &DOMAIN_PREFIX));
+        // Forwarder address — prevents cross-forwarder replay.
+        let forwarder_addr = Self::get_trusted_forwarder(env.clone());
+        message.append(&forwarder_addr.to_xdr(env));
+        // Request body — full deterministic XDR of the typed ForwardRequest.
+        message.append(&request.to_xdr(env));
 
+        // Verify Ed25519 signature. Traps on cryptographic failure.
+        env.crypto().ed25519_verify(&pub_key, &message, signature);
         Ok(())
     }
 
-    /// Encode forward request for signature verification
-    fn encode_forward_request(env: &Env, request: &ForwardRequest) -> Bytes {
-        // Create a deterministic encoding of the request
-        let mut data = Bytes::new(env);
+    /// Forward the call to the target contract.
+    ///
+    /// Builds `Vec<Val>` of `[from.into_val(), ...decoded(request.target_args)]`
+    /// and invokes `request.to.request.target_fn(...)`. Each entry of
+    /// `request.target_args` is the XDR bytes of one `Val` (so the signed
+    /// payload is fully deterministic across off-chain encoders and the
+    /// contracttype stays small).
+    ///
+    /// Returns the XDR-encoded return value of the target.
+    fn forward_call(env: &Env, request: &ForwardRequest) -> Result<Bytes, Error> {
+        let mut args: Vec<Val> = Vec::new(env);
+        args.push_back(request.from.clone().into_val(env));
 
-        // Append request fields (simplified encoding)
-        // In production, use a proper encoding scheme like EIP-712
-        // For now, we'll use a simple approach with byte arrays
-        data.append(&Bytes::from_slice(env, &request.nonce.to_be_bytes()));
-        data.append(&Bytes::from_slice(env, &request.deadline.to_be_bytes()));
-        data.append(&request.data);
+        for arg_bytes in request.target_args.iter() {
+            // Stream arg_bytes into a heap Vec<u8> so FromXdr can read it.
+            let len: u32 = arg_bytes.len();
+            let mut buf: std::vec::Vec<u8> = std::vec::Vec::with_capacity(len as usize);
+            let mut i: u32 = 0;
+            while i < len {
+                buf.push(arg_bytes.get(i).unwrap_or(0));
+                i = i.saturating_add(1);
+            }
+            let val: Val = Val::from_xdr(&buf).map_err(|_| Error::ExecutionFailed)?;
+            args.push_back(val);
+        }
 
-        data
+        let result: Val = env.invoke_contract(&request.to, &request.target_fn, args);
+        Ok(result.to_xdr(env))
     }
 
-    /// Forward the call to the target contract
-    fn forward_call(_env: &Env, request: &ForwardRequest) -> Result<Bytes, Error> {
-        // In Soroban, we need to invoke the target contract
-        // The target contract should be ERC-2771 aware and extract the original sender
-
-        // For now, we'll prepare the call data with the original sender appended
-        let call_data = request.data.clone();
-
-        // Note: In a real implementation, you would use contract invocation
-        // This is a simplified version for demonstration
-
-        Ok(call_data)
+    /// Require that the caller is the contract owner.
+    fn require_owner(env: &Env, caller: &Address) -> Result<(), Error> {
+        let stored: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Owner)
+            .ok_or(Error::OwnerNotSet)?;
+        if *caller != stored {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
     }
 
-    /// Require that the relayer is active
+    /// Require that the relayer is registered and active.
     fn require_active_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
         let config: Option<RelayerConfig> = env
             .storage()
             .instance()
             .get(&DataKey::Relayer(relayer.clone()));
-
         match config {
             Some(cfg) if cfg.is_active => Ok(()),
             _ => Err(Error::Unauthorized),
         }
+    }
+
+    // ========================================================================
+    // Re-export helpers
+    // ========================================================================
+
+    /// Returns the canonical domain separator string used in the signed
+    /// message. Exposed for off-chain clients that need to reproduce the
+    /// exact prefix when constructing signatures.
+    pub fn domain_separator(env: Env) -> Bytes {
+        Bytes::from_slice(&env, &DOMAIN_PREFIX)
     }
 }
 

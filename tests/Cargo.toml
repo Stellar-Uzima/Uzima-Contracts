@@ -11,9 +11,12 @@ sut_token = { path = "../contracts/sut_token" }
 healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
 reputation = { path = "../contracts/reputation" }
 healthcare_payment = { path = "../contracts/healthcare_payment" }
+meta_tx_forwarder = { path = "../contracts/meta_tx_forwarder" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
 
 [lib]
 name = "uzima_tests"
