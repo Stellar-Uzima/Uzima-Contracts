@@ -165,7 +165,7 @@ impl ERC2771ContextImpl {
     /// soroban-sdk 21.7.7. Kept as a deprecated alias to avoid breaking any
     /// downstream consumer that still references the old name.
     #[deprecated(
-        since = "issue-834",
+        since = "0.1.0",
         note = "Soroban 21.x removed env.invoker(); use has_trusted_forwarder() instead"
     )]
     pub fn is_invoker_trusted(env: &Env) -> bool {

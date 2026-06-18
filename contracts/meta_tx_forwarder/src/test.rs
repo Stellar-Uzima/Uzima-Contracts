@@ -155,7 +155,14 @@ fn sign_request(
     BytesN::<64>::from_array(env, &sig_bytes)
 }
 
-/// Build a request that targets `MockTarget::echo_add_with_sender(from, a, b)`.
+/// Build a request that targets `MockTarget::echo_add(from, a, b)`.
+///
+/// `#[allow(clippy::too_many_arguments)]` is applied because every argument
+/// here is a distinct, named input (user, target, monotonic nonce, deadline,
+/// and the two addends). Grouping into a config struct would obscure what
+/// each test is setting; the warning adds no real value at call sites that
+/// already read like a literal config block.
+#[allow(clippy::too_many_arguments)]
 fn build_add_request(
     env: &Env,
     user: &UserKeys,

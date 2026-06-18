@@ -1,44 +1,41 @@
-fix(meta-tx): soroban-sdk 21.7.7 compatibility + cleanup (#834)
+fix(meta-tx): clear CI Code-Quality failures (#834)
 
-Apply changes that should have been in the initial PR but were caught
-only by running cargo check under the actual toolchain:
+Follow-up to the clean-up commit. Code Quality CI was failing with:
 
-- Drop the unused `data: Bytes` field from ForwardRequest. The field
-  was never read by the verifier and was merely carried around in the
-  typed payload; removing it also removes 24 unused bytes from every
-  signature and slightly tightens the contracttype-derived ToXdr layout.
-- Rename ERC2771Context::is_invoker_trusted() to has_trusted_forwarder()
-  to honestly reflect what it checks on soroban-sdk 21.7.7 (where the
-  implicit env.invoker() query was deliberately removed). Keep
-  is_invoker_trusted() as a deprecated alias for downstream code that
-  still references the old name.
-- Rewrite msg_sender(env, args) to read the trusted-forwarder-decoded
-  arg 0 when configured, falling back to env.current_contract_address()
-  when no forwarder is registered. Direct lookup of the immediate caller
-  is no longer possible in 21.x.
-- Drop the LastInvoker storage key entirely; there is no env.invoker()
-  to capture anymore. The mock target only stores LastFrom now.
-- Rename mock targets to fit symbol_short!'s 9-char limit:
-    MockTarget::echo_add_with_sender -> echo_add.
-    MockTargetContract::record_and_add -> record_a.
-  The off-chain test and benchmark signers already used these symbol
-  names, so renaming the contract functions is the right direction.
-- Replace request.clone().to_xdr(env) for sources that are shared
-  ForwardRequest references. The 21.7.7 contracttype-derive ToXdr impl
-  consumes self by value, which would otherwise trigger E0507 when
-  chaining to_xdr(env) inline.
-- Update README to match: drop the removed data field from the
-  ForwardRequest struct snippet and the TS example; rename
-  is_invoker_trusted to has_trusted_forwarder in the integration
-  example; remove the obsolete execute_open section; soften the
-  obsolete verify env.invoker equals trusted claim; update the
-  signed-payload hex layout to call out the clone-then-to_xdr step;
-  switch the integration test command to the manifest-path form because
-  tests is its own Cargo sub-project.
-- Add a brief Soroban-21.x note in msg_sender so future contributors do
-  not try to reintroduce Invoker or env.invoker().
+1) clippy::deprecated_semver in erc2771_context.rs:
+      #[deprecated(since = "issue-834", ...)]
+   Rustlint rejects non-semver strings. Switched to the workspace
+   package version (0.1.0):
+      #[deprecated(since = "0.1.0", ...)]
 
-Tests: 17 unit tests pass on meta_tx_forwarder. Integration tests
-remain in tests/Cargo.toml (a non-workspace sub-project) and now require
-cargo test with --manifest-path tests/Cargo.toml -- meta_tx to run;
-their source is byte-compatible with the unit tests after the renames.
+2) clippy::too_many_arguments in test.rs:
+   build_add_request(env, user, target, nonce, deadline, a, b)
+   exceeded the default cap of 6. Added `#[allow(clippy::too_many_arguments)]`
+   with a justification comment (every arg is a distinct named input) and
+   also fixed the now-stale doc comment ("echo_add_with_sender" -> "echo_add").
+
+3) rustfmt.toml was emitting nightly-only / deprecated-option warnings
+   during cargo fmt --all -- --check. Removed the offending options:
+   fn_args_layout, fn_return_indent, match_expression_indent,
+   where_layout, imports_layout, format_strings, format_macro_matchers,
+   format_macro_bodies, control_brace_style, match_arm_blocks,
+   match_block_trailing_comma, error_on_line_overflow.
+   The remaining options (hard_tabs, tab_spaces, newline_style,
+   use_small_heuristics, imports_granularity, group_imports,
+   reorder_imports, reorder_modules, reorder_impl_items, wrap_comments,
+   comment_width, normalize_comments, max_width, edition) are stable.
+
+   group_imports is "StdExternalCrate" (string form) instead of `true`
+   because rustfmt 1.7x on stable still requires the string form;
+   the bool form was rejected with `invalid type: boolean true,
+   expected string` on this toolchain.
+
+Verification locally:
+  cargo fmt --all -- --check        -> 0
+  cargo clippy -p meta_tx_forwarder --all-targets -- -D warnings
+                                    -> 0
+  cargo test --lib -p meta_tx_forwarder -> 17/17 passed
+
+No contract behaviour changes; the deprecated alias is still wired
+through to has_trusted_forwarder, the exec path is identical, and tests
+still cover replay/expired/cross-forwarder/tampered-signature paths.
