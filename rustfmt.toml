@@ -18,15 +18,12 @@ reorder_modules = true
 reorder_impl_items = false
 
 # Function formatting
-fn_args_layout = "Tall"
-fn_return_indent = "WithArgs"
-where_layout = "Tall"
+fn_params_layout = "Tall"
 
 # Control flow
 control_brace_style = "AlwaysSameLine"
 match_arm_blocks = true
 match_block_trailing_comma = true
-match_expression_indent = "Block"
 
 # Comments
 wrap_comments = false
