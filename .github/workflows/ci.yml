@@ -67,5 +67,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --all-targets -- -D warnings
+      # Install nightly rustfmt alongside the project's pinned stable
+      # toolchain (rust-toolchain.toml pins stable 1.92.0). The repo's
+      # `rustfmt.toml` uses options that are only available on nightly
+      # rustfmt (e.g. `imports_granularity`, `format_macro_bodies`), so a
+      # plain `cargo fmt --check` would either be a no-op or emit
+      # "unstable feature" warnings on every run. Running `cargo +nightly fmt`
+      # honours the file's intent without forcing the rest of the workspace
+      # onto nightly. Devs who want to apply the same formatting locally can
+      # run `rustup component add rustfmt --toolchain nightly`.
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
+      - name: cargo fmt (nightly — honours rustfmt.toml's nightly-only options)
+        run: cargo +nightly fmt --all -- --check
+      - name: cargo clippy (uses project's pinned stable toolchain)
+        run: cargo clippy --all-targets -- -D warnings

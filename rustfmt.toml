@@ -1,6 +1,17 @@
 # Rustfmt configuration for Uzima Contracts
-# Ensures consistent code formatting across the project
-
+# Ensures consistent code formatting across the project.
+#
+# IMPORTANT: several options in this file are only available on nightly
+# rustfmt (e.g. `imports_granularity`, `format_macro_bodies`, parts of the
+# comments/format-macros subsections). The project's `rust-toolchain.toml`
+# pins stable 1.92.0, so dev installs get a stable rustfmt and will print
+# "unstable feature" warnings against this file. CI runs
+# `cargo +nightly fmt --all -- --check` (see `.github/workflows/ci.yml`,
+# the `code-quality` job) so the format check actually applies these
+# rules. If you reformat locally, do so with nightly:
+#   rustup component add rustfmt --toolchain nightly
+#   cargo +nightly fmt
+#
 # Formatting style
 hard_tabs = false
 tab_spaces = 4
