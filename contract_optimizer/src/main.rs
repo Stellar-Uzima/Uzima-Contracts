@@ -89,10 +89,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }
                         println!();
                     }
-                },
+                }
                 _ => eprintln!("Invalid format. Use 'json' or 'text'"),
             }
-        },
+        }
         Commands::Report { input, output } => {
             let report = generate_report(&input)?;
             if let Some(out) = output {
@@ -101,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             } else {
                 println!("{}", report);
             }
-        },
+        }
         Commands::Complexity {
             contracts_path,
             output,
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let store = load_trends(&trends)?;
                 println!("Trend snapshots: {}", store.snapshots.len());
             }
-        },
+        }
         Commands::PrReview {
             repo,
             pr_number,
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             integrate_pr_review(&repo, pr_number, &token).await?;
             println!("PR review integration completed");
-        },
+        }
         Commands::Metrics { metrics_file } => {
             let metrics = AccuracyMetrics::load(&metrics_file)?;
             println!("Optimization Engine Accuracy Metrics");
@@ -154,7 +154,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     category, cat_metrics.applied, cat_metrics.total, rate
                 );
             }
-        },
+        }
     }
 
     Ok(())

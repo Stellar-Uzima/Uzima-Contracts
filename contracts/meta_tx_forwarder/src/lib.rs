@@ -28,8 +28,8 @@ pub mod erc2771_context;
 
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes,
-    BytesN, Env, IntoVal, Symbol, Val, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    IntoVal, Symbol, Val, Vec,
 };
 
 // ============================================================================
@@ -332,8 +332,7 @@ impl MetaTxForwarder {
         env.storage()
             .instance()
             .set(&DataKey::Relayer(relayer.clone()), &config);
-        env.events()
-            .publish((symbol_short!("deact_rel"),), relayer);
+        env.events().publish((symbol_short!("deact_rel"),), relayer);
         Ok(())
     }
 
@@ -351,7 +350,8 @@ impl MetaTxForwarder {
 
     /// Check if an address is an active relayer.
     pub fn is_relayer(env: Env, relayer: Address) -> bool {
-        let config: Option<RelayerConfig> = env.storage().instance().get(&DataKey::Relayer(relayer));
+        let config: Option<RelayerConfig> =
+            env.storage().instance().get(&DataKey::Relayer(relayer));
         matches!(config, Some(cfg) if cfg.is_active)
     }
 

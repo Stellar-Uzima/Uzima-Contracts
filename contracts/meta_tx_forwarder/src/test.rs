@@ -59,9 +59,7 @@ fn install_mock_target(env: &Env) -> (Address, MockTargetClient<'_>) {
 
 fn last_mock_target_last_from(env: &Env, target: &Address) -> Option<Address> {
     env.as_contract(target, || {
-        env.storage()
-            .instance()
-            .get(&MockTargetKey::LastFrom)
+        env.storage().instance().get(&MockTargetKey::LastFrom)
     })
 }
 
@@ -529,9 +527,7 @@ fn test_domain_separator_is_constant() {
         sep,
         Bytes::from_slice(
             &env,
-            &[
-                b'U', b'Z', b'M', b'-', b'M', b'T', b'X', b'-', b'v', b'1', 0, 0, 0, 0, 0, 0,
-            ]
+            &[b'U', b'Z', b'M', b'-', b'M', b'T', b'X', b'-', b'v', b'1', 0, 0, 0, 0, 0, 0,]
         )
     );
 }

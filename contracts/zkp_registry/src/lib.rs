@@ -1269,20 +1269,20 @@ impl ZKPRegistry {
             AdminAction::UpgradeContract(wasm_hash) => {
                 env.deployer()
                     .update_current_contract_wasm(wasm_hash.clone());
-            },
+            }
             AdminAction::EmergencyPause => {
                 env.storage()
                     .instance()
                     .set(&DataKey::ContractPaused, &true);
-            },
+            }
             AdminAction::EmergencyResume => {
                 env.storage()
                     .instance()
                     .set(&DataKey::ContractPaused, &false);
-            },
+            }
             AdminAction::UpdateParameters(_key, _val) => {
                 // Placeholder for dynamic parameter updates
-            },
+            }
         }
         Ok(())
     }

@@ -145,11 +145,11 @@ impl MedicalRecordHashRegistry {
                 }
                 events::publish_record_verified(&env, &patient_id, &record_hash, false);
                 Ok(false)
-            },
+            }
             None => {
                 events::publish_record_verified(&env, &patient_id, &record_hash, false);
                 Ok(false)
-            },
+            }
         }
     }
 

@@ -723,19 +723,19 @@ impl IdentityRegistryContract {
             match rel {
                 VerificationRelationship::Authentication => {
                     did_doc.authentication.push_back(method_id.clone());
-                },
+                }
                 VerificationRelationship::AssertionMethod => {
                     did_doc.assertion_method.push_back(method_id.clone());
-                },
+                }
                 VerificationRelationship::KeyAgreement => {
                     did_doc.key_agreement.push_back(method_id.clone());
-                },
+                }
                 VerificationRelationship::CapabilityInvocation => {
                     did_doc.capability_invocation.push_back(method_id.clone());
-                },
+                }
                 VerificationRelationship::CapabilityDelegation => {
                     did_doc.capability_delegation.push_back(method_id.clone());
-                },
+                }
             }
         }
 
@@ -1005,7 +1005,7 @@ impl IdentityRegistryContract {
                 } else {
                     Ok(CredentialStatus::Valid)
                 }
-            },
+            }
         }
     }
 
@@ -1904,7 +1904,7 @@ impl IdentityRegistryContract {
                 }
 
                 false
-            },
+            }
         }
     }
 

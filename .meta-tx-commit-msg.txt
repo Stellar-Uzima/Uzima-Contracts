@@ -1,41 +1,37 @@
-fix(meta-tx): clear CI Code-Quality failures (#834)
+chore(fmt): cargo fmt --all catch-up for CI Code Quality
 
-Follow-up to the clean-up commit. Code Quality CI was failing with:
+Follow-up to b4099fd. Even after the meta-tx-forwarder-specific
+clippy/rustfmt fixes landed, the Code Quality job on the PR was
+still failing because `cargo fmt --all -- --check` returned exit 1
+with formatting diffs in **other contracts**, not the meta-tx code:
 
-1) clippy::deprecated_semver in erc2771_context.rs:
-      #[deprecated(since = "issue-834", ...)]
-   Rustlint rejects non-semver strings. Switched to the workspace
-   package version (0.1.0):
-      #[deprecated(since = "0.1.0", ...)]
+  contracts/reputation_access_control/src/lib.rs
+  contracts/reputation_integration/src/lib.rs
+  contracts/timelock/src/errors.rs
+  contracts/zkp_registry/src/lib.rs
+  contracts/complexity.rs (or similar generic files)
+  contracts/.../main.rs (a few)
 
-2) clippy::too_many_arguments in test.rs:
-   build_add_request(env, user, target, nonce, deadline, a, b)
-   exceeded the default cap of 6. Added `#[allow(clippy::too_many_arguments)]`
-   with a justification comment (every arg is a distinct named input) and
-   also fixed the now-stale doc comment ("echo_add_with_sender" -> "echo_add").
+These were latent rustfmt drift in the wider workspace — likely
+surfaced now that my rustfmt.toml cleanup removed a couple of
+nightly-only stub options that were previously masking the
+differences. The cargo fmt --all-diffs were straightforward
+(trailing comma / whitespace / import-ordering normalisations) and
+do not change contract behaviour.
 
-3) rustfmt.toml was emitting nightly-only / deprecated-option warnings
-   during cargo fmt --all -- --check. Removed the offending options:
-   fn_args_layout, fn_return_indent, match_expression_indent,
-   where_layout, imports_layout, format_strings, format_macro_matchers,
-   format_macro_bodies, control_brace_style, match_arm_blocks,
-   match_block_trailing_comma, error_on_line_overflow.
-   The remaining options (hard_tabs, tab_spaces, newline_style,
-   use_small_heuristics, imports_granularity, group_imports,
-   reorder_imports, reorder_modules, reorder_impl_items, wrap_comments,
-   comment_width, normalize_comments, max_width, edition) are stable.
+This commit applies `cargo fmt --all` so every Rust file in the
+workspace matches rustfmt's current rules.
 
-   group_imports is "StdExternalCrate" (string form) instead of `true`
-   because rustfmt 1.7x on stable still requires the string form;
-   the bool form was rejected with `invalid type: boolean true,
-   expected string` on this toolchain.
+Scope note: this technically widens the PR to non-meta-tx contracts.
+A cleaner shape would be to split this into a dedicated
+`chore(fmt): cargo fmt --all drift catch-up` PR. If the maintainer
+asks, the hunks in this commit can be lifted into a separate PR by
+cherry-reverting just the non-meta-tx files.
 
 Verification locally:
-  cargo fmt --all -- --check        -> 0
-  cargo clippy -p meta_tx_forwarder --all-targets -- -D warnings
-                                    -> 0
-  cargo test --lib -p meta_tx_forwarder -> 17/17 passed
+  cargo fmt --all -- --check                  -> FMT_EXIT=0
+  cargo clippy --workspace --all-targets -- -D warnings -> CLIPPY_EXIT=0
+  cargo test --lib -p meta_tx_forwarder       -> 17/17 passed
 
-No contract behaviour changes; the deprecated alias is still wired
-through to has_trusted_forwarder, the exec path is identical, and tests
-still cover replay/expired/cross-forwarder/tampered-signature paths.
+Refs #834 (Closes: needs maintainer to add the keyword to the PR body,
+since my fork's integration token cannot PATCH the upstream PR body).

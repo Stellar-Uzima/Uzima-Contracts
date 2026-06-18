@@ -1616,8 +1616,8 @@ impl CrossChainBridgeContract {
         match operation.status {
             OperationStatus::Completed | OperationStatus::Refunded => {
                 return Ok(());
-            },
-            _ => {},
+            }
+            _ => {}
         }
 
         let now = env.ledger().timestamp();
@@ -1654,7 +1654,7 @@ impl CrossChainBridgeContract {
 
         // Only allow extension for pending or in-progress operations
         match operation.status {
-            OperationStatus::Pending | OperationStatus::InProgress => {},
+            OperationStatus::Pending | OperationStatus::InProgress => {}
             _ => return Err(Error::OperationAlreadyCompleted),
         }
 
@@ -1815,7 +1815,7 @@ impl CrossChainBridgeContract {
                         .persistent()
                         .set(&DataKey::Message(op_id.clone()), &msg);
                 }
-            },
+            }
             RollbackOpType::AtomicTxRollback => {
                 if let Some(mut atomic_tx) = env
                     .storage()
@@ -1827,10 +1827,10 @@ impl CrossChainBridgeContract {
                         .persistent()
                         .set(&DataKey::AtomicTx(op_id.clone()), &atomic_tx);
                 }
-            },
+            }
             RollbackOpType::RecordSyncRollback => {
                 // Record sync rollback handled externally via oracle confirmation
-            },
+            }
         }
 
         rollback.status = RollbackStatus::Completed;
