@@ -9,10 +9,14 @@
 //! `cargo test -p meta_tx_forwarder`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used)]
+// Bring the standard library back into scope inside the test sub-module
+// (the parent crate is `#![no_std]`); required for `std::vec::Vec` used to
+// feed the rustcrypto ed25519-dalek signer.
+extern crate std;
 
 use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{symbol_short, vec, Address, Bytes, BytesN, Env, IntoVal, Val, Vec};
 
@@ -27,15 +31,13 @@ pub struct MockTarget;
 
 #[soroban_sdk::contractimpl]
 impl MockTarget {
-    /// Add two numbers and echo the original sender's address bytes.
-    pub fn echo_add_with_sender(env: Env, from: Address, a: u32, b: u32) -> u32 {
-        // Record that we were called via the forwarder (env.invoker()).
+    /// Add two numbers and record the original sender's address bytes.
+    /// Exposed as `echo_add` (≤ 9 ASCII chars to fit `symbol_short!`).
+    pub fn echo_add(env: Env, from: Address, a: u32, b: u32) -> u32 {
+        // Record that we were called via the forwarder (arg 0 == from).
         env.storage()
             .instance()
             .set(&MockTargetKey::LastFrom, &from);
-        env.storage()
-            .instance()
-            .set(&MockTargetKey::LastInvoker, &env.invoker());
         a + b
     }
 
@@ -47,7 +49,6 @@ impl MockTarget {
 #[soroban_sdk::contracttype]
 pub enum MockTargetKey {
     LastFrom,
-    LastInvoker,
 }
 
 fn install_mock_target(env: &Env) -> (Address, MockTargetClient<'_>) {
@@ -64,12 +65,12 @@ fn last_mock_target_last_from(env: &Env, target: &Address) -> Option<Address> {
     })
 }
 
-/// Encode a slice of `Val`s into a `Vec<Bytes>`, each entry the XDR of a Val.
-/// Mirrors `lib::forward_call`'s decoding direction (round-trip-safe).
-fn vals_to_target_args(env: &Env, vals: &[Val]) -> Vec<Bytes> {
-    let mut out: Vec<Bytes> = Vec::new(env);
+/// Build a `Vec<Val>` from a slice of `Val`s. Mirrors what target-contract
+/// invocations expect (positional args of heterogeneous types).
+fn vals_to_target_args(env: &Env, vals: &[Val]) -> Vec<Val> {
+    let mut out: Vec<Val> = Vec::new(env);
     for v in vals {
-        out.push_back(Bytes::from_slice(env, &v.to_xdr(env)));
+        out.push_back(*v);
     }
     out
 }
@@ -85,7 +86,7 @@ fn install_forwarder(env: &Env) -> (Address, MetaTxForwarderClient<'_>) {
 }
 
 fn initialize(
-    env: &Env,
+    _env: &Env,
     forwarder: &MetaTxForwarderClient<'_>,
     owner: &Address,
     fee_collector: &Address,
@@ -131,10 +132,16 @@ fn sign_request(
     signing_key: &SigningKey,
     request: &ForwardRequest,
 ) -> BytesN<64> {
-    let mut message = Bytes::new(env);
-    message.append(&Bytes::from_slice(env, &super::DOMAIN_PREFIX));
-    message.append(&trusted_forwarder.to_xdr(env));
-    message.append(&request.to_xdr(env));
+    let mut message: Bytes = Bytes::new(env);
+    let prefix: Bytes = Bytes::from_slice(env, &super::DOMAIN_PREFIX);
+    message.append(&prefix);
+    let fwd_xdr: Bytes = trusted_forwarder.to_xdr(env);
+    message.append(&fwd_xdr);
+    // The soroban-sdk 21.7.7 contracttype-derive impl consumes self by
+    // value when serialising to XDR, so the borrowed request is cloned
+    // first.
+    let req_xdr: Bytes = request.clone().to_xdr(env);
+    message.append(&req_xdr);
 
     // Stream a copy out into a heap Vec<u8> to feed rustcrypto's signer,
     // which requires an actual byte slice (not a Soroban Bytes handle).
@@ -166,7 +173,6 @@ fn build_add_request(
         gas: 100_000,
         nonce,
         deadline,
-        data: Bytes::new(env),
         target_fn: symbol_short!("echo_add"),
         target_args,
     }
@@ -498,7 +504,6 @@ fn test_unsigned_user_request_rejected_no_pub_key() {
         gas: 100_000,
         nonce: 0,
         deadline: env.ledger().timestamp() + 3600,
-        data: Bytes::new(&env),
         target_fn: symbol_short!("noop"),
         target_args: Vec::new(&env),
     };

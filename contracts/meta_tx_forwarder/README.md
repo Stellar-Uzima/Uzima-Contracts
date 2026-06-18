@@ -45,12 +45,17 @@ This implementation:
 ```
 
 Every forwarded call's first positional argument is `request.from` (the
-original signer). Target contracts can either:
+original signer). Target contracts are recommended to:
 
-1. Branch on `env.invoker() == ERC2771ContextImpl::get_trusted_forwarder(&env)`
-   and treat `from` as the authoritative sender, **or**
-2. Accept `from` unconditionally as their first argument and trust the
-   forwarder to populate it (most straightforward).
+1. Accept `from` unconditionally as their first argument and trust the
+   forwarder to populate it (the recommended Soroban-21.x pattern; the
+   host no longer exposes `env.invoker()`, so there's no implicit
+   in-band check that the immediate caller is the trusted forwarder).
+2. Optionally call `Address::require_auth()` themselves for direct
+   invocations, and skip it on relayed calls (because `from`'s
+   authorization has already been proven off-chain via the Ed25519
+   signature over the typed payload and `relayer.require_auth()` on
+   the forwarder).
 
 ## Data Structures
 
@@ -64,7 +69,6 @@ pub struct ForwardRequest {
     pub gas: u32,             // Informational gas-limit hint
     pub nonce: u64,           // Per-user nonce for replay protection
     pub deadline: u64,        // Unix-timestamp expiry
-    pub data: Bytes,          // Reserved opaque bytes; unused by verifier
     pub target_fn: Symbol,    // Soroban contract function to invoke on `to`
     pub target_args: Vec<Val> // Arguments passed to `target_fn` (forwarder auto-prepends `from`)
 }
@@ -77,7 +81,7 @@ The contract signs and verifies exactly this byte sequence:
 ```
 DOMAIN_PREFIX  (16 bytes)        = "UZM-MTX-v1\0\0\0\0\0\0"
 TRUSTED_FORWARDER_ADDRESS_XDR     = env.current_contract_address().to_xdr(env)
-FORWARD_REQUEST_BODY_XDR          = request.to_xdr(env)
+FORWARD_REQUEST_BODY_XDR          = request.clone().to_xdr(env)
 ```
 
 The full message is the concatenation of these three slices. The user's
@@ -129,12 +133,6 @@ relayer must be in the registered-active set. The full execution order is:
 
 Returns the XDR-encoded `Val` returned by the target contract.
 
-### `execute_open(relayer, request, signature) -> Result<Bytes, Error>`
-
-Same as `execute` but does **not** require a registered-active relayer.
-Authentication is still enforced via `relayer.require_auth()`. Intended for
-admin tooling and self-relaying; production code paths should use `execute`.
-
 ### `execute_batch(relayer, requests, signatures) -> Result<Vec<Bytes>, Error>`
 
 Batched execution. All requests are processed sequentially. On first failure,
@@ -175,13 +173,16 @@ impl MyContract {
     }
 
     /// Called directly OR via the meta-tx forwarder.
-    /// `from` is the original signer; for direct calls, it's `env.invoker()`.
+    /// `from` is the original signer; on direct calls, callers must
+    /// pre-sign `from.require_auth()` themselves.
     pub fn my_action(env: Env, from: Address, x: u32) -> u32 {
         // Authz: in a meta-tx flow, `from` has already authorized off-chain
-        // via the Ed25519 signature — *do not* re-call `require_auth()`,
-        // because only the relayer signs the inner transaction otherwise.
+        // via the Ed25519 signature. The trusted-forwarder check itself is
+        // informational in Soroban 21.x (the host does not expose
+        // `env.invoker()`), so the strongest guarantee is that the
+        // forwarder has *registered* a trusted forwarder at setup time.
         // For direct calls, fall back to the standard Soroban auth model.
-        let trusted = ERC2771ContextImpl::is_invoker_trusted(&env);
+        let trusted = ERC2771ContextImpl::has_trusted_forwarder(&env);
         if !trusted {
             from.require_auth();
         }
@@ -227,8 +228,17 @@ let rest   = erc2771_context::ERC2771ContextImpl::msg_data(&env, &msg_args);
 
 * The forwarder stores its own address under `DataKey::TrustedForwarder`.
   Target contracts should read it via
-  `ERC2771ContextImpl::get_trusted_forwarder(&env)` and verify `env.invoker()
-  == trusted` before trusting a forwarded `from`.
+  `ERC2771ContextImpl::get_trusted_forwarder(&env)` and (optionally) use
+  `ERC2771ContextImpl::has_trusted_forwarder(&env)` to gate direct-call
+  authorization. On Soroban 21.x the host no longer exposes `env.invoker()`,
+  so the in-band "is the immediate caller the trusted forwarder" checkup
+  is replaced by: the forwarder has been registered at contract init time
+  AND (`from` is treated as authoritative when present in arg 0).
+* **The actual authorization of the forwarder itself is enforced inside
+  `MetaTxForwarder::execute`** via `relayer.require_auth()` and the
+  Ed25519 signature over the typed payload. Target contracts therefore
+  can trust forwarded `from` values precisely because the forwarder has
+  already authenticated the relayer and verified the patient's signature.
 
 ### Relayer Authorization
 
@@ -306,14 +316,16 @@ trusted forwarder address via `ERC2771ContextImpl::set_trusted_forwarder`.
 ## Testing
 
 ```bash
-cargo test -p meta_tx_forwarder                 # unit tests inside the crate
-cargo test -p uzima-tests -- meta_tx            # integration + benchmarks
+cargo test --lib -p meta_tx_forwarder            # unit tests inside the contract crate
+cargo test --manifest-path tests/Cargo.toml -- meta_tx  # integration + benchmarks
 ```
 
-The integration tests use real `ed25519_dalek` key pairs. The benchmarks
-print a `[BENCH] relayed-vs-direct CPU factor: …` line that exposes the
-extra cost of the verification + dispatch loop relative to a direct
-authenticated call.
+The `tests/` directory is a separate Cargo sub-project (not registered in
+the root `[workspace].members`), so integration tests are run with an
+explicit `--manifest-path`. The integration tests use real `ed25519_dalek`
+key pairs. The benchmarks print a `[BENCH] relayed-vs-direct CPU factor: …`
+line that exposes the extra cost of the verification + dispatch loop
+relative to a direct authenticated call.
 
 ## Usage Example (patient grants record access to a doctor, gasless)
 
@@ -330,9 +342,8 @@ const request = {
   to: targetContractAddress,            // contract to invoke
   value: 0n,
   gas: 100000,
-  nonce: await getCurrentNonce(forwarder, patientAddress),  // read on-chain
+  nonce: await forwarder.get_nonce(patientAddress),         // read on-chain
   deadline: BigInt(now + 3600),         // +1h safety margin
-  data: Buffer.alloc(0),                // reserved / unused
   targetFn: "grant_access",             // function name on `to`
   targetArgs: [nativeToScVal(doctorAddress), nativeToScVal(60 * 60 * 24)], // args after `from`
 };
@@ -367,8 +378,9 @@ soroban contract invoke \
 
 On success, the patient's nonce on the forwarder advances by one, and the
 target contract's `grant_access(from=patientAddress, doctorAddr, ttl)`
-executes with the forwarder as `env.invoker()` and `from` set to
-`patientAddress`. The patient pays only the (off-chain) relay fee.
+executes with `from` set to `patientAddress` (the original signer) as the
+first positional argument; the trusted forwarder itself is the immediate
+caller. The patient pays only the (off-chain) relay fee.
 
 ## Events
 

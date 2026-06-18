@@ -26,9 +26,9 @@
 
 pub mod erc2771_context;
 
-use soroban_sdk::xdr::{FromXdr, ToXdr};
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, Bytes,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes,
     BytesN, Env, IntoVal, Symbol, Val, Vec,
 };
 
@@ -69,19 +69,14 @@ pub enum Error {
 /// Forward request structure containing all necessary data for a meta-transaction.
 ///
 /// The signed payload is the deterministic XDR serialization of this struct
-/// (produced via `to_xdr(env)`). Signers must produce the Ed25519 signature
+/// (produced via `request.to_xdr()`). Signers must produce the Ed25519 signature
 /// over these exact bytes after application of the user's public-key.
 ///
 /// `target_fn` identifies the Soroban contract function to invoke on `to`,
-/// and `target_args` are the **XDR-encoded positional arguments** to that
-/// function *excluding the original sender* — the forwarder automatically
-/// prepends `from` as the first positional argument so target contracts
-/// recognise the original signer (the ERC-2771 pattern adapted to Soroban).
-///
-/// We store target arguments as `Vec<Bytes>` (each entry the XDR bytes of a
-/// single `Val`) rather than `Vec<Val>` to keep the contracttype layout
-/// rock-solid across SDK upgrades and to make the signed payload byte-for-byte
-/// deterministic across off-chain encoders.
+/// and `target_args` are the positional arguments to that function *excluding
+/// the original sender* — the forwarder automatically prepends `from` as
+/// the first positional argument so target contracts recognise the original
+/// signer (the ERC-2771 pattern adapted to Soroban).
 ///
 /// `data` is preserved for backwards compatibility and may carry arbitrary
 /// opaque bytes (currently unused by the on-chain verifier).
@@ -102,13 +97,11 @@ pub struct ForwardRequest {
     pub nonce: u64,
     /// Unix timestamp deadline after which the request is no longer valid.
     pub deadline: u64,
-    /// Reserved opaque bytes; not part of the on-chain dispatch path.
-    pub data: Bytes,
     /// Target contract function symbol to invoke on `to`.
     pub target_fn: Symbol,
-    /// Optional positional arguments for `target_fn` as a list of XDR-encoded
-    /// `Val`s. The original `from` address is always prepended automatically.
-    pub target_args: Vec<Bytes>,
+    /// Optional positional arguments for `target_fn`. The original `from`
+    /// address is always prepended automatically.
+    pub target_args: Vec<Val>,
 }
 
 /// Relayer configuration
@@ -435,13 +428,13 @@ impl MetaTxForwarder {
 
     /// Verify Ed25519 signature over the typed payload of `request`.
     ///
-    /// The signed message is `DOMAIN_PREFIX || forwarder_address || request.to_xdr(env)`.
+    /// The signed message is `DOMAIN_PREFIX || forwarder_address || request.to_xdr()`.
     /// The user's 32-byte Ed25519 public key is looked up from storage.
     ///
-    /// Panics (host trap) on signature verification failure by design —
-    /// Soroban `ed25519_verify` is fail-fast and there is no error return
-    /// path; we surface `Error::InvalidSignature` for clarification when the
-    /// missing public key is the root cause (vs. a cryptographic mismatch).
+    /// Traps (host panic) on signature verification failure by design — Soroban
+    /// `ed25519_verify` is fail-fast and there is no soft return path;
+    /// `Error::PubKeyNotRegistered` is surfaced up-front when the user has
+    /// not registered their key.
     fn verify_signature(
         env: &Env,
         request: &ForwardRequest,
@@ -460,7 +453,10 @@ impl MetaTxForwarder {
         let forwarder_addr = Self::get_trusted_forwarder(env.clone());
         message.append(&forwarder_addr.to_xdr(env));
         // Request body — full deterministic XDR of the typed ForwardRequest.
-        message.append(&request.to_xdr(env));
+        // The soroban-sdk 21.7.7 contracttype-derive impl takes `self` by
+        // value, so we clone the borrowed request before serializing it.
+        let req_xdr: soroban_sdk::Bytes = request.clone().to_xdr(env);
+        message.append(&req_xdr);
 
         // Verify Ed25519 signature. Traps on cryptographic failure.
         env.crypto().ed25519_verify(&pub_key, &message, signature);
@@ -469,31 +465,22 @@ impl MetaTxForwarder {
 
     /// Forward the call to the target contract.
     ///
-    /// Builds `Vec<Val>` of `[from.into_val(), ...decoded(request.target_args)]`
-    /// and invokes `request.to.request.target_fn(...)`. Each entry of
-    /// `request.target_args` is the XDR bytes of one `Val` (so the signed
-    /// payload is fully deterministic across off-chain encoders and the
-    /// contracttype stays small).
-    ///
-    /// Returns the XDR-encoded return value of the target.
+    /// Builds `Vec<Val>` of `[from.into_val(), ...request.target_args]` and
+    /// invokes `request.to.request.target_fn(...)`. Returns the XDR-encoded
+    /// return value of the target.
     fn forward_call(env: &Env, request: &ForwardRequest) -> Result<Bytes, Error> {
+        // Build the positional arg list passed to the target. The forwarder
+        // always prepends the original `from` so target contracts have
+        // first-argument access to the original signer.
         let mut args: Vec<Val> = Vec::new(env);
         args.push_back(request.from.clone().into_val(env));
-
-        for arg_bytes in request.target_args.iter() {
-            // Stream arg_bytes into a heap Vec<u8> so FromXdr can read it.
-            let len: u32 = arg_bytes.len();
-            let mut buf: std::vec::Vec<u8> = std::vec::Vec::with_capacity(len as usize);
-            let mut i: u32 = 0;
-            while i < len {
-                buf.push(arg_bytes.get(i).unwrap_or(0));
-                i = i.saturating_add(1);
-            }
-            let val: Val = Val::from_xdr(&buf).map_err(|_| Error::ExecutionFailed)?;
-            args.push_back(val);
+        for arg in request.target_args.iter() {
+            args.push_back(arg);
         }
 
         let result: Val = env.invoke_contract(&request.to, &request.target_fn, args);
+        // The auto-derived `ToXdr` for `Val` consumes self by value in 21.x
+        // (returns `Bytes`). `result` is freshly owned, so no clone needed.
         Ok(result.to_xdr(env))
     }
 

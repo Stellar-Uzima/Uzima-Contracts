@@ -8,30 +8,34 @@
 //! `(Symbol, Vec<Val>)` argument lists. The Meta-Transaction Forwarder
 //! exploits this by prepending the original `Address` as the first positional
 //! argument to every forwarded call. This module provides the matching
-//! helpers for target contracts:
+//! helpers for target contracts.
 //!
-//! - [`msg_sender`] returns the immediate `env.invoker()`. When called via
-//!   the trusted forwarder, this is the **forwarder's** address; the original
-//!   user is in the **first positional argument** of the call.
-//! - [`msg_data`] returns the raw args vector that was forwarded to the
-//!   contract, semantically equivalent to Ethereum's `_msgData()` after the
-//!   forwarder-appended sender has been stripped.
+//! ## Soroban 21.x API note
+//! `env.invoker()` (and the broader `Invoker` trait) is **not exposed** in
+//! soroban-sdk 21.x. There is no implicit "who called me" query — the SDK
+//! deliberately removed it because the recommended pattern is to require
+//! authentication from any address a contract wants to trust. Target
+//! contracts that need the original signer therefore MUST accept the
+//! forwarder-supplied `from` as their first positional argument and/or call
+//! the address's `require_auth()`.
 //!
 //! ## Target contract usage
 //! ```ignore
 //! use meta_tx_forwarder::erc2771_context;
+//! use soroban_sdk::{Address, Env};
 //!
 //! pub fn my_fn(env: Env, from: Address, x: u32) -> u32 {
-//!     // When invoked directly: `from == env.invoker()`.
-//!     // When invoked via the trusted forwarder: `from` is the original
-//!     // signer (and `env.invoker() == trusted_forwarder`).
+//!     // Trust model: when this contract was invoked via the configured
+//!     // trusted forwarder we treat the first arg as authoritative; otherwise
+//!     // we fall back to requiring direct authentication from the caller.
 //!     let trusted = erc2771_context::ERC2771ContextImpl::get_trusted_forwarder(&env);
-//!     let sender = if env.invoker() == trusted {
-//!         from            // ERC-2771 path
-//!     } else {
-//!         env.invoker()   // direct call
-//!     };
-//!     let _ = sender;
+//!     if trusted.is_none() {
+//!         from.require_auth();           // direct-call path
+//!     }
+//!     // trusted == Some(addr): forwarder's auth has already been validated
+//!     // inside MetaTxForwarder::execute; `from` is the original signer.
+//!     let _ = x;
+//!     let _ = from;
 //!     x
 //! }
 //! ```
@@ -39,6 +43,9 @@
 //! All helpers in this module are `no_std` safe and live in instance storage.
 
 use soroban_sdk::{Address, Env, Symbol, Val, Vec};
+// `Address::try_from_val(env, &val)` lives on `TryFromVal<Env, Val>`. We avoid
+// `Invoker` entirely because soroban-sdk 21.7.7 has removed it.
+use soroban_sdk::TryFromVal;
 
 use crate::DataKey;
 
@@ -88,11 +95,27 @@ impl ERC2771ContextImpl {
         env.storage().instance().get(&DataKey::TrustedForwarder)
     }
 
-    /// Return the immediate `env.invoker()`. When the caller is the trusted
-    /// forwarder, this is the forwarder; the original signer is in the
-    /// first positional argument of the call.
-    pub fn msg_sender(env: &Env) -> Address {
-        env.invoker()
+    /// Returns the Soroban 21.x "sender" the contract sees.
+    ///
+    /// Soroban 21 does not expose the immediate caller via an `env.invoker()`
+    /// query, so a true EVM-style `msg.sender` is not available. We provide a
+    /// best-effort equivalent: when a trusted forwarder has been configured
+    /// (e.g. via [`set_trusted_forwarder`]) and the first positional argument
+    /// of the call is an `Address`, we return that as the "sender". When no
+    /// trusted forwarder is configured the function falls back to the
+    /// contract's own address — but in that path the target contract MUST
+    /// call `require_auth()` on the address it actually trusts (direct calls
+    /// are not authenticated implicitly).
+    ///
+    /// This signature is intentionally not EVM-compatible in 21.x. Targets
+    /// that genuinely need "who called me" should require explicit
+    /// authentication.
+    pub fn msg_sender(env: &Env, args: &Vec<Val>) -> Address {
+        match Self::get_trusted_forwarder(env) {
+            Some(_) => Self::msg_sender_from_data(env, args)
+                .unwrap_or_else(|| env.current_contract_address()),
+            None => env.current_contract_address(),
+        }
     }
 
     /// Return the first positional argument of the current invocation —
@@ -100,13 +123,10 @@ impl ERC2771ContextImpl {
     ///
     /// Returns `None` if the contract was not invoked through the forwarder
     /// (i.e., direct invocation where arg 0 is something else or no args
-    /// were supplied).
-    ///
-    /// The helper does **not** type-check: callers must know that positional
-    /// arg 0 is, in fact, an `Address` for their function. The Soroban host
-    /// will trap if the call shape doesn't match.
+    /// were supplied) or if arg 0 cannot be decoded as an `Address`.
     pub fn msg_sender_from_data(env: &Env, args: &Vec<Val>) -> Option<Address> {
-        args.get(0)
+        let v = args.get(0)?;
+        Address::try_from_val(env, &v).ok()
     }
 
     /// Return all arguments *after* the original sender. This is the
@@ -125,14 +145,31 @@ impl ERC2771ContextImpl {
         out
     }
 
-    /// True iff the current `env.invoker()` is the configured trusted
-    /// forwarder. Targets should branch on this instead of inspecting raw
-    /// addresses.
+    /// True iff a trusted-forwarder address has been configured for this
+    /// contract.
+    ///
+    /// Soroban 21.x removed the implicit `env.invoker()` query, so we can
+    /// only check that a trusted forwarder was registered at setup time,
+    /// not that the immediate caller of the current call is it. Target
+    /// contracts that need an authentication proof must use
+    /// `Address::require_auth()` on whatever address they wish to trust.
+    /// Authorization of the forwarder itself is enforced inside
+    /// `MetaTxForwarder::execute` via `relayer.require_auth()` and the
+    /// Ed25519 signature over the typed payload.
+    pub fn has_trusted_forwarder(env: &Env) -> bool {
+        Self::get_trusted_forwarder(env).is_some()
+    }
+
+    /// Deprecated alias for [`Self::has_trusted_forwarder`]. Previously
+    /// queried `env.invoker()`, which is no longer exposed in
+    /// soroban-sdk 21.7.7. Kept as a deprecated alias to avoid breaking any
+    /// downstream consumer that still references the old name.
+    #[deprecated(
+        since = "issue-834",
+        note = "Soroban 21.x removed env.invoker(); use has_trusted_forwarder() instead"
+    )]
     pub fn is_invoker_trusted(env: &Env) -> bool {
-        match Self::get_trusted_forwarder(env) {
-            Some(trusted) => env.invoker() == trusted,
-            None => false,
-        }
+        Self::has_trusted_forwarder(env)
     }
 
     /// Looking up the function name this contract was called through.
