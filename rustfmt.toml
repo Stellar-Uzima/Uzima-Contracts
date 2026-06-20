@@ -1,13 +1,23 @@
 # Rustfmt configuration for Uzima Contracts
-# Ensures consistent code formatting across the project
+# Ensures consistent code formatting across the project.
+#
+# Only options that are stable across the entire rustfmt 1.7x -> 1.9x
+# toolchain range used by CI (dtolnay/rust-toolchain@stable) are kept here.
+# Several historical options (fn_args_layout / fn_return_indent /
+# match_expression_indent / where_layout / imports_layout / format_strings /
+# format_macro_matchers / format_macro_bodies) are nightly-only or
+# deprecated on recent stable and were removed on 2026-06 to keep CI from
+# turning the warnings into errors.
 
-# Formatting style
+# Indent & style
 hard_tabs = false
 tab_spaces = 4
 newline_style = "Auto"
 use_small_heuristics = "Default"
 
 # Imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
 # Note: imports_granularity, imports_layout and group_imports are
 # nightly-only on current stable rustfmt and consistently trigger
 # CI's `cargo fmt --all -- --check` exit 1 with no real diff.
@@ -17,7 +27,7 @@ use_small_heuristics = "Default"
 # group_imports = "StdExternalCrate"
 reorder_imports = true
 
-# Code organization
+# Code organisation
 reorder_modules = true
 reorder_impl_items = false
 
@@ -45,6 +55,8 @@ normalize_comments = true
 
 # Maximum widths
 max_width = 100
+
+# Edition
 error_on_line_overflow = false
 
 # Special cases
