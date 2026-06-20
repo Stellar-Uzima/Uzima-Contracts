@@ -1,6 +1,7 @@
 #![no_std]
 //! health_check - Healthcare smart contract on Stellar blockchain.
 
+use common_error::CommonError;
 use soroban_sdk::{contract, contractimpl, contracttype, Env, String, Vec};
 
 /// Contract version constant
@@ -105,8 +106,12 @@ pub struct HealthCheckContract;
 impl HealthCheckContract {
     /// Initialize the health check contract
     pub fn initialize(env: Env) -> bool {
+        Self::try_initialize(env).is_ok()
+    }
+
+    pub fn try_initialize(env: Env) -> Result<(), CommonError> {
         if env.storage().instance().has(&DataKey::Initialized) {
-            return false;
+            return Err(CommonError::AlreadyInitialized);
         }
 
         env.storage().instance().set(&DataKey::Initialized, &true);
@@ -121,7 +126,7 @@ impl HealthCheckContract {
         env.storage().instance().set(&DataKey::LastErrorTime, &0u64);
         env.storage().instance().set(&DataKey::CommonErrorCode, &0u32);
 
-        true
+        Ok(())
     }
 
     /// Get comprehensive health check

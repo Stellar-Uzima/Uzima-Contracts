@@ -6,6 +6,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 pub const COMMON_ERROR_MAX: u32 = 99;
 pub const MEDICAL_RECORDS_ERROR_BASE: u32 = 1000;
 pub const RBAC_ERROR_BASE: u32 = 2000;
+pub type CommonResult<T> = Result<T, CommonError>;
 
 #[contracterror(export = false)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -30,6 +31,10 @@ pub enum CommonError {
     InvalidPayload = 16,
     DuplicateSubmission = 17,
     UnauthorizedCaller = 18,
+}
+
+pub fn is_common_error_code(code: u32) -> bool {
+    code <= COMMON_ERROR_MAX
 }
 
 pub fn get_suggestion(error: CommonError) -> Symbol {

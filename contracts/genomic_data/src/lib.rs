@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod test;
 
+use common_error::CommonError;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
@@ -304,9 +305,13 @@ impl GenomicDataContract {
     }
 
     pub fn initialize(env: Env, admin: Address) -> bool {
+        Self::try_initialize(env, admin).is_ok()
+    }
+
+    pub fn try_initialize(env: Env, admin: Address) -> Result<(), CommonError> {
         admin.require_auth();
         if env.storage().instance().has(&UPGRADE_ADMIN) {
-            return false;
+            return Err(CommonError::AlreadyInitialized);
         }
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
@@ -321,13 +326,21 @@ impl GenomicDataContract {
             None,
             "initialized",
         );
-        true
+        Ok(())
     }
 
     pub fn set_zk_verifier(env: Env, admin: Address, contract_id: Address) -> bool {
+        Self::try_set_zk_verifier(env, admin, contract_id).is_ok()
+    }
+
+    pub fn try_set_zk_verifier(
+        env: Env,
+        admin: Address,
+        contract_id: Address,
+    ) -> Result<(), CommonError> {
         admin.require_auth();
         if !Self::require_admin(&env, &admin) {
-            return false;
+            return Err(CommonError::Unauthorized);
         }
         env.storage()
             .instance()
@@ -340,7 +353,7 @@ impl GenomicDataContract {
             None,
             "zk verifier set",
         );
-        true
+        Ok(())
     }
 
     pub fn add_record(
@@ -467,6 +480,15 @@ impl GenomicDataContract {
     }
 
     pub fn revoke_consent(env: Env, patient: Address, record_id: u64, grantee: Address) -> bool {
+        Self::try_revoke_consent(env, patient, record_id, grantee).is_ok()
+    }
+
+    pub fn try_revoke_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+    ) -> Result<(), CommonError> {
         patient.require_auth();
         let ce_opt = env
             .storage()
@@ -474,11 +496,11 @@ impl GenomicDataContract {
             .get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
         let mut entry = if let Some(entry) = ce_opt {
             if entry.patient != patient {
-                return false;
+                return Err(CommonError::Unauthorized);
             }
             entry
         } else {
-            return false;
+            return Err(CommonError::NotFound);
         };
         entry.active = false;
         env.storage()
@@ -492,7 +514,7 @@ impl GenomicDataContract {
             Some(record_id),
             "consent revoked",
         );
-        true
+        Ok(())
     }
 
     pub fn grant_research_consent(
@@ -969,6 +991,14 @@ impl GenomicDataContract {
     }
 
     pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> bool {
+        Self::try_purchase_listing(env, buyer, listing_id).is_ok()
+    }
+
+    pub fn try_purchase_listing(
+        env: Env,
+        buyer: Address,
+        listing_id: u64,
+    ) -> Result<(), CommonError> {
         buyer.require_auth();
         let l_opt = env
             .storage()
@@ -977,10 +1007,10 @@ impl GenomicDataContract {
         let mut listing = if let Some(listing) = l_opt {
             listing
         } else {
-            return false;
+            return Err(CommonError::NotFound);
         };
         if listing.status != ListingStatus::Active {
-            return false;
+            return Err(CommonError::InvalidState);
         }
         listing.buyer = Some(buyer.clone());
         listing.status = ListingStatus::Purchased;
@@ -995,7 +1025,7 @@ impl GenomicDataContract {
             Some(listing.record_id),
             "listing purchased",
         );
-        true
+        Ok(())
     }
 
     pub fn report_breach(
