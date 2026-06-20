@@ -22,6 +22,7 @@ reorder_modules = true
 reorder_impl_items = false
 
 # Function formatting
+fn_params_layout = "Tall"
 # Note: fn_args_layout / fn_return_indent / where_layout are
 # deprecated/removed in current rustfmt. Use fn_params_layout and
 # where_clause_layout when nightly options are reintroduced.

@@ -1,5 +1,39 @@
 #![no_std]
-//! healthcare_payment - Healthcare smart contract on Stellar blockchain.
+//! # Healthcare Payment
+//!
+//! Claims adjudication, eligibility checks, and provider payouts for the Uzima
+//! Contracts platform. Surfaces the EDI-837 / EDI-834 / EDI-835 flows used by
+//! integration partners alongside a circuit-breaker so a downstream anomaly
+//! can pause claim processing without taking the WHO platform offline.
+//!
+//! ## Surface
+//!
+//! * **Claims** — `submit_claim`, `verify_claim`, `approve_claim`,
+//!   `reject_claim`, `process_payment`, `batch_process_payments`,
+//!   `escrow_claim`.
+//! * **Eligibility & enrollment** — `verify_insurance_eligibility`,
+//!   `sync_coverage_enrollment` (HIPAA EDI-834 / EDI-837).
+//! * **EOB** — `process_eob` (HIPAA EDI-835) updates the patient's running
+//!   deductible / copay book-keeping via [`PatientResponsibility`].
+//! * **Pre-auths & payment plans** — `request_preauth`, `approve_preauth`,
+//!   `create_payment_plan`, `pay_installment`.
+//! * **ZK coverage proofs** — `submit_coverage_proof`,
+//!   `verify_coverage_with_zk`, `get_coverage_proof`.
+//! * **Circuit breaker** — `emergency_pause`, `begin_recovery`,
+//!   `resume_operations`, `report_anomaly`, `set_failure_threshold`,
+//!   `add_authorized_pauser`, `remove_authorized_pauser`.
+//!
+//! ## Example (heightened reimbursement flow)
+//!
+//! ```ignore
+//! client.initialize(&admin, &router, &escrow, &treasury, &token, &aml, &rbac);
+//! clinic.submit_claim(&patient, &clinic, &"X-22", &500i128, &"BC001", &None);
+//! prov.verify_claim(&1, &clinic);
+//! payer.approve_claim(&1, &payer);
+//! client.submit_insurance_claim(&clinic, &1, &1, &"PAYER-77", &"837")?;
+//! client.process_payment(&1)?;  // pays out via routes to clinic + treasury
+//! client.process_eob(&admin, &1, &1, &500, &400, &100, &"auto-pay", &"835")?;
+//! ```
 #![allow(clippy::too_many_arguments)]
 
 pub mod errors;

@@ -1,9 +1,34 @@
 #![no_std]
-//! governor - Healthcare smart contract on Stellar blockchain.
+//! # Governor
+//!
+//! On-chain governance for the Uzima Contracts platform. Token holders can
+//! propose, vote on, queue, and execute decisions that mutate other contracts
+//! (typically via a timelock).
+//!
+//! ## Lifecycle
+//!
+//! ```text
+//!    Propose  ->  Active (after voting_delay)  ->  Succeeded/Defeated
+//!         \                                            |
+//!          \------ Cancelable here <--------------------+
+//!                                                       |
+//!                                                  Queue (Succeeded only)
+//!                                                       |
+//!                                                  Execute (after timelock delay)
+//! ```
+//!
+//! * **Voting power** combines `token.balance_of` and (optionally)
+//!   `rep_contract.get_score` to weight votes.
+//! * **Disputes**: if a `dispute_contract` is configured, `state` and
+//!   `execute` consult `is_disputed(proposal_id)` and refuse to act on
+//!   disputed proposals.
+//! * **Storage layout** lives in instance storage so all hot reads stay
+//!   cheap.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::needless_return)]
 #![allow(dead_code)]
+
 
 pub mod errors;
 pub use errors::Error;
