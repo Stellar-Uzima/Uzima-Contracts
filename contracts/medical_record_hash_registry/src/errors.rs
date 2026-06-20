@@ -27,7 +27,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::ContractPaused | Error::DeadlineExceeded => symbol_short!("RE_TRY_L"),
         Error::InvalidId | Error::DuplicateRecord | Error::RecordNotFound => {
             symbol_short!("CHK_ID")
-        }
+        },
         Error::InsufficientFunds => symbol_short!("ADD_FUND"),
         Error::StorageFull => symbol_short!("CLN_OLD"),
         Error::CrossChainTimeout => symbol_short!("RE_TRY_L"),

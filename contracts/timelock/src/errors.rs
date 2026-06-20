@@ -34,7 +34,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::AlreadyInitialized | Error::AlreadyQueued => symbol_short!("ALREADY"),
         Error::ContractPaused | Error::DeadlineExceeded | Error::CrossChainTimeout => {
             symbol_short!("RE_TRY_L")
-        }
+        },
         Error::InsufficientFunds => symbol_short!("ADD_FUND"),
         Error::StorageFull => symbol_short!("CLN_OLD"),
         _ => symbol_short!("CONTACT"),

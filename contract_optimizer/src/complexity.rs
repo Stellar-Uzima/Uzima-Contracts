@@ -271,7 +271,7 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
             Item::Struct(ItemStruct { fields, .. }) => {
                 self.data_structure += 2;
                 self.data_structure += fields.len() as u32;
-            }
+            },
             Item::Enum(ItemEnum { variants, .. }) => {
                 self.data_structure += 3;
                 let variant_count = variants.len() as u32;
@@ -280,8 +280,8 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
                 for v in variants {
                     self.data_structure += v.fields.len() as u32;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
         syn::visit::visit_item(self, item);
     }
@@ -344,18 +344,18 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
         match method.as_str() {
             "require_auth" | "require_auth_for_current_contract" => {
                 self.permission_complexity += 2;
-            }
+            },
             "storage" => {
                 if method == "storage" {
                     // env.storage().get/set — counted via method chain below
                 }
-            }
+            },
             "get" | "set" | "update" | "extend_ttl" | "delete" => {
                 self.data_structure += 1;
-            }
+            },
             "invoke_contract" | "invoke_contract_v2" => {
                 self.external_interactions += 2;
-            }
+            },
             _ => {
                 if method.contains("auth") || method.contains("admin") || method.contains("role") {
                     self.permission_complexity += 1;
@@ -363,7 +363,7 @@ impl<'ast> Visit<'ast> for ComplexityVisitor {
                 if method.contains("status") || method.contains("transition") {
                     self.state_transitions += 1;
                 }
-            }
+            },
         }
         syn::visit::visit_expr_method_call(self, node);
     }

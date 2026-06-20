@@ -1252,11 +1252,11 @@ impl CrossChainAccessContract {
                     if time_of_day < start || time_of_day > end {
                         return false;
                     }
-                }
+                },
                 AccessCondition::SingleUse => {
                     return true;
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
         true
