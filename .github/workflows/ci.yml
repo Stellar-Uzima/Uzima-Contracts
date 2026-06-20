@@ -34,28 +34,38 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
       - name: Build all contracts for wasm32
-        run: |
-          for contract in contracts/*/; do
-            if [ -d "$contract" ] && [ -f "${contract}Cargo.toml" ]; then
-              cd "$contract"
-              cargo build --target wasm32-unknown-unknown --release 2>&1 || echo "FAILED: $(basename $contract)"
-              cd - > /dev/null
-            fi
-          done
+        # Use workspace-aware build so the [workspace] exclude list (deferred
+        # contracts not yet compatible with the pinned soroban-sdk, see
+        # Cargo.toml "Issue #828 audit" comment) is respected automatically.
+        run: cargo build --workspace --target wasm32-unknown-unknown --release
       - name: Verify #![no_std] attribute
+        # Skip directories that are in the workspace `[workspace] exclude = [...]`
+        # list (Cargo.toml) so deferred contracts do not gate CI on lint-style
+        # attributes unrelated to the workspace build.
         run: |
+          set -e
           FAILED=0
+          # `|| true` keeps the assignment robust if the exclude list ever
+          # changes format; the inner character class also allows hyphens.
+          EXCLUDED=$(grep -oE '"contracts/[a-zA-Z0-9_-]+"' Cargo.toml | tr -d '"' | sort -u || true)
           for contract in contracts/*/; do
+            name=$(basename "$contract")
+            [ -f "${contract}Cargo.toml" ] || continue
+            if printf '%s\n' "$EXCLUDED" | grep -qxF "contracts/$name"; then
+              continue
+            fi
             lib_file="${contract}src/lib.rs"
             if [ -f "$lib_file" ]; then
-              [[ "$contract" == *contract_behavior_fuzzing* ]] && continue
               if ! grep -qF '#![no_std]' "$lib_file"; then
                 echo "MISSING #![no_std]: $lib_file"
                 FAILED=$((FAILED + 1))
               fi
             fi
           done
-          [ $FAILED -eq 0 ] || exit 1
+          if [ "$FAILED" -ne 0 ]; then
+            echo "FAILED: $FAILED contract(s) missing #![no_std]"
+            exit 1
+          fi
 
   # ============================================================================
   # Code Quality (fmt + clippy)

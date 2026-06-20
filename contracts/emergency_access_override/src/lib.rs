@@ -11,6 +11,8 @@ mod events;
 pub use errors::Error;
 
 use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+// Shared multi-sig helpers (Phase 4 migration: see issue #830)
+use governance_commons::{multi_sig, ApprovalStatus};
 
 // ==================== Data Types ====================
 
@@ -31,7 +33,7 @@ pub enum DataKey {
     Initialized,
     Admin,
     ApprovalThreshold,
-    TrustedApprover(Address),          // approver -> bool (exists)
+    TrustedApprovers,                  // Vec<Address> of configured approvers
     EmergencyAccess(Address, Address), // (patient, provider)
     Cooldown(Address),                 // approver -> last_used timestamp
     CooldownPeriod,                    // configurable cooldown in seconds (default 86400 = 24h)
@@ -64,9 +66,9 @@ impl EmergencyAccessOverride {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
-        if threshold == 0 || threshold > approvers.len() {
-            return Err(Error::InvalidThreshold);
-        }
+        // Delegate approval-set validation to the shared multi-sig helper.
+        multi_sig::validate_approval_set(&approvers, threshold)
+            .map_err(|_| Error::InvalidThreshold)?;
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -76,12 +78,14 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::CooldownPeriod, &DEFAULT_COOLDOWN_SECONDS);
-
-        for approver in approvers.iter() {
-            env.storage()
-                .persistent()
-                .set(&DataKey::TrustedApprover(approver.clone()), &true);
-        }
+        // Store the approver set as a Vec<Address> in instance storage so
+        // that the shared multi-sig helper can validate membership. The
+        // previous implementation kept a per-address boolean in persistent
+        // storage; under soroban-sdk 21.x we consolidate to a single
+        // instance entry which the multi-sig helpers can iterate directly.
+        env.storage()
+            .instance()
+            .set(&DataKey::TrustedApprovers, &approvers);
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -101,14 +105,13 @@ impl EmergencyAccessOverride {
             return Err(Error::InvalidDuration);
         }
 
-        let is_trusted: Option<bool> = env
+        // Delegate approver-membership check to the shared multi-sig helper.
+        let trusted: Vec<Address> = env
             .storage()
-            .persistent()
-            .get(&DataKey::TrustedApprover(approver.clone()));
-
-        if is_trusted != Some(true) {
-            return Err(Error::Unauthorized);
-        }
+            .instance()
+            .get(&DataKey::TrustedApprovers)
+            .ok_or(Error::NotInitialized)?;
+        multi_sig::validate_approver(&approver, &trusted).map_err(|_| Error::Unauthorized)?;
 
         let now = env.ledger().timestamp();
 
@@ -170,16 +173,14 @@ impl EmergencyAccessOverride {
             return Ok(true);
         }
 
-        // Avoid duplicate approver records
-        for a in record.approvers.iter() {
-            if a == approver {
-                // already approved by this approver, no changes
-                events::publish_duplicate_approval(&env, &patient, &provider, &approver, now);
-                return Ok(false);
-            }
+        // Use shared helper for idempotent approval. add_approval returns
+        // false if the approver already approved; we preserve the existing
+        // duplicate-approval event so callers can observe rejection.
+        let newly_added = multi_sig::add_approval(approver.clone(), &mut record.approvers);
+        if !newly_added {
+            events::publish_duplicate_approval(&env, &patient, &provider, &approver, now);
+            return Ok(false);
         }
-
-        record.approvers.push_back(approver.clone());
 
         // Determine if approval threshold reached
         let threshold: u32 = env
@@ -187,9 +188,10 @@ impl EmergencyAccessOverride {
             .instance()
             .get(&DataKey::ApprovalThreshold)
             .ok_or(Error::NotInitialized)?;
-        let current = record.approvers.len();
 
-        if current >= threshold {
+        if multi_sig::check_approval_status(&record.approvers, threshold, false)
+            == ApprovalStatus::Ready
+        {
             record.approved = true;
             record.granted_at = now;
             record.expiry_at = now.saturating_add(duration_seconds);
@@ -493,9 +495,8 @@ pub fn approve_emergency_access(
         .persistent()
         .get(&EmergencyKey::Config)
         .ok_or(Error::NotInitialized)?;
-    if !config.approvers.contains(&approver) {
-        return Err(Error::Unauthorized);
-    }
+    // Delegate approver-membership check to the shared multi-sig helper.
+    multi_sig::validate_approver(&approver, &config.approvers).map_err(|_| Error::Unauthorized)?;
     let mut request: EmergencyRequest = env
         .storage()
         .persistent()
@@ -508,15 +509,17 @@ pub fn approve_emergency_access(
     if elapsed > config.expiry_seconds {
         return Err(Error::InvalidDuration); // reuse: expired
     }
-    if request.approvals.contains(&approver) {
+    // add_approval is idempotent: returns false if approver already signed.
+    if !multi_sig::add_approval(approver.clone(), &mut request.approvals) {
         return Err(Error::RateLimitExceeded); // reuse: already signed
     }
-    request.approvals.push_back(approver.clone());
     env.events().publish(
         (Symbol::new(&env, "EmergencyApproval"),),
         (request_id, approver.clone()),
     );
-    if request.approvals.len() >= config.required_approvals {
+    if multi_sig::check_approval_status(&request.approvals, config.required_approvals, false)
+        == ApprovalStatus::Ready
+    {
         request.granted = true;
         env.events().publish(
             (Symbol::new(&env, "EmergencyAccessGranted"),),

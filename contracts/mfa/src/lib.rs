@@ -164,7 +164,7 @@ impl MultiFactorAuth {
     }
 
     /// Recovery mechanism for lost factors
-    pub fn initiate_recovery(env: Env, user: Address, secret_hash: BytesN<32>) {
+    pub fn initiate_recovery(env: Env, user: Address, _secret_hash: BytesN<32>) {
         user.require_auth();
 
         let cfg: MFAConfig = env
@@ -183,7 +183,7 @@ impl MultiFactorAuth {
         env.storage()
             .persistent()
             .set(&DataKey::Recovery(user), &recovery);
-        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY_I"));
+        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY"));
     }
 
     /// Emergency override using admin signatures (multi-sig simulation)
