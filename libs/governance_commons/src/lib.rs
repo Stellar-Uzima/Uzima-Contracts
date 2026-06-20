@@ -43,10 +43,10 @@
 //!                                       (require_auth, specific roles)
 //! ```
 
+pub mod errors;
 pub mod multi_sig;
 pub mod types;
-pub mod errors;
 
+pub use errors::*;
 pub use multi_sig::*;
 pub use types::*;
-pub use errors::*;
