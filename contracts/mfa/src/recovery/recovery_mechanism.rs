@@ -23,7 +23,7 @@ impl RecoveryMechanism {
 
     /// Triggers factor recovery after time-lock expires.
     pub fn complete_recovery(env: &Env, user: &Address, code_hash: BytesN<32>) -> bool {
-        let mut vault: RecoveryVault = env
+        let vault: RecoveryVault = env
             .storage()
             .persistent()
             .get(&DataKey::Recovery(user.clone()))

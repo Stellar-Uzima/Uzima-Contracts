@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Ledger, Env};
 
@@ -146,12 +144,12 @@ fn test_alert_thresholds() {
     client.record_operation(&1000, &true);
 
     let alerts = client.check_alert_thresholds();
-    assert!(alerts.len() > 0);
+    assert!(!alerts.is_empty());
 
     // Trigger pause alert
     client.set_paused(&true);
     let alerts = client.check_alert_thresholds();
-    assert!(alerts.len() > 0);
+    assert!(!alerts.is_empty());
 }
 
 #[test]
