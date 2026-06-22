@@ -119,11 +119,7 @@ pub struct PatientRiskStratificationContract;
 
 #[contractimpl]
 impl PatientRiskStratificationContract {
-    pub fn initialize(env: Env, admin: Address) -> bool {
-        Self::try_initialize(env, admin).is_ok()
-    }
-
-    pub fn try_initialize(env: Env, admin: Address) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
@@ -162,29 +158,6 @@ impl PatientRiskStratificationContract {
     }
 
     pub fn register_risk_model(
-        env: Env,
-        caller: Address,
-        model_id: BytesN<32>,
-        model_type: RiskModelType,
-        specialty: String,
-        version: String,
-        min_confidence_bps: u32,
-        description: String,
-    ) -> Result<bool, Error> {
-        Self::try_register_risk_model(
-            env,
-            caller,
-            model_id,
-            model_type,
-            specialty,
-            version,
-            min_confidence_bps,
-            description,
-        )
-        .map(|_| true)
-    }
-
-    pub fn try_register_risk_model(
         env: Env,
         caller: Address,
         model_id: BytesN<32>,

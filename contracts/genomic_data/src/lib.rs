@@ -304,11 +304,7 @@ impl GenomicDataContract {
         env.events().publish(("LOG", topic), entry);
     }
 
-    pub fn initialize(env: Env, admin: Address) -> bool {
-        Self::try_initialize(env, admin).is_ok()
-    }
-
-    pub fn try_initialize(env: Env, admin: Address) -> Result<(), CommonError> {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), CommonError> {
         admin.require_auth();
         if env.storage().instance().has(&UPGRADE_ADMIN) {
             return Err(CommonError::AlreadyInitialized);
@@ -329,11 +325,7 @@ impl GenomicDataContract {
         Ok(())
     }
 
-    pub fn set_zk_verifier(env: Env, admin: Address, contract_id: Address) -> bool {
-        Self::try_set_zk_verifier(env, admin, contract_id).is_ok()
-    }
-
-    pub fn try_set_zk_verifier(
+    pub fn set_zk_verifier(
         env: Env,
         admin: Address,
         contract_id: Address,
@@ -479,11 +471,7 @@ impl GenomicDataContract {
         true
     }
 
-    pub fn revoke_consent(env: Env, patient: Address, record_id: u64, grantee: Address) -> bool {
-        Self::try_revoke_consent(env, patient, record_id, grantee).is_ok()
-    }
-
-    pub fn try_revoke_consent(
+    pub fn revoke_consent(
         env: Env,
         patient: Address,
         record_id: u64,
@@ -990,11 +978,7 @@ impl GenomicDataContract {
         lid
     }
 
-    pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> bool {
-        Self::try_purchase_listing(env, buyer, listing_id).is_ok()
-    }
-
-    pub fn try_purchase_listing(
+    pub fn purchase_listing(
         env: Env,
         buyer: Address,
         listing_id: u64,

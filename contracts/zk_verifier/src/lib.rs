@@ -85,11 +85,7 @@ impl ZkVerifierContract {
         Ok(())
     }
 
-    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<bool, Error> {
-        Self::try_set_default_ttl(env, caller, ttl).map(|_| true)
-    }
-
-    pub fn try_set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<(), Error> {
+    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &caller)?;
@@ -157,14 +153,6 @@ impl ZkVerifierContract {
         caller: Address,
         version: u32,
     ) -> Result<bool, Error> {
-        Self::try_deactivate_verifying_key(env, caller, version).map(|changed| changed)
-    }
-
-    pub fn try_deactivate_verifying_key(
-        env: Env,
-        caller: Address,
-        version: u32,
-    ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &caller)?;
@@ -202,27 +190,6 @@ impl ZkVerifierContract {
 
     #[allow(clippy::too_many_arguments)]
     pub fn submit_attestation(
-        env: Env,
-        attestor: Address,
-        vk_version: u32,
-        public_inputs_hash: BytesN<32>,
-        proof_hash: BytesN<32>,
-        verified: bool,
-        ttl: u64,
-    ) -> Result<bool, Error> {
-        Self::try_submit_attestation(
-            env,
-            attestor,
-            vk_version,
-            public_inputs_hash,
-            proof_hash,
-            verified,
-            ttl,
-        )
-        .map(|_| true)
-    }
-
-    pub fn try_submit_attestation(
         env: Env,
         attestor: Address,
         vk_version: u32,
@@ -329,11 +296,7 @@ impl ZkVerifierContract {
         env.crypto().sha256(&proof).into()
     }
 
-    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
-        Self::try_mark_nullifier_used(env, nullifier).is_ok()
-    }
-
-    pub fn try_mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> Result<(), Error> {
+    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> Result<(), Error> {
         let key = DataKey::Nullifier(nullifier.clone());
         if env.storage().persistent().has(&key) {
             return Err(Error::InvalidInput);

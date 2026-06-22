@@ -106,11 +106,7 @@ pub struct AnomalyDetectionContract;
 
 #[contractimpl]
 impl AnomalyDetectionContract {
-    pub fn initialize(env: Env, admin: Address, detector: Address, threshold_bps: u32) -> bool {
-        Self::try_initialize(env, admin, detector, threshold_bps).is_ok()
-    }
-
-    pub fn try_initialize(
+    pub fn initialize(
         env: Env,
         admin: Address,
         detector: Address,
@@ -187,25 +183,6 @@ impl AnomalyDetectionContract {
         new_threshold: Option<u32>,
         new_sensitivity: Option<u32>,
         enabled: Option<bool>,
-    ) -> Result<bool, Error> {
-        Self::try_update_config(
-            env,
-            caller,
-            new_detector,
-            new_threshold,
-            new_sensitivity,
-            enabled,
-        )
-        .map(|_| true)
-    }
-
-    pub fn try_update_config(
-        env: Env,
-        caller: Address,
-        new_detector: Option<Address>,
-        new_threshold: Option<u32>,
-        new_sensitivity: Option<u32>,
-        enabled: Option<bool>,
     ) -> Result<(), Error> {
         caller.require_auth();
         let mut config = Self::ensure_admin(&env, &caller)?;
@@ -239,14 +216,6 @@ impl AnomalyDetectionContract {
     }
 
     pub fn set_audit_forensics(
-        env: Env,
-        admin: Address,
-        forensics: Address,
-    ) -> Result<bool, Error> {
-        Self::try_set_audit_forensics(env, admin, forensics).map(|_| true)
-    }
-
-    pub fn try_set_audit_forensics(
         env: Env,
         admin: Address,
         forensics: Address,
