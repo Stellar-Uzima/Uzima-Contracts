@@ -72,6 +72,37 @@ Known candidates (from last audit):
 
 - **Batch operations**: High-frequency callers (e.g., bulk record ingestion) would benefit from batch variants of `write_record`, `create_alert`, and `submit_message`.
 
+  **Implementation (issue #831):** All three contracts now expose batch variants with a shared pattern:
+
+  | Contract | Batch Function | Input Type | Output Type |
+  |---|---|---|---|
+  | `medical_records` | `write_record_batch` | `Vec<RecordInput>` | `Result<Vec<u64>, Error>` |
+  | `anomaly_detector` | `create_alert_batch` | `Vec<AlertInput>` | `Result<Vec<u64>, Error>` |
+  | `cross_chain_bridge` | `submit_message_batch` | `Vec<SubmitMessageRequest>` | `Result<Vec<BytesN<32>>, Error>` |
+
+  **Pattern:**
+  - All-or-nothing semantics — if any item fails validation, the entire batch is rejected (no partial commits).
+  - Max 50 items per batch (enforced by `BatchTooLarge` error at position 0).
+  - Outer auth/init/paused/permission checks are done once at the batch level.
+  - Per-item validation and storage reuse the same internal helpers as the single-item variants (e.g., `write_record_internal`).
+  - Single-item functions (`write_record`, `add_record`) were refactored to delegate to the same internal helper, eliminating code duplication.
+
+  **Error variants added:**
+  - `cross_chain_bridge`: `BatchTooLarge = 291`
+  - `anomaly_detector`: `BatchTooLarge = 14`
+  - `medical_records`: already had `BatchTooLarge = 1208` and `InvalidBatch = 1292`
+
+  **Gas estimate (Soroban, approximate):**
+  - Each batch item incurs the same storage cost as a single-item call (one `persistent::set` + event emission).
+  - Batch overhead per call: ~1 ledger entry for the outer checks (negligible).
+  - Total cost = overhead + (N × per-item cost). For N = 50, batch saves ~49× the overhead of repeated auth/init/paused checks.
+  - Precise gas figures require Soroban simulation; the above is a structural estimate.
+
+  **Test coverage:**
+  - `anomaly_detector`: 4 new tests — empty batch, single, multiple, oversized (43 total, +4).
+  - `cross_chain_bridge`: 5 new tests — empty batch, single, multiple, oversized, invalid chain (57 total, +5).
+  - `medical_records`: test suite blocked by pre-existing SDK compatibility issue (issue #828).
+
 ## CI/CD Integration
 
 Add the following step to `.github/workflows/ci.yml` to generate a refactoring report on every PR:
