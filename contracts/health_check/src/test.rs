@@ -7,8 +7,9 @@ fn test_initialize() {
     let contract_id = env.register_contract(None, HealthCheckContract);
     let client = HealthCheckContractClient::new(&env, &contract_id);
 
-    assert!(client.initialize().is_ok());
-    assert!(client.initialize().is_err()); // Second init should fail
+    client.initialize();
+    let result = client.try_initialize();
+    assert!(result.is_err()); // Second init should fail
 }
 
 #[test]
