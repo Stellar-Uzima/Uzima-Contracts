@@ -116,15 +116,23 @@ impl HealthCheckContract {
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.storage().instance().set(&DataKey::LastActivity, &env.ledger().timestamp());
-        env.storage().instance().set(&DataKey::TotalOperations, &0u64);
-        env.storage().instance().set(&DataKey::FailedOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::LastActivity, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::FailedOperations, &0u64);
         env.storage().instance().set(&DataKey::TotalGasUsed, &0u64);
         env.storage().instance().set(&DataKey::PeakGasUsage, &0u64);
         env.storage().instance().set(&DataKey::TotalErrors, &0u64);
         env.storage().instance().set(&DataKey::RecentErrors, &0u64);
         env.storage().instance().set(&DataKey::LastErrorTime, &0u64);
-        env.storage().instance().set(&DataKey::CommonErrorCode, &0u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::CommonErrorCode, &0u32);
 
         Ok(())
     }
@@ -137,7 +145,7 @@ impl HealthCheckContract {
         let last_activity = Self::last_activity(&env);
         let total_operations = Self::get_total_operations(&env);
         let failed_operations = Self::get_failed_operations(&env);
-        
+
         let success_rate = if total_operations > 0 {
             let successful = total_operations.saturating_sub(failed_operations);
             ((successful * 10000) / total_operations) as u32
@@ -161,7 +169,7 @@ impl HealthCheckContract {
         let version = String::from_str(&env, VERSION);
         let total_ops = Self::get_total_operations(&env);
         let total_gas = Self::get_total_gas_used(&env);
-        
+
         let avg_gas_usage = if total_ops > 0 {
             total_gas / total_ops
         } else {
@@ -184,7 +192,7 @@ impl HealthCheckContract {
     pub fn get_gas_metrics(env: Env) -> GasMetrics {
         let total_ops = Self::get_total_operations(&env);
         let total_gas = Self::get_total_gas_used(&env);
-        
+
         let avg_usage = if total_ops > 0 {
             total_gas / total_ops
         } else {
@@ -204,7 +212,7 @@ impl HealthCheckContract {
     pub fn get_error_metrics(env: Env) -> ErrorMetrics {
         let total_ops = Self::get_total_operations(&env);
         let total_errors = Self::get_total_errors(&env);
-        
+
         let error_rate = if total_ops > 0 {
             ((total_errors * 1000) / total_ops) as u32
         } else {
@@ -225,7 +233,7 @@ impl HealthCheckContract {
         Self::update_last_activity(&env);
         Self::increment_total_operations(&env);
         Self::update_gas_metrics(&env, gas_used);
-        
+
         if !success {
             Self::increment_failed_operations(&env);
         }
@@ -235,8 +243,12 @@ impl HealthCheckContract {
     pub fn record_error(env: Env, error_code: u32) {
         Self::increment_total_errors(&env);
         Self::increment_recent_errors(&env);
-        env.storage().instance().set(&DataKey::LastErrorTime, &env.ledger().timestamp());
-        env.storage().instance().set(&DataKey::CommonErrorCode, &error_code);
+        env.storage()
+            .instance()
+            .set(&DataKey::LastErrorTime, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&DataKey::CommonErrorCode, &error_code);
     }
 
     /// Set pause status
@@ -332,7 +344,9 @@ impl HealthCheckContract {
 
         let peak = Self::get_peak_gas_usage(env);
         if gas_used > peak {
-            env.storage().instance().set(&DataKey::PeakGasUsage, &gas_used);
+            env.storage()
+                .instance()
+                .set(&DataKey::PeakGasUsage, &gas_used);
         }
     }
 
@@ -392,30 +406,30 @@ impl HealthCheckContract {
     /// Get alert thresholds status
     pub fn check_alert_thresholds(env: Env) -> Vec<String> {
         let mut alerts = Vec::new(&env);
-        
+
         let health = Self::health_check(env.clone());
-        
+
         // Check error rate threshold (> 5%)
         if health.success_rate < 9500 {
             alerts.push_back(String::from_str(&env, "High error rate detected"));
         }
-        
+
         // Check storage usage threshold (> 80% of estimate)
         if health.storage_usage > 8192 {
             alerts.push_back(String::from_str(&env, "High storage usage"));
         }
-        
+
         // Check if paused
         if health.is_paused {
             alerts.push_back(String::from_str(&env, "Contract is paused"));
         }
-        
+
         // Check inactivity (> 1 hour)
         let current_time = env.ledger().timestamp();
         if current_time > health.last_activity + 3600 {
             alerts.push_back(String::from_str(&env, "No recent activity"));
         }
-        
+
         alerts
     }
 }
