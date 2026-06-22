@@ -81,6 +81,8 @@ fn now(env: &Env) -> u64 {
 
 /// Read GovernorConfig from instance storage (cheap, cached by the host).
 /// Instance storage is cheaper than persistent for frequently-read values.
+/// Performance Audit Note: Audited for redundant instance-storage reads.
+/// The get_cfg function is called at most once per execution path/function scope.
 fn get_cfg(env: &Env) -> Result<GovernorConfig, Error> {
     env.storage()
         .instance()
@@ -348,6 +350,7 @@ impl Governor {
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod test {
+    extern crate std;
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
 
@@ -434,4 +437,50 @@ mod test {
             symbol_short!("RE_TRY_L")
         );
     }
+
+    #[test]
+    fn test_governor_gas_snapshots() {
+        let env = Env::default();
+        env.mock_all_auths();
+
+        let token_id = env.register_contract(None, MockToken);
+        let token_client = MockTokenClient::new(&env, &token_id);
+
+        let tl = Address::generate(&env);
+        let voter = Address::generate(&env);
+
+        let gov_id = env.register_contract(None, Governor);
+        let gov_client = GovernorClient::new(&env, &gov_id);
+
+        gov_client.initialize(&token_id, &tl, &5, &10, &100, &1, &None, &None);
+
+        token_client.set_bal(&voter, &200);
+
+        // Scenario 1: propose CPU cost
+        let start_propose = env.budget().cpu_instruction_cost();
+        let prop_id = gov_client.propose(
+            &voter,
+            &Bytes::from_array(&env, &[1, 2, 3]),
+            &Bytes::from_array(&env, &[0]),
+        );
+        let cpu_propose = env.budget().cpu_instruction_cost() - start_propose;
+        std::println!("SNAPSHOT [governor - propose]: CPU={}", cpu_propose);
+
+        env.ledger().set_timestamp(env.ledger().timestamp() + 6);
+
+        // Scenario 2: cast_vote CPU cost
+        let start_vote = env.budget().cpu_instruction_cost();
+        gov_client.cast_vote(&prop_id, &voter, &1);
+        let cpu_vote = env.budget().cpu_instruction_cost() - start_vote;
+        std::println!("SNAPSHOT [governor - cast_vote]: CPU={}", cpu_vote);
+
+        env.ledger().set_timestamp(env.ledger().timestamp() + 20);
+
+        // Scenario 3: queue CPU cost
+        let start_queue = env.budget().cpu_instruction_cost();
+        gov_client.queue(&prop_id);
+        let cpu_queue = env.budget().cpu_instruction_cost() - start_queue;
+        std::println!("SNAPSHOT [governor - queue]: CPU={}", cpu_queue);
+    }
 }
+

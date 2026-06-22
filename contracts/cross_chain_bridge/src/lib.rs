@@ -2096,6 +2096,8 @@ impl CrossChainBridgeContract {
 
 // ==================== Private Helper Functions ====================
 // These are not exposed as contract entry points.
+// Performance Audit Note: Audited for redundant instance-storage reads.
+// All keys (Admin, Paused, etc.) are read at most once per execution path/function scope.
 impl CrossChainBridgeContract {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env

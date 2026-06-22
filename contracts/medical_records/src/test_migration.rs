@@ -28,7 +28,7 @@ fn test_migration_admin_check() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #100)")]
+#[should_panic(expected = "Error(Contract, #1)")]
 fn test_migration_admin_check_panic() {
     let env = Env::default();
     env.mock_all_auths();

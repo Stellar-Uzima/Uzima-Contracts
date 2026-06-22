@@ -157,7 +157,7 @@ pub enum RbacRole {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[contracterror]
+#[soroban_sdk::contracterror]
 #[repr(u32)]
 pub enum RbacError {
     Unauthorized = 100,
@@ -286,7 +286,7 @@ pub struct ZkAuditRecord {
 
 // ==================== Medical Record ====================
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct MedicalRecord {
     pub patient_id: Address,
@@ -1537,9 +1537,9 @@ impl MedicalRecordsContract {
         Self::require_active_user(&env, &user)?;
 
         let attr_key = Self::attribute_epoch_key(&env, &namespace, &value);
-        let epoch = Self::read_access_attribute_epoch(&env, &attr_key);
-        let now = env.ledger().timestamp();
         let mut state = Self::read_advanced_access_state(&env);
+        let epoch = state.attribute_epochs.get(attr_key.clone()).unwrap_or(1);
+        let now = env.ledger().timestamp();
         let current: Vec<UserAccessAttribute> = state
             .user_attributes
             .get(user.clone())
@@ -1636,7 +1636,8 @@ impl MedicalRecordsContract {
         if revoked {
             state.user_attributes.set(user, updated);
             let epoch_key = Self::attribute_epoch_key(&env, &namespace, &value);
-            let next_epoch = Self::read_access_attribute_epoch(&env, &epoch_key).saturating_add(1);
+            let current_epoch = state.attribute_epochs.get(epoch_key.clone()).unwrap_or(1);
+            let next_epoch = current_epoch.saturating_add(1);
             state.attribute_epochs.set(epoch_key, next_epoch);
             Self::write_advanced_access_state(&env, &state);
         }
@@ -4894,19 +4895,19 @@ impl MedicalRecordsContract {
         let mut payload = Bytes::new(&env);
 
         let format_tag = match format {
-            ExportFormat::FHIRBundle => Bytes::from_array(&env, &b"FHIR"[..]),
-            ExportFormat::HL7v2 => Bytes::from_array(&env, &b"HL7v2"[..]),
-            ExportFormat::CDA => Bytes::from_array(&env, &b"CDA"[..]),
+            ExportFormat::FHIRBundle => Bytes::from_array(&env, b"FHIR"),
+            ExportFormat::HL7v2 => Bytes::from_array(&env, b"HL7v2"),
+            ExportFormat::CDA => Bytes::from_array(&env, b"CDA"),
         };
         payload.append(&format_tag);
         payload.append(&Bytes::from_array(&env, &now.to_be_bytes()));
 
         {
-            let id_bytes: BytesN<32> = env.current_contract_id();
-            payload.append(&Bytes::from_array(&env, id_bytes.as_ref()));
+            let id_bytes = env.current_contract_address().to_xdr(&env);
+            payload.append(&id_bytes);
         }
 
-        payload.append(&Bytes::from_array(&env, &b"DEMO"[..]));
+        payload.append(&Bytes::from_array(&env, b"DEMO"));
         let role_byte = match user_profile.role {
             Role::Admin => 0u8,
             Role::Doctor => 1u8,
@@ -4915,23 +4916,34 @@ impl MedicalRecordsContract {
         };
         payload.append(&Bytes::from_array(&env, &[role_byte]));
         if let Some(did) = user_profile.did_reference {
-            payload.append(&Bytes::from_array(&env, did.as_bytes()));
+            let len = did.len() as usize;
+            let mut buf = [0u8; 128];
+            if len <= 128 {
+                let slice = &mut buf[..len];
+                did.copy_into_slice(slice);
+                payload.append(&Bytes::from_slice(&env, slice));
+            } else {
+                extern crate alloc;
+                let mut buf = alloc::vec![0u8; len];
+                did.copy_into_slice(&mut buf);
+                payload.append(&Bytes::from_slice(&env, &buf));
+            }
         }
 
-        payload.append(&Bytes::from_array(&env, &b"RECS"[..]));
-        let rec_len = records.len() as u32;
+        payload.append(&Bytes::from_array(&env, b"RECS"));
+        let rec_len = records.len();
         payload.append(&Bytes::from_array(&env, &rec_len.to_be_bytes()));
         for record in records.iter() {
             payload.append(&record.to_xdr(&env));
         }
 
-        payload.append(&Bytes::from_array(&env, &b"AUDIT"[..]));
+        payload.append(&Bytes::from_array(&env, b"AUDIT"));
         let audit_count: u64 = env
             .storage()
             .persistent()
             .get(&DataKey::PatientAccessLogCount(patient_id.clone()))
             .unwrap_or(0);
-        let audit_start = if audit_count > 10 { audit_count - 10 } else { 0 };
+        let audit_start = audit_count.saturating_sub(10);
         for i in audit_start..audit_count {
             if let Some(log_entry) = env
                 .storage()
@@ -4948,7 +4960,7 @@ impl MedicalRecordsContract {
 
         env.events().publish(
             (symbol_short!("EXPORT"), symbol_short!("DATA")),
-            (patient_id, format as u32, now),
+            (patient_id.clone(), format as u32, now),
         );
 
         Self::log_info(
@@ -5000,11 +5012,23 @@ impl MedicalRecordsContract {
             Some(v) => v,
             None => return false, // fail closed
         };
-        let client = RbacClient::new(env, &rbac_addr);
-        match client.has_role(address, &role) {
-            Ok(has) => has,
-            Err(_) => false, // fail closed
+        Self::check_rbac_role_with_client(env, &rbac_addr, address, role)
+    }
+
+    fn check_rbac_role_with_client(env: &Env, rbac_addr: &Address, address: &Address, role: RbacRole) -> bool {
+        let client = RbacClient::new(env, rbac_addr);
+        match client.try_has_role(address, &role) {
+            Ok(Ok(has)) => has,
+            _ => false, // fail closed
         }
+    }
+
+    fn is_active_user_with_role(env: &Env, rbac_addr: &Address, address: &Address, role: RbacRole) -> bool {
+        let is_active = match Self::read_users(env).get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
+        };
+        is_active && Self::check_rbac_role_with_client(env, rbac_addr, address, role)
     }
 
     fn is_admin(env: &Env, address: &Address) -> bool {
@@ -5562,8 +5586,9 @@ impl MedicalRecordsContract {
     }
 
     fn bump_access_attribute_epoch(env: &Env, key: &BytesN<32>) {
-        let next = Self::read_access_attribute_epoch(env, key).saturating_add(1);
         let mut state = Self::read_advanced_access_state(env);
+        let current = state.attribute_epochs.get(key.clone()).unwrap_or(1);
+        let next = current.saturating_add(1);
         state.attribute_epochs.set(key.clone(), next);
         Self::write_advanced_access_state(env, &state);
     }
@@ -5627,9 +5652,9 @@ impl MedicalRecordsContract {
             &DataKey::PatientConsentContract,
         ) {
             let client = PatientConsentManagementClient::new(env, &contract_addr);
-            match client.check_consent(patient.clone(), provider.clone()) {
-                Ok(has_consent) => has_consent,
-                Err(_) => false,
+            match client.try_check_consent(patient, provider) {
+                Ok(Ok(has_consent)) => has_consent,
+                _ => false,
             }
         } else {
             true
@@ -5739,17 +5764,27 @@ impl MedicalRecordsContract {
         record: &EncryptedRecord,
         record_id: u64,
     ) -> bool {
-        if Self::is_admin(env, caller) {
-            return true;
-        }
-        if *caller == record.patient_id {
-            return true;
-        }
-        if *caller == record.doctor_id {
-            return true;
-        }
-        if Self::is_active_doctor(env, caller) && !record.is_confidential {
-            return true;
+        let rbac_addr = env.storage().instance().get(&DataKey::RbacContract);
+        if let Some(ref rbac) = rbac_addr {
+            if Self::is_active_user_with_role(env, rbac, caller, RbacRole::Admin) {
+                return true;
+            }
+            if *caller == record.patient_id {
+                return true;
+            }
+            if *caller == record.doctor_id {
+                return true;
+            }
+            if Self::is_active_user_with_role(env, rbac, caller, RbacRole::Doctor) && !record.is_confidential {
+                return true;
+            }
+        } else {
+            if *caller == record.patient_id {
+                return true;
+            }
+            if *caller == record.doctor_id {
+                return true;
+            }
         }
         if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
             return true;
@@ -6149,7 +6184,10 @@ impl MedicalRecordsContract {
                 _ => None,
             };
             if let Some(pr) = prev_rbac {
-                client.remove_role(address, &pr).map_err(|_| Error::Unauthorized)?;
+                match client.try_remove_role(address, &pr) {
+                    Ok(Ok(_)) => {},
+                    _ => return Err(Error::Unauthorized),
+                }
             }
         }
         let next_rbac = match new_role {
@@ -6159,7 +6197,10 @@ impl MedicalRecordsContract {
             _ => None,
         };
         if let Some(nr) = next_rbac {
-            client.assign_role(address, &nr).map_err(|_| Error::Unauthorized)?;
+            match client.try_assign_role(address, &nr) {
+                Ok(Ok(_)) => {},
+                _ => return Err(Error::Unauthorized),
+            }
         }
         Ok(())
     }
@@ -6217,118 +6258,34 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
 }
 
 #[cfg(any(test, feature = "testutils"))]
-#[soroban_sdk::contract]
-pub struct MockRbac;
+pub mod mock_rbac {
+    use super::*;
+
+    #[soroban_sdk::contract]
+    pub struct MockRbac;
+
+    #[soroban_sdk::contractimpl]
+    impl MockRbac {
+        pub fn initialize(_env: Env, _admin: Address, _config: soroban_sdk::Val) {}
+
+        pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+            let key = (address, role);
+            Ok(env.storage().instance().get(&key).unwrap_or(false))
+        }
+
+        pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+            let key = (address, role);
+            env.storage().instance().set(&key, &true);
+            Ok(true)
+        }
+
+        pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+            let key = (address, role);
+            env.storage().instance().set(&key, &false);
+            Ok(true)
+        }
+    }
+}
 
 #[cfg(any(test, feature = "testutils"))]
-#[soroban_sdk::contractimpl]
-impl MockRbac {
-    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
-
-    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
-        let key = (address, role);
-        Ok(env.storage().instance().get(&key).unwrap_or(false))
-    }
-
-    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
-        let key = (address, role);
-        env.storage().instance().set(&key, &true);
-        Ok(true)
-    }
-
-    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
-        let key = (address, role);
-        env.storage().instance().set(&key, &false);
-        Ok(true)
-    }
-}
-
-// ==================== Traditional Medicine Support ====================
-
-impl MedicalRecordsContract {
-    /// Store a medical record with optional traditional medicine metadata.
-    /// When `traditional_metadata` is provided, the record is also indexed
-    /// for separate querying via `list_traditional_records`.
-    pub fn add_record_with_traditional(
-        env: Env,
-        caller: Address,
-        patient: Address,
-        diagnosis: String,
-        treatment: String,
-        is_confidential: bool,
-        tags: Vec<String>,
-        category: String,
-        treatment_type: String,
-        data_ref: String,
-        traditional_metadata: Option<TraditionalMedicineMetadata>,
-    ) -> Result<u64, Error> {
-        let record_id = Self::add_record(
-            env.clone(),
-            caller.clone(),
-            patient.clone(),
-            diagnosis,
-            treatment,
-            is_confidential,
-            tags.clone(),
-            category.clone(),
-            treatment_type,
-            data_ref,
-        )?;
-
-        if let Some(meta) = traditional_metadata {
-            // Emit dedicated event
-            env.events().publish(
-                (Symbol::new(&env, "TradRecAdded"),),
-                (caller.clone(), record_id, patient.clone(), meta.practice_type.clone()),
-            );
-        }
-
-        Ok(record_id)
-    }
-
-    /// List traditional medicine records for a patient.
-    /// Returns record IDs that have associated traditional medicine metadata.
-    pub fn list_traditional_records(
-        env: Env,
-        caller: Address,
-        patient: Address,
-    ) -> Result<Vec<u64>, Error> {
-        caller.require_auth();
-        Self::require_initialized(&env)?;
-
-        if caller != patient && !Self::is_admin(&env, &caller) {
-            return Err(Error::Unauthorized);
-        }
-
-        // Scan patient records for traditional medicine category
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::PatientRecordCount(patient.clone()))
-            .unwrap_or(0);
-
-        let mut traditional_ids = Vec::new(&env);
-        for idx in 0..count {
-            if let Some(record_id) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, u64>(&DataKey::PatientRecord(patient.clone(), idx))
-            {
-                if let Some(record) = env
-                    .storage()
-                    .persistent()
-                    .get::<DataKey, MedicalRecord>(&DataKey::Record(record_id))
-                {
-                    if record.category == String::from_str(&env, "Traditional")
-                        || record.category == String::from_str(&env, "Herbal")
-                        || record.category == String::from_str(&env, "Spiritual")
-                    {
-                        traditional_ids.push_back(record_id);
-                    }
-                }
-            }
-        }
-
-        Ok(traditional_ids)
-    }
-}
+pub use mock_rbac::{MockRbac, MockRbacClient};

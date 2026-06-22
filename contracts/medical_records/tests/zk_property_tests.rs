@@ -551,7 +551,7 @@ proptest! {
         // ttl_secs is in 1..30 which is always valid (contract cap is 3600),
         // but unwrap so a future tightening of validation surfaces here.
         t.client
-            .set_zk_grant_ttl(&t.admin1, &ttl_secs)
+            .try_set_zk_grant_ttl(&t.admin1, &ttl_secs)
             .expect("test setup: short TTL must be accepted by the contract");
 
         let record_id = add_base_record(&env, &t);

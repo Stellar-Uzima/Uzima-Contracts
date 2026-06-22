@@ -254,6 +254,29 @@ pub fn get_user_history(env: Env, user: Address) -> Result<Vec<Record>, Error> {
 }
 ```
 
+### 3.3 Instance-Storage Read Caching within Function Scope
+
+In Soroban, even though the host caches instance storage, retrieving it via `env.storage().instance().get(...)` repeatedly within the same function invocation incurs a metering cost (CPU instructions and fee budget).
+
+To optimize this, always cache instance storage reads into a local variable or pass the cached state to helper functions rather than performing multiple gets for the same key.
+
+**❌ Inefficient:**
+```rust
+fn process_attribute(env: &Env) {
+    let epoch = Self::read_access_attribute_epoch(env, &key);
+    // ... later in the same function ...
+    let state = Self::read_advanced_access_state(env); // Reads the same key 'adv_access' from instance storage again!
+}
+```
+
+**✅ Efficient:**
+```rust
+fn process_attribute(env: &Env) {
+    let state = Self::read_advanced_access_state(env);
+    let epoch = state.attribute_epochs.get(key).unwrap_or(1); // Cache and query in memory
+}
+```
+
 ---
 
 ## 4. Batch Processing
