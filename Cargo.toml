@@ -4,6 +4,7 @@ members = [
     "contracts/*",
     "contract_optimizer",
     "tests/interoperability_suite",
+    "tests/integration_framework",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
