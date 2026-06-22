@@ -10,6 +10,11 @@ on:
   pull_request:
     branches: [main, develop]
 
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
 jobs:
   # ============================================================================
   # Tests
@@ -38,6 +43,92 @@ jobs:
         # contracts not yet compatible with the pinned soroban-sdk, see
         # Cargo.toml "Issue #828 audit" comment) is respected automatically.
         run: cargo build --workspace --target wasm32-unknown-unknown --release
+      - name: Collect wasm artifacts
+        run: |
+          set -euo pipefail
+          rm -rf dist reports
+          mkdir -p dist reports
+          shopt -s nullglob
+          for wasm_file in target/wasm32-unknown-unknown/release/*.wasm; do
+            contract_name="$(basename "$wasm_file" .wasm)"
+            if [ "$contract_name" = "load_testing" ]; then
+              echo "Skipping known oversized test contract: $contract_name"
+              continue
+            fi
+            cp "$wasm_file" "dist/$contract_name.wasm"
+          done
+          if ! compgen -G "dist/*.wasm" > /dev/null; then
+            echo "No wasm artifacts were collected from target/wasm32-unknown-unknown/release"
+            exit 1
+          fi
+      - name: Resolve wasm size baseline
+        run: |
+          set -euo pipefail
+          baseline_path="reports/wasm_size_baselines.base.json"
+          cp scripts/wasm_size_baselines.json "$baseline_path"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if git fetch --no-tags --depth=1 origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" \
+              && git show "origin/${{ github.base_ref }}:scripts/wasm_size_baselines.json" > "$baseline_path" 2>/dev/null; then
+              echo "Using wasm size baseline from origin/${{ github.base_ref }}"
+            else
+              echo "Base branch baseline unavailable; using checked-out baseline file"
+              cp scripts/wasm_size_baselines.json "$baseline_path"
+            fi
+          fi
+      - name: Monitor wasm sizes
+        run: bash ./scripts/wasm_size_monitor.sh --baseline reports/wasm_size_baselines.base.json
+      - name: Upload wasm size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-size-report
+          path: reports/wasm_size_report.md
+      - name: Comment PR with wasm size summary
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/wasm_size_report.md';
+            if (!fs.existsSync(path)) {
+              core.warning('wasm-size report not found at ' + path);
+              return;
+            }
+            const report = fs.readFileSync(path, 'utf8');
+            const status = (report.match(/^WASM_SIZE_STATUS=(\w+)\s*$/m) || [])[1] || 'unknown';
+            const emoji = status === 'passed' ? ':white_check_mark:' : ':x:';
+            const marker = '<!-- wasm-size-report -->';
+            const body = [
+              marker,
+              '### ' + emoji + ' WASM Size Report',
+              '',
+              report,
+            ].join('\n');
+            const comments = await github.rest.issues.listComments({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100
+            });
+            const previous = comments.data.find(comment =>
+              comment.user?.type === 'Bot' && comment.body?.includes(marker)
+            );
+            if (previous) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: previous.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body
+              });
+            }
       - name: Verify #![no_std] attribute
         # Skip directories that are in the workspace `[workspace] exclude = [...]`
         # list (Cargo.toml) so deferred contracts do not gate CI on lint-style

@@ -1,0 +1,13 @@
+{
+  "contracts": {},
+  "excludedContracts": [
+    "load_testing"
+  ],
+  "generatedBy": "scripts/wasm_size_monitor.sh --update",
+  "limits": {
+    "maxBytes": 65536,
+    "regressionPercent": 10.0,
+    "warningBytes": 61440
+  },
+  "schemaVersion": 1
+}
