@@ -105,11 +105,7 @@ pub struct HealthCheckContract;
 #[contractimpl]
 impl HealthCheckContract {
     /// Initialize the health check contract
-    pub fn initialize(env: Env) -> bool {
-        Self::try_initialize(env).is_ok()
-    }
-
-    pub fn try_initialize(env: Env) -> Result<(), CommonError> {
+    pub fn initialize(env: Env) -> Result<(), CommonError> {
         if env.storage().instance().has(&DataKey::Initialized) {
             return Err(CommonError::AlreadyInitialized);
         }

@@ -180,11 +180,7 @@ pub struct DrugDiscoveryPlatform;
 
 #[contractimpl]
 impl DrugDiscoveryPlatform {
-    pub fn initialize(env: Env, admin: Address, analyzer: Address, predictor: Address) -> bool {
-        Self::try_initialize(env, admin, analyzer, predictor).is_ok()
-    }
-
-    pub fn try_initialize(
+    pub fn initialize(
         env: Env,
         admin: Address,
         analyzer: Address,

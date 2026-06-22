@@ -13,7 +13,7 @@ fn setup(env: &Env) -> (DrugDiscoveryPlatformClient<'_>, Address, Address, Addre
     let analyzer = Address::generate(env);
     let predictor = Address::generate(env);
 
-    assert!(client.initialize(&admin, &analyzer, &predictor));
+    assert!(client.initialize(&admin, &analyzer, &predictor).is_ok());
     (client, admin, analyzer, predictor)
 }
 
