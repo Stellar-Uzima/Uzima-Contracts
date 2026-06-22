@@ -259,25 +259,6 @@ impl DrugDiscoveryPlatform {
         clinical_trial_contract: Option<Address>,
         large_scale_mode: Option<bool>,
         quantum_enabled: Option<bool>,
-    ) -> Result<bool, Error> {
-        Self::try_configure_integrations(
-            env,
-            caller,
-            genomic_contract,
-            clinical_trial_contract,
-            large_scale_mode,
-            quantum_enabled,
-        )
-        .map(|_| true)
-    }
-
-    pub fn try_configure_integrations(
-        env: Env,
-        caller: Address,
-        genomic_contract: Option<Address>,
-        clinical_trial_contract: Option<Address>,
-        large_scale_mode: Option<bool>,
-        quantum_enabled: Option<bool>,
     ) -> Result<(), Error> {
         caller.require_auth();
         let mut cfg = Self::ensure_admin(&env, &caller)?;
