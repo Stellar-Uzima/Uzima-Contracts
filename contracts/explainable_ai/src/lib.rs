@@ -162,11 +162,8 @@ pub struct ExplainableAiContract;
 #[contractimpl]
 impl ExplainableAiContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
+        governance_commons::init_guard(&env);
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&REQUEST_COUNTER, &0u64);

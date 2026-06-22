@@ -227,9 +227,7 @@ pub struct PatientConsentToken;
 impl PatientConsentToken {
     /// Initialize the contract with an admin
     pub fn initialize(env: Env, admin: Address) -> Result<(), ContractError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(ContractError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| ContractError::AlreadyInitialized)?;
 
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);

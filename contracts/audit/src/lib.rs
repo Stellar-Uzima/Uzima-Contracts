@@ -29,9 +29,7 @@ impl AuditTrail {
 
     /// Initialize the contract with an admin address and audit configuration.
     pub fn initialize(env: Env, admin: Address, config: AuditConfig) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Config, &config);

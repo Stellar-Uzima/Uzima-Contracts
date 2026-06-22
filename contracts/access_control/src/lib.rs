@@ -112,6 +112,7 @@ impl AccessControlImpl {
 
     /// Store the initial admin.  Must be called once during contract `initialize`.
     pub fn init(env: &Env, admin: &Address) {
+        governance_commons::init_guard(env);
         env.storage().instance().set(&DataKey::Admin, admin);
     }
 

@@ -11,6 +11,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+governance_commons = { path = "../../libs/governance_commons" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

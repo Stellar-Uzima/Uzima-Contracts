@@ -1033,9 +1033,7 @@ impl MedicalRecordsContract {
 
     /// Initialize the contract, setting the admin and default storage values.
     pub fn initialize(env: Env, admin: Address, rbac_contract: Address) -> bool {
-        admin.require_auth();
-
-        if env.storage().instance().has(&UPGRADE_ADMIN) {
+        if governance_commons::try_init_guard(&env).is_err() {
             Self::log_warning(
                 &env,
                 "initialize",
@@ -1046,6 +1044,8 @@ impl MedicalRecordsContract {
             );
             return false;
         }
+
+        admin.require_auth();
 
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);

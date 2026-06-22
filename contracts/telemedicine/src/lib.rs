@@ -429,9 +429,7 @@ impl TelemedicineContract {
     // ============================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), TelemedicineError> {
-        if env.storage().instance().has(&DataKey::Paused) {
-            return Err(TelemedicineError::NotPaused);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| TelemedicineError::NotPaused)?;
         // Store admin and config in instance storage (contract metadata)
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);

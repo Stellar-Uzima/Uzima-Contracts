@@ -23,9 +23,7 @@ pub struct MultiFactorAuth;
 impl MultiFactorAuth {
     /// Initialize with global MFA configuration
     pub fn initialize(env: Env, admin: Address, config: MFAConfig) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()

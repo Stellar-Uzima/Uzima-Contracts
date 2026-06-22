@@ -148,9 +148,7 @@ impl Governor {
         reputation_contract: Option<Address>,
         dispute_contract: Option<Address>,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&CFG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let cfg = GovernorConfig {
             voting_delay,
             voting_period,

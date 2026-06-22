@@ -273,9 +273,7 @@ impl MedicationManagement {
         medical_records_contract: Address,
         healthcare_payment_contract: Address,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         let config = Config {
             admin,

@@ -320,11 +320,9 @@ impl HealthcareAnalyticsDashboardContract {
         min_cohort_size: u32,
         noise_bps: u32,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
 
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
         if min_cohort_size == 0 || noise_bps > 10_000 {
             return Err(Error::InvalidInput);
         }

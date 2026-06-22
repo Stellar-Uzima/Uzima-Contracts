@@ -137,9 +137,7 @@ pub struct PatientPortalContract;
 #[contractimpl]
 impl PatientPortalContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), PatientPortalError> {
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(PatientPortalError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| PatientPortalError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
