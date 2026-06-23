@@ -1,13 +1,11 @@
-#![cfg(any(test, feature = "testutils"))]
 #![no_std]
 
 extern crate alloc;
 use alloc::{string::String, vec::Vec};
 
-use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
-    Address, Env,
-};
+#[cfg(any(test, feature = "testutils"))]
+use soroban_sdk::testutils::{Address as _, Ledger as _};
+use soroban_sdk::{Address, Env};
 
 // ─── ContractEntry ──────────────────────────────────────────────────────────
 
