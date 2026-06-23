@@ -14,8 +14,6 @@ mod test;
 #[cfg(test)]
 mod timeout_simple_test;
 
-use replay_protection;
-
 /// # Cross-Chain Bridge Signature Scheme
 ///
 /// To prevent unauthorized relaying and replay attacks, all validator attestations

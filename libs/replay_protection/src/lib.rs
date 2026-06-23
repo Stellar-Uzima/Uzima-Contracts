@@ -61,7 +61,8 @@ pub enum DataKey {
 /// * `ttl_secs` — Time-to-live in seconds from `timestamp`.
 /// * `source_chain` — The chain the message claims to originate from.
 /// * `expected_source_chain` — The chain we expect; returns `ChainMismatch`
-///    if the two differ.
+///   if the two differ.
+#[allow(clippy::too_many_arguments)]
 pub fn verify_replay_protection(
     env: &Env,
     message_hash: &BytesN<32>,

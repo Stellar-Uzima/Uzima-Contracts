@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::testutils::Ledger;
 use soroban_sdk::{contract, contractimpl, BytesN, Env};
