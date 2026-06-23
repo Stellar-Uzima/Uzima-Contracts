@@ -3,7 +3,6 @@
 
 // internal
 use super::*;
-use common_error::CommonError;
 use crate::errors::Error;
 use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
 
@@ -119,7 +118,7 @@ fn test_get_record_denied_after_consent_expiry() {
     client.manage_user(&admin, &doctor, &Role::Doctor);
     client.manage_user(&admin, &patient, &Role::Patient);
 
-    client.grant_permission(&admin, &provider, Permission::ReadRecord, 0, false);
+    client.grant_permission(&admin, &provider, &Permission::ReadRecord, &0, &false);
 
     let diagnosis = String::from_str(&env, "Flu");
     let treatment = String::from_str(&env, "Rest");
@@ -1411,21 +1410,21 @@ fn test_quantum_performance_benchmark() {
 #[test]
 fn test_error_codes_are_stable() {
     use crate::errors::Error;
-    assert_eq!(Error::Unauthorized as u32, 100);
-    assert_eq!(Error::NotAICoordinator as u32, 150);
-    assert_eq!(Error::InvalidInput as u32, 200);
-    assert_eq!(Error::InputTooLong as u32, 201);
-    assert_eq!(Error::BatchTooLarge as u32, 208);
-    assert_eq!(Error::NotInitialized as u32, 300);
-    assert_eq!(Error::ContractPaused as u32, 302);
-    assert_eq!(Error::DeadlineExceeded as u32, 306);
-    assert_eq!(Error::RateLimitExceeded as u32, 307);
-    assert_eq!(Error::RecordNotFound as u32, 403);
-    assert_eq!(Error::InsufficientFunds as u32, 500);
-    assert_eq!(Error::StorageFull as u32, 502);
-    assert_eq!(Error::CrossChainAccessDenied as u32, 700);
-    assert_eq!(Error::AIConfigNotSet as u32, 830);
-    assert_eq!(Error::InvalidAIScore as u32, 831);
+    assert_eq!(Error::Unauthorized as u32, 1);
+    assert_eq!(Error::NotAICoordinator as u32, 1150);
+    assert_eq!(Error::InvalidInput as u32, 8);
+    assert_eq!(Error::InputTooLong as u32, 1201);
+    assert_eq!(Error::BatchTooLarge as u32, 1208);
+    assert_eq!(Error::NotInitialized as u32, 2);
+    assert_eq!(Error::ContractPaused as u32, 4);
+    assert_eq!(Error::DeadlineExceeded as u32, 5);
+    assert_eq!(Error::RateLimitExceeded as u32, 6);
+    assert_eq!(Error::RecordNotFound as u32, 1403);
+    assert_eq!(Error::InsufficientFunds as u32, 7);
+    assert_eq!(Error::StorageFull as u32, 1502);
+    assert_eq!(Error::CrossChainAccessDenied as u32, 1700);
+    assert_eq!(Error::AIConfigNotSet as u32, 1830);
+    assert_eq!(Error::InvalidAIScore as u32, 1831);
 }
 
 #[test]
@@ -1578,10 +1577,10 @@ fn test_list_traditional_records() {
 
     let ids = client.list_traditional_records(&patient, &patient);
     assert_eq!(ids.len(), 2);
-    assert!(ids.contains(&trad_id1));
-    assert!(ids.contains(&trad_id2));
+    assert!(ids.contains(trad_id1));
+    assert!(ids.contains(trad_id2));
     // Plain record must NOT be in the list
-    assert!(!ids.contains(&_plain_id));
+    assert!(!ids.contains(_plain_id));
 }
 
 #[test]

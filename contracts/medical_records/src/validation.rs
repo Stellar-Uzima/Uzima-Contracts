@@ -11,6 +11,7 @@
 //! - Complex data structure validation (MedicalRecord, UserProfile)
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
+#![allow(dead_code)]
 
 use soroban_sdk::{Address, Bytes, Env, Map, String, Vec};
 

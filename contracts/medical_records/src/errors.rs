@@ -1,4 +1,3 @@
-use common_error::CommonError;
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
 #[contracterror(export = false)]
@@ -6,13 +5,13 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[repr(u32)]
 pub enum Error {
     // --- Common Errors (0–99) ---
-    Unauthorized = CommonError::Unauthorized as u32,
-    InvalidInput = CommonError::InvalidInput as u32,
-    NotInitialized = CommonError::NotInitialized as u32,
-    ContractPaused = CommonError::ContractPaused as u32,
-    DeadlineExceeded = CommonError::DeadlineExceeded as u32,
-    RateLimitExceeded = CommonError::RateLimitExceeded as u32,
-    InsufficientFunds = CommonError::InsufficientFunds as u32,
+    Unauthorized = 1,
+    InvalidInput = 8,
+    NotInitialized = 2,
+    ContractPaused = 4,
+    DeadlineExceeded = 5,
+    RateLimitExceeded = 6,
+    InsufficientFunds = 7,
 
     // --- Access Control & Authorization (1000–1099) ---
     NotAICoordinator = 1150,

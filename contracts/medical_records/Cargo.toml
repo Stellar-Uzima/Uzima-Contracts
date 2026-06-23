@@ -16,6 +16,7 @@ patient_consent_management = { path = "../patient_consent_management" }
 upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
+medical_records = { path = ".", features = ["testutils"] }
 soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
 anomaly_detection = { path = "../anomaly_detection" }
 predictive_analytics = { path = "../predictive_analytics" }
