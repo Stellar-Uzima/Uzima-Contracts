@@ -494,12 +494,7 @@ impl CrossChainAccessContract {
         }
 
         let now = env.ledger().timestamp();
-        if now
-            > request
-                .created_at
-                .checked_add(REQUEST_EXPIRY)
-                .ok_or(Error::Overflow)?
-        {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
             request.status = RequestStatus::Expired;
             requests.set(request_id, request);
             env.storage()

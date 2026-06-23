@@ -13,7 +13,7 @@ The bridge contract serves as the main orchestrator for cross-chain communicatio
 **Key Features:**
 - Multi-validator message verification
 - Atomic cross-chain transactions (2-Phase Commit)
-- Nonce-based replay attack protection
+- Nonce-based replay attack protection (via shared `replay_protection` library)
 - Message expiration handling
 - Support for multiple blockchain networks
 
@@ -85,6 +85,49 @@ The existing medical records contract has been enhanced with cross-chain capabil
 - Cross-chain record reference registration
 - Cross-chain record retrieval (via bridge)
 - Record hash computation for integrity verification
+
+## Replay Protection Library
+
+All cross-chain contracts use a shared `replay_protection` library (`libs/replay_protection/`) that
+provides three layers of defense in a single call:
+
+### Triple-Check Pattern
+
+```rust
+pub fn verify_replay_protection(
+    env: &Env,
+    message_hash: &BytesN<32>,
+    sender_key: &BytesN<32>,
+    nonce: u64,
+    timestamp: u64,
+    ttl_secs: u64,
+    source_chain: &ChainId,
+    expected_source_chain: &ChainId,
+) -> Result<(), ReplayError>
+```
+
+| Check | Purpose | Rejects When |
+|-------|---------|-------------|
+| **Nonce uniqueness** (nonce ≤ last nonce for sender) | Prevents resubmission | `NonceReused` |
+| **Expiration** (now > timestamp + ttl) | Prevents stale execution | `MessageExpired` |
+| **Chain binding** (source ≠ expected) | Prevents cross-chain replay | `ChainMismatch` |
+
+### Helpers
+
+- `is_message_seen(env, hash)` — query whether a message hash was already processed
+- `check_message_expired(env, timestamp, ttl)` — re-check expiration at confirm/execute time
+
+### Contract-Specific Usage
+
+| Contract | Replay Protection |
+|----------|-------------------|
+| `cross_chain_bridge` | Full `verify_replay_protection` on `submit_message`; `check_message_expired` on `confirm_message` / `execute_message` |
+| `cross_chain_access` | `check_message_expired` in `process_request` |
+| `cross_chain_identity` | `check_message_expired` in `attest_verification` |
+| `cross_chain_enhancements` | `check_replay_protection` uses shared expiration + chain binding, stores idempotency marker |
+
+Each contract defines a `to_replay_chain_id()` conversion that maps its local `ChainId` enum to the
+library's `replay_protection::ChainId`.
 
 ## Security Model
 

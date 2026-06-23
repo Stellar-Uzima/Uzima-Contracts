@@ -69,21 +69,36 @@ Soroban contracts are single-threaded and do not support mid-execution callbacks
 - Write state **before** making cross-contract calls (checks-effects-interactions pattern).
 - Validate return values from cross-contract calls.
 
-### Replay Attacks
+### Replay Attacks (Triple-Check Pattern)
 
-For cross-chain messages and meta-transactions, always enforce nonces:
+For cross-chain messages, enforce all three protections — **nonce uniqueness**, **expiration**, and
+**chain binding** — in a single call. The project provides a shared `replay_protection` library
+(`libs/replay_protection/`) used by all cross-chain contracts:
 
 ```rust
-fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
-    let stored: u64 = env.storage().persistent()
-        .get(&DataKey::Nonce(sender.clone()))
-        .unwrap_or(0);
-    if nonce != stored.saturating_add(1) {
-        return Err(Error::InvalidNonce);
-    }
-    Ok(())
+use replay_protection::{verify_replay_protection, ChainId};
+
+fn submit_cross_chain_message(
+    env: &Env,
+    message_hash: &BytesN<32>,
+    sender_key: &BytesN<32>,
+    nonce: u64,
+    timestamp: u64,
+    ttl_secs: u64,
+    source_chain: &ChainId,
+    expected_chain: &ChainId,
+) -> Result<(), ReplayError> {
+    // Single call enforces all three guards
+    verify_replay_protection(
+        env, message_hash, sender_key,
+        nonce, timestamp, ttl_secs,
+        source_chain, expected_chain,
+    )
 }
 ```
+
+For confirm/execute stages where nonce and chain were already checked at submission, use
+the lighter `check_message_expired` helper instead.
 
 ### Denial of Service via Unbounded Loops
 
