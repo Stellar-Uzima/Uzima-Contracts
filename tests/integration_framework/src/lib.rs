@@ -1,4 +1,3 @@
-#![allow(unexpected_cfgs)]
 #![no_std]
 
 extern crate alloc;
