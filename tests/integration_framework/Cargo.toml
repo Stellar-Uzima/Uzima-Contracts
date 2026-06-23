@@ -10,7 +10,7 @@ name = "integration_framework"
 path = "src/lib.rs"
 
 [dependencies]
-soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7" }
 
 [dev-dependencies]
 soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
