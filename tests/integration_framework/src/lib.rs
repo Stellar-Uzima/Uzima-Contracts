@@ -1,3 +1,4 @@
+#![cfg(any(test, feature = "testutils"))]
 #![no_std]
 
 extern crate alloc;
