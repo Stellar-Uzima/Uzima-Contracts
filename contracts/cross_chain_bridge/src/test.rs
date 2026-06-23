@@ -1,5 +1,8 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+
+extern crate std;
+
 use crate::{
     AtomicTxStatus, ChainId, CrossChainBridgeContract, CrossChainBridgeContractClient,
     CrossChainEventType, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
@@ -1770,44 +1773,47 @@ fn test_bridge_gas_snapshots() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
     let (validator, sk) = setup_validator(&env, &client, &admin);
 
+    env.mock_all_auths();
+
     let message_id = generate_message_id(&env);
     let signature = dummy_sig(&env);
+    let recipient = Address::generate(&env);
 
     let req = SubmitMessageRequest {
         message_id: message_id.clone(),
         source_chain: ChainId::Stellar,
         dest_chain: ChainId::Ethereum,
         sender: String::from_str(&env, "sender"),
-        recipient: String::from_str(&env, "recipient"),
-        payload_type: MessageType::Text,
-        payload: Bytes::from_slice(&env, &[0u8; 10]),
+        recipient,
+        payload_type: MessageType::RecordSync,
+        payload: String::from_str(&env, "payload"),
         nonce: 1,
         signature: signature.clone(),
-        v_nonce: 1,
         v_signature: create_sig(&env, &sk, &message_id, 1),
+        v_nonce: 1,
     };
 
     // Scenario 1: submit_message CPU cost
     let start_submit = env.budget().cpu_instruction_cost();
-    client.submit_message(&validator, &req);
+    let _ = client.submit_message(&validator, &req);
     let cpu_submit = env.budget().cpu_instruction_cost() - start_submit;
     std::println!("SNAPSHOT [cross_chain_bridge - submit_message]: CPU={}", cpu_submit);
 
     // Scenario 2: confirm_message CPU cost
     let start_confirm = env.budget().cpu_instruction_cost();
     let conf_sig = create_sig(&env, &sk, &message_id, 2);
-    client.confirm_message(&validator, &message_id, &conf_sig, &2);
+    let _ = client.confirm_message(&validator, &message_id, &conf_sig, &2);
     let cpu_confirm = env.budget().cpu_instruction_cost() - start_confirm;
     std::println!("SNAPSHOT [cross_chain_bridge - confirm_message]: CPU={}", cpu_confirm);
 
     // Scenario 3: sync_cross_chain_event CPU cost
     let start_sync = env.budget().cpu_instruction_cost();
     let sync_sig = create_sig(&env, &sk, &message_id, 3);
-    client.sync_cross_chain_event(
+    let _ = client.sync_cross_chain_event(
         &validator,
         &ChainId::Stellar,
         &ChainId::Ethereum,
-        &CrossChainEventType::Transfer,
+        &CrossChainEventType::RecordCreated,
         &message_id,
         &100,
         &sync_sig,
@@ -1816,4 +1822,3 @@ fn test_bridge_gas_snapshots() {
     let cpu_sync = env.budget().cpu_instruction_cost() - start_sync;
     std::println!("SNAPSHOT [cross_chain_bridge - sync_cross_chain_event]: CPU={}", cpu_sync);
 }
-
