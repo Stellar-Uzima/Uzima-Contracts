@@ -1,34 +1,95 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-# Tool to assist in contract upgrades
-# Usage: ./upgrade_contract.sh <contract_id> <new_wasm_path> <version> <description>
+# upgrade_contract.sh - Install a new WASM hash and scaffold a migration plan.
+# Usage: ./scripts/upgrade_contract.sh <contract_name> <network> <new_wasm_path> <from_version> <to_version> [--identity <name>]
 
-CONTRACT_ID=$1
-WASM_PATH=$2
-VERSION=$3
-# DESC=$4
+CONTRACT_NAME="${1:-}"
+NETWORK="${2:-}"
+WASM_PATH="${3:-}"
+FROM_VERSION="${4:-}"
+TO_VERSION="${5:-}"
+IDENTITY="default"
 
-if [ -z "$CONTRACT_ID" ] || [ -z "$WASM_PATH" ] || [ -z "$VERSION" ]; then
-    echo "Usage: $0 <contract_id> <new_wasm_path> <version> [description]"
+shift $(( $# > 5 ? 5 : $# ))
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --identity)
+            IDENTITY="${2:-}"
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1" >&2
+            echo "Usage: $0 <contract_name> <network> <new_wasm_path> <from_version> <to_version> [--identity <name>]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -z "$CONTRACT_NAME" || -z "$NETWORK" || -z "$WASM_PATH" || -z "$FROM_VERSION" || -z "$TO_VERSION" ]]; then
+    echo "Usage: $0 <contract_name> <network> <new_wasm_path> <from_version> <to_version> [--identity <name>]" >&2
     exit 1
 fi
 
-echo "--- Starting Upgrade Process for $CONTRACT_ID ---"
+if ! command -v soroban >/dev/null 2>&1; then
+    echo "soroban CLI is required" >&2
+    exit 1
+fi
 
-# 1. Install new WASM
+PLAN_DIR="deployments/$NETWORK/$CONTRACT_NAME"
+PLAN_PATH="$PLAN_DIR/plan.json"
+
+echo "--- Preparing upgrade assets for $CONTRACT_NAME on $NETWORK ---"
 echo "Installing new WASM..."
-WASM_HASH=$(soroban contract install --wasm "$WASM_PATH")
+WASM_HASH=$(soroban contract install --wasm "$WASM_PATH" --source "$IDENTITY" --network "$NETWORK")
 echo "New WASM Hash: $WASM_HASH"
 
-# 2. Get UpgradeManager ID (Assuming it's stored or we pass it)
-# For this script we assume the caller is the admin of the target or using the manager
-# Here we'll just show how to call the upgrade directly for simple cases
-# or propose to the manager.
+mkdir -p "$PLAN_DIR"
 
-echo "Proposing upgrade to version $VERSION..."
-# soroban contract invoke --id <UPGRADE_MANAGER_ID> -- \
-#   propose_upgrade --proposer <ADMIN_ADDR> --target "$CONTRACT_ID" \
-#   --new_wasm_hash "$WASM_HASH" --new_version "$VERSION" --description "$DESC"
+cat > "$PLAN_PATH" <<EOF
+{
+  "contract_name": "$CONTRACT_NAME",
+  "network": "$NETWORK",
+  "contract_id": "REPLACE_WITH_DEPLOYED_CONTRACT_ID",
+  "admin_identity": "$IDENTITY",
+  "upgrade_entrypoint": "upgrade",
+  "caller_arg_name": "caller",
+  "new_wasm_hash": "$WASM_HASH",
+  "version_bump": {
+    "from": $FROM_VERSION,
+    "to": $TO_VERSION
+  },
+  "expected_storage_migration_steps": [
+    {
+      "action": "update",
+      "key": "ContractVersion",
+      "from": "$FROM_VERSION",
+      "to": "$TO_VERSION",
+      "description": "Replace this placeholder with the actual schema bump and migration details."
+    }
+  ],
+  "expected_gas": {
+    "cpu_instructions": 0,
+    "read_bytes": 0,
+    "write_bytes": 0,
+    "transaction_fee_stroops": 0
+  },
+  "expected_event_emissions": [
+    {
+      "topic": "Upgrade",
+      "data": "Replace with the expected upgrade event payload."
+    }
+  ],
+  "notes": [
+    "Fill in contract_id, gas, storage diff, and event expectations before running migrate_contract.sh."
+  ]
+}
+EOF
 
-echo "Upgrade proposed. Check proposal ID and get approvals."
+echo "Migration plan scaffolded at $PLAN_PATH"
+echo "Next steps:"
+echo "  1. Review and complete $PLAN_PATH"
+echo "  2. Run ./scripts/migrate_contract.sh $CONTRACT_NAME --network $NETWORK --dry-run"
+echo "  3. Run ./scripts/migrate_contract.sh $CONTRACT_NAME --network $NETWORK --i-understand-this-is-live"
+

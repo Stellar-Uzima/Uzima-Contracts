@@ -1,0 +1,58 @@
+{
+  "contract_name": "medical_records",
+  "network": "testnet",
+  "contract_id": "REPLACE_WITH_DEPLOYED_CONTRACT_ID",
+  "admin_identity": "testnet-admin",
+  "upgrade_entrypoint": "upgrade",
+  "caller_arg_name": "caller",
+  "new_wasm_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "version_bump": {
+    "from": 3,
+    "to": 4
+  },
+  "expected_storage_migration_steps": [
+    {
+      "action": "update",
+      "key": "ContractVersion",
+      "from": "3",
+      "to": "4",
+      "description": "Advance the schema version guard before reading migrated records."
+    },
+    {
+      "action": "backfill",
+      "key": "PatientRecordIndex",
+      "from": "missing for legacy records",
+      "to": "secondary index populated for historical entries",
+      "description": "Create the lookup index needed by the new release without changing contract IDs."
+    },
+    {
+      "action": "add",
+      "key": "MigrationCheckpoint",
+      "from": "absent",
+      "to": "completed:v4",
+      "description": "Persist an operator-visible checkpoint so post-upgrade verification can confirm the migration finished."
+    }
+  ],
+  "expected_gas": {
+    "cpu_instructions": 1850000,
+    "read_bytes": 4096,
+    "write_bytes": 6144,
+    "transaction_fee_stroops": 275000
+  },
+  "expected_event_emissions": [
+    {
+      "topic": "Upgrade",
+      "data": "medical_records wasm updated to v4",
+      "description": "Native contract upgrade event emitted by the target contract."
+    },
+    {
+      "topic": "Migration",
+      "data": "schema advanced to v4 and legacy records indexed",
+      "description": "Operator-facing migration checkpoint event for audit trails."
+    }
+  ],
+  "notes": [
+    "Replace the placeholder contract_id and wasm hash before any live execution.",
+    "Keep expected gas in sync with the latest pre-prod measurements before mainnet rollout."
+  ]
+}
