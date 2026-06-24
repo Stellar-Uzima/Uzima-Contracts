@@ -24,7 +24,7 @@ mod timeout_simple_test;
 ///   - `Target_ID`: The unique identifier of the entity being signed (e.g., `message_id`, `proof_id`).
 ///   - `Nonce`: A monotonically increasing 64-bit integer unique to the validator's public key.
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Submit Message Request ====================
@@ -685,33 +685,6 @@ impl CrossChainBridgeContract {
             Self::require_chain_supported(&env, &request.source_chain)?;
             Self::verify_nonce(&env, &request.sender, request.nonce)?;
 
-            // Replay protection: nonce uniqueness, expiration, and chain binding.
-            // The shared `replay_protection` library also advances the per-sender
-            // nonce on success, so no separate `update_nonce` is required.
-            let rp_source = Self::to_replay_chain_id(&request.source_chain);
-            let timestamp = env.ledger().timestamp();
-            let mut tmp = [0u8; 128];
-            let sender_len = request.sender.len() as usize;
-            request.sender.copy_into_slice(&mut tmp[..sender_len]);
-            let sender_bytes = Bytes::from_slice(&env, &tmp[..sender_len]);
-            let sender_key: BytesN<32> = env.crypto().sha256(&sender_bytes).into();
-            replay_protection::verify_replay_protection(
-                &env,
-                &request.message_id,
-                &sender_key,
-                request.nonce,
-                timestamp,
-                MESSAGE_EXPIRY_SECS,
-                &rp_source,
-                &rp_source,
-            )
-            .map_err(|e| match e {
-                replay_protection::ReplayError::NonceReused => Error::InvalidNonce,
-                replay_protection::ReplayError::MessageExpired => Error::MessageExpired,
-                replay_protection::ReplayError::ChainMismatch => Error::InvalidChain,
-                replay_protection::ReplayError::ExpiryOverflow => Error::Overflow,
-            })?;
-
             // Per-request validator nonce and signature verification
             Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
             Self::verify_validator_signature(
@@ -721,6 +694,8 @@ impl CrossChainBridgeContract {
                 request.v_nonce,
                 &request.v_signature,
             )?;
+
+            let timestamp = env.ledger().timestamp();
 
             let message = CrossChainMessage {
                 message_id: request.message_id.clone(),
@@ -744,6 +719,8 @@ impl CrossChainBridgeContract {
                 PERSISTENT_TTL_THRESHOLD,
                 PERSISTENT_TTL_EXTEND_TO,
             );
+
+            Self::update_nonce(&env, &request.sender, request.nonce);
 
             let count: u64 = env
                 .storage()
@@ -2309,8 +2286,6 @@ impl CrossChainBridgeContract {
         nonce: u64,
         signature: &BytesN<64>,
     ) -> Result<(), Error> {
-        use soroban_sdk::Bytes;
-
         // Serialize Data + Nonce for Ed25519 verification
         // Using a more efficient construction for the message payload
         let mut msg_data = Bytes::from_array(env, &data.to_array());
@@ -2367,6 +2342,21 @@ impl CrossChainBridgeContract {
             ),
         );
         Ok(())
+    }
+
+    /// Maps a ChainId to a unique u32 used in cross-chain replay-protection payloads.
+    /// Ensures a signed message for chain A cannot be replayed on chain B.
+    fn to_replay_chain_id(chain: &ChainId) -> u32 {
+        match chain {
+            ChainId::Stellar => 0,
+            ChainId::Ethereum => 1,
+            ChainId::Polygon => 2,
+            ChainId::Avalanche => 3,
+            ChainId::BinanceSmartChain => 4,
+            ChainId::Arbitrum => 5,
+            ChainId::Optimism => 6,
+            ChainId::Custom(id) => *id,
+        }
     }
 
     fn require_authorized_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
