@@ -662,6 +662,87 @@ impl CrossChainBridgeContract {
         Ok(request.message_id)
     }
 
+    /// Submit multiple cross-chain messages in a single call.
+    /// Validates the validator once and processes each request in order.
+    /// Returns the list of message IDs for successfully submitted messages.
+    /// If any request fails, the error is returned immediately (partial batch may have been stored).
+    pub fn submit_message_batch(
+        env: Env,
+        validator: Address,
+        requests: Vec<SubmitMessageRequest>,
+    ) -> Result<Vec<BytesN<32>>, Error> {
+        validator.require_auth();
+        Self::require_not_paused(&env)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+
+        if requests.is_empty() {
+            return Err(Error::InvalidMessage);
+        }
+
+        let mut message_ids: Vec<BytesN<32>> = Vec::new(&env);
+
+        for request in requests.iter() {
+            Self::require_chain_supported(&env, &request.source_chain)?;
+            Self::verify_nonce(&env, &request.sender, request.nonce)?;
+
+            // Per-request validator nonce and signature verification
+            Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
+            Self::verify_validator_signature(
+                &env,
+                &v_info.public_key,
+                &request.message_id,
+                request.v_nonce,
+                &request.v_signature,
+            )?;
+
+            let timestamp = env.ledger().timestamp();
+
+            let message = CrossChainMessage {
+                message_id: request.message_id.clone(),
+                source_chain: request.source_chain.clone(),
+                dest_chain: request.dest_chain.clone(),
+                sender: request.sender.clone(),
+                recipient: request.recipient.clone(),
+                payload_type: request.payload_type.clone(),
+                payload: request.payload.clone(),
+                nonce: request.nonce,
+                timestamp,
+                status: MessageStatus::Pending,
+                signature: request.signature.clone(),
+            };
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::Message(request.message_id.clone()), &message);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Message(request.message_id.clone()),
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND_TO,
+            );
+
+            Self::update_nonce(&env, &request.sender, request.nonce);
+
+            let count: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::MessageCount)
+                .unwrap_or(0);
+            env.storage().instance().set(
+                &DataKey::MessageCount,
+                &(count.checked_add(1).ok_or(Error::Overflow)?),
+            );
+
+            env.events().publish(
+                (Symbol::new(&env, "MessageSubmitted"),),
+                (request.message_id.clone(), timestamp),
+            );
+
+            message_ids.push_back(request.message_id.clone());
+        }
+
+        Ok(message_ids)
+    }
+
     /// Confirm a cross-chain message (validator attestation)
     /// BUG FIX: Confirmations now stored per message_id (was using shared "conf_key")
     pub fn confirm_message(
