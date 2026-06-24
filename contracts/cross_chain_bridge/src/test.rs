@@ -1762,3 +1762,169 @@ fn test_chaos_oracle_offline_mid_consensus() {
     );
     assert_eq!(result, Err(Ok(Error::InsufficientOracleReports)));
 }
+
+// ==================== Batch Submit Message Tests ====================
+
+#[test]
+fn test_submit_message_batch_empty_fails() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, _sk) = setup_validator(&env, &client, &admin);
+
+    env.mock_all_auths();
+    let result = client.try_submit_message_batch(&validator, &Vec::new(&env));
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
+}
+
+#[test]
+fn test_submit_message_batch_single() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    let message_id = generate_message_id(&env);
+    let sender = String::from_str(&env, "0xsender");
+    let payload = String::from_str(&env, "{}");
+
+    env.mock_all_auths();
+    let v_sig = create_sig(&env, &sk, &message_id, 1);
+    let request = SubmitMessageRequest {
+        message_id: message_id.clone(),
+        source_chain: ChainId::Ethereum,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordRequest,
+        payload: payload.clone(),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig,
+        v_nonce: 1,
+    };
+
+    let ids = client.submit_message_batch(&validator, &soroban_sdk::vec![&env, request]);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids.get(0).unwrap(), message_id);
+    assert_eq!(client.get_message_count(), 1);
+
+    let msg = client.get_message(&message_id).unwrap();
+    assert_eq!(msg.status, MessageStatus::Pending);
+}
+
+#[test]
+fn test_submit_message_batch_multiple() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    env.mock_all_auths();
+    let id1 = BytesN::from_array(&env, &[0x01; 32]);
+    let id2 = BytesN::from_array(&env, &[0x02; 32]);
+
+    let v_sig1 = create_sig(&env, &sk, &id1, 1);
+    let v_sig2 = create_sig(&env, &sk, &id2, 2);
+
+    let req1 = SubmitMessageRequest {
+        message_id: id1.clone(),
+        source_chain: ChainId::Ethereum,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordRequest,
+        payload: String::from_str(&env, "{}"),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig1,
+        v_nonce: 1,
+    };
+    let req2 = SubmitMessageRequest {
+        message_id: id2.clone(),
+        source_chain: ChainId::Polygon,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordResponse,
+        payload: String::from_str(&env, r#"{"data":"test"}"#),
+        nonce: 2,
+        signature: dummy_sig(&env),
+        v_signature: v_sig2,
+        v_nonce: 2,
+    };
+
+    let ids = client.submit_message_batch(&validator, &soroban_sdk::vec![&env, req1, req2]);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(client.get_message_count(), 2);
+
+    assert!(client.get_message(&id1).is_some());
+    assert!(client.get_message(&id2).is_some());
+}
+
+#[test]
+fn test_submit_message_batch_too_large() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    env.mock_all_auths();
+    let mut requests = Vec::new(&env);
+    for i in 0..51 {
+        let mid = BytesN::from_array(&env, &[i as u8; 32]);
+        let v_sig = create_sig(&env, &sk, &mid, i as u64 + 1);
+        requests.push_back(SubmitMessageRequest {
+            message_id: mid,
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: i as u64 + 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: i as u64 + 1,
+        });
+    }
+
+    let result = client.try_submit_message_batch(&validator, &requests);
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
+}
+
+#[test]
+fn test_submit_message_batch_rejects_invalid_chain() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    let mid = generate_message_id(&env);
+    let v_sig = create_sig(&env, &sk, &mid, 1);
+
+    env.mock_all_auths();
+    let request = SubmitMessageRequest {
+        message_id: mid,
+        source_chain: ChainId::BinanceSmartChain,
+        dest_chain: ChainId::Stellar,
+        sender,
+        recipient,
+        payload_type: MessageType::RecordRequest,
+        payload: String::from_str(&env, "{}"),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig,
+        v_nonce: 1,
+    };
+
+    let result = client.try_submit_message_batch(&validator, &soroban_sdk::vec![&env, request]);
+    assert_eq!(result, Err(Ok(Error::ChainNotSupported)));
+}

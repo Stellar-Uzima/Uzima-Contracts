@@ -1002,6 +1002,21 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    /// Verify a range proof without storing it.
+    ///
+    /// Host-callable verifier that runs the same cryptographic checks as
+    /// `create_range_proof` but returns the boolean verdict instead of
+    /// persisting the proof. Useful for cross-contract calls where the
+    /// caller only needs a verification result.
+    pub fn verify_range_proof(env: Env, proof: RangeProof) -> Result<bool, Error> {
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if proof.min_value >= proof.max_value {
+            return Err(Error::InvalidRange);
+        }
+        Self::verify_range_proof_internal(&env, &proof)
+    }
+
     /// Create credential verification proof
     #[allow(clippy::too_many_arguments)]
     pub fn create_credential_proof(

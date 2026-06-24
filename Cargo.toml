@@ -5,6 +5,7 @@ members = [
     "contract_optimizer",
     "tests/interoperability_suite",
     "tests/integration_framework",
+    "libs/replay_protection",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
@@ -48,6 +49,7 @@ exclude = [
 soroban-sdk = { version = "=21.7.7" }
 soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
+replay_protection = { path = "libs/replay_protection" }
 
 [workspace.package]
 version = "0.1.0"

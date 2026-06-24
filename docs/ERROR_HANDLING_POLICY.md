@@ -22,6 +22,9 @@ explicit (`#[repr(u32)]`) and grouped by category:
 - All public functions that can fail **must** return `Result<T, Error>`.
 - Use `Ok(())` for side-effect-only functions instead of `bool`.
 - Prefer the `?` operator over `.unwrap()` / `.expect()` in production code.
+- If a legacy public API already returns `bool` and changing it would break consumers,
+  add a canonical `try_*` entrypoint returning `Result<(), Error>` and keep the old
+  function as a thin compatibility wrapper.
 
 ## 3. Checked Arithmetic
 

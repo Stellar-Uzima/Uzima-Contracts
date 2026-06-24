@@ -21,7 +21,7 @@ fn test_initialize() {
 
     let (client, _id) = setup(&env);
     let admin = Address::generate(&env);
-    assert!(client.initialize(&admin));
+    assert!(client.initialize(&admin).is_ok());
 
     // Double initialization should fail
     let result = client.try_initialize(&admin);
@@ -38,7 +38,7 @@ fn test_initialize_unauthorized() {
     let other = Address::generate(&env);
 
     // First init as admin
-    assert!(client.initialize(&admin));
+    assert!(client.initialize(&admin).is_ok());
 
     // Other address trying to init should fail
     let result = client.try_initialize(&other);

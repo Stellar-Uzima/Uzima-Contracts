@@ -406,7 +406,7 @@ impl CrossChainIdentityContract {
         }
 
         let now = env.ledger().timestamp();
-        if now > request.created_at + REQUEST_EXPIRY {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
             request.status = RequestStatus::Expired;
             env.storage().persistent().set(&req_key, &request);
             return Err(Error::RequestExpired);
