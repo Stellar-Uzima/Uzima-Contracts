@@ -621,7 +621,23 @@ pub enum DataKey {
 // ==================== Errors ====================
 // NOTE: `Error` lives in `errors.rs` and is re-exported above.
 
-// ==================== Batch (Optional) ====================
+// ==================== Batch Types ====================
+
+/// Per-record input for batched record creation.
+/// Same fields as `write_record` minus `caller` (passed at batch level).
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordInput {
+    pub patient: Address,
+    pub diagnosis: String,
+    pub treatment: String,
+    pub is_confidential: bool,
+    pub tags: Vec<String>,
+    pub category: String,
+    pub treatment_type: String,
+    pub data_ref: String,
+    pub traditional_metadata: Option<TraditionalMedicineMetadata>,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -1718,54 +1734,20 @@ impl MedicalRecordsContract {
         }
         Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
-        // Validate inputs
-        if Self::is_patient_forgotten(&env, &patient) {
-            Self::log_warning(
-                &env,
-                "add_record",
-                Some(&caller),
-                Some(&patient),
-                None,
-                "Record creation denied because patient is marked as forgotten",
-            );
-            return Err(Error::Unauthorized);
-        }
-        validation::validate_diagnosis(&diagnosis)?;
-        validation::validate_treatment(&treatment)?;
-        validation::validate_tags(&tags)?;
-        validation::validate_category(&category, &env)?;
-        validation::validate_treatment_type(&treatment_type)?;
-        validation::validate_data_ref(&env, &data_ref)?;
-        validation::validate_addresses_different(&caller, &patient)?;
-
-        let record_id = Self::next_id(&env);
-        let record = MedicalRecord {
-            patient_id: patient.clone(),
-            doctor_id: caller.clone(),
-            timestamp: env.ledger().timestamp(),
-            diagnosis,
-            treatment,
-            is_confidential,
-            tags: tags.clone(),
-            category: category.clone(),
-            treatment_type,
-            data_ref,
-            doctor_did: None,
-        };
-
-        Self::store_record(&env, record_id, &record, &category, is_confidential);
-        Self::append_patient_record(&env, &patient, record_id);
-        Self::increment_record_count(&env);
-
-        events::emit_record_created(
+        let record_id = Self::write_record_internal(
             &env,
-            caller.clone(),
-            record_id,
-            patient.clone(),
+            &caller,
+            &patient,
+            &diagnosis,
+            &treatment,
             is_confidential,
-            category.clone(),
-            tags.clone(),
-        );
+            &tags,
+            &category,
+            &treatment_type,
+            &data_ref,
+            &None,
+        )?;
+
         Self::log_info(
             &env,
             "add_record",
@@ -1828,84 +1810,20 @@ impl MedicalRecordsContract {
         }
         Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
-        if Self::is_patient_forgotten(&env, &patient) {
-            Self::log_warning(
-                &env,
-                "write_record",
-                Some(&caller),
-                Some(&patient),
-                None,
-                "Record creation denied because patient is marked as forgotten",
-            );
-            return Err(Error::Unauthorized);
-        }
-        validation::validate_diagnosis(&diagnosis)?;
-        validation::validate_treatment(&treatment)?;
-        validation::validate_tags(&tags)?;
-        validation::validate_category(&category, &env)?;
-        validation::validate_treatment_type(&treatment_type)?;
-        validation::validate_data_ref(&env, &data_ref)?;
-        validation::validate_addresses_different(&caller, &patient)?;
-
-        let record_id = Self::next_id(&env);
-        let record = MedicalRecord {
-            patient_id: patient.clone(),
-            doctor_id: caller.clone(),
-            timestamp: env.ledger().timestamp(),
-            diagnosis,
-            treatment,
-            is_confidential,
-            tags: tags.clone(),
-            category: category.clone(),
-            treatment_type,
-            data_ref,
-            doctor_did: None,
-        };
-
-        Self::store_record(&env, record_id, &record, &category, is_confidential);
-        Self::append_patient_record(&env, &patient, record_id);
-        Self::increment_record_count(&env);
-
-        // --- Traditional medicine path ---
-        if let Some(meta) = traditional_metadata {
-            let practice_type = meta.practice_type.clone();
-
-            // Persist the metadata encrypted alongside the main record.
-            // The metadata struct is stored under the TraditionalMeta key; callers are
-            // expected to further encrypt `remedies_used` off-chain before passing it in.
-            env.storage()
-                .persistent()
-                .set(&DataKey::TraditionalMeta(record_id), &meta);
-
-            // Append to the per-patient traditional records index.
-            let idx_key = DataKey::PatientTraditionalRecords(patient.clone());
-            let mut trad_ids: Vec<u64> = env
-                .storage()
-                .persistent()
-                .get(&idx_key)
-                .unwrap_or(Vec::new(&env));
-            trad_ids.push_back(record_id);
-            env.storage().persistent().set(&idx_key, &trad_ids);
-
-            // Emit non-sensitive event (only practice_type, never remedies).
-            events::emit_traditional_record_added(
-                &env,
-                caller.clone(),
-                record_id,
-                patient.clone(),
-                practice_type,
-            );
-        }
-
-        events::emit_record_created(
+        let record_id = Self::write_record_internal(
             &env,
-            caller.clone(),
-            record_id,
-            patient.clone(),
+            &caller,
+            &patient,
+            &diagnosis,
+            &treatment,
             is_confidential,
-            category.clone(),
-            tags.clone(),
-        );
+            &tags,
+            &category,
+            &treatment_type,
+            &data_ref,
+            &traditional_metadata,
+        )?;
+
         Self::log_info(
             &env,
             "write_record",
@@ -1915,6 +1833,80 @@ impl MedicalRecordsContract {
             "Medical record written (write_record)",
         );
         Ok(record_id)
+    }
+
+    /// Create multiple medical records in a single atomic call.
+    ///
+    /// All-or-nothing semantics: if any record fails validation, the entire
+    /// batch is rejected and no records are persisted.
+    ///
+    /// ## Limits
+    /// - Max 50 records per batch.
+    pub fn write_record_batch(
+        env: Env,
+        caller: Address,
+        records: Vec<RecordInput>,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "write_record_batch",
+                Some(&caller),
+                None,
+                None,
+                "Batch record creation blocked because encrypted record flow is enforced",
+            );
+            return Err(Error::EncryptionRequired);
+        }
+
+        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "write_record_batch",
+                Some(&caller),
+                None,
+                None,
+                "Batch record creation denied: caller lacks CreateRecord permission",
+            );
+            return Err(Error::Unauthorized);
+        }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
+
+        let count = records.len();
+        if count == 0 || count > 50 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        let mut ids: Vec<u64> = Vec::new(&env);
+        for input in records.iter() {
+            let id = Self::write_record_internal(
+                &env,
+                &caller,
+                &input.patient,
+                &input.diagnosis,
+                &input.treatment,
+                input.is_confidential,
+                &input.tags,
+                &input.category,
+                &input.treatment_type,
+                &input.data_ref,
+                &input.traditional_metadata,
+            )?;
+            ids.push_back(id);
+        }
+
+        Self::log_info(
+            &env,
+            "write_record_batch",
+            Some(&caller),
+            None,
+            None,
+            "Batch record write completed",
+        );
+        Ok(ids)
     }
 
     /// Return the record IDs of all traditional-medicine records for a patient.
@@ -4966,6 +4958,97 @@ impl MedicalRecordsContract {
     // ---------------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------------
+
+    /// Core per-record creation logic shared by `add_record`, `write_record`,
+    /// and `write_record_batch`.  Handles per-item validation, storage, and
+    /// event emission.  Callers are responsible for outer auth / init / paused /
+    /// permission / rate-limit checks.
+    fn write_record_internal(
+        env: &Env,
+        caller: &Address,
+        patient: &Address,
+        diagnosis: &String,
+        treatment: &String,
+        is_confidential: bool,
+        tags: &Vec<String>,
+        category: &String,
+        treatment_type: &String,
+        data_ref: &String,
+        traditional_metadata: &Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        if Self::is_patient_forgotten(env, patient) {
+            Self::log_warning(
+                env,
+                "write_record_internal",
+                Some(caller),
+                Some(patient),
+                None,
+                "Record creation denied because patient is marked as forgotten",
+            );
+            return Err(Error::Unauthorized);
+        }
+        validation::validate_diagnosis(diagnosis)?;
+        validation::validate_treatment(treatment)?;
+        validation::validate_tags(tags)?;
+        validation::validate_category(category, env)?;
+        validation::validate_treatment_type(treatment_type)?;
+        validation::validate_data_ref(env, data_ref)?;
+        validation::validate_addresses_different(caller, patient)?;
+
+        let record_id = Self::next_id(env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            diagnosis: diagnosis.clone(),
+            treatment: treatment.clone(),
+            is_confidential,
+            tags: tags.clone(),
+            category: category.clone(),
+            treatment_type: treatment_type.clone(),
+            data_ref: data_ref.clone(),
+            doctor_did: None,
+        };
+
+        Self::store_record(env, record_id, &record, category, is_confidential);
+        Self::append_patient_record(env, patient, record_id);
+        Self::increment_record_count(env);
+
+        // --- Traditional medicine metadata ---
+        if let Some(meta) = traditional_metadata {
+            let practice_type = meta.practice_type.clone();
+            env.storage()
+                .persistent()
+                .set(&DataKey::TraditionalMeta(record_id), meta);
+            let idx_key = DataKey::PatientTraditionalRecords(patient.clone());
+            let mut trad_ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&idx_key)
+                .unwrap_or(Vec::new(env));
+            trad_ids.push_back(record_id);
+            env.storage().persistent().set(&idx_key, &trad_ids);
+            events::emit_traditional_record_added(
+                env,
+                caller.clone(),
+                record_id,
+                patient.clone(),
+                practice_type,
+            );
+        }
+
+        events::emit_record_created(
+            env,
+            caller.clone(),
+            record_id,
+            patient.clone(),
+            is_confidential,
+            category.clone(),
+            tags.clone(),
+        );
+
+        Ok(record_id)
+    }
 
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&UPGRADE_ADMIN) {
