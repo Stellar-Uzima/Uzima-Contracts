@@ -685,6 +685,33 @@ impl CrossChainBridgeContract {
             Self::require_chain_supported(&env, &request.source_chain)?;
             Self::verify_nonce(&env, &request.sender, request.nonce)?;
 
+            // Replay protection: nonce uniqueness, expiration, and chain binding.
+            // The shared `replay_protection` library also advances the per-sender
+            // nonce on success, so no separate `update_nonce` is required.
+            let rp_source = Self::to_replay_chain_id(&request.source_chain);
+            let timestamp = env.ledger().timestamp();
+            let mut tmp = [0u8; 128];
+            let sender_len = request.sender.len() as usize;
+            request.sender.copy_into_slice(&mut tmp[..sender_len]);
+            let sender_bytes = Bytes::from_slice(&env, &tmp[..sender_len]);
+            let sender_key: BytesN<32> = env.crypto().sha256(&sender_bytes).into();
+            replay_protection::verify_replay_protection(
+                &env,
+                &request.message_id,
+                &sender_key,
+                request.nonce,
+                timestamp,
+                MESSAGE_EXPIRY_SECS,
+                &rp_source,
+                &rp_source,
+            )
+            .map_err(|e| match e {
+                replay_protection::ReplayError::NonceReused => Error::InvalidNonce,
+                replay_protection::ReplayError::MessageExpired => Error::MessageExpired,
+                replay_protection::ReplayError::ChainMismatch => Error::InvalidChain,
+                replay_protection::ReplayError::ExpiryOverflow => Error::Overflow,
+            })?;
+
             // Per-request validator nonce and signature verification
             Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
             Self::verify_validator_signature(
@@ -694,8 +721,6 @@ impl CrossChainBridgeContract {
                 request.v_nonce,
                 &request.v_signature,
             )?;
-
-            let timestamp = env.ledger().timestamp();
 
             let message = CrossChainMessage {
                 message_id: request.message_id.clone(),
@@ -719,8 +744,6 @@ impl CrossChainBridgeContract {
                 PERSISTENT_TTL_THRESHOLD,
                 PERSISTENT_TTL_EXTEND_TO,
             );
-
-            Self::update_nonce(&env, &request.sender, request.nonce);
 
             let count: u64 = env
                 .storage()
