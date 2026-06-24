@@ -24,7 +24,7 @@ mod timeout_simple_test;
 ///   - `Target_ID`: The unique identifier of the entity being signed (e.g., `message_id`, `proof_id`).
 ///   - `Nonce`: A monotonically increasing 64-bit integer unique to the validator's public key.
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 // ==================== Submit Message Request ====================
@@ -346,7 +346,6 @@ pub enum DataKey {
     // Persistent storage keys (critical long-lived data)
     Validator(Address),
     Message(BytesN<32>),
-    Nonce(String),
     RecordRef(u64, ChainId),
     AtomicTx(BytesN<32>),
     OracleNode(Address),
@@ -605,7 +604,30 @@ impl CrossChainBridgeContract {
         let v_info = Self::get_active_validator_info(&env, &validator)?;
         Self::require_chain_supported(&env, &request.source_chain)?;
 
-        Self::verify_nonce(&env, &request.sender, request.nonce)?;
+        // Replay protection: nonce uniqueness, expiration, and chain binding
+        let mut tmp = [0u8; 128];
+        let sender_len = request.sender.len() as usize;
+        request.sender.copy_into_slice(&mut tmp[..sender_len]);
+        let sender_bytes = Bytes::from_slice(&env, &tmp[..sender_len]);
+        let sender_key: BytesN<32> = env.crypto().sha256(&sender_bytes).into();
+        let rp_source = Self::to_replay_chain_id(&request.source_chain);
+        let timestamp = env.ledger().timestamp();
+        replay_protection::verify_replay_protection(
+            &env,
+            &request.message_id,
+            &sender_key,
+            request.nonce,
+            timestamp,
+            MESSAGE_EXPIRY_SECS,
+            &rp_source,
+            &rp_source,
+        )
+        .map_err(|e| match e {
+            replay_protection::ReplayError::NonceReused => Error::InvalidNonce,
+            replay_protection::ReplayError::MessageExpired => Error::MessageExpired,
+            replay_protection::ReplayError::ChainMismatch => Error::InvalidChain,
+            replay_protection::ReplayError::ExpiryOverflow => Error::Overflow,
+        })?;
 
         // Cryptographic verification of the submitting validator
         Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
@@ -616,8 +638,6 @@ impl CrossChainBridgeContract {
             request.v_nonce,
             &request.v_signature,
         )?;
-
-        let timestamp = env.ledger().timestamp();
 
         let message = CrossChainMessage {
             message_id: request.message_id.clone(),
@@ -641,8 +661,6 @@ impl CrossChainBridgeContract {
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
-
-        Self::update_nonce(&env, &request.sender, request.nonce);
 
         let count: u64 = env
             .storage()
@@ -771,15 +789,8 @@ impl CrossChainBridgeContract {
             return Err(Error::MessageAlreadyProcessed);
         }
 
-        let now = env.ledger().timestamp();
-        if now
-            > message
-                .timestamp
-                .checked_add(MESSAGE_EXPIRY_SECS)
-                .ok_or(Error::Overflow)?
-        {
-            return Err(Error::MessageExpired);
-        }
+        replay_protection::check_message_expired(&env, message.timestamp, MESSAGE_EXPIRY_SECS)
+            .map_err(|_| Error::MessageExpired)?;
 
         // Replay Protection & Signature Verification
         Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
@@ -853,13 +864,7 @@ impl CrossChainBridgeContract {
             return Err(Error::InsufficientConfirmations);
         }
 
-        let now = env.ledger().timestamp();
-        if now
-            > message
-                .timestamp
-                .checked_add(MESSAGE_EXPIRY_SECS)
-                .ok_or(Error::Overflow)?
-        {
+        if replay_protection::check_message_expired(&env, message.timestamp, MESSAGE_EXPIRY_SECS).is_err() {
             message.status = MessageStatus::Expired;
             env.storage().persistent().set(&msg_key, &message);
             return Err(Error::MessageExpired);
@@ -2271,19 +2276,6 @@ impl CrossChainBridgeContract {
         }
     }
 
-    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
-        let last_nonce: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Nonce(sender.clone()))
-            .unwrap_or(0);
-
-        if nonce <= last_nonce {
-            return Err(Error::InvalidNonce);
-        }
-        Ok(())
-    }
-
     fn verify_validator_signature(
         env: &Env,
         validator_pubkey: &BytesN<32>,
@@ -2318,12 +2310,6 @@ impl CrossChainBridgeContract {
 
         env.storage().persistent().set(&key, &nonce);
         Ok(())
-    }
-
-    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Nonce(sender.clone()), &nonce);
     }
 
     fn increment_validator_confirmations(env: &Env, validator: &Address) {
@@ -2367,5 +2353,18 @@ impl CrossChainBridgeContract {
             return Err(Error::UnauthorizedRelayer);
         }
         Ok(())
+    }
+
+    fn to_replay_chain_id(chain: &ChainId) -> replay_protection::ChainId {
+        match chain {
+            ChainId::Stellar => replay_protection::ChainId::Stellar,
+            ChainId::Ethereum => replay_protection::ChainId::Ethereum,
+            ChainId::Polygon => replay_protection::ChainId::Polygon,
+            ChainId::Avalanche => replay_protection::ChainId::Avalanche,
+            ChainId::BinanceSmartChain => replay_protection::ChainId::BinanceSmartChain,
+            ChainId::Arbitrum => replay_protection::ChainId::Arbitrum,
+            ChainId::Optimism => replay_protection::ChainId::Optimism,
+            ChainId::Custom(id) => replay_protection::ChainId::Custom(*id),
+        }
     }
 }

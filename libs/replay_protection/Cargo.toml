@@ -1,17 +1,13 @@
 [package]
-name = "cross_chain_access"
-version.workspace = true
+name = "replay_protection"
+version = "0.1.0"
 edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
-
-[lib]
-crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
-replay_protection = { workspace = true }
+
+[lib]
+crate-type = ["rlib"]
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
