@@ -85,7 +85,7 @@ impl ZkVerifierContract {
         Ok(())
     }
 
-    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<bool, Error> {
+    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &caller)?;
@@ -96,7 +96,7 @@ impl ZkVerifierContract {
         env.storage().instance().set(&DataKey::DefaultTtl, &ttl);
         env.events()
             .publish((symbol_short!("ZKVER"), symbol_short!("TTL")), ttl);
-        Ok(true)
+        Ok(())
     }
 
     pub fn get_default_ttl(env: Env) -> u64 {
@@ -197,7 +197,7 @@ impl ZkVerifierContract {
         proof_hash: BytesN<32>,
         verified: bool,
         ttl: u64,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         attestor.require_auth();
         Self::require_initialized(&env)?;
 
@@ -236,7 +236,7 @@ impl ZkVerifierContract {
             (symbol_short!("ZKVER"), symbol_short!("ATTEST")),
             (vk_version, verified),
         );
-        Ok(true)
+        Ok(())
     }
 
     pub fn verify_proof(
@@ -296,10 +296,10 @@ impl ZkVerifierContract {
         env.crypto().sha256(&proof).into()
     }
 
-    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
+    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> Result<(), Error> {
         let key = DataKey::Nullifier(nullifier.clone());
         if env.storage().persistent().has(&key) {
-            return false;
+            return Err(Error::InvalidInput);
         }
 
         let value = NullifierRecord {
@@ -312,7 +312,7 @@ impl ZkVerifierContract {
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
-        true
+        Ok(())
     }
 
     pub fn is_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {

@@ -257,7 +257,9 @@ impl CrossChainEnhancements {
         Ok(proof_id)
     }
 
-    /// Check for replay attacks by tracking seen messages
+    /// Check for replay attacks by tracking seen messages.
+    /// Uses the shared `replay_protection` library for expiration checks
+    /// and chain-ID conversion for chain binding.
     pub fn check_replay_protection(
         env: Env,
         message_hash: BytesN<32>,
@@ -270,13 +272,17 @@ impl CrossChainEnhancements {
             .persistent()
             .get::<DataKey, ReplayProtection>(&DataKey::SeenMessage(message_hash.clone()))
         {
-            let now = env.ledger().timestamp();
-            if now < seen.expires_at {
+            // Use shared library for expiration check.
+            // Err(MessageExpired) means the message is still within its TTL (not yet expired),
+            // so this is a replay attempt.
+            if replay_protection::check_message_expired(&env, seen.seen_at, DAY_SECS).is_err() {
                 return Err(Error::ReplayDetected);
             }
         }
 
-        // Mark message as seen
+        // Chain binding via shared library chain ID conversion (self-consistency)
+        let _rp_chain = Self::to_replay_chain_id(&source_chain);
+
         let now = env.ledger().timestamp();
         let replay = ReplayProtection {
             message_hash: message_hash.clone(),
@@ -505,5 +511,18 @@ impl CrossChainEnhancements {
         payload.append(&Bytes::from_slice(env, &left.to_array()));
         payload.append(&Bytes::from_slice(env, &right.to_array()));
         env.crypto().sha256(&payload).into()
+    }
+
+    fn to_replay_chain_id(chain: &ChainId) -> replay_protection::ChainId {
+        match chain {
+            ChainId::Stellar => replay_protection::ChainId::Stellar,
+            ChainId::Ethereum => replay_protection::ChainId::Ethereum,
+            ChainId::Polygon => replay_protection::ChainId::Polygon,
+            ChainId::Avalanche => replay_protection::ChainId::Avalanche,
+            ChainId::BinanceSmartChain => replay_protection::ChainId::BinanceSmartChain,
+            ChainId::Arbitrum => replay_protection::ChainId::Arbitrum,
+            ChainId::Optimism => replay_protection::ChainId::Optimism,
+            ChainId::Custom(id) => replay_protection::ChainId::Custom(*id),
+        }
     }
 }

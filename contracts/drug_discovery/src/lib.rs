@@ -11,6 +11,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
+use common_error::{get_suggestion as common_suggestion, CommonError};
 
 #[derive(Clone)]
 #[contracttype]
@@ -149,6 +150,7 @@ pub enum Error {
     BenchmarkNotMet = 6,
     IntegrationMissing = 7,
     QuantumDisabled = 8,
+    AlreadyInitialized = 9,
 }
 
 #[soroban_sdk::contractclient(name = "GenomicDataClient")]
@@ -178,11 +180,16 @@ pub struct DrugDiscoveryPlatform;
 
 #[contractimpl]
 impl DrugDiscoveryPlatform {
-    pub fn initialize(env: Env, admin: Address, analyzer: Address, predictor: Address) -> bool {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        analyzer: Address,
+        predictor: Address,
+    ) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            return false;
+            return Err(Error::AlreadyInitialized);
         }
 
         let cfg = PlatformConfig {
@@ -204,7 +211,7 @@ impl DrugDiscoveryPlatform {
         env.storage().instance().set(&MATCH_COUNT, &0u64);
         env.storage().instance().set(&QUANTUM_COUNT, &0u64);
         env.storage().instance().set(&CAMPAIGN_COUNT, &0u64);
-        true
+        Ok(())
     }
 
     fn load_config(env: &Env) -> Result<PlatformConfig, Error> {
@@ -252,7 +259,7 @@ impl DrugDiscoveryPlatform {
         clinical_trial_contract: Option<Address>,
         large_scale_mode: Option<bool>,
         quantum_enabled: Option<bool>,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         let mut cfg = Self::ensure_admin(&env, &caller)?;
 
@@ -271,7 +278,7 @@ impl DrugDiscoveryPlatform {
 
         env.storage().instance().set(&DataKey::Config, &cfg);
         env.events().publish((symbol_short!("CfgInt"),), true);
-        Ok(true)
+        Ok(())
     }
 
     pub fn register_molecule(
@@ -616,5 +623,20 @@ impl DrugDiscoveryPlatform {
             .instance()
             .get(&DataKey::CampaignReport(campaign_id))
             .ok_or(Error::PredictionNotFound)
+    }
+}
+
+pub fn get_suggestion(error: Error) -> Symbol {
+    match error {
+        Error::NotAuthorized => common_suggestion(CommonError::Unauthorized),
+        Error::NotInitialized => common_suggestion(CommonError::NotInitialized),
+        Error::AlreadyInitialized => common_suggestion(CommonError::AlreadyInitialized),
+        Error::InvalidInput => common_suggestion(CommonError::InvalidInput),
+        Error::MoleculeNotFound | Error::PredictionNotFound => {
+            common_suggestion(CommonError::NotFound)
+        },
+        Error::BenchmarkNotMet => common_suggestion(CommonError::InvalidState),
+        Error::IntegrationMissing => common_suggestion(CommonError::ExternalContractNotSet),
+        Error::QuantumDisabled => common_suggestion(CommonError::InvalidState),
     }
 }

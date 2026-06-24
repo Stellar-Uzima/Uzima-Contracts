@@ -11,6 +11,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }
+common_error = { path = "../common_error" }
 upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]

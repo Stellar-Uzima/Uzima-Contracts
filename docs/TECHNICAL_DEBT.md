@@ -9,7 +9,7 @@ This document serves as the central catalog and tracking system for technical de
 |---|---|---|---|---|---|---|---|
 | TD-001 | `zkp_registry` | Replace simulated ZKP verification in `verify_zkp_internal` with actual cryptographic verification. | Security | High | High | Open | Q3 2024 |
 | TD-002 | `zkp_registry` | Implement proper expiration decryption and validation in `create_credential_proof`. | Security | High | High | Open | Q3 2024 |
-| TD-003 | `zkp_registry` | Replace simulated range proof verification in `verify_range_proof_internal` with actual verification. | Security | High | High | Open | Q3 2024 |
+| TD-003 | `zkp_registry` | Replace simulated range proof verification in `verify_range_proof_internal` with actual verification. | Security | High | High | Resolved (PR #848) | Q3 2024 |
 | TD-004 | `zkp_registry` | Replace simulated recursive proof verification in `verify_recursive_proof_internal` with actual verification. | Security | High | High | Open | Q4 2024 |
 
 ## Assessment Matrix

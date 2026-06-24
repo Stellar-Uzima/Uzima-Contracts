@@ -29,6 +29,8 @@
 #![allow(clippy::needless_return)]
 #![allow(dead_code)]
 
+#[cfg(test)]
+mod benchmarks;
 
 pub mod errors;
 pub use errors::Error;
@@ -86,6 +88,49 @@ fn get_cfg(env: &Env) -> Result<GovernorConfig, Error> {
         .instance()
         .get(&CFG)
         .ok_or(Error::NotInitialized)
+}
+
+fn get_props(env: &Env) -> Map<u64, Proposal> {
+    env.storage()
+        .persistent()
+        .get(&PROPS)
+        .unwrap_or(Map::new(env))
+}
+
+fn proposal_state(env: &Env, cfg: &GovernorConfig, proposal_id: u64, p: &Proposal) -> u32 {
+    let t = now(env);
+
+    if p.canceled {
+        return 2;
+    }
+    if p.executed {
+        return 5;
+    }
+    if p.queued {
+        return 4;
+    }
+
+    if let Some(dispute_addr) = &cfg.dispute_contract {
+        let args = vec![env, proposal_id.into_val(env)];
+        let is_disputed: bool =
+            env.invoke_contract(dispute_addr, &Symbol::new(env, "is_disputed"), args);
+        if is_disputed {
+            return 6;
+        }
+    }
+
+    if t < p.start_time {
+        return 0;
+    }
+    if t <= p.end_time {
+        return 1;
+    }
+
+    if p.for_votes > p.against_votes {
+        return 3;
+    }
+
+    2
 }
 
 #[contractimpl]
@@ -233,59 +278,20 @@ impl Governor {
 
     pub fn state(env: Env, proposal_id: u64) -> Result<u32, Error> {
         let cfg = get_cfg(&env)?;
-        let props: Map<u64, Proposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPS)
-            .unwrap_or(Map::new(&env));
+        let props = get_props(&env);
         let p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
-        let t = now(&env);
-
-        if p.canceled {
-            return Ok(2);
-        }
-        if p.executed {
-            return Ok(5);
-        }
-        if p.queued {
-            return Ok(4);
-        }
-
-        if let Some(dispute_addr) = cfg.dispute_contract {
-            let args = vec![&env, proposal_id.into_val(&env)];
-            let is_disputed: bool =
-                env.invoke_contract(&dispute_addr, &Symbol::new(&env, "is_disputed"), args);
-            if is_disputed {
-                return Ok(6);
-            }
-        }
-
-        if t < p.start_time {
-            return Ok(0);
-        }
-        if t <= p.end_time {
-            return Ok(1);
-        }
-
-        if p.for_votes > p.against_votes {
-            return Ok(3);
-        }
-
-        Ok(2)
+        Ok(proposal_state(&env, &cfg, proposal_id, &p))
     }
 
     pub fn queue(env: Env, proposal_id: u64) -> Result<(), Error> {
-        let state = Self::state(env.clone(), proposal_id)?;
-        if state != 3 {
+        let cfg = get_cfg(&env)?;
+        let mut props = get_props(&env);
+        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+
+        if proposal_state(&env, &cfg, proposal_id, &p) != 3 {
             return Err(Error::ProposalNotSuccessful);
         }
 
-        let mut props: Map<u64, Proposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPS)
-            .unwrap_or(Map::new(&env));
-        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
         p.queued = true;
         props.set(proposal_id, p);
         env.storage().persistent().set(&PROPS, &props);

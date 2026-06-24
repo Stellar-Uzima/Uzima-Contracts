@@ -95,6 +95,16 @@ pub struct AnomalyModel {
     pub updated_at: u64,
 }
 
+/// Per-alert input for batched alert creation.
+#[derive(Clone)]
+#[contracttype]
+pub struct AlertInput {
+    pub patient: Address,
+    pub model_id: BytesN<32>,
+    pub result: DetectionResult,
+    pub metadata: String,
+}
+
 /// Security alert record
 #[derive(Clone)]
 #[contracttype]
@@ -186,6 +196,7 @@ pub enum Error {
     DuplicateFederatedUpdate = 11,
     InvalidFeatureCount = 12,
     InvalidScore = 13,
+    BatchTooLarge = 14,
 }
 
 // ==================== Contract ====================
@@ -740,6 +751,64 @@ impl AnomalyDetectorContract {
         );
 
         Ok(alert_id)
+    }
+
+    /// Create multiple alerts in a single atomic call.
+    ///
+    /// All-or-nothing semantics: if any alert fails, the entire batch is
+    /// rejected and no alerts are persisted.
+    ///
+    /// ## Limits
+    /// - Max 50 alerts per batch.
+    pub fn create_alert_batch(
+        env: Env,
+        caller: Address,
+        alerts: Vec<AlertInput>,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_authorized(&env, &caller)?;
+        Self::require_not_paused(&env)?;
+
+        let count = alerts.len();
+        if count == 0 || count > 50 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        let mut ids: Vec<u64> = Vec::new(&env);
+        for input in alerts.iter() {
+            let alert_id = Self::next_alert_id(&env);
+            let now = env.ledger().timestamp();
+
+            let alert = Alert {
+                alert_id,
+                patient: input.patient.clone(),
+                triggered_by: caller.clone(),
+                model_id: input.model_id,
+                anomaly_score: input.result.anomaly_score,
+                alert_level: input.result.alert_level,
+                status: AlertStatus::Active,
+                pattern_type: input.result.pattern_type,
+                explanation_summary: input.result.explanation_summary,
+                metadata: input.metadata,
+                created_at: now,
+                updated_at: now,
+            };
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::Alert(alert_id), &alert);
+
+            Self::increment_patient_active_alerts(&env, &input.patient);
+
+            env.events().publish(
+                (symbol_short!("AlertCrt"),),
+                (alert_id, input.patient, alert.anomaly_score),
+            );
+
+            ids.push_back(alert_id);
+        }
+
+        Ok(ids)
     }
 
     /// Acknowledge an active alert (marks as reviewed, does not close).
