@@ -675,8 +675,8 @@ impl CrossChainBridgeContract {
         Self::require_not_paused(&env)?;
         let v_info = Self::get_active_validator_info(&env, &validator)?;
 
-        if requests.is_empty() {
-            return Err(Error::InvalidMessage);
+        if requests.is_empty() || requests.len() > 50 {
+            return Err(Error::BatchTooLarge);
         }
 
         let mut message_ids: Vec<BytesN<32>> = Vec::new(&env);
