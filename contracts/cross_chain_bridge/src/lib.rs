@@ -2092,6 +2092,26 @@ impl CrossChainBridgeContract {
     pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
         Self::get_default_timeout(&op_type)
     }
+
+    // Moved here from private impl block so #[contractimpl] can resolve Self:: calls
+    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
+        let last_nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Nonce(sender.clone()))
+            .unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(Error::InvalidNonce);
+        }
+        Ok(())
+    }
+
+    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(sender.clone()), &nonce);
+    }
 }
 
 // ==================== Private Helper Functions ====================
@@ -2178,19 +2198,6 @@ impl CrossChainBridgeContract {
         }
     }
 
-    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
-        let last_nonce: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Nonce(sender.clone()))
-            .unwrap_or(0);
-
-        if nonce <= last_nonce {
-            return Err(Error::InvalidNonce);
-        }
-        Ok(())
-    }
-
     fn verify_validator_signature(
         env: &Env,
         validator_pubkey: &BytesN<32>,
@@ -2225,12 +2232,6 @@ impl CrossChainBridgeContract {
 
         env.storage().persistent().set(&key, &nonce);
         Ok(())
-    }
-
-    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Nonce(sender.clone()), &nonce);
     }
 
     fn increment_validator_confirmations(env: &Env, validator: &Address) {
