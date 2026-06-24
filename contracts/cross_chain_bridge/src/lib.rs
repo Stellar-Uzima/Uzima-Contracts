@@ -2323,6 +2323,25 @@ impl CrossChainBridgeContract {
         Ok(())
     }
 
+    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
+        let last_nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Nonce(sender.clone()))
+            .unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(Error::InvalidNonce);
+        }
+        Ok(())
+    }
+
+    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(sender.clone()), &nonce);
+    }
+
     fn verify_validator_nonce(env: &Env, pubkey: &BytesN<32>, nonce: u64) -> Result<(), Error> {
         let key = DataKey::ValidatorNonce(pubkey.clone());
         let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);

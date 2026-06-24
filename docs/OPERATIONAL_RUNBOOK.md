@@ -50,26 +50,31 @@ This runbook covers common operational tasks for Uzima Contracts in production.
    make build-opt
    ```
 
-2. Upload the new WASM to the network:
+2. Install the new WASM and scaffold the migration plan:
    ```bash
-   soroban contract upload \
-     --source deployer \
-     --network testnet \
-     --wasm target/wasm32-unknown-unknown/release/<contract>.wasm
+   ./scripts/upgrade_contract.sh <contract> testnet \
+     target/wasm32-unknown-unknown/release/<contract>.wasm \
+     <current_version> \
+     <next_version> \
+     --identity admin
    ```
-   Note the returned `WASM_HASH`.
+   This writes `deployments/testnet/<contract>/plan.json` with the installed WASM hash.
 
-3. Upgrade the deployed contract:
+3. Review the plan and perform a dry run:
    ```bash
-   soroban contract invoke \
-     --id <CONTRACT_ID> \
-     --source admin \
-     --network testnet \
-     -- upgrade \
-     --new_wasm_hash <WASM_HASH>
+   ./scripts/migrate_contract.sh <contract> --network testnet --dry-run
    ```
 
-4. Verify the upgrade:
+4. Execute the live migration only after the dry-run is approved:
+   ```bash
+   ./scripts/migrate_contract.sh <contract> \
+     --network testnet \
+     --identity admin \
+     --i-understand-this-is-live
+   ```
+   The script requires an explicit `LIVE` confirmation at the prompt before it submits.
+
+5. Verify the upgrade:
    ```bash
    soroban contract invoke \
      --id <CONTRACT_ID> \
@@ -78,12 +83,11 @@ This runbook covers common operational tasks for Uzima Contracts in production.
      -- version
    ```
 
-5. Update `deployments/<network>_<contract>.json` with the new WASM hash and timestamp.
+6. Update deployment metadata and attach the approved dry-run output to the change record.
 
 ---
 
 ## Emergency Pause
-
 If a contract must be halted immediately:
 
 1. Invoke the pause function:
