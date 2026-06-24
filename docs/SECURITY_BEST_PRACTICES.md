@@ -227,3 +227,46 @@ If a vulnerability is discovered:
 5. Unpause and notify stakeholders.
 
 For critical vulnerabilities, contact the security team directly before any public disclosure.
+
+## 8. Deterministic Build Verification
+
+Auditors review and sign a specific WASM binary. If the artifact that is
+deployed (or later rebuilt) differs from the one that was audited, the entire
+security model breaks: auditors signed one binary while users run another. To
+prevent this, every release records the SHA-256 of each built `.wasm` and CI
+verifies fresh builds against that audited record.
+
+### Record hashes at release time
+
+Build the release artifacts from the **pinned** toolchain (`rust-toolchain.toml`,
+currently Rust 1.92.0) so output is reproducible, then record the hashes and
+attach the auditor's signing key:
+
+```sh
+make dist                                   # builds .wasm into dist/
+./scripts/verify_deployment.sh record mainnet v1.0.0 <auditor_pubkey>
+git add deployments/mainnet/v1.0.0/hashes.txt
+```
+
+This writes `deployments/<network>/<release>/hashes.txt` containing the
+toolchain version, a `Signed-by:` line with the auditor's pubkey, and one
+`<sha256>  <artifact>` line per contract.
+
+### Verify before/after deployment and in CI
+
+```sh
+make dist
+./scripts/verify_deployment.sh compare mainnet v1.0.0
+```
+
+`compare` rebuilds, hashes, and diffs against the recorded set. It **exits
+non-zero on any mismatch**, so it fails CI if a deployed/built artifact drifts
+from the audited record. When no record exists yet for the target network and
+release it is a safe no-op, so CI stays green until a release is recorded.
+
+The CI `Build (wasm32)` job runs `compare` automatically for the current ref
+against both `testnet` and `mainnet` records.
+
+> **Tip:** keep `deployments/<network>/<release>/hashes.txt` immutable once an
+> auditor has signed it. A new audited build means a new release directory, not
+> an edit to an existing one.

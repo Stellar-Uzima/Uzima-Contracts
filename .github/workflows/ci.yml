@@ -40,6 +40,17 @@ jobs:
         # contracts not yet compatible with the pinned soroban-sdk, see
         # Cargo.toml "Issue #828 audit" comment) is respected automatically.
         run: cargo build --workspace --target wasm32-unknown-unknown --release
+      - name: Verify deployed WASM hashes (Issue #854)
+        # Deterministic build verification: a fresh wasm build must match the
+        # auditor-signed hashes recorded for a release in deployments/. This is
+        # a no-op (passes) until a release record exists, and fails the build on
+        # any mismatch once one does. WASM_DIR points at the workspace release
+        # output produced by the build step above.
+        env:
+          WASM_DIR: target/wasm32-unknown-unknown/release
+        run: |
+          bash ./scripts/verify_deployment.sh compare testnet "${GITHUB_REF_NAME}"
+          bash ./scripts/verify_deployment.sh compare mainnet "${GITHUB_REF_NAME}"
       - name: Verify #![no_std] attribute
         # Skip directories that are in the workspace `[workspace] exclude = [...]`
         # list (Cargo.toml) so deferred contracts do not gate CI on lint-style
