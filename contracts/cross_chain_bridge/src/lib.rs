@@ -2052,7 +2052,11 @@ impl CrossChainBridgeContract {
     /// Add an authorized relayer (admin only).
     pub fn add_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
         admin.require_auth();
-        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
         if admin != stored_admin {
             return Err(Error::Unauthorized);
         }
@@ -2072,7 +2076,11 @@ impl CrossChainBridgeContract {
     /// Remove an authorized relayer (admin only).
     pub fn remove_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
         admin.require_auth();
-        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::Unauthorized)?;
         if admin != stored_admin {
             return Err(Error::Unauthorized);
         }

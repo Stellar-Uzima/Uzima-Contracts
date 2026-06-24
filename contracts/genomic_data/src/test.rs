@@ -8,7 +8,7 @@ fn test_initialize_and_add_record() {
     env.mock_all_auths();
     let (client, _id) = setup(&env);
     let admin = Address::generate(&env);
-    assert!(client.initialize(&admin));
+    client.initialize(&admin);
 
     let patient = Address::generate(&env);
     let uploader = Address::generate(&env);
@@ -177,8 +177,7 @@ fn test_marketplace_listing() {
     let lid = client.create_listing(&uploader, &rid, &1000i128, &currency, &None);
     assert!(lid > 0);
     let buyer = Address::generate(&env);
-    let ok = client.purchase_listing(&buyer, &lid);
-    assert!(ok);
+    client.purchase_listing(&buyer, &lid);
 }
 
 #[test]
