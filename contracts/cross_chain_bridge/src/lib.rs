@@ -357,6 +357,7 @@ pub enum DataKey {
     Rollback(BytesN<32>),
     Event(u64),
     CrossChainOp(BytesN<32>),
+    Nonce(String),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
     AuthorizedRelayer(Address),
