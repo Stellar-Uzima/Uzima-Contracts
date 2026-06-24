@@ -63,6 +63,8 @@
 #![allow(clippy::enum_variant_names)]
 
 #[cfg(test)]
+mod benchmarks;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod test_migration;
@@ -75,11 +77,11 @@ mod validation;
 
 pub use errors::Error;
 
+use patient_consent_management::PatientConsentManagementClient;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
 };
-use patient_consent_management::PatientConsentManagementClient;
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
 // ==================== Cross-Chain Types ====================
@@ -1014,7 +1016,9 @@ impl MedicalRecordsContract {
 
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
-        env.storage().instance().set(&DataKey::RbacContract, &rbac_contract);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
 
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
@@ -1129,10 +1133,13 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
-        Self::require_admin(&env, &caller)?;
+        let mut users = Self::read_users(&env);
+        let rbac_addr = Self::load_rbac_contract(&env).ok_or(Error::Unauthorized)?;
+        if !Self::is_active_role_with_context(&env, &users, &rbac_addr, &caller, RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
         Self::check_and_update_rate_limit(&env, &caller, OP_MANAGE_USER)?;
 
-        let mut users = Self::read_users(&env);
         let existing = users.get(user.clone());
 
         let role_str = match role {
@@ -1150,7 +1157,7 @@ impl MedicalRecordsContract {
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
-            Self::sync_rbac_role(&env, &user, Some(previous_role), role)?;
+            Self::sync_rbac_role_with_contract(&env, &rbac_addr, &user, Some(previous_role), role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -1186,7 +1193,7 @@ impl MedicalRecordsContract {
                 );
             }
         } else {
-            Self::sync_rbac_role(&env, &user, None, role)?;
+            Self::sync_rbac_role_with_contract(&env, &rbac_addr, &user, None, role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -2187,10 +2194,28 @@ impl MedicalRecordsContract {
         validation::validate_pagination(page, page_size)?;
 
         // Minimal gating: allow patients, admins, and active doctors to query.
-        if caller != patient
-            && !Self::is_admin(&env, &caller)
-            && !Self::is_active_doctor(&env, &caller)
-        {
+        let access_ctx = if caller == patient {
+            None
+        } else {
+            Some((Self::read_users(&env), Self::load_rbac_contract(&env)))
+        };
+        let is_admin = access_ctx
+            .as_ref()
+            .and_then(|(users, rbac_addr)| {
+                rbac_addr.as_ref().map(|addr| {
+                    Self::is_active_role_with_context(&env, users, addr, &caller, RbacRole::Admin)
+                })
+            })
+            .unwrap_or(false);
+        let is_active_doctor = access_ctx
+            .as_ref()
+            .and_then(|(users, rbac_addr)| {
+                rbac_addr.as_ref().map(|addr| {
+                    Self::is_active_role_with_context(&env, users, addr, &caller, RbacRole::Doctor)
+                })
+            })
+            .unwrap_or(false);
+        if caller != patient && !is_admin && !is_active_doctor {
             return Err(Error::Unauthorized);
         }
 
@@ -2226,7 +2251,7 @@ impl MedicalRecordsContract {
                         .persistent()
                         .get::<_, MedicalRecord>(&DataKey::Record(id))
                     {
-                        if Self::can_view_record(&env, &caller, &r, id) {
+                        if Self::can_view_record_with_admin(&env, &caller, &r, id, is_admin) {
                             if let Some(meta) = env
                                 .storage()
                                 .persistent()
@@ -2264,7 +2289,7 @@ impl MedicalRecordsContract {
                     .persistent()
                     .get::<_, MedicalRecord>(&DataKey::Record(record_id))
                 {
-                    if Self::can_view_record(&env, &caller, &r, record_id) {
+                    if Self::can_view_record_with_admin(&env, &caller, &r, record_id, is_admin) {
                         if let Some(meta) = env
                             .storage()
                             .persistent()
@@ -4931,7 +4956,11 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::PatientAccessLogCount(patient_id.clone()))
             .unwrap_or(0);
-        let audit_start = if audit_count > 10 { audit_count - 10 } else { 0 };
+        let audit_start = if audit_count > 10 {
+            audit_count - 10
+        } else {
+            0
+        };
         for i in audit_start..audit_count {
             if let Some(log_entry) = env
                 .storage()
@@ -4996,39 +5025,70 @@ impl MedicalRecordsContract {
     }
 
     fn check_rbac_role(env: &Env, address: &Address, role: RbacRole) -> bool {
-        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+        let rbac_addr: Address = match Self::load_rbac_contract(env) {
             Some(v) => v,
             None => return false, // fail closed
         };
-        let client = RbacClient::new(env, &rbac_addr);
-        match client.has_role(address, &role) {
-            Ok(has) => has,
-            Err(_) => false, // fail closed
+        Self::check_rbac_role_with_contract(env, &rbac_addr, address, role)
+    }
+
+    fn load_rbac_contract(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::RbacContract)
+    }
+
+    fn check_rbac_role_with_contract(
+        env: &Env,
+        rbac_addr: &Address,
+        address: &Address,
+        role: RbacRole,
+    ) -> bool {
+        let client = RbacClient::new(env, rbac_addr);
+        client.has_role(address, &role)
+    }
+
+    fn is_user_active(users: &Map<Address, UserProfile>, address: &Address) -> bool {
+        match users.get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
         }
     }
 
+    fn is_active_role_with_context(
+        env: &Env,
+        users: &Map<Address, UserProfile>,
+        rbac_addr: &Address,
+        address: &Address,
+        role: RbacRole,
+    ) -> bool {
+        Self::is_user_active(users, address)
+            && Self::check_rbac_role_with_contract(env, rbac_addr, address, role)
+    }
+
     fn is_admin(env: &Env, address: &Address) -> bool {
-        let is_active = match Self::read_users(env).get(address.clone()) {
-            Some(profile) => profile.active,
-            None => true,
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
         };
-        is_active && Self::check_rbac_role(env, address, RbacRole::Admin)
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Admin)
     }
 
     fn is_active_doctor(env: &Env, address: &Address) -> bool {
-        let is_active = match Self::read_users(env).get(address.clone()) {
-            Some(profile) => profile.active,
-            None => true,
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
         };
-        is_active && Self::check_rbac_role(env, address, RbacRole::Doctor)
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Doctor)
     }
 
     fn is_active_patient(env: &Env, address: &Address) -> bool {
-        let is_active = match Self::read_users(env).get(address.clone()) {
-            Some(profile) => profile.active,
-            None => true,
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
         };
-        is_active && Self::check_rbac_role(env, address, RbacRole::Patient)
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Patient)
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
@@ -5598,11 +5658,27 @@ impl MedicalRecordsContract {
         record: &MedicalRecord,
         record_id: u64,
     ) -> bool {
+        Self::can_view_record_with_admin(
+            env,
+            caller,
+            record,
+            record_id,
+            Self::is_admin(env, caller),
+        )
+    }
+
+    fn can_view_record_with_admin(
+        env: &Env,
+        caller: &Address,
+        record: &MedicalRecord,
+        record_id: u64,
+        is_admin: bool,
+    ) -> bool {
         if Self::is_patient_forgotten(env, &record.patient_id) {
             return false;
         }
 
-        if Self::is_admin(env, caller) {
+        if is_admin {
             return true;
         }
         if *caller == record.patient_id {
@@ -5623,9 +5699,11 @@ impl MedicalRecordsContract {
     }
 
     fn has_patient_consent(env: &Env, patient: &Address, provider: &Address) -> bool {
-        if let Some(contract_addr) = env.storage().persistent().get::<_, Address>(
-            &DataKey::PatientConsentContract,
-        ) {
+        if let Some(contract_addr) = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::PatientConsentContract)
+        {
             let client = PatientConsentManagementClient::new(env, &contract_addr);
             match client.check_consent(patient.clone(), provider.clone()) {
                 Ok(has_consent) => has_consent,
@@ -5739,17 +5817,28 @@ impl MedicalRecordsContract {
         record: &EncryptedRecord,
         record_id: u64,
     ) -> bool {
-        if Self::is_admin(env, caller) {
-            return true;
-        }
         if *caller == record.patient_id {
             return true;
         }
         if *caller == record.doctor_id {
             return true;
         }
-        if Self::is_active_doctor(env, caller) && !record.is_confidential {
-            return true;
+        if let Some(rbac_addr) = Self::load_rbac_contract(env) {
+            let users = Self::read_users(env);
+            if Self::is_active_role_with_context(env, &users, &rbac_addr, caller, RbacRole::Admin) {
+                return true;
+            }
+            if !record.is_confidential
+                && Self::is_active_role_with_context(
+                    env,
+                    &users,
+                    &rbac_addr,
+                    caller,
+                    RbacRole::Doctor,
+                )
+            {
+                return true;
+            }
         }
         if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
             return true;
@@ -6138,9 +6227,24 @@ impl MedicalRecordsContract {
         Ok(result)
     }
 
-    fn sync_rbac_role(env: &Env, address: &Address, previous_role: Option<Role>, new_role: Role) -> Result<(), Error> {
-        let r_addr: Address = env.storage().instance().get(&DataKey::RbacContract).ok_or(Error::NotInitialized)?;
-        let client = RbacClient::new(env, &r_addr);
+    fn sync_rbac_role(
+        env: &Env,
+        address: &Address,
+        previous_role: Option<Role>,
+        new_role: Role,
+    ) -> Result<(), Error> {
+        let r_addr: Address = Self::load_rbac_contract(env).ok_or(Error::NotInitialized)?;
+        Self::sync_rbac_role_with_contract(env, &r_addr, address, previous_role, new_role)
+    }
+
+    fn sync_rbac_role_with_contract(
+        env: &Env,
+        r_addr: &Address,
+        address: &Address,
+        previous_role: Option<Role>,
+        new_role: Role,
+    ) -> Result<(), Error> {
+        let client = RbacClient::new(env, r_addr);
         if let Some(prev) = previous_role {
             let prev_rbac = match prev {
                 Role::Admin => Some(RbacRole::Admin),
@@ -6149,7 +6253,7 @@ impl MedicalRecordsContract {
                 _ => None,
             };
             if let Some(pr) = prev_rbac {
-                client.remove_role(address, &pr).map_err(|_| Error::Unauthorized)?;
+                client.remove_role(address, &pr);
             }
         }
         let next_rbac = match new_role {
@@ -6159,7 +6263,7 @@ impl MedicalRecordsContract {
             _ => None,
         };
         if let Some(nr) = next_rbac {
-            client.assign_role(address, &nr).map_err(|_| Error::Unauthorized)?;
+            client.assign_role(address, &nr);
         }
         Ok(())
     }
@@ -6213,7 +6317,6 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
             report,
         })
     }
-
 }
 
 #[cfg(any(test, feature = "testutils"))]
@@ -6279,7 +6382,12 @@ impl MedicalRecordsContract {
             // Emit dedicated event
             env.events().publish(
                 (Symbol::new(&env, "TradRecAdded"),),
-                (caller.clone(), record_id, patient.clone(), meta.practice_type.clone()),
+                (
+                    caller.clone(),
+                    record_id,
+                    patient.clone(),
+                    meta.practice_type.clone(),
+                ),
             );
         }
 
