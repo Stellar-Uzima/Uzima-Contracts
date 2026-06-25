@@ -47,6 +47,7 @@ Only rows with status `unique-range` are enforced for overlap by `scripts/check_
 | `timelock` | `legacy-shared-category` | `100-799` | Still uses shared category bands |
 | `token_sale` | `legacy-sequential` | `1-99` | Pending migration |
 | `upgrade_manager` | `legacy-shared-category` | `100-499` | Still uses shared category bands |
+| `meta_tx_forwarder` | `legacy-sequential` | `1-10` | Inline in lib.rs; defines errors 1–10 (InvalidSignature, InvalidNonce, RequestExpired, ExecutionFailed, Unauthorized, AlreadyInitialized, OwnerNotSet, BatchLengthMismatch, PubKeyNotRegistered, InvalidFeePercentage) |
 | `zk_verifier` | `legacy-shared-category` | `100-699` | Still uses shared category bands |
 
 ## Migrated Result-Based Entry Points

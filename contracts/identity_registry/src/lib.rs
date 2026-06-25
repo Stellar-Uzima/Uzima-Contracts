@@ -2099,6 +2099,9 @@ impl IdentityRegistryContract {
 mod comprehensive_tests;
 
 #[cfg(test)]
+pub mod test_fixtures;
+
+#[cfg(test)]
 #[soroban_sdk::contract]
 pub struct MockRbac;
 
