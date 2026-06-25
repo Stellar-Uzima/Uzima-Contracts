@@ -70,6 +70,7 @@ Use this checklist before every PR and audit. Each item must be checked (✅) or
 - [ ] Unit tests cover boundary/edge cases for all validated inputs
 - [ ] Integration tests verify cross-contract interactions
 - [ ] Fuzz tests exist for functions that accept arbitrary byte inputs
+- [ ] Contract coverage thresholds are enforced by CI as documented in [docs/TESTING.md](TESTING.md)
 
 ## 10. Documentation
 
