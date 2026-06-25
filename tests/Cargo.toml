@@ -9,8 +9,6 @@ soroban-sdk = { workspace = true, features = ["testutils"] }
 medical_records = { path = "../contracts/medical_records" }
 sut_token = { path = "../contracts/sut_token" }
 healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
-reputation = { path = "../contracts/reputation" }
-healthcare_payment = { path = "../contracts/healthcare_payment" }
 meta_tx_forwarder = { path = "../contracts/meta_tx_forwarder" }
 
 [dev-dependencies]

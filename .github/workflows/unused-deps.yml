@@ -1,0 +1,38 @@
+# Unused Dependencies (issue #883)
+#
+# Runs `cargo machete` across every crate in the repo to catch dependencies
+# declared in a Cargo.toml but never used. Unused deps slow compiles and inflate
+# WASM size, which matters for on-chain Soroban contracts.
+#
+# cargo-machete is STATIC analysis (it parses manifests and greps source), so it
+# does not build the workspace and runs in seconds. The job fails (blocking the
+# merge when marked required) on any unused dependency. Genuine false positives
+# (e.g. a crate used only through a macro) are suppressed per-crate via
+# `[package.metadata.cargo-machete] ignored = [...]` — see docs/DEPENDENCY_HYGIENE.md.
+name: Unused Dependencies
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch:
+
+concurrency:
+  group: unused-deps-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-machete:
+    name: cargo-machete
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+      - name: Check for unused dependencies
+        run: cargo machete
