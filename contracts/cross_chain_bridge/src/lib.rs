@@ -356,6 +356,7 @@ pub enum DataKey {
     Rollback(BytesN<32>),
     Event(u64),
     CrossChainOp(BytesN<32>),
+    Nonce(String),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
     AuthorizedRelayer(Address),
@@ -2299,6 +2300,25 @@ impl CrossChainBridgeContract {
             .ed25519_verify(validator_pubkey, &message_hash.into(), signature);
 
         Ok(())
+    }
+
+    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
+        let last_nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Nonce(sender.clone()))
+            .unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(Error::InvalidNonce);
+        }
+        Ok(())
+    }
+
+    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(sender.clone()), &nonce);
     }
 
     fn verify_validator_nonce(env: &Env, pubkey: &BytesN<32>, nonce: u64) -> Result<(), Error> {
