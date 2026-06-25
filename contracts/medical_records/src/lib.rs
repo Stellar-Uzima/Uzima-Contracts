@@ -67,6 +67,8 @@ mod benchmarks;
 #[cfg(test)]
 mod test;
 #[cfg(test)]
+mod test_input_validation;
+#[cfg(test)]
 mod test_migration;
 #[cfg(test)]
 mod test_permissions;

@@ -296,3 +296,61 @@ fn bench_storage_encrypted_record_view_gate() {
     print_delta("medical_records::encrypted_record_view_gate", before, after);
     assert!(after <= before);
 }
+
+fn populate_records(
+    env: &Env,
+    client: &MedicalRecordsContractClient<'_>,
+    doctor: &Address,
+    patient: &Address,
+    count: u64,
+) {
+    for i in 0..count {
+        client.add_record(
+            doctor,
+            patient,
+            &String::from_str(env, &format!("Diagnosis {}", i)),
+            &String::from_str(env, &format!("Treatment {}", i)),
+            &false,
+            &Vec::new(env),
+            &String::from_str(env, "General"),
+            &String::from_str(env, "Medication"),
+            &String::from_str(env, &format!("ipfs://record{}", i)),
+        );
+    }
+}
+
+#[test]
+fn bench_write_record_1_record() { bench_write_record_with_count(1); }
+
+#[test]
+fn bench_write_record_100_records() { bench_write_record_with_count(100); }
+
+#[test]
+fn bench_write_record_1000_records() { bench_write_record_with_count(1000); }
+
+fn bench_write_record_with_count(existing: u64) {
+    let env = Env::default();
+    let (client, _admin, doctor, patient) = setup_contract(&env);
+
+    populate_records(&env, &client, &doctor, &patient, existing);
+
+    let cost = measure_cpu(&env, || {
+        client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Benchmark Diagnosis"),
+            &String::from_str(&env, "Benchmark Treatment"),
+            &false,
+            &Vec::new(&env),
+            &String::from_str(&env, "General"),
+            &String::from_str(&env, "Medication"),
+            &String::from_str(&env, "ipfs://benchmark-record"),
+        );
+    });
+
+    std::println!(
+        "[STORAGE-BENCH] write_record existing={} cpu_cost={}",
+        existing,
+        cost
+    );
+}
