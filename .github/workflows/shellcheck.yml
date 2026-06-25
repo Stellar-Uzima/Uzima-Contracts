@@ -1,0 +1,27 @@
+name: ShellCheck
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'scripts/**'
+      - '**/*.sh'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/**'
+      - '**/*.sh'
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        env:
+          SHELLCHECK_OPTS: -s bash
+        with:
+          severity: warning
+          ignore: target
