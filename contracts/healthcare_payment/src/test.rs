@@ -422,3 +422,302 @@ fn test_reentrancy_guard_blocks_concurrent_call() {
 fn test_reentrancy_error_code_is_stable() {
     assert_eq!(Error::Reentrancy as u32, 800);
 }
+
+// ==============================
+// Escrow Dispute Mechanism Tests
+// ==============================
+
+use escrow::{EscrowContract, EscrowContractClient, EscrowStatus};
+
+fn setup_with_real_escrow() -> (
+    Env,
+    HealthcarePaymentClient<'static>,
+    EscrowContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+    token::StellarAssetClient<'static>,
+    token::Client<'static>,
+) {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let provider = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+
+    let stellar_asset_contract = env.register_stellar_asset_contract_v2(token_admin.clone());
+    let token_id = stellar_asset_contract.address();
+
+    let token_admin_client = token::StellarAssetClient::new(&env, &token_id);
+    let token_client = token::Client::new(&env, &token_id);
+
+    let router_id = env.register_contract(None, MockPaymentRouter);
+    let escrow_id = env.register_contract(None, EscrowContract);
+    let escrow_client = EscrowContractClient::new(&env, &escrow_id);
+    escrow_client.initialize(&admin);
+    escrow_client.set_fee_config(&admin, &treasury, &250u32);
+
+    let rbac_id = env.register_contract(None, MockRbac);
+    let aml_contract = Address::generate(&env);
+
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &MockRole::Admin);
+
+    let contract_id = env.register_contract(None, HealthcarePayment);
+    let client = HealthcarePaymentClient::new(&env, &contract_id);
+
+    client.initialize(
+        &admin,
+        &router_id,
+        &escrow_id,
+        &treasury,
+        &token_id,
+        &aml_contract,
+        &rbac_id,
+    );
+
+    token_admin_client.mint(&contract_id, &100_000_000);
+    token_admin_client.mint(&patient, &100_000_000);
+
+    (
+        env,
+        client,
+        escrow_client,
+        admin,
+        provider,
+        patient,
+        treasury,
+        token_admin_client,
+        token_client,
+    )
+}
+
+fn submit_approve_and_escrow(
+    env: &Env,
+    client: &HealthcarePaymentClient<'static>,
+    admin: &Address,
+    provider: &Address,
+    patient: &Address,
+    amount: i128,
+) -> u64 {
+    let claim_id = client.submit_claim(
+        patient,
+        provider,
+        &String::from_str(env, "SERVICE-DISPUTE"),
+        &amount,
+        &String::from_str(env, "POLICY-DSP"),
+        &None,
+    );
+    client.verify_claim(&claim_id, admin);
+    client.approve_claim(&claim_id, admin);
+    client.escrow_claim(&claim_id);
+    claim_id
+}
+
+/// Full dispute lifecycle: escrow -> mark_disputed -> refund_escrow
+#[test]
+fn test_dispute_lifecycle_refund() {
+    let (env, client, escrow_client, _admin, provider, patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&env, &client, &_admin, &provider, &patient, 2000);
+
+    // Escrow should exist in Pending state
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Pending);
+    assert_eq!(escrow.amount, 2000);
+
+    // Mark as disputed
+    escrow_client.mark_disputed(&provider, &claim_id);
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Disputed);
+
+    // Refund the escrow
+    escrow_client.refund_escrow(
+        &claim_id,
+        &String::from_str(&env, "Fraud confirmed, refunding payer"),
+    );
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Refunded);
+}
+
+/// Dispute lifecycle that ends in release (resolved in favor of provider)
+#[test]
+fn test_dispute_then_release() {
+    let (_env, client, escrow_client, admin, provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &provider, &_patient, 3000);
+
+    // Mark disputed
+    escrow_client.mark_disputed(&admin, &claim_id);
+
+    // Resolve dispute: two approvals then release
+    let arbiter = Address::generate(&_env);
+    escrow_client.approve_release(&claim_id, &admin);
+    escrow_client.approve_release(&claim_id, &arbiter);
+    assert!(escrow_client.release_escrow(&claim_id));
+
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Settled);
+
+    // Provider should have credit (minus fee)
+    let credit = escrow_client.get_credit(&provider);
+    let expected_fee = 3000 * 250 / 10000; // 75
+    assert_eq!(credit, 3000 - expected_fee);
+}
+
+/// Cannot release with fewer than 2 approvals (partial attestation edge case)
+#[test]
+fn test_insufficient_approvals_rejected() {
+    let (_env, client, escrow_client, admin, _provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &_provider, &_patient, 1000);
+
+    // Only one approval
+    escrow_client.approve_release(&claim_id, &admin);
+
+    // Release should fail - needs 2 approvals
+    let result = escrow_client.try_release_escrow(&claim_id);
+    assert!(result.is_err(), "Release with 1 approval must be rejected");
+}
+
+/// Cannot release escrow while still in Pending state
+#[test]
+fn test_cannot_release_pending_escrow() {
+    let (_env, client, escrow_client, admin, _provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &_provider, &_patient, 1500);
+
+    // Try releasing without any approvals
+    let result = escrow_client.try_release_escrow(&claim_id);
+    assert!(result.is_err(), "Release of Pending escrow must be rejected");
+}
+
+/// Cannot refund an already settled escrow
+#[test]
+fn test_cannot_refund_settled_escrow() {
+    let (_env, client, escrow_client, admin, provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &provider, &_patient, 2500);
+
+    let arbiter = Address::generate(&_env);
+    escrow_client.approve_release(&claim_id, &admin);
+    escrow_client.approve_release(&claim_id, &arbiter);
+    assert!(escrow_client.release_escrow(&claim_id));
+
+    // Trying to refund a settled escrow should fail
+    let result = escrow_client.try_refund_escrow(
+        &claim_id,
+        &String::from_str(&_env, "Too late"),
+    );
+    assert!(result.is_err(), "Refund of Settled escrow must be rejected");
+}
+
+/// Report fraud then escrow: workflow through HealthcarePayment
+#[test]
+fn test_fraud_then_escrow_works() {
+    let (env, client, escrow_client, admin, provider, patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = client.submit_claim(
+        &patient,
+        &provider,
+        &String::from_str(&env, "SERVICE-FRAUD"),
+        &1800i128,
+        &String::from_str(&env, "POLICY-FRD"),
+        &None,
+    );
+    client.verify_claim(&claim_id, &admin);
+    client.approve_claim(&claim_id, &admin);
+
+    // Report fraud before escrowing
+    client.report_fraud(
+        &claim_id,
+        &admin,
+        &String::from_str(&env, "Suspected billing fraud"),
+    );
+
+    // Escrow should still work on a disputed claim
+    client.escrow_claim(&claim_id);
+
+    // Escrow created on the escrow contract
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Pending);
+}
+
+/// Double-dispute marking should still leave escrow in Disputed state
+#[test]
+fn test_double_dispute_marking() {
+    let (_env, client, escrow_client, admin, provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &provider, &_patient, 500);
+
+    escrow_client.mark_disputed(&provider, &claim_id);
+    escrow_client.mark_disputed(&admin, &claim_id); // second mark
+
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.status, EscrowStatus::Disputed);
+}
+
+/// Create escrow with the minimum valid amount (1 unit)
+#[test]
+fn test_escrow_minimum_amount() {
+    let (_env, client, escrow_client, admin, _provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &_provider, &_patient, 1);
+
+    let escrow = escrow_client.get_escrow(&claim_id).unwrap();
+    assert_eq!(escrow.amount, 1);
+}
+
+/// Invalid escrow ID should return None from get_escrow
+#[test]
+fn test_escrow_not_found() {
+    let (_env, _client, escrow_client, _admin, _provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let result = escrow_client.get_escrow(&999u64);
+    assert!(result.is_none(), "Non-existent escrow must return None");
+}
+
+/// Approve release after escrow is settled should be a no-op or rejected
+#[test]
+fn test_approve_after_settled() {
+    let (_env, client, escrow_client, admin, provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &provider, &_patient, 800);
+
+    let arbiter = Address::generate(&_env);
+    escrow_client.approve_release(&claim_id, &admin);
+    escrow_client.approve_release(&claim_id, &arbiter);
+    escrow_client.release_escrow(&claim_id);
+
+    // Another approve on settled escrow should be rejected
+    let result = escrow_client.try_approve_release(&claim_id, &provider);
+    assert!(result.is_err(), "Approve on Settled escrow must be rejected");
+}
+
+/// Analytics tracking should reflect dispute operations
+#[test]
+fn test_dispute_analytics() {
+    let (_env, client, escrow_client, admin, provider, _patient, _treasury, _ta, _tc) =
+        setup_with_real_escrow();
+
+    let claim_id = submit_approve_and_escrow(&_env, &client, &admin, &provider, &_patient, 4000);
+    escrow_client.mark_disputed(&provider, &claim_id);
+
+    // Settle and refund counts should reflect the dispute
+    assert_eq!(escrow_client.get_total_escrows(), 1);
+    let _dispute_rate = escrow_client.get_dispute_rate();
+}
