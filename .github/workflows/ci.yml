@@ -186,3 +186,100 @@ jobs:
               repo: context.repo.repo,
               body
             });
+
+  # ============================================================================
+  # SDK Bindings (TypeScript + Python)
+  # Regenerates mobile SDK contract bindings on every PR, uploads artifacts,
+  # comments with drift diff, and fails when bindings are out of sync unless
+  # the PR body contains [skip-sdk-gen].
+  # ============================================================================
+  sdk-bindings:
+    name: SDK Bindings
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Generate SDK bindings and write drift report
+        run: |
+          node scripts/generate-sdk-types.mjs --report reports/sdk_bindings_drift.txt
+      - name: Upload generated SDK bindings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-bindings
+          path: |
+            mobile-sdk/core/src/generated/contract-bindings.ts
+            mobile-sdk/python/uzima_sdk/contract_bindings.py
+            mobile-sdk/python/uzima_sdk/__init__.py
+            reports/sdk_bindings_drift.txt
+      - name: Enforce binding sync (unless [skip-sdk-gen])
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          DRIFT=$(grep -E '^SDK_BINDINGS_DRIFT=' reports/sdk_bindings_drift.txt | cut -d= -f2)
+          if [ "$DRIFT" = "0" ]; then
+            echo "SDK bindings are in sync."
+            exit 0
+          fi
+          if [ "${{ github.event_name }}" = "pull_request" ] && printf '%s' "$PR_BODY" | grep -qF '[skip-sdk-gen]'; then
+            echo "::warning::SDK bindings are out of sync but [skip-sdk-gen] was found in the PR body."
+            exit 0
+          fi
+          echo "::error::SDK bindings are out of sync with on-chain contract types."
+          echo "Run: node scripts/generate-sdk-types.mjs && git add mobile-sdk/"
+          exit 1
+      - name: Comment PR with SDK binding drift diff
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/sdk_bindings_drift.txt';
+            if (!fs.existsSync(path)) {
+              core.warning('SDK bindings drift report not found at ' + path);
+              return;
+            }
+            const report = fs.readFileSync(path, 'utf8');
+            const driftMatch = report.match(/^SDK_BINDINGS_DRIFT=(\d+)\s*$/m);
+            const drift = driftMatch ? Number(driftMatch[1]) : null;
+            if (drift === null) {
+              core.warning('Could not parse SDK_BINDINGS_DRIFT from report');
+              return;
+            }
+            const emoji = drift === 0 ? ':white_check_mark:' : ':x:';
+            const skip = (context.payload.pull_request?.body || '').includes('[skip-sdk-gen]');
+            const diffBlocks = [];
+            const fileRegex = /^FILE=(.+)\nSTATUS=(.+)\n(?:---DIFF---\n([\s\S]*?)\n---END---)?/gm;
+            let match;
+            while ((match = fileRegex.exec(report)) !== null) {
+              const [, file, status, diff] = match;
+              if (diff && diff.trim()) {
+                diffBlocks.push('#### `' + file + '` (' + status + ')\n```diff\n' + diff.trim() + '\n```');
+              } else {
+                diffBlocks.push('- `' + file + '` (' + status + ')');
+              }
+            }
+            const body = [
+              '### ' + emoji + ' SDK Binding Sync',
+              '',
+              'Drift detected: **' + (drift === 0 ? 'no' : 'yes') + '**',
+              skip ? '> `[skip-sdk-gen]` present — enforcement skipped for this PR.' : '',
+              '',
+              drift === 0
+                ? 'Generated TypeScript and Python bindings match the committed copy.'
+                : 'Regenerate with `node scripts/generate-sdk-types.mjs`, commit, and push.',
+              '',
+              diffBlocks.length ? diffBlocks.join('\n\n') : '_No per-file diff captured._',
+              '',
+              'Download the `sdk-bindings` workflow artifact for the full generated output.',
+              '',
+              '> Run `./scripts/check-sdk-bindings.sh` locally before pushing.'
+            ].filter(Boolean).join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
