@@ -344,6 +344,7 @@ pub enum DataKey {
     EventCount,
     OpCount,
     // Persistent storage keys (critical long-lived data)
+    Nonce(String),
     Validator(Address),
     Message(BytesN<32>),
     Nonce(String),
