@@ -15,6 +15,23 @@ pub enum Error {
     InvalidExpiry = 470,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::InvalidPatient => "Invalid Patient",
+            Error::InvalidProvider => "Invalid Provider",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::ConsentNotFound => "Consent Not Found",
+            Error::ConsentAlreadyExists => "Consent Already Exists",
+            Error::InvalidExpiry => "Invalid Expiry",
+        };
+        f.write_str(message)
+    }
+}
+
 #[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {

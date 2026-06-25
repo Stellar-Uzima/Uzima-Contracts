@@ -249,6 +249,34 @@ pub enum Error {
     DataMappingFailed = 20,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::ProviderNotFound => "Provider Not Found",
+            Error::ProviderAlreadyExists => "Provider Already Exists",
+            Error::ObservationNotFound => "Observation Not Found",
+            Error::ConditionNotFound => "Condition Not Found",
+            Error::InvalidFHIRData => "Invalid F H I R Data",
+            Error::EMRConfigNotSet => "E M R Config Not Set",
+            Error::InvalidResourceType => "Invalid Resource Type",
+            Error::MappingNotFound => "Mapping Not Found",
+            Error::ProviderNotVerified => "Provider Not Verified",
+            Error::InvalidNPI => "Invalid N P I",
+            Error::InvalidTaxId => "Invalid Tax Id",
+            Error::BundleNotFound => "Bundle Not Found",
+            Error::InvalidDataFormat => "Invalid Data Format",
+            Error::ProviderAlreadyVerified => "Provider Already Verified",
+            Error::MedicalRecordsContractNotSet => "Medical Records Contract Not Set",
+            Error::OperationFailed => "Operation Failed",
+            Error::InvalidBundleType => "Invalid Bundle Type",
+            Error::DataMappingFailed => "Data Mapping Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct FHIRIntegrationContract;
 

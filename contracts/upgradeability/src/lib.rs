@@ -26,6 +26,23 @@ pub enum UpgradeError {
     DeprecatedFunctionNotTracked = 108,
 }
 
+impl core::fmt::Display for UpgradeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            UpgradeError::NotAuthorized => "Not Authorized",
+            UpgradeError::InvalidWasmHash => "Invalid Wasm Hash",
+            UpgradeError::VersionAlreadyExists => "Version Already Exists",
+            UpgradeError::MigrationFailed => "Migration Failed",
+            UpgradeError::IncompatibleVersion => "Incompatible Version",
+            UpgradeError::ContractPaused => "Contract Paused",
+            UpgradeError::HistoryNotFound => "History Not Found",
+            UpgradeError::IntegrityCheckFailed => "Integrity Check Failed",
+            UpgradeError::DeprecatedFunctionNotTracked => "Deprecated Function Not Tracked",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub struct UpgradeHistory {

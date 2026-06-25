@@ -251,6 +251,34 @@ pub enum Error {
     ContractNotSet = 19,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::TwinNotFound => "Twin Not Found",
+            Error::InvalidStatus => "Invalid Status",
+            Error::DataStreamNotFound => "Data Stream Not Found",
+            Error::ModelNotFound => "Model Not Found",
+            Error::SimulationNotFound => "Simulation Not Found",
+            Error::InvalidParameter => "Invalid Parameter",
+            Error::InsufficientAccuracy => "Insufficient Accuracy",
+            Error::SyncInProgress => "Sync In Progress",
+            Error::ResearchAccessDenied => "Research Access Denied",
+            Error::SnapshotExpired => "Snapshot Expired",
+            Error::DuplicateDataStream => "Duplicate Data Stream",
+            Error::ModelNotActive => "Model Not Active",
+            Error::SimulationInvalid => "Simulation Invalid",
+            Error::PrivacyLevelInsufficient => "Privacy Level Insufficient",
+            Error::ConsentRequired => "Consent Required",
+            Error::ContractNotSet => "Contract Not Set",
+        };
+        f.write_str(message)
+    }
+}
+
+
 // ==================== Contract Implementation ====================
 
 #[contract]

@@ -61,6 +61,33 @@ pub enum CommonError {
     UnauthorizedCaller = 18,
 }
 
+impl core::fmt::Display for CommonError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            CommonError::Unknown => "Unknown",
+            CommonError::Unauthorized => "Unauthorized",
+            CommonError::NotInitialized => "Not Initialized",
+            CommonError::AlreadyInitialized => "Already Initialized",
+            CommonError::ContractPaused => "Contract Paused",
+            CommonError::DeadlineExceeded => "Deadline Exceeded",
+            CommonError::RateLimitExceeded => "Rate Limit Exceeded",
+            CommonError::InsufficientFunds => "Insufficient Funds",
+            CommonError::InvalidInput => "Invalid Input",
+            CommonError::InvalidState => "Invalid State",
+            CommonError::NotFound => "Not Found",
+            CommonError::AccessDenied => "Access Denied",
+            CommonError::Timeout => "Timeout",
+            CommonError::InvalidArgument => "Invalid Argument",
+            CommonError::ExternalContractNotSet => "External Contract Not Set",
+            CommonError::InvalidData => "Invalid Data",
+            CommonError::InvalidPayload => "Invalid Payload",
+            CommonError::DuplicateSubmission => "Duplicate Submission",
+            CommonError::UnauthorizedCaller => "Unauthorized Caller",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn is_common_error_code(code: u32) -> bool {
     code <= COMMON_ERROR_MAX
 }

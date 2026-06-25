@@ -123,6 +123,21 @@ pub enum Error {
     InvalidKeyLength = 7,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidKey => "Invalid Key",
+            Error::KeyNotFound => "Key Not Found",
+            Error::KeyAlreadyRevoked => "Key Already Revoked",
+            Error::InvalidKeyLength => "Invalid Key Length",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

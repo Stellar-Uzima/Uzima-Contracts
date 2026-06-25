@@ -146,6 +146,20 @@ pub enum Error {
     InvalidBPSValue = 6,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::RequestNotFound => "Request Not Found",
+            Error::ExplanationNotFound => "Explanation Not Found",
+            Error::InvalidImportance => "Invalid Importance",
+            Error::AuditNotFound => "Audit Not Found",
+            Error::InvalidBPSValue => "Invalid B P S Value",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct ExplainableAiContract;
 

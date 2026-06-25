@@ -22,6 +22,21 @@ pub enum SerializationError {
     ZeroValueMetadata = 7,
 }
 
+impl core::fmt::Display for SerializationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            SerializationError::CollectionTooLarge => "Collection Too Large",
+            SerializationError::StringTooLong => "String Too Long",
+            SerializationError::NestingTooDeep => "Nesting Too Deep",
+            SerializationError::EmptyCollection => "Empty Collection",
+            SerializationError::InvalidAddress => "Invalid Address",
+            SerializationError::InvalidBytes => "Invalid Bytes",
+            SerializationError::ZeroValueMetadata => "Zero Value Metadata",
+        };
+        f.write_str(message)
+    }
+}
+
 /// Trait to ensure types can be safely serialized and stored.
 pub trait SafeSerialize {
     /// Validates the implementor's fields against edge-case constraints.

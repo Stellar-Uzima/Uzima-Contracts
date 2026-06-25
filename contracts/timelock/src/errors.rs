@@ -27,6 +27,26 @@ pub enum Error {
     CrossChainTimeout = 702,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::AlreadyQueued => "Already Queued",
+            Error::NotQueued => "Not Queued",
+            Error::NotReady => "Not Ready",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::StorageFull => "Storage Full",
+            Error::CrossChainTimeout => "Cross Chain Timeout",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),

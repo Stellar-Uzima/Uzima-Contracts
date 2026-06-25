@@ -237,6 +237,39 @@ pub enum Error {
     Overflow               = 24,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::RoundNotFound => "Round Not Found",
+            Error::RoundNotOpen => "Round Not Open",
+            Error::RoundNotAggregating => "Round Not Aggregating",
+            Error::RoundFinalized => "Round Finalized",
+            Error::NotEnoughParticipants => "Not Enough Participants",
+            Error::TooManyParticipants => "Too Many Participants",
+            Error::DuplicateUpdate => "Duplicate Update",
+            Error::InvalidDPParam => "Invalid D P Param",
+            Error::InstitutionNotFound => "Institution Not Found",
+            Error::InstitutionNotActive => "Institution Not Active",
+            Error::InstitutionAlreadyRegistered => "Institution Already Registered",
+            Error::LowReputation => "Low Reputation",
+            Error::InvalidParameter => "Invalid Parameter",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::ValidationFailed => "Validation Failed",
+            Error::PrivacyBudgetExceeded => "Privacy Budget Exceeded",
+            Error::PoisoningAttackDetected => "Poisoning Attack Detected",
+            Error::CommunicationBudgetExceeded => "Communication Budget Exceeded",
+            Error::VerificationFailed => "Verification Failed",
+            Error::FrameworkNotSupported => "Framework Not Supported",
+            Error::ContributionQualityLow => "Contribution Quality Low",
+            Error::Overflow => "Overflow",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct FederatedLearningContract;
 

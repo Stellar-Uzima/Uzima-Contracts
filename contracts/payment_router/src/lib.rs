@@ -23,6 +23,24 @@ pub enum Error {
     CrossChainTimeout = 16,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::InvalidFeeBps => "Invalid Fee Bps",
+            Error::FeeNotSet => "Fee Not Set",
+            Error::Overflow => "Overflow",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::UnauthorizedCaller => "Unauthorized Caller",
+            Error::ContractPaused => "Contract Paused",
+            Error::StorageFull => "Storage Full",
+            Error::CrossChainTimeout => "Cross Chain Timeout",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct RouterFeeConfig {

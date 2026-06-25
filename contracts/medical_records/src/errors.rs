@@ -81,6 +81,72 @@ pub enum Error {
     InvalidParticipantCount = 1834,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::NotInitialized => "Not Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::RateLimitExceeded => "Rate Limit Exceeded",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::NotAICoordinator => "Not A I Coordinator",
+            Error::EmergencyAccessExpired => "Emergency Access Expired",
+            Error::InvalidPagination => "Invalid Pagination",
+            Error::InputTooLong => "Input Too Long",
+            Error::BatchTooLarge => "Batch Too Large",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::InvalidDataRefLength => "Invalid Data Ref Length",
+            Error::InvalidDataRefCharset => "Invalid Data Ref Charset",
+            Error::InvalidDiagnosisLength => "Invalid Diagnosis Length",
+            Error::InvalidTreatmentLength => "Invalid Treatment Length",
+            Error::InvalidPurposeLength => "Invalid Purpose Length",
+            Error::InvalidTagLength => "Invalid Tag Length",
+            Error::InvalidModelVersionLength => "Invalid Model Version Length",
+            Error::InvalidExplanationLength => "Invalid Explanation Length",
+            Error::InvalidTreatmentTypeLength => "Invalid Treatment Type Length",
+            Error::InvalidAddress => "Invalid Address",
+            Error::SameAddress => "Same Address",
+            Error::InvalidBatch => "Invalid Batch",
+            Error::NumberOutOfBounds => "Number Out Of Bounds",
+            Error::InvalidCategory => "Invalid Category",
+            Error::EmptyTreatment => "Empty Treatment",
+            Error::EmptyDiagnosis => "Empty Diagnosis",
+            Error::EmptyTag => "Empty Tag",
+            Error::EmptyDataRef => "Empty Data Ref",
+            Error::ProposalAlreadyExecuted => "Proposal Already Executed",
+            Error::TimelockNotElapsed => "Timelock Not Elapsed",
+            Error::NotEnoughApproval => "Not Enough Approval",
+            Error::CryptoRegistryNotSet => "Crypto Registry Not Set",
+            Error::EncryptionRequired => "Encryption Required",
+            Error::IdentityRegistryNotSet => "Identity Registry Not Set",
+            Error::RecordNotFound => "Record Not Found",
+            Error::EmergencyAccessNotFound => "Emergency Access Not Found",
+            Error::DIDNotFound => "D I D Not Found",
+            Error::DIDNotActive => "D I D Not Active",
+            Error::RecordAlreadySynced => "Record Already Synced",
+            Error::StorageFull => "Storage Full",
+            Error::InvalidCredential => "Invalid Credential",
+            Error::MissingRequiredCredential => "Missing Required Credential",
+            Error::CredentialExpired => "Credential Expired",
+            Error::CredentialRevoked => "Credential Revoked",
+            Error::CrossChainAccessDenied => "Cross Chain Access Denied",
+            Error::CrossChainTimeout => "Cross Chain Timeout",
+            Error::InvalidChain => "Invalid Chain",
+            Error::CrossChainNotEnabled => "Cross Chain Not Enabled",
+            Error::CrossChainContractsNotSet => "Cross Chain Contracts Not Set",
+            Error::AIConfigNotSet => "A I Config Not Set",
+            Error::InvalidAIScore => "Invalid A I Score",
+            Error::InvalidScore => "Invalid Score",
+            Error::InvalidDPEpsilon => "Invalid D P Epsilon",
+            Error::InvalidParticipantCount => "Invalid Participant Count",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {

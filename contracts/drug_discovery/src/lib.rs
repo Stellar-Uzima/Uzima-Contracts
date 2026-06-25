@@ -7,11 +7,11 @@
 #[cfg(test)]
 mod test;
 
+use common_error::{get_suggestion as common_suggestion, CommonError};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
-use common_error::{get_suggestion as common_suggestion, CommonError};
 
 #[derive(Clone)]
 #[contracttype]
@@ -151,6 +151,23 @@ pub enum Error {
     IntegrationMissing = 7,
     QuantumDisabled = 8,
     AlreadyInitialized = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::NotInitialized => "Not Initialized",
+            Error::InvalidInput => "Invalid Input",
+            Error::MoleculeNotFound => "Molecule Not Found",
+            Error::PredictionNotFound => "Prediction Not Found",
+            Error::BenchmarkNotMet => "Benchmark Not Met",
+            Error::IntegrationMissing => "Integration Missing",
+            Error::QuantumDisabled => "Quantum Disabled",
+            Error::AlreadyInitialized => "Already Initialized",
+        };
+        f.write_str(message)
+    }
 }
 
 #[soroban_sdk::contractclient(name = "GenomicDataClient")]

@@ -47,6 +47,44 @@ pub enum Error {
     DeviceOffline = 826,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::NotAdmin => "Not Admin",
+            Error::NotDeviceOperator => "Not Device Operator",
+            Error::NotManufacturer => "Not Manufacturer",
+            Error::InputTooLong => "Input Too Long",
+            Error::InputTooShort => "Input Too Short",
+            Error::InvalidDeviceType => "Invalid Device Type",
+            Error::InvalidFirmwareHash => "Invalid Firmware Hash",
+            Error::InvalidMetricValue => "Invalid Metric Value",
+            Error::InvalidTimestamp => "Invalid Timestamp",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::NotPaused => "Not Paused",
+            Error::DeviceNotFound => "Device Not Found",
+            Error::DeviceAlreadyRegistered => "Device Already Registered",
+            Error::ManufacturerNotRegistered => "Manufacturer Not Registered",
+            Error::ManufacturerAlreadyRegistered => "Manufacturer Already Registered",
+            Error::FirmwareVersionNotFound => "Firmware Version Not Found",
+            Error::FirmwareAlreadyExists => "Firmware Already Exists",
+            Error::ChannelNotFound => "Channel Not Found",
+            Error::InvalidEncryptionKey => "Invalid Encryption Key",
+            Error::KeyRotationTooFrequent => "Key Rotation Too Frequent",
+            Error::DeviceDecommissioned => "Device Decommissioned",
+            Error::FirmwareNotApproved => "Firmware Not Approved",
+            Error::HeartbeatTooFrequent => "Heartbeat Too Frequent",
+            Error::DeviceNotActive => "Device Not Active",
+            Error::DeviceSuspended => "Device Suspended",
+            Error::DowngradeNotAllowed => "Downgrade Not Allowed",
+            Error::DeviceOffline => "Device Offline",
+        };
+        f.write_str(message)
+    }
+}
+
 #[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {

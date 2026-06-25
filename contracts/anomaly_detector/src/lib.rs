@@ -199,6 +199,28 @@ pub enum Error {
     BatchTooLarge = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::ModelNotFound => "Model Not Found",
+            Error::AlertNotFound => "Alert Not Found",
+            Error::FeatureCountMismatch => "Feature Count Mismatch",
+            Error::InvalidWeight => "Invalid Weight",
+            Error::InvalidThreshold => "Invalid Threshold",
+            Error::AlertAlreadyResolved => "Alert Already Resolved",
+            Error::DuplicateFederatedUpdate => "Duplicate Federated Update",
+            Error::InvalidFeatureCount => "Invalid Feature Count",
+            Error::InvalidScore => "Invalid Score",
+            Error::BatchTooLarge => "Batch Too Large",
+        };
+        f.write_str(message)
+    }
+}
+
 // ==================== Contract ====================
 
 #[contract]

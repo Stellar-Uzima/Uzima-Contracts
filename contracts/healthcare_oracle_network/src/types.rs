@@ -25,6 +25,34 @@ pub enum Error {
     AlreadyReported = 19,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::OracleAlreadyRegistered => "Oracle Already Registered",
+            Error::OracleNotFound => "Oracle Not Found",
+            Error::OracleNotVerified => "Oracle Not Verified",
+            Error::OracleInactive => "Oracle Inactive",
+            Error::InvalidData => "Invalid Data",
+            Error::SubmissionAlreadyExists => "Submission Already Exists",
+            Error::RoundNotFound => "Round Not Found",
+            Error::InsufficientSubmissions => "Insufficient Submissions",
+            Error::ConsensusAlreadyFinalized => "Consensus Already Finalized",
+            Error::ConsensusNotFound => "Consensus Not Found",
+            Error::DisputeNotFound => "Dispute Not Found",
+            Error::DisputeAlreadyResolved => "Dispute Already Resolved",
+            Error::InvalidDisputeState => "Invalid Dispute State",
+            Error::InvalidFeedType => "Invalid Feed Type",
+            Error::ArbiterExists => "Arbiter Exists",
+            Error::AlreadyReported => "Already Reported",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum FeedKind {

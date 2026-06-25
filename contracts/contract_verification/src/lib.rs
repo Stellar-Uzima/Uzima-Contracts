@@ -96,6 +96,18 @@ pub enum VerificationError {
     MetadataNotFound = 4,
 }
 
+impl core::fmt::Display for VerificationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            VerificationError::NotInitialized => "Not Initialized",
+            VerificationError::AlreadyInitialized => "Already Initialized",
+            VerificationError::Unauthorized => "Unauthorized",
+            VerificationError::MetadataNotFound => "Metadata Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]

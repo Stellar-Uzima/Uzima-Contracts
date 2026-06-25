@@ -28,9 +28,7 @@ fn negative_tampered_commitment() {
     let (proof, _proof_id) = range_proof_negatives::case_tampered_commitment(&env);
 
     let (client, admin) = range_proof_negatives::setup(&env);
-    range_proof_negatives::register_bulletproof_circuit(
-        &client, &env, &admin, &proof.vk_hash,
-    );
+    range_proof_negatives::register_bulletproof_circuit(&client, &env, &admin, &proof.vk_hash);
 
     let result = client.try_verify_range_proof(&proof);
     assert_eq!(result, Err(Ok(Error::InconsistentCommitment)));
@@ -77,9 +75,7 @@ fn negative_mismatched_encrypted_value() {
     let (proof, _proof_id) = range_proof_negatives::case_mismatched_encrypted_value(&env);
 
     let (client, admin) = range_proof_negatives::setup(&env);
-    range_proof_negatives::register_bulletproof_circuit(
-        &client, &env, &admin, &proof.vk_hash,
-    );
+    range_proof_negatives::register_bulletproof_circuit(&client, &env, &admin, &proof.vk_hash);
 
     let result = client.try_verify_range_proof(&proof);
     assert_eq!(result, Err(Ok(Error::InconsistentCommitment)));

@@ -320,6 +320,41 @@ pub enum Error {
     LegalHoldActive = 26,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::ConsentNotFound => "Consent Not Found",
+            Error::ConsentAlreadyExists => "Consent Already Exists",
+            Error::InvalidConsentStatus => "Invalid Consent Status",
+            Error::ConsentExpired => "Consent Expired",
+            Error::AuditLogNotFound => "Audit Log Not Found",
+            Error::BreachReportNotFound => "Breach Report Not Found",
+            Error::ViolationNotFound => "Violation Not Found",
+            Error::InvalidFramework => "Invalid Framework",
+            Error::InvalidResourceType => "Invalid Resource Type",
+            Error::DataBreachAlreadyReported => "Data Breach Already Reported",
+            Error::ViolationAlreadyExists => "Violation Already Exists",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::RetentionPolicyNotFound => "Retention Policy Not Found",
+            Error::ComplianceConfigNotSet => "Compliance Config Not Set",
+            Error::InsufficientPermissions => "Insufficient Permissions",
+            Error::DataPurgeFailed => "Data Purge Failed",
+            Error::NotificationFailed => "Notification Failed",
+            Error::InvalidPatientAddress => "Invalid Patient Address",
+            Error::ReportAlreadyExists => "Report Already Exists",
+            Error::ReportNotFound => "Report Not Found",
+            Error::RecordAlreadyExists => "Record Already Exists",
+            Error::RetentionRecordNotFound => "Retention Record Not Found",
+            Error::RecordNotDeletable => "Record Not Deletable",
+            Error::LegalHoldActive => "Legal Hold Active",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct HealthcareComplianceContract;
 

@@ -30,6 +30,30 @@ pub enum Error {
     ConductEntryNotFound = 16,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ProviderNotFound => "Provider Not Found",
+            Error::CredentialNotFound => "Credential Not Found",
+            Error::InvalidCredentialType => "Invalid Credential Type",
+            Error::CredentialExpired => "Credential Expired",
+            Error::CredentialRevoked => "Credential Revoked",
+            Error::DuplicateCredential => "Duplicate Credential",
+            Error::InvalidRating => "Invalid Rating",
+            Error::FeedbackNotFound => "Feedback Not Found",
+            Error::DisputeNotFound => "Dispute Not Found",
+            Error::InsufficientReputation => "Insufficient Reputation",
+            Error::NotVerifiedProvider => "Not Verified Provider",
+            Error::InvalidConductEntry => "Invalid Conduct Entry",
+            Error::ConductEntryNotFound => "Conduct Entry Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
 // Credential types for healthcare providers
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]

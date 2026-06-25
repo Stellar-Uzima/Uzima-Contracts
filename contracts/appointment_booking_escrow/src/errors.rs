@@ -22,6 +22,30 @@ pub enum Error {
     DoubleWithdrawal = 505,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::OnlyPatientCanRefund => "Only Patient Can Refund",
+            Error::OnlyProviderCanConfirm => "Only Provider Can Confirm",
+            Error::InvalidAmount => "Invalid Amount",
+            Error::InvalidPatient => "Invalid Patient",
+            Error::InvalidProvider => "Invalid Provider",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::InvalidState => "Invalid State",
+            Error::AppointmentNotFound => "Appointment Not Found",
+            Error::AppointmentAlreadyConfirmed => "Appointment Already Confirmed",
+            Error::AppointmentAlreadyRefunded => "Appointment Already Refunded",
+            Error::AppointmentNoShow => "Appointment No Show",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::TokenTransferFailed => "Token Transfer Failed",
+            Error::DoubleWithdrawal => "Double Withdrawal",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::OnlyPatientCanRefund | Error::OnlyProviderCanConfirm => {

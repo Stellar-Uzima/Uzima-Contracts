@@ -136,3 +136,22 @@ pub enum Error {
     StringTooLong = 10,
     NestingTooDeep = 11,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::RoundNotFound => "Round Not Found",
+            Error::RoundFinalized => "Round Finalized",
+            Error::NotEnoughParticipants => "Not Enough Participants",
+            Error::DuplicateUpdate => "Duplicate Update",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::AdminNotSet => "Admin Not Set",
+            Error::SerializationError => "Serialization Error",
+            Error::CollectionTooLarge => "Collection Too Large",
+            Error::StringTooLong => "String Too Long",
+            Error::NestingTooDeep => "Nesting Too Deep",
+        };
+        f.write_str(message)
+    }
+}

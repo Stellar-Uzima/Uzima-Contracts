@@ -19,6 +19,22 @@ pub enum Error {
     AlreadyApproved = 451,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAValidator => "Not A Validator",
+            Error::NotEnoughApprovals => "Not Enough Approvals",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::InvalidState => "Invalid State",
+            Error::TimelockNotExpired => "Timelock Not Expired",
+            Error::ConfigNotFound => "Config Not Found",
+            Error::ProposalNotFound => "Proposal Not Found",
+            Error::AlreadyApproved => "Already Approved",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::NotAValidator | Error::NotEnoughApprovals => symbol_short!("CHK_AUTH"),

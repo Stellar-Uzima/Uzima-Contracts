@@ -41,6 +41,40 @@ pub enum Error {
     KeyRotationCooldown = 603,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::NotVerifier => "Not Verifier",
+            Error::CannotRemoveOwner => "Cannot Remove Owner",
+            Error::InvalidRecoveryGuardian => "Invalid Recovery Guardian",
+            Error::InsufficientGuardianApprovals => "Insufficient Guardian Approvals",
+            Error::InvalidInput => "Invalid Input",
+            Error::InputTooLong => "Input Too Long",
+            Error::InvalidVerificationMethod => "Invalid Verification Method",
+            Error::InvalidCredentialType => "Invalid Credential Type",
+            Error::InvalidServiceEndpoint => "Invalid Service Endpoint",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::RecoveryNotInitiated => "Recovery Not Initiated",
+            Error::RecoveryAlreadyPending => "Recovery Already Pending",
+            Error::RecoveryTimelockNotElapsed => "Recovery Timelock Not Elapsed",
+            Error::VerificationMethodNotFound => "Verification Method Not Found",
+            Error::CredentialNotFound => "Credential Not Found",
+            Error::AttestationNotFound => "Attestation Not Found",
+            Error::ServiceNotFound => "Service Not Found",
+            Error::DIDNotFound => "D I D Not Found",
+            Error::DIDAlreadyExists => "D I D Already Exists",
+            Error::DIDDeactivated => "D I D Deactivated",
+            Error::CredentialExpired => "Credential Expired",
+            Error::CredentialRevoked => "Credential Revoked",
+            Error::KeyRotationCooldown => "Key Rotation Cooldown",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::NotVerifier | Error::CannotRemoveOwner => {

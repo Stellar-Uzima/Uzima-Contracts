@@ -276,6 +276,17 @@ pub enum RbacError {
     AlreadyInitialized = 301,
 }
 
+impl core::fmt::Display for RbacError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            RbacError::Unauthorized => "Unauthorized",
+            RbacError::NotInitialized => "Not Initialized",
+            RbacError::AlreadyInitialized => "Already Initialized",
+        };
+        f.write_str(message)
+    }
+}
+
 #[soroban_sdk::contractclient(name = "RbacClient")]
 pub trait RbacContract {
     fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;

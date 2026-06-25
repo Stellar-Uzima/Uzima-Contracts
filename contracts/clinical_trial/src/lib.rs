@@ -23,6 +23,23 @@ pub enum Error {
     InvalidSeverity = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::ProtocolNotFound => "Protocol Not Found",
+            Error::TrialFull => "Trial Full",
+            Error::InvalidTitle => "Invalid Title",
+            Error::InvalidMetadataRef => "Invalid Metadata Ref",
+            Error::InvalidName => "Invalid Name",
+            Error::InvalidConsentRef => "Invalid Consent Ref",
+            Error::InvalidMaxParticipants => "Invalid Max Participants",
+            Error::InvalidDescriptionRef => "Invalid Description Ref",
+            Error::InvalidSeverity => "Invalid Severity",
+        };
+        f.write_str(message)
+    }
+}
+
 // ==================== VALIDATION CONSTANTS ====================
 
 /// Minimum length for protocol title

@@ -55,6 +55,43 @@ pub enum TelemedicineError {
     KnowledgeEntryNotFound = 28,
 }
 
+impl core::fmt::Display for TelemedicineError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            TelemedicineError::ContractPaused => "Contract Paused",
+            TelemedicineError::NotPaused => "Not Paused",
+            TelemedicineError::NotAdmin => "Not Admin",
+            TelemedicineError::ProviderAlreadyRegistered => "Provider Already Registered",
+            TelemedicineError::ProviderNotFound => "Provider Not Found",
+            TelemedicineError::ProviderNotActive => "Provider Not Active",
+            TelemedicineError::LicenseExpired => "License Expired",
+            TelemedicineError::PatientAlreadyRegistered => "Patient Already Registered",
+            TelemedicineError::PatientNotFound => "Patient Not Found",
+            TelemedicineError::ConsentNotGiven => "Consent Not Given",
+            TelemedicineError::ConsultationNotFound => "Consultation Not Found",
+            TelemedicineError::ConsultationNotScheduled => "Consultation Not Scheduled",
+            TelemedicineError::ConsultationNotActive => "Consultation Not Active",
+            TelemedicineError::ConsultationAlreadyCompleted => "Consultation Already Completed",
+            TelemedicineError::PrescriptionNotFound => "Prescription Not Found",
+            TelemedicineError::MonitoringSessionNotFound => "Monitoring Session Not Found",
+            TelemedicineError::AppointmentNotFound => "Appointment Not Found",
+            TelemedicineError::DigitalTherapeuticNotFound => "Digital Therapeutic Not Found",
+            TelemedicineError::QualityAssessmentNotFound => "Quality Assessment Not Found",
+            TelemedicineError::EmergencyNotFound => "Emergency Not Found",
+            TelemedicineError::EmergencyAlreadyResolved => "Emergency Already Resolved",
+            TelemedicineError::InvalidJurisdiction => "Invalid Jurisdiction",
+            TelemedicineError::DataTransferNotApproved => "Data Transfer Not Approved",
+            TelemedicineError::UnsupportedLanguage => "Unsupported Language",
+            TelemedicineError::ChatbotInquiryNotFound => "Chatbot Inquiry Not Found",
+            TelemedicineError::InvalidChatMessage => "Invalid Chat Message",
+            TelemedicineError::KnowledgeEntryAlreadyExists => "Knowledge Entry Already Exists",
+            TelemedicineError::KnowledgeEntryNotFound => "Knowledge Entry Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
+
 // ============================================================
 // DATA STRUCTURES
 // ============================================================

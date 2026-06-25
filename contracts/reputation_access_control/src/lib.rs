@@ -22,6 +22,23 @@ pub enum Error {
     CredentialExpired = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InsufficientReputation => "Insufficient Reputation",
+            Error::AccessDenied => "Access Denied",
+            Error::InvalidResource => "Invalid Resource",
+            Error::PolicyNotFound => "Policy Not Found",
+            Error::ProviderNotVerified => "Provider Not Verified",
+            Error::CredentialExpired => "Credential Expired",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ResourceType {

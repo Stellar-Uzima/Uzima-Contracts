@@ -14,6 +14,19 @@ pub enum Error {
     RightToBeForgottenDisabled = 5,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::UserAlreadyForgotten => "User Already Forgotten",
+            Error::RuleNotConfigured => "Rule Not Configured",
+            Error::RightToBeForgottenDisabled => "Right To Be Forgotten Disabled",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataResidency {

@@ -89,7 +89,14 @@ pub fn setup(env: &Env) -> (ZKPRegistryClient<'_>, Address) {
 pub fn case_wrong_version_byte(env: &Env) -> (RangeProof, BytesN<32>) {
     let prover = Address::generate(env);
     let vk_hash = BytesN::from_array(env, &[0xB0u8; 32]);
-    let mut data = valid_proof_data(env, &prover, &vk_hash, 18, 65, &Bytes::from_slice(env, b"age"));
+    let mut data = valid_proof_data(
+        env,
+        &prover,
+        &vk_hash,
+        18,
+        65,
+        &Bytes::from_slice(env, b"age"),
+    );
     data.set(0, 0x01); // SNARK version, not Bulletproof
     let proof_id = BytesN::from_array(env, &[0xC0u8; 32]);
     let proof = RangeProof {
@@ -115,7 +122,14 @@ pub fn case_wrong_version_byte(env: &Env) -> (RangeProof, BytesN<32>) {
 pub fn case_tampered_commitment(env: &Env) -> (RangeProof, BytesN<32>) {
     let prover = Address::generate(env);
     let vk_hash = BytesN::from_array(env, &[0xB1u8; 32]);
-    let mut data = valid_proof_data(env, &prover, &vk_hash, 21, 99, &Bytes::from_slice(env, b"enc"));
+    let mut data = valid_proof_data(
+        env,
+        &prover,
+        &vk_hash,
+        21,
+        99,
+        &Bytes::from_slice(env, b"enc"),
+    );
     let old = data.get_unchecked(2);
     data.set(2, old ^ 0xFF);
     let proof_id = BytesN::from_array(env, &[0xC1u8; 32]);
@@ -188,7 +202,11 @@ pub fn case_unregistered_vk(env: &Env) -> (RangeProof, BytesN<32>) {
     let prover = Address::generate(env);
     let vk_hash = BytesN::from_array(env, &[0xB4u8; 32]);
     let proof_data = valid_proof_data(
-        env, &prover, &vk_hash, 30, 50,
+        env,
+        &prover,
+        &vk_hash,
+        30,
+        50,
         &Bytes::from_slice(env, b"unregistered"),
     );
     let proof_id = BytesN::from_array(env, &[0xC4u8; 32]);
@@ -217,7 +235,11 @@ pub fn case_mismatched_encrypted_value(env: &Env) -> (RangeProof, BytesN<32>) {
     let vk_hash = BytesN::from_array(env, &[0xB5u8; 32]);
     // Build commitment over "original_value"
     let proof_data = valid_proof_data(
-        env, &prover, &vk_hash, 25, 75,
+        env,
+        &prover,
+        &vk_hash,
+        25,
+        75,
         &Bytes::from_slice(env, b"original_value"),
     );
     let proof_id = BytesN::from_array(env, &[0xC5u8; 32]);
@@ -248,7 +270,11 @@ pub fn case_invalid_range(env: &Env) -> (RangeProof, BytesN<32>) {
     // The proof_data is technically valid (min=100, max=50 embedded),
     // but the struct values are invalid.
     let proof_data = valid_proof_data(
-        env, &prover, &vk_hash, 100, 50,
+        env,
+        &prover,
+        &vk_hash,
+        100,
+        50,
         &Bytes::from_slice(env, b"range"),
     );
     let proof_id = BytesN::from_array(env, &[0xC6u8; 32]);

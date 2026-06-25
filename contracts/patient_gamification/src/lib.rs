@@ -207,6 +207,34 @@ pub enum Error {
     RandomnessCommitExpired = 19,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::InvalidInput => "Invalid Input",
+            Error::AchievementNotFound => "Achievement Not Found",
+            Error::ChallengeNotFound => "Challenge Not Found",
+            Error::ChallengeFull => "Challenge Full",
+            Error::ChallengeEnded => "Challenge Ended",
+            Error::AlreadyParticipating => "Already Participating",
+            Error::NotParticipating => "Not Participating",
+            Error::InsufficientPoints => "Insufficient Points",
+            Error::PrivacyThresholdNotMet => "Privacy Threshold Not Met",
+            Error::InvalidTimeRange => "Invalid Time Range",
+            Error::AlreadyCompleted => "Already Completed",
+            Error::RandomnessAlreadyCommitted => "Randomness Already Committed",
+            Error::RandomnessCommitNotFound => "Randomness Commit Not Found",
+            Error::RandomnessRevealTooEarly => "Randomness Reveal Too Early",
+            Error::RandomnessRevealMismatch => "Randomness Reveal Mismatch",
+            Error::RandomnessCommitExpired => "Randomness Commit Expired",
+        };
+        f.write_str(message)
+    }
+}
+
+
 // ============================================================================
 // CONTRACT IMPLEMENTATION
 // ============================================================================

@@ -54,6 +54,26 @@ pub enum ContractError {
     InheritanceCycle = 12,
 }
 
+impl core::fmt::Display for ContractError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            ContractError::NotAuthorized => "Not Authorized",
+            ContractError::TokenNotFound => "Token Not Found",
+            ContractError::ConsentRevoked => "Consent Revoked",
+            ContractError::AlreadyInitialized => "Already Initialized",
+            ContractError::NotTokenOwner => "Not Token Owner",
+            ContractError::InvalidPermission => "Invalid Permission",
+            ContractError::AccessDenied => "Access Denied",
+            ContractError::InvalidDelegation => "Invalid Delegation",
+            ContractError::EmergencyOverrideFailed => "Emergency Override Failed",
+            ContractError::MarketplaceNotEnabled => "Marketplace Not Enabled",
+            ContractError::InvalidCondition => "Invalid Condition",
+            ContractError::InheritanceCycle => "Inheritance Cycle",
+        };
+        f.write_str(message)
+    }
+}
+
 // Data type enum for granular permissions
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

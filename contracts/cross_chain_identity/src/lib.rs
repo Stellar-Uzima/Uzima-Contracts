@@ -170,6 +170,32 @@ pub enum Error {
     SyncFailed = 18,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::IdentityNotFound => "Identity Not Found",
+            Error::IdentityAlreadyExists => "Identity Already Exists",
+            Error::IdentityExpired => "Identity Expired",
+            Error::IdentityRevoked => "Identity Revoked",
+            Error::RequestNotFound => "Request Not Found",
+            Error::RequestExpired => "Request Expired",
+            Error::RequestAlreadyProcessed => "Request Already Processed",
+            Error::ValidatorNotFound => "Validator Not Found",
+            Error::ValidatorNotActive => "Validator Not Active",
+            Error::DuplicateAttestation => "Duplicate Attestation",
+            Error::InsufficientAttestations => "Insufficient Attestations",
+            Error::InvalidProof => "Invalid Proof",
+            Error::InvalidChain => "Invalid Chain",
+            Error::SyncNotFound => "Sync Not Found",
+            Error::SyncFailed => "Sync Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct CrossChainIdentityContract;
 
@@ -406,7 +432,9 @@ impl CrossChainIdentityContract {
         }
 
         let now = env.ledger().timestamp();
-        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY)
+            .is_err()
+        {
             request.status = RequestStatus::Expired;
             env.storage().persistent().set(&req_key, &request);
             return Err(Error::RequestExpired);

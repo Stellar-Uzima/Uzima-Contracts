@@ -34,6 +34,29 @@ pub enum Error {
     ConfigNotFound = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::InvalidThreshold => "Invalid Threshold",
+            Error::InvalidTimelock => "Invalid Timelock",
+            Error::NotSigner => "Not Signer",
+            Error::ProposalNotFound => "Proposal Not Found",
+            Error::NotPending => "Not Pending",
+            Error::AlreadyApproved => "Already Approved",
+            Error::TimelockNotExpired => "Timelock Not Expired",
+            Error::NotApproved => "Not Approved",
+            Error::Halted => "Halted",
+            Error::NotAuthorized => "Not Authorized",
+            Error::SymbolTooLong => "Symbol Too Long",
+            Error::TransferFailed => "Transfer Failed",
+            Error::ConfigNotFound => "Config Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
 /// Treasury proposal types
 #[derive(Clone)]
 #[contracttype]

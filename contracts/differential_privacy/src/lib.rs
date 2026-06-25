@@ -83,6 +83,25 @@ pub enum Error {
     ArithmeticOverflow = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::BudgetNotFound => "Budget Not Found",
+            Error::BudgetExhausted => "Budget Exhausted",
+            Error::BudgetNotActive => "Budget Not Active",
+            Error::QueryNotFound => "Query Not Found",
+            Error::InvalidSensitivity => "Invalid Sensitivity",
+            Error::InsufficientBudget => "Insufficient Budget",
+            Error::InvalidInput => "Invalid Input",
+            Error::ArithmeticOverflow => "Arithmetic Overflow",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

@@ -66,6 +66,18 @@ pub enum AccessError {
     InvalidRole = 4,
 }
 
+impl core::fmt::Display for AccessError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            AccessError::Unauthorized => "Unauthorized",
+            AccessError::NotInitialized => "Not Initialized",
+            AccessError::AlreadyInitialized => "Already Initialized",
+            AccessError::InvalidRole => "Invalid Role",
+        };
+        f.write_str(message)
+    }
+}
+
 // ── AccessControl trait ───────────────────────────────────────────────────────
 
 /// Trait that any contract can implement to gain standardised access control.

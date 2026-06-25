@@ -49,6 +49,47 @@ pub enum Error {
     CodeMappingFailed = 813,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::InsufficientPermissions => "Insufficient Permissions",
+            Error::HIPAAComplianceViolation => "H I P A A Compliance Violation",
+            Error::RecordAccessDenied => "Record Access Denied",
+            Error::InputTooLong => "Input Too Long",
+            Error::BatchTooLarge => "Batch Too Large",
+            Error::EmptyClinicalNote => "Empty Clinical Note",
+            Error::InvalidLanguageCode => "Invalid Language Code",
+            Error::InvalidEncoding => "Invalid Encoding",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::RateLimitExceeded => "Rate Limit Exceeded",
+            Error::Timeout => "Timeout",
+            Error::InvalidConfiguration => "Invalid Configuration",
+            Error::RecordNotFound => "Record Not Found",
+            Error::IntegrationFailed => "Integration Failed",
+            Error::ExternalContractNotSet => "External Contract Not Set",
+            Error::NLPEngineNotInitialized => "N L P Engine Not Initialized",
+            Error::EntityExtractionFailed => "Entity Extraction Failed",
+            Error::ConceptExtractionFailed => "Concept Extraction Failed",
+            Error::SentimentAnalysisFailed => "Sentiment Analysis Failed",
+            Error::CodingSuggestionFailed => "Coding Suggestion Failed",
+            Error::TokenizationFailed => "Tokenization Failed",
+            Error::LanguageDetectionFailed => "Language Detection Failed",
+            Error::MedicalTermNotFound => "Medical Term Not Found",
+            Error::InvalidMedicalTerm => "Invalid Medical Term",
+            Error::TermDatabaseNotLoaded => "Term Database Not Loaded",
+            Error::ICD10CodeNotFound => "I C D10 Code Not Found",
+            Error::CPTCodeNotFound => "C P T Code Not Found",
+            Error::InvalidCodeFormat => "Invalid Code Format",
+            Error::CodeMappingFailed => "Code Mapping Failed",
+        };
+        f.write_str(message)
+    }
+}
+
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::EmptyClinicalNote => symbol_short!("ADD_TEXT"),

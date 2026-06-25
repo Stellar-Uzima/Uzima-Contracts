@@ -33,6 +33,23 @@ pub enum MentalHealthError {
     InvalidInput = 8,
 }
 
+impl core::fmt::Display for MentalHealthError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            MentalHealthError::AlreadyInitialized => "Already Initialized",
+            MentalHealthError::NotInitialized => "Not Initialized",
+            MentalHealthError::NotAdmin => "Not Admin",
+            MentalHealthError::Paused => "Paused",
+            MentalHealthError::NotEnrolled => "Not Enrolled",
+            MentalHealthError::CommunityNotFound => "Community Not Found",
+            MentalHealthError::AlreadyMember => "Already Member",
+            MentalHealthError::InvalidInput => "Invalid Input",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum CrisisSeverity {

@@ -38,6 +38,37 @@ pub enum Error {
     MaxTemplatesReached = 513,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::SenderNotAuthorized => "Sender Not Authorized",
+            Error::BatchTooLarge => "Batch Too Large",
+            Error::RecipientsEmpty => "Recipients Empty",
+            Error::TitleTooLong => "Title Too Long",
+            Error::MessageTooLong => "Message Too Long",
+            Error::NameTooLong => "Name Too Long",
+            Error::LocaleTooLong => "Locale Too Long",
+            Error::InvalidNotifType => "Invalid Notif Type",
+            Error::TooManyEnabledTypes => "Too Many Enabled Types",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::RateLimitExceeded => "Rate Limit Exceeded",
+            Error::AlreadyRead => "Already Read",
+            Error::AlreadyArchived => "Already Archived",
+            Error::NotificationNotFound => "Notification Not Found",
+            Error::AlertRuleNotFound => "Alert Rule Not Found",
+            Error::TemplateNotFound => "Template Not Found",
+            Error::SenderNotFound => "Sender Not Found",
+            Error::MaxSendersReached => "Max Senders Reached",
+            Error::MaxRulesReached => "Max Rules Reached",
+            Error::MaxNotificationsReached => "Max Notifications Reached",
+            Error::MaxTemplatesReached => "Max Templates Reached",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::SenderNotAuthorized => symbol_short!("CHK_AUTH"),

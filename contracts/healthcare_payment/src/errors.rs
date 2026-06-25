@@ -48,6 +48,43 @@ pub enum Error {
     Reentrancy = 800,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::UnauthorizedCaller => "Unauthorized Caller",
+            Error::NotAuthorizedPauser => "Not Authorized Pauser",
+            Error::InvalidAmount => "Invalid Amount",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::InvalidCoverage => "Invalid Coverage",
+            Error::PolicyMismatch => "Policy Mismatch",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::CircuitOpen => "Circuit Open",
+            Error::InvalidStatus => "Invalid Status",
+            Error::AlreadyInState => "Already In State",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::ClaimNotFound => "Claim Not Found",
+            Error::PreAuthNotFound => "Pre Auth Not Found",
+            Error::PaymentPlanNotFound => "Payment Plan Not Found",
+            Error::InsuranceProviderNotFound => "Insurance Provider Not Found",
+            Error::CoveragePolicyNotFound => "Coverage Policy Not Found",
+            Error::EligibilityCheckNotFound => "Eligibility Check Not Found",
+            Error::ClaimSubmissionNotFound => "Claim Submission Not Found",
+            Error::EobNotFound => "Eob Not Found",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::StorageFull => "Storage Full",
+            Error::FraudDetected => "Fraud Detected",
+            Error::EscrowFailed => "Escrow Failed",
+            Error::UnsupportedTransaction => "Unsupported Transaction",
+            Error::CrossChainTimeout => "Cross Chain Timeout",
+            Error::Reentrancy => "Reentrancy",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),

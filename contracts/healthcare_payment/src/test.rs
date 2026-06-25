@@ -20,6 +20,15 @@ pub enum MockRoleError {
     Unauthorized = 100,
 }
 
+impl core::fmt::Display for MockRoleError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            MockRoleError::Unauthorized => "Unauthorized",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 struct MockRbac;
 

@@ -71,3 +71,20 @@ pub enum Error {
     InvalidHorizon = 8,
     EmptyInput = 9,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ConfigNotSet => "Config Not Set",
+            Error::Disabled => "Disabled",
+            Error::InvalidValue => "Invalid Value",
+            Error::InvalidConfidence => "Invalid Confidence",
+            Error::RecordNotFound => "Record Not Found",
+            Error::LowConfidence => "Low Confidence",
+            Error::InvalidHorizon => "Invalid Horizon",
+            Error::EmptyInput => "Empty Input",
+        };
+        f.write_str(message)
+    }
+}

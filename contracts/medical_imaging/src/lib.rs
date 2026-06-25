@@ -323,6 +323,38 @@ pub enum Error {
     ReportsNotYetAvailable = 23,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::ImageNotFound => "Image Not Found",
+            Error::ModelNotFound => "Model Not Found",
+            Error::ShareNotFound => "Share Not Found",
+            Error::ShareExpired => "Share Expired",
+            Error::AnnotationNotFound => "Annotation Not Found",
+            Error::LinkNotFound => "Link Not Found",
+            Error::DuplicateDicomSop => "Duplicate Dicom Sop",
+            Error::IntegrityMismatch => "Integrity Mismatch",
+            Error::StudyNotFound => "Study Not Found",
+            Error::StudyNotInExpectedStatus => "Study Not In Expected Status",
+            Error::ReaderNotAssigned => "Reader Not Assigned",
+            Error::ReaderAlreadySubmitted => "Reader Already Submitted",
+            Error::TooManyReaders => "Too Many Readers",
+            Error::TooManyImages => "Too Many Images",
+            Error::AllReadersNotSubmitted => "All Readers Not Submitted",
+            Error::ArbitratorNotAssigned => "Arbitrator Not Assigned",
+            Error::InvalidStatusTransition => "Invalid Status Transition",
+            Error::ReportsNotYetAvailable => "Reports Not Yet Available",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct MedicalImagingContract;
 

@@ -40,6 +40,24 @@ pub enum PatientPortalError {
     NotAppointmentOwner = 10,
 }
 
+impl core::fmt::Display for PatientPortalError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            PatientPortalError::AlreadyInitialized => "Already Initialized",
+            PatientPortalError::NotInitialized => "Not Initialized",
+            PatientPortalError::NotAdmin => "Not Admin",
+            PatientPortalError::Paused => "Paused",
+            PatientPortalError::AlreadyRegistered => "Already Registered",
+            PatientPortalError::NotRegistered => "Not Registered",
+            PatientPortalError::AppointmentNotFound => "Appointment Not Found",
+            PatientPortalError::ExportTooManyRecords => "Export Too Many Records",
+            PatientPortalError::InvalidInput => "Invalid Input",
+            PatientPortalError::NotAppointmentOwner => "Not Appointment Owner",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AppointmentStatus {

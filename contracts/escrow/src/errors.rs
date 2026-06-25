@@ -29,6 +29,28 @@ pub enum Error {
     Overflow = 562,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::NotAdmin => "Not Admin",
+            Error::InsufficientApprovals => "Insufficient Approvals",
+            Error::InvalidAmount => "Invalid Amount",
+            Error::InvalidFeeBps => "Invalid Fee Bps",
+            Error::FeeNotSet => "Fee Not Set",
+            Error::ReentrancyGuard => "Reentrancy Guard",
+            Error::InvalidStateTransition => "Invalid State Transition",
+            Error::EscrowExists => "Escrow Exists",
+            Error::EscrowNotFound => "Escrow Not Found",
+            Error::AlreadySettled => "Already Settled",
+            Error::NoBasisToRefund => "No Basis To Refund",
+            Error::NoCredit => "No Credit",
+            Error::Overflow => "Overflow",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized | Error::NotAdmin | Error::InsufficientApprovals => {

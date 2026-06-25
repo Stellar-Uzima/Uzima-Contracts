@@ -280,6 +280,32 @@ pub enum Error {
     CostLimitExceeded = 18,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::TargetNotFound => "Target Not Found",
+            Error::BackupNotFound => "Backup Not Found",
+            Error::RestoreRequestNotFound => "Restore Request Not Found",
+            Error::RecoveryTestNotFound => "Recovery Test Not Found",
+            Error::ScheduleNotDue => "Schedule Not Due",
+            Error::InsufficientTargets => "Insufficient Targets",
+            Error::GeoRedundancyNotMet => "Geo Redundancy Not Met",
+            Error::EncryptionRequired => "Encryption Required",
+            Error::IntegrityMismatch => "Integrity Mismatch",
+            Error::RestoreNotApproved => "Restore Not Approved",
+            Error::AlreadyExecuted => "Already Executed",
+            Error::DuplicateApproval => "Duplicate Approval",
+            Error::CostLimitExceeded => "Cost Limit Exceeded",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct MedicalRecordBackupContract;
 

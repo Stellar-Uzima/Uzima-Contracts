@@ -159,6 +159,22 @@ pub enum Error {
     CacheMiss = 8,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::RecordNotIndexed => "Record Not Indexed",
+            Error::QueryTooLarge => "Query Too Large",
+            Error::CacheMiss => "Cache Miss",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct MedicalRecordSearchContract;
 

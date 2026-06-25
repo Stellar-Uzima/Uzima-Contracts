@@ -17,6 +17,26 @@ pub enum Error {
     InvalidInput = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::ProfileNotFound => "Profile Not Found",
+            Error::ProfileAlreadyExists => "Profile Already Exists",
+            Error::InvalidSpecialty => "Invalid Specialty",
+            Error::InvalidAvailability => "Invalid Availability",
+            Error::NotVerified => "Not Verified",
+            Error::ContractPaused => "Contract Paused",
+            Error::InputTooLong => "Input Too Long",
+            Error::InvalidInput => "Invalid Input",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ProviderProfile {

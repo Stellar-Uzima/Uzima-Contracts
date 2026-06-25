@@ -240,6 +240,37 @@ pub enum Error {
     SwapAlreadyProcessed = 23,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::GrantNotFound => "Grant Not Found",
+            Error::GrantExpired => "Grant Expired",
+            Error::GrantRevoked => "Grant Revoked",
+            Error::RequestNotFound => "Request Not Found",
+            Error::RequestExpired => "Request Expired",
+            Error::RequestAlreadyProcessed => "Request Already Processed",
+            Error::DelegationNotFound => "Delegation Not Found",
+            Error::DelegationExpired => "Delegation Expired",
+            Error::InsufficientPermissions => "Insufficient Permissions",
+            Error::EmergencyNotEnabled => "Emergency Not Enabled",
+            Error::EmergencyNotAuthorized => "Emergency Not Authorized",
+            Error::InvalidScope => "Invalid Scope",
+            Error::InvalidCondition => "Invalid Condition",
+            Error::AuditRequired => "Audit Required",
+            Error::SingleUseConsumed => "Single Use Consumed",
+            Error::TimeRestrictionViolated => "Time Restriction Violated",
+            Error::Overflow => "Overflow",
+            Error::SwapNotFound => "Swap Not Found",
+            Error::SwapExpired => "Swap Expired",
+            Error::SwapAlreadyProcessed => "Swap Already Processed",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct CrossChainAccessContract;
 
@@ -494,7 +525,9 @@ impl CrossChainAccessContract {
         }
 
         let now = env.ledger().timestamp();
-        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY)
+            .is_err()
+        {
             request.status = RequestStatus::Expired;
             requests.set(request_id, request);
             env.storage()

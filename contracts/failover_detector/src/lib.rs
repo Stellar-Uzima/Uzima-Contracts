@@ -99,6 +99,24 @@ pub enum Error {
     RecoveryFailed = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::NodeNotFound => "Node Not Found",
+            Error::FailoverNotFound => "Failover Not Found",
+            Error::NoAvailableTargets => "No Available Targets",
+            Error::FailoverInProgress => "Failover In Progress",
+            Error::MaxFailuresReached => "Max Failures Reached",
+            Error::RecoveryFailed => "Recovery Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================

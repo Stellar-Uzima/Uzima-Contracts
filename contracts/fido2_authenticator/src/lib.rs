@@ -71,6 +71,35 @@ pub enum Error {
     AlgorithmKeyMismatch = 21,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::DeviceNotFound => "Device Not Found",
+            Error::DeviceAlreadyRegistered => "Device Already Registered",
+            Error::MaxDevicesReached => "Max Devices Reached",
+            Error::DeviceInactive => "Device Inactive",
+            Error::InvalidPublicKey => "Invalid Public Key",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::InvalidAuthenticatorData => "Invalid Authenticator Data",
+            Error::ChallengeExpired => "Challenge Expired",
+            Error::NoChallengeIssued => "No Challenge Issued",
+            Error::SignCountRegression => "Sign Count Regression",
+            Error::InvalidDeviceName => "Invalid Device Name",
+            Error::InvalidCredentialIdHash => "Invalid Credential Id Hash",
+            Error::ZkVerifierNotSet => "Zk Verifier Not Set",
+            Error::NullifierAlreadyUsed => "Nullifier Already Used",
+            Error::RpIdMismatch => "Rp Id Mismatch",
+            Error::UserPresenceNotVerified => "User Presence Not Verified",
+            Error::InvalidRevocationReason => "Invalid Revocation Reason",
+            Error::AlgorithmKeyMismatch => "Algorithm Key Mismatch",
+        };
+        f.write_str(message)
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Data types
 // ═══════════════════════════════════════════════════════════════════════════

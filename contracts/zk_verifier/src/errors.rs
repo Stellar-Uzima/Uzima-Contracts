@@ -13,6 +13,21 @@ pub enum Error {
     VerificationFailed = 601,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::VersionNotFound => "Version Not Found",
+            Error::InvalidProof => "Invalid Proof",
+            Error::VerificationFailed => "Verification Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),

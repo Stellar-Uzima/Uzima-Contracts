@@ -11,6 +11,17 @@ pub enum Error {
     DisputeNotFound = 3,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::NotArbiter => "Not Arbiter",
+            Error::DisputeNotFound => "Dispute Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct DisputeResolution;
 

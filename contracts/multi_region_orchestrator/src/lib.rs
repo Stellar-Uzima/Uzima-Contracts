@@ -112,6 +112,25 @@ pub enum Error {
     InsufficientReplicas = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::MaxRegionsExceeded => "Max Regions Exceeded",
+            Error::AllRegionsUnavailable => "All Regions Unavailable",
+            Error::FailoverFailed => "Failover Failed",
+            Error::SyncFailed => "Sync Failed",
+            Error::RtoExceeded => "Rto Exceeded",
+            Error::InsufficientReplicas => "Insufficient Replicas",
+        };
+        f.write_str(message)
+    }
+}
+
+
 // ============================================================================
 // Storage Keys
 // ============================================================================

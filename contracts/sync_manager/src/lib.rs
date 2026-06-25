@@ -111,6 +111,24 @@ pub enum Error {
     TargetUnavailable = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::SyncOperationNotFound => "Sync Operation Not Found",
+            Error::SyncFailed => "Sync Failed",
+            Error::ConflictDetected => "Conflict Detected",
+            Error::MaxRetriesExceeded => "Max Retries Exceeded",
+            Error::InconsistentState => "Inconsistent State",
+            Error::TargetUnavailable => "Target Unavailable",
+        };
+        f.write_str(message)
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================

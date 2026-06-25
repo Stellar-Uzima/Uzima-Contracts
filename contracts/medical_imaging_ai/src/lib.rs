@@ -190,6 +190,33 @@ pub enum Error {
     InsufficientSamples = 18,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::ModelNotFound => "Model Not Found",
+            Error::ModelNotActive => "Model Not Active",
+            Error::ModelAlreadyExists => "Model Already Exists",
+            Error::ResultNotFound => "Result Not Found",
+            Error::SegmentationNotFound => "Segmentation Not Found",
+            Error::TooManyFindings => "Too Many Findings",
+            Error::TooManyRegions => "Too Many Regions",
+            Error::InvalidConfidence => "Invalid Confidence",
+            Error::InvalidSeverity => "Invalid Severity",
+            Error::InvalidThreshold => "Invalid Threshold",
+            Error::AttestationInvalid => "Attestation Invalid",
+            Error::DuplicateResult => "Duplicate Result",
+            Error::InsufficientSamples => "Insufficient Samples",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct MedicalImagingAiContract;
 

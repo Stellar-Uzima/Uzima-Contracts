@@ -13,3 +13,15 @@ pub enum Error {
     /// A string or bytes input exceeded the maximum allowed length.
     InputTooLong = 4,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::InputTooLong => "Input Too Long",
+        };
+        f.write_str(message)
+    }
+}

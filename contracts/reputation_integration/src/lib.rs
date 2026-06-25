@@ -19,6 +19,24 @@ pub enum Error {
     SyncFailed = 8,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ProviderNotFound => "Provider Not Found",
+            Error::ReputationContractNotFound => "Reputation Contract Not Found",
+            Error::HealthcareReputationContractNotFound => {
+                "Healthcare Reputation Contract Not Found"
+            },
+            Error::InvalidScoreMapping => "Invalid Score Mapping",
+            Error::SyncFailed => "Sync Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ScoreMapping {

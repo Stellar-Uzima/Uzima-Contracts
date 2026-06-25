@@ -363,6 +363,29 @@ pub enum Error {
     InvalidRegion = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::DataNotFound => "Data Not Found",
+            Error::InvalidAggregationMethod => "Invalid Aggregation Method",
+            Error::PrivacyBudgetExceeded => "Privacy Budget Exceeded",
+            Error::InsufficientPrivilege => "Insufficient Privilege",
+            Error::InvalidSeverity => "Invalid Severity",
+            Error::AlertExpired => "Alert Expired",
+            Error::ModelNotFound => "Model Not Found",
+            Error::InterventionNotFound => "Intervention Not Found",
+            Error::CollaborationNotFound => "Collaboration Not Found",
+            Error::InvalidTimeRange => "Invalid Time Range",
+            Error::InvalidRegion => "Invalid Region",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

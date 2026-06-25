@@ -88,6 +88,17 @@ pub enum MonitoringError {
     Unauthorized = 3,
 }
 
+impl core::fmt::Display for MonitoringError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            MonitoringError::NotInitialized => "Not Initialized",
+            MonitoringError::AlreadyInitialized => "Already Initialized",
+            MonitoringError::Unauthorized => "Unauthorized",
+        };
+        f.write_str(message)
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]

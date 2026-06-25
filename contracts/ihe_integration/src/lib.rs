@@ -427,7 +427,7 @@ pub enum DataKey {
 // ==================== Errors ====================
 
 #[contracterror]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Error {
     NotInitialized = 1,
     AlreadyInitialized = 2,
@@ -454,6 +454,39 @@ pub enum Error {
     ConnectathonTestNotFound = 23,
     EmptyPatientId = 24,
     EmptyDocumentId = 25,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::DocumentNotFound => "Document Not Found",
+            Error::DocumentAlreadyExists => "Document Already Exists",
+            Error::DocumentDeprecated => "Document Deprecated",
+            Error::PatientNotFound => "Patient Not Found",
+            Error::CrossReferenceNotFound => "Cross Reference Not Found",
+            Error::DemographicsNotFound => "Demographics Not Found",
+            Error::AuditEventNotFound => "Audit Event Not Found",
+            Error::GatewayNotFound => "Gateway Not Found",
+            Error::GatewayAlreadyExists => "Gateway Already Exists",
+            Error::MasterPatientNotFound => "Master Patient Not Found",
+            Error::ConsentNotFound => "Consent Not Found",
+            Error::ConsentRevoked => "Consent Revoked",
+            Error::ConsentExpired => "Consent Expired",
+            Error::SignatureNotFound => "Signature Not Found",
+            Error::SignatureInvalid => "Signature Invalid",
+            Error::ProviderNotFound => "Provider Not Found",
+            Error::ValueSetNotFound => "Value Set Not Found",
+            Error::ValueSetOidExists => "Value Set Oid Exists",
+            Error::InvalidHL7Message => "Invalid H L7 Message",
+            Error::ConnectathonTestNotFound => "Connectathon Test Not Found",
+            Error::EmptyPatientId => "Empty Patient Id",
+            Error::EmptyDocumentId => "Empty Document Id",
+        };
+        f.write_str(message)
+    }
 }
 
 // ==================== Contract ====================

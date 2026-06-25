@@ -978,11 +978,7 @@ impl GenomicDataContract {
         lid
     }
 
-    pub fn purchase_listing(
-        env: Env,
-        buyer: Address,
-        listing_id: u64,
-    ) -> Result<(), CommonError> {
+    pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> Result<(), CommonError> {
         buyer.require_auth();
         let l_opt = env
             .storage()

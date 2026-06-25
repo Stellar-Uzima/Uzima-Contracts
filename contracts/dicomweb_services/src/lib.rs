@@ -238,6 +238,30 @@ pub enum Error {
     QueryError = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::StudyNotFound => "Study Not Found",
+            Error::SeriesNotFound => "Series Not Found",
+            Error::InstanceNotFound => "Instance Not Found",
+            Error::BulkDataNotFound => "Bulk Data Not Found",
+            Error::CacheMiss => "Cache Miss",
+            Error::ConcurrencyLimitExceeded => "Concurrency Limit Exceeded",
+            Error::InvalidTransferSyntax => "Invalid Transfer Syntax",
+            Error::InvalidDicomJson => "Invalid Dicom Json",
+            Error::StorageError => "Storage Error",
+            Error::QueryError => "Query Error",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct DicomwebServicesContract;
 
@@ -1206,6 +1230,30 @@ pub enum Error {
     StorageError = 14,
     QueryError = 15,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::InvalidInput => "Invalid Input",
+            Error::StudyNotFound => "Study Not Found",
+            Error::SeriesNotFound => "Series Not Found",
+            Error::InstanceNotFound => "Instance Not Found",
+            Error::BulkDataNotFound => "Bulk Data Not Found",
+            Error::CacheMiss => "Cache Miss",
+            Error::ConcurrencyLimitExceeded => "Concurrency Limit Exceeded",
+            Error::InvalidTransferSyntax => "Invalid Transfer Syntax",
+            Error::InvalidDicomJson => "Invalid Dicom Json",
+            Error::StorageError => "Storage Error",
+            Error::QueryError => "Query Error",
+        };
+        f.write_str(message)
+    }
+}
+
 
 #[contract]
 pub struct DicomwebServicesContract;

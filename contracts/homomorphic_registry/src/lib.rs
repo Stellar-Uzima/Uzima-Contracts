@@ -147,6 +147,28 @@ pub enum Error {
     KeyNotFound = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContextNotFound => "Context Not Found",
+            Error::ContextInactive => "Context Inactive",
+            Error::InvalidInput => "Invalid Input",
+            Error::ComputationAlreadyExists => "Computation Already Exists",
+            Error::CiphertextNotFound => "Ciphertext Not Found",
+            Error::CiphertextAlreadyExists => "Ciphertext Already Exists",
+            Error::SchemeMismatch => "Scheme Mismatch",
+            Error::IncompatibleDimensions => "Incompatible Dimensions",
+            Error::NoiseBudgetExhausted => "Noise Budget Exhausted",
+            Error::ArithmeticOverflow => "Arithmetic Overflow",
+            Error::KeyNotFound => "Key Not Found",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

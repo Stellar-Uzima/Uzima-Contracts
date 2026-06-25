@@ -30,6 +30,25 @@ pub enum Error {
     IndexOutOfBounds = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::InsufficientBalance => "Insufficient Balance",
+            Error::InsufficientAllowance => "Insufficient Allowance",
+            Error::ExceedsSupplyCap => "Exceeds Supply Cap",
+            Error::InvalidAmount => "Invalid Amount",
+            Error::InvalidAddress => "Invalid Address",
+            Error::SnapshotNotFound => "Snapshot Not Found",
+            Error::Overflow => "Overflow",
+            Error::IndexOutOfBounds => "Index Out Of Bounds",
+        };
+        f.write_str(message)
+    }
+}
+
 // Data structures
 #[derive(Clone)]
 #[contracttype]

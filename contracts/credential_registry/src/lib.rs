@@ -79,6 +79,23 @@ pub enum Error {
     InvalidSignature = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::IssuerNotFound => "Issuer Not Found",
+            Error::RootVersionNotFound => "Root Version Not Found",
+            Error::InvalidCredentialId => "Invalid Credential Id",
+            Error::InvalidExpiry => "Invalid Expiry",
+            Error::InvalidMetadata => "Invalid Metadata",
+            Error::InvalidSignature => "Invalid Signature",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct CredentialRegistryContract;
 

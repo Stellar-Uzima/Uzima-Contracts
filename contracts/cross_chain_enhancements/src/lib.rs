@@ -105,6 +105,25 @@ pub enum Error {
     ExpiredMessage = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::InvalidProof => "Invalid Proof",
+            Error::ProofAlreadyVerified => "Proof Already Verified",
+            Error::ProofNotFound => "Proof Not Found",
+            Error::ReplayDetected => "Replay Detected",
+            Error::RateLimitExceeded => "Rate Limit Exceeded",
+            Error::ArithmeticOverflow => "Arithmetic Overflow",
+            Error::InvalidMerklePath => "Invalid Merkle Path",
+            Error::ExpiredMessage => "Expired Message",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

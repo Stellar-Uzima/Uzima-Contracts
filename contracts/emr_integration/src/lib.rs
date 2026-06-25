@@ -284,6 +284,45 @@ pub enum Error {
     UnsupportedEncoding = 31,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ContractPaused => "Contract Paused",
+            Error::EMRSystemNotFound => "E M R System Not Found",
+            Error::EMRSystemAlreadyExists => "E M R System Already Exists",
+            Error::OnboardingNotFound => "Onboarding Not Found",
+            Error::OnboardingAlreadyExists => "Onboarding Already Exists",
+            Error::VerificationNotFound => "Verification Not Found",
+            Error::NetworkNodeNotFound => "Network Node Not Found",
+            Error::AgreementNotFound => "Agreement Not Found",
+            Error::TestNotFound => "Test Not Found",
+            Error::InvalidStatus => "Invalid Status",
+            Error::InvalidEMRSystem => "Invalid E M R System",
+            Error::ProviderNotFound => "Provider Not Found",
+            Error::InvalidNPI => "Invalid N P I",
+            Error::InvalidLicenseNumber => "Invalid License Number",
+            Error::LicenseExpired => "License Expired",
+            Error::InvalidAgreement => "Invalid Agreement",
+            Error::AgreementNotActive => "Agreement Not Active",
+            Error::TestFailed => "Test Failed",
+            Error::InvalidTestType => "Invalid Test Type",
+            Error::DuplicateTest => "Duplicate Test",
+            Error::FHIRContractNotSet => "F H I R Contract Not Set",
+            Error::OperationFailed => "Operation Failed",
+            Error::UnsupportedMessageFormat => "Unsupported Message Format",
+            Error::MessageParseFailed => "Message Parse Failed",
+            Error::UnsupportedMessageType => "Unsupported Message Type",
+            Error::InvalidMessagePayload => "Invalid Message Payload",
+            Error::MessageNotFound => "Message Not Found",
+            Error::ValidationReportNotFound => "Validation Report Not Found",
+            Error::TransformationNotFound => "Transformation Not Found",
+            Error::UnsupportedEncoding => "Unsupported Encoding",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct EMRIntegrationContract;
 

@@ -261,6 +261,29 @@ pub enum Error {
     UnsupportedDataLakeProvider = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::InvalidInput => "Invalid Input",
+            Error::PrivacyThresholdNotMet => "Privacy Threshold Not Met",
+            Error::MetricNotFound => "Metric Not Found",
+            Error::TemplateNotFound => "Template Not Found",
+            Error::ScheduleNotFound => "Schedule Not Found",
+            Error::ComplianceNotFound => "Compliance Not Found",
+            Error::AiAnalyticsNotConfigured => "Ai Analytics Not Configured",
+            Error::AiRoundNotFound => "Ai Round Not Found",
+            Error::DataLakeNotFound => "Data Lake Not Found",
+            Error::ExportNotFound => "Export Not Found",
+            Error::UnsupportedDataLakeProvider => "Unsupported Data Lake Provider",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct HealthcareAnalyticsDashboardContract;
 

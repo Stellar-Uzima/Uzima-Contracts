@@ -101,6 +101,24 @@ pub enum Error {
     AlreadyInitialized = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ConfigNotSet => "Config Not Set",
+            Error::Disabled => "Disabled",
+            Error::InvalidScore => "Invalid Score",
+            Error::InvalidSeverity => "Invalid Severity",
+            Error::RecordNotFound => "Record Not Found",
+            Error::NotWhitelisted => "Not Whitelisted",
+            Error::AlertNotFound => "Alert Not Found",
+            Error::AlertAlreadyResolved => "Alert Already Resolved",
+            Error::AlreadyInitialized => "Already Initialized",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct AnomalyDetectionContract;
 
@@ -215,11 +233,7 @@ impl AnomalyDetectionContract {
         Ok(())
     }
 
-    pub fn set_audit_forensics(
-        env: Env,
-        admin: Address,
-        forensics: Address,
-    ) -> Result<(), Error> {
+    pub fn set_audit_forensics(env: Env, admin: Address, forensics: Address) -> Result<(), Error> {
         admin.require_auth();
         Self::ensure_admin(&env, &admin)?;
         env.storage()

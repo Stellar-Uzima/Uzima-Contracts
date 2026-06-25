@@ -156,6 +156,30 @@ pub enum Error {
     SettlementTimeout = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::ProviderNotActive => "Provider Not Active",
+            Error::ProviderExists => "Provider Exists",
+            Error::ListingNotFound => "Listing Not Found",
+            Error::InvalidPricing => "Invalid Pricing",
+            Error::InvalidQuality => "Invalid Quality",
+            Error::InvalidRoyalty => "Invalid Royalty",
+            Error::InvalidAnonymization => "Invalid Anonymization",
+            Error::InvalidSettlementWindow => "Invalid Settlement Window",
+            Error::InvalidStatus => "Invalid Status",
+            Error::IntentNotFound => "Intent Not Found",
+            Error::EscrowNotLinked => "Escrow Not Linked",
+            Error::SettlementTimeout => "Settlement Timeout",
+        };
+        f.write_str(message)
+    }
+}
+
+
 #[contract]
 pub struct HealthcareDataMarketplace;
 

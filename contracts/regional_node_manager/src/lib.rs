@@ -86,6 +86,25 @@ pub enum Error {
     DuplicateNode = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::NodeNotFound => "Node Not Found",
+            Error::HealthCheckFailed => "Health Check Failed",
+            Error::ReplicaOutOfSync => "Replica Out Of Sync",
+            Error::NodeUnreachable => "Node Unreachable",
+            Error::InvalidThreshold => "Invalid Threshold",
+            Error::DuplicateNode => "Duplicate Node",
+        };
+        f.write_str(message)
+    }
+}
+
+
 // ============================================================================
 // Storage Keys
 // ============================================================================

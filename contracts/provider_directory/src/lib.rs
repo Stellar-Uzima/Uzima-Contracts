@@ -13,6 +13,18 @@ pub enum Error {
     NotAuthorized = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::RateLimitExceeded => "Rate Limit Exceeded",
+            Error::NotAuthorized => "Not Authorized",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,

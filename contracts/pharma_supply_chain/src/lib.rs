@@ -20,6 +20,23 @@ pub enum Error {
     BatchAlreadyExists = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::ManufacturerNotFound => "Manufacturer Not Found",
+            Error::MedicationNotFound => "Medication Not Found",
+            Error::BatchNotFound => "Batch Not Found",
+            Error::ShipmentNotFound => "Shipment Not Found",
+            Error::InvalidInput => "Invalid Input",
+            Error::BatchAlreadyExists => "Batch Already Exists",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum BatchStatus {

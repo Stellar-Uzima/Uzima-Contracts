@@ -404,6 +404,50 @@ pub enum Error {
     BaseProofMissing = 618,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidProof => "Invalid Proof",
+            Error::ProofNotFound => "Proof Not Found",
+            Error::CircuitNotFound => "Circuit Not Found",
+            Error::VerificationFailed => "Verification Failed",
+            Error::GasLimitExceeded => "Gas Limit Exceeded",
+            Error::InvalidInput => "Invalid Input",
+            Error::InvalidRange => "Invalid Range",
+            Error::CredentialExpired => "Credential Expired",
+            Error::InvalidCircuit => "Invalid Circuit",
+            Error::ProofTooLarge => "Proof Too Large",
+            Error::RecursiveDepthExceeded => "Recursive Depth Exceeded",
+            Error::InvalidHashFunction => "Invalid Hash Function",
+            Error::InsufficientFunds => "Insufficient Funds",
+            Error::DeadlineExceeded => "Deadline Exceeded",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::UnauthorizedCaller => "Unauthorized Caller",
+            Error::ContractPaused => "Contract Paused",
+            Error::StorageFull => "Storage Full",
+            Error::CrossChainTimeout => "Cross Chain Timeout",
+            Error::InvalidSigner => "Invalid Signer",
+            Error::InvalidThreshold => "Invalid Threshold",
+            Error::ProposalNotFound => "Proposal Not Found",
+            Error::AlreadyApproved => "Already Approved",
+            Error::TimelockNotExpired => "Timelock Not Expired",
+            Error::AlreadyExecuted => "Already Executed",
+            Error::NotEnoughApprovals => "Not Enough Approvals",
+            Error::MalformedProof => "Malformed Proof",
+            Error::VkMismatch => "Vk Mismatch",
+            Error::InconsistentPublicInputCount => "Inconsistent Public Input Count",
+            Error::InvalidExpirationCiphertext => "Invalid Expiration Ciphertext",
+            Error::InconsistentCommitment => "Inconsistent Commitment",
+            Error::InvalidProofFormat => "Invalid Proof Format",
+            Error::BaseProofMissing => "Base Proof Missing",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

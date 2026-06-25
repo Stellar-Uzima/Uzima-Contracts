@@ -57,6 +57,52 @@ pub enum Error {
     RefundFailed = 804,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::Unauthorized => "Unauthorized",
+            Error::UnauthorizedRelayer => "Unauthorized Relayer",
+            Error::InsufficientConfirmations => "Insufficient Confirmations",
+            Error::InsufficientOracleReports => "Insufficient Oracle Reports",
+            Error::DuplicateOracleReport => "Duplicate Oracle Report",
+            Error::InvalidSignature => "Invalid Signature",
+            Error::InvalidMessage => "Invalid Message",
+            Error::InvalidNonce => "Invalid Nonce",
+            Error::InvalidPayload => "Invalid Payload",
+            Error::InvalidAddress => "Invalid Address",
+            Error::BatchTooLarge => "Batch Too Large",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::ContractPaused => "Contract Paused",
+            Error::Overflow => "Overflow",
+            Error::MessageNotFound => "Message Not Found",
+            Error::MessageExpired => "Message Expired",
+            Error::MessageAlreadyProcessed => "Message Already Processed",
+            Error::AtomicTxNotFound => "Atomic Tx Not Found",
+            Error::AtomicTxExpired => "Atomic Tx Expired",
+            Error::AtomicTxAlreadyProcessed => "Atomic Tx Already Processed",
+            Error::RecordRefNotFound => "Record Ref Not Found",
+            Error::RollbackNotFound => "Rollback Not Found",
+            Error::RollbackAlreadyProcessed => "Rollback Already Processed",
+            Error::EventNotFound => "Event Not Found",
+            Error::ValidatorNotFound => "Validator Not Found",
+            Error::ValidatorNotActive => "Validator Not Active",
+            Error::DuplicateConfirmation => "Duplicate Confirmation",
+            Error::ProofNotFound => "Proof Not Found",
+            Error::ProofAlreadyVerified => "Proof Already Verified",
+            Error::InvalidChain => "Invalid Chain",
+            Error::ChainNotSupported => "Chain Not Supported",
+            Error::OracleNotFound => "Oracle Not Found",
+            Error::OracleNotActive => "Oracle Not Active",
+            Error::OperationNotFound => "Operation Not Found",
+            Error::OperationExpired => "Operation Expired",
+            Error::OperationAlreadyCompleted => "Operation Already Completed",
+            Error::MaxExtensionsReached => "Max Extensions Reached",
+            Error::RefundFailed => "Refund Failed",
+        };
+        f.write_str(message)
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized

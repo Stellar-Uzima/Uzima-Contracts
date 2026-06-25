@@ -114,6 +114,23 @@ pub enum Error {
     AlreadyInitialized = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotAuthorized => "Not Authorized",
+            Error::ConfigNotSet => "Config Not Set",
+            Error::ModelNotFound => "Model Not Found",
+            Error::InvalidScore => "Invalid Score",
+            Error::LowConfidence => "Low Confidence",
+            Error::AssessmentNotFound => "Assessment Not Found",
+            Error::InvalidModel => "Invalid Model",
+            Error::DuplicateModel => "Duplicate Model",
+            Error::AlreadyInitialized => "Already Initialized",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct PatientRiskStratificationContract;
 

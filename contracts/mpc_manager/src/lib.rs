@@ -165,6 +165,29 @@ pub enum Error {
     InsufficientParticipants = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::InvalidInput => "Invalid Input",
+            Error::SessionNotFound => "Session Not Found",
+            Error::SessionExpired => "Session Expired",
+            Error::InvalidState => "Invalid State",
+            Error::DuplicateCommit => "Duplicate Commit",
+            Error::DuplicateReveal => "Duplicate Reveal",
+            Error::ThresholdNotMet => "Threshold Not Met",
+            Error::InvalidShare => "Invalid Share",
+            Error::ComputationFailed => "Computation Failed",
+            Error::ProofVerificationFailed => "Proof Verification Failed",
+            Error::GasLimitExceeded => "Gas Limit Exceeded",
+            Error::InsufficientParticipants => "Insufficient Participants",
+        };
+        f.write_str(message)
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================

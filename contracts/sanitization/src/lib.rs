@@ -24,6 +24,19 @@ pub enum SanitizationError {
     InvalidFormat = 5,
 }
 
+impl core::fmt::Display for SanitizationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            SanitizationError::InputTooLong => "Input Too Long",
+            SanitizationError::EmptyInput => "Empty Input",
+            SanitizationError::NullByte => "Null Byte",
+            SanitizationError::InvalidCharacter => "Invalid Character",
+            SanitizationError::InvalidFormat => "Invalid Format",
+        };
+        f.write_str(message)
+    }
+}
+
 /// Validates a general-purpose string: non-empty, within `max_len` bytes,
 /// no null bytes, no ASCII control characters (allows tab/LF/CR).
 pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), SanitizationError> {

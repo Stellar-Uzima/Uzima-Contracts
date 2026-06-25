@@ -62,6 +62,24 @@ pub enum Error {
     InvalidFeePercentage = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::InvalidSignature => "Invalid Signature",
+            Error::InvalidNonce => "Invalid Nonce",
+            Error::RequestExpired => "Request Expired",
+            Error::ExecutionFailed => "Execution Failed",
+            Error::Unauthorized => "Unauthorized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::OwnerNotSet => "Owner Not Set",
+            Error::BatchLengthMismatch => "Batch Length Mismatch",
+            Error::PubKeyNotRegistered => "Pub Key Not Registered",
+            Error::InvalidFeePercentage => "Invalid Fee Percentage",
+        };
+        f.write_str(message)
+    }
+}
+
 // ============================================================================
 // Data Structures
 // ============================================================================

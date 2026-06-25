@@ -23,6 +23,25 @@ pub enum Error {
     AutoRefillDisabled = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotInitialized => "Not Initialized",
+            Error::Unauthorized => "Unauthorized",
+            Error::MedicationNotFound => "Medication Not Found",
+            Error::ScheduleNotFound => "Schedule Not Found",
+            Error::InvalidData => "Invalid Data",
+            Error::RefillNotFound => "Refill Not Found",
+            Error::InteractionAlreadyExists => "Interaction Already Exists",
+            Error::DuplicateMedication => "Duplicate Medication",
+            Error::DoseAlreadyRecorded => "Dose Already Recorded",
+            Error::AutoRefillDisabled => "Auto Refill Disabled",
+        };
+        f.write_str(message)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum MedicationSource {

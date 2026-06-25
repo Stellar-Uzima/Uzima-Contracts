@@ -70,6 +70,19 @@ pub enum Error {
     BatchTooLarge = 5,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let message = match self {
+            Error::NotInitialized => "Not Initialized",
+            Error::AlreadyInitialized => "Already Initialized",
+            Error::NotAuthorized => "Not Authorized",
+            Error::Paused => "Paused",
+            Error::BatchTooLarge => "Batch Too Large",
+        };
+        f.write_str(message)
+    }
+}
+
 #[contract]
 pub struct StorageCleanup;
 
