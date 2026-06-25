@@ -573,4 +573,31 @@ soroban config network add --global custom \
 
 ---
 
+## Deterministic Build Verification (audited == deployed)
+
+Before deploying, record the SHA-256 of the exact artifacts you are shipping so
+the deployed bytecode can be proven to match the audited build. After deploying
+(and in CI), verify a fresh build still matches that record.
+
+```sh
+# 1. Build release artifacts from the pinned toolchain (rust-toolchain.toml)
+make dist
+
+# 2. Record the audited hashes for this network + release, with the auditor key
+./scripts/verify_deployment.sh record testnet v1.0.0 <auditor_pubkey>
+#    -> deployments/testnet/v1.0.0/hashes.txt   (commit this file)
+
+# 3. Deploy as usual (see sections above), then verify nothing drifted
+make dist
+./scripts/verify_deployment.sh compare testnet v1.0.0
+```
+
+`compare` exits non-zero on any mismatch (failing CI), and is a no-op when no
+record exists yet for the target. See
+[`docs/SECURITY_BEST_PRACTICES.md`](./SECURITY_BEST_PRACTICES.md) §8 and
+[`deployments/README.md`](../deployments/README.md) for the full workflow,
+file format, and the `Signed-by:` convention.
+
+---
+
 This guide provides a comprehensive foundation for deploying Soroban contracts. For more advanced topics, see the [Contract Interaction Guide](./SOROBAN_CLI_INTERACTION.md) and [Development Guide](./SOROBAN_CLI_DEVELOPMENT.md).
