@@ -417,6 +417,155 @@ fn test_expired_request_rejected() {
 }
 
 // ===========================================================================
+// Deadline / Timeout edge cases
+// ===========================================================================
+
+#[test]
+fn test_deadline_equal_to_current_timestamp_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let user = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    env.ledger().with_mut(|l| l.timestamp = 5000);
+    let now = env.ledger().timestamp();
+    let req = build_add_request(&env, &user, &target.address, 0, now, 3, 4);
+    let sig = sign_request(&env, &fwd.address, &user.signing_key, &req);
+    let res = fwd.try_execute(&relayer, &req, &sig);
+    assert!(res.is_ok(), "deadline == now must be accepted");
+}
+
+#[test]
+fn test_deadline_zero_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let user = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    env.ledger().with_mut(|l| l.timestamp = 1);
+    let req = build_add_request(&env, &user, &target.address, 0, 0, 5, 6);
+    let sig = sign_request(&env, &fwd.address, &user.signing_key, &req);
+    let res = fwd.try_execute(&relayer, &req, &sig);
+    assert_eq!(res, Err(Ok(Error::RequestExpired)));
+}
+
+#[test]
+fn test_deadline_max_u64_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let user = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    let req = build_add_request(&env, &user, &target.address, 0, u64::MAX, 7, 8);
+    let sig = sign_request(&env, &fwd.address, &user.signing_key, &req);
+    let res = fwd.try_execute(&relayer, &req, &sig);
+    assert!(res.is_ok(), "deadline == u64::MAX must be accepted");
+}
+
+#[test]
+fn test_batch_continues_on_first_expired_request() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let u1 = make_user(&env, &fwd, &owner);
+    let u2 = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    env.ledger().with_mut(|l| l.timestamp = 1000);
+
+    // Request 1: expired
+    let r1 = build_add_request(&env, &u1, &target.address, 0, 500, 1, 2);
+    // Request 2: valid
+    let r2 = build_add_request(&env, &u2, &target.address, 0, 2000, 10, 20);
+    let s1 = sign_request(&env, &fwd.address, &u1.signing_key, &r1);
+    let s2 = sign_request(&env, &fwd.address, &u2.signing_key, &r2);
+
+    // Batch execution stops at the first failure
+    let res = fwd.try_execute_batch(
+        &relayer,
+        &vec![&env, r1.clone(), r2.clone()],
+        &vec![&env, s1.clone(), s2.clone()],
+    );
+    assert_eq!(res, Err(Ok(Error::RequestExpired)));
+    // Nonce of user 1 should not have advanced (first request failed)
+    assert_eq!(fwd.get_nonce(&u1.addr), 0);
+}
+
+#[test]
+fn test_batch_with_all_different_deadlines() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let u1 = make_user(&env, &fwd, &owner);
+    let u2 = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    env.ledger().with_mut(|l| l.timestamp = 5000);
+
+    let r1 = build_add_request(&env, &u1, &target.address, 0, 6000, 1, 2);
+    let r2 = build_add_request(&env, &u2, &target.address, 0, 7000, 3, 4);
+    let s1 = sign_request(&env, &fwd.address, &u1.signing_key, &r1);
+    let s2 = sign_request(&env, &fwd.address, &u2.signing_key, &r2);
+
+    let res = fwd.execute_batch(
+        &relayer,
+        &vec![&env, r1, r2],
+        &vec![&env, s1, s2],
+    );
+    assert_eq!(res.len(), 2);
+    assert_eq!(fwd.get_nonce(&u1.addr), 1);
+    assert_eq!(fwd.get_nonce(&u2.addr), 1);
+}
+
+#[test]
+fn test_deadline_just_before_current_timestamp_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (_fid, fwd) = install_forwarder(&env);
+    let owner = Address::generate(&env);
+    let fc = Address::generate(&env);
+    initialize(&env, &fwd, &owner, &fc);
+    let user = make_user(&env, &fwd, &owner);
+    let (_tid, target) = install_mock_target(&env);
+    let relayer = Address::generate(&env);
+    fwd.register_relayer(&owner, &relayer, &100u32);
+
+    env.ledger().with_mut(|l| l.timestamp = 100);
+    let req = build_add_request(&env, &user, &target.address, 0, 99, 1, 1);
+    let sig = sign_request(&env, &fwd.address, &user.signing_key, &req);
+    let res = fwd.try_execute(&relayer, &req, &sig);
+    assert_eq!(res, Err(Ok(Error::RequestExpired)));
+}
+
+// ===========================================================================
 // Signature verification
 // ===========================================================================
 
