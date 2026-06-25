@@ -667,6 +667,8 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 
 ## 🤝 Contribution Guidelines
 
+> **Adding a new contract?** See [CONTRIBUTING.md](CONTRIBUTING.md) for the step-by-step guide covering workspace registration, CI checks, and the review checklist.
+
 We welcome contributions from the community! Please follow these guidelines to ensure smooth collaboration.
 
 ### Getting Started
