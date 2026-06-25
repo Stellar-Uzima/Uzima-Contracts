@@ -1,0 +1,22 @@
+{
+  "contract": "timelock",
+  "events": [
+    {
+      "name": "Queued",
+      "topics": ["Queued"],
+      "data": {
+        "id": "u64",
+        "eta": "u64"
+      }
+    },
+    {
+      "name": "Exec",
+      "topics": ["Exec"],
+      "data": {
+        "id": "u64",
+        "target": "Address",
+        "call": "BytesN<32>"
+      }
+    }
+  ]
+}
