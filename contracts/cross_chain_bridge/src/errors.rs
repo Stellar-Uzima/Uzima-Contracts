@@ -17,7 +17,7 @@ pub enum Error {
     InvalidNonce = 281,
     InvalidPayload = 282,
     InvalidAddress = 290,
-    BatchTooLarge = 291,
+    BatchTooLarge = 283,
 
     // --- Lifecycle & State (300–399) ---
     AlreadyInitialized = 301,
