@@ -1,0 +1,62 @@
+# Security Audit (issue #913)
+#
+# Runs `cargo audit` (RustSec advisory database) against the resolved
+# dependency graph. The existing `scripts/security-scan.sh` already shells out
+# to `cargo audit`, but nothing wired it into CI, so dependency advisories were
+# never enforced on a PR. This workflow closes that gap.
+#
+# Scope of enforcement:
+#   - Every pull request and every push to `main`/`develop` runs the audit and
+#     FAILS the job on any active, non-ignored advisory. With this job marked
+#     "required" in branch protection, that blocks the merge.
+#   - A daily scheduled run re-audits already-merged code so advisories
+#     published *after* a merge are surfaced; GitHub emails the maintainers when
+#     a scheduled run fails, which is the "alert on new advisories" path.
+#
+# Known, non-applicable advisories are documented with a justification in
+# `.cargo/audit.toml` (auto-loaded by cargo-audit). That keeps the gate green
+# for transitive advisories we cannot act on while still blocking new ones.
+#
+# A dedicated workflow (rather than a job inside ci.yml) is deliberate: the
+# `schedule:` trigger should run ONLY the audit, not the full test/build/quality
+# matrix in ci.yml.
+name: Security Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Daily at 06:00 UTC.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref to save CI minutes. The daily
+# scheduled run uses a distinct group so a push cannot cancel it.
+concurrency:
+  group: security-audit-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  cargo-audit:
+    name: cargo-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Generate Cargo.lock
+        # Cargo.lock is intentionally git-ignored for this workspace (see
+        # .gitignore), so the advisory scan resolves a fresh lockfile from the
+        # committed manifests before auditing.
+        run: cargo generate-lockfile
+      - name: Run cargo audit
+        # Reads `.cargo/audit.toml` for the documented ignore list and exits
+        # non-zero on any non-ignored advisory, failing the job and blocking the
+        # merge.
+        run: cargo audit

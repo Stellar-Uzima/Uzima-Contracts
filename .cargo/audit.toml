@@ -1,0 +1,45 @@
+# cargo-audit configuration (issue #913)
+#
+# Auto-loaded by `cargo audit` (cargo-audit >= 0.18) when run from the repo
+# root. The `ignore` list below silences advisories that are KNOWN to be
+# non-applicable to this project. Every entry MUST carry a justification and,
+# where one exists, a remediation/tracking note. New advisories that are not
+# listed here will fail CI (see .github/workflows/security-audit.yml).
+#
+# Review cadence: the daily scheduled audit re-runs against the live advisory
+# DB, so a justification that becomes stale (e.g. an upgrade path opens up)
+# will resurface here for removal.
+
+[advisories]
+ignore = [
+    # --- rustls-webpki 0.101.7 (transitive, off-chain tooling only) ----------
+    # Dependency path:
+    #   rustls-webpki 0.101.7
+    #     <- rustls 0.21  <- hyper-rustls / tokio-rustls
+    #       <- octocrab 0.32 / reqwest 0.11
+    #         <- contract_optimizer  (feature = "cli", a std HOST binary)
+    #
+    # These advisories concern TLS certificate / CRL parsing. They are reachable
+    # ONLY from the off-chain `contract_optimizer` CLI when it makes HTTPS calls
+    # to the GitHub API. None of the on-chain Soroban contracts can link this
+    # code: contracts are `#![no_std]`, compile to wasm32-unknown-unknown, and
+    # have zero dependency on octocrab/reqwest/rustls (the `cli` feature is
+    # explicitly gated off for the wasm build). So the on-chain attack surface
+    # is unaffected.
+    #
+    # Remediation requires a major bump of octocrab (0.32 -> 0.53+) and reqwest
+    # (0.11 -> 0.12+) to pull rustls 0.23 / rustls-webpki 0.103. That is a
+    # breaking change to contract_optimizer's GitHub client and is intentionally
+    # OUT OF SCOPE for the CI-integration work in #913; it should be tracked as
+    # its own dependency-upgrade issue. Remove these ignores once that lands.
+    "RUSTSEC-2026-0104", # rustls-webpki: reachable panic in CRL parsing
+    "RUSTSEC-2026-0098", # rustls-webpki: name constraints for URI names wrongly accepted
+    "RUSTSEC-2026-0099", # rustls-webpki: name constraints accepted for wildcard certs
+]
+
+# NOTE: the `unmaintained` informational advisories currently reported
+# (RUSTSEC-2024-0436 paste, RUSTSEC-2025-0134 rustls-pemfile) are deliberately
+# NOT ignored. cargo-audit treats them as non-blocking warnings, so they stay
+# visible in CI output for tracking without failing the build. Add a
+# `deny = ["unmaintained"]` policy here only when the project is ready to gate
+# on them.
