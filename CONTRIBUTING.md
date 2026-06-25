@@ -39,6 +39,18 @@ bash scripts/check-naming.sh
 - Include examples for complex functions
 - Update relevant documentation when changing functionality
 
+### Secret Scanning
+Never commit secrets (Stellar seeds, RPC keys, API tokens, private keys). The
+repo enforces this with [`gitleaks`](https://github.com/gitleaks/gitleaks) both
+locally and in CI. Install the pre-commit hook once:
+```bash
+pip install pre-commit   # or: brew install pre-commit
+pre-commit install       # scans staged changes on every commit
+```
+CI also runs a secret scan on every push and PR and **blocks merges** on any
+finding. See the [Secret Management Policy](./docs/SECRET_MANAGEMENT.md) for the
+full policy, allowlist rules, and what to do if a scan flags something.
+
 ## Testing Requirements
 
 ### Unit Tests
@@ -65,6 +77,7 @@ bash scripts/check-naming.sh
 - [ ] Documentation is updated
 - [ ] No new Clippy warnings
 - [ ] Code is properly formatted
+- [ ] No secrets committed (gitleaks pre-commit hook passes)
 - [ ] Contract review checklist items have been considered for correctness, safety, and testing
 
 ## Contract Review Checklist
@@ -102,6 +115,7 @@ The project uses GitHub Actions for CI/CD. The pipeline includes:
 - Linting (Clippy)
 - Testing
 - Formatting check
+- Secret scanning (gitleaks)
 
 ## Getting Help
 - Review existing documentation in the `docs/` directory
