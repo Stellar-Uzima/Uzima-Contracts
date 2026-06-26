@@ -1,0 +1,7 @@
+
+# .trufflehog.yaml
+# Trufflehog configuration file
+
+# Exclude the plan.json file from secret scanning
+exclude:
+  - deployments/testnet/medical_records/plan.json

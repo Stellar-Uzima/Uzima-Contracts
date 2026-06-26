@@ -43,8 +43,8 @@ repos:
         entry: shellcheck
         args: ["-s", "bash", "-x"]
 
-      - id: check-error-codes
-        name: check error codes
-        language: system
-        entry: bash scripts/check_error_codes.sh
-        pass_filenames: false
+  - repo: https://github.com/trufflesecurity/trufflehog
+    rev: v3.63.0
+    hooks:
+      - id: trufflehog
+        args: [--fail]

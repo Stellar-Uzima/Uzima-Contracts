@@ -9,6 +9,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 0'
 
 jobs:
   # ============================================================================
@@ -86,18 +88,20 @@ jobs:
           fi
 
   # ============================================================================
-  # Code Quality (fmt + clippy)
+  # Secret Scanning
   # ============================================================================
-  code-quality:
-    name: Code Quality
+  secret-scanning:
+    name: Secret Scanning
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Run trufflehog
+        uses: trufflesecurity/trufflehog@main
         with:
-          components: rustfmt, clippy
-      # The repos `rustfmt.toml` declares options that are either nightly-only
-      # (e.g. `imports_granularity = "Crate"`, `format_macro_bodies = true`)
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --fail
       # or treated as warnings-before-exit-1 by rustfmt 1.92.0, while
       # `rust-toolchain.toml` pins stable 1.92.0 and CI installs stable
       # rustfmt. The `cargo fmt --all -- --check` step therefore fails on
