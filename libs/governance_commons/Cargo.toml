@@ -4,7 +4,7 @@ version = "0.2.0"
 edition.workspace = true
 
 [dependencies]
-soroban-sdk = { workspace = true }
+soroban-sdk = { version = "=21.7.7" }
 
 [lib]
 crate-type = ["rlib"]

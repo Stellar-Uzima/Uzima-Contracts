@@ -23,6 +23,7 @@ mod timeout_simple_test;
 /// **Payload**: `SHA256(Target_ID + Nonce)`
 ///   - `Target_ID`: The unique identifier of the entity being signed (e.g., `message_id`, `proof_id`).
 ///   - `Nonce`: A monotonically increasing 64-bit integer unique to the validator's public key.
+use governance_commons::require_admin;
 use soroban_sdk::{
     contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
@@ -481,8 +482,7 @@ impl CrossChainBridgeContract {
         public_key: BytesN<32>,
         initial_stake: i128,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         Self::require_not_paused(&env)?;
 
         let validator = Validator {
@@ -508,8 +508,7 @@ impl CrossChainBridgeContract {
         caller: Address,
         validator_address: Address,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         let key = DataKey::Validator(validator_address.clone());
         if let Some(mut validator) = env.storage().persistent().get::<DataKey, Validator>(&key) {
@@ -528,8 +527,7 @@ impl CrossChainBridgeContract {
     }
 
     pub fn add_supported_chain(env: Env, caller: Address, chain: ChainId) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         let mut chains: Vec<ChainId> = env
             .storage()
@@ -555,8 +553,7 @@ impl CrossChainBridgeContract {
         caller: Address,
         min_confirmations: u32,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         env.storage()
             .instance()
@@ -566,8 +563,7 @@ impl CrossChainBridgeContract {
     }
 
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         env.storage().instance().set(&DataKey::Paused, &true);
 
@@ -580,8 +576,7 @@ impl CrossChainBridgeContract {
     }
 
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         env.storage().instance().set(&DataKey::Paused, &false);
 
@@ -1193,8 +1188,7 @@ impl CrossChainBridgeContract {
         public_key: BytesN<32>,
         supported_chains: Vec<ChainId>,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         Self::require_not_paused(&env)?;
 
         let oracle = OracleNode {
@@ -1222,8 +1216,7 @@ impl CrossChainBridgeContract {
         caller: Address,
         oracle_address: Address,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         let key = DataKey::OracleNode(oracle_address.clone());
         if let Some(mut oracle) = env.storage().persistent().get::<DataKey, OracleNode>(&key) {
@@ -1865,8 +1858,7 @@ impl CrossChainBridgeContract {
 
     /// Execute a rollback — marks the associated operation as failed/rolled back
     pub fn execute_rollback(env: Env, caller: Address, op_id: BytesN<32>) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         let rb_key = DataKey::Rollback(op_id.clone());
         let mut rollback = env
@@ -1926,8 +1918,7 @@ impl CrossChainBridgeContract {
 
     /// Cancel a pending rollback
     pub fn cancel_rollback(env: Env, caller: Address, op_id: BytesN<32>) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
 
         let rb_key = DataKey::Rollback(op_id.clone());
         let mut rollback = env

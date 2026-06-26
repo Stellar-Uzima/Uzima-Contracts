@@ -10,11 +10,11 @@ pub mod types;
 mod test;
 
 use crate::types::{AMLReport, AMLRule, DataKey, GlobalAMLStats, RiskLevel, RiskProfile};
+use governance_commons::require_admin;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
     Symbol, Vec,
-    contract, contractimpl, symbol_short, Address, BytesN, Env, String, Symbol, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
@@ -63,9 +63,8 @@ impl AntiMoneyLaundering {
         description: String,
         threshold: i128,
         risk_contribution: u32,
-    ) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    ) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         let rule = AMLRule {
             rule_id: id,
@@ -76,6 +75,7 @@ impl AntiMoneyLaundering {
             is_enabled: true,
         };
         env.storage().instance().set(&DataKey::Rule(id), &rule);
+        Ok(())
     }
 
     /// Monitor a transaction and update risk profile
@@ -127,19 +127,29 @@ impl AntiMoneyLaundering {
     }
 
     /// Update blacklist status for a user.
-    pub fn update_user_status(env: Env, admin: Address, user: Address, is_blacklisted: bool) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn update_user_status(
+        env: Env,
+        admin: Address,
+        user: Address,
+        is_blacklisted: bool,
+    ) -> Result<(), Error> {
+        require_admin!(env, admin);
         Self::set_user_status_internal(&env, user, is_blacklisted);
+        Ok(())
     }
 
     /// Blacklist or whitelist an address manually by admin.
     #[deprecated(since = "v2.0.0", note = "Use update_user_status instead")]
-    pub fn set_user_status(env: Env, admin: Address, user: Address, is_blacklisted: bool) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn set_user_status(
+        env: Env,
+        admin: Address,
+        user: Address,
+        is_blacklisted: bool,
+    ) -> Result<(), Error> {
+        require_admin!(env, admin);
         upgradeability::emit_deprecation_warning(&env, Symbol::new(&env, "set_user_status")).ok();
         Self::set_user_status_internal(&env, user, is_blacklisted);
+        Ok(())
     }
 
     /// Generate an AML compliance report for regulatory use
@@ -149,9 +159,8 @@ impl AntiMoneyLaundering {
         subject: Address,
         summary: String,
         evidence: String,
-    ) -> u64 {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    ) -> Result<u64, Error> {
+        require_admin!(env, admin);
 
         let report_id = Self::next_id(&env, &DataKey::NextReportId);
         let profile = Self::get_or_create_profile(&env, &subject);
@@ -172,7 +181,7 @@ impl AntiMoneyLaundering {
 
         env.events()
             .publish((symbol_short!("AML"), symbol_short!("REPORT")), report_id);
-        report_id
+        Ok(report_id)
     }
 
     /// Register AML deprecated entrypoints for upgrade and migration tracking.
@@ -181,7 +190,7 @@ impl AntiMoneyLaundering {
         admin: Address,
     ) -> Result<(), upgradeability::UpgradeError> {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
+        Self::require_admin_checked(&env, &admin);
         Self::ensure_upgrade_metadata(&env, &admin);
         upgradeability::set_deprecated_functions(&env, Self::deprecated_functions(&env))
     }
@@ -199,7 +208,7 @@ impl AntiMoneyLaundering {
         new_version: u32,
     ) -> Result<(), upgradeability::UpgradeError> {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
+        Self::require_admin_checked(&env, &admin);
         Self::ensure_upgrade_metadata(&env, &admin);
         upgradeability::execute_upgrade_with_deprecations::<Self>(
             &env,
@@ -268,7 +277,19 @@ impl AntiMoneyLaundering {
         }
     }
 
-    fn require_admin(env: &Env, actor: &Address) {
+    fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if admin != *actor {
+            return Err(Error::NotAuthorized);
+        }
+        Ok(())
+    }
+
+    fn require_admin_checked(env: &Env, actor: &Address) {
         let admin: Address = env
             .storage()
             .instance()

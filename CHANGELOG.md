@@ -8,7 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Shared admin-auth macros in `governance_commons`** (`libs/governance_commons/src/macros.rs`): `require_admin!(env, caller)` expands to `caller.require_auth(); Self::require_admin(&env, &caller)?;`, eliminating the duplicated two-line admin check pattern. A lower-priority `require_role!(env, caller, role)` variant is also provided for role-gated functions. See `docs/REFACTORING_SUGGESTIONS.md` Section 2.
 - **Workspace-wide soroban-sdk pin:** All active member crates now inherit `soroban-sdk` from the workspace root via `workspace = true`. The `contracts/upgradeability` crate was the only non-excluded member with a hardcoded version — corrected in this PR.
+
+### Changed
+- `anomaly_detector`: replaced 6 hand-rolled `caller.require_auth(); Self::require_admin(...)` pairs with `require_admin!(env, caller)`.
+- `cross_chain_bridge`: replaced 10 hand-rolled admin-check pairs with `require_admin!(env, caller)`.
+- `audit`: `grant_log_access`, `revoke_log_access`, `set_retention_policy` now return `Result<(), Error>` and use `require_admin!(env, admin)`; `require_admin` helper converted from panic to `Result`.
+- `aml`: `configure_rule`, `update_user_status`, `set_user_status`, `report_incident` now return `Result` and use `require_admin!(env, admin)`; `require_admin` helper converted from panic to `Result`.
+
+### Security
+- Centralised the `require_auth` + `require_admin` sequence into a single auditable primitive — auditors now have one macro to verify instead of re-checking every contract individually (see `SECURITY_CHECKLIST.md` Section 1).
 - `scripts/check_sdk_version.sh` — CI guard that fails the build if any member crate overrides the workspace soroban-sdk pin. Scans all Cargo.toml files including excluded/deferred contracts.
 - `docs/VERSIONING_STRATEGY.md` — Documents SDK bump cadence (patch/minor/major), compatibility matrix, deprecation policy, and the CI enforcement mechanism.
 - Added note in changelog about `healthcare_compliance` contract's former `22.0.0` drift (issue #828 deferred).

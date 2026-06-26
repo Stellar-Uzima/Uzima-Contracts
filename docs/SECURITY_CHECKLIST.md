@@ -11,6 +11,7 @@ Use this checklist before every PR and audit. Each item must be checked (✅) or
 - [ ] Role checks are performed after `require_auth()`, not instead of it
 - [ ] No function relies solely on caller address comparison without `require_auth()`
 - [ ] Ownership transfer requires auth from the **current** owner, not the new one
+- [ ] Admin-gated functions use the shared `require_admin!(env, caller)` macro from `governance_commons` instead of hand-rolling the two-line pattern — this prevents accidentally omitting `require_auth()` or `require_admin()` in new code. Role-gated functions use `require_role!(env, caller, role)`. See `libs/governance_commons/src/macros.rs`.
 
 ## 2. Input Validation
 

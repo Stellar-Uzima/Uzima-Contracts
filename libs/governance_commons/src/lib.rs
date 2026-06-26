@@ -44,6 +44,7 @@
 //! ```
 
 pub mod errors;
+pub mod macros;
 pub mod multi_sig;
 pub mod types;
 

@@ -248,4 +248,35 @@ impl RBAC {
 
         Storage::get_config(&env).ok_or(Error::NotInitialized)
     }
+
+    // ─── Private helpers ─────────────────────────────────────────────────────
+
+    /// Verifies that `caller` is the stored admin address.
+    ///
+    /// This function satisfies the signature expected by `require_admin!(env, caller)`
+    /// from `governance_commons`. RBAC admin functions currently use a different
+    /// auth pattern (the stored admin is fetched and `.require_auth()` is called on
+    /// it directly, rather than passing `caller` as an explicit parameter). Adding
+    /// `governance_commons` as a dependency and introducing a `caller: Address`
+    /// parameter to `assign_role`, `remove_role`, and `update_config` would allow
+    /// these functions to use `require_admin!(env, caller)` uniformly.
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin = Storage::get_admin(env);
+        if admin != *caller {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
+    }
+
+    /// Verifies that `caller` holds `role`.
+    ///
+    /// This function satisfies the signature expected by `require_role!(env, caller, role)`
+    /// from `governance_commons`. Add `governance_commons` as a dependency and call
+    /// `require_role!(env, caller, role)` in any function that requires a specific role.
+    fn require_role(env: &Env, caller: &Address, role: Role) -> Result<(), Error> {
+        if !Storage::has_role(env, caller, role) {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
+    }
 }
