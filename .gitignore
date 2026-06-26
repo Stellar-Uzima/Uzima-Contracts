@@ -99,5 +99,11 @@ deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
 
+# WASM size monitor runtime output (Issue #846) — the baseline JSON is committed,
+# but the generated report and local trend/tips files are not.
+wasm_size_report.md
+.wasm_size_trends.json
+.wasm_optimization_tips.json
+
 CLAUDE.md
 plan.md
