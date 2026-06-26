@@ -65,6 +65,8 @@
 #[cfg(test)]
 mod benchmarks;
 #[cfg(test)]
+mod load_tests;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod test_input_validation;

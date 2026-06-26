@@ -314,6 +314,10 @@ pub enum DataKey {
     LastKeyRotation(Address),
     KeyRotationCooldown,
 
+    // DID Document Version History
+    DIDDocumentHistory(Address, u32),
+    DIDDocumentHistoryCount(Address),
+
     // Provider Staking
     StakeInfo(Address),
 }
@@ -638,6 +642,9 @@ impl IdentityRegistryContract {
         // Compute hash of current document for audit trail
         let prev_hash = Self::compute_document_hash(&env, &did_doc);
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         did_doc.services = new_services;
         did_doc.also_known_as = new_also_known_as;
         did_doc.updated = env.ledger().timestamp();
@@ -703,6 +710,9 @@ impl IdentityRegistryContract {
         if matches!(did_doc.status, DIDStatus::Deactivated) {
             return Err(Error::DIDDeactivated);
         }
+
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
 
         let timestamp = env.ledger().timestamp();
 
@@ -791,6 +801,9 @@ impl IdentityRegistryContract {
             return Err(Error::KeyRotationCooldown);
         }
 
+        // Archive current version before rotation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         // Find and update the verification method
         let mut found = false;
         let mut updated_methods = Vec::new(&env);
@@ -851,6 +864,9 @@ impl IdentityRegistryContract {
         if matches!(did_doc.status, DIDStatus::Deactivated) {
             return Err(Error::DIDDeactivated);
         }
+
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
 
         // Ensure at least one method remains active
         let active_count = did_doc
@@ -1489,6 +1505,9 @@ impl IdentityRegistryContract {
             return Err(Error::DIDDeactivated);
         }
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         let new_service = ServiceEndpoint {
             id: service_id.clone(),
             service_type,
@@ -1521,13 +1540,15 @@ impl IdentityRegistryContract {
             .get(&DataKey::DIDDocument(subject.clone()))
             .ok_or(Error::DIDNotFound)?;
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         let mut updated_services = Vec::new(&env);
         let mut found = false;
 
         for svc in did_doc.services.iter() {
             if svc.id == service_id {
                 found = true;
-                // Skip - effectively removes it
             } else {
                 updated_services.push_back(svc);
             }
@@ -1866,6 +1887,35 @@ impl IdentityRegistryContract {
     fn compute_document_hash(env: &Env, doc: &DIDDocument) -> BytesN<32> {
         let data = doc.clone().to_xdr(env);
         env.crypto().sha256(&data).into()
+    }
+
+    /// Archive the current DID document as a version history entry before mutation
+    fn archive_did_version(env: &Env, subject: &Address, doc: &DIDDocument) {
+        let count_key = DataKey::DIDDocumentHistoryCount(subject.clone());
+        let version_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&count_key)
+            .unwrap_or(0);
+        let new_idx = version_count + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::DIDDocumentHistory(subject.clone(), new_idx), doc);
+        env.storage()
+            .persistent()
+            .set(&count_key, &new_idx);
+    }
+
+    /// Retrieve a past version of a DID document by version number.
+    /// Returns None if the version does not exist.
+    pub fn get_did_version(
+        env: Env,
+        subject: Address,
+        version: u32,
+    ) -> Option<DIDDocument> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DIDDocumentHistory(subject, version))
     }
 
     /// DID-based authorization check
@@ -2750,6 +2800,126 @@ mod tests {
         assert_eq!(Error::DIDNotFound as u32, 470);
         assert_eq!(Error::DIDAlreadyExists as u32, 471);
         assert_eq!(Error::CredentialExpired as u32, 605);
+    }
+
+    // ========================================================================
+    // DID RESOLUTION EDGE-CASE TESTS (Issue #958)
+    // ========================================================================
+
+    #[test]
+    fn test_resolve_did_not_found() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_deactivated() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+        client.deactivate_did(&subject);
+
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDDeactivated)));
+    }
+
+    #[test]
+    fn test_resolve_did_by_string() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        let did_string = client.create_did(&subject, &public_key, &services);
+        let did_doc = client.resolve_did_by_string(&did_string);
+        assert_eq!(did_doc.controller, subject);
+    }
+
+    #[test]
+    fn test_resolve_did_by_string_not_found() {
+        let (env, client, _owner) = create_contract();
+        let did_string = String::from_str(&env, "did:stellar:uzima:testnet:nonexistent");
+        let result = client.try_resolve_did_by_string(&did_string);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_after_update_tracks_new_data() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let mut new_services: Vec<ServiceEndpoint> = Vec::new(&env);
+        new_services.push_back(ServiceEndpoint {
+            id: String::from_str(&env, "#records"),
+            service_type: String::from_str(&env, "MedicalRecords"),
+            endpoint: String::from_str(&env, "ipfs://QmUpdate"),
+            is_active: true,
+        });
+        client.update_did(&subject, &new_services, &Vec::new(&env));
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.services.len(), 1);
+        assert_eq!(did_doc.version, 2);
+    }
+
+    #[test]
+    fn test_resolve_did_with_multiple_verification_methods() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let primary_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &primary_key, &services);
+
+        for i in 0u8..5u8 {
+            let key = BytesN::from_array(&env, &[i + 10; 32]);
+            let method_id = String::from_bytes(&env, &[i + 1; 1]);
+            let mut rels: Vec<VerificationRelationship> = Vec::new(&env);
+            rels.push_back(VerificationRelationship::Authentication);
+            client.add_verification_method(
+                &subject,
+                &method_id,
+                &VerificationMethodType::Ed25519VerificationKey2020,
+                &key,
+                &rels,
+            );
+        }
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.verification_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_resolve_did_after_recovery_restores_active() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let guardian = Address::generate(&env);
+        client.add_recovery_guardian(&subject, &guardian, &2u32);
+
+        let new_controller = Address::generate(&env);
+        let new_key = BytesN::from_array(&env, &[42u8; 32]);
+        client.initiate_recovery(&guardian, &subject, &new_controller, &new_key);
+
+        let did_doc_recovery = client.resolve_did(&subject);
+        assert!(matches!(did_doc_recovery.status, DIDStatus::RecoveryPending));
+
+        client.cancel_recovery(&subject);
+        let did_doc_restored = client.resolve_did(&subject);
+        assert!(matches!(did_doc_restored.status, DIDStatus::Active));
     }
 
     #[test]
