@@ -1,0 +1,17 @@
+[package]
+name = "replay_protection"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[lib]
+crate-type = ["rlib"]
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

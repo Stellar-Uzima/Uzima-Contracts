@@ -1,3 +1,4 @@
+//! sut_token - Healthcare smart contract on Stellar blockchain.
 // SUT Token - Stellar Utility Token with checked arithmetic throughout
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]

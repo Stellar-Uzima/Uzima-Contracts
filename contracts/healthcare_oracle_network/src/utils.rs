@@ -1,21 +1,22 @@
-use soroban_sdk::{symbol_short, Address, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec, xdr::ToXdr};
 
 use crate::types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, DrugPriceData, Error,
-    FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData,
+    TreatmentOutcomeData,
 };
 
-pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::ClinicalTrial(data) => data.trial_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::ClinicalTrial(data) => Ok(data.trial_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
-pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> String {
+pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::TreatmentOutcome(data) => data.outcome_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::TreatmentOutcome(data) => Ok(data.outcome_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
@@ -39,6 +40,38 @@ pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+pub fn make_cross_contract_cache_key(
+    env: &Env,
+    contract: &Address,
+    function_name: Symbol,
+    args: &Vec<RawVal>,
+) -> CallCacheKey {
+    let args_hash: BytesN<32> = env.crypto().sha256(&args.to_xdr(env)).into();
+    CallCacheKey {
+        contract: contract.clone(),
+        function_name,
+        args_hash,
+    }
+}
+
+pub fn invoke_contract_cached<
+    T: TryFromVal<Env, Val> + IntoVal<Env, Val> + Clone,
+>(
+    env: &Env,
+    contract: Address,
+    function_name: Symbol,
+    args: Vec<RawVal>,
+) -> T {
+    let cache_key = make_cross_contract_cache_key(env, &contract, function_name.clone(), &args);
+    if let Some(value) = env.storage().temporary().get(&cache_key) {
+        return value;
+    }
+
+    let result: T = env.invoke_contract(&contract, &function_name, args.clone());
+    env.storage().temporary().set(&cache_key, &result);
+    result
 }
 
 pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, Error> {
@@ -66,6 +99,50 @@ pub fn read_oracle(env: &Env, operator: Address) -> Result<OracleNode, Error> {
         .ok_or(Error::OracleNotFound)
 }
 
+pub fn hash_payload(env: &Env, payload: &FeedPayload) -> BytesN<32> {
+    env.crypto().sha256(&payload.to_xdr(env)).into()
+}
+
+pub fn slash_oracle(env: &Env, operator: Address, penalty: i128, reason: String) -> Result<(), Error> {
+    adjust_reputation(env, operator.clone(), penalty.saturating_neg(), true)?;
+    env.events().publish(
+        (symbol_short!("ORACLE_SLASHED"),),
+        (operator, penalty, reason),
+    );
+    Ok(())
+}
+
+pub fn detect_duplicate_submission(
+    env: &Env,
+    key: &FeedKey,
+    operator: &Address,
+    payload: &FeedPayload,
+    round_id: u64,
+) -> Result<(), Error> {
+    let current_hash = hash_payload(env, payload);
+    let duplicate_key = DataKey::LastSubmissionHash(key.clone(), operator.clone());
+    let previous_hash: Option<BytesN<32>> = env.storage().persistent().get(&duplicate_key);
+
+    if let Some(previous) = previous_hash {
+        if previous == current_hash {
+            slash_oracle(
+                env,
+                operator.clone(),
+                10,
+                String::from_str(env, "Duplicate submission detected"),
+            )?;
+            env.events().publish(
+                (symbol_short!("DUPLICATE_SUBMISSION"),),
+                (operator.clone(), key.kind, key.feed_id.clone(), round_id),
+            );
+            return Err(Error::SubmissionAlreadyExists);
+        }
+    }
+
+    env.storage().persistent().set(&duplicate_key, &current_hash);
+    Ok(())
+}
+
 pub fn submit_payload(
     env: Env,
     operator: Address,
@@ -76,6 +153,8 @@ pub fn submit_payload(
 ) -> Result<u64, Error> {
     let key = FeedKey { kind, feed_id };
     let round_id = ensure_active_round(&env, key.clone())?;
+
+    detect_duplicate_submission(&env, &key, &operator, &payload, round_id)?;
 
     let submission_key = DataKey::Submission(key.clone(), round_id, operator.clone());
     if env.storage().persistent().has(&submission_key) {

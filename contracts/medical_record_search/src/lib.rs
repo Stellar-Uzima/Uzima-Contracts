@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_record_search - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]

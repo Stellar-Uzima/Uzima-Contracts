@@ -1,4 +1,37 @@
 #![no_std]
+//! # Credential Registry
+//!
+//! Tracks per-issuer credential roots (one root per issuer per version) and
+//! the active root that verifiers should use when checking issued
+//! verifiable credentials.
+//!
+//! ## Operations
+//!
+//! * `set_credential_root` / `batch_set_credential_roots` — issuer managers
+//!   publish a new Merkle root keyed by `(issuer, version)`. Each new version
+//!   supersedes the previous active root for that issuer.
+//! * `revoke_root` — flag a previously-published root as revoked. If the
+//!   revoked root was active, the issuer's `ActiveRoot` is cleared so
+//!   verifiers must obtain the next valid version.
+//! * `is_root_revoked`, `get_root`, `get_revocation_root` — read paths used
+//!   by off-chain verifiers.
+//!
+//! ## Authentication
+//!
+//! * The contract has a single global admin set at `initialize`.
+//! * Each issuer has an optional [`DataKey::IssuerAdmin`] delegate who is
+//!   permitted to publish or revoke that issuer's roots.
+//!
+//! ## Examples
+//!
+//! A typical call flow (off-chain pseudocode):
+//!
+//! ```ignore
+//! client.initialize(&admin);
+//! client.set_issuer_admin(&admin, &issuer, &issuer_admin);
+//! let v = client.set_credential_root(&iadm, &issuer, &root, &meta, &expiry, &sig);
+//! let proofs = offchain::verify_against_root(root, vc_proof);
+//! ```
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{

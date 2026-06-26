@@ -3,6 +3,7 @@ use std::path::Path;
 use syn::{visit::Visit, Expr, ExprCall, ItemFn};
 use walkdir::WalkDir;
 
+pub mod complexity;
 pub mod metrics;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -114,7 +115,7 @@ impl<'a> Visit<'a> for OptimizationVisitor<'a> {
                                     )),
                                     suggestion: "Consider batching storage operations or using temporary variables".to_string(),
                                 });
-                            }
+                            },
                             "events" => {
                                 self.recommendations.push(OptimizationRecommendation {
                                     category: "Gas Optimization".to_string(),
@@ -129,8 +130,8 @@ impl<'a> Visit<'a> for OptimizationVisitor<'a> {
                                     suggestion: "Emit events outside of loops when possible"
                                         .to_string(),
                                 });
-                            }
-                            _ => {}
+                            },
+                            _ => {},
                         }
                     }
                 }

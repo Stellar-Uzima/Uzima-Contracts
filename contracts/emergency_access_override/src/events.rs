@@ -68,3 +68,22 @@ pub fn publish_initialization(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("EMER"), symbol_short!("INIT")), admin);
 }
+
+pub fn publish_rate_limit_exceeded(
+    env: &Env,
+    caller: &Address,
+    next_allowed_at: u64,
+    attempted_at: u64,
+) {
+    env.events().publish(
+        (symbol_short!("EMER"), symbol_short!("RATELMT")),
+        (caller, next_allowed_at, attempted_at),
+    );
+}
+
+pub fn publish_cooldown_updated(env: &Env, admin: &Address, new_period: u64) {
+    env.events().publish(
+        (symbol_short!("EMER"), symbol_short!("CDUPD")),
+        (admin, new_period),
+    );
+}

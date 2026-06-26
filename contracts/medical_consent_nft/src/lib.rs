@@ -1,3 +1,4 @@
+//! medical_consent_nft - Healthcare smart contract on Stellar blockchain.
 // Medical Consent NFT - Advanced Patient consent management with dynamic features
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]

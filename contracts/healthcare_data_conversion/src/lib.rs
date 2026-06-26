@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_data_conversion - Healthcare smart contract on Stellar blockchain.
 
 // #[cfg(test)]
 // mod test;

@@ -19,7 +19,7 @@ impl ContractSetup {
     /// Create a new contract setup with test environment
     pub fn new() -> Self {
         let env = Env::default();
-        let admin = Address::generate(&env);
+        let admin = generate_test_address(&env);
 
         Self {
             env,
@@ -36,7 +36,7 @@ impl ContractSetup {
 
     /// Generate a random test address
     pub fn generate_address(&self) -> Address {
-        Address::generate(&self.env)
+        generate_test_address(&self.env)
     }
 
     /// Create N test users

@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_imaging - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -1362,7 +1363,7 @@ impl MedicalImagingContract {
                 .storage()
                 .persistent()
                 .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
+                .ok_or(Error::ReportsNotYetAvailable)?;
             if existing.reader == reader {
                 return Err(Error::ReaderAlreadySubmitted);
             }
@@ -1421,14 +1422,15 @@ impl MedicalImagingContract {
         let mut reader_report_count = 0u32;
         let mut all_diagnosis_hashes: Vec<BytesN<32>> = Vec::new(&env);
         for rid in updated_report_ids.iter() {
-            let rpt: ReaderReport = env
+            if let Some(rpt) = env
                 .storage()
                 .persistent()
-                .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
-            if readers.iter().any(|r| r == rpt.reader) {
-                reader_report_count = reader_report_count.saturating_add(1);
-                all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+                .get::<_, ReaderReport>(&DataKey::ReaderReportEntry(rid))
+            {
+                if readers.iter().any(|r| r == rpt.reader) {
+                    reader_report_count = reader_report_count.saturating_add(1);
+                    all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+                }
             }
         }
 
@@ -1440,11 +1442,11 @@ impl MedicalImagingContract {
                 .storage()
                 .persistent()
                 .get(&DataKey::Study(study_id))
-                .unwrap();
+                .ok_or(Error::StudyNotFound)?;
             let current_status = study.status;
 
             // Check if all hashes match
-            let first_hash = all_diagnosis_hashes.get(0).unwrap();
+            let first_hash = all_diagnosis_hashes.get(0).unwrap_or_default();
             let all_match = all_diagnosis_hashes.iter().all(|h| h == first_hash);
 
             if all_match {
@@ -1517,7 +1519,7 @@ impl MedicalImagingContract {
         out
     }
 
-    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> ReaderReport {
+    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> Result<ReaderReport, Error> {
         reader.require_auth();
         let report_ids: Vec<u64> = env
             .storage()
@@ -1526,16 +1528,17 @@ impl MedicalImagingContract {
             .unwrap_or(Vec::new(&env));
 
         for rid in report_ids.iter() {
-            let rpt: ReaderReport = env
+            if let Some(rpt) = env
                 .storage()
                 .persistent()
-                .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
-            if rpt.reader == reader {
-                return rpt;
+                .get::<_, ReaderReport>(&DataKey::ReaderReportEntry(rid))
+            {
+                if rpt.reader == reader {
+                    return Ok(rpt);
+                }
             }
         }
-        panic!("report not found");
+        Err(Error::ReportsNotYetAvailable)
     }
 
     // ── Study Finalization & Amendment ──

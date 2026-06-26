@@ -6,6 +6,7 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 pub enum Error {
     // --- Access Control (100–199) ---
     Unauthorized = 100,
+    UnauthorizedRelayer = 101,
     InsufficientConfirmations = 120,
     InsufficientOracleReports = 121,
     DuplicateOracleReport = 122,
@@ -16,6 +17,7 @@ pub enum Error {
     InvalidNonce = 281,
     InvalidPayload = 282,
     InvalidAddress = 290,
+    BatchTooLarge = 283,
 
     // --- Lifecycle & State (300–399) ---
     AlreadyInitialized = 301,

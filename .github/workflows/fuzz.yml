@@ -1,0 +1,261 @@
+# Nightly fuzz testing for contracts that accept arbitrary byte input.
+#
+# Runs proptest-based harnesses in tests/fuzz/ for 5 minutes each, covering:
+#   cross_chain_bridge, zk_verifier, zkp_registry, meta_tx_forwarder
+#
+# See docs/SECURITY_BEST_PRACTICES.md §10 and SECURITY_CHECKLIST.md §9.
+#
+# Architecture note: Soroban contracts target wasm32-unknown-unknown, which
+# does not support libFuzzer. Fuzz targets are compiled for x86_64-unknown-linux-gnu
+# (the CI runner host) using soroban-sdk testutils. proptest provides coverage-
+# guided shrinkable property tests as the primary fuzzing engine.
+# cargo-fuzz / libFuzzer targets are a future enhancement (requires nightly).
+
+name: Fuzz Tests
+
+on:
+  schedule:
+    # Run nightly at 02:30 UTC
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+    inputs:
+      fuzz_duration_secs:
+        description: 'Fuzzing duration per target (seconds)'
+        required: false
+        default: '300'
+      proptest_cases:
+        description: 'Number of proptest cases per property'
+        required: false
+        default: '5000'
+
+env:
+  FUZZ_DURATION: ${{ github.event.inputs.fuzz_duration_secs || '300' }}
+  PROPTEST_CASES: ${{ github.event.inputs.proptest_cases || '5000' }}
+  RUST_BACKTRACE: '1'
+
+jobs:
+  # ============================================================
+  # Fuzz: zk_verifier — verify_proof(Bytes), compute_proof_hash(Bytes)
+  # ============================================================
+  fuzz-zk-verifier:
+    name: Fuzz zk_verifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run proptest harness (5 min budget)
+        id: fuzz
+        continue-on-error: true
+        working-directory: tests/fuzz/zk_verifier
+        run: |
+          timeout "$FUZZ_DURATION" cargo test --release -- --nocapture 2>&1 | tee /tmp/fuzz-zk-verifier.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload fuzz log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-log-zk-verifier
+          path: /tmp/fuzz-zk-verifier.log
+          retention-days: 30
+
+      - name: File issue on crash
+        if: steps.fuzz.outputs.exit_code != '0' && steps.fuzz.outputs.exit_code != '124'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHRUNK=$(grep -A 20 'FAILED\|panicked\|thread.*main' /tmp/fuzz-zk-verifier.log | head -30 || echo "(no shrunk input captured)")
+          gh issue create \
+            --title "Fuzz crash: zk_verifier $(date -u +%Y-%m-%d)" \
+            --label "security,fuzz-crash" \
+            --body "## Fuzz crash detected in \`zk_verifier\`
+
+**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+**Proptest cases:** ${PROPTEST_CASES}
+
+\`\`\`
+${SHRUNK}
+\`\`\`
+
+See the \`fuzz-log-zk-verifier\` artifact for the full output and shrunk reproducer." \
+            || echo "::warning::Could not file issue (may be missing permission or label)"
+
+  # ============================================================
+  # Fuzz: zkp_registry — import_state(Bytes), submit_zkp(proof_data: Bytes),
+  #                       verify_range_proof, credential ciphertext
+  # ============================================================
+  fuzz-zkp-registry:
+    name: Fuzz zkp_registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run proptest harness (5 min budget)
+        id: fuzz
+        continue-on-error: true
+        working-directory: tests/fuzz/zkp_registry
+        run: |
+          timeout "$FUZZ_DURATION" cargo test --release -- --nocapture 2>&1 | tee /tmp/fuzz-zkp-registry.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload fuzz log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-log-zkp-registry
+          path: /tmp/fuzz-zkp-registry.log
+          retention-days: 30
+
+      - name: File issue on crash
+        if: steps.fuzz.outputs.exit_code != '0' && steps.fuzz.outputs.exit_code != '124'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHRUNK=$(grep -A 20 'FAILED\|panicked\|thread.*main' /tmp/fuzz-zkp-registry.log | head -30 || echo "(no shrunk input captured)")
+          gh issue create \
+            --title "Fuzz crash: zkp_registry $(date -u +%Y-%m-%d)" \
+            --label "security,fuzz-crash" \
+            --body "## Fuzz crash detected in \`zkp_registry\`
+
+**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+**Proptest cases:** ${PROPTEST_CASES}
+
+\`\`\`
+${SHRUNK}
+\`\`\`
+
+See the \`fuzz-log-zkp-registry\` artifact for the full output and shrunk reproducer." \
+            || echo "::warning::Could not file issue (may be missing permission or label)"
+
+  # ============================================================
+  # Fuzz: cross_chain_bridge — validate_chain_address(String),
+  #                              confirm_message(BytesN<64>)
+  # ============================================================
+  fuzz-cross-chain-bridge:
+    name: Fuzz cross_chain_bridge
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run proptest harness (5 min budget)
+        id: fuzz
+        continue-on-error: true
+        working-directory: tests/fuzz/cross_chain_bridge
+        run: |
+          timeout "$FUZZ_DURATION" cargo test --release -- --nocapture 2>&1 | tee /tmp/fuzz-cross-chain-bridge.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload fuzz log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-log-cross-chain-bridge
+          path: /tmp/fuzz-cross-chain-bridge.log
+          retention-days: 30
+
+      - name: File issue on crash
+        if: steps.fuzz.outputs.exit_code != '0' && steps.fuzz.outputs.exit_code != '124'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHRUNK=$(grep -A 20 'FAILED\|panicked\|thread.*main' /tmp/fuzz-cross-chain-bridge.log | head -30 || echo "(no shrunk input captured)")
+          gh issue create \
+            --title "Fuzz crash: cross_chain_bridge $(date -u +%Y-%m-%d)" \
+            --label "security,fuzz-crash" \
+            --body "## Fuzz crash detected in \`cross_chain_bridge\`
+
+**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+**Proptest cases:** ${PROPTEST_CASES}
+
+\`\`\`
+${SHRUNK}
+\`\`\`
+
+See the \`fuzz-log-cross-chain-bridge\` artifact for the full output and shrunk reproducer." \
+            || echo "::warning::Could not file issue (may be missing permission or label)"
+
+  # ============================================================
+  # Fuzz: meta_tx_forwarder — execute(BytesN<64> signature)
+  # ============================================================
+  fuzz-meta-tx-forwarder:
+    name: Fuzz meta_tx_forwarder
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Run proptest harness (5 min budget)
+        id: fuzz
+        continue-on-error: true
+        working-directory: tests/fuzz/meta_tx_forwarder
+        run: |
+          timeout "$FUZZ_DURATION" cargo test --release -- --nocapture 2>&1 | tee /tmp/fuzz-meta-tx-forwarder.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload fuzz log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-log-meta-tx-forwarder
+          path: /tmp/fuzz-meta-tx-forwarder.log
+          retention-days: 30
+
+      - name: File issue on crash
+        if: steps.fuzz.outputs.exit_code != '0' && steps.fuzz.outputs.exit_code != '124'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHRUNK=$(grep -A 20 'FAILED\|panicked\|thread.*main' /tmp/fuzz-meta-tx-forwarder.log | head -30 || echo "(no shrunk input captured)")
+          gh issue create \
+            --title "Fuzz crash: meta_tx_forwarder $(date -u +%Y-%m-%d)" \
+            --label "security,fuzz-crash" \
+            --body "## Fuzz crash detected in \`meta_tx_forwarder\`
+
+**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+**Proptest cases:** ${PROPTEST_CASES}
+
+\`\`\`
+${SHRUNK}
+\`\`\`
+
+See the \`fuzz-log-meta-tx-forwarder\` artifact for the full output and shrunk reproducer." \
+            || echo "::warning::Could not file issue (may be missing permission or label)"
+
+  # ============================================================
+  # Summary: aggregate corpus sizes and report
+  # ============================================================
+  fuzz-summary:
+    name: Fuzz Summary
+    runs-on: ubuntu-latest
+    needs:
+      - fuzz-zk-verifier
+      - fuzz-zkp-registry
+      - fuzz-cross-chain-bridge
+      - fuzz-meta-tx-forwarder
+    if: always()
+    steps:
+      - name: Report overall fuzz status
+        run: |
+          echo "## Nightly Fuzz Run Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Target | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|--------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| zk_verifier | ${{ needs.fuzz-zk-verifier.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| zkp_registry | ${{ needs.fuzz-zkp-registry.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cross_chain_bridge | ${{ needs.fuzz-cross-chain-bridge.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| meta_tx_forwarder | ${{ needs.fuzz-meta-tx-forwarder.result }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Proptest cases per property: ${PROPTEST_CASES}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Fuzz duration per target: ${FUZZ_DURATION}s" >> "$GITHUB_STEP_SUMMARY"
+          echo "Crash artifacts are uploaded per-job and filed as issues." >> "$GITHUB_STEP_SUMMARY"

@@ -1,4 +1,5 @@
 #![no_std]
+//! secure_enclave - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, IntoVal, Vec,

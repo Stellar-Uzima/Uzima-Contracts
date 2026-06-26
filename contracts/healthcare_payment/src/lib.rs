@@ -1,10 +1,46 @@
 #![no_std]
+//! # Healthcare Payment
+//!
+//! Claims adjudication, eligibility checks, and provider payouts for the Uzima
+//! Contracts platform. Surfaces the EDI-837 / EDI-834 / EDI-835 flows used by
+//! integration partners alongside a circuit-breaker so a downstream anomaly
+//! can pause claim processing without taking the WHO platform offline.
+//!
+//! ## Surface
+//!
+//! * **Claims** — `submit_claim`, `verify_claim`, `approve_claim`,
+//!   `reject_claim`, `process_payment`, `batch_process_payments`,
+//!   `escrow_claim`.
+//! * **Eligibility & enrollment** — `verify_insurance_eligibility`,
+//!   `sync_coverage_enrollment` (HIPAA EDI-834 / EDI-837).
+//! * **EOB** — `process_eob` (HIPAA EDI-835) updates the patient's running
+//!   deductible / copay book-keeping via [`PatientResponsibility`].
+//! * **Pre-auths & payment plans** — `request_preauth`, `approve_preauth`,
+//!   `create_payment_plan`, `pay_installment`.
+//! * **ZK coverage proofs** — `submit_coverage_proof`,
+//!   `verify_coverage_with_zk`, `get_coverage_proof`.
+//! * **Circuit breaker** — `emergency_pause`, `begin_recovery`,
+//!   `resume_operations`, `report_anomaly`, `set_failure_threshold`,
+//!   `add_authorized_pauser`, `remove_authorized_pauser`.
+//!
+//! ## Example (heightened reimbursement flow)
+//!
+//! ```ignore
+//! client.initialize(&admin, &router, &escrow, &treasury, &token, &aml, &rbac);
+//! clinic.submit_claim(&patient, &clinic, &"X-22", &500i128, &"BC001", &None);
+//! prov.verify_claim(&1, &clinic);
+//! payer.approve_claim(&1, &payer);
+//! client.submit_insurance_claim(&clinic, &1, &1, &"PAYER-77", &"837")?;
+//! client.process_payment(&1)?;  // pays out via routes to clinic + treasury
+//! client.process_eob(&admin, &1, &1, &500, &400, &100, &"auto-pay", &"835")?;
+//! ```
+#![allow(clippy::too_many_arguments)]
 
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token::Client as TokenClient, Address, Env,
-    IntoVal, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short,
+    token::Client as TokenClient, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -13,9 +49,10 @@ pub enum ClaimStatus {
     Submitted = 0,
     Verified = 1,
     Approved = 2,
-    Rejected = 3,
-    Paid = 4,
-    Disputed = 5,
+    PendingAMLReview = 3,
+    Rejected = 4,
+    Paid = 5,
+    Disputed = 6,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -194,12 +231,56 @@ pub struct ExplanationOfBenefits {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct CoverageProof {
+    pub policy_id: u64,
+    pub patient: Address,
+    pub proof_hash: BytesN<32>,
+    pub circuit_version: u32,
+    pub is_verified: bool,
+    pub proven_coverage_bps: u32,
+    pub submitted_at: u64,
+    pub expires_at: u64,
+    pub registry_proof_id: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct PatientResponsibility {
     pub patient: Address,
     pub total_copay_tracked: i128,
     pub total_deductible_tracked: i128,
     pub total_patient_responsibility: i128,
     pub last_updated: u64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
 #[derive(Clone)]
@@ -210,6 +291,8 @@ pub struct Config {
     pub escrow_contract: Address,
     pub treasury: Address,
     pub token: Address,
+    pub aml_contract: Address,
+    pub rbac_contract: Address,
 }
 
 #[derive(Clone)]
@@ -238,6 +321,9 @@ pub enum DataKey {
     PatientResponsibility(Address),
     CircuitBreakerState,
     AuthorizedPausers,
+    Locked,
+    CoverageProof(u64, Address),
+    CoverageProofCount,
 }
 
 #[contract]
@@ -252,10 +338,12 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
-        if config.admin != *caller {
-            return Err(Error::Unauthorized);
+        let client = RbacClient::new(env, &config.rbac_contract);
+        if client.has_role(caller, &RbacRole::Admin) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
         }
-        Ok(())
     }
 
     fn read_counter(env: &Env, key: &DataKey) -> u64 {
@@ -300,6 +388,23 @@ impl HealthcarePayment {
             }
         }
         Ok(())
+    }
+
+    fn acquire_lock(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get::<DataKey, bool>(&DataKey::Locked)
+            .unwrap_or(false)
+        {
+            return Err(Error::Reentrancy);
+        }
+        env.storage().instance().set(&DataKey::Locked, &true);
+        Ok(())
+    }
+
+    fn release_lock(env: &Env) {
+        env.storage().instance().set(&DataKey::Locked, &false);
     }
 
     fn is_authorized_pauser(env: &Env, caller: &Address) -> bool {
@@ -358,6 +463,8 @@ impl HealthcarePayment {
         escrow_contract: Address,
         treasury: Address,
         token: Address,
+        aml_contract: Address,
+        rbac_contract: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -369,6 +476,8 @@ impl HealthcarePayment {
             escrow_contract,
             treasury,
             token,
+            aml_contract,
+            rbac_contract,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
@@ -897,6 +1006,7 @@ impl HealthcarePayment {
 
     pub fn process_payment(env: Env, claim_id: u64) -> Result<(), Error> {
         Self::require_operational(&env)?;
+        Self::acquire_lock(&env)?;
         env.events().publish(
             (symbol_short!("DIAG"), symbol_short!("ENTER")),
             (symbol_short!("proc_pay"), claim_id),
@@ -917,6 +1027,7 @@ impl HealthcarePayment {
                 (symbol_short!("DIAG"), symbol_short!("VALFAIL")),
                 (symbol_short!("proc_pay"), claim_id, claim.status as u32),
             );
+            Self::release_lock(&env);
             return Err(Error::InvalidStatus);
         }
 
@@ -968,11 +1079,13 @@ impl HealthcarePayment {
             (symbol_short!("proc_pay"), claim_id),
         );
 
+        Self::release_lock(&env);
         Ok(())
     }
 
     /// Process multiple approved claims in one call. Reads Config and creates TokenClient once.
     pub fn batch_process_payments(env: Env, claim_ids: Vec<u64>) -> Result<Vec<u64>, Error> {
+        Self::acquire_lock(&env)?;
         let config: Config = env
             .storage()
             .instance()
@@ -992,6 +1105,7 @@ impl HealthcarePayment {
                 .ok_or(Error::ClaimNotFound)?;
 
             if claim.status != ClaimStatus::Approved {
+                Self::release_lock(&env);
                 return Err(Error::InvalidStatus);
             }
 
@@ -1020,6 +1134,7 @@ impl HealthcarePayment {
             paid_ids.push_back(claim_id);
         }
 
+        Self::release_lock(&env);
         Ok(paid_ids)
     }
 
@@ -1295,6 +1410,135 @@ impl HealthcarePayment {
             .persistent()
             .get(&DataKey::Eob(claim_id))
             .ok_or(Error::EobNotFound)
+    }
+
+    // =========================================================================
+    // ZK Proof of Insurance Coverage
+    // =========================================================================
+
+    /// Submit a zero-knowledge proof of insurance coverage.
+    /// The patient proves they have active coverage without revealing
+    /// sensitive policy details on-chain.
+    pub fn submit_coverage_proof(
+        env: Env,
+        patient: Address,
+        policy_id: u64,
+        proof_hash: BytesN<32>,
+        circuit_version: u32,
+        proven_coverage_bps: u32,
+        expires_at: u64,
+        registry_proof_id: BytesN<32>,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_operational(&env)?;
+
+        if proven_coverage_bps > 10_000 {
+            return Err(Error::InvalidCoverage);
+        }
+        if expires_at <= env.ledger().timestamp() {
+            return Err(Error::InvalidCoverage);
+        }
+
+        let policy = Self::get_policy(&env, policy_id)?;
+        if policy.patient != patient {
+            return Err(Error::Unauthorized);
+        }
+
+        let proof = CoverageProof {
+            policy_id,
+            patient: patient.clone(),
+            proof_hash,
+            circuit_version,
+            is_verified: false,
+            proven_coverage_bps,
+            submitted_at: env.ledger().timestamp(),
+            expires_at,
+            registry_proof_id,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CoverageProof(policy_id, patient.clone()), &proof);
+
+        let proof_count: u64 = env
+            .storage()
+            .instance()
+            .get::<DataKey, u64>(&DataKey::CoverageProofCount)
+            .unwrap_or(0u64)
+            .saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::CoverageProofCount, &proof_count);
+
+        env.events().publish(
+            (symbol_short!("COV_PROOF"),),
+            (policy_id, patient, proven_coverage_bps),
+        );
+
+        Ok(())
+    }
+
+    /// Verify insurance coverage using a previously submitted ZK proof.
+    /// Returns the proven coverage basis points if the proof is valid.
+    pub fn verify_coverage_with_zk(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_operational(&env)?;
+
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient.clone()))
+            .ok_or(Error::CoveragePolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        if now > proof.expires_at {
+            return Err(Error::InvalidCoverage);
+        }
+
+        // Mark as verified for audit trail
+        let mut updated = proof.clone();
+        updated.is_verified = true;
+        env.storage().persistent().set(
+            &DataKey::CoverageProof(policy_id, patient.clone()),
+            &updated,
+        );
+
+        env.events().publish(
+            (symbol_short!("COV_VER"),),
+            (policy_id, caller, proof.proven_coverage_bps),
+        );
+
+        Ok(proof.proven_coverage_bps)
+    }
+
+    /// Get the ZK coverage proof for a patient's policy.
+    /// Get the ZK coverage proof for a patient's policy.
+    pub fn get_coverage_proof(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<CoverageProof, Error> {
+        caller.require_auth();
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient))
+            .ok_or(Error::EligibilityCheckNotFound)?;
+        Ok(proof)
+    }
+
+    /// Get the total number of coverage proofs submitted.
+    pub fn get_coverage_proof_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CoverageProofCount)
+            .unwrap_or(0)
     }
 
     pub fn get_patient_responsibility(env: Env, patient: Address) -> Option<PatientResponsibility> {

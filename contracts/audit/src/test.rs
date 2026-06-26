@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use crate::types::{ActionType, AuditConfig, AuditType, OperationResult, RetentionPolicy};
 use soroban_sdk::testutils::Address as _;

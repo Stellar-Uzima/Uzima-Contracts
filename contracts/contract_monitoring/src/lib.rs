@@ -13,7 +13,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -477,3 +479,33 @@ mod test {
         );
     }
 }
+
+// pub fn version(env: Env) -> String {
+//     env.storage()
+//         .instance()
+//         .get(&DataKey::Version)
+//         .unwrap_or_else(|| String::from_str(&env, "uninitialized"))
+// }
+
+// # After existing deployment table output, add:
+// echo ""
+// echo "=== On-Chain Versions ==="
+// for contract_id in "${CONTRACT_IDS[@]}"; do
+//   version=$(stellar contract invoke \
+//     --id "$contract_id" \
+//     --network "$NETWORK" \
+//     -- version 2>/dev/null || echo "unknown")
+//   echo "  $contract_id: $version"
+// done
+
+// pub fn initialize(env: Env, /* ... existing args ... */) -> Result<(), ContractError> {
+//     // ... existing init logic ...
+
+//     // Store version in instance storage for runtime retrieval
+//     env.storage()
+//         .instance()
+//         .set(&DataKey::Version, &String::from_str(&env, CONTRACT_VERSION));
+
+//     emit_initialized!(env, CONTRACT_VERSION);
+//     Ok(())
+// }

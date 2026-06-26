@@ -23,6 +23,7 @@
                     <li><a href="#functions">Functions</a></li>
                     <li><a href="#users">Users</a></li>
                     <li><a href="#performance">Performance</a></li>
+                    <li><a href="#complexity">Complexity</a></li>
                 </ul>
             </nav>
             <div class="sidebar-footer">
@@ -75,6 +76,48 @@
                 </div>
             </section>
             
+            <section class="table-container" id="complexity">
+                <div class="section-header-row">
+                    <h3>Contract Complexity (#481)</h3>
+                    <span class="complexity-meta" id="complexity-generated">Run ./scripts/complexity_score.sh</span>
+                </div>
+                <p class="complexity-hint">
+                    Scores use cyclomatic complexity, data structures, external calls, state transitions, and permissions.
+                    Generate <code>dashboard/data/complexity_report.json</code> and trend history before viewing.
+                </p>
+                <div class="stats-grid complexity-stats">
+                    <div class="stat-card">
+                        <h3>Workspace Average</h3>
+                        <p class="stat-value" id="complexity-avg">—</p>
+                        <span class="stat-trend neutral" id="complexity-trend-label">—</span>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Contracts Scored</h3>
+                        <p class="stat-value" id="complexity-count">—</p>
+                        <span class="stat-trend neutral">Static analysis</span>
+                    </div>
+                </div>
+                <div class="chart-box complexity-trend-box">
+                    <h3>Complexity trend (workspace average)</h3>
+                    <canvas id="complexityTrendChart"></canvas>
+                </div>
+                <table id="complexity-table">
+                    <thead>
+                        <tr>
+                            <th>Contract</th>
+                            <th>Total</th>
+                            <th>Grade</th>
+                            <th>Cyclomatic</th>
+                            <th>Data</th>
+                            <th>External</th>
+                            <th>State</th>
+                            <th>Permissions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </section>
+
             <section class="table-container">
                 <h3>Top Performing Functions</h3>
                 <table id="functions-table">

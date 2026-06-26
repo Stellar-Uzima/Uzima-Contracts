@@ -1,4 +1,5 @@
 #![no_std]
+//! medication_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
@@ -437,6 +438,92 @@ impl MedicationManagement {
         }
 
         env.storage().persistent().set(&key, &interaction);
+        Ok(())
+    }
+
+    /// Check if two medications have a known interaction.
+    /// Returns the interaction details if one exists, or None if no interaction is known.
+    pub fn check_interactions(
+        env: Env,
+        medication_a: String,
+        medication_b: String,
+    ) -> Option<DrugInteraction> {
+        let (left, right) = Self::normalized_pair(&medication_a, &medication_b);
+        env.storage()
+            .persistent()
+            .get(&DataKey::Interaction(left, right))
+    }
+
+    /// Update an existing interaction record.
+    /// Only admin, pharmacist, or fda_oracle may call this.
+    pub fn update_interaction(
+        env: Env,
+        operator: Address,
+        interaction: DrugInteraction,
+    ) -> Result<(), Error> {
+        operator.require_auth();
+        let config = Self::get_config(&env)?;
+        if operator != config.admin
+            && operator != config.fda_oracle
+            && operator != config.pharmacist
+        {
+            return Err(Error::Unauthorized);
+        }
+
+        if interaction.medication_a == interaction.medication_b
+            || interaction.medication_a.is_empty()
+            || interaction.medication_b.is_empty()
+        {
+            return Err(Error::InvalidData);
+        }
+
+        let (left, right) =
+            Self::normalized_pair(&interaction.medication_a, &interaction.medication_b);
+        let key = DataKey::Interaction(left, right);
+        if !env.storage().persistent().has(&key) {
+            return Err(Error::MedicationNotFound);
+        }
+
+        env.storage().persistent().set(&key, &interaction);
+        Ok(())
+    }
+
+    /// Resolve (remove) an interaction alert for a given schedule and alert index.
+    /// Only the patient, provider, or admin may call this.
+    pub fn resolve_interaction(
+        env: Env,
+        caller: Address,
+        schedule_id: u64,
+        alert_index: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        let schedule = Self::get_schedule_internal(&env, schedule_id)?;
+        let config = Self::get_config(&env)?;
+        if caller != schedule.patient && caller != schedule.provider && caller != config.admin {
+            return Err(Error::Unauthorized);
+        }
+
+        let alerts: Vec<InteractionAlert> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ScheduleAlerts(schedule_id))
+            .unwrap_or(Vec::new(&env));
+
+        if alert_index >= alerts.len() {
+            return Err(Error::InvalidData);
+        }
+
+        let mut new_alerts = Vec::new(&env);
+        for i in 0..alerts.len() {
+            if i != alert_index {
+                new_alerts.push_back(alerts.get(i).unwrap());
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ScheduleAlerts(schedule_id), &new_alerts);
+
         Ok(())
     }
 

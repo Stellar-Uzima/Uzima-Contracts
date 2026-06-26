@@ -69,21 +69,36 @@ Soroban contracts are single-threaded and do not support mid-execution callbacks
 - Write state **before** making cross-contract calls (checks-effects-interactions pattern).
 - Validate return values from cross-contract calls.
 
-### Replay Attacks
+### Replay Attacks (Triple-Check Pattern)
 
-For cross-chain messages and meta-transactions, always enforce nonces:
+For cross-chain messages, enforce all three protections — **nonce uniqueness**, **expiration**, and
+**chain binding** — in a single call. The project provides a shared `replay_protection` library
+(`libs/replay_protection/`) used by all cross-chain contracts:
 
 ```rust
-fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
-    let stored: u64 = env.storage().persistent()
-        .get(&DataKey::Nonce(sender.clone()))
-        .unwrap_or(0);
-    if nonce != stored.saturating_add(1) {
-        return Err(Error::InvalidNonce);
-    }
-    Ok(())
+use replay_protection::{verify_replay_protection, ChainId};
+
+fn submit_cross_chain_message(
+    env: &Env,
+    message_hash: &BytesN<32>,
+    sender_key: &BytesN<32>,
+    nonce: u64,
+    timestamp: u64,
+    ttl_secs: u64,
+    source_chain: &ChainId,
+    expected_chain: &ChainId,
+) -> Result<(), ReplayError> {
+    // Single call enforces all three guards
+    verify_replay_protection(
+        env, message_hash, sender_key,
+        nonce, timestamp, ttl_secs,
+        source_chain, expected_chain,
+    )
 }
 ```
+
+For confirm/execute stages where nonce and chain were already checked at submission, use
+the lighter `check_message_expired` helper instead.
 
 ### Denial of Service via Unbounded Loops
 
@@ -212,3 +227,151 @@ If a vulnerability is discovered:
 5. Unpause and notify stakeholders.
 
 For critical vulnerabilities, contact the security team directly before any public disclosure.
+
+## 8. Deterministic Build Verification
+
+Auditors review and sign a specific WASM binary. If the artifact that is
+deployed (or later rebuilt) differs from the one that was audited, the entire
+security model breaks: auditors signed one binary while users run another. To
+prevent this, every release records the SHA-256 of each built `.wasm` and CI
+verifies fresh builds against that audited record.
+
+### Record hashes at release time
+
+Build the release artifacts from the **pinned** toolchain (`rust-toolchain.toml`,
+currently Rust 1.92.0) so output is reproducible, then record the hashes and
+attach the auditor's signing key:
+
+```sh
+make dist                                   # builds .wasm into dist/
+./scripts/verify_deployment.sh record mainnet v1.0.0 <auditor_pubkey>
+git add deployments/mainnet/v1.0.0/hashes.txt
+```
+
+This writes `deployments/<network>/<release>/hashes.txt` containing the
+toolchain version, a `Signed-by:` line with the auditor's pubkey, and one
+`<sha256>  <artifact>` line per contract.
+
+### Verify before/after deployment and in CI
+
+```sh
+make dist
+./scripts/verify_deployment.sh compare mainnet v1.0.0
+```
+
+`compare` rebuilds, hashes, and diffs against the recorded set. It **exits
+non-zero on any mismatch**, so it fails CI if a deployed/built artifact drifts
+from the audited record. When no record exists yet for the target network and
+release it is a safe no-op, so CI stays green until a release is recorded.
+
+The CI `Build (wasm32)` job runs `compare` automatically for the current ref
+against both `testnet` and `mainnet` records.
+
+> **Tip:** keep `deployments/<network>/<release>/hashes.txt` immutable once an
+> auditor has signed it. A new audited build means a new release directory, not
+> an edit to an existing one.
+
+---
+
+## 10. Fuzz Testing for Byte-Input Functions
+
+### Background
+
+Several contracts in this repository accept untrusted byte sequences:
+cross-chain messages, ZK proof blobs, encrypted payloads, and XDR-encoded
+state. Without regular fuzzing, edge cases in parse/validate code can remain
+hidden for years until exploited.
+
+`SECURITY_CHECKLIST.md §9` requires fuzz tests for every `pub fn` accepting
+`Bytes`, `Vec<u8>`, or raw message types.
+
+### Architecture
+
+Soroban contracts target `wasm32-unknown-unknown`, which does not support
+libFuzzer. Fuzz targets are therefore compiled for `x86_64-unknown-linux-gnu`
+(the CI host) using `soroban-sdk` testutils. **proptest** provides the primary
+fuzzing engine — it generates shrinkable, coverage-guided property tests that
+automatically minimize failing inputs.
+
+```
+tests/fuzz/
+  zk_verifier/          # verify_proof(Bytes), compute_proof_hash(Bytes)
+  zkp_registry/         # import_state(Bytes), submit_zkp(proof_data: Bytes),
+                        #   verify_range_proof(RangeProof), ciphertext parsing
+  cross_chain_bridge/   # validate_chain_address(String), confirm_message(BytesN<64>)
+  meta_tx_forwarder/    # execute(ForwardRequest, signature: BytesN<64>)
+```
+
+Each directory is a standalone Rust crate (`[workspace]` in its own
+`Cargo.toml`) excluded from the workspace `wasm32` build.
+
+### Functions audited for byte-input risk
+
+| Contract | Function | Byte-input parameter |
+|----------|----------|---------------------|
+| `zk_verifier` | `verify_proof` | `proof: Bytes` |
+| `zk_verifier` | `compute_proof_hash` | `proof: Bytes` |
+| `zkp_registry` | `submit_zkp` | `proof_data: Bytes` |
+| `zkp_registry` | `create_range_proof` | `encrypted_value: Bytes`, `proof_data: Bytes` |
+| `zkp_registry` | `create_credential_proof` | `encrypted_expiration: Bytes` |
+| `zkp_registry` | `import_state` | `state_bytes: Bytes` (XDR deserialization) |
+| `zkp_registry` | `verify_range_proof` | `RangeProof.proof_data`, `RangeProof.encrypted_value` |
+| `cross_chain_bridge` | `validate_chain_address` | `address: String` |
+| `cross_chain_bridge` | `confirm_message` | `signature: BytesN<64>` |
+| `cross_chain_bridge` | `submit_proof` | `signature: BytesN<64>` |
+| `meta_tx_forwarder` | `execute` | `signature: BytesN<64>` |
+| `meta_tx_forwarder` | `execute_batch` | `signatures: Vec<BytesN<64>>` |
+
+### Key invariants tested
+
+1. **No panics**: every function that accepts arbitrary bytes must return `Ok`
+   or a typed `Err`. Host traps caught by `try_*` client methods count as Err.
+2. **`verify_proof` returns `false` without a valid attestation**: arbitrary
+   bytes must never yield `Ok(true)` from an unattested proof.
+3. **`compute_proof_hash` is total**: SHA-256 over any byte sequence must
+   always succeed.
+4. **`import_state` handles malformed XDR**: arbitrary bytes must return
+   `InvalidInput`, never trap.
+5. **Expired requests are rejected before signature verification**: avoids
+   unnecessary crypto work on stale requests.
+
+### Running fuzz tests locally
+
+```sh
+# zk_verifier (quick smoke test — default 500 cases)
+cd tests/fuzz/zk_verifier && cargo test
+
+# Long-duration session (adjust PROPTEST_CASES for time budget)
+PROPTEST_CASES=10000 cargo test --release
+
+# Specific target
+cargo test verify_proof_unattested_returns_false
+
+# All four targets in parallel
+for target in zk_verifier zkp_registry cross_chain_bridge meta_tx_forwarder; do
+  (cd tests/fuzz/$target && PROPTEST_CASES=5000 cargo test --release) &
+done
+wait
+```
+
+### CI schedule
+
+`.github/workflows/fuzz.yml` runs nightly at 02:30 UTC with
+`PROPTEST_CASES=5000` and a 5-minute (`timeout 300`) budget per target.
+On any test failure (non-zero, non-timeout exit):
+
+1. The full proptest log (including shrunk failing input) is uploaded as a
+   workflow artifact retained for 30 days.
+2. A GitHub issue is automatically filed with the label `security,fuzz-crash`
+   and the shrunk reproducer embedded in the body.
+
+A `timeout 124` exit (normal expiry after 5 minutes with no failures) is
+treated as **success** — the fuzzer ran its budget and found nothing.
+
+### Adding a new fuzz target
+
+1. Identify any new `pub fn` that accepts `Bytes`, `Vec<u8>`, or raw message
+   structs containing byte fields.
+2. Add a proptest property to the appropriate `tests/fuzz/<contract>/tests/fuzz.rs`.
+3. Update the table above.
+4. Run locally and confirm the seed corpus passes before pushing.

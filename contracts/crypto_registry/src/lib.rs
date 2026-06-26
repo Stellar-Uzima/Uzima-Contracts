@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+
+//! crypto_registry - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod benchmarks;
@@ -7,7 +10,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    Symbol,
+    Symbol, Vec,
 };
 
 // =============================================================================
@@ -418,5 +421,78 @@ impl CryptoRegistry {
             out.append(&Bytes::from_slice(env, &v.to_be_bytes()));
         }
         out
+    }
+
+    /// Rotate a specific key bundle for an owner with automatic old-key invalidation.
+    /// This implements the envelope encryption pattern: the new key bundle replaces
+    /// the old one atomically, and the old KEK is revoked so it cannot be used for
+    /// future encryption operations.
+    pub fn rotate_key(
+        env: Env,
+        owner: Address,
+        new_encryption_key: PublicKey,
+        new_pq_encryption_key: PublicKey,
+        has_pq_encryption_key: bool,
+        new_signing_key: PublicKey,
+        has_signing_key: bool,
+    ) -> Result<u32, Error> {
+        // Require auth from the owner
+        owner.require_auth();
+        Self::require_initialized(&env)?;
+
+        // Get the current version before rotation
+        let old_version: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CurrentVersion(owner.clone()))
+            .unwrap_or(0);
+
+        // Revoke old key bundle if it exists
+        if old_version > 0 {
+            let old_key = DataKey::Bundle(owner.clone(), old_version);
+            if let Some(mut old_bundle) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, KeyBundle>(&old_key)
+            {
+                old_bundle.revoked = true;
+                env.storage().persistent().set(&old_key, &old_bundle);
+            }
+        }
+
+        // Register the new key bundle
+        let new_version = Self::register_key_bundle(
+            env.clone(),
+            owner.clone(),
+            new_encryption_key,
+            new_pq_encryption_key,
+            has_pq_encryption_key,
+            new_signing_key,
+            has_signing_key,
+        )?;
+
+        // Emit key rotation event
+        env.events().publish(
+            (Symbol::new(&env, "KeyRotated"),),
+            (owner, old_version, new_version),
+        );
+
+        Ok(new_version)
+    }
+
+    /// Get all key bundle versions for an owner (including revoked ones).
+    pub fn get_all_key_versions(env: Env, owner: Address) -> Result<Vec<u32>, Error> {
+        Self::require_initialized(&env)?;
+        let current: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CurrentVersion(owner.clone()))
+            .unwrap_or(0);
+
+        let mut versions = Vec::new(&env);
+        for v in 1..=current {
+            versions.push_back(v);
+        }
+        Ok(versions)
     }
 }

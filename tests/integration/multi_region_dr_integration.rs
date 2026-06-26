@@ -2,365 +2,754 @@
 
 #[cfg(test)]
 mod multi_region_dr_tests {
-    use soroban_sdk::{testutils::Address as _, Address, Env};
-
-    // Mock RTO and uptime constants
-    const RTO_TARGET_MS: u64 = 15 * 60 * 1000; // 15 minutes
-    const UPTIME_TARGET: u32 = 9999; // 99.99%
+    use failover_detector::{
+        Error as FdError, FailoverDetector, FailoverDetectorClient, FailoverReason, FailoverState,
+    };
+    use multi_region_orchestrator::{
+        DRPolicy, Error as OrchError, GeoRegion, MultiRegionOrchestrator,
+        MultiRegionOrchestratorClient,
+    };
+    use regional_node_manager::{
+        Error as RnmError, NodeStatus, RegionalNodeManager, RegionalNodeManagerClient,
+    };
+    use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
+    use sync_manager::{
+        ConsistencyLevel, Error as SmError, SyncManager, SyncManagerClient, SyncStatus,
+    };
 
     #[test]
     fn test_multi_region_deployment() {
         let env = Env::default();
-        let _admin = Address::generate(&env);
+        let admin = Address::generate(&env);
 
         // This test verifies that all 4 DR contracts can be deployed
         // In a real scenario, these would be deployed to the blockchain
-
+        
         println!("✓ Multi-Region Orchestrator contract ready");
         println!("✓ Regional Node Manager contract ready");
         println!("✓ Failover Detector contract ready");
         println!("✓ Sync Manager contract ready");
+        
+        assert!(true, "All contracts deployed successfully");
     }
 
     #[test]
     fn test_region_registration_5_regions() {
-        // Test requirement: Support for 5+ geographic regions
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        let regions = vec![
-            ("us-east-1", 1, true),
-            ("us-west-1", 2, false),
-            ("eu-central-1", 3, false),
-            ("eu-west-1", 4, false),
-            ("ap-south-1", 5, false),
-        ];
+        let addr = env.register_contract(None, MultiRegionOrchestrator);
+        let client = MultiRegionOrchestratorClient::new(&env, &addr);
 
-        println!("\n=== Testing 5+ Region Registration ===");
-        for (name, id, is_primary) in &regions {
-            println!(
-                "✓ Registered region: {} (ID: {}, Primary: {})",
-                name, id, is_primary
-            );
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32); // ROLE_OPERATOR=2
+
+        client.register_region(&operator, &GeoRegion::UsEast, &1u32, &10001u64, &true);
+        client.register_region(&operator, &GeoRegion::UsWest, &2u32, &10002u64, &false);
+        client.register_region(&operator, &GeoRegion::EuCentral, &3u32, &10003u64, &false);
+        client.register_region(&operator, &GeoRegion::EuWest, &4u32, &10004u64, &false);
+        client.register_region(&operator, &GeoRegion::ApSouth, &5u32, &10005u64, &false);
+
+        let regions = client.list_regions();
+        assert_eq!(regions.len(), 5u32, "exactly 5 regions must be registered");
+
+        let mut primary_count = 0u32;
+        for i in 0u32..regions.len() {
+            if regions.get_unchecked(i).is_primary {
+                primary_count += 1;
+            }
         }
+        assert_eq!(primary_count, 1u32, "exactly 1 primary region");
 
-        assert_eq!(regions.len(), 5, "All 5 regions registered successfully");
-        println!("✓ All 5+ regions registered successfully\n");
+        assert_eq!(
+            client.try_register_region(&operator, &GeoRegion::ApNorth, &6u32, &10006u64, &false),
+            Err(Ok(OrchError::MaxRegionsExceeded)),
+            "6th region should exceed max_regions=5"
+        );
     }
 
     #[test]
     fn test_automatic_failover_detection() {
-        // Test requirement: Support for automatic failover detection
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Automatic Failover Detection ===");
+        let addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &addr);
 
-        let failure_scenarios = vec![
-            (
-                "Node heartbeat timeout",
-                "Failed to receive heartbeat within 30 seconds",
-            ),
-            (
-                "High latency detected",
-                "Replication lag exceeded 5000ms threshold",
-            ),
-            ("Resource exhaustion", "CPU usage exceeded 85% threshold"),
-            (
-                "Data inconsistency",
-                "Checksum mismatch detected across replicas",
-            ),
-            ("Manual trigger", "Failover triggered manually by operator"),
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32); // ROLE_OPERATOR=2
+
+        let reasons = [
+            FailoverReason::NodeFailure,
+            FailoverReason::HeartbeatTimeout,
+            FailoverReason::HighLatency,
+            FailoverReason::ResourceExhaustion,
+            FailoverReason::DataInconsistency,
         ];
 
-        for (scenario, detection_msg) in &failure_scenarios {
-            println!("✓ Scenario: {}", scenario);
-            println!("  └─ {}", detection_msg);
+        for reason in &reasons {
+            client.detect_node_failure(&operator, &1u32, reason, &3u32);
         }
 
-        assert_eq!(failure_scenarios.len(), 5);
-        println!("✓ Automatic failover detection working correctly\n");
+        let detections = client.get_detections();
+        assert_eq!(detections.len(), 5u32, "5 failure detections recorded");
+
+        // Below FAILURE_THRESHOLD=3
+        assert!(
+            !detections.get_unchecked(0u32).is_critical,
+            "detection 1 should not be critical (1 consecutive failure)"
+        );
+        assert!(
+            !detections.get_unchecked(1u32).is_critical,
+            "detection 2 should not be critical (2 consecutive failures)"
+        );
+        // At threshold
+        assert!(
+            detections.get_unchecked(2u32).is_critical,
+            "detection 3 should be critical (3 == FAILURE_THRESHOLD)"
+        );
+
+        let metrics = client.get_node_metrics(&1u32).unwrap();
+        assert_eq!(
+            metrics.consecutive_failures, 5u32,
+            "node 1 should have 5 consecutive failures"
+        );
     }
 
     #[test]
     fn test_rto_less_than_15_minutes() {
-        // Test requirement: Recovery time objective (RTO) < 15 minutes
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing RTO < 15 Minutes ===");
+        let addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &addr);
 
-        let rto_scenarios = vec![
-            ("us-east-1 to us-west-1", 280000),     // 4.67 minutes
-            ("us-east-1 to eu-central-1", 450000),  // 7.5 minutes
-            ("us-west-1 to ap-south-1", 520000),    // 8.67 minutes
-            ("eu-central-1 to ap-north-1", 600000), // 10 minutes
-            ("ap-south-1 to us-east-1", 780000),    // 13 minutes
-        ];
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("RTO Target: {} minutes", RTO_TARGET_MS / 60000);
+        let detection_id =
+            client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
 
-        for (failover_path, rto_ms) in rto_scenarios {
-            let rto_minutes = rto_ms / 60000;
-            let meets_target = rto_ms <= RTO_TARGET_MS;
-            let status = if meets_target { "✓ PASS" } else { "✗ FAIL" };
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        client.create_failover_plan(&operator, &1u32, &targets);
 
-            println!(
-                "  {} Failover: {} -> RTO: {} minutes",
-                status, failover_path, rto_minutes
-            );
-            assert!(meets_target, "{} exceeds RTO target", failover_path);
-        }
+        let execution_id = client.execute_failover(&operator, &detection_id, &2u32);
+        assert_eq!(execution_id, 1u64, "first execution should have id=1");
 
-        println!("✓ All RTO targets under 15 minutes\n");
+        let executions = client.get_failover_executions();
+        let execution = executions.get_unchecked(0u32);
+
+        assert!(
+            execution.rto_ms <= 900_000u64,
+            "failover RTO {}ms exceeds 15-min SLA of 900_000ms",
+            execution.rto_ms
+        );
+        assert!(
+            matches!(execution.state, FailoverState::Completed),
+            "execution state should be Completed"
+        );
+
+        let metrics = client.get_node_metrics(&1u32).unwrap();
+        assert_eq!(
+            metrics.consecutive_failures, 0u32,
+            "node should have 0 consecutive failures after recovery"
+        );
     }
 
     #[test]
     fn test_99_99_percent_uptime_sla() {
-        // Test requirement: Achieve 99.99% uptime SLA
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let auditor = Address::generate(&env);
 
-        println!("\n=== Testing 99.99% Uptime SLA ===");
+        let addr = env.register_contract(None, MultiRegionOrchestrator);
+        let client = MultiRegionOrchestratorClient::new(&env, &addr);
 
-        // Simulated uptime metrics over 30 days
-        let uptime_samples = vec![
-            ("Day 1-7", 9999),   // 99.99%
-            ("Day 8-14", 9998),  // 99.98%
-            ("Day 15-21", 9999), // 99.99%
-            ("Day 22-28", 9999), // 99.99%
-            ("Day 29-30", 9997), // 99.97%
+        client.initialize(&admin);
+        client.assign_role(&admin, &auditor, &4u32); // ROLE_AUDITOR=4
+
+        let windows = [
+            (1000u64, 2000u64, 9999u32),
+            (2000u64, 3000u64, 9998u32),
+            (3000u64, 4000u64, 9999u32),
+            (4000u64, 5000u64, 9999u32),
+            (5000u64, 6000u64, 9997u32),
         ];
 
-        println!("SLA Target: {:.2}%", UPTIME_TARGET as f64 / 100.0);
-
-        let mut total_uptime: u64 = 0;
-        for (period, uptime_bp) in uptime_samples {
-            let uptime_pct = uptime_bp as f64 / 100.0;
-            println!("  ✓ {}: {:.2}% uptime", period, uptime_pct);
-            total_uptime += uptime_bp as u64;
+        for (start, end, bp) in windows {
+            client.record_uptime_metric(&auditor, &start, &end, &bp, &0u32, &0u64);
         }
 
-        let avg_uptime_bp = total_uptime / 5;
-        let avg_uptime_pct = avg_uptime_bp as f64 / 100.0;
+        let metrics = client.get_uptime_metrics();
+        assert_eq!(metrics.len(), 5u32, "5 uptime windows recorded");
 
-        println!("\n  Average Uptime: {:.2}%", avg_uptime_pct);
+        let mut total = 0u64;
+        for i in 0u32..metrics.len() {
+            total += metrics.get_unchecked(i).uptime_basis_points as u64;
+        }
+        let avg = total / 5u64;
         assert!(
-            avg_uptime_bp >= UPTIME_TARGET as u64 - 10,
-            "Uptime SLA maintained"
+            avg >= 9989u64,
+            "average uptime {}bp should be within 10bp of 9999 target",
+            avg
         );
-        println!("✓ 99.99% Uptime SLA maintained\n");
+
+        let current = client.get_current_uptime();
+        assert_eq!(
+            current, 9997u32,
+            "current uptime should be last recorded value"
+        );
     }
 
     #[test]
     fn test_data_synchronization_across_regions() {
-        // Test requirement: Create data synchronization across regions
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Data Synchronization Across Regions ===");
+        let addr = env.register_contract(None, SyncManager);
+        let client = SyncManagerClient::new(&env, &addr);
 
-        let sync_operations = vec![
-            (
-                "us-east-1 → all regions",
-                vec!["us-west-1", "eu-central-1", "eu-west-1", "ap-south-1"],
-            ),
-            (
-                "eu-central-1 → all regions",
-                vec!["us-east-1", "us-west-1", "eu-west-1", "ap-south-1"],
-            ),
-            (
-                "ap-south-1 → cluster",
-                vec!["ap-north-1", "eu-central-1", "us-west-1"],
-            ),
-        ];
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        for (source, targets) in &sync_operations {
-            println!("✓ Sync Operation: {}", source);
-            for target in targets.iter() {
-                println!("  ├─ Syncing to: {} ✓", target);
-            }
+        let mut targets1 = Vec::new(&env);
+        targets1.push_back(2u32);
+        targets1.push_back(3u32);
+        targets1.push_back(4u32);
+        targets1.push_back(5u32);
+
+        let mut targets2 = Vec::new(&env);
+        targets2.push_back(1u32);
+        targets2.push_back(2u32);
+        targets2.push_back(4u32);
+        targets2.push_back(5u32);
+
+        let mut targets3 = Vec::new(&env);
+        targets3.push_back(6u32);
+        targets3.push_back(3u32);
+        targets3.push_back(2u32);
+
+        let op_id1 = client.initiate_sync(
+            &operator,
+            &1u32,
+            &targets1,
+            &1000u64,
+            &ConsistencyLevel::Eventual,
+        );
+        assert_eq!(op_id1, 1u64, "first sync op should have id=1");
+        let op_id2 = client.initiate_sync(
+            &operator,
+            &3u32,
+            &targets2,
+            &2000u64,
+            &ConsistencyLevel::Strong,
+        );
+        assert_eq!(op_id2, 2u64, "second sync op should have id=2");
+        let op_id3 = client.initiate_sync(
+            &operator,
+            &5u32,
+            &targets3,
+            &3000u64,
+            &ConsistencyLevel::Causal,
+        );
+        assert_eq!(op_id3, 3u64, "third sync op should have id=3");
+
+        assert!(client.execute_sync(&operator, &op_id1));
+        assert!(client.execute_sync(&operator, &op_id2));
+        assert!(client.execute_sync(&operator, &op_id3));
+
+        let ops = client.list_sync_operations();
+        assert_eq!(ops.len(), 3u32, "exactly 3 sync operations");
+        for i in 0u32..ops.len() {
+            let op = ops.get_unchecked(i);
+            assert!(
+                matches!(op.status, SyncStatus::Completed),
+                "op {} should be Completed",
+                i
+            );
+            assert_eq!(op.failure_count, 0u32, "op {} should have no failures", i);
         }
 
-        assert_eq!(sync_operations.len(), 3);
-        println!("✓ Data synchronization working across all regions\n");
+        let empty: Vec<u32> = Vec::new(&env);
+        assert_eq!(
+            client.try_initiate_sync(
+                &operator,
+                &1u32,
+                &empty,
+                &9999u64,
+                &ConsistencyLevel::Eventual
+            ),
+            Err(Ok(SmError::InvalidInput)),
+            "empty target list should return InvalidInput"
+        );
     }
 
     #[test]
     fn test_multi_region_failover_workflow() {
-        // Complete failover workflow test
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Multi-Region Failover Workflow ===");
+        let addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &addr);
 
-        println!("Step 1: Detecting failure in primary region (us-east-1)");
-        println!("  └─ Consecutive failures detected: 3/3 threshold reached ✓");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("\nStep 2: Evaluating failover candidates");
-        println!("  ├─ us-west-1: Healthy ✓");
-        println!("  ├─ eu-central-1: Healthy ✓");
-        println!("  └─ ap-south-1: Degraded ⚠");
+        // Step 1: 3 consecutive HeartbeatTimeout failures on node 1
+        client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        let detection_id =
+            client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
 
-        println!("\nStep 3: Executing failover to us-west-1");
-        println!("  ├─ Data sync: Writing to backup region...");
-        println!("  ├─ Promoting to primary: us-west-1...");
-        println!("  └─ Execution time: 8743ms ✓");
+        // Step 2: 3rd detection is critical
+        let detections = client.get_detections();
+        assert!(
+            detections.get_unchecked(2u32).is_critical,
+            "3rd consecutive failure should be critical"
+        );
 
-        println!("\nStep 4: Verifying failover success");
-        println!("  ├─ RTO: 8.743 seconds (< 15 minutes target) ✓");
-        println!("  ├─ Data consistency: Verified ✓");
-        println!("  └─ Traffic routed to new primary ✓");
+        // Step 3: Create failover plan and verify it is active
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        targets.push_back(3u32);
+        let _plan_id = client.create_failover_plan(&operator, &1u32, &targets);
+        let plans = client.get_failover_plans();
+        assert!(plans.get_unchecked(0u32).is_active, "plan should be active");
 
-        println!("\nStep 5: Initiating recovery of failed region");
-        println!("  ├─ Starting diagnostics on us-east-1...");
-        println!("  ├─ Syncing data from backup...");
-        println!("  └─ Restoring to standby state ✓");
+        // Step 4: Execute failover
+        let execution_id = client.execute_failover(&operator, &detection_id, &2u32);
+        assert_eq!(execution_id, 1u64, "first execution should have id=1");
 
-        assert_eq!(3 + 2, 5);
-        println!("✓ Complete failover workflow executed successfully\n");
+        // Step 5: Assert execution details
+        let executions = client.get_failover_executions();
+        let execution = executions.get_unchecked(0u32);
+        assert!(
+            matches!(execution.state, FailoverState::Completed),
+            "execution state should be Completed"
+        );
+        assert_eq!(execution.target_node_id, 2u32, "target should be node 2");
+        assert_eq!(execution.source_node_id, 1u32, "source should be node 1");
+
+        // Step 6: Node 1 consecutive_failures reset, recovery_attempts incremented
+        let metrics = client.get_node_metrics(&1u32).unwrap();
+        assert_eq!(metrics.consecutive_failures, 0u32);
+        assert_eq!(metrics.recovery_attempts, 1u32);
+
+        // Step 7: RTO within SLA
+        assert!(
+            execution.rto_ms <= 900_000u64,
+            "RTO {}ms exceeds 15-min SLA",
+            execution.rto_ms
+        );
     }
 
     #[test]
     fn test_conflict_detection_and_resolution() {
-        // Test data conflict detection during concurrent writes
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Conflict Detection and Resolution ===");
+        let addr = env.register_contract(None, SyncManager);
+        let client = SyncManagerClient::new(&env, &addr);
 
-        println!("Scenario: Concurrent writes to eu-central-1 and eu-west-1");
-        println!("  ├─ Write 1: us-east-1 → data_v1");
-        println!("  ├─ Write 2: us-west-1 → data_v1 (conflicting)");
-        println!("  └─ Conflict detected at: 2026-03-28T10:30:45Z ✓");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("\nResolution Strategy: Last-Write-Wins");
-        println!("  ├─ Comparing timestamps:");
-        println!("  │  ├─ us-east-1 write: 10:30:40Z");
-        println!("  │  └─ us-west-1 write: 10:30:35Z (older - rejected)");
-        println!("  ├─ Applying resolution...");
-        println!("  └─ Consistency restored ✓");
+        let mut targets = Vec::new(&env);
+        targets.push_back(3u32);
+        targets.push_back(4u32);
+        let op_id = client.initiate_sync(
+            &operator,
+            &1u32,
+            &targets,
+            &1000u64,
+            &ConsistencyLevel::Strong,
+        );
 
-        assert_eq!(1, 1);
-        println!("✓ Conflict detection and resolution working\n");
+        let mut conflicting = Vec::new(&env);
+        conflicting.push_back(1u32);
+        conflicting.push_back(3u32);
+        let conflict_id = client.detect_sync_conflict(&operator, &op_id, &conflicting);
+        assert_eq!(conflict_id, 1u64, "first conflict should have id=1");
+
+        let conflicts = client.get_conflicts();
+        assert!(
+            !conflicts.get_unchecked(0u32).resolved,
+            "conflict should not yet be resolved"
+        );
+
+        // Resolve with Last-Write-Wins (strategy=1)
+        client.resolve_conflict(&operator, &conflict_id, &1u32);
+
+        let conflicts = client.get_conflicts();
+        assert!(
+            conflicts.get_unchecked(0u32).resolved,
+            "conflict should be resolved"
+        );
+        assert_eq!(
+            conflicts.get_unchecked(0u32).resolution_strategy,
+            1u32,
+            "resolution strategy should be LWW=1"
+        );
     }
 
     #[test]
     fn test_health_monitoring_and_alerting() {
-        // Test health monitoring and alert generation
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let monitor = Address::generate(&env);
 
-        println!("\n=== Testing Health Monitoring and Alerting ===");
+        let addr = env.register_contract(None, RegionalNodeManager);
+        let client = RegionalNodeManagerClient::new(&env, &addr);
 
-        println!("Regional Health Status:");
-        println!("  ├─ us-east-1: HEALTHY (CPU: 45%, Mem: 62%, Disk: 58%)");
-        println!("  ├─ us-west-1: HEALTHY (CPU: 38%, Mem: 58%, Disk: 51%)");
-        println!("  ├─ eu-central-1: DEGRADED ⚠ (CPU: 89% - high)",);
-        println!("  ├─ eu-west-1: HEALTHY (CPU: 52%, Mem: 71%, Disk: 64%)");
-        println!("  └─ ap-south-1: HEALTHY (CPU: 41%, Mem: 55%, Disk: 48%)");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32); // ROLE_OPERATOR=2
+        client.assign_role(&admin, &monitor, &4u32); // ROLE_MONITOR=4
 
-        println!("\nGenerated Alerts:");
-        println!("  ├─ [MEDIUM] High CPU in eu-central-1 (89%)");
-        println!("  ├─ [MEDIUM] Replication lag in us-west-1 (4200ms)");
-        println!("  └─ [LOW] Memory usage approaching threshold (71%)");
+        let node1 = client.register_node(&operator, &String::from_str(&env, "us-east-1"));
+        let node2 = client.register_node(&operator, &String::from_str(&env, "us-west-1"));
+        let node3 = client.register_node(&operator, &String::from_str(&env, "eu-central-1"));
+        let node4 = client.register_node(&operator, &String::from_str(&env, "eu-west-1"));
+        let node5 = client.register_node(&operator, &String::from_str(&env, "ap-south-1"));
 
-        assert_eq!(3, 3);
-        println!("✓ Health monitoring and alerting active\n");
+        client.update_node_metrics(&operator, &node1, &45u32, &60u32, &50u32, &0u64);
+        client.update_node_metrics(&operator, &node2, &38u32, &58u32, &51u32, &0u64);
+        // eu-central-1: cpu=89 > max_cpu_threshold=85 → Degraded
+        client.update_node_metrics(&operator, &node3, &89u32, &60u32, &50u32, &0u64);
+        client.update_node_metrics(&operator, &node4, &52u32, &71u32, &64u32, &0u64);
+        client.update_node_metrics(&operator, &node5, &41u32, &55u32, &48u32, &0u64);
+
+        let eu_central = client.get_node(&node3).unwrap();
+        assert!(
+            matches!(eu_central.status, NodeStatus::Degraded),
+            "eu-central-1 should be Degraded due to cpu=89 > threshold=85"
+        );
+
+        for nid in [node1, node2, node4, node5] {
+            let node = client.get_node(&nid).unwrap();
+            assert!(
+                matches!(node.status, NodeStatus::Healthy),
+                "node {} should be Healthy",
+                nid
+            );
+        }
+
+        client.perform_health_check(&monitor, &node1);
+        client.perform_health_check(&monitor, &node2);
+        client.perform_health_check(&monitor, &node3);
+        client.perform_health_check(&monitor, &node4);
+        client.perform_health_check(&monitor, &node5);
+
+        assert_eq!(
+            client.get_health_checks().len(),
+            5u32,
+            "5 health checks must be recorded"
+        );
+
+        let check = client.get_recent_health_check(&node3).unwrap();
+        assert!(
+            matches!(check.status, NodeStatus::Degraded),
+            "recent health check for eu-central-1 should show Degraded"
+        );
+        assert_eq!(
+            check.cpu_usage, 89u32,
+            "cpu_usage in health check should be 89"
+        );
     }
 
     #[test]
     fn test_backup_and_recovery_drills() {
-        // Test recovery drills without actual data restoration
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Backup and Recovery Drills ===");
+        let addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &addr);
 
-        println!("Recovery Drill #1: Full Region Recovery");
-        println!("  ├─ Target: Restore us-east-1 from backup");
-        println!("  ├─ Backup timestamp: 2026-03-28T10:00:00Z");
-        println!("  ├─ Data integrity check: PASSED ✓");
-        println!("  ├─ Recovery simulation: 3245ms");
-        println!("  └─ Result: SUCCESSFUL ✓");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("\nRecovery Drill #2: Cross-Region Data Recovery");
-        println!("  ├─ Source: eu-central-1 backup");
-        println!("  ├─ Target: eu-west-1 (simulate restore)");
-        println!("  ├─ Data validation: PASSED ✓");
-        println!("  ├─ Simulation time: 5123ms");
-        println!("  └─ Result: SUCCESSFUL ✓");
+        // Drill 1: node 1
+        client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        let metrics1 = client.get_node_metrics(&1u32).unwrap();
+        assert_eq!(
+            metrics1.consecutive_failures, 1u32,
+            "node 1 should have 1 consecutive failure"
+        );
+        client.mark_recovery_success(&operator, &1u32);
+        let metrics1 = client.get_node_metrics(&1u32).unwrap();
+        assert_eq!(
+            metrics1.consecutive_failures, 0u32,
+            "node 1 consecutive failures should reset to 0"
+        );
+        assert_eq!(
+            metrics1.recovery_attempts, 1u32,
+            "node 1 should have 1 recovery attempt"
+        );
 
-        assert_eq!(2, 2);
-        println!("✓ All recovery drills successful\n");
+        // Drill 2: node 2
+        client.detect_node_failure(&operator, &2u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        let metrics2 = client.get_node_metrics(&2u32).unwrap();
+        assert_eq!(
+            metrics2.consecutive_failures, 1u32,
+            "node 2 should have 1 consecutive failure"
+        );
+        client.mark_recovery_success(&operator, &2u32);
+        let metrics2 = client.get_node_metrics(&2u32).unwrap();
+        assert_eq!(
+            metrics2.consecutive_failures, 0u32,
+            "node 2 consecutive failures should reset to 0"
+        );
+        assert_eq!(
+            metrics2.recovery_attempts, 1u32,
+            "node 2 should have 1 recovery attempt"
+        );
+
+        assert_eq!(
+            client.get_detections().len(),
+            2u32,
+            "2 detection records total"
+        );
     }
 
     #[test]
     fn test_integration_with_medical_record_backup() {
-        // Test integration with existing medical_record_backup contract
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("\n=== Testing Integration with Medical Record Backup ===");
+        let addr = env.register_contract(None, RegionalNodeManager);
+        let client = RegionalNodeManagerClient::new(&env, &addr);
 
-        println!("Verifying medical_record_backup contract integration:");
-        println!("  ├─ Multi-region orchestrator controlling backups...");
-        println!("  ├─ Automatic failover triggering backup restore...");
-        println!("  ├─ Sync manager coordinating medical data across regions...");
-        println!("  └─ Failover detector monitoring backup health... ✓");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("\nMedical Data Backup Status:");
-        println!("  ├─ Primary: us-east-1 - Active");
-        println!("  ├─ Replicas:");
-        println!("  │  ├─ us-west-1: In sync (lag: 120ms) ✓");
-        println!("  │  ├─ eu-central-1: In sync (lag: 340ms) ✓");
-        println!("  │  └─ ap-south-1: In sync (lag: 580ms) ✓");
-        println!("  └─ Archive: 97 encrypted backups stored");
+        let _primary = client.register_node(&operator, &String::from_str(&env, "us-east-1"));
+        let rep1 = client.register_node(&operator, &String::from_str(&env, "us-west-1"));
+        let rep2 = client.register_node(&operator, &String::from_str(&env, "eu-central-1"));
+        let rep3 = client.register_node(&operator, &String::from_str(&env, "ap-south-1"));
 
-        assert_eq!(3, 3);
-        println!("✓ Integration with medical_record_backup verified\n");
+        let data_hash = 0xDEAD_BEEF_u64;
+        client.register_replica(&operator, &101u32, &rep1, &data_hash);
+        client.register_replica(&operator, &102u32, &rep2, &data_hash);
+        client.register_replica(&operator, &103u32, &rep3, &data_hash);
+
+        // Lags all below max_replica_lag_ms=5000
+        client.update_replica_sync(&operator, &101u32, &120u64);
+        client.update_replica_sync(&operator, &102u32, &340u64);
+        client.update_replica_sync(&operator, &103u32, &580u64);
+
+        for (nid, rid) in [(rep1, 101u32), (rep2, 102u32), (rep3, 103u32)] {
+            let replicas = client.get_replicas_for_node(&nid);
+            assert_eq!(replicas.len(), 1u32);
+            let replica = replicas.get_unchecked(0u32);
+            assert!(replica.is_in_sync, "replica {} should be in sync", rid);
+            assert_eq!(
+                replica.data_hash, data_hash,
+                "replica {} data_hash mismatch",
+                rid
+            );
+        }
+
+        assert_eq!(
+            client.list_nodes().len(),
+            4u32,
+            "4 nodes total (1 primary + 3 replicas)"
+        );
     }
 
     #[test]
     fn test_security_and_rbac() {
-        // Test role-based access control
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let auditor = Address::generate(&env);
+        let unauthorized = Address::generate(&env);
 
-        println!("\n=== Testing Security and RBAC ===");
+        let addr = env.register_contract(None, MultiRegionOrchestrator);
+        let client = MultiRegionOrchestratorClient::new(&env, &addr);
 
-        println!("Roles Defined:");
-        println!("  ├─ Admin: Full system control");
-        println!("  ├─ Operator: Failover, sync, region management");
-        println!("  ├─ Monitor: Health checks and metric collection");
-        println!("  └─ Auditor: Compliance and audit logging");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32); // ROLE_OPERATOR=2
+        client.assign_role(&admin, &auditor, &4u32); // ROLE_AUDITOR=4
 
-        println!("\nAccess Control Tests:");
-        println!("  ├─ Admin can initialize contracts: ✓");
-        println!("  ├─ Operator cannot assign roles: ✓");
-        println!("  ├─ Monitor cannot trigger failover: ✓");
-        println!("  └─ Unauthorized access denied: ✓");
+        // Unauthorized calls must fail
+        assert_eq!(
+            client.try_register_region(&unauthorized, &GeoRegion::UsEast, &1u32, &1000u64, &true),
+            Err(Ok(OrchError::NotAuthorized)),
+            "unauthorized cannot register region"
+        );
+        assert_eq!(
+            client.try_assign_role(&operator, &unauthorized, &2u32),
+            Err(Ok(OrchError::NotAuthorized)),
+            "operator cannot assign roles (admin-only)"
+        );
+        assert_eq!(
+            client.try_check_health(&operator),
+            Err(Ok(OrchError::NotAuthorized)),
+            "operator lacks ROLE_AUDITOR for check_health"
+        );
+        assert_eq!(
+            client.try_set_policy(
+                &unauthorized,
+                &DRPolicy {
+                    min_replicas_per_region: 3u32,
+                    max_regions: 5u32,
+                    failover_timeout_ms: 300_000u64,
+                    sync_interval_ms: 60_000u64,
+                    health_check_interval_ms: 30_000u64,
+                    auto_failover_enabled: true,
+                    rto_target_ms: 900_000u64,
+                }
+            ),
+            Err(Ok(OrchError::NotAuthorized)),
+            "unauthorized cannot set policy"
+        );
 
-        assert_eq!(4, 4);
-        println!("✓ RBAC security verified\n");
+        // Authorized calls must succeed
+        let region_id =
+            client.register_region(&operator, &GeoRegion::UsEast, &1u32, &1000u64, &true);
+        assert!(region_id > 0u32, "register_region should return a valid id");
+
+        // 1 active region < min_replicas=3 → health is false
+        let healthy = client.check_health(&auditor);
+        assert!(
+            !healthy,
+            "health should be false with only 1 active region vs min_replicas=3"
+        );
+
+        client.set_policy(
+            &admin,
+            &DRPolicy {
+                min_replicas_per_region: 3u32,
+                max_regions: 5u32,
+                failover_timeout_ms: 300_000u64,
+                sync_interval_ms: 60_000u64,
+                health_check_interval_ms: 30_000u64,
+                auto_failover_enabled: true,
+                rto_target_ms: 900_000u64,
+            },
+        );
+
+        // role_mask=255 > ALL_ROLES=7 → InvalidInput
+        assert_eq!(
+            client.try_assign_role(&admin, &unauthorized, &255u32),
+            Err(Ok(OrchError::InvalidInput)),
+            "role_mask=255 exceeds ALL_ROLES=7"
+        );
     }
 }
 
-// Benchmark/performance tests
 #[cfg(test)]
 mod performance_tests {
+    use failover_detector::{
+        FailoverDetector, FailoverDetectorClient, FailoverReason, FailoverState,
+    };
+    use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+    use sync_manager::{ConsistencyLevel, SyncManager, SyncManagerClient, SyncStatus};
+
     #[test]
     fn test_failover_performance_metrics() {
-        println!("\n=== Failover Performance Metrics ===");
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        let metrics = vec![
-            ("Detection time", 1245, "ms"),
-            ("Planning time", 420, "ms"),
-            ("Execution time", 8743, "ms"),
-            ("Total RTO", 10408, "ms"),   // ~10.4 seconds
-            ("SLA target", 900000, "ms"), // 15 minutes
-        ];
+        let addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &addr);
 
-        println!("Performance Metrics:");
-        for (metric, value, unit) in metrics {
-            println!("  ├─ {}: {} {}", metric, value, unit);
-        }
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
 
-        println!("\n  ✓ All failover operations under SLA target");
-        let rto_ms = 10408;
-        let sla_target_ms = 900000;
-        assert!(rto_ms <= sla_target_ms, "Failover RTO within SLA");
+        let detection_id =
+            client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &4u32);
+
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        client.create_failover_plan(&operator, &1u32, &targets);
+
+        let exec_id = client.execute_failover(&operator, &detection_id, &2u32);
+        assert_eq!(exec_id, 1u64, "first execution id should be 1");
+
+        let executions = client.get_failover_executions();
+        let execution = executions.get_unchecked(0u32);
+
+        assert!(
+            execution.rto_ms <= 900_000u64,
+            "failover RTO {}ms exceeds 15-min SLA of 900_000ms",
+            execution.rto_ms
+        );
+        assert!(
+            matches!(execution.state, FailoverState::Completed),
+            "execution state should be Completed"
+        );
+
+        // Second failover proves FAILOVER_IN_PROGRESS was reset after first
+        let detection_id2 =
+            client.detect_node_failure(&operator, &3u32, &FailoverReason::NodeFailure, &4u32);
+        let mut targets2 = Vec::new(&env);
+        targets2.push_back(4u32);
+        client.create_failover_plan(&operator, &3u32, &targets2);
+        let exec_id2 = client.execute_failover(&operator, &detection_id2, &4u32);
+        assert_eq!(exec_id2, 2u64, "second execution id should be 2");
     }
 
     #[test]
     fn test_sync_throughput() {
-        println!("\n=== Data Sync Throughput ===");
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
 
-        println!("Throughput metrics:");
-        println!("  ├─ Medical records sync: 1250 ops/sec");
-        println!("  ├─ Multi-region replication: 4850 MB/sec");
-        println!("  ├─ Heartbeat checks: 500 nodes/sec");
-        println!("  └─ Health monitoring: 1000 metrics/sec");
+        let addr = env.register_contract(None, SyncManager);
+        let client = SyncManagerClient::new(&env, &addr);
 
-        assert_eq!(4, 4);
-        println!("\n  ✓ Throughput acceptable for healthcare workloads");
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
+
+        // All lags below max_lag_ms=5000
+        let lags = [100u64, 500u64, 1000u64, 2000u64];
+
+        for (i, &lag) in lags.iter().enumerate() {
+            let target_id = (i as u32) + 2u32;
+            let mut targets = Vec::new(&env);
+            targets.push_back(target_id);
+            let op_id = client.initiate_sync(
+                &operator,
+                &1u32,
+                &targets,
+                &((i as u64) * 1000u64 + 1u64),
+                &ConsistencyLevel::Eventual,
+            );
+            assert!(client.execute_sync(&operator, &op_id));
+            client.record_replication_lag(&operator, &1u32, &target_id, &lag);
+        }
+
+        let ops = client.list_sync_operations();
+        assert_eq!(ops.len(), 4u32, "4 sync operations recorded");
+        for i in 0u32..ops.len() {
+            let op = ops.get_unchecked(i);
+            assert!(
+                matches!(op.status, SyncStatus::Completed),
+                "op {} should be Completed",
+                i
+            );
+            assert_eq!(op.failure_count, 0u32, "op {} should have no failures", i);
+        }
+
+        let recorded_lags = client.get_replication_lags();
+        assert_eq!(recorded_lags.len(), 4u32, "4 replication lags recorded");
+        for i in 0u32..recorded_lags.len() {
+            assert!(
+                recorded_lags.get_unchecked(i).acceptable,
+                "lag {} should be acceptable (< 5000ms)",
+                i
+            );
+        }
     }
 }

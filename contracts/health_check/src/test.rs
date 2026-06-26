@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use soroban_sdk::{testutils::Ledger, Env};
 
@@ -9,8 +7,9 @@ fn test_initialize() {
     let contract_id = env.register_contract(None, HealthCheckContract);
     let client = HealthCheckContractClient::new(&env, &contract_id);
 
-    assert!(client.initialize());
-    assert!(!client.initialize()); // Second init should fail
+    client.initialize();
+    let result = client.try_initialize();
+    assert!(result.is_err()); // Second init should fail
 }
 
 #[test]
@@ -146,12 +145,12 @@ fn test_alert_thresholds() {
     client.record_operation(&1000, &true);
 
     let alerts = client.check_alert_thresholds();
-    assert!(alerts.len() > 0);
+    assert!(!alerts.is_empty());
 
     // Trigger pause alert
     client.set_paused(&true);
     let alerts = client.check_alert_thresholds();
-    assert!(alerts.len() > 0);
+    assert!(!alerts.is_empty());
 }
 
 #[test]

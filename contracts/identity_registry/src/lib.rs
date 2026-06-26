@@ -1,3 +1,4 @@
+//! identity_registry - Healthcare smart contract on Stellar blockchain.
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
@@ -8,8 +9,8 @@ pub mod errors;
 pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
-    Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    String, Symbol, Vec,
 };
 use uzima_sanitization::{
     sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
@@ -20,7 +21,35 @@ use uzima_sanitization::{
 // ============================================================================
 // Implements W3C DID Core Specification (https://www.w3.org/TR/did-core/)
 // DID Method: did:stellar:uzima:<network>:<address>
-// ============================================================================
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+}
 
 // === DID Document Structures (W3C Compliant) ===
 
@@ -224,6 +253,24 @@ pub struct Attestation {
     pub is_active: bool,
 }
 
+/// Stake information for a healthcare provider using SUT token reputation bonding.
+#[derive(Clone)]
+#[contracttype]
+pub struct ProviderStake {
+    /// The provider's address
+    pub provider: Address,
+    /// The SUT token contract address
+    pub token_address: Address,
+    /// Amount of SUT tokens staked
+    pub amount: i128,
+    /// Timestamp until which the stake is locked
+    pub locked_until: u64,
+    /// Whether the stake has been slashed
+    pub slashed: bool,
+    /// When the stake was deposited
+    pub deposited_at: u64,
+}
+
 // === Storage Keys ===
 
 #[contracttype]
@@ -232,6 +279,8 @@ pub enum DataKey {
     Owner,
     Initialized,
     NetworkId,
+    RbacContract,
+    Paused,
 
     // Verifier Management
     Verifier(Address),
@@ -264,6 +313,9 @@ pub enum DataKey {
     // Key Rotation
     LastKeyRotation(Address),
     KeyRotationCooldown,
+
+    // Provider Staking
+    StakeInfo(Address),
 }
 
 // === Constants ===
@@ -285,7 +337,12 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Initialize the contract with an owner and network identifier
-    pub fn initialize(env: Env, owner: Address, network_id: String) -> Result<(), Error> {
+    pub fn initialize(
+        env: Env,
+        owner: Address,
+        network_id: String,
+        rbac_contract: Address,
+    ) -> Result<(), Error> {
         owner.require_auth();
 
         sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
@@ -297,7 +354,11 @@ impl IdentityRegistryContract {
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage()
             .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
+        env.storage()
+            .instance()
             .set(&DataKey::NetworkId, &network_id);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
@@ -333,8 +394,79 @@ impl IdentityRegistryContract {
         (status, 1, env.ledger().timestamp())
     }
 
+    /// Returns true if the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    fn is_admin(env: &Env, caller: &Address) -> bool {
+        if let Some(owner) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::Owner)
+        {
+            if &owner == caller {
+                return true;
+            }
+        }
+        if let Some(rbac_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::RbacContract)
+        {
+            let client = RbacClient::new(env, &rbac_addr);
+            return client.has_role(caller, &RbacRole::Admin);
+        }
+        false
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        if Self::is_admin(env, caller) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (Symbol::new(&env, "Paused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (Symbol::new(&env, "Unpaused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
     /// Legacy initialize for backward compatibility
-    pub fn initialize_legacy(env: Env, owner: Address) {
+    pub fn initialize_legacy(env: Env, owner: Address, rbac_contract: Address) {
         owner.require_auth();
 
         if env.storage().instance().has(&DataKey::Owner) {
@@ -342,6 +474,9 @@ impl IdentityRegistryContract {
         }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
@@ -363,6 +498,7 @@ impl IdentityRegistryContract {
         services: Vec<ServiceEndpoint>,
     ) -> Result<String, Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Check if DID already exists
         if env
@@ -785,11 +921,7 @@ impl IdentityRegistryContract {
         issuer.require_auth();
 
         // Verify issuer is a registered verifier
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(issuer.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), issuer.clone());
 
         if !is_verifier {
             return Err(Error::NotVerifier);
@@ -1013,6 +1145,7 @@ impl IdentityRegistryContract {
         guardian: Address,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let guardians: Vec<RecoveryGuardian> = env
             .storage()
@@ -1040,6 +1173,7 @@ impl IdentityRegistryContract {
     /// Set recovery threshold
     pub fn set_recovery_threshold(env: Env, subject: Address, threshold: u32) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         env.storage()
             .persistent()
@@ -1137,6 +1271,7 @@ impl IdentityRegistryContract {
     /// Approve a recovery request
     pub fn approve_recovery(env: Env, guardian: Address, request_id: u64) -> Result<(), Error> {
         guardian.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut request: RecoveryRequest = env
             .storage()
@@ -1283,6 +1418,7 @@ impl IdentityRegistryContract {
     /// Cancel a recovery request (only subject with existing key)
     pub fn cancel_recovery(env: Env, subject: Address) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let request_id: u64 = env
             .storage()
@@ -1377,6 +1513,7 @@ impl IdentityRegistryContract {
     /// Remove/deactivate a service endpoint
     pub fn remove_service(env: Env, subject: Address, service_id: String) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut did_doc: DIDDocument = env
             .storage()
@@ -1430,6 +1567,18 @@ impl IdentityRegistryContract {
 
         owner.require_auth();
 
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        rbac_client.assign_role(&verifier, &RbacRole::Staff);
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &true);
@@ -1454,6 +1603,18 @@ impl IdentityRegistryContract {
             return Err(Error::CannotRemoveOwner);
         }
 
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        rbac_client.remove_role(&verifier, &RbacRole::Staff);
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &false);
@@ -1466,10 +1627,18 @@ impl IdentityRegistryContract {
 
     /// Check if an address is a verifier
     pub fn is_verifier(env: Env, account: Address) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Verifier(account))
-            .unwrap_or(false)
+        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+            Some(v) => v,
+            None => return false,
+        };
+        let client = RbacClient::new(&env, &rbac_addr);
+        if client.has_role(&account, &RbacRole::Staff) {
+            return true;
+        }
+        if client.has_role(&account, &RbacRole::Service) {
+            return true;
+        }
+        client.has_role(&account, &RbacRole::Admin)
     }
 
     /// Get the contract owner
@@ -1487,6 +1656,9 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
         if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
             panic!("invalid meta");
@@ -1509,12 +1681,11 @@ impl IdentityRegistryContract {
     /// Create an attestation (legacy - only verifiers can do this)
     pub fn attest(env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32>) {
         verifier.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1557,12 +1728,11 @@ impl IdentityRegistryContract {
         claim_hash: BytesN<32>,
     ) {
         verifier.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1762,6 +1932,7 @@ impl IdentityRegistryContract {
         public_key_hash: BytesN<32>,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Silently succeed when no DID document exists yet.
         let mut did_doc: DIDDocument = match env
@@ -1812,6 +1983,112 @@ impl IdentityRegistryContract {
 
         Ok(())
     }
+
+    // ========================================================================
+    // PROVIDER STAKING (SUT Token Reputation Bonding)
+    // ========================================================================
+
+    /// Deposit stake for a healthcare provider.
+    pub fn deposit_stake(
+        env: Env,
+        provider: Address,
+        amount: i128,
+        token_address: Address,
+    ) -> Result<(), Error> {
+        provider.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let now = env.ledger().timestamp();
+        let lock_until = now.saturating_add(90 * 86400); // 90 days default lock
+
+        // Store stake info
+        let stake_info = ProviderStake {
+            provider: provider.clone(),
+            token_address: token_address.clone(),
+            amount,
+            locked_until: lock_until,
+            slashed: false,
+            deposited_at: now,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        // Emit stake deposited event
+        env.events().publish(
+            (Symbol::new(&env, "StakeDeposited"),),
+            (provider, amount, lock_until),
+        );
+
+        Ok(())
+    }
+
+    /// Withdraw stake after lock period if not slashed and in good standing.
+    pub fn withdraw_stake(env: Env, provider: Address) -> Result<i128, Error> {
+        provider.require_auth();
+
+        let now = env.ledger().timestamp();
+
+        // Load stake info to verify lock period has elapsed
+        let stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        if now < stake_info.locked_until {
+            return Err(Error::InvalidInput);
+        }
+
+        if stake_info.slashed {
+            return Err(Error::InvalidInput);
+        }
+
+        // Remove stake info
+        env.storage()
+            .persistent()
+            .remove(&DataKey::StakeInfo(provider.clone()));
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeWithdrawn"),),
+            (provider.clone(), stake_info.amount),
+        );
+
+        Ok(stake_info.amount)
+    }
+
+    /// Slash stake for verified misconduct (governance only).
+    pub fn slash_stake(
+        env: Env,
+        governance: Address,
+        provider: Address,
+        amount: i128,
+        reason: String,
+    ) -> Result<(), Error> {
+        governance.require_auth();
+
+        let mut stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        stake_info.slashed = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeSlashed"),),
+            (provider, amount, reason),
+        );
+
+        Ok(())
+    }
 }
 
 // ============================================================================
@@ -1820,6 +2097,36 @@ impl IdentityRegistryContract {
 
 #[cfg(test)]
 mod comprehensive_tests;
+
+#[cfg(test)]
+pub mod test_fixtures;
+
+#[cfg(test)]
+#[soroban_sdk::contract]
+pub struct MockRbac;
+
+#[cfg(test)]
+#[soroban_sdk::contractimpl]
+impl MockRbac {
+    pub fn init_mock(_env: Env) {}
+
+    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1831,12 +2138,15 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
         let network_id = String::from_str(&env, "testnet");
-        client.initialize(&owner, &network_id);
+        client.initialize(&owner, &network_id, &rbac_id);
 
         (env, client, owner)
     }
@@ -1845,11 +2155,14 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
-        client.initialize_legacy(&owner);
+        client.initialize_legacy(&owner, &rbac_id);
 
         (env, client, owner)
     }
@@ -1872,8 +2185,9 @@ mod tests {
         let (env, client, _owner) = create_contract();
         let owner2 = Address::generate(&env);
         let network_id = String::from_str(&env, "mainnet");
+        let rbac_id = env.register_contract(None, MockRbac);
 
-        client.initialize(&owner2, &network_id);
+        client.initialize(&owner2, &network_id, &rbac_id);
     }
 
     // ========================================================================

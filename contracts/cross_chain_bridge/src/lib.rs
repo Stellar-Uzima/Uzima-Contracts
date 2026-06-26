@@ -1,10 +1,10 @@
 #![no_std]
+//! cross_chain_bridge - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::enum_variant_names)]
 #![allow(dead_code)]
-
 pub mod errors;
 pub use errors::Error;
 
@@ -14,9 +14,37 @@ mod test;
 #[cfg(test)]
 mod timeout_simple_test;
 
+/// # Cross-Chain Bridge Signature Scheme
+///
+/// To prevent unauthorized relaying and replay attacks, all validator attestations
+/// (submissions, confirmations, and proofs) require a cryptographic signature.
+///
+/// **Scheme**: Ed25519 (EdDSA)
+/// **Payload**: `SHA256(Target_ID + Nonce)`
+///   - `Target_ID`: The unique identifier of the entity being signed (e.g., `message_id`, `proof_id`).
+///   - `Nonce`: A monotonically increasing 64-bit integer unique to the validator's public key.
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
+
+// ==================== Submit Message Request ====================
+
+/// Bundled request for submit_message to stay within Soroban's 10-param limit.
+#[derive(Clone)]
+#[contracttype]
+pub struct SubmitMessageRequest {
+    pub message_id: BytesN<32>,
+    pub source_chain: ChainId,
+    pub dest_chain: ChainId,
+    pub sender: String,
+    pub recipient: Address,
+    pub payload_type: MessageType,
+    pub payload: String,
+    pub nonce: u64,
+    pub signature: BytesN<64>,
+    pub v_signature: BytesN<64>,
+    pub v_nonce: u64,
+}
 
 // ==================== Existing Core Types ====================
 
@@ -185,7 +213,9 @@ pub struct CrossChainProof {
     pub merkle_root: BytesN<32>,
     pub timestamp: u64,
     pub prover: String,
+    /// Total number of unique validators who have verified this proof
     pub verifier_count: u32,
+    /// Whether the proof has reached the required consensus threshold
     pub verified: bool,
 }
 
@@ -300,6 +330,7 @@ pub enum EventSyncStatus {
 #[contracttype]
 pub enum DataKey {
     // Instance storage keys (contract config/metadata)
+    ValidatorNonce(BytesN<32>),
     Admin,
     MedicalContract,
     IdentityContract,
@@ -313,9 +344,9 @@ pub enum DataKey {
     EventCount,
     OpCount,
     // Persistent storage keys (critical long-lived data)
+    Nonce(String),
     Validator(Address),
     Message(BytesN<32>),
-    Nonce(String),
     RecordRef(u64, ChainId),
     AtomicTx(BytesN<32>),
     OracleNode(Address),
@@ -327,6 +358,7 @@ pub enum DataKey {
     CrossChainOp(BytesN<32>),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
+    AuthorizedRelayer(Address),
 }
 
 // Constants
@@ -432,6 +464,7 @@ impl CrossChainBridgeContract {
         env.storage().instance().set(&DataKey::OracleCount, &0u64);
         env.storage().instance().set(&DataKey::RollbackCount, &0u64);
         env.storage().instance().set(&DataKey::EventCount, &0u64);
+        env.storage().instance().set(&DataKey::OpCount, &0u64);
 
         env.events()
             .publish((Symbol::new(&env, "BridgeInitialized"),), (admin.clone(),));
@@ -565,49 +598,51 @@ impl CrossChainBridgeContract {
     pub fn submit_message(
         env: Env,
         validator: Address,
-        message_id: BytesN<32>,
-        source_chain: ChainId,
-        dest_chain: ChainId,
-        sender: String,
-        recipient: Address,
-        payload_type: MessageType,
-        payload: String,
-        nonce: u64,
-        signature: BytesN<64>,
+        request: SubmitMessageRequest,
     ) -> Result<BytesN<32>, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
-        Self::require_chain_supported(&env, &source_chain)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+        Self::require_chain_supported(&env, &request.source_chain)?;
 
-        Self::verify_nonce(&env, &sender, nonce)?;
+        Self::verify_nonce(&env, &request.sender, request.nonce)?;
+
+        // Cryptographic verification of the submitting validator
+        Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &request.message_id,
+            request.v_nonce,
+            &request.v_signature,
+        )?;
 
         let timestamp = env.ledger().timestamp();
 
         let message = CrossChainMessage {
-            message_id: message_id.clone(),
-            source_chain,
-            dest_chain,
-            sender: sender.clone(),
-            recipient,
-            payload_type,
-            payload,
-            nonce,
+            message_id: request.message_id.clone(),
+            source_chain: request.source_chain,
+            dest_chain: request.dest_chain,
+            sender: request.sender.clone(),
+            recipient: request.recipient,
+            payload_type: request.payload_type,
+            payload: request.payload,
+            nonce: request.nonce,
             timestamp,
             status: MessageStatus::Pending,
-            signature,
+            signature: request.signature,
         };
 
         env.storage()
             .persistent()
-            .set(&DataKey::Message(message_id.clone()), &message);
+            .set(&DataKey::Message(request.message_id.clone()), &message);
         env.storage().persistent().extend_ttl(
-            &DataKey::Message(message_id.clone()),
+            &DataKey::Message(request.message_id.clone()),
             PERSISTENT_TTL_THRESHOLD,
             PERSISTENT_TTL_EXTEND_TO,
         );
 
-        Self::update_nonce(&env, &sender, nonce);
+        Self::update_nonce(&env, &request.sender, request.nonce);
 
         let count: u64 = env
             .storage()
@@ -621,10 +656,91 @@ impl CrossChainBridgeContract {
 
         env.events().publish(
             (Symbol::new(&env, "MessageSubmitted"),),
-            (message_id.clone(), timestamp),
+            (request.message_id.clone(), timestamp),
         );
 
-        Ok(message_id)
+        Ok(request.message_id)
+    }
+
+    /// Submit multiple cross-chain messages in a single call.
+    /// Validates the validator once and processes each request in order.
+    /// Returns the list of message IDs for successfully submitted messages.
+    /// If any request fails, the error is returned immediately (partial batch may have been stored).
+    pub fn submit_message_batch(
+        env: Env,
+        validator: Address,
+        requests: Vec<SubmitMessageRequest>,
+    ) -> Result<Vec<BytesN<32>>, Error> {
+        validator.require_auth();
+        Self::require_not_paused(&env)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+
+        if requests.is_empty() || requests.len() > 50 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        let mut message_ids: Vec<BytesN<32>> = Vec::new(&env);
+
+        for request in requests.iter() {
+            Self::require_chain_supported(&env, &request.source_chain)?;
+            Self::verify_nonce(&env, &request.sender, request.nonce)?;
+
+            // Per-request validator nonce and signature verification
+            Self::verify_validator_nonce(&env, &v_info.public_key, request.v_nonce)?;
+            Self::verify_validator_signature(
+                &env,
+                &v_info.public_key,
+                &request.message_id,
+                request.v_nonce,
+                &request.v_signature,
+            )?;
+
+            let timestamp = env.ledger().timestamp();
+
+            let message = CrossChainMessage {
+                message_id: request.message_id.clone(),
+                source_chain: request.source_chain.clone(),
+                dest_chain: request.dest_chain.clone(),
+                sender: request.sender.clone(),
+                recipient: request.recipient.clone(),
+                payload_type: request.payload_type.clone(),
+                payload: request.payload.clone(),
+                nonce: request.nonce,
+                timestamp,
+                status: MessageStatus::Pending,
+                signature: request.signature.clone(),
+            };
+
+            env.storage()
+                .persistent()
+                .set(&DataKey::Message(request.message_id.clone()), &message);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Message(request.message_id.clone()),
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND_TO,
+            );
+
+            Self::update_nonce(&env, &request.sender, request.nonce);
+
+            let count: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::MessageCount)
+                .unwrap_or(0);
+            env.storage().instance().set(
+                &DataKey::MessageCount,
+                &(count.checked_add(1).ok_or(Error::Overflow)?),
+            );
+
+            env.events().publish(
+                (Symbol::new(&env, "MessageSubmitted"),),
+                (request.message_id.clone(), timestamp),
+            );
+
+            message_ids.push_back(request.message_id.clone());
+        }
+
+        Ok(message_ids)
     }
 
     /// Confirm a cross-chain message (validator attestation)
@@ -633,10 +749,12 @@ impl CrossChainBridgeContract {
         env: Env,
         validator: Address,
         message_id: BytesN<32>,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<bool, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
 
         let msg_key = DataKey::Message(message_id.clone());
         let mut message = env
@@ -658,6 +776,10 @@ impl CrossChainBridgeContract {
         {
             return Err(Error::MessageExpired);
         }
+
+        // Replay Protection & Signature Verification
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &message_id, nonce, &signature)?;
 
         // BUG FIX: Use message_id as direct storage key, not a shared symbol
         let conf_key = DataKey::Confirmations(message_id.clone());
@@ -875,10 +997,12 @@ impl CrossChainBridgeContract {
         env: Env,
         validator: Address,
         tx_id: BytesN<32>,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<bool, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
 
         let tx_key = DataKey::AtomicTx(tx_id.clone());
         let mut atomic_tx = env
@@ -898,13 +1022,17 @@ impl CrossChainBridgeContract {
             return Err(Error::AtomicTxExpired);
         }
 
+        // Signature Verification
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &tx_id, nonce, &signature)?;
+
         if !atomic_tx.confirmations.contains(&validator) {
             atomic_tx.confirmations.push_back(validator.clone());
         }
 
         let min_confirmations: u32 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
@@ -1019,10 +1147,21 @@ impl CrossChainBridgeContract {
         local_record_id: u64,
         external_chain: ChainId,
         status: SyncStatus,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<bool, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+
+        // Signature Verification
+        let mut target_id_bytes = [0u8; 32];
+        let id_be = local_record_id.to_be_bytes();
+        target_id_bytes[24..32].copy_from_slice(&id_be);
+        let target_id = BytesN::from_array(&env, &target_id_bytes);
+
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &target_id, nonce, &signature)?;
 
         let ref_key = DataKey::RecordRef(local_record_id, external_chain.clone());
         let mut record_ref = env
@@ -1129,7 +1268,7 @@ impl CrossChainBridgeContract {
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::OracleCount)
             .unwrap_or(0);
         let report_id = count.checked_add(1).ok_or(Error::Overflow)?;
@@ -1150,7 +1289,7 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::OracleReport(report_id), &report);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::OracleCount, &report_id);
 
         // Update oracle stats
@@ -1172,10 +1311,22 @@ impl CrossChainBridgeContract {
         chain: ChainId,
         report_ids: Vec<u64>,
         consensus_hash: BytesN<32>,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<bool, Error> {
         caller.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &caller)?;
+        let v_info = Self::get_active_validator_info(&env, &caller)?;
+
+        // Cryptographic verification of the validator triggering aggregation
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &consensus_hash,
+            nonce,
+            &signature,
+        )?;
 
         if report_ids.len() < MIN_ORACLE_REPORTS {
             return Err(Error::InsufficientOracleReports);
@@ -1229,11 +1380,17 @@ impl CrossChainBridgeContract {
         block_hash: BytesN<32>,
         merkle_root: BytesN<32>,
         prover: String,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<BytesN<32>, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
         Self::require_chain_supported(&env, &source_chain)?;
+
+        // Signature Verification
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &proof_id, nonce, &signature)?;
 
         let now = env.ledger().timestamp();
 
@@ -1253,6 +1410,15 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::Proof(proof_id.clone()), &proof);
 
+        // Track initial submission as a confirmation
+        let conf_key = DataKey::Confirmations(proof_id.clone());
+        let mut verifiers: Vec<Address> = Vec::new(&env);
+        verifiers.push_back(validator.clone());
+        env.storage().temporary().set(&conf_key, &verifiers);
+        env.storage()
+            .temporary()
+            .extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
+
         env.events().publish(
             (Symbol::new(&env, "ProofSubmitted"),),
             (proof_id.clone(), validator),
@@ -1264,12 +1430,24 @@ impl CrossChainBridgeContract {
     /// Verify a submitted cross-chain proof (additional validator attestation)
     pub fn verify_cross_chain_proof(
         env: Env,
-        validator: Address,
+        validator_address: Address,
+        signature: BytesN<64>,
+        nonce: u64,
         proof_id: BytesN<32>,
     ) -> Result<bool, Error> {
-        validator.require_auth();
+        validator_address.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+
+        let v_key = DataKey::Validator(validator_address.clone());
+        let validator = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Validator>(&v_key)
+            .ok_or(Error::ValidatorNotFound)?;
+
+        if !validator.is_active {
+            return Err(Error::ValidatorNotActive);
+        }
 
         let proof_key = DataKey::Proof(proof_id.clone());
         let mut proof = env
@@ -1282,18 +1460,44 @@ impl CrossChainBridgeContract {
             return Err(Error::ProofAlreadyVerified);
         }
 
-        proof.verifier_count = proof.verifier_count.saturating_add(1);
+        // Replay Protection & Signature Verification
+        Self::verify_validator_nonce(&env, &validator.public_key, nonce)?;
+        Self::verify_validator_signature(
+            &env,
+            &validator.public_key,
+            &proof_id,
+            nonce,
+            &signature,
+        )?;
 
-        // Proof is verified once enough validators attest
+        // Track unique confirmations
+        let conf_key = DataKey::Confirmations(proof_id.clone());
+        let mut verifiers: Vec<Address> = env
+            .storage()
+            .temporary()
+            .get(&conf_key)
+            .unwrap_or(Vec::new(&env));
+
+        if verifiers.contains(&validator_address) {
+            return Err(Error::DuplicateConfirmation);
+        }
+
+        verifiers.push_back(validator_address);
+        env.storage().temporary().set(&conf_key, &verifiers);
+        env.storage()
+            .temporary()
+            .extend_ttl(&conf_key, 0, TEMP_SESSION_TTL);
+
+        proof.verifier_count = verifiers.len() as u32;
+
         let min_conf: u32 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::MinConfirmations)
             .unwrap_or(DEFAULT_MIN_CONFIRMATIONS);
 
         if proof.verifier_count >= min_conf {
             proof.verified = true;
-
             env.events().publish(
                 (Symbol::new(&env, "ProofVerified"),),
                 (proof_id.clone(), proof.source_chain.clone()),
@@ -1301,7 +1505,6 @@ impl CrossChainBridgeContract {
         }
 
         env.storage().persistent().set(&proof_key, &proof);
-
         Ok(proof.verified)
     }
 
@@ -1351,15 +1554,27 @@ impl CrossChainBridgeContract {
         event_type: CrossChainEventType,
         payload_hash: BytesN<32>,
         block_height: u64,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<u64, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
         Self::require_chain_supported(&env, &source_chain)?;
+
+        // Signature Verification
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(
+            &env,
+            &v_info.public_key,
+            &payload_hash,
+            nonce,
+            &signature,
+        )?;
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::EventCount)
             .unwrap_or(0);
         let event_id = count.checked_add(1).ok_or(Error::Overflow)?;
@@ -1379,7 +1594,7 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::Event(event_id), &event);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::EventCount, &event_id);
 
         env.events().publish(
@@ -1396,10 +1611,19 @@ impl CrossChainBridgeContract {
         validator: Address,
         event_id: u64,
         status: EventSyncStatus,
+        signature: BytesN<64>,
+        nonce: u64,
     ) -> Result<bool, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
-        Self::require_active_validator(&env, &validator)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+
+        // Signature Verification
+        let mut target_bytes = [0u8; 32];
+        target_bytes[24..32].copy_from_slice(&event_id.to_be_bytes());
+        let target_id = BytesN::from_array(&env, &target_bytes);
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+        Self::verify_validator_signature(&env, &v_info.public_key, &target_id, nonce, &signature)?;
 
         let evt_key = DataKey::Event(event_id);
         let mut event = env
@@ -1448,14 +1672,9 @@ impl CrossChainBridgeContract {
             .persistent()
             .set(&DataKey::CrossChainOp(op_id.clone()), &operation);
 
-        let count: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::OpCount)
-            .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&DataKey::OpCount, &(count.saturating_add(1)));
+        let count: u64 = env.storage().instance().get(&DataKey::OpCount).unwrap_or(0);
+        let new_count = count.saturating_add(1);
+        env.storage().instance().set(&DataKey::OpCount, &new_count);
 
         env.events().publish(
             (Symbol::new(&env, "OperationCreated"),),
@@ -1629,11 +1848,11 @@ impl CrossChainBridgeContract {
 
         let count: u64 = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::RollbackCount)
             .unwrap_or(0);
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::RollbackCount, &(count.saturating_add(1)));
 
         env.events().publish(
@@ -1909,8 +2128,76 @@ impl CrossChainBridgeContract {
             .unwrap_or(0)
     }
 
-    // ==================== Internal Helper Functions ====================
+    // ==================== Requirement: Authorized Relayer ====================
 
+    /// Add an authorized relayer (admin only).
+    pub fn add_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuthorizedRelayer(relayer.clone()), &true);
+        env.events().publish(
+            (
+                soroban_sdk::symbol_short!("bridge"),
+                soroban_sdk::symbol_short!("rel_add"),
+            ),
+            relayer,
+        );
+        Ok(())
+    }
+
+    /// Remove an authorized relayer (admin only).
+    pub fn remove_relayer(env: Env, admin: Address, relayer: Address) -> Result<(), Error> {
+        admin.require_auth();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        if admin != stored_admin {
+            return Err(Error::Unauthorized);
+        }
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AuthorizedRelayer(relayer.clone()));
+        env.events().publish(
+            (
+                soroban_sdk::symbol_short!("bridge"),
+                soroban_sdk::symbol_short!("rel_rm"),
+            ),
+            relayer,
+        );
+        Ok(())
+    }
+
+    pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
+        Self::get_default_timeout(&op_type)
+    }
+
+    // Moved here from private impl block so #[contractimpl] can resolve Self:: calls
+    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
+        let last_nonce: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Nonce(sender.clone()))
+            .unwrap_or(0);
+
+        if nonce <= last_nonce {
+            return Err(Error::InvalidNonce);
+        }
+        Ok(())
+    }
+
+    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(sender.clone()), &nonce);
+    }
+}
+
+// ==================== Private Helper Functions ====================
+// These are not exposed as contract entry points.
+impl CrossChainBridgeContract {
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1944,6 +2231,19 @@ impl CrossChainBridgeContract {
         Ok(())
     }
 
+    fn get_active_validator_info(env: &Env, validator: &Address) -> Result<Validator, Error> {
+        match env
+            .storage()
+            .persistent()
+            .get::<DataKey, Validator>(&DataKey::Validator(validator.clone()))
+        {
+            Some(v) if v.is_active => Ok(v),
+            Some(_) => Err(Error::ValidatorNotActive),
+            None => Err(Error::ValidatorNotFound),
+        }
+    }
+
+    #[allow(dead_code)]
     fn require_active_validator(env: &Env, validator: &Address) -> Result<(), Error> {
         match env
             .storage()
@@ -1968,7 +2268,7 @@ impl CrossChainBridgeContract {
     fn require_chain_supported(env: &Env, chain: &ChainId) -> Result<(), Error> {
         let chains: Vec<ChainId> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::SupportedChains)
             .unwrap_or(Vec::new(&env));
 
@@ -1979,23 +2279,38 @@ impl CrossChainBridgeContract {
         }
     }
 
-    fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
-        let last_nonce: u64 = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Nonce(sender.clone()))
-            .unwrap_or(0);
+    fn verify_validator_signature(
+        env: &Env,
+        validator_pubkey: &BytesN<32>,
+        data: &BytesN<32>,
+        nonce: u64,
+        signature: &BytesN<64>,
+    ) -> Result<(), Error> {
+        // Serialize Data + Nonce for Ed25519 verification
+        // Using a more efficient construction for the message payload
+        let mut msg_data = Bytes::from_array(env, &data.to_array());
+        msg_data.extend_from_array(&nonce.to_be_bytes());
+
+        // Note: ed25519_verify will panic/trap if verification fails.
+        // This is standard for Soroban auth, but ensure callers are aware
+        // that Error::InvalidSignature is primarily a placeholder for off-chain hints.
+        let message_hash = env.crypto().sha256(&msg_data);
+        env.crypto()
+            .ed25519_verify(validator_pubkey, &message_hash.into(), signature);
+
+        Ok(())
+    }
+
+    fn verify_validator_nonce(env: &Env, pubkey: &BytesN<32>, nonce: u64) -> Result<(), Error> {
+        let key = DataKey::ValidatorNonce(pubkey.clone());
+        let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
 
         if nonce <= last_nonce {
             return Err(Error::InvalidNonce);
         }
-        Ok(())
-    }
 
-    fn update_nonce(env: &Env, sender: &String, nonce: u64) {
-        env.storage()
-            .persistent()
-            .set(&DataKey::Nonce(sender.clone()), &nonce);
+        env.storage().persistent().set(&key, &nonce);
+        Ok(())
     }
 
     fn increment_validator_confirmations(env: &Env, validator: &Address) {
@@ -2006,7 +2321,6 @@ impl CrossChainBridgeContract {
         }
     }
 
-    /// Get default timeout for operation type
     fn get_default_timeout(op_type: &OperationType) -> u64 {
         match op_type {
             OperationType::TokenTransfer => TOKEN_TRANSFER_TIMEOUT,
@@ -2017,13 +2331,8 @@ impl CrossChainBridgeContract {
         }
     }
 
-    /// Process refund for timed out operation
     fn refund(env: &Env, operation: &mut CrossChainOp) -> Result<(), Error> {
-        // Mark operation as refunded
         operation.status = OperationStatus::Refunded;
-
-        // In a real implementation, this would trigger actual token transfer
-        // For now, we just emit an event and update status
         env.events().publish(
             (Symbol::new(&env, "RefundProcessed"),),
             (
@@ -2032,12 +2341,33 @@ impl CrossChainBridgeContract {
                 operation.op_type,
             ),
         );
-
         Ok(())
     }
 
-    /// Expose get_default_timeout for testing
-    pub fn get_default_timeout_internal(_env: Env, op_type: OperationType) -> u64 {
-        Self::get_default_timeout(&op_type)
+    /// Maps a ChainId to a unique u32 used in cross-chain replay-protection payloads.
+    /// Ensures a signed message for chain A cannot be replayed on chain B.
+    fn to_replay_chain_id(chain: &ChainId) -> u32 {
+        match chain {
+            ChainId::Stellar => 0,
+            ChainId::Ethereum => 1,
+            ChainId::Polygon => 2,
+            ChainId::Avalanche => 3,
+            ChainId::BinanceSmartChain => 4,
+            ChainId::Arbitrum => 5,
+            ChainId::Optimism => 6,
+            ChainId::Custom(id) => *id,
+        }
+    }
+
+    fn require_authorized_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
+        let is_authorized: bool = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuthorizedRelayer(relayer.clone()))
+            .unwrap_or(false);
+        if !is_authorized {
+            return Err(Error::UnauthorizedRelayer);
+        }
+        Ok(())
     }
 }

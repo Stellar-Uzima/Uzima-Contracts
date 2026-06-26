@@ -1,3 +1,4 @@
+//! cross_chain_identity - Healthcare smart contract on Stellar blockchain.
 // Cross-Chain Identity Contract - Identity verification across blockchains
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -405,7 +406,7 @@ impl CrossChainIdentityContract {
         }
 
         let now = env.ledger().timestamp();
-        if now > request.created_at + REQUEST_EXPIRY {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
             request.status = RequestStatus::Expired;
             env.storage().persistent().set(&req_key, &request);
             return Err(Error::RequestExpired);

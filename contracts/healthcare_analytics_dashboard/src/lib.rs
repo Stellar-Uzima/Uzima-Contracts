@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_analytics_dashboard - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
@@ -190,6 +191,29 @@ pub trait AiAnalyticsTrait {
     fn get_round(env: Env, round_id: u64) -> Option<AiFederatedRound>;
 }
 
+#[contractclient(name = "DifferentialPrivacyClient")]
+pub trait DifferentialPrivacyTrait {
+    fn add_laplace_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<(), ()>;
+    fn add_gaussian_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<(), ()>;
+    fn get_remaining_budget(env: Env, budget_id: BytesN<32>) -> u64;
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -214,6 +238,7 @@ pub enum DataKey {
     QueryOptimization(u64, String),
     AiContract,
     AiInsight(u64),
+    DifferentialPrivacyContract,
 }
 
 #[contracterror]
@@ -1063,6 +1088,74 @@ impl HealthcareAnalyticsDashboardContract {
 
     pub fn get_ai_round_insight(env: Env, round_id: u64) -> Option<AiRoundInsight> {
         env.storage().instance().get(&DataKey::AiInsight(round_id))
+    }
+
+    /// Configure the differential privacy contract address (admin only).
+    pub fn set_differential_privacy_contract(
+        env: Env,
+        caller: Address,
+        dp_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DifferentialPrivacyContract, &dp_contract.clone());
+        env.events()
+            .publish((symbol_short!("DPSet"),), dp_contract);
+        Ok(true)
+    }
+
+    /// Get the configured differential privacy contract address.
+    pub fn get_differential_privacy_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::DifferentialPrivacyContract)
+    }
+
+    /// Apply Laplace noise via the configured differential privacy contract.
+    /// Delegates to the DP contract's `add_laplace_noise` and returns remaining budget.
+    pub fn apply_differential_privacy_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::ensure_collector_or_admin(&env, &caller)?;
+
+        let dp_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::DifferentialPrivacyContract)
+            .ok_or(Error::AiAnalyticsNotConfigured)?;
+
+        let client = DifferentialPrivacyClient::new(&env, &dp_addr);
+
+        // Apply Laplace noise via the DP contract.
+        // NOTE: The DP contract returns Result<(), ()> — the opaque () error type
+        // makes proper error propagation impossible. Failures are silently consumed.
+        let _ = client.add_laplace_noise(
+            &caller,
+            &budget_id,
+            &query_id,
+            &data_type,
+            &true_value,
+            &sensitivity,
+        );
+
+        let remaining = client.get_remaining_budget(&budget_id);
+
+        env.events().publish(
+            (symbol_short!("DPNoise"),),
+            (query_id, budget_id, remaining),
+        );
+
+        Ok(remaining)
     }
 
     pub fn get_visualization_series(

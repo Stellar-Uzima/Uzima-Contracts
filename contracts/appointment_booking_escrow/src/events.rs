@@ -52,6 +52,32 @@ pub fn publish_funds_released(
     );
 }
 
+pub fn publish_marked_no_show(
+    env: &Env,
+    appointment_id: u64,
+    provider: &Address,
+    patient: &Address,
+    timestamp: u64,
+) {
+    env.events().publish(
+        (symbol_short!("APPT"), symbol_short!("NOSHOW")),
+        (appointment_id, provider, patient, timestamp),
+    );
+}
+
+pub fn publish_reminder_sent(
+    env: &Env,
+    appointment_id: u64,
+    provider: &Address,
+    patient: &Address,
+    timestamp: u64,
+) {
+    env.events().publish(
+        (symbol_short!("APPT"), symbol_short!("REMINDR")),
+        (appointment_id, provider, patient, timestamp),
+    );
+}
+
 pub fn publish_initialization(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("APPT"), symbol_short!("INIT")), admin);

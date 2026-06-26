@@ -1,6 +1,7 @@
 #![no_std]
+//! regional_node_manager - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, map, Map, String};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map, String};
 
 // ============================================================================
 // Data Types & Constants
@@ -11,7 +12,7 @@ const ROLE_OPERATOR: u32 = 2;
 const ROLE_MONITOR: u32 = 4;
 const ALL_ROLES: u32 = 7;
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum NodeStatus {
     Healthy = 0,
@@ -147,7 +148,7 @@ impl RegionalNodeManager {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())

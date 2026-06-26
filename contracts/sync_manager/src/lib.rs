@@ -1,6 +1,10 @@
 #![no_std]
+//! sync_manager - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, map, Map};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
+    Vec,
+};
 
 // ============================================================================
 // Data Types & Constants
@@ -8,13 +12,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 const ROLE_ADMIN: u32 = 1;
 const ROLE_OPERATOR: u32 = 2;
-const ROLE_AUDITOR: u32 = 4;
-const ALL_ROLES: u32 = 7;
+const ALL_ROLES: u32 = 3;
 
 const MAX_RETRIES: u32 = 3;
-const SYNC_TIMEOUT_MS: u64 = 60000; // 60 seconds
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum SyncStatus {
     Pending = 0,
@@ -24,7 +26,7 @@ pub enum SyncStatus {
     PartialSuccess = 4,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum ConsistencyLevel {
     Eventual = 0,
@@ -117,7 +119,6 @@ const ADMIN: Symbol = symbol_short!("ADMIN");
 const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const OPERATIONS: Symbol = symbol_short!("OPS");
-const WINDOWS: Symbol = symbol_short!("WINS");
 const LAGS: Symbol = symbol_short!("LAGS");
 const CONFLICTS: Symbol = symbol_short!("CONF");
 const SYNC_POLICY: Symbol = symbol_short!("SPOL");
@@ -170,7 +171,12 @@ impl SyncManager {
         Ok(())
     }
 
-    pub fn assign_role(env: Env, caller: Address, user: Address, role_mask: u32) -> Result<(), Error> {
+    pub fn assign_role(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role_mask: u32,
+    ) -> Result<(), Error> {
         Self::require_admin(&env, &caller)?;
         if role_mask > ALL_ROLES {
             return Err(Error::InvalidInput);
@@ -180,7 +186,7 @@ impl SyncManager {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())
@@ -200,7 +206,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_region_ids.len() == 0 {
+        if target_region_ids.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -228,20 +234,21 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         operations.push_back(operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
-        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage()
             .instance()
             .set(&NEXT_OPERATION_ID, &(operation_id + 1));
 
-        env.events().publish((symbol_short!("SM_INIT_S"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_INIT_S"),), operation_id);
         Ok(operation_id)
     }
 
-    pub fn execute_sync(
-        env: Env,
-        caller: Address,
-        operation_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn execute_sync(env: Env, caller: Address, operation_id: u64) -> Result<bool, Error> {
         Self::require_operator(&env, &caller)?;
 
         let mut operations: Vec<SyncOperation> = env
@@ -250,8 +257,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;
@@ -266,24 +273,25 @@ impl SyncManager {
 
         // Simulate sync execution
         let current_time = env.ledger().timestamp();
-        operation.success_count = targets as u32;
+        operation.success_count = targets;
         operation.failure_count = 0;
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
 
         operations.set(idx, operation.clone());
         env.storage().persistent().set(&OPERATIONS, &operations);
-        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
-        env.events().publish((symbol_short!("SM_EXEC"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_EXEC"),), operation_id);
         Ok(true)
     }
 
-    pub fn retry_sync(
-        env: Env,
-        caller: Address,
-        operation_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn retry_sync(env: Env, caller: Address, operation_id: u64) -> Result<bool, Error> {
         Self::require_operator(&env, &caller)?;
 
         let mut operations: Vec<SyncOperation> = env
@@ -292,8 +300,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;
@@ -311,15 +319,20 @@ impl SyncManager {
         operation.status = SyncStatus::InProgress;
 
         let current_time = env.ledger().timestamp();
-        operation.success_count = operation.target_region_ids.len() as u32;
+        operation.success_count = operation.target_region_ids.len();
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
 
         operations.set(idx, operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
-        env.storage().persistent().extend_ttl(&OPERATIONS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
-        env.events().publish((symbol_short!("SM_RETR"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_RETR"),), operation_id);
         Ok(true)
     }
 
@@ -379,7 +392,11 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         lags.push_back(lag_record);
         env.storage().persistent().set(&LAGS, &lags);
-        env.storage().persistent().extend_ttl(&LAGS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &LAGS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage().instance().set(&NEXT_LAG_ID, &(lag_id + 1));
 
         env.events().publish((symbol_short!("SM_LAG"),), lag_id);
@@ -393,20 +410,25 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env))
     }
 
-    pub fn get_region_lag(env: Env, source_region_id: u32, target_region_id: u32) -> Option<ReplicationLag> {
+    pub fn get_region_lag(
+        env: Env,
+        source_region_id: u32,
+        target_region_id: u32,
+    ) -> Option<ReplicationLag> {
         let lags: Vec<ReplicationLag> = env
             .storage()
             .persistent()
             .get(&LAGS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if lags.len() == 0 {
+        if lags.is_empty() {
             return None;
         }
 
         for i in (0..lags.len()).rev() {
             let lag = lags.get_unchecked(i);
-            if lag.source_region_id == source_region_id && lag.target_region_id == target_region_id {
+            if lag.source_region_id == source_region_id && lag.target_region_id == target_region_id
+            {
                 return Some(lag.clone());
             }
         }
@@ -425,7 +447,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if conflicting_regions.len() == 0 {
+        if conflicting_regions.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -451,12 +473,17 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         conflicts.push_back(conflict);
         env.storage().persistent().set(&CONFLICTS, &conflicts);
-        env.storage().persistent().extend_ttl(&CONFLICTS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        env.storage().persistent().extend_ttl(
+            &CONFLICTS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage()
             .instance()
             .set(&NEXT_CONFLICT_ID, &(conflict_id + 1));
 
-        env.events().publish((symbol_short!("SM_CONF"),), conflict_id);
+        env.events()
+            .publish((symbol_short!("SM_CONF"),), conflict_id);
         Ok(conflict_id)
     }
 
@@ -491,8 +518,13 @@ impl SyncManager {
         }
 
         env.storage().persistent().set(&CONFLICTS, &conflicts);
-        env.storage().persistent().extend_ttl(&CONFLICTS, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
-        env.events().publish((symbol_short!("SM_RESO"),), conflict_id);
+        env.storage().persistent().extend_ttl(
+            &CONFLICTS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.events()
+            .publish((symbol_short!("SM_RESO"),), conflict_id);
         Ok(())
     }
 
@@ -523,7 +555,7 @@ impl SyncManager {
         env.storage()
             .instance()
             .get(&SYNC_POLICY)
-            .unwrap_or_else(|| SyncPolicy {
+            .unwrap_or(SyncPolicy {
                 sync_interval_ms: 60000,
                 max_lag_ms: 5000,
                 consistency_mode: ConsistencyLevel::Eventual,
@@ -538,7 +570,11 @@ impl SyncManager {
     // ========================================================================
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&ADMIN)
+            .ok_or(Error::NotInitialized)?;
         if admin != *caller {
             return Err(Error::NotAuthorized);
         }
@@ -563,42 +599,53 @@ impl SyncManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_initialize() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        let result = SyncManager::initialize(env.clone(), admin.clone());
+        let result = env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        });
         assert!(result.is_ok());
 
-        let result = SyncManager::initialize(env, admin);
+        let result = env.as_contract(&contract, || SyncManager::initialize(env.clone(), admin));
         assert!(matches!(result, Err(Error::AlreadyInitialized)));
     }
 
     #[test]
     fn test_initiate_sync() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        SyncManager::initialize(env.clone(), admin.clone()).unwrap();
-        SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);
 
-        let result = SyncManager::initiate_sync(
-            env,
-            operator,
-            1,
-            targets,
-            12345u64,
-            ConsistencyLevel::Eventual,
-        );
-
+        let result = env.as_contract(&contract, || {
+            SyncManager::initiate_sync(
+                env.clone(),
+                operator,
+                1,
+                targets,
+                12345u64,
+                ConsistencyLevel::Eventual,
+            )
+        });
         assert!(result.is_ok());
     }
 }

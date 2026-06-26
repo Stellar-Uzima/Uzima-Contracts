@@ -1,4 +1,5 @@
 #![no_std]
+//! token_sale - Healthcare smart contract on Stellar blockchain.
 
 mod contract;
 mod errors;

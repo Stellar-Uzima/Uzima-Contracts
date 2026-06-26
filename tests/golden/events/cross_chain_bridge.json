@@ -1,0 +1,28 @@
+{
+  "contract": "cross_chain_bridge",
+  "events": [
+    {
+      "name": "MessageSubmitted",
+      "topics": ["MessageSubmitted"],
+      "data": {
+        "message_id": "BytesN<32>",
+        "timestamp": "u64"
+      }
+    },
+    {
+      "name": "MessageVerified",
+      "topics": ["MessageVerified"],
+      "data": {
+        "message_id": "BytesN<32>"
+      }
+    },
+    {
+      "name": "MessageExecuted",
+      "topics": ["MessageExecuted"],
+      "data": {
+        "message_id": "BytesN<32>",
+        "payload_type": "MessageType"
+      }
+    }
+  ]
+}

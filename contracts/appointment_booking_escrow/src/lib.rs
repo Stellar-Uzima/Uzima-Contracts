@@ -1,4 +1,5 @@
 #![no_std]
+//! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 
 #[cfg(test)]
@@ -21,6 +22,7 @@ pub enum AppointmentStatus {
     Confirmed = 1,
     Refunded = 2,
     Completed = 3,
+    NoShow = 4,
 }
 
 #[derive(Clone)]
@@ -32,8 +34,11 @@ pub struct AppointmentEscrow {
     pub amount: i128,
     pub token: Address,
     pub booked_at: u64,
+    pub scheduled_time: u64,
     pub confirmed_at: u64, // 0 if not confirmed
     pub refunded_at: u64,  // 0 if not refunded
+    pub reminder_sent_at: u64,
+    pub no_show_marked_at: u64,
     pub status: AppointmentStatus,
     pub funds_released: bool, // Prevents double withdrawal
 }
@@ -159,8 +164,11 @@ impl AppointmentBookingEscrow {
             amount,
             token: token.clone(),
             booked_at: timestamp,
+            scheduled_time: timestamp,
             confirmed_at: 0,
             refunded_at: 0,
+            reminder_sent_at: 0,
+            no_show_marked_at: 0,
             status: AppointmentStatus::Booked,
             funds_released: false,
         };
@@ -250,6 +258,11 @@ impl AppointmentBookingEscrow {
             Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyRefunded);
         }
+        if appointment.status == AppointmentStatus::NoShow {
+            events::diag_validation_fail(&env, "confirm_appointment", "no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::AppointmentNoShow);
+        }
 
         // Prevent double withdrawal
         if appointment.funds_released {
@@ -336,6 +349,11 @@ impl AppointmentBookingEscrow {
             Self::record_operation(&env, false);
             return Err(Error::InvalidState);
         }
+        if appointment.status == AppointmentStatus::NoShow {
+            events::diag_validation_fail(&env, "refund_appointment", "no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::AppointmentNoShow);
+        }
 
         // Prevent double withdrawal
         if appointment.funds_released {
@@ -378,6 +396,122 @@ impl AppointmentBookingEscrow {
         );
 
         events::diag_fn_exit(&env, "refund_appointment");
+        Self::record_operation(&env, true);
+        Ok(())
+    }
+
+    /// Mark an appointment as a no-show (provider only).
+    /// Only callable by the appointment's provider. No funds are released.
+    pub fn mark_no_show(env: Env, provider: Address, appointment_id: u64) -> Result<(), Error> {
+        provider.require_auth();
+        Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "mark_no_show");
+
+        let appointment_key = DataKey::Appointment(appointment_id);
+        let mut appointment: AppointmentEscrow = env
+            .storage()
+            .persistent()
+            .get(&appointment_key)
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
+
+        // Only the assigned provider may mark no-show
+        if appointment.provider != provider {
+            events::diag_auth_fail(&env, "mark_no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::OnlyProviderCanConfirm);
+        }
+
+        // Only allow no-show on Booked appointments
+        if appointment.status != AppointmentStatus::Booked {
+            events::diag_validation_fail(&env, "mark_no_show", "not_booked");
+            Self::record_operation(&env, false);
+            return Err(Error::InvalidState);
+        }
+
+        let timestamp = env.ledger().timestamp();
+
+        appointment.status = AppointmentStatus::NoShow;
+        appointment.no_show_marked_at = timestamp;
+
+        env.storage()
+            .persistent()
+            .set(&appointment_key, &appointment);
+
+        events::diag_state_change(
+            &env,
+            appointment_id,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::NoShow as u32,
+        );
+
+        events::publish_marked_no_show(
+            &env,
+            appointment_id,
+            &provider,
+            &appointment.patient,
+            timestamp,
+        );
+
+        events::diag_fn_exit(&env, "mark_no_show");
+        Self::record_operation(&env, true);
+        Ok(())
+    }
+
+    /// Send an appointment reminder (provider or admin only).
+    /// Records the timestamp when the reminder was last sent.
+    pub fn send_reminder(env: Env, caller: Address, appointment_id: u64) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "send_reminder");
+
+        let appointment_key = DataKey::Appointment(appointment_id);
+        let mut appointment: AppointmentEscrow = env
+            .storage()
+            .persistent()
+            .get(&appointment_key)
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
+
+        // Only the provider or admin can send a reminder
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if appointment.provider != caller && admin != caller {
+            events::diag_auth_fail(&env, "send_reminder");
+            Self::record_operation(&env, false);
+            return Err(Error::OnlyProviderCanConfirm);
+        }
+
+        // Reminders only make sense for Booked appointments
+        if appointment.status != AppointmentStatus::Booked {
+            events::diag_validation_fail(&env, "send_reminder", "not_booked");
+            Self::record_operation(&env, false);
+            return Err(Error::InvalidState);
+        }
+
+        let timestamp = env.ledger().timestamp();
+        appointment.reminder_sent_at = timestamp;
+
+        env.storage()
+            .persistent()
+            .set(&appointment_key, &appointment);
+
+        events::publish_reminder_sent(
+            &env,
+            appointment_id,
+            &appointment.provider,
+            &appointment.patient,
+            timestamp,
+        );
+
+        events::diag_fn_exit(&env, "send_reminder");
         Self::record_operation(&env, true);
         Ok(())
     }

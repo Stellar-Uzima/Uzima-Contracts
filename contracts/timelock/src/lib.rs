@@ -1,4 +1,5 @@
 #![no_std]
+//! timelock - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;
 pub use errors::Error;
@@ -89,6 +90,11 @@ impl Timelock {
         );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
+        let _cfg: TimelockConfig = env
+            .storage()
+            .instance()
+            .get(&CFG)
+            .ok_or(Error::NotInitialized)?;
         if now < tx.eta {
             return Err(Error::NotReady);
         }
@@ -106,6 +112,9 @@ impl Timelock {
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "testutils"))]
+mod time_dependent_tests;
 
 #[cfg(all(test, feature = "testutils"))]
 #[allow(clippy::unwrap_used, clippy::panic)]

@@ -1,6 +1,7 @@
 #![no_std]
+//! multi_region_orchestrator - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol, Vec, map, Map};
+use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
 
 // ============================================================================
 // Data Types & Constants
@@ -13,9 +14,8 @@ const ALL_ROLES: u32 = 7;
 
 const MAX_REGIONS: u32 = 10;
 const RTO_THRESHOLD_MS: u64 = 15 * 60 * 1000; // 15 minutes
-const UPTIME_TARGET: u32 = 9999; // 99.99% (in basis points)
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum GeoRegion {
     UsEast = 0,
@@ -29,7 +29,7 @@ pub enum GeoRegion {
     Custom = 8,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum RegionStatus {
     Active = 0,
@@ -186,7 +186,7 @@ impl MultiRegionOrchestrator {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())
@@ -354,8 +354,8 @@ impl MultiRegionOrchestrator {
         let failover_event = FailoverEvent {
             event_id: failover_id,
             triggered_at: start_time,
-            source_region: RegionStatus::Active.clone(), // Simplified, should use actual region
-            target_region: RegionStatus::Active.clone(),
+            source_region: GeoRegion::UsEast, // discriminant used as placeholder
+            target_region: GeoRegion::UsWest,
             reason,
             rto_ms,
             success,
@@ -394,7 +394,7 @@ impl MultiRegionOrchestrator {
     pub fn sync_data(
         env: Env,
         caller: Address,
-        source_region_id: u32,
+        _source_region_id: u32,
         target_region_ids: Vec<u32>,
         data_hash: u64,
     ) -> Result<u64, Error> {

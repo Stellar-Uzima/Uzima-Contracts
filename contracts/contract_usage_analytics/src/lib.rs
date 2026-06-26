@@ -1,8 +1,8 @@
 #![no_std]
+//! contract_usage_analytics - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Vec,
 };
 
 #[derive(Clone)]

@@ -1,4 +1,5 @@
 #![no_std]
+//! mpc_manager - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod test;

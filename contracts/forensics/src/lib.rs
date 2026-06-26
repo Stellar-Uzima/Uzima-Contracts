@@ -1,4 +1,5 @@
 #![no_std]
+//! forensics - Healthcare smart contract on Stellar blockchain.
 
 pub mod analysis;
 pub mod detection;
@@ -14,8 +15,19 @@ use crate::types::{
     ActivityType, DataKey, ForensicEvidence, InvestigationReport, PatternAnalysis, ThreatLevel,
 };
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol, Vec,
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
 };
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    Unauthorized = 3,
+    ReportNotFound = 4,
+}
 
 #[contract]
 pub struct OnChainForensics;
@@ -23,13 +35,14 @@ pub struct OnChainForensics;
 #[contractimpl]
 impl OnChainForensics {
     /// Initialize with administrator
-    pub fn initialize(env: Env, admin: Address) {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::EvidenceCount, &0u64);
         env.storage().instance().set(&DataKey::ReportCount, &0u64);
+        Ok(())
     }
 
     /// Log a forensic event and collect evidence
@@ -106,9 +119,9 @@ impl OnChainForensics {
         end: u64,
         evidence_ids: Vec<u64>,
         findings: String,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
+        Self::require_admin(&env, &admin)?;
 
         let report_id = Self::next_id(&env, &DataKey::ReportCount);
         let report = InvestigationReport {
@@ -129,32 +142,32 @@ impl OnChainForensics {
             (report_id, report.start_timestamp, report.end_timestamp),
         );
 
-        report_id
+        Ok(report_id)
     }
 
     /// Update an investigation status
-    pub fn update_investigation(env: Env, admin: Address, report_id: u64, status: String) -> bool {
+    pub fn update_investigation(env: Env, admin: Address, report_id: u64, status: String) -> Result<bool, Error> {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
+        Self::require_admin(&env, &admin)?;
 
         let mut report: InvestigationReport = env
             .storage()
             .persistent()
             .get(&DataKey::Report(report_id))
-            .expect("Report not found");
+            .ok_or(Error::ReportNotFound)?;
 
         report.status = status;
         env.storage()
             .persistent()
             .set(&DataKey::Report(report_id), &report);
 
-        true
+        Ok(true)
     }
 
     /// Blacklist a suspicious address after forensic evidence
-    pub fn blacklist_actor(env: Env, admin: Address, actor_to_blacklist: Address) {
+    pub fn blacklist_actor(env: Env, admin: Address, actor_to_blacklist: Address) -> Result<(), Error> {
         admin.require_auth();
-        Self::require_admin(&env, &admin);
+        Self::require_admin(&env, &admin)?;
 
         env.storage()
             .instance()
@@ -164,6 +177,7 @@ impl OnChainForensics {
             (symbol_short!("FORENSIC"), symbol_short!("B_LIST")),
             actor_to_blacklist,
         );
+        Ok(())
     }
 
     /// Internal helper to update pattern analysis
@@ -209,15 +223,16 @@ impl OnChainForensics {
     }
 
     /// Private helper to get the administrator
-    fn require_admin(env: &Env, actor: &Address) {
+    fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("Not initialized");
+            .ok_or(Error::NotInitialized)?;
         if admin != *actor {
-            panic!("Unauthorized: Admin access required");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     /// Helper to increment counters

@@ -1,59 +1,68 @@
-#![allow(unused_imports)]
-
-use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{Env, Address, testutils::{Address as _}, String, vec};
+use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
 
 #[test]
-fn test_cross_chain_transfer_logic() {
+fn test_cross_chain_record_bridge_sync() {
     let env = Env::default();
+    env.mock_all_auths();
+
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-    let sender = Address::generate(&env);
-    let destination_chain = String::from_str(&env, "Ethereum");
-    let record_hash = String::from_str(&env, "QmXoyp...hash");
+    let admin = Address::generate(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let record_hash = String::from_str(&env, "QmXoypizvW4C6vNbkCvM2EmxFTANf8wXmmE7DWjhx");
 
-    // 1. Test successful bridge initiation
-    // Assuming the contract has a cross_chain_transfer method based on issue requirements
-    // If not existing, we simulate the logic behavior expected for bridge operations
-    env.mock_all_auths();
+    // Initialize and set up users
+    assert!(client.initialize(&admin));
+    assert!(client.manage_user(&admin, &doctor, &Role::Doctor));
+    assert!(client.manage_user(&admin, &patient, &Role::Patient));
 
-    // Simulating a successful cross-chain event validation
+    // Test successful record creation (cross-chain compatible)
     let result = client.try_add_record(
-        &sender,
-        &sender,
-        &String::from_str(&env, "Cross-Chain Sync"),
-        &destination_chain,
-        &true, // bridge_sync flag
-        &soroban_sdk::vec![&env],
-        &String::from_str(&env, "Bridge"),
-        &String::from_str(&env, "Sync"),
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Cross-Chain Sync: Diabetes Follow-up"),
+        &String::from_str(&env, "Remote monitoring"),
+        &false,
+        &vec![&env, String::from_str(&env, "cross-chain"), String::from_str(&env, "sync")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Telemedicine"),
         &record_hash,
     );
 
-    assert!(result.is_ok(), "Bridge sync record should be accepted");
+    assert!(result.is_ok(), "Cross-chain compatible record should be accepted");
 }
 
 #[test]
-fn test_bridge_error_invalid_destination() {
+fn test_bridge_error_invalid_data() {
     let env = Env::default();
+    env.mock_all_auths();
+
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
-    let sender = Address::generate(&env);
+    let admin = Address::generate(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
 
-    // Test scenario: Missing data for bridge
+    assert!(client.initialize(&admin));
+    assert!(client.manage_user(&admin, &doctor, &Role::Doctor));
+    assert!(client.manage_user(&admin, &patient, &Role::Patient));
+
+    // Test: empty diagnosis should fail
     let res = client.try_add_record(
-        &sender,
-        &sender,
+        &doctor,
+        &patient,
         &String::from_str(&env, ""),
-        &String::from_str(&env, ""),
-        &true,
+        &String::from_str(&env, "Treatment"),
+        &false,
         &soroban_sdk::vec![&env],
-        &String::from_str(&env, "Invalid"),
-        &String::from_str(&env, "Fail"),
-        &String::from_str(&env, ""),
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
     );
 
-    assert!(res.is_err(), "Should fail if bridge metadata is incomplete");
+    assert!(res.is_err(), "Should fail with empty diagnosis");
 }

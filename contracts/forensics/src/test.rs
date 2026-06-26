@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use super::*;
-use crate::types::{ActivityType, Level, ThreatLevel};
+use crate::types::{ActivityType, ThreatLevel};
 use soroban_sdk::testutils::{Address as _, Ledger};
 
 #[test]
@@ -44,13 +44,13 @@ fn test_forensics_lifecycle() {
 }
 
 #[test]
-#[should_panic(expected = "Already initialized")]
-fn test_double_initialization() {
+fn test_double_initialization_returns_error() {
     let env = Env::default();
     let admin = Address::generate(&env);
     let contract_id = env.register_contract(None, OnChainForensics);
     let client = OnChainForensicsClient::new(&env, &contract_id);
 
     client.initialize(&admin);
-    client.initialize(&admin);
+    let result = client.try_initialize(&admin);
+    assert!(result.is_err());
 }

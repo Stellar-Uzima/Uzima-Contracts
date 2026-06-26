@@ -1,4 +1,5 @@
 #![no_std]
+//! code_ownership - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;

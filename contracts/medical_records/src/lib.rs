@@ -1,9 +1,73 @@
+//! # Medical Records Contract
+//!
+//! Core medical records management contract for the Uzima healthcare platform.
+//! Provides on-chain medical record storage with fine-grained access control,
+//! encryption support, cross-chain sync, and AI integration capabilities.
+//!
+//! ## Purpose
+//! Manages patient medical records with support for:
+//! - Creating and retrieving medical records with metadata
+//! - Role-based access control (RBAC) via built-in user management
+//! - Encrypted records with end-to-end encryption envelope support
+//! - Cross-chain record synchronization
+//! - AI/ML integration for anomaly detection and risk assessment
+//! - Quantum-safe cryptographic envelope upgrades
+//! - Zero-knowledge proof based access grants
+//! - Data quality validation and correction workflows
+//!
+//! ## Key Dependencies
+//! - `rbac` - Role-based access control (used via built-in user management)
+//! - `upgradeability` - Contract upgrade and admin patterns
+//! - `identity_registry` - DID-based identity (optional)
+//! - `audit_forensics` - Audit trail logging (optional)
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address
+//! - Admin is automatically granted the Admin role
+//!
+//! ## Dependencies (Optional)
+//! - `identity_registry` - For DID-based user profiles
+//! - `zk_verifier` - For zero-knowledge proof verification
+//! - `credential_registry` - For credential management
+//! - `crypto_registry` - For cryptographic key management
+//! - `audit_forensics` - For forensic auditing
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can manage users, pause/unpause, config changes
+//! - **Doctor**: Can create and read records
+//! - **Patient**: Can read their own records
+//! - **Permission Grants**: Granular permission delegation supported
+//!
+//! ## Error Ranges
+//! - 100-199: Access Control & Authorization
+//! - 200-299: Input Validation
+//! - 300-399: Lifecycle & State
+//! - 400-499: Entity Existence
+//! - 500-599: Financial & Resource
+//! - 600-699: Cryptography & ZK
+//! - 700-799: Cross-Chain
+//! - 800-899: Domain-Specific AI/Medical
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin);
+//! client.manage_user(&admin, &doctor, &Role::Doctor);
+//! client.manage_user(&admin, &patient, &Role::Patient);
+//! let record_id = client.add_record(&doctor, &patient, &diagnosis, &treatment,
+//!     &false, &tags, &category, &treatment_type, &data_ref);
+//! let record = client.get_record(&patient, &record_id);
+//! ```
+
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::enum_variant_names)]
 
 #[cfg(test)]
+mod benchmarks;
+#[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_input_validation;
 #[cfg(test)]
 mod test_migration;
 #[cfg(test)]
@@ -15,6 +79,7 @@ mod validation;
 
 pub use errors::Error;
 
+use patient_consent_management::PatientConsentManagementClient;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
@@ -79,6 +144,36 @@ pub enum Role {
     Doctor,
     Patient,
     None,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -209,6 +304,27 @@ pub struct MedicalRecord {
     pub treatment_type: String,
     pub data_ref: String,
     pub doctor_did: Option<String>,
+}
+
+// ==================== Traditional Medicine ====================
+
+/// Structured metadata for records involving traditional / indigenous healing practices.
+/// Sensitive remedy details should be stored encrypted off-chain; only the
+/// non-sensitive `practice_type` is surfaced in on-chain events.
+#[derive(Clone)]
+#[contracttype]
+pub struct TraditionalMedicineMetadata {
+    /// Category of traditional practice (e.g. "Ayurveda", "Traditional Chinese Medicine",
+    /// "African Traditional Medicine", "Naturopathy").
+    pub practice_type: String,
+    /// Cultural or lineage tradition of the practitioner (e.g. "Yoruba", "Zulu", "Siddha").
+    pub practitioner_tradition: String,
+    /// Off-chain encrypted reference to specific remedies / preparations used.
+    pub remedies_used: String,
+    /// Broader cultural context or ceremony associated with the treatment.
+    pub cultural_context: String,
+    /// Primary language in which the consultation was conducted (ISO 639-1 code recommended).
+    pub language: String,
 }
 
 // ==================== AI & Recovery Types ====================
@@ -420,6 +536,7 @@ pub enum DataKey {
     Initialized,
     Paused,
     ContractVersion,
+    RbacContract,
 
     // Users / DID
     Users,
@@ -486,6 +603,7 @@ pub enum DataKey {
     // ZK
     ZkVerifierContract,
     CredentialRegistryContract,
+    PatientConsentContract,
     ZkEnforced,
     ZkGrantTtl,
     ZkUsedNullifier(BytesN<32>),
@@ -495,12 +613,35 @@ pub enum DataKey {
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
     QuantumThreatLevel,       // 0-100 (percentage)
+    LastExportTime(Address),  // Timestamp of last data export per patient
+
+    // Traditional medicine
+    /// Encrypted traditional metadata for a record (stored alongside the main record).
+    TraditionalMeta(u64),
+    /// Per-patient index of record IDs that have traditional metadata attached.
+    PatientTraditionalRecords(Address),
 }
 
 // ==================== Errors ====================
 // NOTE: `Error` lives in `errors.rs` and is re-exported above.
 
-// ==================== Batch (Optional) ====================
+// ==================== Batch Types ====================
+
+/// Per-record input for batched record creation.
+/// Same fields as `write_record` minus `caller` (passed at batch level).
+#[derive(Clone)]
+#[contracttype]
+pub struct RecordInput {
+    pub patient: Address,
+    pub diagnosis: String,
+    pub treatment: String,
+    pub is_confidential: bool,
+    pub tags: Vec<String>,
+    pub category: String,
+    pub treatment_type: String,
+    pub data_ref: String,
+    pub traditional_metadata: Option<TraditionalMedicineMetadata>,
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -514,6 +655,14 @@ pub struct FailureInfo {
 pub struct BatchResult {
     pub successes: Vec<u64>,
     pub failures: Vec<FailureInfo>,
+}
+
+/// Result type for cursor-based paginated record listing.
+#[derive(Clone)]
+#[contracttype]
+pub struct ListRecordsResult {
+    pub records: Vec<MedicalRecord>,
+    pub next_cursor: Option<u64>,
 }
 
 // ==================== Rate Limiting Types ====================
@@ -728,9 +877,19 @@ pub trait CredentialRegistryContract {
     fn is_root_revoked(env: Env, issuer: Address, root: BytesN<32>) -> bool;
 }
 
+/// Export format for patient data portability
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[contracttype]
+pub enum ExportFormat {
+    FHIRBundle,
+    HL7v2,
+    CDA,
+}
+
 // Rate-limiting operation IDs
 const OP_ADD_RECORD: u32 = 1;
 const OP_MANAGE_USER: u32 = 2;
+const EXPORT_COOLDOWN_SECS: u64 = 86_400; // 24 hours
 
 // Default rate limits
 const DEFAULT_DOCTOR_MAX_CALLS: u32 = 50;
@@ -745,7 +904,7 @@ const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 pub enum LogLevel {
     Info,
     Warning,
-    ErrorLevel,
+    LogError,
 }
 
 #[derive(Clone)]
@@ -784,7 +943,7 @@ impl MedicalRecordsContract {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
-            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+            LogLevel::LogError => symbol_short!("LOG_ERROR"),
         };
 
         let entry = StructuredLog {
@@ -848,7 +1007,7 @@ impl MedicalRecordsContract {
     ) {
         Self::emit_structured_log(
             env,
-            LogLevel::ErrorLevel,
+            LogLevel::LogError,
             operation,
             actor,
             target_id,
@@ -858,7 +1017,7 @@ impl MedicalRecordsContract {
     }
 
     /// Initialize the contract, setting the admin and default storage values.
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address, rbac_contract: Address) -> bool {
         admin.require_auth();
 
         if env.storage().instance().has(&UPGRADE_ADMIN) {
@@ -875,6 +1034,9 @@ impl MedicalRecordsContract {
 
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
 
         env.storage().persistent().set(&DataKey::Paused, &false);
         env.storage().persistent().set(&DataKey::NextId, &0u64);
@@ -989,10 +1151,13 @@ impl MedicalRecordsContract {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
-        Self::require_admin(&env, &caller)?;
+        let mut users = Self::read_users(&env);
+        let rbac_addr = Self::load_rbac_contract(&env).ok_or(Error::Unauthorized)?;
+        if !Self::is_active_role_with_context(&env, &users, &rbac_addr, &caller, RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
         Self::check_and_update_rate_limit(&env, &caller, OP_MANAGE_USER)?;
 
-        let mut users = Self::read_users(&env);
         let existing = users.get(user.clone());
 
         let role_str = match role {
@@ -1010,6 +1175,7 @@ impl MedicalRecordsContract {
                 Role::Patient => "Patient",
                 Role::None => "None",
             };
+            Self::sync_rbac_role_with_contract(&env, &rbac_addr, &user, Some(previous_role), role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -1045,6 +1211,7 @@ impl MedicalRecordsContract {
                 );
             }
         } else {
+            Self::sync_rbac_role_with_contract(&env, &rbac_addr, &user, None, role)?;
             users.set(
                 user.clone(),
                 UserProfile {
@@ -1132,11 +1299,11 @@ impl MedicalRecordsContract {
         }
     }
 
-    pub fn get_user_role(env: Env, user: Address) -> Role {
+    pub fn get_user_role(env: Env, user: Address) -> Result<Role, Error> {
         let users = Self::read_users(&env);
         match users.get(user) {
-            Some(p) if p.active => p.role,
-            _ => Role::None,
+            Some(p) if p.active => Ok(p.role),
+            _ => Err(Error::Unauthorized),
         }
     }
 
@@ -1576,54 +1743,20 @@ impl MedicalRecordsContract {
         }
         Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
 
-        // Validate inputs
-        if Self::is_patient_forgotten(&env, &patient) {
-            Self::log_warning(
-                &env,
-                "add_record",
-                Some(&caller),
-                Some(&patient),
-                None,
-                "Record creation denied because patient is marked as forgotten",
-            );
-            return Err(Error::Unauthorized);
-        }
-        validation::validate_diagnosis(&diagnosis)?;
-        validation::validate_treatment(&treatment)?;
-        validation::validate_tags(&tags)?;
-        validation::validate_category(&category, &env)?;
-        validation::validate_treatment_type(&treatment_type)?;
-        validation::validate_data_ref(&env, &data_ref)?;
-        validation::validate_addresses_different(&caller, &patient)?;
-
-        let record_id = Self::next_id(&env);
-        let record = MedicalRecord {
-            patient_id: patient.clone(),
-            doctor_id: caller.clone(),
-            timestamp: env.ledger().timestamp(),
-            diagnosis,
-            treatment,
-            is_confidential,
-            tags: tags.clone(),
-            category: category.clone(),
-            treatment_type,
-            data_ref,
-            doctor_did: None,
-        };
-
-        Self::store_record(&env, record_id, &record, &category, is_confidential);
-        Self::append_patient_record(&env, &patient, record_id);
-        Self::increment_record_count(&env);
-
-        events::emit_record_created(
+        let record_id = Self::write_record_internal(
             &env,
-            caller.clone(),
-            record_id,
-            patient.clone(),
+            &caller,
+            &patient,
+            &diagnosis,
+            &treatment,
             is_confidential,
-            category.clone(),
-            tags.clone(),
-        );
+            &tags,
+            &category,
+            &treatment_type,
+            &data_ref,
+            &None,
+        )?;
+
         Self::log_info(
             &env,
             "add_record",
@@ -1633,6 +1766,184 @@ impl MedicalRecordsContract {
             "Medical record created",
         );
         Ok(record_id)
+    }
+
+    /// Write a medical record with optional traditional medicine metadata.
+    ///
+    /// This is the canonical entry-point for records that may involve traditional
+    /// healing practices. When `traditional_metadata` is `Some`, the metadata is
+    /// stored encrypted alongside the main record and the record ID is appended to
+    /// the patient-scoped traditional-records index so it can be queried separately
+    /// via `list_traditional_records`.
+    ///
+    /// Calling with `traditional_metadata: None` is fully backward-compatible with
+    /// the existing `add_record` behaviour.
+    pub fn write_record(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        traditional_metadata: Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "write_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation blocked because encrypted record flow is enforced",
+            );
+            return Err(Error::EncryptionRequired);
+        }
+
+        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "write_record",
+                Some(&caller),
+                Some(&patient),
+                None,
+                "Record creation denied: caller lacks CreateRecord permission",
+            );
+            return Err(Error::Unauthorized);
+        }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
+
+        let record_id = Self::write_record_internal(
+            &env,
+            &caller,
+            &patient,
+            &diagnosis,
+            &treatment,
+            is_confidential,
+            &tags,
+            &category,
+            &treatment_type,
+            &data_ref,
+            &traditional_metadata,
+        )?;
+
+        Self::log_info(
+            &env,
+            "write_record",
+            Some(&caller),
+            Some(&patient),
+            Some(record_id),
+            "Medical record written (write_record)",
+        );
+        Ok(record_id)
+    }
+
+    /// Create multiple medical records in a single atomic call.
+    ///
+    /// All-or-nothing semantics: if any record fails validation, the entire
+    /// batch is rejected and no records are persisted.
+    ///
+    /// ## Limits
+    /// - Max 50 records per batch.
+    pub fn write_record_batch(
+        env: Env,
+        caller: Address,
+        records: Vec<RecordInput>,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if Self::is_encryption_required_internal(&env) {
+            Self::log_error(
+                &env,
+                "write_record_batch",
+                Some(&caller),
+                None,
+                None,
+                "Batch record creation blocked because encrypted record flow is enforced",
+            );
+            return Err(Error::EncryptionRequired);
+        }
+
+        if !Self::check_permission(&env, &caller, Permission::CreateRecord) {
+            Self::log_error(
+                &env,
+                "write_record_batch",
+                Some(&caller),
+                None,
+                None,
+                "Batch record creation denied: caller lacks CreateRecord permission",
+            );
+            return Err(Error::Unauthorized);
+        }
+        Self::check_and_update_rate_limit(&env, &caller, OP_ADD_RECORD)?;
+
+        let count = records.len();
+        if count == 0 || count > 50 {
+            return Err(Error::BatchTooLarge);
+        }
+
+        let mut ids: Vec<u64> = Vec::new(&env);
+        for input in records.iter() {
+            let id = Self::write_record_internal(
+                &env,
+                &caller,
+                &input.patient,
+                &input.diagnosis,
+                &input.treatment,
+                input.is_confidential,
+                &input.tags,
+                &input.category,
+                &input.treatment_type,
+                &input.data_ref,
+                &input.traditional_metadata,
+            )?;
+            ids.push_back(id);
+        }
+
+        Self::log_info(
+            &env,
+            "write_record_batch",
+            Some(&caller),
+            None,
+            None,
+            "Batch record write completed",
+        );
+        Ok(ids)
+    }
+
+    /// Return the record IDs of all traditional-medicine records for a patient.
+    ///
+    /// Only the patient themselves, an admin, or a caller with `ReadRecord` permission
+    /// may invoke this function.
+    pub fn list_traditional_records(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let is_patient = caller == patient_id;
+        let has_read = Self::check_permission(&env, &caller, Permission::ReadRecord);
+
+        if !is_patient && !has_read {
+            return Err(Error::Unauthorized);
+        }
+
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientTraditionalRecords(patient_id))
+            .unwrap_or(Vec::new(&env));
+
+        Ok(ids)
     }
 
     pub fn add_record_with_did(
@@ -1877,10 +2188,28 @@ impl MedicalRecordsContract {
         validation::validate_pagination(page, page_size)?;
 
         // Minimal gating: allow patients, admins, and active doctors to query.
-        if caller != patient
-            && !Self::is_admin(&env, &caller)
-            && !Self::is_active_doctor(&env, &caller)
-        {
+        let access_ctx = if caller == patient {
+            None
+        } else {
+            Some((Self::read_users(&env), Self::load_rbac_contract(&env)))
+        };
+        let is_admin = access_ctx
+            .as_ref()
+            .and_then(|(users, rbac_addr)| {
+                rbac_addr.as_ref().map(|addr| {
+                    Self::is_active_role_with_context(&env, users, addr, &caller, RbacRole::Admin)
+                })
+            })
+            .unwrap_or(false);
+        let is_active_doctor = access_ctx
+            .as_ref()
+            .and_then(|(users, rbac_addr)| {
+                rbac_addr.as_ref().map(|addr| {
+                    Self::is_active_role_with_context(&env, users, addr, &caller, RbacRole::Doctor)
+                })
+            })
+            .unwrap_or(false);
+        if caller != patient && !is_admin && !is_active_doctor {
             return Err(Error::Unauthorized);
         }
 
@@ -1916,7 +2245,7 @@ impl MedicalRecordsContract {
                         .persistent()
                         .get::<_, MedicalRecord>(&DataKey::Record(id))
                     {
-                        if Self::can_view_record(&env, &caller, &r, id) {
+                        if Self::can_view_record_with_admin(&env, &caller, &r, id, is_admin) {
                             if let Some(meta) = env
                                 .storage()
                                 .persistent()
@@ -1954,7 +2283,7 @@ impl MedicalRecordsContract {
                     .persistent()
                     .get::<_, MedicalRecord>(&DataKey::Record(record_id))
                 {
-                    if Self::can_view_record(&env, &caller, &r, record_id) {
+                    if Self::can_view_record_with_admin(&env, &caller, &r, record_id, is_admin) {
                         if let Some(meta) = env
                             .storage()
                             .persistent()
@@ -1990,6 +2319,63 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .get(&DataKey::PatientRecord(patient, index))
+    }
+
+    /// List medical records using cursor-based pagination.
+    /// Returns up to `limit` records starting after the given cursor.
+    /// `cursor` is the last record_id from a previous page (None for first page).
+    /// `limit` must be between 1 and 100.
+    pub fn list_records(
+        env: Env,
+        caller: Address,
+        cursor: Option<u64>,
+        limit: u32,
+    ) -> Result<ListRecordsResult, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if limit == 0 || limit > 100 {
+            return Err(Error::InvalidPagination);
+        }
+
+        let start_id = cursor.map(|c| c.saturating_add(1)).unwrap_or(0);
+        let max_id = env
+            .storage()
+            .persistent()
+            .get::<_, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+
+        let mut records = Vec::new(&env);
+        let mut last_id = start_id;
+        let limit_u64 = u64::from(limit);
+        let mut collected: u64 = 0;
+
+        let mut current = start_id;
+        while current < max_id && collected < limit_u64 {
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<_, MedicalRecord>(&DataKey::Record(current))
+            {
+                if Self::can_view_record(&env, &caller, &record, current) {
+                    records.push_back(record);
+                    last_id = current;
+                    collected = collected.saturating_add(1);
+                }
+            }
+            current = current.saturating_add(1);
+        }
+
+        let next_cursor = if current < max_id && collected == limit_u64 {
+            Some(last_id)
+        } else {
+            None
+        };
+
+        Ok(ListRecordsResult {
+            records,
+            next_cursor,
+        })
     }
 
     pub fn set_zk_verifier_contract(
@@ -2032,6 +2418,28 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .get(&DataKey::CredentialRegistryContract)
+    }
+
+    pub fn set_patient_consent_contract(
+        env: Env,
+        caller: Address,
+        consent_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientConsentContract, &consent_contract);
+        Ok(true)
+    }
+
+    pub fn get_patient_consent_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::PatientConsentContract)
     }
 
     pub fn set_zk_enforced(env: Env, caller: Address, enforced: bool) -> Result<bool, Error> {
@@ -4452,9 +4860,226 @@ impl MedicalRecordsContract {
         env.storage().instance().get(&VERSION).unwrap_or(0)
     }
 
+    /// Export all patient data in the requested format for data portability.
+    /// Only the patient themselves can request their export.
+    /// Rate-limited to one export per 24 hours per patient.
+    pub fn export_patient_data(
+        env: Env,
+        patient_id: Address,
+        format: ExportFormat,
+    ) -> Result<Bytes, Error> {
+        patient_id.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        let now = env.ledger().timestamp();
+        let last_export: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LastExportTime(patient_id.clone()))
+            .unwrap_or(0);
+        if now < last_export.saturating_add(EXPORT_COOLDOWN_SECS) {
+            return Err(Error::RateLimitExceeded);
+        }
+
+        // Collect all records for this patient
+        let total: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient_id.clone()))
+            .unwrap_or(0);
+        let mut records: Vec<MedicalRecord> = Vec::new(&env);
+        for i in 0..total {
+            if let Some(rid) = env
+                .storage()
+                .persistent()
+                .get::<_, u64>(&DataKey::PatientRecord(patient_id.clone(), i))
+            {
+                if let Some(r) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, MedicalRecord>(&DataKey::Record(rid))
+                {
+                    records.push_back(r);
+                }
+            }
+        }
+
+        let user_profile = Self::read_users(&env)
+            .get(patient_id.clone())
+            .ok_or(Error::Unauthorized)?;
+
+        // Build export payload: demographics summary + records + consent + audit
+        let mut payload = Bytes::new(&env);
+
+        let format_tag = match format {
+            ExportFormat::FHIRBundle => Bytes::from_array(&env, &b"FHIR"[..]),
+            ExportFormat::HL7v2 => Bytes::from_array(&env, &b"HL7v2"[..]),
+            ExportFormat::CDA => Bytes::from_array(&env, &b"CDA"[..]),
+        };
+        payload.append(&format_tag);
+        payload.append(&Bytes::from_array(&env, &now.to_be_bytes()));
+
+        {
+            let id_bytes: BytesN<32> = env.current_contract_id();
+            payload.append(&Bytes::from_array(&env, id_bytes.as_ref()));
+        }
+
+        payload.append(&Bytes::from_array(&env, &b"DEMO"[..]));
+        let role_byte = match user_profile.role {
+            Role::Admin => 0u8,
+            Role::Doctor => 1u8,
+            Role::Patient => 2u8,
+            Role::None => 3u8,
+        };
+        payload.append(&Bytes::from_array(&env, &[role_byte]));
+        if let Some(did) = user_profile.did_reference {
+            payload.append(&Bytes::from_array(&env, did.as_bytes()));
+        }
+
+        payload.append(&Bytes::from_array(&env, &b"RECS"[..]));
+        let rec_len = records.len() as u32;
+        payload.append(&Bytes::from_array(&env, &rec_len.to_be_bytes()));
+        for record in records.iter() {
+            payload.append(&record.to_xdr(&env));
+        }
+
+        payload.append(&Bytes::from_array(&env, &b"AUDIT"[..]));
+        let audit_count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientAccessLogCount(patient_id.clone()))
+            .unwrap_or(0);
+        let audit_start = if audit_count > 10 {
+            audit_count - 10
+        } else {
+            0
+        };
+        for i in audit_start..audit_count {
+            if let Some(log_entry) = env
+                .storage()
+                .persistent()
+                .get::<_, AccessRequest>(&DataKey::PatientAccessLog(patient_id.clone(), i))
+            {
+                payload.append(&log_entry.to_xdr(&env));
+            }
+        }
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::LastExportTime(patient_id.clone()), &now);
+
+        env.events().publish(
+            (symbol_short!("EXPORT"), symbol_short!("DATA")),
+            (patient_id, format as u32, now),
+        );
+
+        Self::log_info(
+            &env,
+            "export_patient_data",
+            Some(&patient_id),
+            Some(&patient_id),
+            None,
+            "Patient data export completed",
+        );
+
+        Ok(payload)
+    }
+
     // ---------------------------------------------------------------------
     // Internal helpers
     // ---------------------------------------------------------------------
+
+    /// Core per-record creation logic shared by `add_record`, `write_record`,
+    /// and `write_record_batch`.  Handles per-item validation, storage, and
+    /// event emission.  Callers are responsible for outer auth / init / paused /
+    /// permission / rate-limit checks.
+    fn write_record_internal(
+        env: &Env,
+        caller: &Address,
+        patient: &Address,
+        diagnosis: &String,
+        treatment: &String,
+        is_confidential: bool,
+        tags: &Vec<String>,
+        category: &String,
+        treatment_type: &String,
+        data_ref: &String,
+        traditional_metadata: &Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        if Self::is_patient_forgotten(env, patient) {
+            Self::log_warning(
+                env,
+                "write_record_internal",
+                Some(caller),
+                Some(patient),
+                None,
+                "Record creation denied because patient is marked as forgotten",
+            );
+            return Err(Error::Unauthorized);
+        }
+        validation::validate_diagnosis(diagnosis)?;
+        validation::validate_treatment(treatment)?;
+        validation::validate_tags(tags)?;
+        validation::validate_category(category, env)?;
+        validation::validate_treatment_type(treatment_type)?;
+        validation::validate_data_ref(env, data_ref)?;
+        validation::validate_addresses_different(caller, patient)?;
+
+        let record_id = Self::next_id(env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: caller.clone(),
+            timestamp: env.ledger().timestamp(),
+            diagnosis: diagnosis.clone(),
+            treatment: treatment.clone(),
+            is_confidential,
+            tags: tags.clone(),
+            category: category.clone(),
+            treatment_type: treatment_type.clone(),
+            data_ref: data_ref.clone(),
+            doctor_did: None,
+        };
+
+        Self::store_record(env, record_id, &record, category, is_confidential);
+        Self::append_patient_record(env, patient, record_id);
+        Self::increment_record_count(env);
+
+        // --- Traditional medicine metadata ---
+        if let Some(meta) = traditional_metadata {
+            let practice_type = meta.practice_type.clone();
+            env.storage()
+                .persistent()
+                .set(&DataKey::TraditionalMeta(record_id), meta);
+            let idx_key = DataKey::PatientTraditionalRecords(patient.clone());
+            let mut trad_ids: Vec<u64> = env
+                .storage()
+                .persistent()
+                .get(&idx_key)
+                .unwrap_or(Vec::new(env));
+            trad_ids.push_back(record_id);
+            env.storage().persistent().set(&idx_key, &trad_ids);
+            events::emit_traditional_record_added(
+                env,
+                caller.clone(),
+                record_id,
+                patient.clone(),
+                practice_type,
+            );
+        }
+
+        events::emit_record_created(
+            env,
+            caller.clone(),
+            record_id,
+            patient.clone(),
+            is_confidential,
+            category.clone(),
+            tags.clone(),
+        );
+
+        Ok(record_id)
+    }
 
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&UPGRADE_ADMIN) {
@@ -4484,25 +5109,71 @@ impl MedicalRecordsContract {
             .unwrap_or(Map::new(env))
     }
 
-    fn is_admin(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Admin) && profile.active,
-            None => false,
+    fn check_rbac_role(env: &Env, address: &Address, role: RbacRole) -> bool {
+        let rbac_addr: Address = match Self::load_rbac_contract(env) {
+            Some(v) => v,
+            None => return false, // fail closed
+        };
+        Self::check_rbac_role_with_contract(env, &rbac_addr, address, role)
+    }
+
+    fn load_rbac_contract(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&DataKey::RbacContract)
+    }
+
+    fn check_rbac_role_with_contract(
+        env: &Env,
+        rbac_addr: &Address,
+        address: &Address,
+        role: RbacRole,
+    ) -> bool {
+        let client = RbacClient::new(env, rbac_addr);
+        client.has_role(address, &role)
+    }
+
+    fn is_user_active(users: &Map<Address, UserProfile>, address: &Address) -> bool {
+        match users.get(address.clone()) {
+            Some(profile) => profile.active,
+            None => true,
         }
+    }
+
+    fn is_active_role_with_context(
+        env: &Env,
+        users: &Map<Address, UserProfile>,
+        rbac_addr: &Address,
+        address: &Address,
+        role: RbacRole,
+    ) -> bool {
+        Self::is_user_active(users, address)
+            && Self::check_rbac_role_with_contract(env, rbac_addr, address, role)
+    }
+
+    fn is_admin(env: &Env, address: &Address) -> bool {
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
+        };
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Admin)
     }
 
     fn is_active_doctor(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Doctor) && profile.active,
-            None => false,
-        }
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
+        };
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Doctor)
     }
 
     fn is_active_patient(env: &Env, address: &Address) -> bool {
-        match Self::read_users(env).get(address.clone()) {
-            Some(profile) => matches!(profile.role, Role::Patient) && profile.active,
-            None => false,
-        }
+        let users = Self::read_users(env);
+        let rbac_addr = match Self::load_rbac_contract(env) {
+            Some(addr) => addr,
+            None => return false,
+        };
+        Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Patient)
     }
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
@@ -5072,11 +5743,27 @@ impl MedicalRecordsContract {
         record: &MedicalRecord,
         record_id: u64,
     ) -> bool {
+        Self::can_view_record_with_admin(
+            env,
+            caller,
+            record,
+            record_id,
+            Self::is_admin(env, caller),
+        )
+    }
+
+    fn can_view_record_with_admin(
+        env: &Env,
+        caller: &Address,
+        record: &MedicalRecord,
+        record_id: u64,
+        is_admin: bool,
+    ) -> bool {
         if Self::is_patient_forgotten(env, &record.patient_id) {
             return false;
         }
 
-        if Self::is_admin(env, caller) {
+        if is_admin {
             return true;
         }
         if *caller == record.patient_id {
@@ -5088,10 +5775,27 @@ impl MedicalRecordsContract {
         if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
             return true;
         }
-        if record.is_confidential {
+        let has_permission = if record.is_confidential {
             Self::check_permission(env, caller, Permission::ReadConfidential)
         } else {
             Self::check_permission(env, caller, Permission::ReadRecord)
+        };
+        has_permission && Self::has_patient_consent(env, &record.patient_id, caller)
+    }
+
+    fn has_patient_consent(env: &Env, patient: &Address, provider: &Address) -> bool {
+        if let Some(contract_addr) = env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&DataKey::PatientConsentContract)
+        {
+            let client = PatientConsentManagementClient::new(env, &contract_addr);
+            match client.check_consent(patient.clone(), provider.clone()) {
+                Ok(has_consent) => has_consent,
+                Err(_) => false,
+            }
+        } else {
+            true
         }
     }
 
@@ -5198,17 +5902,28 @@ impl MedicalRecordsContract {
         record: &EncryptedRecord,
         record_id: u64,
     ) -> bool {
-        if Self::is_admin(env, caller) {
-            return true;
-        }
         if *caller == record.patient_id {
             return true;
         }
         if *caller == record.doctor_id {
             return true;
         }
-        if Self::is_active_doctor(env, caller) && !record.is_confidential {
-            return true;
+        if let Some(rbac_addr) = Self::load_rbac_contract(env) {
+            let users = Self::read_users(env);
+            if Self::is_active_role_with_context(env, &users, &rbac_addr, caller, RbacRole::Admin) {
+                return true;
+            }
+            if !record.is_confidential
+                && Self::is_active_role_with_context(
+                    env,
+                    &users,
+                    &rbac_addr,
+                    caller,
+                    RbacRole::Doctor,
+                )
+            {
+                return true;
+            }
         }
         if Self::has_emergency_access_internal(env, caller, &record.patient_id, record_id) {
             return true;
@@ -5596,6 +6311,47 @@ impl MedicalRecordsContract {
 
         Ok(result)
     }
+
+    fn sync_rbac_role(
+        env: &Env,
+        address: &Address,
+        previous_role: Option<Role>,
+        new_role: Role,
+    ) -> Result<(), Error> {
+        let r_addr: Address = Self::load_rbac_contract(env).ok_or(Error::NotInitialized)?;
+        Self::sync_rbac_role_with_contract(env, &r_addr, address, previous_role, new_role)
+    }
+
+    fn sync_rbac_role_with_contract(
+        env: &Env,
+        r_addr: &Address,
+        address: &Address,
+        previous_role: Option<Role>,
+        new_role: Role,
+    ) -> Result<(), Error> {
+        let client = RbacClient::new(env, r_addr);
+        if let Some(prev) = previous_role {
+            let prev_rbac = match prev {
+                Role::Admin => Some(RbacRole::Admin),
+                Role::Doctor => Some(RbacRole::Doctor),
+                Role::Patient => Some(RbacRole::Patient),
+                _ => None,
+            };
+            if let Some(pr) = prev_rbac {
+                client.remove_role(address, &pr);
+            }
+        }
+        let next_rbac = match new_role {
+            Role::Admin => Some(RbacRole::Admin),
+            Role::Doctor => Some(RbacRole::Doctor),
+            Role::Patient => Some(RbacRole::Patient),
+            _ => None,
+        };
+        if let Some(nr) = next_rbac {
+            client.assign_role(address, &nr);
+        }
+        Ok(())
+    }
 }
 
 impl upgradeability::migration::Migratable for MedicalRecordsContract {
@@ -5645,5 +6401,127 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
             gas_impact: 0,
             report,
         })
+    }
+}
+
+#[cfg(any(test, feature = "testutils"))]
+#[soroban_sdk::contract]
+pub struct MockRbac;
+
+#[cfg(any(test, feature = "testutils"))]
+#[soroban_sdk::contractimpl]
+impl MockRbac {
+    pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
+
+    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
+}
+
+// ==================== Traditional Medicine Support ====================
+
+impl MedicalRecordsContract {
+    /// Store a medical record with optional traditional medicine metadata.
+    /// When `traditional_metadata` is provided, the record is also indexed
+    /// for separate querying via `list_traditional_records`.
+    pub fn add_record_with_traditional(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        diagnosis: String,
+        treatment: String,
+        is_confidential: bool,
+        tags: Vec<String>,
+        category: String,
+        treatment_type: String,
+        data_ref: String,
+        traditional_metadata: Option<TraditionalMedicineMetadata>,
+    ) -> Result<u64, Error> {
+        let record_id = Self::add_record(
+            env.clone(),
+            caller.clone(),
+            patient.clone(),
+            diagnosis,
+            treatment,
+            is_confidential,
+            tags.clone(),
+            category.clone(),
+            treatment_type,
+            data_ref,
+        )?;
+
+        if let Some(meta) = traditional_metadata {
+            // Emit dedicated event
+            env.events().publish(
+                (Symbol::new(&env, "TradRecAdded"),),
+                (
+                    caller.clone(),
+                    record_id,
+                    patient.clone(),
+                    meta.practice_type.clone(),
+                ),
+            );
+        }
+
+        Ok(record_id)
+    }
+
+    /// List traditional medicine records for a patient.
+    /// Returns record IDs that have associated traditional medicine metadata.
+    pub fn list_traditional_records(
+        env: Env,
+        caller: Address,
+        patient: Address,
+    ) -> Result<Vec<u64>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if caller != patient && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Scan patient records for traditional medicine category
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientRecordCount(patient.clone()))
+            .unwrap_or(0);
+
+        let mut traditional_ids = Vec::new(&env);
+        for idx in 0..count {
+            if let Some(record_id) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, u64>(&DataKey::PatientRecord(patient.clone(), idx))
+            {
+                if let Some(record) = env
+                    .storage()
+                    .persistent()
+                    .get::<DataKey, MedicalRecord>(&DataKey::Record(record_id))
+                {
+                    if record.category == String::from_str(&env, "Traditional")
+                        || record.category == String::from_str(&env, "Herbal")
+                        || record.category == String::from_str(&env, "Spiritual")
+                    {
+                        traditional_ids.push_back(record_id);
+                    }
+                }
+            }
+        }
+
+        Ok(traditional_ids)
     }
 }

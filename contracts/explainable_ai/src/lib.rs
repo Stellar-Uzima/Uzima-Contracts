@@ -1,3 +1,4 @@
+//! explainable_ai - Healthcare smart contract on Stellar blockchain.
 // Explainable AI Contract - Enhanced with SHAP Integration and Counterfactual Explanations
 #![no_std]
 #![allow(clippy::too_many_arguments)]

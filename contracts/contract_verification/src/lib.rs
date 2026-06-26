@@ -16,11 +16,13 @@
 
 #![no_std]
 
-use soroban_sdk::{
-    contract, contractimpl, contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Vec,
-};
-#[allow(unused_imports)] // `vec!` macro is re-exported to the nested test module via `use super::*`
+#[allow(unused_imports)]
+// `vec!` macro is re-exported to the nested test module via `use super::*`
 use soroban_sdk::vec;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    String, Vec,
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

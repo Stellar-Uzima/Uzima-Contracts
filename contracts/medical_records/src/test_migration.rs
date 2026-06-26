@@ -1,4 +1,7 @@
-use crate::{MedicalRecordsContract, MedicalRecordsContractClient};
+// internal
+use crate::{MedicalRecordsContract, MedicalRecordsContractClient, MockRbac, MockRbacClient, RbacRole};
+
+// external crates
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 #[test]
@@ -10,7 +13,11 @@ fn test_migration_admin_check() {
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
+    client.initialize(&admin, &rbac_id);
 
     let dummy_hash = BytesN::<32>::from_array(&env, &[0u8; 32]);
 
@@ -29,7 +36,11 @@ fn test_migration_admin_check_panic() {
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize(&admin);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
+    client.initialize(&admin, &rbac_id);
 
     let dummy_hash = BytesN::<32>::from_array(&env, &[0u8; 32]);
     let user = Address::generate(&env);

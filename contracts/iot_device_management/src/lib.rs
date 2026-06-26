@@ -1,4 +1,5 @@
 #![no_std]
+//! iot_device_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::cast_possible_truncation)]

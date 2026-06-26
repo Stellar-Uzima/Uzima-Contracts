@@ -1,4 +1,5 @@
 #![no_std]
+//! sanitization - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{Env, String};
 

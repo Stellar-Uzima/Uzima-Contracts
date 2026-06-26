@@ -1,86 +1,91 @@
+use common_error::CommonError;
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
 #[contracterror(export = false)]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    // --- Access Control & Authorization (100–199) ---
-    Unauthorized = 100,
-    NotAICoordinator = 150,
-    EmergencyAccessExpired = 160,
+    // --- Common Errors (0–99) ---
+    Unauthorized = CommonError::Unauthorized as u32,
+    InvalidInput = CommonError::InvalidInput as u32,
+    NotInitialized = CommonError::NotInitialized as u32,
+    ContractPaused = CommonError::ContractPaused as u32,
+    DeadlineExceeded = CommonError::DeadlineExceeded as u32,
+    RateLimitExceeded = CommonError::RateLimitExceeded as u32,
+    InsufficientFunds = CommonError::InsufficientFunds as u32,
 
-    // --- Input Validation (200–299) ---
-    InvalidInput = 200,
-    InputTooLong = 201,
-    BatchTooLarge = 208,
-    InvalidSignature = 207,
-    InvalidDataRefLength = 250,
-    InvalidDataRefCharset = 251,
-    InvalidDiagnosisLength = 252,
-    InvalidTreatmentLength = 253,
-    InvalidPurposeLength = 254,
-    InvalidTagLength = 255,
-    InvalidModelVersionLength = 256,
-    InvalidExplanationLength = 257,
-    InvalidTreatmentTypeLength = 258,
-    InvalidAddress = 290,
-    SameAddress = 291,
-    InvalidBatch = 292,
-    NumberOutOfBounds = 293,
-    InvalidCategory = 280,
-    EmptyTreatment = 281,
-    EmptyDiagnosis = 282,
-    EmptyTag = 283,
-    EmptyDataRef = 284,
+    // --- Access Control & Authorization (1000–1099) ---
+    NotAICoordinator = 1150,
+    EmergencyAccessExpired = 1160,
 
-    // --- Lifecycle & State (300–399) ---
-    NotInitialized = 300,
-    ContractPaused = 302,
-    DeadlineExceeded = 306,
-    RateLimitExceeded = 307,
-    ProposalAlreadyExecuted = 320,
-    TimelockNotElapsed = 321,
-    NotEnoughApproval = 322,
-    CryptoRegistryNotSet = 340,
-    EncryptionRequired = 341,
-    IdentityRegistryNotSet = 342,
+    // --- Input Validation (1100–1199) ---
+    InvalidPagination = 1202,
+    InputTooLong = 1201,
+    BatchTooLarge = 1208,
+    InvalidSignature = 1207,
+    InvalidDataRefLength = 1250,
+    InvalidDataRefCharset = 1251,
+    InvalidDiagnosisLength = 1252,
+    InvalidTreatmentLength = 1253,
+    InvalidPurposeLength = 1254,
+    InvalidTagLength = 1255,
+    InvalidModelVersionLength = 1256,
+    InvalidExplanationLength = 1257,
+    InvalidTreatmentTypeLength = 1258,
+    InvalidAddress = 1290,
+    SameAddress = 1291,
+    InvalidBatch = 1292,
+    NumberOutOfBounds = 1293,
+    InvalidCategory = 1280,
+    EmptyTreatment = 1281,
+    EmptyDiagnosis = 1282,
+    EmptyTag = 1283,
+    EmptyDataRef = 1284,
 
-    // --- Entity Existence (400–499) ---
-    RecordNotFound = 403,
-    EmergencyAccessNotFound = 460,
-    DIDNotFound = 470,
-    DIDNotActive = 471,
-    RecordAlreadySynced = 480,
+    // --- Lifecycle & State (1200–1299) ---
+    ProposalAlreadyExecuted = 1320,
+    TimelockNotElapsed = 1321,
+    NotEnoughApproval = 1322,
+    CryptoRegistryNotSet = 1340,
+    EncryptionRequired = 1341,
+    IdentityRegistryNotSet = 1342,
 
-    // --- Financial & Resource (500–599) ---
-    InsufficientFunds = 500,
-    StorageFull = 502,
+    // --- Entity Existence (1300–1399) ---
+    RecordNotFound = 1403,
+    EmergencyAccessNotFound = 1460,
+    DIDNotFound = 1470,
+    DIDNotActive = 1471,
+    RecordAlreadySynced = 1480,
 
-    // --- Cryptography & ZK (600–699) ---
-    InvalidCredential = 640,
-    MissingRequiredCredential = 641,
-    CredentialExpired = 605,
-    CredentialRevoked = 606,
+    // --- Financial & Resource (1400–1499) ---
+    StorageFull = 1502,
 
-    // --- Cross-Chain & Integration (700–799) ---
-    CrossChainAccessDenied = 700,
-    CrossChainTimeout = 702,
-    InvalidChain = 703,
-    CrossChainNotEnabled = 710,
-    CrossChainContractsNotSet = 711,
+    // --- Cryptography & ZK (1500–1599) ---
+    InvalidCredential = 1640,
+    MissingRequiredCredential = 1641,
+    CredentialExpired = 1605,
+    CredentialRevoked = 1606,
 
-    // --- Domain-Specific: AI/Medical (800–899) ---
-    AIConfigNotSet = 830,
-    InvalidAIScore = 831,
-    InvalidScore = 832,
-    InvalidDPEpsilon = 833,
-    InvalidParticipantCount = 834,
+    // --- Cross-Chain & Integration (1600–1699) ---
+    CrossChainAccessDenied = 1700,
+    CrossChainTimeout = 1702,
+    InvalidChain = 1703,
+    CrossChainNotEnabled = 1710,
+    CrossChainContractsNotSet = 1711,
+
+    // --- Domain-Specific: AI/Medical (1700–1799) ---
+    AIConfigNotSet = 1830,
+    InvalidAIScore = 1831,
+    InvalidScore = 1832,
+    InvalidDPEpsilon = 1833,
+    InvalidParticipantCount = 1834,
 }
 
 #[allow(dead_code)]
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
+        Error::InvalidPagination => symbol_short!("CHK_DATA"),
         Error::Unauthorized | Error::NotAICoordinator => symbol_short!("CHK_AUTH"),
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),

@@ -1,10 +1,11 @@
 #![no_std]
+//! clinical_decision_support - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short as ss, Address, Env, String, Vec,
 };
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RecommendationType {
     DrugInteraction = 0,
     TreatmentOptimization = 1,
@@ -187,7 +188,7 @@ impl ClinicalDecisionSupport {
 
     /// Records clinical outcomes to enable continuous learning for the CDSS AI.
     pub fn record_outcome(env: Env, condition_code: String, was_successful: bool) {
-        let key = DataKey::Outcome(condition_code);
+        let key = DataKey::Outcome(condition_code.clone());
         let mut stats = env
             .storage()
             .persistent()
@@ -202,7 +203,7 @@ impl ClinicalDecisionSupport {
         env.storage().persistent().set(&key, &stats);
 
         env.events().publish(
-            (ss!("cdss"), ss!("learning_update")),
+            (ss!("cdss"), ss!("learn_upd")),
             (condition_code, was_successful, stats),
         );
     }
@@ -273,7 +274,7 @@ impl ClinicalDecisionSupport {
                 } else {
                     100 // Add 1% confidence
                 }
-            }
+            },
             _ => 0, // Not enough data to learn yet
         }
     }

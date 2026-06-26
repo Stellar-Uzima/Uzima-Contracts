@@ -1,4 +1,5 @@
 #![no_std]
+//! aml - Healthcare smart contract on Stellar blockchain.
 
 pub mod detection;
 pub mod enforcement;
