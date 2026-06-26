@@ -12,11 +12,17 @@ healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
 reputation = { path = "../contracts/reputation" }
 healthcare_payment = { path = "../contracts/healthcare_payment" }
 meta_tx_forwarder = { path = "../contracts/meta_tx_forwarder" }
+identity_registry = { path = "../contracts/identity_registry" }
+timelock = { path = "../contracts/timelock" }
+escrow = { path = "../contracts/escrow" }
+audit = { path = "../contracts/audit" }
+patient_consent_management = { path = "../contracts/patient_consent_management" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
+serde_json = "1"
 
 [lib]
 name = "uzima_tests"
