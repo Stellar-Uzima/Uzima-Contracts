@@ -622,8 +622,8 @@ impl HealthcarePayment {
         let check_id = Self::next_counter(&env, &DataKey::EligibilityCount);
         let deductible_remaining = policy
             .deductible_total
-            .saturating_sub(policy.deductible_met)
-            .max(0);
+            .checked_sub(policy.deductible_met)
+            .ok_or(Error::Arithmetic)?;
         let eligibility = EligibilityCheck {
             id: check_id,
             policy_id,
@@ -674,7 +674,8 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::ClaimCount)
             .unwrap_or(0u64)
-            .saturating_add(1);
+            .checked_add(1)
+            .ok_or(Error::Arithmetic)?;
 
         let current_time = env.ledger().timestamp();
 
