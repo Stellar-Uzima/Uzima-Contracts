@@ -348,3 +348,65 @@ cd contracts/cross_chain_access && cargo test
 3. **Cross-Chain Record Updates**: Support updating records from external chains
 4. **Interoperability Standards**: Implement HL7 FHIR standards for healthcare data
 5. **Decentralized Identifiers (DIDs)**: Integrate with W3C DID standards
+
+---
+
+## Re-org Protection and Finality Assumptions
+
+### Overview
+
+Blockchain re-organizations (re-orgs) occur when a competing chain fork overtakes the canonical chain, causing previously-confirmed transactions to be reversed. The `cross_chain_bridge` contract protects against re-org-induced fund loss by requiring a minimum number of validator confirmations before a message is considered final.
+
+### Minimum Confirmation Depths
+
+Each supported chain has a defined minimum confirmation depth based on its consensus mechanism and historical re-org data:
+
+| Chain | Minimum Confirmations | Rationale |
+|---|---|---|
+| **Stellar** | 1 | Federated Byzantine Agreement (FBA) provides instant finality |
+| **Ethereum** | 6 | Probabilistic PoS finality; 6 blocks ≈ ~72s safety margin |
+| **Polygon** | 3 | PoS with Heimdall checkpoints; 3 blocks provides adequate safety |
+| **Avalanche** | 2 | Avalanche consensus achieves finality in ~2 seconds / ~2 rounds |
+| **BNB Chain** | 3 | PoSA consensus; 3 confirmations mitigates short re-orgs |
+| **Arbitrum** | 3 | Optimistic rollup with fraud proof window; 3 L2 confirmations |
+| **Optimism** | 3 | Optimistic rollup; 3 L2 confirmations before Ethereum anchoring |
+
+These values are configurable via `set_min_confirmations()` by the contract admin and can be updated if chain security parameters change.
+
+### Re-org Protection Mechanism
+
+1. **Message Submission**: A validator submits a cross-chain message. The message status is set to `Pending`.
+2. **Confirmation Collection**: Additional validators confirm the message. Each confirmation represents one "block depth" of finality evidence.
+3. **Finality Gate**: Only after `confirmations.len() >= min_confirmations` does the message transition to `Verified`.
+4. **Execution**: Only `Verified` messages can be executed. `Pending` messages cannot trigger any state changes.
+
+### Re-org Scenarios Handled
+
+| Scenario | Re-org Depth | Protection |
+|---|---|---|
+| Shallow re-org (1 block) | 1 | Message stays `Pending` until 2nd confirmation received |
+| Medium re-org (3 blocks) | 3 | Ethereum messages require 6 confirmations; 3-block re-org leaves message `Pending` |
+| Deep re-org (6 blocks) | 6 | Message only reaches `Verified` after full finality threshold is met |
+
+### Double-Spend Prevention
+
+- **Per-message confirmation tracking**: Confirmations are stored under `DataKey::Confirmations(message_id)` — not a shared key. Each message has its own confirmation set.
+- **Duplicate confirmation rejection**: `Error::DuplicateConfirmation` is returned if a validator attempts to confirm the same message twice.
+- **Already-processed rejection**: `Error::MessageAlreadyProcessed` is returned if a message is already `Verified` or `Executed`.
+- **Nonce-based replay protection**: Each validator confirmation carries a monotonically-increasing nonce. Re-using a nonce returns `Error::NonceAlreadyUsed`.
+- **Message expiry**: Messages not confirmed within `MESSAGE_EXPIRY_SECS` (86,400 seconds / 24 hours) are rejected.
+
+### Test Coverage
+
+Re-org protection is tested in `contracts/cross_chain_bridge/src/reorg_protection_tests.rs`:
+
+| Test | Re-org Depth |
+|---|---|
+| `reorg_depth_1_message_stays_pending_until_confirmed` | 1 |
+| `reorg_depth_3_ethereum_not_verified_before_finality` | 3 |
+| `reorg_depth_6_ethereum_verified_after_full_finality` | 6 |
+| `double_spend_prevented_same_validator_cannot_confirm_twice` | N/A |
+| `double_spend_verified_message_cannot_be_reconfirmed` | N/A |
+| `reorg_polygon_depth_3_requires_all_confirmations` | 3 |
+| `reorg_message_can_be_retried_after_reorg` | 1 |
+
