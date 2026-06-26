@@ -17,9 +17,14 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        toolchain: [stable, nightly]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.toolchain }}
       - run: bash ./scripts/check_error_codes.sh
       - run: bash ./scripts/check_no_production_unwraps.sh
       - run: cargo test --all
