@@ -11,6 +11,7 @@ mod test;
 
 mod string_helpers;
 mod simple_tests;
+mod conformance_tests;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
@@ -1991,4 +1992,3 @@ impl DicomwebServicesContract {
         0
     }
 }
-
