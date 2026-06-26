@@ -73,3 +73,19 @@ records permanently inaccessible.
 
 > **Note:** This satisfies GDPR Article 17 because encrypted data becomes permanently
 > unreadable without the encryption key.
+
+### GDPR Article 17 in `patient_consent_management`
+
+The `patient_consent_management` contract implements a controlled, two-stage erasure process to comply with GDPR's "Right to Erasure".
+
+1.  **Erasure Request**: A patient initiates an erasure request by calling the `request_erasure` entrypoint. This creates an on-chain record of the request and emits an `ErasureRequested` event. This step is restricted to the patient themselves, ensuring that only the data subject can initiate the process.
+
+2.  **Admin-Triggered Execution**: A contract administrator executes the erasure by calling the `execute_erasure` entrypoint, providing the patient's address. This two-step process prevents accidental or malicious erasures and provides a clear, auditable separation of duties.
+
+3.  **Data Nullification**: Upon execution, the contract nullifies all of the patient's consent records. It does this by:
+    *   Deleting the patient's `ConsentLog`, which contains their entire history of consent grants and revocations.
+    *   Deleting all `ConsentRecord` entries from the `ProviderIndex`, which tracks individual consents.
+
+4.  **Finalization**: The erasure request's status is updated to `Executed`, and an `ErasureExecuted` event is emitted. After this point, all of the patient's consent data is irrecoverably removed from the contract's storage.
+
+This flow provides a robust and auditable mechanism for complying with GDPR's right to erasure, ensuring that patient data can be completely and verifiably removed from the system upon request.

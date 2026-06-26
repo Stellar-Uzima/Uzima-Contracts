@@ -13,6 +13,9 @@ pub enum Error {
     ConsentNotFound = 406,
     ConsentAlreadyExists = 460,
     InvalidExpiry = 470,
+    ErasureRequestExists = 500,
+    ErasureRequestNotFound = 501,
+    ErasureRequestNotPending = 502,
 }
 
 #[allow(dead_code)]
@@ -26,5 +29,8 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::ConsentNotFound => symbol_short!("CHK_ID"),
         Error::ConsentAlreadyExists => symbol_short!("ALREADY"),
         Error::InvalidExpiry => symbol_short!("BAD_EXP"),
+        Error::ErasureRequestExists => symbol_short!("ER_EXIST"),
+        Error::ErasureRequestNotFound => symbol_short!("ER_NFOUND"),
+        Error::ErasureRequestNotPending => symbol_short!("ER_STATE"),
     }
 }

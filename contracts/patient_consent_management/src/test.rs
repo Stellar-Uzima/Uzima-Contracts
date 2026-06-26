@@ -7,6 +7,73 @@ mod tests {
         Address, Env, Symbol, TryFromVal,
     };
 
+    // ============================================================
+    // Issue #888: GDPR Data Erasure Tests
+    // ============================================================
+
+    #[test]
+    fn test_erasure_lifecycle() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+
+        let patient = Address::generate(&env);
+        let provider1 = Address::generate(&env);
+        let provider2 = Address::generate(&env);
+
+        // 1. Grant consents
+        client.grant_consent(&patient, &provider1);
+        client.grant_consent(&patient, &provider2);
+        assert_eq!(client.get_active_consent_count(&patient), 2);
+
+        // 2. Request erasure
+        client.request_erasure(&patient);
+        let status = client.get_erasure_status(&patient);
+        assert_eq!(status, crate::ErasureStatus::Requested);
+
+        // 3. Admin executes erasure
+        client.execute_erasure(&admin, &patient);
+        let status = client.get_erasure_status(&patient);
+        assert_eq!(status, crate::ErasureStatus::Executed);
+
+        // 4. Verify data is erased
+        assert_eq!(client.get_active_consent_count(&patient), 0);
+        assert!(!client.check_consent(&patient, &provider1));
+        assert!(client.get_patient_consents(&patient).is_none());
+    }
+
+    #[test]
+    fn test_erasure_request_twice_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+
+        client.request_erasure(&patient);
+        let result = client.try_request_erasure(&patient);
+        assert_eq!(result, Err(Ok(Error::ErasureRequestExists)));
+    }
+
+    #[test]
+    fn test_execute_erasure_without_request_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+
+        let result = client.try_execute_erasure(&admin, &patient);
+        assert_eq!(result, Err(Ok(Error::ErasureRequestNotFound)));
+    }
+
+    #[test]
+    fn test_execute_erasure_not_admin_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin);
+        let patient = Address::generate(&env);
+        let not_admin = Address::generate(&env);
+
+        client.request_erasure(&patient);
+        let result = client.try_execute_erasure(&not_admin, &patient);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
     fn setup() -> (Env, PatientConsentManagementClient<'static>, Address) {
         let env = Env::default();
         env.mock_all_auths();
