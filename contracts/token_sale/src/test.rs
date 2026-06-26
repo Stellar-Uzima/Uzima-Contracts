@@ -329,3 +329,42 @@ fn test_vesting_overflow_is_rejected() {
     let result = client.try_get_vested_amount(&owner, &2u64);
     assert_eq!(result, Err(Ok(Error::Overflow)));
 }
+
+#[test]
+fn test_token_allocation_overflow() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let contributor = Address::generate(&env);
+
+    let (sut_token_address, _sut_token_client, _sut_token_admin) =
+        create_token_contract(&env, &owner);
+    let (payment_token_address, _payment_token_client, payment_token_admin) =
+        create_token_contract(&env, &owner);
+
+    let contract_id = env.register_contract(None, TokenSaleContract);
+    let client = TokenSaleContractClient::new(&env, &contract_id);
+
+    // Initialize contract
+    client.initialize(&owner, &sut_token_address, &treasury, &1000, &10000, &7);
+
+    // Add supported payment token
+    client.add_supported_token(&payment_token_address);
+
+    // Set up ledger time
+    env.ledger().with_mut(|li| {
+        li.timestamp = 1500;
+    });
+
+    // Add a sale phase with a very low price to trigger overflow
+    client.add_sale_phase(&1000, &2000, &1, &u128::MAX, &u128::MAX);
+
+    // Mint payment tokens to contributor
+    payment_token_admin.mint(&contributor, &i128::MAX);
+
+    // Try to contribute with a large amount that will cause an overflow when calculating tokens to allocate
+    let result = client.try_contribute(&contributor, &0, &payment_token_address, &u128::MAX);
+    assert_eq!(result, Err(Ok(Error::Overflow)));
+}
