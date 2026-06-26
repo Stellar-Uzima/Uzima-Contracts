@@ -86,18 +86,21 @@ jobs:
           fi
 
   # ============================================================================
-  # Code Quality (fmt + clippy)
+  # Compliance Report
   # ============================================================================
-  code-quality:
-    name: Code Quality
+  compliance-report:
+    name: Compliance Report
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Generate compliance report
+        run: |
+          bash ./scripts/generate_compliance_report.sh local <YOUR_CONTRACT_ID> deployments
+      - uses: actions/upload-artifact@v2
         with:
-          components: rustfmt, clippy
-      # The repos `rustfmt.toml` declares options that are either nightly-only
-      # (e.g. `imports_granularity = "Crate"`, `format_macro_bodies = true`)
+          name: compliance-report
+          path: deployments/
       # or treated as warnings-before-exit-1 by rustfmt 1.92.0, while
       # `rust-toolchain.toml` pins stable 1.92.0 and CI installs stable
       # rustfmt. The `cargo fmt --all -- --check` step therefore fails on
