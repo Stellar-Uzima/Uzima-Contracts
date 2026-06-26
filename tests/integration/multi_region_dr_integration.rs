@@ -351,6 +351,53 @@ mod multi_region_dr_tests {
 
 
 
+
+    #[test]
+    fn test_rto_measurement_under_load() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+
+        let fd_addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &fd_addr);
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
+
+        // Simulate concurrent failures on 3 different nodes
+        let detection1 = client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        let detection2 = client.detect_node_failure(&operator, &2u32, &FailoverReason::ResourceExhaustion, &3u32);
+        let detection3 = client.detect_node_failure(&operator, &3u32, &FailoverReason::HighLatency, &3u32);
+
+        let mut targets1 = Vec::new(&env);
+        targets1.push_back(4u32);
+        client.create_failover_plan(&operator, &1u32, &targets1);
+
+        let mut targets2 = Vec::new(&env);
+        targets2.push_back(5u32);
+        client.create_failover_plan(&operator, &2u32, &targets2);
+
+        let mut targets3 = Vec::new(&env);
+        targets3.push_back(6u32);
+        client.create_failover_plan(&operator, &3u32, &targets3);
+
+        // Execute failovers
+        client.execute_failover(&operator, &detection1, &4u32);
+        client.execute_failover(&operator, &detection2, &5u32);
+        client.execute_failover(&operator, &detection3, &6u32);
+
+        let executions = client.get_failover_executions();
+        assert_eq!(executions.len(), 3, "Should have 3 failover executions");
+
+        for execution in executions.iter() {
+            assert!(
+                execution.rto_ms <= 900_000u64,
+                "Failover RTO {}ms exceeds 15-min SLA under load",
+                execution.rto_ms
+            );
+            assert!(matches!(execution.state, FailoverState::Completed));
+        }
+    }
+
     #[test]
     fn test_data_consistency_after_failover() {
         let env = Env::default();
