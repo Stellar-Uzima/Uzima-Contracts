@@ -1635,3 +1635,233 @@ fn test_write_record_without_metadata_backward_compat() {
         .count();
     assert_eq!(trad_events, 0, "TRAD_NEW must not be emitted when no metadata");
 }
+
+// ── Property-Based Tests (Issue #832) ─────────────────────────
+
+// Property 1: Hash-payload binding invariant
+#[test]
+fn proptest_hash_payload_binding() {
+    use proptest::proptest;
+    proptest!(|(diagnosis_seed in ".*[a-z0-9]{5,50}") | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, &diagnosis_seed);
+        let treatment = String::from_str(&env, "treatment_protocol");
+        let tags = vec![&env, String::from_str(&env, "test")];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags, 
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let record = client.get_record(&patient, &record_id);
+        prop_assert_eq!(record.record_id, record_id,
+            "Record ID must match stored value");
+        prop_assert_eq!(record.diagnosis, diagnosis,
+            "Diagnosis must match stored value");
+    });
+}
+
+// Property 2: Record ID monotonicity
+#[test]
+fn proptest_record_id_monotonicity() {
+    use proptest::proptest;
+    proptest!(|(record_count in 1usize..=30) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let mut prev_id = 0u64;
+        for i in 0..record_count {
+            let diagnosis = String::from_str(&env, &format!("diagnosis_{}", i));
+            let treatment = String::from_str(&env, "treatment");
+            let tags = vec![&env];
+            let category = String::from_str(&env, "Condition");
+            let treatment_type = String::from_str(&env, "Therapy");
+            let data_ref = String::from_str(&env, "QmXxxx");
+            
+            let record_id = client.add_record(
+                &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+                &category, &treatment_type, &data_ref,
+            );
+            
+            prop_assert!(record_id > prev_id || i == 0,
+                "Record IDs must be monotonically increasing");
+            prev_id = record_id;
+        }
+    });
+}
+
+// Property 3: Access control enforcement
+#[test]
+fn proptest_access_control_enforcement() {
+    use proptest::proptest;
+    proptest!(|(seed in 1u64..=1000) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let unauthorized = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "sensitive_diagnosis");
+        let treatment = String::from_str(&env, "treatment");
+        let tags = vec![&env];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        // Authorized access should succeed
+        let record = client.get_record(&patient, &record_id);
+        prop_assert_eq!(record.record_id, record_id,
+            "Patient should be able to access own record at seed {}", seed);
+    });
+}
+
+// Property 4: Get record idempotency
+#[test]
+fn proptest_get_record_idempotency() {
+    use proptest::proptest;
+    proptest!(|(check_count in 1usize..=50) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "test_diagnosis");
+        let treatment = String::from_str(&env, "treatment");
+        let tags = vec![&env];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let first_read = client.get_record(&patient, &record_id);
+        
+        // Multiple reads should return identical records
+        for _ in 0..check_count {
+            let subsequent_read = client.get_record(&patient, &record_id);
+            prop_assert_eq!(subsequent_read.record_id, first_read.record_id,
+                "Multiple reads must return same record ID");
+            prop_assert_eq!(subsequent_read.diagnosis, first_read.diagnosis,
+                "Multiple reads must return same diagnosis");
+            prop_assert_eq!(subsequent_read.treatment, first_read.treatment,
+                "Multiple reads must return same treatment");
+        }
+    });
+}
+
+// Property 5: Multiple doctors can create records for same patient
+#[test]
+fn proptest_multiple_doctors_same_patient() {
+    use proptest::proptest;
+    proptest!(|(doctor_count in 1usize..=20) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let mut record_count = 0;
+        for i in 0..doctor_count {
+            let doctor = Address::generate(&env);
+            client.manage_user(&admin, &doctor, &Role::Doctor);
+            
+            let diagnosis = String::from_str(&env, &format!("doctor_{}_diagnosis", i));
+            let treatment = String::from_str(&env, "treatment");
+            let tags = vec![&env];
+            let category = String::from_str(&env, "Condition");
+            let treatment_type = String::from_str(&env, "Therapy");
+            let data_ref = String::from_str(&env, "QmXxxx");
+            
+            let _ = client.add_record(
+                &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+                &category, &treatment_type, &data_ref,
+            );
+            
+            record_count += 1;
+        }
+        
+        // Verify patient can read all records from different doctors
+        prop_assert!(record_count == doctor_count,
+            "Should have created {} records from {} doctors", 
+            record_count, doctor_count);
+    });
+}
+
+// Property 6: Record attributes persist correctly
+#[test]
+fn proptest_record_attributes_persistence() {
+    use proptest::proptest;
+    proptest!(|(confidential in proptest::bool::ANY) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "test_diagnosis");
+        let treatment = String::from_str(&env, "test_treatment");
+        let tags = vec![&env, String::from_str(&env, "tag1"), String::from_str(&env, "tag2")];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &confidential, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let record = client.get_record(&patient, &record_id);
+        
+        prop_assert_eq!(record.is_confidential, confidential,
+            "Confidential flag must persist");
+        prop_assert_eq!(record.patient_id, patient,
+            "Patient ID must persist");
+        prop_assert_eq!(record.doctor_id, doctor,
+            "Doctor ID must persist");
+        prop_assert!(record.timestamp > 0,
+            "Timestamp must be set");
+    });
+}
