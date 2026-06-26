@@ -88,23 +88,20 @@ jobs:
           fi
 
   # ============================================================================
-  # Compliance Report
+  # Secret Scanning
   # ============================================================================
-  compliance-report:
-    name: Compliance Report
+  secret-scanning:
+    name: Secret Scanning
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Generate compliance report
-        env:
-          COMPLIANCE_CONTRACT_ID: ${{ secrets.COMPLIANCE_CONTRACT_ID }}
-        run: |
-          bash ./scripts/generate_compliance_report.sh local $COMPLIANCE_CONTRACT_ID deployments
-      - uses: actions/upload-artifact@v2
+      - name: Run trufflehog
+        uses: trufflesecurity/trufflehog@main
         with:
-          name: compliance-report
-          path: deployments/
+          path: .
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --fail
       # or treated as warnings-before-exit-1 by rustfmt 1.92.0, while
       # `rust-toolchain.toml` pins stable 1.92.0 and CI installs stable
       # rustfmt. The `cargo fmt --all -- --check` step therefore fails on
