@@ -32,6 +32,9 @@
 #[cfg(test)]
 mod benchmarks;
 
+#[cfg(test)]
+mod governance_tests;
+
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
@@ -298,6 +301,28 @@ impl Governor {
 
         env.events()
             .publish((symbol_short!("Queue"), proposal_id), ());
+        Ok(())
+    }
+
+    /// Cancel an active or pending proposal. Only the original proposer may cancel.
+    pub fn cancel(env: Env, proposal_id: u64, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        let mut props = get_props(&env);
+        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+
+        if p.canceled || p.executed {
+            return Err(Error::InvalidState);
+        }
+        if p.proposer != caller {
+            return Err(Error::Unauthorized);
+        }
+
+        p.canceled = true;
+        props.set(proposal_id, p);
+        env.storage().persistent().set(&PROPS, &props);
+
+        env.events()
+            .publish((symbol_short!("Cancel"), proposal_id), caller);
         Ok(())
     }
 

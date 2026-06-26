@@ -4,6 +4,9 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
+    // --- Authorization (100–199) ---
+    Unauthorized = 100,
+
     // --- Lifecycle & State (300–399) ---
     NotInitialized = 300,
     AlreadyInitialized = 301,
