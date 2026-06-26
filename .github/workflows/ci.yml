@@ -307,3 +307,20 @@ jobs:
               repo: context.repo.repo,
               body
             });
+
+  # ============================================================================
+  # Event Emission Audit (SECURITY_CHECKLIST §5)
+  # Enforces that every state-changing pub fn in contracts/*/src/lib.rs emits
+  # an event via env.events().publish(...).  Legacy functions that predate
+  # this requirement are allowlisted in scripts/allowlists/event_emission.txt.
+  # A PR that adds a new state-mutating function without event emission fails
+  # this job.  To allowlist a legacy backlog function, add an entry to that
+  # file in the same PR with a comment referencing a follow-up issue.
+  # ============================================================================
+  event-audit:
+    name: Event Emission Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Audit state-changing functions for event emission
+        run: bash ./scripts/check_events.sh
