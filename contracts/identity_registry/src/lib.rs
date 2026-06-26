@@ -2753,6 +2753,122 @@ mod tests {
     }
 
     #[test]
+    fn test_resolve_did_not_found() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_deactivated() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+        client.deactivate_did(&subject);
+
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDDeactivated)));
+    }
+
+    #[test]
+    fn test_resolve_did_by_string() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        let did_string = client.create_did(&subject, &public_key, &services);
+        let did_doc = client.resolve_did_by_string(&did_string);
+        assert_eq!(did_doc.controller, subject);
+    }
+
+    #[test]
+    fn test_resolve_did_by_string_not_found() {
+        let (env, client, _owner) = create_contract();
+        let did_string = String::from_str(&env, "did:stellar:uzima:testnet:nonexistent");
+        let result = client.try_resolve_did_by_string(&did_string);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_after_update_tracks_new_data() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let mut new_services: Vec<ServiceEndpoint> = Vec::new(&env);
+        new_services.push_back(ServiceEndpoint {
+            id: String::from_str(&env, "#records"),
+            service_type: String::from_str(&env, "MedicalRecords"),
+            endpoint: String::from_str(&env, "ipfs://QmUpdate"),
+            is_active: true,
+        });
+        client.update_did(&subject, &new_services, &Vec::new(&env));
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.services.len(), 1);
+        assert_eq!(did_doc.version, 2);
+    }
+
+    #[test]
+    fn test_resolve_did_with_multiple_verification_methods() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let primary_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &primary_key, &services);
+
+        for i in 0u8..5u8 {
+            let key = BytesN::from_array(&env, &[i + 10; 32]);
+            let method_id = String::from_bytes(&env, &[i + 1; 1]);
+            let mut rels: Vec<VerificationRelationship> = Vec::new(&env);
+            rels.push_back(VerificationRelationship::Authentication);
+            client.add_verification_method(
+                &subject,
+                &method_id,
+                &VerificationMethodType::Ed25519VerificationKey2020,
+                &key,
+                &rels,
+            );
+        }
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.verification_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_resolve_did_after_recovery_restores_active() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let guardian = Address::generate(&env);
+        client.add_recovery_guardian(&subject, &guardian, &2u32);
+
+        let new_controller = Address::generate(&env);
+        let new_key = BytesN::from_array(&env, &[42u8; 32]);
+        client.initiate_recovery(&guardian, &subject, &new_controller, &new_key);
+
+        let did_doc_recovery = client.resolve_did(&subject);
+        assert!(matches!(did_doc_recovery.status, DIDStatus::RecoveryPending));
+
+        client.cancel_recovery(&subject);
+        let did_doc_restored = client.resolve_did(&subject);
+        assert!(matches!(did_doc_restored.status, DIDStatus::Active));
+    }
+
+    #[test]
     fn test_get_suggestion_returns_expected_hint() {
         use soroban_sdk::symbol_short;
         assert_eq!(

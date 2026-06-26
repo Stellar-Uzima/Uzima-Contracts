@@ -61,6 +61,9 @@ pub enum CommonError {
     UnauthorizedCaller = 18,
 }
 
+#[cfg(test)]
+mod golden_tests;
+
 pub fn is_common_error_code(code: u32) -> bool {
     code <= COMMON_ERROR_MAX
 }
