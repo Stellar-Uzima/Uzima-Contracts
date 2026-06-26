@@ -50,3 +50,17 @@ pub fn publish_consent_expired(env: &Env, patient: &Address, provider: &Address,
         (patient, provider, timestamp),
     );
 }
+
+pub fn publish_erasure_requested(env: &Env, patient: &Address) {
+    env.events().publish(
+        (symbol_short!("ERASURE"), symbol_short!("REQUEST")),
+        patient,
+    );
+}
+
+pub fn publish_erasure_executed(env: &Env, patient: &Address) {
+    env.events().publish(
+        (symbol_short!("ERASURE"), symbol_short!("EXECUTE")),
+        patient,
+    );
+}
