@@ -65,6 +65,22 @@ pub struct ConsentLog {
     pub record_count: u32,
 }
 
+#[derive(Clone, PartialEq, Debug)]
+#[contracttype]
+pub enum ErasureStatus {
+    None,
+    Requested,
+    Executed,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ErasureRequest {
+    pub patient: Address,
+    pub requested_at: u64,
+    pub status: ErasureStatus,
+}
+
 #[contracttype]
 pub enum DataKey {
     Initialized,
@@ -72,6 +88,7 @@ pub enum DataKey {
     Paused,
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
+    ErasureRequest(Address),
 }
 
 #[contract]
@@ -438,6 +455,81 @@ impl PatientConsentManagement {
     /// Returns true if the contract is initialized and operational.
     pub fn health_check(env: Env) -> bool {
         env.storage().instance().has(&DataKey::Initialized)
+    }
+
+    // ============================================================
+    // Issue #888: GDPR Data Erasure
+    // ============================================================
+
+    pub fn request_erasure(env: Env, patient: Address) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        let key = DataKey::ErasureRequest(patient.clone());
+        if let Some(existing_request) = env
+            .storage()
+            .persistent()
+            .get::<_, ErasureRequest>(&key)
+        {
+            if existing_request.status == ErasureStatus::Requested {
+                return Err(Error::ErasureRequestExists);
+            }
+        }
+
+        let request = ErasureRequest {
+            patient: patient.clone(),
+            requested_at: env.ledger().timestamp(),
+            status: ErasureStatus::Requested,
+        };
+        env.storage().persistent().set(&key, &request);
+        events::publish_erasure_requested(&env, &patient);
+        Ok(())
+    }
+
+    pub fn execute_erasure(env: Env, caller: Address, patient: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        Self::require_initialized(&env)?;
+
+        let key = DataKey::ErasureRequest(patient.clone());
+        let mut request: ErasureRequest = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ErasureRequestNotFound)?;
+
+        if request.status != ErasureStatus::Requested {
+            return Err(Error::ErasureRequestNotPending);
+        }
+
+        // Nullify patient data
+        let consent_key = DataKey::ConsentStorage(patient.clone());
+        if let Some(log) = env
+            .storage()
+            .persistent()
+            .get::<_, ConsentLog>(&consent_key)
+        {
+            for record in log.records.iter() {
+                let provider_key = DataKey::ProviderIndex(patient.clone(), record.provider);
+                env.storage().persistent().remove(&provider_key);
+            }
+            env.storage().persistent().remove(&consent_key);
+        }
+
+        request.status = ErasureStatus::Executed;
+        env.storage().persistent().set(&key, &request);
+        events::publish_erasure_executed(&env, &patient);
+        Ok(())
+    }
+
+    pub fn get_erasure_status(env: Env, patient: Address) -> ErasureStatus {
+        let key = DataKey::ErasureRequest(patient);
+        env.storage()
+            .persistent()
+            .get::<_, ErasureRequest>(&key)
+            .map(|r| r.status)
+            .unwrap_or(ErasureStatus::None)
     }
 }
 
