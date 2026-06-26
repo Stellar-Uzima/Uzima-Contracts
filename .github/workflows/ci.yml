@@ -9,6 +9,8 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  schedule:
+    - cron: '0 0 * * 0'
 
 jobs:
   # ============================================================================
@@ -95,8 +97,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Generate compliance report
+        env:
+          COMPLIANCE_CONTRACT_ID: ${{ secrets.COMPLIANCE_CONTRACT_ID }}
         run: |
-          bash ./scripts/generate_compliance_report.sh local <YOUR_CONTRACT_ID> deployments
+          bash ./scripts/generate_compliance_report.sh local $COMPLIANCE_CONTRACT_ID deployments
       - uses: actions/upload-artifact@v2
         with:
           name: compliance-report
