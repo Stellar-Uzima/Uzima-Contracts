@@ -350,10 +350,12 @@ impl HealthcarePayment {
         env.storage().instance().get(key).unwrap_or(0u64)
     }
 
-    fn next_counter(env: &Env, key: &DataKey) -> u64 {
-        let next = Self::read_counter(env, key).saturating_add(1);
+    fn next_counter(env: &Env, key: &DataKey) -> Result<u64, Error> {
+        let next = Self::read_counter(env, key)
+            .checked_add(1)
+            .ok_or(Error::Arithmetic)?;
         env.storage().instance().set(key, &next);
-        next
+        Ok(next)
     }
 
     fn get_policy(env: &Env, policy_id: u64) -> Result<CoveragePolicy, Error> {
@@ -530,7 +532,7 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let provider_id = Self::next_counter(&env, &DataKey::InsuranceProviderCount);
+        let provider_id = Self::next_counter(&env, &DataKey::InsuranceProviderCount)?;
         let provider = InsuranceProvider {
             id: provider_id,
             name,
@@ -578,7 +580,7 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let policy_id = Self::next_counter(&env, &DataKey::CoveragePolicyCount);
+        let policy_id = Self::next_counter(&env, &DataKey::CoveragePolicyCount)?;
         let policy = CoveragePolicy {
             id: policy_id,
             patient: patient.clone(),
@@ -619,11 +621,11 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let check_id = Self::next_counter(&env, &DataKey::EligibilityCount);
+        let check_id = Self::next_counter(&env, &DataKey::EligibilityCount)?;
         let deductible_remaining = policy
             .deductible_total
-            .saturating_sub(policy.deductible_met)
-            .max(0);
+            .checked_sub(policy.deductible_met)
+            .ok_or(Error::Arithmetic)?;
         let eligibility = EligibilityCheck {
             id: check_id,
             policy_id,
@@ -674,7 +676,8 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::ClaimCount)
             .unwrap_or(0u64)
-            .saturating_add(1);
+            .checked_add(1)
+            .ok_or(Error::Arithmetic)?;
 
         let current_time = env.ledger().timestamp();
 

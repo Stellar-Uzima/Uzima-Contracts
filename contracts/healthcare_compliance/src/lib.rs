@@ -406,6 +406,11 @@ impl HealthcareComplianceContract {
         patient.require_auth();
         Self::check_paused(&env)?;
 
+        // Data Minimization Check
+        if consent.data_categories.len() > 20 {
+            return Err(Error::InvalidResourceType); // Re-using an existing error for simplicity
+        }
+
         // Validate consent
         if consent.patient != patient {
             return Err(Error::InvalidPatientAddress);

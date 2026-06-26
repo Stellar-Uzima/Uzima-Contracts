@@ -120,16 +120,10 @@ fn clear_reentrancy(env: &Env) {
     env.storage().temporary().remove(&REENTRANCY_LOCK);
 }
 
-fn add_credit(env: &Env, addr: &Address, delta: i128) {
-    let mut credits: Map<Address, i128> = env
-        .storage()
-        .persistent()
-        .get(&CREDITS)
-        .unwrap_or(Map::new(&env));
-    let current = credits.get(addr.clone()).unwrap_or(0);
-    let new_bal = current.saturating_add(delta);
+    let new_bal = current.checked_add(delta).ok_or(Error::Overflow)?;
     credits.set(addr.clone(), new_bal);
     env.storage().persistent().set(&CREDITS, &credits);
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)] // All boolean flags represent distinct independent escrow state transitions
@@ -141,7 +135,7 @@ fn update_stats(
     refunded: bool,
     disputed: bool,
     active_delta: i32,
-) {
+) -> Result<(), Error> {
     let mut stats: PlatformStats = env
         .storage()
         .instance()
@@ -156,8 +150,8 @@ fn update_stats(
         });
 
     if is_new {
-        stats.total_escrows += 1;
-        stats.total_volume = stats.total_volume.saturating_add(volume);
+        stats.total_escrows = stats.total_escrows.checked_add(1).ok_or(Error::Overflow)?;
+        stats.total_volume = stats.total_volume.checked_add(volume).ok_or(Error::Overflow)?;
 
         // Time-bucketed daily stats
         let day_id = env.ledger().timestamp() / 86400;
@@ -171,30 +165,31 @@ fn update_stats(
             volume: 0,
             count: 0,
         });
-        daily.volume = daily.volume.saturating_add(volume);
-        daily.count += 1;
+        daily.volume = daily.volume.checked_add(volume).ok_or(Error::Overflow)?;
+        daily.count = daily.count.checked_add(1).ok_or(Error::Overflow)?;
         daily_map.set(day_id, daily);
         env.storage().persistent().set(&DAILY_STATS, &daily_map);
     }
     if settled {
-        stats.settled_count += 1;
+        stats.settled_count = stats.settled_count.checked_add(1).ok_or(Error::Overflow)?;
     }
     if refunded {
-        stats.refunded_count += 1;
+        stats.refunded_count = stats.refunded_count.checked_add(1).ok_or(Error::Overflow)?;
     }
     if disputed {
-        stats.disputed_count += 1;
+        stats.disputed_count = stats.disputed_count.checked_add(1).ok_or(Error::Overflow)?;
     }
 
     if active_delta > 0 {
-        stats.active_count = stats.active_count.saturating_add(active_delta as u64);
+        stats.active_count = stats.active_count.checked_add(active_delta as u64).ok_or(Error::Overflow)?;
     } else if active_delta < 0 {
         stats.active_count = stats
             .active_count
-            .saturating_sub(active_delta.unsigned_abs().into());
+            .checked_sub(active_delta.unsigned_abs().into()).ok_or(Error::Overflow)?;
     }
 
     env.storage().instance().set(&STATS, &stats);
+    Ok(())
 }
 
 #[contractimpl]
@@ -273,7 +268,7 @@ impl EscrowContract {
         escrows.set(order_id, e);
         env.storage().persistent().set(&ESCROWS, &escrows);
 
-        update_stats(&env, amount, true, false, false, false, 0);
+        update_stats(&env, amount, true, false, false, false, 0)?;
 
         // event
         let topics = (symbol_short!("EscNew"), order_id);
@@ -298,7 +293,7 @@ impl EscrowContract {
         escrows.set(order_id, e.clone());
         env.storage().persistent().set(&ESCROWS, &escrows);
 
-        update_stats(&env, 0, false, false, false, true, 0);
+        update_stats(&env, 0, false, false, false, true, 0)?;
 
         env.events()
             .publish((symbol_short!("EscDisput"), order_id), ());
@@ -327,7 +322,7 @@ impl EscrowContract {
         // Transition to Active if at least 1 approval exists (e.g., from payer)
         if e.status == EscrowStatus::Pending && !e.approvals.is_empty() {
             e.status = EscrowStatus::Active;
-            update_stats(&env, 0, false, false, false, false, 1);
+            update_stats(&env, 0, false, false, false, false, 1)?;
         }
 
         escrows.set(order_id, e);
@@ -375,11 +370,11 @@ impl EscrowContract {
             .checked_mul(fee_conf.platform_fee_bps as i128)
             .map(|n| n / 10_000)
             .ok_or(Error::Overflow)?;
-        let provider_amount = e.amount.saturating_sub(fee);
-        add_credit(&env, &e.payee, provider_amount);
-        add_credit(&env, &fee_conf.fee_receiver, fee);
+        let provider_amount = e.amount.checked_sub(fee).ok_or(Error::Overflow)?;
+        add_credit(&env, &e.payee, provider_amount)?;
+        add_credit(&env, &fee_conf.fee_receiver, fee)?;
 
-        update_stats(&env, 0, false, true, false, false, -1);
+        update_stats(&env, 0, false, true, false, false, -1)?;
 
         env.events().publish(
             (symbol_short!("EscRel"), order_id),
@@ -420,7 +415,7 @@ impl EscrowContract {
         env.storage().persistent().set(&ESCROWS, &escrows);
 
         // credit payer for refund
-        add_credit(&env, &e.payer, e.amount);
+        add_credit(&env, &e.payer, e.amount)?;
 
         update_stats(
             &env,
@@ -430,7 +425,7 @@ impl EscrowContract {
             true,
             false,
             if was_active { -1 } else { 0 },
-        );
+        )?;
 
         // #283: Refunded event with session_id, amount, mentee_id (payer), reason
         env.events().publish(

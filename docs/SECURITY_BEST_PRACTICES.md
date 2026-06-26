@@ -49,18 +49,40 @@ pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
 
 ### Integer Overflow / Underflow
 
-Soroban runs in `no_std` with Rust's overflow checks disabled in release mode. Always use safe arithmetic:
+Soroban runs in `no_std` with Rust's overflow checks disabled in release mode. Unchecked arithmetic can lead to silent overflows, producing incorrect results that can be exploited. To prevent this, all arithmetic operations on token amounts, counters, or any other critical value **must** use checked operations.
+
+**Guideline: Always use `checked_*` methods for arithmetic and return a typed `Error` on overflow.**
+
+This approach ensures that any overflow is explicitly handled as an error condition rather than causing a panic or producing an incorrect value.
+
+#### ✅ Correct: Using `checked_add` with `ok_or`
+
+This is the required pattern for all arithmetic that can potentially overflow. It converts the `Option` returned by `checked_add` into a `Result`, propagating a clear `Error::Overflow` if the operation fails.
 
 ```rust
-// ❌ Unsafe
-let new_count = count + 1;
-
-// ✅ Safe — returns Err on overflow
+// ✅ Safe and explicit — returns Err(Error::Overflow) on overflow
 let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+```
 
-// ✅ Safe — saturates at u64::MAX (for counters where overflow is impossible in practice)
+#### ❌ Incorrect: Using `saturating_*` methods
+
+Saturating arithmetic should be avoided. While it prevents panics, it can silently mask overflow conditions by clamping the value at its maximum. This can lead to unexpected behavior and hide critical bugs.
+
+```rust
+// ❌ Unsafe — silently fails by clamping at the type's maximum value
 let new_count = count.saturating_add(1);
 ```
+
+#### ❌ Incorrect: Using raw arithmetic operators
+
+Raw operators (`+`, `-`, `*`, `/`) will panic in debug builds but will silently wrap (overflow) in release builds. This is the most dangerous option and **must not** be used in production code.
+
+```rust
+// ❌ Unsafe — panics in debug, wraps in release
+let new_count = count + 1;
+```
+
+By consistently applying the `checked_*` pattern, we ensure that our contracts are robust against integer overflow vulnerabilities and provide clear, actionable error information to callers.
 
 ### Reentrancy
 

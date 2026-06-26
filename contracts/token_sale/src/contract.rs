@@ -171,7 +171,7 @@ impl TokenSaleContract {
 
         let tokens_to_allocate =
             fp_math::tokens_for_payment(amount, phase.price_per_token, config.token_decimals)
-                .expect("token allocation overflow");
+                .ok_or(Error::Overflow)?;
 
         let new_sold = phase
             .sold_tokens

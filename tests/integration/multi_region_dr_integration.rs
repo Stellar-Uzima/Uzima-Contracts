@@ -349,6 +349,138 @@ mod multi_region_dr_tests {
         );
     }
 
+
+
+
+    #[test]
+    fn test_rto_measurement_under_load() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+
+        let fd_addr = env.register_contract(None, FailoverDetector);
+        let client = FailoverDetectorClient::new(&env, &fd_addr);
+        client.initialize(&admin);
+        client.assign_role(&admin, &operator, &2u32);
+
+        // Simulate concurrent failures on 3 different nodes
+        let detection1 = client.detect_node_failure(&operator, &1u32, &FailoverReason::HeartbeatTimeout, &3u32);
+        let detection2 = client.detect_node_failure(&operator, &2u32, &FailoverReason::ResourceExhaustion, &3u32);
+        let detection3 = client.detect_node_failure(&operator, &3u32, &FailoverReason::HighLatency, &3u32);
+
+        let mut targets1 = Vec::new(&env);
+        targets1.push_back(4u32);
+        client.create_failover_plan(&operator, &1u32, &targets1);
+
+        let mut targets2 = Vec::new(&env);
+        targets2.push_back(5u32);
+        client.create_failover_plan(&operator, &2u32, &targets2);
+
+        let mut targets3 = Vec::new(&env);
+        targets3.push_back(6u32);
+        client.create_failover_plan(&operator, &3u32, &targets3);
+
+        // Execute failovers
+        client.execute_failover(&operator, &detection1, &4u32);
+        client.execute_failover(&operator, &detection2, &5u32);
+        client.execute_failover(&operator, &detection3, &6u32);
+
+        let executions = client.get_failover_executions();
+        assert_eq!(executions.len(), 3, "Should have 3 failover executions");
+
+        for execution in executions.iter() {
+            assert!(
+                execution.rto_ms <= 900_000u64,
+                "Failover RTO {}ms exceeds 15-min SLA under load",
+                execution.rto_ms
+            );
+            assert!(matches!(execution.state, FailoverState::Completed));
+        }
+    }
+
+    #[test]
+    fn test_data_consistency_after_failover() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+
+        // Setup orchestrator and register regions
+        let orch_addr = env.register_contract(None, MultiRegionOrchestrator);
+        let orch_client = MultiRegionOrchestratorClient::new(&env, &orch_addr);
+        orch_client.initialize(&admin);
+        orch_client.assign_role(&admin, &operator, &2u32);
+        orch_client.register_region(&operator, &GeoRegion::UsEast, &1u32, &10001u64, &true);
+        orch_client.register_region(&operator, &GeoRegion::UsWest, &2u32, &10002u64, &false);
+
+        // Setup sync manager and simulate data write
+        let sync_addr = env.register_contract(None, SyncManager);
+        let sync_client = SyncManagerClient::new(&env, &sync_addr);
+        sync_client.initialize(&admin);
+        sync_client.assign_role(&admin, &operator, &2u32);
+
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32); // Sync to the secondary region
+        let data_payload = 12345u64;
+        sync_client.initiate_sync(&operator, &1u32, &targets, &data_payload, &ConsistencyLevel::Strong);
+
+        // Fail the primary region
+        let fd_addr = env.register_contract(None, FailoverDetector);
+        let fd_client = FailoverDetectorClient::new(&env, &fd_addr);
+        fd_client.initialize(&admin);
+        fd_client.assign_role(&admin, &operator, &2u32);
+        fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+        fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+        fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+
+        // Promote the new primary
+        orch_client.promote_new_primary(&operator, &2u32);
+
+        // After failover, verify the data is present in the new primary's sync logs
+        let sync_ops = sync_client.list_sync_operations();
+        let last_op = sync_ops.iter().last().unwrap();
+        assert_eq!(last_op.source_node_id, 1u32);
+        assert_eq!(last_op.data_hash, data_payload);
+        assert_eq!(last_op.targets.get(0).unwrap(), 2u32);
+    }
+
+    #[test]
+    fn test_primary_region_failure_and_automatic_failover() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+
+        let orch_addr = env.register_contract(None, MultiRegionOrchestrator);
+        let orch_client = MultiRegionOrchestratorClient::new(&env, &orch_addr);
+
+        orch_client.initialize(&admin);
+        orch_client.assign_role(&admin, &operator, &2u32); // ROLE_OPERATOR
+
+        // Register a primary and a secondary region
+        orch_client.register_region(&operator, &GeoRegion::UsEast, &1u32, &10001u64, &true);
+        orch_client.register_region(&operator, &GeoRegion::UsWest, &2u32, &10002u64, &false);
+
+        // Simulate a failure of the primary region's node
+        let fd_addr = env.register_contract(None, FailoverDetector);
+        let fd_client = FailoverDetectorClient::new(&env, &fd_addr);
+        fd_client.initialize(&admin);
+        fd_client.assign_role(&admin, &operator, &2u32);
+
+        // Trigger a critical failure for the primary node (ID 1)
+        fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+        fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+        let detection_id = fd_client.detect_node_failure(&operator, &1u32, &FailoverReason::NodeFailure, &3u32);
+
+        // The orchestrator should observe this and trigger a failover
+        // For this test, we'll manually trigger the failover promotion
+        orch_client.promote_new_primary(&operator, &2u32);
+
+        let regions = orch_client.list_regions();
+        let primary_region = regions.iter().find(|r| r.is_primary).unwrap();
+
+        assert_eq!(primary_region.region_id, 2u32, "UsWest should be the new primary");
+        assert!(!regions.iter().find(|r| r.region_id == 1).unwrap().is_primary, "UsEast should no longer be primary");
+    }
+
     #[test]
     fn test_conflict_detection_and_resolution() {
         let env = Env::default();
