@@ -52,6 +52,7 @@ mod test;
 
 use crate::errors::Error;
 use events::{emit_initialized, emit_role_assigned, emit_role_removed};
+use governance_commons::require_admin;
 use queries::Queries;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
 use storage::Storage;
@@ -83,7 +84,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         let success = Storage::add_role(&env, &address, role);
 
@@ -117,7 +118,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         let success = Storage::remove_role(&env, &address, role);
 
@@ -232,7 +233,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         Storage::set_config(&env, &config);
 
@@ -247,5 +248,13 @@ impl RBAC {
         }
 
         Storage::get_config(&env).ok_or(Error::NotInitialized)
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin = Storage::get_admin(env);
+        if *caller != admin {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
     }
 }

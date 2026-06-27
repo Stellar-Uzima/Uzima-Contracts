@@ -43,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release script error handling
 
 ### Security
+- **Centralized Admin & Role Authorization Checks:** Introduced shared `require_admin!(env, caller)` and `require_role!(env, caller, role)` macros in `libs/governance_commons` to eliminate duplicate auth logic across multiple contracts (`anomaly_detector`, `cross_chain_bridge`, `aml`, `audit`, and `rbac`).
 - Enhanced security audit integration
 - Improved access control validation
 - Added security-focused clippy checks

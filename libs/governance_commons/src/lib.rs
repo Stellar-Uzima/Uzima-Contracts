@@ -44,9 +44,11 @@
 //! ```
 
 pub mod errors;
+pub mod macros;
 pub mod multi_sig;
 pub mod types;
 
 pub use errors::*;
+pub use macros::*;
 pub use multi_sig::*;
 pub use types::*;
