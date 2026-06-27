@@ -280,6 +280,31 @@ pub enum Error {
     CostLimitExceeded = 18,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::TargetNotFound => write!(f, "target not found"),
+            Error::BackupNotFound => write!(f, "backup not found"),
+            Error::RestoreRequestNotFound => write!(f, "restore request not found"),
+            Error::RecoveryTestNotFound => write!(f, "recovery test not found"),
+            Error::ScheduleNotDue => write!(f, "schedule not due"),
+            Error::InsufficientTargets => write!(f, "insufficient targets"),
+            Error::GeoRedundancyNotMet => write!(f, "geo redundancy not met"),
+            Error::EncryptionRequired => write!(f, "encryption required"),
+            Error::IntegrityMismatch => write!(f, "integrity mismatch"),
+            Error::RestoreNotApproved => write!(f, "restore not approved"),
+            Error::AlreadyExecuted => write!(f, "already executed"),
+            Error::DuplicateApproval => write!(f, "duplicate approval"),
+            Error::CostLimitExceeded => write!(f, "cost limit exceeded"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalRecordBackupContract;
 
@@ -994,6 +1019,7 @@ impl MedicalRecordBackupContract {
         Ok(artifact_id)
     }
 
+    #[must_use]
     fn select_targets(env: &Env, policy: &BackupPolicy) -> Result<(Vec<u32>, u32, u32), Error> {
         let ids: Vec<u32> = env
             .storage()
@@ -1269,6 +1295,7 @@ impl MedicalRecordBackupContract {
         }
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&ADMIN) {
             return Err(Error::NotInitialized);
@@ -1276,6 +1303,7 @@ impl MedicalRecordBackupContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
@@ -1283,6 +1311,7 @@ impl MedicalRecordBackupContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -1296,6 +1325,7 @@ impl MedicalRecordBackupContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -1317,18 +1347,22 @@ impl MedicalRecordBackupContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_role(env, caller, ROLE_OPERATOR)
     }
 
+    #[must_use]
     fn require_auditor(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_role(env, caller, ROLE_AUDITOR)
     }
 
+    #[must_use]
     fn require_recovery(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_role(env, caller, ROLE_RECOVERY)
     }
 
+    #[must_use]
     fn get_policy_internal(env: &Env) -> Result<BackupPolicy, Error> {
         env.storage()
             .persistent()

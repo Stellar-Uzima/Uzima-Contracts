@@ -12,6 +12,17 @@ pub enum Error {
     InvalidAmount = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NegativeAmount => write!(f, "negative amount"),
+            Error::InvalidAmount => write!(f, "invalid amount"),
+        }
+    }
+}
+
 const ADMIN: Symbol = symbol_short!("admin");
 const SCORES: Symbol = symbol_short!("scores");
 

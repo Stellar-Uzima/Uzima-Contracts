@@ -278,8 +278,11 @@ pub enum RbacError {
 
 #[soroban_sdk::contractclient(name = "RbacClient")]
 pub trait RbacContract {
+    #[must_use]
     fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
@@ -332,6 +335,7 @@ pub struct HealthcarePayment;
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl HealthcarePayment {
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let config: Config = env
             .storage()
@@ -350,6 +354,7 @@ impl HealthcarePayment {
         env.storage().instance().get(key).unwrap_or(0u64)
     }
 
+    #[must_use]
     fn next_counter(env: &Env, key: &DataKey) -> Result<u64, Error> {
         let next = Self::read_counter(env, key)
             .checked_add(1)
@@ -358,6 +363,7 @@ impl HealthcarePayment {
         Ok(next)
     }
 
+    #[must_use]
     fn get_policy(env: &Env, policy_id: u64) -> Result<CoveragePolicy, Error> {
         env.storage()
             .persistent()
@@ -365,6 +371,7 @@ impl HealthcarePayment {
             .ok_or(Error::CoveragePolicyNotFound)
     }
 
+    #[must_use]
     fn get_provider(env: &Env, provider_id: u64) -> Result<InsuranceProvider, Error> {
         env.storage()
             .persistent()
@@ -372,6 +379,7 @@ impl HealthcarePayment {
             .ok_or(Error::InsuranceProviderNotFound)
     }
 
+    #[must_use]
     fn validate_positive_amount(amount: i128) -> Result<(), Error> {
         if amount <= 0 {
             return Err(Error::InvalidAmount);
@@ -379,6 +387,7 @@ impl HealthcarePayment {
         Ok(())
     }
 
+    #[must_use]
     fn require_operational(env: &Env) -> Result<(), Error> {
         if let Some(cb) = env
             .storage()
@@ -392,6 +401,7 @@ impl HealthcarePayment {
         Ok(())
     }
 
+    #[must_use]
     fn acquire_lock(env: &Env) -> Result<(), Error> {
         if env
             .storage()

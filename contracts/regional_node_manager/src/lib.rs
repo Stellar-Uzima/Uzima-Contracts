@@ -86,6 +86,23 @@ pub enum Error {
     DuplicateNode = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::NodeNotFound => write!(f, "node not found"),
+            Error::HealthCheckFailed => write!(f, "health check failed"),
+            Error::ReplicaOutOfSync => write!(f, "replica out of sync"),
+            Error::NodeUnreachable => write!(f, "node unreachable"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::DuplicateNode => write!(f, "duplicate node"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
@@ -487,6 +504,7 @@ impl RegionalNodeManager {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
         if admin != *caller {
@@ -495,6 +513,7 @@ impl RegionalNodeManager {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -509,6 +528,7 @@ impl RegionalNodeManager {
         Ok(())
     }
 
+    #[must_use]
     fn require_monitor(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()

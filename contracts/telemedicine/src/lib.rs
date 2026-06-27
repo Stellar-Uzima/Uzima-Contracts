@@ -55,6 +55,41 @@ pub enum TelemedicineError {
     KnowledgeEntryNotFound = 28,
 }
 
+impl core::fmt::Display for TelemedicineError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            TelemedicineError::ContractPaused => write!(f, "contract paused"),
+            TelemedicineError::NotPaused => write!(f, "not paused"),
+            TelemedicineError::NotAdmin => write!(f, "not admin"),
+            TelemedicineError::ProviderAlreadyRegistered => write!(f, "provider already registered"),
+            TelemedicineError::ProviderNotFound => write!(f, "provider not found"),
+            TelemedicineError::ProviderNotActive => write!(f, "provider not active"),
+            TelemedicineError::LicenseExpired => write!(f, "license expired"),
+            TelemedicineError::PatientAlreadyRegistered => write!(f, "patient already registered"),
+            TelemedicineError::PatientNotFound => write!(f, "patient not found"),
+            TelemedicineError::ConsentNotGiven => write!(f, "consent not given"),
+            TelemedicineError::ConsultationNotFound => write!(f, "consultation not found"),
+            TelemedicineError::ConsultationNotScheduled => write!(f, "consultation not scheduled"),
+            TelemedicineError::ConsultationNotActive => write!(f, "consultation not active"),
+            TelemedicineError::ConsultationAlreadyCompleted => write!(f, "consultation already completed"),
+            TelemedicineError::PrescriptionNotFound => write!(f, "prescription not found"),
+            TelemedicineError::MonitoringSessionNotFound => write!(f, "monitoring session not found"),
+            TelemedicineError::AppointmentNotFound => write!(f, "appointment not found"),
+            TelemedicineError::DigitalTherapeuticNotFound => write!(f, "digital therapeutic not found"),
+            TelemedicineError::QualityAssessmentNotFound => write!(f, "quality assessment not found"),
+            TelemedicineError::EmergencyNotFound => write!(f, "emergency not found"),
+            TelemedicineError::EmergencyAlreadyResolved => write!(f, "emergency already resolved"),
+            TelemedicineError::InvalidJurisdiction => write!(f, "invalid jurisdiction"),
+            TelemedicineError::DataTransferNotApproved => write!(f, "data transfer not approved"),
+            TelemedicineError::UnsupportedLanguage => write!(f, "unsupported language"),
+            TelemedicineError::ChatbotInquiryNotFound => write!(f, "chatbot inquiry not found"),
+            TelemedicineError::InvalidChatMessage => write!(f, "invalid chat message"),
+            TelemedicineError::KnowledgeEntryAlreadyExists => write!(f, "knowledge entry already exists"),
+            TelemedicineError::KnowledgeEntryNotFound => write!(f, "knowledge entry not found"),
+        }
+    }
+}
+
 // ============================================================
 // DATA STRUCTURES
 // ============================================================
@@ -1272,6 +1307,7 @@ impl TelemedicineContract {
     // UTILITY FUNCTIONS
     // ============================================================
 
+    #[must_use]
     fn require_admin(env: &Env) -> Result<(), TelemedicineError> {
         // Retrieve the stored admin address from instance storage
         let admin: Address = env
@@ -1283,6 +1319,7 @@ impl TelemedicineContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), TelemedicineError> {
         if env
             .storage()
@@ -1295,6 +1332,7 @@ impl TelemedicineContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_supported_language(language: &String) -> Result<(), TelemedicineError> {
         let lang = Self::normalize_string(language);
         if matches!(lang.as_str(), "english" | "swahili" | "french" | "en" | "sw" | "fr") {
@@ -1840,7 +1878,7 @@ impl TelemedicineContract {
         filtered
     }
 
-    #[allow(dead_code)]
+    
     fn is_valid_jurisdiction(jurisdiction: &str) -> bool {
         matches!(
             jurisdiction,

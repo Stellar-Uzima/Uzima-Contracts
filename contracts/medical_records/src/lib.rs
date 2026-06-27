@@ -169,10 +169,23 @@ pub enum RbacError {
     AlreadyInitialized = 301,
 }
 
+impl core::fmt::Display for RbacError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            RbacError::Unauthorized => write!(f, "unauthorized"),
+            RbacError::NotInitialized => write!(f, "not initialized"),
+            RbacError::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[soroban_sdk::contractclient(name = "RbacClient")]
 pub trait RbacContract {
+    #[must_use]
     fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
@@ -4802,7 +4815,7 @@ impl MedicalRecordsContract {
     // MIGRATION & UPGRADE SYSTEM
     // =================================================================
 
-    #[allow(dead_code)]
+    
     fn get_contract_version(env: &Env) -> u32 {
         env.storage()
             .instance()
@@ -4810,7 +4823,7 @@ impl MedicalRecordsContract {
             .unwrap_or(0)
     }
 
-    #[allow(dead_code)]
+    
     fn set_contract_version(env: &Env, new_version: u32) {
         env.storage()
             .instance()
@@ -5081,6 +5094,7 @@ impl MedicalRecordsContract {
         Ok(record_id)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&UPGRADE_ADMIN) {
             Ok(())
@@ -5089,6 +5103,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -5176,6 +5191,7 @@ impl MedicalRecordsContract {
         Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Patient)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_admin(env, caller) {
             Ok(())
@@ -5184,6 +5200,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_doctor(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_active_doctor(env, caller) {
             Ok(())
@@ -5192,6 +5209,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_user(env: &Env, user: &Address) -> Result<(), Error> {
         let users = Self::read_users(env);
         match users.get(user.clone()) {
@@ -5200,6 +5218,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
         if Self::is_active_patient(env, patient) {
             Ok(())
@@ -5477,6 +5496,7 @@ impl MedicalRecordsContract {
         registry_client.is_root_revoked(issuer, root)
     }
 
+    #[must_use]
     fn resolve_record_provider(env: &Env, record_id: u64) -> Result<Address, Error> {
         if let Some(record) = env
             .storage()
@@ -5852,6 +5872,7 @@ impl MedicalRecordsContract {
             .set(&DataKey::PatientAccessLog(patient.clone(), pnext), &next);
     }
 
+    #[must_use]
     fn require_cross_chain_contracts(env: &Env) -> Result<Address, Error> {
         let bridge: Address = env
             .storage()
@@ -5875,6 +5896,7 @@ impl MedicalRecordsContract {
         Ok(bridge)
     }
 
+    #[must_use]
     fn require_crypto_registry(env: &Env) -> Result<Address, Error> {
         env.storage()
             .persistent()
@@ -6018,6 +6040,7 @@ impl MedicalRecordsContract {
     /// Internal guard – called at the start of rate-limited operations.
     /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
     /// all allowed calls in the current window.
+    #[must_use]
     fn check_and_update_rate_limit(env: &Env, caller: &Address, op: u32) -> Result<(), Error> {
         // Admin-granted bypass flag
         let bypass: bool = env
@@ -6355,11 +6378,13 @@ impl MedicalRecordsContract {
 }
 
 impl upgradeability::migration::Migratable for MedicalRecordsContract {
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         Self::migrate_data(env, from_version);
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         // Simple integrity check: hash of the record count and next ID
         let next_id = env
@@ -6413,17 +6438,20 @@ pub struct MockRbac;
 impl MockRbac {
     pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
 
+    #[must_use]
     pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
+    #[must_use]
     pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &true);
         Ok(true)
     }
 
+    #[must_use]
     pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &false);

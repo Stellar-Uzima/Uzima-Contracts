@@ -1,8 +1,6 @@
 #![no_std]
 //! fhir_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
-#![allow(dead_code)]
-
 // #[cfg(test)]
 // mod test;
 
@@ -215,12 +213,10 @@ const CONDITIONS: Symbol = symbol_short!("CONDITION");
 const MEDICATIONS: Symbol = symbol_short!("MEDICATE");
 const PROCEDURES: Symbol = symbol_short!("PROCEDURE");
 const ALLERGIES: Symbol = symbol_short!("ALLERGIES");
-const BUNDLES: Symbol = symbol_short!("BUNDLES");
 const EMR_CONFIG: Symbol = symbol_short!("EMR_CFG");
 const DATA_MAPPINGS: Symbol = symbol_short!("MAPPINGS");
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const MEDICAL_RECORD_CONTRACT: Symbol = symbol_short!("MED_REC");
-const PROVIDER_COUNT: Symbol = symbol_short!("PROV_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
 #[contracterror]
@@ -247,6 +243,33 @@ pub enum Error {
     OperationFailed = 18,
     InvalidBundleType = 19,
     DataMappingFailed = 20,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::ProviderAlreadyExists => write!(f, "provider already exists"),
+            Error::ObservationNotFound => write!(f, "observation not found"),
+            Error::ConditionNotFound => write!(f, "condition not found"),
+            Error::InvalidFHIRData => write!(f, "invalid f h i r data"),
+            Error::EMRConfigNotSet => write!(f, "e m r config not set"),
+            Error::InvalidResourceType => write!(f, "invalid resource type"),
+            Error::MappingNotFound => write!(f, "mapping not found"),
+            Error::ProviderNotVerified => write!(f, "provider not verified"),
+            Error::InvalidNPI => write!(f, "invalid n p i"),
+            Error::InvalidTaxId => write!(f, "invalid tax id"),
+            Error::BundleNotFound => write!(f, "bundle not found"),
+            Error::InvalidDataFormat => write!(f, "invalid data format"),
+            Error::ProviderAlreadyVerified => write!(f, "provider already verified"),
+            Error::MedicalRecordsContractNotSet => write!(f, "medical records contract not set"),
+            Error::OperationFailed => write!(f, "operation failed"),
+            Error::InvalidBundleType => write!(f, "invalid bundle type"),
+            Error::DataMappingFailed => write!(f, "data mapping failed"),
+        }
+    }
 }
 
 #[contract]
@@ -779,7 +802,6 @@ pub struct ExportConfig {
     pub export_size_limit_bytes: u32,
 }
 
-const EXPORT_COUNT: Symbol = symbol_short!("XPORT_CNT");
 const EXPORT_CFG: Symbol = symbol_short!("XPORT_CFG");
 
 impl FHIRIntegrationContract {

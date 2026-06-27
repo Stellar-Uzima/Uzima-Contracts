@@ -63,6 +63,7 @@ pub fn update_config(
     Ok(())
 }
 
+#[must_use]
 pub fn add_arbiter(env: Env, admin: Address, arbiter: Address) -> Result<(), Error> {
     utils::require_admin(&env, admin)?;
 

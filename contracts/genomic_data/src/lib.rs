@@ -1096,10 +1096,12 @@ impl GenomicDataContract {
 }
 
 impl upgradeability::migration::Migratable for GenomicDataContract {
+    #[must_use]
     fn migrate(_env: &Env, _from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         let next_id = env
             .storage()

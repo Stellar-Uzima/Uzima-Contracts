@@ -30,6 +30,28 @@ pub enum Error {
     InvalidVoteType = 280,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidState => write!(f, "invalid state"),
+            Error::VotingClosed => write!(f, "voting closed"),
+            Error::AlreadyVoted => write!(f, "already voted"),
+            Error::NotQueued => write!(f, "not queued"),
+            Error::ProposalDisputed => write!(f, "proposal disputed"),
+            Error::ProposalNotFound => write!(f, "proposal not found"),
+            Error::ProposalNotSuccessful => write!(f, "proposal not successful"),
+            Error::AlreadyExecuted => write!(f, "already executed"),
+            Error::ProposalThresholdNotMet => write!(f, "proposal threshold not met"),
+            Error::NoVotingPower => write!(f, "no voting power"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::InvalidVoteType => write!(f, "invalid vote type"),
+        }
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::NotInitialized => symbol_short!("INIT_CTR"),

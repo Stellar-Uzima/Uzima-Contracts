@@ -6,8 +6,6 @@
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
-#![allow(dead_code)]
-
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
@@ -32,6 +30,28 @@ pub enum Error {
     SymbolTooLong = 13,
     TransferFailed = 14,
     ConfigNotFound = 15,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::InvalidTimelock => write!(f, "invalid timelock"),
+            Error::NotSigner => write!(f, "not signer"),
+            Error::ProposalNotFound => write!(f, "proposal not found"),
+            Error::NotPending => write!(f, "not pending"),
+            Error::AlreadyApproved => write!(f, "already approved"),
+            Error::TimelockNotExpired => write!(f, "timelock not expired"),
+            Error::NotApproved => write!(f, "not approved"),
+            Error::Halted => write!(f, "halted"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::SymbolTooLong => write!(f, "symbol too long"),
+            Error::TransferFailed => write!(f, "transfer failed"),
+            Error::ConfigNotFound => write!(f, "config not found"),
+        }
+    }
 }
 
 /// Treasury proposal types

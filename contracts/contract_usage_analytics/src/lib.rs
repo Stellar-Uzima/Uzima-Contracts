@@ -55,6 +55,17 @@ pub enum Error {
     InvalidInput = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+        }
+    }
+}
+
 #[contract]
 pub struct ContractUsageAnalytics;
 

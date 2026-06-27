@@ -1,7 +1,5 @@
 #![no_std]
 //! medical_record_hash_registry - Healthcare smart contract on Stellar blockchain.
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -186,6 +184,7 @@ impl MedicalRecordHashRegistry {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);

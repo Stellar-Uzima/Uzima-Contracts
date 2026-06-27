@@ -20,6 +20,22 @@ pub enum Error {
     BatchAlreadyExists = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::ManufacturerNotFound => write!(f, "manufacturer not found"),
+            Error::MedicationNotFound => write!(f, "medication not found"),
+            Error::BatchNotFound => write!(f, "batch not found"),
+            Error::ShipmentNotFound => write!(f, "shipment not found"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::BatchAlreadyExists => write!(f, "batch already exists"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum BatchStatus {
@@ -135,6 +151,7 @@ pub struct PharmaSupplyChainContract;
 #[allow(clippy::too_many_arguments)]
 #[contractimpl]
 impl PharmaSupplyChainContract {
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

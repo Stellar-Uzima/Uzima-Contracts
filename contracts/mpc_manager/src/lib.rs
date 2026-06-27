@@ -165,6 +165,28 @@ pub enum Error {
     InsufficientParticipants = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::SessionNotFound => write!(f, "session not found"),
+            Error::SessionExpired => write!(f, "session expired"),
+            Error::InvalidState => write!(f, "invalid state"),
+            Error::DuplicateCommit => write!(f, "duplicate commit"),
+            Error::DuplicateReveal => write!(f, "duplicate reveal"),
+            Error::ThresholdNotMet => write!(f, "threshold not met"),
+            Error::InvalidShare => write!(f, "invalid share"),
+            Error::ComputationFailed => write!(f, "computation failed"),
+            Error::ProofVerificationFailed => write!(f, "proof verification failed"),
+            Error::GasLimitExceeded => write!(f, "gas limit exceeded"),
+            Error::InsufficientParticipants => write!(f, "insufficient participants"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -727,6 +749,7 @@ impl MPCManager {
     // Helpers
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -735,6 +758,7 @@ impl MPCManager {
         }
     }
 
+    #[must_use]
     fn require_not_expired(env: &Env, session: &MPCSession) -> Result<(), Error> {
         let now = env.ledger().timestamp();
         if now > session.expires_at {

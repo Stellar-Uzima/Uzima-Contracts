@@ -4,7 +4,6 @@
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::enum_variant_names)]
-#![allow(dead_code)]
 pub mod errors;
 pub use errors::Error;
 
@@ -376,7 +375,6 @@ const TOKEN_TRANSFER_TIMEOUT: u64 = 3_600; // 1 hour
 const MESSAGE_PASSING_TIMEOUT: u64 = 1_800; // 30 minutes
 const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
 const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
-const EXTENSION_MULTIPLIER: u64 = 2; // Each extension doubles the timeout
 
 // TTL constants for storage management
 /// TTL threshold: extend persistent data if remaining TTL falls below this
@@ -394,36 +392,6 @@ impl CrossChainBridgeContract {
     // ============================================================
     // Storage tier helpers
     // ============================================================
-
-    /// Set a persistent value and extend its TTL in one call.
-    fn persistent_set<T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val> + Clone>(
-        env: &Env,
-        key: &DataKey,
-        val: &T,
-    ) {
-        env.storage().persistent().set(key, val);
-        env.storage().persistent().extend_ttl(
-            key,
-            PERSISTENT_TTL_THRESHOLD,
-            PERSISTENT_TTL_EXTEND_TO,
-        );
-    }
-
-    /// Get a persistent value and extend its TTL.
-    fn persistent_get<T: soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val> + Clone>(
-        env: &Env,
-        key: &DataKey,
-    ) -> Option<T> {
-        let val = env.storage().persistent().get(key);
-        if val.is_some() {
-            env.storage().persistent().extend_ttl(
-                key,
-                PERSISTENT_TTL_THRESHOLD,
-                PERSISTENT_TTL_EXTEND_TO,
-            );
-        }
-        val
-    }
 
     /// Initialize the bridge contract
     pub fn initialize(
@@ -2178,6 +2146,7 @@ impl CrossChainBridgeContract {
     }
 
     // Moved here from private impl block so #[contractimpl] can resolve Self:: calls
+    #[must_use]
     fn verify_nonce(env: &Env, sender: &String, nonce: u64) -> Result<(), Error> {
         let last_nonce: u64 = env
             .storage()
@@ -2201,6 +2170,7 @@ impl CrossChainBridgeContract {
 // ==================== Private Helper Functions ====================
 // These are not exposed as contract entry points.
 impl CrossChainBridgeContract {
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -2222,6 +2192,7 @@ impl CrossChainBridgeContract {
         }
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -2234,6 +2205,7 @@ impl CrossChainBridgeContract {
         Ok(())
     }
 
+    #[must_use]
     fn get_active_validator_info(env: &Env, validator: &Address) -> Result<Validator, Error> {
         match env
             .storage()
@@ -2246,7 +2218,8 @@ impl CrossChainBridgeContract {
         }
     }
 
-    #[allow(dead_code)]
+    
+    #[must_use]
     fn require_active_validator(env: &Env, validator: &Address) -> Result<(), Error> {
         match env
             .storage()
@@ -2268,6 +2241,7 @@ impl CrossChainBridgeContract {
         )
     }
 
+    #[must_use]
     fn require_chain_supported(env: &Env, chain: &ChainId) -> Result<(), Error> {
         let chains: Vec<ChainId> = env
             .storage()
@@ -2304,6 +2278,7 @@ impl CrossChainBridgeContract {
         Ok(())
     }
 
+    #[must_use]
     fn verify_validator_nonce(env: &Env, pubkey: &BytesN<32>, nonce: u64) -> Result<(), Error> {
         let key = DataKey::ValidatorNonce(pubkey.clone());
         let last_nonce: u64 = env.storage().persistent().get(&key).unwrap_or(0);
@@ -2334,6 +2309,7 @@ impl CrossChainBridgeContract {
         }
     }
 
+    #[must_use]
     fn refund(env: &Env, operation: &mut CrossChainOp) -> Result<(), Error> {
         operation.status = OperationStatus::Refunded;
         env.events().publish(
@@ -2347,30 +2323,4 @@ impl CrossChainBridgeContract {
         Ok(())
     }
 
-    /// Maps a ChainId to a unique u32 used in cross-chain replay-protection payloads.
-    /// Ensures a signed message for chain A cannot be replayed on chain B.
-    fn to_replay_chain_id(chain: &ChainId) -> u32 {
-        match chain {
-            ChainId::Stellar => 0,
-            ChainId::Ethereum => 1,
-            ChainId::Polygon => 2,
-            ChainId::Avalanche => 3,
-            ChainId::BinanceSmartChain => 4,
-            ChainId::Arbitrum => 5,
-            ChainId::Optimism => 6,
-            ChainId::Custom(id) => *id,
-        }
-    }
-
-    fn require_authorized_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
-        let is_authorized: bool = env
-            .storage()
-            .persistent()
-            .get(&DataKey::AuthorizedRelayer(relayer.clone()))
-            .unwrap_or(false);
-        if !is_authorized {
-            return Err(Error::UnauthorizedRelayer);
-        }
-        Ok(())
-    }
 }

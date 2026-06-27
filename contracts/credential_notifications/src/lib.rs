@@ -33,6 +33,17 @@ pub enum Error {
     NotifierNotFound = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotifierNotFound => write!(f, "notifier not found"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -119,6 +130,7 @@ impl CredentialNotificationsContract {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -131,6 +143,7 @@ impl CredentialNotificationsContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_notifier_or_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::require_admin(env, caller).is_ok() {
             return Ok(());

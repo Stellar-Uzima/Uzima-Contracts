@@ -363,6 +363,28 @@ pub enum Error {
     InvalidRegion = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::DataNotFound => write!(f, "data not found"),
+            Error::InvalidAggregationMethod => write!(f, "invalid aggregation method"),
+            Error::PrivacyBudgetExceeded => write!(f, "privacy budget exceeded"),
+            Error::InsufficientPrivilege => write!(f, "insufficient privilege"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+            Error::AlertExpired => write!(f, "alert expired"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::InterventionNotFound => write!(f, "intervention not found"),
+            Error::CollaborationNotFound => write!(f, "collaboration not found"),
+            Error::InvalidTimeRange => write!(f, "invalid time range"),
+            Error::InvalidRegion => write!(f, "invalid region"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -1051,6 +1073,7 @@ impl PublicHealthSurveillance {
     // Internal helper functions
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -1075,6 +1098,7 @@ impl PublicHealthSurveillance {
     }
 
     /// Create automatic alert for detected outbreak
+    #[must_use]
     fn create_automatic_alert(env: &Env, outbreak_data: &OutbreakData) -> Result<(), Error> {
         let alert_id: u64 = env
             .storage()
@@ -1157,6 +1181,7 @@ impl PublicHealthSurveillance {
     }
 
     /// Create antimicrobial resistance alert
+    #[must_use]
     fn create_amr_alert(env: &Env, amr_data: &AntimicrobialResistance) -> Result<(), Error> {
         let alert_id: u64 = env
             .storage()
@@ -1198,6 +1223,7 @@ impl PublicHealthSurveillance {
     }
 
     /// Check privacy budget for user
+    #[must_use]
     fn check_privacy_budget(env: &Env, user: &Address, required_epsilon: u64) -> Result<(), Error> {
         let current_budget: u64 = env
             .storage()

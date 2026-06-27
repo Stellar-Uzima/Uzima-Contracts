@@ -22,6 +22,22 @@ pub enum Error {
     CredentialExpired = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InsufficientReputation => write!(f, "insufficient reputation"),
+            Error::AccessDenied => write!(f, "access denied"),
+            Error::InvalidResource => write!(f, "invalid resource"),
+            Error::PolicyNotFound => write!(f, "policy not found"),
+            Error::ProviderNotVerified => write!(f, "provider not verified"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+        }
+    }
+}
+
 #[contracttype]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum ResourceType {
@@ -410,6 +426,7 @@ impl ReputationAccessControl {
     }
 
     // Helper functions
+    #[must_use]
     fn set_default_policies(env: &Env) -> Result<(), Error> {
         // Credential symbols – all ≤ 9 chars
         let med_lic = symbol_short!("MedLic");
@@ -516,6 +533,7 @@ impl ReputationAccessControl {
         Ok(true)
     }
 
+    #[must_use]
     fn has_emergency_access(env: &Env, provider: &Address) -> Result<bool, Error> {
         Ok(env
             .storage()
@@ -531,6 +549,7 @@ impl ReputationAccessControl {
         BytesN::from_array(env, &data)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -539,6 +558,7 @@ impl ReputationAccessControl {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

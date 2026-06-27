@@ -6,8 +6,6 @@
 #![allow(clippy::unnecessary_cast)]
 #![allow(clippy::unnecessary_map_or)]
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -168,6 +166,31 @@ pub enum Error {
     InvalidChain = 16,
     SyncNotFound = 17,
     SyncFailed = 18,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::IdentityNotFound => write!(f, "identity not found"),
+            Error::IdentityAlreadyExists => write!(f, "identity already exists"),
+            Error::IdentityExpired => write!(f, "identity expired"),
+            Error::IdentityRevoked => write!(f, "identity revoked"),
+            Error::RequestNotFound => write!(f, "request not found"),
+            Error::RequestExpired => write!(f, "request expired"),
+            Error::RequestAlreadyProcessed => write!(f, "request already processed"),
+            Error::ValidatorNotFound => write!(f, "validator not found"),
+            Error::ValidatorNotActive => write!(f, "validator not active"),
+            Error::DuplicateAttestation => write!(f, "duplicate attestation"),
+            Error::InsufficientAttestations => write!(f, "insufficient attestations"),
+            Error::InvalidProof => write!(f, "invalid proof"),
+            Error::InvalidChain => write!(f, "invalid chain"),
+            Error::SyncNotFound => write!(f, "sync not found"),
+            Error::SyncFailed => write!(f, "sync failed"),
+        }
+    }
 }
 
 #[contract]
@@ -637,6 +660,7 @@ impl CrossChainIdentityContract {
 
     // ==================== Internal Helper Functions ====================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -655,6 +679,7 @@ impl CrossChainIdentityContract {
         admin.map_or(false, |a| &a == caller)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -667,6 +692,7 @@ impl CrossChainIdentityContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_active_validator(env: &Env, validator: &Address) -> Result<(), Error> {
         match env
             .storage()
@@ -703,6 +729,7 @@ impl CrossChainIdentityContract {
         count + 1
     }
 
+    #[must_use]
     fn create_verified_identity(env: &Env, request: &VerificationRequest) -> Result<(), Error> {
         let now = env.ledger().timestamp();
         let ttl: u64 = env

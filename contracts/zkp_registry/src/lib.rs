@@ -274,11 +274,13 @@ pub enum DataKey {
     VerificationResult(BytesN<32>),
 }
 
-#[allow(dead_code)] // Reserved for future admin-key lookups; kept for ABI consistency
+ // Reserved for future admin-key lookups; kept for ABI consistency
+#[allow(dead_code)]
 const ADMIN: Symbol = symbol_short!("ADMIN");
 
 // TTL constants for storage management
-#[allow(dead_code)] // Reserved for future TTL maintenance; kept as configuration constants
+ // Reserved for future TTL maintenance; kept as configuration constants
+#[allow(dead_code)]
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
 #[allow(dead_code)]
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
@@ -402,6 +404,49 @@ pub enum Error {
     InvalidProofFormat = 617,
     /// Recursive proof supplied with a missing or unverified base proof.
     BaseProofMissing = 618,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidProof => write!(f, "invalid proof"),
+            Error::ProofNotFound => write!(f, "proof not found"),
+            Error::CircuitNotFound => write!(f, "circuit not found"),
+            Error::VerificationFailed => write!(f, "verification failed"),
+            Error::GasLimitExceeded => write!(f, "gas limit exceeded"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::InvalidRange => write!(f, "invalid range"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+            Error::InvalidCircuit => write!(f, "invalid circuit"),
+            Error::ProofTooLarge => write!(f, "proof too large"),
+            Error::RecursiveDepthExceeded => write!(f, "recursive depth exceeded"),
+            Error::InvalidHashFunction => write!(f, "invalid hash function"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::UnauthorizedCaller => write!(f, "unauthorized caller"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::StorageFull => write!(f, "storage full"),
+            Error::CrossChainTimeout => write!(f, "cross chain timeout"),
+            Error::InvalidSigner => write!(f, "invalid signer"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::ProposalNotFound => write!(f, "proposal not found"),
+            Error::AlreadyApproved => write!(f, "already approved"),
+            Error::TimelockNotExpired => write!(f, "timelock not expired"),
+            Error::AlreadyExecuted => write!(f, "already executed"),
+            Error::NotEnoughApprovals => write!(f, "not enough approvals"),
+            Error::MalformedProof => write!(f, "malformed proof"),
+            Error::VkMismatch => write!(f, "vk mismatch"),
+            Error::InconsistentPublicInputCount => write!(f, "inconsistent public input count"),
+            Error::InvalidExpirationCiphertext => write!(f, "invalid expiration ciphertext"),
+            Error::InconsistentCommitment => write!(f, "inconsistent commitment"),
+            Error::InvalidProofFormat => write!(f, "invalid proof format"),
+            Error::BaseProofMissing => write!(f, "base proof missing"),
+        }
+    }
 }
 
 // =============================================================================
@@ -1410,6 +1455,7 @@ impl ZKPRegistry {
     // Internal helper functions
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn execute_action(env: &Env, action: &AdminAction) -> Result<(), Error> {
         match action {
             AdminAction::UpgradeContract(wasm_hash) => {
@@ -1433,6 +1479,7 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -1440,6 +1487,7 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -1469,6 +1517,7 @@ impl ZKPRegistry {
     /// On rejection of any step, the matching `Error` variant is returned and
     /// `Ok(false)` is never returned. This guarantees that the *only* way to
     /// advance a proof past this gate is to satisfy every binding constraint.
+    #[must_use]
     fn verify_zkp_internal(env: &Env, proof: &ZKProof) -> Result<bool, Error> {
         // 1. Format integrity
         Self::verify_proof_format(proof)?;
@@ -1519,6 +1568,7 @@ impl ZKPRegistry {
     /// Validate the byte-level proof format for the declared `ZKPType`.
     /// Returns `MalformedProof` for empty/short data, `InvalidProofFormat` for
     /// a wrong version byte or unsupported ZKPType.
+    #[must_use]
     fn verify_proof_format(proof: &ZKProof) -> Result<(), Error> {
         if proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
@@ -1574,6 +1624,7 @@ impl ZKPRegistry {
     ///
     /// The verifier additionally enforces VK-binding to a registered circuit
     /// and (over `create_range_proof`) checks min < max.
+    #[must_use]
     fn verify_range_proof_internal(env: &Env, proof: &RangeProof) -> Result<bool, Error> {
         if proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
@@ -1632,6 +1683,7 @@ impl ZKPRegistry {
     /// recursive proof's `aggregated_vk_hash` MUST equal the SHA-256 of the
     /// base proof's vk_hash concatenated with the recursive step's vk_hash.
     /// This prevents reuse of stale base proofs once their VK is rotated.
+    #[must_use]
     fn verify_recursive_proof_internal(env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
         if proof.recursive_proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);

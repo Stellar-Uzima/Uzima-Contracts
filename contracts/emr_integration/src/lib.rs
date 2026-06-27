@@ -284,6 +284,44 @@ pub enum Error {
     UnsupportedEncoding = 31,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::EMRSystemNotFound => write!(f, "e m r system not found"),
+            Error::EMRSystemAlreadyExists => write!(f, "e m r system already exists"),
+            Error::OnboardingNotFound => write!(f, "onboarding not found"),
+            Error::OnboardingAlreadyExists => write!(f, "onboarding already exists"),
+            Error::VerificationNotFound => write!(f, "verification not found"),
+            Error::NetworkNodeNotFound => write!(f, "network node not found"),
+            Error::AgreementNotFound => write!(f, "agreement not found"),
+            Error::TestNotFound => write!(f, "test not found"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::InvalidEMRSystem => write!(f, "invalid e m r system"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::InvalidNPI => write!(f, "invalid n p i"),
+            Error::InvalidLicenseNumber => write!(f, "invalid license number"),
+            Error::LicenseExpired => write!(f, "license expired"),
+            Error::InvalidAgreement => write!(f, "invalid agreement"),
+            Error::AgreementNotActive => write!(f, "agreement not active"),
+            Error::TestFailed => write!(f, "test failed"),
+            Error::InvalidTestType => write!(f, "invalid test type"),
+            Error::DuplicateTest => write!(f, "duplicate test"),
+            Error::FHIRContractNotSet => write!(f, "f h i r contract not set"),
+            Error::OperationFailed => write!(f, "operation failed"),
+            Error::UnsupportedMessageFormat => write!(f, "unsupported message format"),
+            Error::MessageParseFailed => write!(f, "message parse failed"),
+            Error::UnsupportedMessageType => write!(f, "unsupported message type"),
+            Error::InvalidMessagePayload => write!(f, "invalid message payload"),
+            Error::MessageNotFound => write!(f, "message not found"),
+            Error::ValidationReportNotFound => write!(f, "validation report not found"),
+            Error::TransformationNotFound => write!(f, "transformation not found"),
+            Error::UnsupportedEncoding => write!(f, "unsupported encoding"),
+        }
+    }
+}
+
 #[contract]
 pub struct EMRIntegrationContract;
 
@@ -930,6 +968,7 @@ impl EMRIntegrationContract {
         Ok(true)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
         let contract_admin: Address = env
             .storage()
@@ -942,6 +981,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
@@ -949,6 +989,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_emr_system_exists(env: &Env, system_id: &String) -> Result<(), Error> {
         let systems: Map<String, EMRSystem> = env
             .storage()
@@ -961,6 +1002,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_supported_encoding(encoding: CharacterEncoding) -> Result<(), Error> {
         match encoding {
             CharacterEncoding::UTF8
@@ -1493,6 +1535,7 @@ impl EMRIntegrationContract {
         ]
     }
 
+    #[must_use]
     fn assert_supported_message_type(message_type: &String) -> Result<(), Error> {
         let candidate = Self::to_rust_string(message_type);
         if Self::supported_message_types()

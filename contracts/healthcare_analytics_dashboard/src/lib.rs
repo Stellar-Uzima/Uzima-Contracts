@@ -261,6 +261,27 @@ pub enum Error {
     UnsupportedDataLakeProvider = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::PrivacyThresholdNotMet => write!(f, "privacy threshold not met"),
+            Error::MetricNotFound => write!(f, "metric not found"),
+            Error::TemplateNotFound => write!(f, "template not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::ComplianceNotFound => write!(f, "compliance not found"),
+            Error::AiAnalyticsNotConfigured => write!(f, "ai analytics not configured"),
+            Error::AiRoundNotFound => write!(f, "ai round not found"),
+            Error::DataLakeNotFound => write!(f, "data lake not found"),
+            Error::ExportNotFound => write!(f, "export not found"),
+            Error::UnsupportedDataLakeProvider => write!(f, "unsupported data lake provider"),
+        }
+    }
+}
+
 #[contract]
 pub struct HealthcareAnalyticsDashboardContract;
 
@@ -334,6 +355,7 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(true)
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<DashboardConfig, Error> {
         env.storage()
             .instance()
@@ -341,6 +363,7 @@ impl HealthcareAnalyticsDashboardContract {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -349,6 +372,7 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_collector_or_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin == *caller {

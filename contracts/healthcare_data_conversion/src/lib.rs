@@ -162,6 +162,29 @@ pub enum Error {
     OperationFailed = 16,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::RuleNotFound => write!(f, "rule not found"),
+            Error::CodingMappingNotFound => write!(f, "coding mapping not found"),
+            Error::FormatNotSupported => write!(f, "format not supported"),
+            Error::ConversionFailed => write!(f, "conversion failed"),
+            Error::ValidationFailed => write!(f, "validation failed"),
+            Error::InvalidConversionRequest => write!(f, "invalid conversion request"),
+            Error::SourceFormatNotSupported => write!(f, "source format not supported"),
+            Error::TargetFormatNotSupported => write!(f, "target format not supported"),
+            Error::MappingTableNotFound => write!(f, "mapping table not found"),
+            Error::DuplicateRule => write!(f, "duplicate rule"),
+            Error::IncompatibleFormats => write!(f, "incompatible formats"),
+            Error::DataLossWarning => write!(f, "data loss warning"),
+            Error::InvalidMappingData => write!(f, "invalid mapping data"),
+            Error::OperationFailed => write!(f, "operation failed"),
+        }
+    }
+}
+
 #[contract]
 pub struct HealthcareDataConversionContract;
 
