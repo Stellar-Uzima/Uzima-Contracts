@@ -1,6 +1,7 @@
 #![no_std]
 //! audit - Healthcare smart contract on Stellar blockchain.
 
+pub mod errors;
 pub mod querying;
 pub mod storage;
 pub mod types;
@@ -9,10 +10,12 @@ pub mod verification;
 #[cfg(test)]
 mod test;
 
+use crate::errors::Error;
 use crate::types::{
     ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
     OperationResult, RetentionPolicy,
 };
+use governance_commons::require_admin;
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
@@ -202,9 +205,8 @@ impl AuditTrail {
     // ─── Access Control ──────────────────────────────────────────────────────
 
     /// Grant log-read access to an address (admin only).
-    pub fn grant_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn grant_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         let entry = LogAccessEntry {
             reader: reader.clone(),
@@ -227,12 +229,12 @@ impl AuditTrail {
             (symbol_short!("AUDIT"), symbol_short!("GRANT")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Revoke log-read access (admin only).
-    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         env.storage()
             .persistent()
@@ -242,6 +244,7 @@ impl AuditTrail {
             (symbol_short!("AUDIT"), symbol_short!("REVOKE")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Check whether an address has log-read access.
@@ -252,12 +255,12 @@ impl AuditTrail {
     // ─── Retention Policy ────────────────────────────────────────────────────
 
     /// Update the retention policy (admin only).
-    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) -> Result<(), Error> {
+        require_admin!(env, admin);
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
+        Ok(())
     }
 
     /// Read the current retention policy.
@@ -402,15 +405,16 @@ impl AuditTrail {
 
     // ─── Private helpers ─────────────────────────────────────────────────────
 
-    fn require_admin(env: &Env, caller: &Address) {
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("Contract not initialized");
+            .ok_or(Error::NotInitialized)?;
         if *caller != admin {
-            panic!("Caller is not the admin");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     fn require_log_access(env: &Env, caller: &Address) {
