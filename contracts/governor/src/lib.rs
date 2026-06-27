@@ -39,7 +39,7 @@ pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env, IntoVal, Map,
-    Symbol,
+    Symbol, Vec,
 };
 
 #[derive(Clone)]
@@ -358,6 +358,36 @@ impl Governor {
         env.events()
             .publish((symbol_short!("Execute"), proposal_id), ());
         Ok(())
+    }
+
+    pub fn cleanup_expired_proposals(env: Env, caller: Address) -> Result<u32, Error> {
+        caller.require_auth();
+        let cfg = get_cfg(&env)?;
+        let mut props = get_props(&env);
+        let mut removed = 0u32;
+
+        let ids: Vec<u64> = props.keys();
+        for id in ids.iter() {
+            let p = props.get(id).unwrap();
+            let state = proposal_state(&env, &cfg, id, &p);
+            if state == 2 || state == 5 {
+                props.remove(id);
+                removed += 1;
+            }
+        }
+
+        if removed == 0 {
+            return Err(Error::CleanupEmpty);
+        }
+
+        env.storage().persistent().set(&PROPS, &props);
+
+        env.events().publish(
+            (symbol_short!("CLEANUP"), symbol_short!("PROPS")),
+            (caller, removed),
+        );
+
+        Ok(removed)
     }
 
     fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> i128 {
