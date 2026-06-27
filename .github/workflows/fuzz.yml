@@ -1,6 +1,6 @@
 # Nightly fuzz testing for contracts that accept arbitrary byte input.
 #
-# Runs proptest-based harnesses in tests/fuzz/ for 5 minutes each, covering:
+# Runs proptest-based harnesses in tests/fuzz/ for 30 minutes each (issue #976), covering:
 #   cross_chain_bridge, zk_verifier, zkp_registry, meta_tx_forwarder
 #
 # See docs/SECURITY_BEST_PRACTICES.md §10 and SECURITY_CHECKLIST.md §9.
@@ -22,14 +22,14 @@ on:
       fuzz_duration_secs:
         description: 'Fuzzing duration per target (seconds)'
         required: false
-        default: '300'
+        default: '1800'
       proptest_cases:
         description: 'Number of proptest cases per property'
         required: false
         default: '5000'
 
 env:
-  FUZZ_DURATION: ${{ github.event.inputs.fuzz_duration_secs || '300' }}
+  FUZZ_DURATION: ${{ github.event.inputs.fuzz_duration_secs || '1800' }}
   PROPTEST_CASES: ${{ github.event.inputs.proptest_cases || '5000' }}
   RUST_BACKTRACE: '1'
 
@@ -40,12 +40,12 @@ jobs:
   fuzz-zk-verifier:
     name: Fuzz zk_verifier
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run proptest harness (5 min budget)
+      - name: Run proptest harness (30 min budget)
         id: fuzz
         continue-on-error: true
         working-directory: tests/fuzz/zk_verifier
@@ -90,12 +90,12 @@ See the \`fuzz-log-zk-verifier\` artifact for the full output and shrunk reprodu
   fuzz-zkp-registry:
     name: Fuzz zkp_registry
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run proptest harness (5 min budget)
+      - name: Run proptest harness (30 min budget)
         id: fuzz
         continue-on-error: true
         working-directory: tests/fuzz/zkp_registry
@@ -140,12 +140,12 @@ See the \`fuzz-log-zkp-registry\` artifact for the full output and shrunk reprod
   fuzz-cross-chain-bridge:
     name: Fuzz cross_chain_bridge
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run proptest harness (5 min budget)
+      - name: Run proptest harness (30 min budget)
         id: fuzz
         continue-on-error: true
         working-directory: tests/fuzz/cross_chain_bridge
@@ -189,12 +189,12 @@ See the \`fuzz-log-cross-chain-bridge\` artifact for the full output and shrunk 
   fuzz-meta-tx-forwarder:
     name: Fuzz meta_tx_forwarder
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Run proptest harness (5 min budget)
+      - name: Run proptest harness (30 min budget)
         id: fuzz
         continue-on-error: true
         working-directory: tests/fuzz/meta_tx_forwarder
