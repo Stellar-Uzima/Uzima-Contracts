@@ -85,7 +85,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &1u64);
         env.events()
-            .publish((Symbol::new(&env, "Initialized"),), (admin,));
+            .publish((Symbol::new(&env, "initialized"),), (admin,));
     }
 
     // Create or version a trial protocol
@@ -118,7 +118,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::ProtocolNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "ProtocolCreated"),), (id, proposer));
+            .publish((Symbol::new(&env, "protocol_created"),), (id, proposer));
         id
     }
 
@@ -145,7 +145,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::SiteNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "SiteRegistered"),), (id, registrar));
+            .publish((Symbol::new(&env, "site_registered"),), (id, registrar));
         id
     }
 
@@ -162,7 +162,7 @@ impl ClinicalTrial {
         v.push_back(protocol_id);
         env.storage().persistent().set(&key, &v);
         env.events().publish(
-            (Symbol::new(&env, "PatientRecruited"),),
+            (Symbol::new(&env, "patient_recruited"),),
             (patient, protocol_id, site),
         );
     }
@@ -190,7 +190,7 @@ impl ClinicalTrial {
         env.storage().persistent().set(&DataKey::Consent(id), &c);
         env.storage().instance().set(&DataKey::ConsentCount, &id);
         env.events().publish(
-            (Symbol::new(&env, "ConsentRecorded"),),
+            (Symbol::new(&env, "consent_recorded"),),
             (id, patient, protocol_id),
         );
         id
@@ -228,7 +228,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &next.saturating_add(1));
         env.events().publish(
-            (Symbol::new(&env, "AdverseEvent"),),
+            (Symbol::new(&env, "adverse_event"),),
             (id, patient, protocol_id, site_id, severity),
         );
         id

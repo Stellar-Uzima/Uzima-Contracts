@@ -23,6 +23,10 @@ use soroban_sdk::{
 };
 
 #[cfg(all(target_arch = "wasm32", not(test)))]
+/// WASM page size in bytes (64 KiB)
+const WASM_PAGE_SIZE: usize = 65536;
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
 struct WasmBumpAllocator {
     next: UnsafeCell<usize>,
 }
@@ -38,7 +42,7 @@ unsafe impl GlobalAlloc for WasmBumpAllocator {
         let next = self.next.get();
 
         if *next == 0 {
-            *next = (wasm32::memory_size(0) as usize) * 65536;
+            *next = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
         }
 
         let aligned = (*next + align - 1) & !(align - 1);
@@ -47,10 +51,10 @@ unsafe impl GlobalAlloc for WasmBumpAllocator {
             None => return ptr::null_mut(),
         };
 
-        let current_bytes = (wasm32::memory_size(0) as usize) * 65536;
+        let current_bytes = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
         if end > current_bytes {
             let additional = end - current_bytes;
-            let pages = additional.div_ceil(65536);
+            let pages = additional.div_ceil(WASM_PAGE_SIZE);
             if wasm32::memory_grow(0, pages) == usize::MAX {
                 return ptr::null_mut();
             }

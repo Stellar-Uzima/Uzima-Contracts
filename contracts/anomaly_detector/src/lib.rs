@@ -8,7 +8,7 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    String, Vec,
+    String, Vec, Symbol
 };
 
 // ==================== Alert & Status Types ====================
@@ -205,7 +205,7 @@ impl AnomalyDetectorContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::AlertCount, &0u64);
         env.storage().instance().set(&DataKey::FeedbackCount, &0u64);
-        env.events().publish((symbol_short!("Init"),), admin);
+        env.events().publish((symbol_short!("init"),), admin);
         Ok(true)
     }
 
@@ -226,7 +226,7 @@ impl AnomalyDetectorContract {
         env.storage()
             .instance()
             .remove(&DataKey::Validator(validator.clone()));
-        env.events().publish((symbol_short!("ValRmvd"),), validator);
+        env.events().publish((Symbol::new(&env, "val_rmvd"),), validator);
         Ok(true)
     }
 
@@ -234,7 +234,7 @@ impl AnomalyDetectorContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("Paused"),), caller);
+        env.events().publish((symbol_short!("paused"),), caller);
         Ok(true)
     }
 
@@ -242,7 +242,7 @@ impl AnomalyDetectorContract {
         caller.require_auth();
         Self::require_admin(&env, &caller)?;
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("Unpaused"),), caller);
+        env.events().publish((symbol_short!("unpaused"),), caller);
         Ok(true)
     }
 
@@ -299,7 +299,7 @@ impl AnomalyDetectorContract {
             .persistent()
             .set(&DataKey::ModelWeights(model_id.clone()), &weights);
 
-        env.events().publish((symbol_short!("MdlReg"),), model_id);
+        env.events().publish((Symbol::new(&env, "mdl_reg"),), model_id);
         Ok(true)
     }
 
@@ -938,10 +938,7 @@ impl AnomalyDetectorContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin != *caller {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
     fn require_authorized(env: &Env, caller: &Address) -> Result<(), Error> {

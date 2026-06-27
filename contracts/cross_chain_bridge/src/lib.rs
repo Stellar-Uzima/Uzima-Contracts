@@ -387,7 +387,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&DataKey::EventCount, &0u64);
 
         env.events()
-            .publish((Symbol::new(&env, "BridgeInitialized"),), (admin.clone(),));
+            .publish((Symbol::new(&env, "bridge_initialized"),), (admin.clone(),));
 
         Ok(true)
     }
@@ -418,7 +418,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::Validator(validator_address.clone()), &validator);
 
         env.events()
-            .publish((Symbol::new(&env, "ValidatorAdded"),), (validator_address,));
+            .publish((Symbol::new(&env, "validator_added"),), (validator_address,));
 
         Ok(true)
     }
@@ -437,7 +437,7 @@ impl CrossChainBridgeContract {
             env.storage().persistent().set(&key, &validator);
 
             env.events().publish(
-                (Symbol::new(&env, "ValidatorDeactivated"),),
+                (Symbol::new(&env, "validator_deactivated"),),
                 (validator_address,),
             );
 
@@ -464,7 +464,7 @@ impl CrossChainBridgeContract {
                 .set(&DataKey::SupportedChains, &chains);
 
             env.events()
-                .publish((Symbol::new(&env, "ChainAdded"),), (chain,));
+                .publish((Symbol::new(&env, "chain_added"),), (chain,));
         }
 
         Ok(true)
@@ -492,7 +492,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&DataKey::Paused, &true);
 
         env.events().publish(
-            (Symbol::new(&env, "Paused"),),
+            (Symbol::new(&env, "paused"),),
             (caller, env.ledger().timestamp()),
         );
 
@@ -506,7 +506,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&DataKey::Paused, &false);
 
         env.events().publish(
-            (Symbol::new(&env, "Unpaused"),),
+            (Symbol::new(&env, "unpaused"),),
             (caller, env.ledger().timestamp()),
         );
 
@@ -568,7 +568,7 @@ impl CrossChainBridgeContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "MessageSubmitted"),),
+            (Symbol::new(&env, "message_submitted"),),
             (message_id.clone(), timestamp),
         );
 
@@ -635,13 +635,13 @@ impl CrossChainBridgeContract {
             env.storage().persistent().set(&msg_key, &message);
 
             env.events().publish(
-                (Symbol::new(&env, "MessageVerified"),),
+                (Symbol::new(&env, "message_verified"),),
                 (message_id.clone(),),
             );
         }
 
         env.events().publish(
-            (Symbol::new(&env, "MessageConfirmed"),),
+            (Symbol::new(&env, "message_confirmed"),),
             (message_id, validator),
         );
 
@@ -684,7 +684,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&msg_key, &message);
 
         env.events().publish(
-            (Symbol::new(&env, "MessageExecuted"),),
+            (Symbol::new(&env, "message_executed"),),
             (message_id, payload_type),
         );
 
@@ -718,7 +718,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::AtomicTx(tx_id.clone()), &atomic_tx);
 
         env.events().publish(
-            (Symbol::new(&env, "AtomicTxInitiated"),),
+            (Symbol::new(&env, "atomic_tx_initiated"),),
             (tx_id.clone(), now),
         );
 
@@ -766,7 +766,7 @@ impl CrossChainBridgeContract {
             atomic_tx.status = AtomicTxStatus::Prepared;
 
             env.events()
-                .publish((Symbol::new(&env, "AtomicTxPrepared"),), (tx_id.clone(),));
+                .publish((Symbol::new(&env, "atomic_tx_prepared"),), (tx_id.clone(),));
         }
 
         env.storage().persistent().set(&tx_key, &atomic_tx);
@@ -800,7 +800,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&tx_key, &atomic_tx);
 
         env.events()
-            .publish((Symbol::new(&env, "AtomicTxCommitted"),), (tx_id,));
+            .publish((Symbol::new(&env, "atomic_tx_committed"),), (tx_id,));
 
         Ok(true)
     }
@@ -824,7 +824,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&tx_key, &atomic_tx);
 
         env.events()
-            .publish((Symbol::new(&env, "AtomicTxAborted"),), (tx_id,));
+            .publish((Symbol::new(&env, "atomic_tx_aborted"),), (tx_id,));
 
         Ok(true)
     }
@@ -859,7 +859,7 @@ impl CrossChainBridgeContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "RecordRefRegistered"),),
+            (Symbol::new(&env, "record_ref_registered"),),
             (local_record_id, external_chain),
         );
 
@@ -891,7 +891,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&ref_key, &record_ref);
 
         env.events().publish(
-            (Symbol::new(&env, "SyncStatusUpdated"),),
+            (Symbol::new(&env, "sync_status_updated"),),
             (local_record_id, external_chain, status),
         );
 
@@ -926,7 +926,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::OracleNode(oracle_address.clone()), &oracle);
 
         env.events()
-            .publish((Symbol::new(&env, "OracleRegistered"),), (oracle_address,));
+            .publish((Symbol::new(&env, "oracle_registered"),), (oracle_address,));
 
         Ok(true)
     }
@@ -946,7 +946,7 @@ impl CrossChainBridgeContract {
             env.storage().persistent().set(&key, &oracle);
 
             env.events()
-                .publish((Symbol::new(&env, "OracleDeactivated"),), (oracle_address,));
+                .publish((Symbol::new(&env, "oracle_deactivated"),), (oracle_address,));
 
             Ok(true)
         } else {
@@ -1012,7 +1012,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&oracle_key, &oracle_node);
 
         env.events().publish(
-            (Symbol::new(&env, "OracleReportSubmitted"),),
+            (Symbol::new(&env, "oracle_report_submitted"),),
             (report_id, oracle, chain, data_hash),
         );
 
@@ -1064,7 +1064,7 @@ impl CrossChainBridgeContract {
         }
 
         env.events().publish(
-            (Symbol::new(&env, "OracleDataAggregated"),),
+            (Symbol::new(&env, "oracle_data_aggregated"),),
             (chain, consensus_hash),
         );
 
@@ -1108,7 +1108,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::Proof(proof_id.clone()), &proof);
 
         env.events().publish(
-            (Symbol::new(&env, "ProofSubmitted"),),
+            (Symbol::new(&env, "proof_submitted"),),
             (proof_id.clone(), validator),
         );
 
@@ -1149,7 +1149,7 @@ impl CrossChainBridgeContract {
             proof.verified = true;
 
             env.events().publish(
-                (Symbol::new(&env, "ProofVerified"),),
+                (Symbol::new(&env, "proof_verified"),),
                 (proof_id.clone(), proof.source_chain.clone()),
             );
         }
@@ -1237,7 +1237,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::EventCount, &event_id);
 
         env.events().publish(
-            (Symbol::new(&env, "EventSynced"),),
+            (Symbol::new(&env, "event_synced"),),
             (event_id, source_chain, dest_chain, payload_hash),
         );
 
@@ -1266,7 +1266,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&evt_key, &event);
 
         env.events()
-            .publish((Symbol::new(&env, "EventProcessed"),), (event_id, status));
+            .publish((Symbol::new(&env, "event_processed"),), (event_id, status));
 
         Ok(true)
     }
@@ -1319,7 +1319,7 @@ impl CrossChainBridgeContract {
             .set(&DataKey::RollbackCount, &(count.saturating_add(1)));
 
         env.events().publish(
-            (Symbol::new(&env, "RollbackInitiated"),),
+            (Symbol::new(&env, "rollback_initiated"),),
             (op_id.clone(), caller),
         );
 
@@ -1382,7 +1382,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&rb_key, &rollback);
 
         env.events()
-            .publish((Symbol::new(&env, "RollbackCompleted"),), (op_id, caller));
+            .publish((Symbol::new(&env, "rollback_completed"),), (op_id, caller));
 
         Ok(true)
     }
@@ -1408,7 +1408,7 @@ impl CrossChainBridgeContract {
         env.storage().persistent().set(&rb_key, &rollback);
 
         env.events()
-            .publish((Symbol::new(&env, "RollbackCancelled"),), (op_id,));
+            .publish((Symbol::new(&env, "rollback_cancelled"),), (op_id,));
 
         Ok(true)
     }

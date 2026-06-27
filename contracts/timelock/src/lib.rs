@@ -73,7 +73,7 @@ impl Timelock {
         }
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
-        env.events().publish((symbol_short!("Queued"), id), (eta,));
+        env.events().publish((symbol_short!("queued"), id), (eta,));
         Ok(())
     }
 

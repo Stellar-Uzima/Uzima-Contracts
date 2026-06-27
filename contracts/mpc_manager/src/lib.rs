@@ -8,6 +8,13 @@ use soroban_sdk::{
     String, Symbol, Vec,
 };
 
+/// Estimated gas cost for creating secret shares
+const GAS_CREATE_SHARES: u64 = 15000;
+/// Estimated gas cost for statistical analysis
+const GAS_STATISTICAL_ANALYSIS: u64 = 35000;
+/// Estimated gas cost for ML training
+const GAS_ML_TRAINING: u64 = 45000;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -491,7 +498,7 @@ impl MPCManager {
         }
 
         // Track gas usage
-        Self::track_gas_usage(&env, &session_id, &participant, 15000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_CREATE_SHARES);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -499,7 +506,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "create_shares"),
             &session_id,
-            15000,
+            GAS_CREATE_SHARES,
             Bytes::from_slice(&env, &num_shares.to_be_bytes()),
         );
 
@@ -595,7 +602,7 @@ impl MPCManager {
         let result_hash = env.crypto().sha256(&encrypted_data);
 
         // Track gas usage (target: < 50,000 gas)
-        Self::track_gas_usage(&env, &session_id, &participant, 35000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_STATISTICAL_ANALYSIS);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -603,7 +610,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "statistical_analysis"),
             &session_id,
-            35000,
+            GAS_STATISTICAL_ANALYSIS,
             encrypted_data,
         );
 
@@ -652,7 +659,7 @@ impl MPCManager {
         let model_hash = env.crypto().sha256(&combined_data);
 
         // Track gas usage
-        Self::track_gas_usage(&env, &session_id, &participant, 45000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_ML_TRAINING);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -660,7 +667,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "ml_training"),
             &session_id,
-            45000,
+            GAS_ML_TRAINING,
             combined_data,
         );
 

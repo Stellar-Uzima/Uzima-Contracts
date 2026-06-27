@@ -544,10 +544,6 @@ impl ReputationAccessControl {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin == *caller {
-            Ok(())
-        } else {
-            Err(Error::NotAuthorized)
-        }
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 }

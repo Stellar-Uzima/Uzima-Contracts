@@ -3,7 +3,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
-    String, Vec,
+    String, Vec, Symbol
 };
 
 #[derive(Clone, PartialEq)]
@@ -241,7 +241,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(id), &empty);
-        env.events().publish((symbol_short!("RndStart"),), id);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
         Ok(id)
     }
 
@@ -321,7 +321,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
-        env.events().publish((symbol_short!("AggStart"),), round_id);
+        env.events().publish((Symbol::new(&env, "agg_start"),), round_id);
         Ok(true)
     }
 

@@ -189,7 +189,7 @@ impl PredictiveAnalyticsContract {
         }
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.events().publish((symbol_short!("CfgUpdate"),), true);
+        env.events().publish((Symbol::new(&env, "cfg_update"),), true);
 
         Ok(true)
     }

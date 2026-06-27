@@ -2,6 +2,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
+    Symbol,
 };
 
 #[derive(Clone)]
@@ -127,7 +128,7 @@ impl AiAnalyticsContract {
         };
 
         env.storage().instance().set(&DataKey::Round(id), &round);
-        env.events().publish((symbol_short!("RndStart"),), id);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
         Ok(id)
     }
 

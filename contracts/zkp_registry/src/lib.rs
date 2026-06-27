@@ -9,6 +9,34 @@ use soroban_sdk::{
     String, Symbol, Vec,
 };
 
+// Named constants for validation limits
+/// Maximum number of public inputs allowed for a circuit
+const MAX_PUBLIC_INPUTS: u32 = 50;
+/// Maximum number of private inputs allowed for a circuit
+const MAX_PRIVATE_INPUTS: u32 = 100;
+/// Maximum number of constraints allowed for a circuit
+const MAX_CONSTRAINTS: u32 = 10000;
+/// Maximum verification gas cost allowed
+const MAX_VERIFICATION_GAS: u64 = 100000;
+/// Maximum proof data size in bytes
+const MAX_PROOF_DATA_SIZE: u32 = 10000;
+/// Estimated verification cost for Poseidon-based SNARK proof
+const COST_POSEIDON: u64 = 50000;
+/// Estimated verification cost for MiMC-based SNARK proof
+const COST_MIMC: u64 = 45000;
+/// Estimated verification cost for SHA256-based SNARK proof
+const COST_SHA256: u64 = 80000;
+/// Estimated verification cost for Rescue-based SNARK proof
+const COST_RESCUE: u64 = 55000;
+/// Estimated verification cost for STARK proof
+const COST_STARK: u64 = 90000;
+/// Estimated verification cost for Bulletproof proof
+const COST_BULLETPROOF: u64 = 30000;
+/// Estimated verification cost for Pedersen commitment
+const COST_PEDERSEN: u64 = 20000;
+/// Estimated verification cost for Recursive proof
+const COST_RECURSIVE: u64 = 95000;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -279,7 +307,7 @@ impl ZKPRegistry {
         Self::require_initialized(&env)?;
 
         // Validate circuit parameters
-        if num_public_inputs > 50 || num_private_inputs > 100 || num_constraints > 10000 {
+        if num_public_inputs > MAX_PUBLIC_INPUTS || num_private_inputs > MAX_PRIVATE_INPUTS || num_constraints > MAX_CONSTRAINTS {
             return Err(Error::InvalidCircuit);
         }
 
@@ -326,12 +354,12 @@ impl ZKPRegistry {
         Self::require_initialized(&env)?;
 
         // Check gas limit
-        if verification_gas > 100000 {
+        if verification_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
         // Validate proof data size
-        if proof_data.len() > 10000 {
+        if proof_data.len() > MAX_PROOF_DATA_SIZE {
             return Err(Error::ProofTooLarge);
         }
 
@@ -460,7 +488,7 @@ impl ZKPRegistry {
         }
 
         // Check gas limit
-        if verification_gas > 100000 {
+        if verification_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
@@ -567,7 +595,7 @@ impl ZKPRegistry {
         }
 
         // Check gas limit
-        if total_gas > 100000 {
+        if total_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
@@ -703,26 +731,26 @@ impl ZKPRegistry {
         }
 
         // Check public inputs are reasonable
-        if proof.public_inputs.len() > 50 {
+        if proof.public_inputs.len() > MAX_PUBLIC_INPUTS {
             return Ok(false);
         }
 
         // Simulate verification based on proof type and hash function
         let verification_cost = match proof.proof_type {
             ZKPType::SNARK => match proof.hash_function {
-                ZKPHashFunction::Poseidon => 50000,
-                ZKPHashFunction::MiMC => 45000,
-                ZKPHashFunction::SHA256 => 80000,
-                ZKPHashFunction::Rescue => 55000,
+                ZKPHashFunction::Poseidon => COST_POSEIDON,
+                ZKPHashFunction::MiMC => COST_MIMC,
+                ZKPHashFunction::SHA256 => COST_SHA256,
+                ZKPHashFunction::Rescue => COST_RESCUE,
             },
-            ZKPType::STARK => 90000,
-            ZKPType::Bulletproof => 30000,
-            ZKPType::PedersenCommitment => 20000,
-            ZKPType::Recursive => 95000,
+            ZKPType::STARK => COST_STARK,
+            ZKPType::Bulletproof => COST_BULLETPROOF,
+            ZKPType::PedersenCommitment => COST_PEDERSEN,
+            ZKPType::Recursive => COST_RECURSIVE,
         };
 
         // Check if verification cost is within acceptable range
-        Ok(verification_cost <= 100000)
+        Ok(verification_cost <= MAX_VERIFICATION_GAS)
     }
 
     /// Internal range proof verification

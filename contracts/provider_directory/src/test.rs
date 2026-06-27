@@ -34,7 +34,7 @@ fn test_profile_management() {
     client.initialize(&admin, &identity_registry);
 
     let name = String::from_str(&env, "Dr. Smith");
-    let specialties = vec![&env, Symbol::new(&env, "Cardiology"), Symbol::new(&env, "InternalMedicine")];
+    let specialties = vec![&env, Symbol::new(&env, "cardiology"), Symbol::new(&env, "internal_medicine")];
     let bio = String::from_str(&env, "Experienced cardiologist with 10 years experience.");
     let location = String::from_str(&env, "New York, NY");
     let contact = String::from_str(&env, "drsmith@example.com");
@@ -68,8 +68,8 @@ fn test_search_by_specialty() {
     let client = ProviderDirectoryContractClient::new(&env, &contract_id);
     client.initialize(&admin, &identity_registry);
 
-    let cardiology = Symbol::new(&env, "Cardiology");
-    let neurology = Symbol::new(&env, "Neurology");
+    let cardiology = Symbol::new(&env, "cardiology");
+    let neurology = Symbol::new(&env, "neurology");
 
     client.update_profile(
         &p1,

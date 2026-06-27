@@ -198,7 +198,7 @@ impl CrossChainIdentityContract {
             .set(&DataKey::IdentityTtl, &DEFAULT_IDENTITY_TTL);
 
         env.events().publish(
-            (Symbol::new(&env, "IdentityContractInitialized"),),
+            (Symbol::new(&env, "identity_contract_initialized"),),
             (admin.clone(),),
         );
 
@@ -232,7 +232,7 @@ impl CrossChainIdentityContract {
             .set(&DataKey::Validator(validator_address.clone()), &validator);
 
         env.events()
-            .publish((Symbol::new(&env, "ValidatorAdded"),), (validator_address,));
+            .publish((Symbol::new(&env, "validator_added"),), (validator_address,));
 
         Ok(true)
     }
@@ -255,7 +255,7 @@ impl CrossChainIdentityContract {
             env.storage().persistent().set(&key, &validator);
 
             env.events().publish(
-                (Symbol::new(&env, "ValidatorDeactivated"),),
+                (Symbol::new(&env, "validator_deactivated"),),
                 (validator_address,),
             );
 
@@ -373,7 +373,7 @@ impl CrossChainIdentityContract {
             .set(&DataKey::Request(request_id), &request);
 
         env.events().publish(
-            (Symbol::new(&env, "VerificationRequested"),),
+            (Symbol::new(&env, "verification_requested"),),
             (stellar_address, external_chain, request_id),
         );
 
@@ -446,7 +446,7 @@ impl CrossChainIdentityContract {
             Self::create_verified_identity(&env, &request)?;
 
             env.events().publish(
-                (Symbol::new(&env, "VerificationApproved"),),
+                (Symbol::new(&env, "verification_approved"),),
                 (
                     request.stellar_address.clone(),
                     request.external_chain.clone(),
@@ -458,7 +458,7 @@ impl CrossChainIdentityContract {
         env.storage().persistent().set(&req_key, &request);
 
         env.events().publish(
-            (Symbol::new(&env, "AttestationAdded"),),
+            (Symbol::new(&env, "attestation_added"),),
             (validator, request_id, is_valid),
         );
 
@@ -489,7 +489,7 @@ impl CrossChainIdentityContract {
             env.storage().persistent().set(&identity_key, &identity);
 
             env.events().publish(
-                (Symbol::new(&env, "IdentityRevoked"),),
+                (Symbol::new(&env, "identity_revoked"),),
                 (stellar_address, external_chain),
             );
 
@@ -544,7 +544,7 @@ impl CrossChainIdentityContract {
             .set(&DataKey::Sync(sync_id), &sync);
 
         env.events().publish(
-            (Symbol::new(&env, "SyncInitiated"),),
+            (Symbol::new(&env, "sync_initiated"),),
             (stellar_address, source_chain, dest_chain, sync_id),
         );
 
@@ -576,7 +576,7 @@ impl CrossChainIdentityContract {
         env.storage().persistent().set(&sync_key, &sync);
 
         env.events()
-            .publish((Symbol::new(&env, "SyncStatusUpdated"),), (sync_id, status));
+            .publish((Symbol::new(&env, "sync_status_updated"),), (sync_id, status));
 
         Ok(true)
     }
@@ -731,7 +731,7 @@ impl CrossChainIdentityContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "IdentityVerified"),),
+            (Symbol::new(&env, "identity_verified"),),
             (
                 request.stellar_address.clone(),
                 request.external_chain.clone(),
