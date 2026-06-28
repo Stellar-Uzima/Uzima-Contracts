@@ -63,8 +63,10 @@ pub struct ZkVerifierContract;
 #[contractimpl]
 impl ZkVerifierContract {
     pub fn initialize(env: Env, admin: Address, default_ttl: u64) -> Result<(), Error> {
-        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::AlreadyInitialized);
+        }
         if !(MIN_DEFAULT_TTL..=MAX_DEFAULT_TTL).contains(&default_ttl) {
             return Err(Error::InvalidInput);
         }

@@ -322,8 +322,10 @@ impl Fido2AuthenticatorContract {
     /// * `rp_id_hash` — SHA-256 of the relying party identifier string
     ///                  (e.g., `sha256(b"uzima.health")`).
     pub fn initialize(env: Env, admin: Address, rp_id_hash: BytesN<32>) -> Result<(), Error> {
-        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::AlreadyInitialized);
+        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()

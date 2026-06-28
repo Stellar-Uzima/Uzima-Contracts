@@ -134,7 +134,9 @@ impl ReputationAccessControl {
         admin: Address,
         _reputation_contract: Address,
     ) -> Result<(), Error> {
-        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
+        if env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::AlreadyInitialized);
+        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Initialized, &true);
