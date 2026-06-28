@@ -13,6 +13,9 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
+/// Maximum key length in bytes (1 MiB, supports McEliece public keys)
+const MAX_KEY_LENGTH: u32 = 1_048_576;
+
 // =============================================================================
 // Types
 // =============================================================================
@@ -310,7 +313,7 @@ impl CryptoRegistry {
             return Err(Error::InvalidKey);
         }
         // McEliece public keys are large, increase limit.
-        if len > 1048576 {
+        if len > MAX_KEY_LENGTH {
             return Err(Error::InvalidKeyLength);
         }
 

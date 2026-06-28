@@ -386,7 +386,7 @@ impl MedicalRecordBackupContract {
         }
 
         env.storage().persistent().set(&DataKey::Policy, &policy);
-        env.events().publish((symbol_short!("BKP_POL"),), caller);
+        env.events().publish((symbol_short!("bkp_pol"),), caller);
         Ok(true)
     }
 
@@ -671,7 +671,7 @@ impl MedicalRecordBackupContract {
             .set(&DataKey::Artifact(request.artifact_id), &artifact);
 
         env.events().publish(
-            (symbol_short!("BKP_REST"),),
+            (symbol_short!("bkp_rest"),),
             (request_id, request.artifact_id),
         );
         Ok(artifact.snapshot_ref)
@@ -983,7 +983,7 @@ impl MedicalRecordBackupContract {
             .instance()
             .set(&NEXT_RUN, &now.saturating_add(policy.interval_seconds));
         env.events().publish(
-            (symbol_short!("BKP_RUN"),),
+            (symbol_short!("bkp_run"),),
             (artifact_id, target_ids.len(), region_count),
         );
 

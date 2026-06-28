@@ -181,7 +181,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::ProposalCount, &0u64);
 
         // Emit initialization event
-        env.events().publish((symbol_short!("INIT"),), admin);
+        env.events().publish((symbol_short!("init"),), admin);
 
         Ok(())
     }
@@ -498,7 +498,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit emergency halt event
-        env.events().publish((symbol_short!("EMERGENCY"),), caller);
+        env.events().publish((symbol_short!("emergency"),), caller);
 
         Ok(())
     }
@@ -522,7 +522,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit resume event
-        env.events().publish((symbol_short!("RESUMED"),), caller);
+        env.events().publish((symbol_short!("resumed"),), caller);
 
         Ok(())
     }

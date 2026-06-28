@@ -881,10 +881,7 @@ impl Fido2AuthenticatorContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if *caller != admin {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
     /// Derives a 32-byte pseudorandom challenge from ledger state and the user address.

@@ -141,10 +141,7 @@ impl PharmaSupplyChainContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin != *caller {
-            return Err(Error::Unauthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::Unauthorized)
     }
 
     fn next_counter(env: &Env, key: &DataKey) -> u64 {

@@ -4,7 +4,7 @@
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
-    BytesN, Env, String, Vec,
+    BytesN, Env, String, Vec, Symbol
 };
 
 #[derive(Clone)]
@@ -330,7 +330,7 @@ impl HealthcareAnalyticsDashboardContract {
             .instance()
             .set(&DataKey::DataLakePartitionCounter, &0u64);
 
-        env.events().publish((symbol_short!("DashInit"),), true);
+        env.events().publish((Symbol::new(&env, "dash_init"),), true);
         Ok(true)
     }
 
@@ -828,7 +828,7 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage()
             .instance()
             .set(&DataKey::Template(id), &template);
-        env.events().publish((symbol_short!("TplCreate"),), id);
+        env.events().publish((Symbol::new(&env, "tpl_create"),), id);
         Ok(id)
     }
 

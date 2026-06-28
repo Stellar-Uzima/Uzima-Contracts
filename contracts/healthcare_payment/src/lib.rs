@@ -650,7 +650,7 @@ impl HealthcarePayment {
             .set(&DataKey::LatestEligibilityByPolicy(policy_id), &check_id);
 
         env.events().publish(
-            (symbol_short!("ELIG"),),
+            (symbol_short!("elig"),),
             (policy_id, eligibility.eligible, eligibility.coverage_bps),
         );
 
@@ -770,7 +770,7 @@ impl HealthcarePayment {
             .set(&DataKey::ClaimSubmission(claim_id), &submission);
 
         env.events().publish(
-            (symbol_short!("CLAIM_EDI"),),
+            (symbol_short!("claim_edi"),),
             (claim_id, coverage_policy_id, submission.status as u32),
         );
 
@@ -809,7 +809,7 @@ impl HealthcarePayment {
             .persistent()
             .set(&DataKey::CoverageEnrollment(enrollment_id), &enrollment);
         env.events().publish(
-            (symbol_short!("COV_834"),),
+            (symbol_short!("cov_834"),),
             (coverage_policy_id, enrollment_id),
         );
 
@@ -1000,7 +1000,7 @@ impl HealthcarePayment {
         }
 
         env.events().publish(
-            (symbol_short!("EOB"),),
+            (symbol_short!("eob"),),
             (claim_id, insurer_paid, patient_responsibility),
         );
 
@@ -1073,7 +1073,7 @@ impl HealthcarePayment {
         }
 
         env.events().publish(
-            (symbol_short!("CLAIM_PD"),),
+            (symbol_short!("claim_pd"),),
             (claim_id, claim.provider, provider_amount),
         );
 

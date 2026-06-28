@@ -163,7 +163,7 @@ impl AuditForensicsContract {
             .persistent()
             .set(&DataKey::Rule(rule_id), &rule);
         env.events()
-            .publish((symbol_short!("AUDIT"), symbol_short!("RULE")), rule_id);
+            .publish((symbol_short!("audit"), symbol_short!("RULE")), rule_id);
 
         rule_id
     }
@@ -220,7 +220,7 @@ impl AuditForensicsContract {
             .set(&DataKey::NextAuditId, &id.saturating_add(1));
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("LOG")),
+            (symbol_short!("audit"), symbol_short!("log")),
             (id, entry.timestamp, entry.action),
         );
 
@@ -301,7 +301,7 @@ impl AuditForensicsContract {
 
         Self::log_internal(&env, caller, AuditAction::AnomalyDetected, None);
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("RUN")),
+            (symbol_short!("audit"), symbol_short!("run")),
             (execution_id, execution.duration_minutes, execution.passed),
         );
 
@@ -506,7 +506,7 @@ impl AuditForensicsContract {
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("COMPRESS")),
+            (symbol_short!("audit"), symbol_short!("compress")),
             (before_timestamp, count, last_hash.clone()),
         );
 
@@ -518,7 +518,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("ARCHIVE")),
+            (symbol_short!("audit"), symbol_short!("archive")),
             archive_ref,
         );
     }
@@ -533,7 +533,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("XCSYNC")),
+            (symbol_short!("audit"), symbol_short!("xcsync")),
             (target_chain, audit_root),
         );
     }
@@ -550,7 +550,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("SHARE")),
+            (symbol_short!("audit"), symbol_short!("share")),
             (regulator, filter_start, filter_end, proof_ref),
         );
 

@@ -778,10 +778,7 @@ impl HomomorphicRegistry {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if &admin != caller {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
     fn require_active_context(env: &Env, context_id: &BytesN<32>) -> Result<HEContext, Error> {
