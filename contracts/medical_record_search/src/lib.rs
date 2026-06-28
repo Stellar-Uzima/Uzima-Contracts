@@ -159,6 +159,21 @@ pub enum Error {
     CacheMiss = 8,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::RecordNotIndexed => write!(f, "record not indexed"),
+            Error::QueryTooLarge => write!(f, "query too large"),
+            Error::CacheMiss => write!(f, "cache miss"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalRecordSearchContract;
 
@@ -756,6 +771,7 @@ impl MedicalRecordSearchContract {
         current
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&ADMIN) {
             return Err(Error::NotInitialized);
@@ -763,6 +779,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -776,6 +793,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -797,6 +815,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);

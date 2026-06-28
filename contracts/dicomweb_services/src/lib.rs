@@ -239,6 +239,28 @@ pub enum Error {
     QueryError = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::StudyNotFound => write!(f, "study not found"),
+            Error::SeriesNotFound => write!(f, "series not found"),
+            Error::InstanceNotFound => write!(f, "instance not found"),
+            Error::BulkDataNotFound => write!(f, "bulk data not found"),
+            Error::CacheMiss => write!(f, "cache miss"),
+            Error::ConcurrencyLimitExceeded => write!(f, "concurrency limit exceeded"),
+            Error::InvalidTransferSyntax => write!(f, "invalid transfer syntax"),
+            Error::InvalidDicomJson => write!(f, "invalid dicom json"),
+            Error::StorageError => write!(f, "storage error"),
+            Error::QueryError => write!(f, "query error"),
+        }
+    }
+}
+
 #[contract]
 pub struct DicomwebServicesContract;
 
@@ -862,6 +884,7 @@ impl DicomwebServicesContract {
     }
 
     // Helper Functions
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -874,6 +897,7 @@ impl DicomwebServicesContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -886,6 +910,7 @@ impl DicomwebServicesContract {
         Ok(())
     }
 
+    #[must_use]
     fn check_concurrency(env: &Env) -> Result<(), Error> {
         let mut tracker: ConcurrencyTracker = env
             .storage()
@@ -1831,6 +1856,7 @@ impl DicomwebServicesContract {
     }
 
     // Helper Functions
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1840,6 +1866,7 @@ impl DicomwebServicesContract {
         common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -1852,6 +1879,7 @@ impl DicomwebServicesContract {
         Ok(())
     }
 
+    #[must_use]
     fn check_concurrency(env: &Env) -> Result<(), Error> {
         let mut tracker: ConcurrencyTracker = env
             .storage()

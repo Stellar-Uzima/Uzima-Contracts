@@ -33,6 +33,21 @@ pub enum MentalHealthError {
     InvalidInput = 8,
 }
 
+impl core::fmt::Display for MentalHealthError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            MentalHealthError::AlreadyInitialized => write!(f, "already initialized"),
+            MentalHealthError::NotInitialized => write!(f, "not initialized"),
+            MentalHealthError::NotAdmin => write!(f, "not admin"),
+            MentalHealthError::Paused => write!(f, "paused"),
+            MentalHealthError::NotEnrolled => write!(f, "not enrolled"),
+            MentalHealthError::CommunityNotFound => write!(f, "community not found"),
+            MentalHealthError::AlreadyMember => write!(f, "already member"),
+            MentalHealthError::InvalidInput => write!(f, "invalid input"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum CrisisSeverity {
@@ -401,6 +416,7 @@ impl MentalHealthSupportContract {
 }
 
 impl MentalHealthSupportContract {
+    #[must_use]
     fn require_init(env: &Env) -> Result<(), MentalHealthError> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(MentalHealthError::NotInitialized);
@@ -408,6 +424,7 @@ impl MentalHealthSupportContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), MentalHealthError> {
         if env
             .storage()
@@ -420,6 +437,7 @@ impl MentalHealthSupportContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), MentalHealthError> {
         Self::require_init(env)?;
         let admin: Address = env
@@ -434,6 +452,7 @@ impl MentalHealthSupportContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_enrolled(env: &Env, patient: &Address) -> Result<(), MentalHealthError> {
         if !env
             .storage()
@@ -531,6 +550,7 @@ impl MentalHealthSupportContract {
         Ok(())
     }
 
+    #[must_use]
     fn enqueue_crisis(env: &Env, crisis_id: u64) -> Result<(), MentalHealthError> {
         let mut q: Vec<u64> = env
             .storage()

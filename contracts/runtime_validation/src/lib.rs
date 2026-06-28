@@ -377,6 +377,7 @@ impl RuntimeValidation {
             .unwrap_or(0)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

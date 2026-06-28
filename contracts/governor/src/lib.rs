@@ -27,8 +27,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::needless_return)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod benchmarks;
 
@@ -86,6 +84,7 @@ fn now(env: &Env) -> u64 {
 
 /// Read GovernorConfig from instance storage (cheap, cached by the host).
 /// Instance storage is cheaper than persistent for frequently-read values.
+#[must_use]
 fn get_cfg(env: &Env) -> Result<GovernorConfig, Error> {
     env.storage()
         .instance()

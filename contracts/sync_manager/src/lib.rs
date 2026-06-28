@@ -111,6 +111,23 @@ pub enum Error {
     TargetUnavailable = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::SyncOperationNotFound => write!(f, "sync operation not found"),
+            Error::SyncFailed => write!(f, "sync failed"),
+            Error::ConflictDetected => write!(f, "conflict detected"),
+            Error::MaxRetriesExceeded => write!(f, "max retries exceeded"),
+            Error::InconsistentState => write!(f, "inconsistent state"),
+            Error::TargetUnavailable => write!(f, "target unavailable"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
@@ -569,6 +586,7 @@ impl SyncManager {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -581,6 +599,7 @@ impl SyncManager {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()

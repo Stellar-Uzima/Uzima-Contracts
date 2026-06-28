@@ -88,6 +88,7 @@ fn new_manage_user_rbac_flow(
     )
 }
 
+#[must_use]
 fn old_history_gate(env: &Env, caller: &Address, patient: &Address) -> Result<(), Error> {
     if caller != patient
         && !MedicalRecordsContract::is_admin(env, caller)
@@ -98,6 +99,7 @@ fn old_history_gate(env: &Env, caller: &Address, patient: &Address) -> Result<()
     Ok(())
 }
 
+#[must_use]
 fn new_history_gate(env: &Env, caller: &Address, patient: &Address) -> Result<(), Error> {
     let access_ctx = if caller == patient {
         None

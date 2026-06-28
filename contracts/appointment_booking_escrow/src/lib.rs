@@ -1,7 +1,5 @@
 #![no_std]
 //! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -673,6 +671,7 @@ impl AppointmentBookingEscrow {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);

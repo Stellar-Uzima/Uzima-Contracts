@@ -1,6 +1,5 @@
 #![no_std]
 //! clinical_trial - Healthcare smart contract on Stellar blockchain.
-#![allow(dead_code)]
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::absurd_extreme_comparisons)]
 
@@ -21,6 +20,22 @@ pub enum Error {
     InvalidMaxParticipants = 7,
     InvalidDescriptionRef = 8,
     InvalidSeverity = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::ProtocolNotFound => write!(f, "protocol not found"),
+            Error::TrialFull => write!(f, "trial full"),
+            Error::InvalidTitle => write!(f, "invalid title"),
+            Error::InvalidMetadataRef => write!(f, "invalid metadata ref"),
+            Error::InvalidName => write!(f, "invalid name"),
+            Error::InvalidConsentRef => write!(f, "invalid consent ref"),
+            Error::InvalidMaxParticipants => write!(f, "invalid max participants"),
+            Error::InvalidDescriptionRef => write!(f, "invalid description ref"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+        }
+    }
 }
 
 // ==================== VALIDATION CONSTANTS ====================
@@ -48,6 +63,7 @@ const MAX_SEVERITY: u32 = 10;
 // ==================== VALIDATION FUNCTIONS ====================
 
 /// Validates that a title string has appropriate length
+#[must_use]
 fn validate_title(title: &String) -> Result<(), Error> {
     let len = title.len();
     if len == 0 || len < MIN_TITLE_LENGTH || len > MAX_TITLE_LENGTH {
@@ -57,6 +73,7 @@ fn validate_title(title: &String) -> Result<(), Error> {
 }
 
 /// Validates that a name string has appropriate length
+#[must_use]
 fn validate_name(name: &String) -> Result<(), Error> {
     let len = name.len();
     if len == 0 || len < MIN_NAME_LENGTH || len > MAX_NAME_LENGTH {
@@ -66,6 +83,7 @@ fn validate_name(name: &String) -> Result<(), Error> {
 }
 
 /// Validates that a reference string (IPFS CID, etc.) has appropriate length
+#[must_use]
 fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error> {
     let len = reference.len();
     if len == 0 || len < MIN_REF_LENGTH || len > MAX_REF_LENGTH {
@@ -75,6 +93,7 @@ fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error
 }
 
 /// Validates that max_participants is positive
+#[must_use]
 fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
     if max_participants == 0 {
         return Err(Error::InvalidMaxParticipants);
@@ -83,6 +102,7 @@ fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
 }
 
 /// Validates severity level is within acceptable range
+#[must_use]
 fn validate_severity(severity: u32) -> Result<(), Error> {
     if severity < MIN_SEVERITY || severity > MAX_SEVERITY {
         return Err(Error::InvalidSeverity);

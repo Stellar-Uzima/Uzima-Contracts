@@ -27,6 +27,16 @@ pub enum Error {
     NotAuthorized = 3,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+        }
+    }
+}
+
 #[contract]
 pub struct AntiMoneyLaundering;
 
@@ -321,6 +331,7 @@ impl AntiMoneyLaundering {
 }
 
 impl upgradeability::migration::Migratable for AntiMoneyLaundering {
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         if from_version < 1 {
             let admin: Address = env
@@ -333,6 +344,7 @@ impl upgradeability::migration::Migratable for AntiMoneyLaundering {
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         let next_report_id = env.storage().instance().get(&DataKey::NextReportId).unwrap_or(0u64);
         let stats = env

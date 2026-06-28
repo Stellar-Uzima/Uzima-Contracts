@@ -316,6 +316,7 @@ impl DeprecationFramework {
             .has(&DataKey::DeprecatedContract(contract_id))
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

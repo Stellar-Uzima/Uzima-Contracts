@@ -29,6 +29,17 @@ pub enum Error {
     ReportNotFound = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::ReportNotFound => write!(f, "report not found"),
+        }
+    }
+}
+
 #[contract]
 pub struct OnChainForensics;
 
@@ -223,6 +234,7 @@ impl OnChainForensics {
     }
 
     /// Private helper to get the administrator
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

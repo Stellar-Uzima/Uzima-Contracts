@@ -105,6 +105,24 @@ pub enum Error {
     ExpiredMessage = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidProof => write!(f, "invalid proof"),
+            Error::ProofAlreadyVerified => write!(f, "proof already verified"),
+            Error::ProofNotFound => write!(f, "proof not found"),
+            Error::ReplayDetected => write!(f, "replay detected"),
+            Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
+            Error::ArithmeticOverflow => write!(f, "arithmetic overflow"),
+            Error::InvalidMerklePath => write!(f, "invalid merkle path"),
+            Error::ExpiredMessage => write!(f, "expired message"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -391,6 +409,7 @@ impl CrossChainEnhancements {
 
     // Internal helper functions
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())

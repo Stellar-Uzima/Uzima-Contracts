@@ -2,8 +2,6 @@
 //! anomaly_detector - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -198,6 +196,27 @@ pub enum Error {
     InvalidFeatureCount = 12,
     InvalidScore = 13,
     BatchTooLarge = 14,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::AlertNotFound => write!(f, "alert not found"),
+            Error::FeatureCountMismatch => write!(f, "feature count mismatch"),
+            Error::InvalidWeight => write!(f, "invalid weight"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::AlertAlreadyResolved => write!(f, "alert already resolved"),
+            Error::DuplicateFederatedUpdate => write!(f, "duplicate federated update"),
+            Error::InvalidFeatureCount => write!(f, "invalid feature count"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+        }
+    }
 }
 
 // ==================== Contract ====================
@@ -1059,6 +1078,7 @@ impl AnomalyDetectorContract {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1068,6 +1088,7 @@ impl AnomalyDetectorContract {
         common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_authorized(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if let Some(a) = admin {
@@ -1086,6 +1107,7 @@ impl AnomalyDetectorContract {
         Err(Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()

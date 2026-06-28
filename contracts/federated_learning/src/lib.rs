@@ -237,6 +237,37 @@ pub enum Error {
     Overflow               = 24,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::RoundNotOpen => write!(f, "round not open"),
+            Error::RoundNotAggregating => write!(f, "round not aggregating"),
+            Error::RoundFinalized => write!(f, "round finalized"),
+            Error::NotEnoughParticipants => write!(f, "not enough participants"),
+            Error::TooManyParticipants => write!(f, "too many participants"),
+            Error::DuplicateUpdate => write!(f, "duplicate update"),
+            Error::InvalidDPParam => write!(f, "invalid d p param"),
+            Error::InstitutionNotFound => write!(f, "institution not found"),
+            Error::InstitutionNotActive => write!(f, "institution not active"),
+            Error::InstitutionAlreadyRegistered => write!(f, "institution already registered"),
+            Error::LowReputation => write!(f, "low reputation"),
+            Error::InvalidParameter => write!(f, "invalid parameter"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::ValidationFailed => write!(f, "validation failed"),
+            Error::PrivacyBudgetExceeded => write!(f, "privacy budget exceeded"),
+            Error::PoisoningAttackDetected => write!(f, "poisoning attack detected"),
+            Error::CommunicationBudgetExceeded => write!(f, "communication budget exceeded"),
+            Error::VerificationFailed => write!(f, "verification failed"),
+            Error::FrameworkNotSupported => write!(f, "framework not supported"),
+            Error::ContributionQualityLow => write!(f, "contribution quality low"),
+            Error::Overflow => write!(f, "overflow"),
+        }
+    }
+}
+
 #[contract]
 pub struct FederatedLearningContract;
 
@@ -254,6 +285,7 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
+    #[must_use]
     fn check_auth(env: &Env, caller: &Address, key: &DataKey) -> Result<(), Error> {
         let stored: Address = env
             .storage()

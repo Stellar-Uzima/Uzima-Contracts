@@ -81,7 +81,71 @@ pub enum Error {
     InvalidParticipantCount = 1834,
 }
 
-#[allow(dead_code)]
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+            Error::NotAICoordinator => write!(f, "not a i coordinator"),
+            Error::EmergencyAccessExpired => write!(f, "emergency access expired"),
+            Error::InvalidPagination => write!(f, "invalid pagination"),
+            Error::InputTooLong => write!(f, "input too long"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::InvalidDataRefLength => write!(f, "invalid data ref length"),
+            Error::InvalidDataRefCharset => write!(f, "invalid data ref charset"),
+            Error::InvalidDiagnosisLength => write!(f, "invalid diagnosis length"),
+            Error::InvalidTreatmentLength => write!(f, "invalid treatment length"),
+            Error::InvalidPurposeLength => write!(f, "invalid purpose length"),
+            Error::InvalidTagLength => write!(f, "invalid tag length"),
+            Error::InvalidModelVersionLength => write!(f, "invalid model version length"),
+            Error::InvalidExplanationLength => write!(f, "invalid explanation length"),
+            Error::InvalidTreatmentTypeLength => write!(f, "invalid treatment type length"),
+            Error::InvalidAddress => write!(f, "invalid address"),
+            Error::SameAddress => write!(f, "same address"),
+            Error::InvalidBatch => write!(f, "invalid batch"),
+            Error::NumberOutOfBounds => write!(f, "number out of bounds"),
+            Error::InvalidCategory => write!(f, "invalid category"),
+            Error::EmptyTreatment => write!(f, "empty treatment"),
+            Error::EmptyDiagnosis => write!(f, "empty diagnosis"),
+            Error::EmptyTag => write!(f, "empty tag"),
+            Error::EmptyDataRef => write!(f, "empty data ref"),
+            Error::ProposalAlreadyExecuted => write!(f, "proposal already executed"),
+            Error::TimelockNotElapsed => write!(f, "timelock not elapsed"),
+            Error::NotEnoughApproval => write!(f, "not enough approval"),
+            Error::CryptoRegistryNotSet => write!(f, "crypto registry not set"),
+            Error::EncryptionRequired => write!(f, "encryption required"),
+            Error::IdentityRegistryNotSet => write!(f, "identity registry not set"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::EmergencyAccessNotFound => write!(f, "emergency access not found"),
+            Error::DIDNotFound => write!(f, "d i d not found"),
+            Error::DIDNotActive => write!(f, "d i d not active"),
+            Error::RecordAlreadySynced => write!(f, "record already synced"),
+            Error::StorageFull => write!(f, "storage full"),
+            Error::InvalidCredential => write!(f, "invalid credential"),
+            Error::MissingRequiredCredential => write!(f, "missing required credential"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+            Error::CredentialRevoked => write!(f, "credential revoked"),
+            Error::CrossChainAccessDenied => write!(f, "cross chain access denied"),
+            Error::CrossChainTimeout => write!(f, "cross chain timeout"),
+            Error::InvalidChain => write!(f, "invalid chain"),
+            Error::CrossChainNotEnabled => write!(f, "cross chain not enabled"),
+            Error::CrossChainContractsNotSet => write!(f, "cross chain contracts not set"),
+            Error::AIConfigNotSet => write!(f, "a i config not set"),
+            Error::InvalidAIScore => write!(f, "invalid a i score"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::InvalidDPEpsilon => write!(f, "invalid d p epsilon"),
+            Error::InvalidParticipantCount => write!(f, "invalid participant count"),
+        }
+    }
+}
+
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),

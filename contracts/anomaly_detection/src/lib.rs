@@ -4,8 +4,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]
-#![allow(dead_code)]
-
 use common_error::{get_suggestion as common_suggestion, CommonError};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
@@ -101,6 +99,23 @@ pub enum Error {
     AlreadyInitialized = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ConfigNotSet => write!(f, "config not set"),
+            Error::Disabled => write!(f, "disabled"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::NotWhitelisted => write!(f, "not whitelisted"),
+            Error::AlertNotFound => write!(f, "alert not found"),
+            Error::AlertAlreadyResolved => write!(f, "alert already resolved"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[contract]
 pub struct AnomalyDetectionContract;
 
@@ -135,6 +150,7 @@ impl AnomalyDetectionContract {
         Ok(())
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
         env.storage()
             .instance()
@@ -142,6 +158,7 @@ impl AnomalyDetectionContract {
             .ok_or(Error::ConfigNotSet)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -150,19 +167,12 @@ impl AnomalyDetectionContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_detector(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
         let config = Self::load_config(env)?;
         if config.detector != *caller {
             return Err(Error::NotAuthorized);
         }
-        if !config.enabled {
-            return Err(Error::Disabled);
-        }
-        Ok(config)
-    }
-
-    fn ensure_enabled(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
-        let config = Self::load_config(env)?;
         if !config.enabled {
             return Err(Error::Disabled);
         }

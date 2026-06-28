@@ -298,6 +298,7 @@ impl IoTDeviceManagement {
     // INTERNAL HELPERS
     // ============================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -309,6 +310,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
+    #[must_use]
     fn check_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -321,6 +323,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, required: Role) -> Result<(), Error> {
         let role: Role = env
             .storage()

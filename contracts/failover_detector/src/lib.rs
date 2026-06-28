@@ -99,6 +99,23 @@ pub enum Error {
     RecoveryFailed = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::NodeNotFound => write!(f, "node not found"),
+            Error::FailoverNotFound => write!(f, "failover not found"),
+            Error::NoAvailableTargets => write!(f, "no available targets"),
+            Error::FailoverInProgress => write!(f, "failover in progress"),
+            Error::MaxFailuresReached => write!(f, "max failures reached"),
+            Error::RecoveryFailed => write!(f, "recovery failed"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
@@ -504,6 +521,7 @@ impl FailoverDetector {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -516,6 +534,7 @@ impl FailoverDetector {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()

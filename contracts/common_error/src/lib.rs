@@ -61,8 +61,31 @@ pub enum CommonError {
     UnauthorizedCaller = 18,
 }
 
-#[cfg(test)]
-mod golden_tests;
+impl core::fmt::Display for CommonError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            CommonError::Unknown => write!(f, "unknown"),
+            CommonError::Unauthorized => write!(f, "unauthorized"),
+            CommonError::NotInitialized => write!(f, "not initialized"),
+            CommonError::AlreadyInitialized => write!(f, "already initialized"),
+            CommonError::ContractPaused => write!(f, "contract paused"),
+            CommonError::DeadlineExceeded => write!(f, "deadline exceeded"),
+            CommonError::RateLimitExceeded => write!(f, "rate limit exceeded"),
+            CommonError::InsufficientFunds => write!(f, "insufficient funds"),
+            CommonError::InvalidInput => write!(f, "invalid input"),
+            CommonError::InvalidState => write!(f, "invalid state"),
+            CommonError::NotFound => write!(f, "not found"),
+            CommonError::AccessDenied => write!(f, "access denied"),
+            CommonError::Timeout => write!(f, "timeout"),
+            CommonError::InvalidArgument => write!(f, "invalid argument"),
+            CommonError::ExternalContractNotSet => write!(f, "external contract not set"),
+            CommonError::InvalidData => write!(f, "invalid data"),
+            CommonError::InvalidPayload => write!(f, "invalid payload"),
+            CommonError::DuplicateSubmission => write!(f, "duplicate submission"),
+            CommonError::UnauthorizedCaller => write!(f, "unauthorized caller"),
+        }
+    }
+}
 
 pub fn is_common_error_code(code: u32) -> bool {
     code <= COMMON_ERROR_MAX

@@ -3,8 +3,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::match_like_matches_macro)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -238,6 +236,36 @@ pub enum Error {
     SwapNotFound = 21,
     SwapExpired = 22,
     SwapAlreadyProcessed = 23,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::GrantNotFound => write!(f, "grant not found"),
+            Error::GrantExpired => write!(f, "grant expired"),
+            Error::GrantRevoked => write!(f, "grant revoked"),
+            Error::RequestNotFound => write!(f, "request not found"),
+            Error::RequestExpired => write!(f, "request expired"),
+            Error::RequestAlreadyProcessed => write!(f, "request already processed"),
+            Error::DelegationNotFound => write!(f, "delegation not found"),
+            Error::DelegationExpired => write!(f, "delegation expired"),
+            Error::InsufficientPermissions => write!(f, "insufficient permissions"),
+            Error::EmergencyNotEnabled => write!(f, "emergency not enabled"),
+            Error::EmergencyNotAuthorized => write!(f, "emergency not authorized"),
+            Error::InvalidScope => write!(f, "invalid scope"),
+            Error::InvalidCondition => write!(f, "invalid condition"),
+            Error::AuditRequired => write!(f, "audit required"),
+            Error::SingleUseConsumed => write!(f, "single use consumed"),
+            Error::TimeRestrictionViolated => write!(f, "time restriction violated"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::SwapNotFound => write!(f, "swap not found"),
+            Error::SwapExpired => write!(f, "swap expired"),
+            Error::SwapAlreadyProcessed => write!(f, "swap already processed"),
+        }
+    }
 }
 
 #[contract]
@@ -1016,6 +1044,7 @@ impl CrossChainAccessContract {
 
     // ==================== Internal Helper Functions ====================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1029,6 +1058,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -1041,6 +1071,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn get_and_increment_grant_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1061,6 +1092,7 @@ impl CrossChainAccessContract {
             .unwrap_or(0)
     }
 
+    #[must_use]
     fn get_and_increment_request_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1074,6 +1106,7 @@ impl CrossChainAccessContract {
         Ok(new_count)
     }
 
+    #[must_use]
     fn get_and_increment_audit_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1087,6 +1120,7 @@ impl CrossChainAccessContract {
         Ok(new_count)
     }
 
+    #[must_use]
     fn get_and_increment_swap_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1186,6 +1220,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn create_request_grant(env: &Env, request: &AccessRequest) -> Result<(), Error> {
         let now = env.ledger().timestamp();
         let grant_id = Self::get_and_increment_grant_count(&env)?;

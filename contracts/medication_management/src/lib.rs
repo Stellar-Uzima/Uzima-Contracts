@@ -23,6 +23,24 @@ pub enum Error {
     AutoRefillDisabled = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::MedicationNotFound => write!(f, "medication not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::InvalidData => write!(f, "invalid data"),
+            Error::RefillNotFound => write!(f, "refill not found"),
+            Error::InteractionAlreadyExists => write!(f, "interaction already exists"),
+            Error::DuplicateMedication => write!(f, "duplicate medication"),
+            Error::DoseAlreadyRecorded => write!(f, "dose already recorded"),
+            Error::AutoRefillDisabled => write!(f, "auto refill disabled"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum MedicationSource {
@@ -768,6 +786,7 @@ impl MedicationManagement {
         Self::medication_count(&env)
     }
 
+    #[must_use]
     fn get_config(env: &Env) -> Result<Config, Error> {
         env.storage()
             .instance()
@@ -775,6 +794,7 @@ impl MedicationManagement {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn get_schedule_internal(env: &Env, schedule_id: u64) -> Result<MedicationSchedule, Error> {
         env.storage()
             .persistent()
@@ -803,6 +823,7 @@ impl MedicationManagement {
             .unwrap_or(Vec::new(env))
     }
 
+    #[must_use]
     fn validate_medication_definition(medication: &MedicationDefinition) -> Result<(), Error> {
         if medication.code.is_empty()
             || medication.ndc_code.is_empty()
@@ -816,6 +837,7 @@ impl MedicationManagement {
         Ok(())
     }
 
+    #[must_use]
     fn authorize_catalog_operator(env: &Env, operator: &Address) -> Result<(), Error> {
         let config = Self::get_config(env)?;
         if operator != &config.admin && operator != &config.fda_oracle {

@@ -233,6 +233,7 @@ impl CodeOwnership {
         owned_modules
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
