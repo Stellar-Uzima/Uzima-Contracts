@@ -51,6 +51,7 @@ soroban-sdk = { version = "=21.7.7" }
 soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
 replay_protection = { path = "libs/replay_protection" }
+common_auth = { path = "contracts/common_auth" }
 
 [workspace.package]
 version = "0.1.0"
@@ -58,14 +59,6 @@ edition = "2021"
 authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 repository = "https://github.com/yourusername/soroban-project"
-
-[workspace.dependencies]
-soroban-sdk = { version = "21.7.7" }
-soroban-cli = "21.7.7"
-common_auth = { path = "contracts/common_auth" }
-
-# Force compatible versions to fix stellar-xdr dependency conflicts
-# Note: arbitrary dependencies removed to fix workspace inheritance issues
 
 [profile.release]
 opt-level = "z"
