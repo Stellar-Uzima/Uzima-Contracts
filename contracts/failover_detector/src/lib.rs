@@ -121,7 +121,6 @@ impl core::fmt::Display for Error {
 // ============================================================================
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
-const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const DETECTIONS: Symbol = symbol_short!("DETC");
 const EXECUTIONS: Symbol = symbol_short!("EXEC");
@@ -146,12 +145,9 @@ impl FailoverDetector {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
-        env.storage().instance().set(&INITIALIZED, &true);
         env.storage().instance().set(&NEXT_DETECTION_ID, &1u64);
         env.storage().instance().set(&NEXT_EXECUTION_ID, &1u64);
         env.storage().instance().set(&NEXT_PLAN_ID, &1u64);

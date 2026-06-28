@@ -60,9 +60,7 @@ pub struct ClinicalDecisionSupport;
 impl ClinicalDecisionSupport {
     /// Initialize the CDSS contract with necessary integration addresses.
     pub fn initialize(env: Env, admin: Address, oracle: Address, medical_records: Address) {
-        if env.storage().persistent().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().persistent().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&DataKey::Oracle, &oracle);
         env.storage()

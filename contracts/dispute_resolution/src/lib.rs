@@ -27,6 +27,7 @@ pub struct DisputeResolution;
 #[contractimpl]
 impl DisputeResolution {
     pub fn initialize(env: Env, arbiters: Vec<Address>) {
+        governance_commons::init_guard(&env);
         env.storage()
             .instance()
             .set(&symbol_short!("arbiters"), &arbiters);

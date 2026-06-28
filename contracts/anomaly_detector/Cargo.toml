@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 soroban-sdk.workspace = true
 common_auth.workspace = true
+governance_commons = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

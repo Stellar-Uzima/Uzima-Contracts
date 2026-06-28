@@ -229,10 +229,8 @@ impl MedicalImagingAiContract {
         default_critical_bps: u32,
         default_min_samples: u64,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
         if default_warning_bps <= default_critical_bps || default_warning_bps > 10_000 {
             return Err(Error::InvalidThreshold);
         }

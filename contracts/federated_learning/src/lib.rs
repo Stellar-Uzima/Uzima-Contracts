@@ -274,10 +274,8 @@ pub struct FederatedLearningContract;
 #[contractimpl]
 impl FederatedLearningContract {
     pub fn initialize(env: Env, admin: Address, coordinator: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()

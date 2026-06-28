@@ -108,7 +108,6 @@ impl core::fmt::Display for Error {
 // ============================================================================
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
-const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const NODES: Symbol = symbol_short!("NODES");
 const CONFIG: Symbol = symbol_short!("CFG");
@@ -131,12 +130,9 @@ impl RegionalNodeManager {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
-        env.storage().instance().set(&INITIALIZED, &true);
         env.storage().instance().set(&NEXT_NODE_ID, &1u32);
         env.storage().instance().set(&NEXT_CHECK_ID, &1u64);
 

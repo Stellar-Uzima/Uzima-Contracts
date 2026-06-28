@@ -116,9 +116,8 @@ pub struct ContractVerification;
 impl ContractVerification {
     /// Initialise the verification registry with an admin address.
     pub fn initialize(env: Env, admin: Address) -> Result<(), VerificationError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(VerificationError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env)
+            .map_err(|_| VerificationError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
