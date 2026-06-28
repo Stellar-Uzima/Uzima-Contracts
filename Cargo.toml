@@ -44,6 +44,7 @@ exclude = [
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/contract_behavior_fuzzing",
     "contracts/governance_integration_tests",
+    "contracts/storage-snapshot",
 ] 
 
 [workspace.dependencies]
