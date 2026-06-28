@@ -191,8 +191,10 @@ impl HealthcareDataMarketplace {
         treasury: Address,
         settlement_window_secs: u64,
     ) -> Result<(), Error> {
-        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
+        if env.storage().instance().has(&DataKey::Config) {
+            return Err(Error::AlreadyInitialized);
+        }
         if settlement_window_secs == 0 || settlement_window_secs > MAX_SETTLEMENT_WINDOW_SECS {
             return Err(Error::InvalidSettlementWindow);
         }

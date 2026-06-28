@@ -11,7 +11,6 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = "=21.7.7"
-governance_commons = { path = "../../libs/governance_commons" }
 common_error = { path = "../common_error" }
 patient_consent_management = { path = "../patient_consent_management" }
 upgradeability = { path = "../upgradeability" }
