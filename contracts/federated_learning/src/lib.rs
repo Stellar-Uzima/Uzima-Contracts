@@ -3,8 +3,8 @@
 #![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Map, String, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    String, Vec, Symbol
 };
 
 // Removed unused 'max' to prevent compiler warnings
@@ -362,31 +362,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(id), &empty);
-
-        env.storage().persistent().set(
-            &DataKey::PrivacyMetrics(id),
-            &PrivacyMetrics {
-                epsilon_used: 0,
-                delta_used: 0,
-                noise_scale: cfg.dp_epsilon,
-                clipping_bound: cfg.dp_delta,
-                privacy_budget_remaining: cfg.dp_epsilon * cfg.max_participants,
-                cumulative_privacy_loss: 0,
-            },
-        );
-
-        env.storage().persistent().set(
-            &DataKey::CommunicationMetrics(id),
-            &CommunicationMetrics {
-                total_bytes_sent: 0,
-                total_bytes_received: 0,
-                compression_ratio: 100,
-                latency_ms: 0,
-                protocol_efficiency: 100,
-            },
-        );
-
-        env.events().publish((symbol_short!("RndStart"),), id);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
         Ok(id)
     }
 
@@ -669,14 +645,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
-        env.storage()
-            .persistent()
-            .set(&DataKey::AttackDetection(round_id), &attack_detection);
-
-        env.events().publish(
-            (symbol_short!("AggStart"),),
-            (round_id, round.verification_score),
-        );
+        env.events().publish((Symbol::new(&env, "agg_start"),), round_id);
         Ok(true)
     }
 

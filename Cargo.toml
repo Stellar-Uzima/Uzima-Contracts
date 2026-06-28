@@ -59,6 +59,11 @@ authors = ["Your Name <your.email@example.com>"]
 license = "MIT"
 repository = "https://github.com/yourusername/soroban-project"
 
+[workspace.dependencies]
+soroban-sdk = { version = "21.7.7" }
+soroban-cli = "21.7.7"
+common_auth = { path = "contracts/common_auth" }
+
 # Force compatible versions to fix stellar-xdr dependency conflicts
 # Note: arbitrary dependencies removed to fix workspace inheritance issues
 

@@ -1,112 +1,24 @@
-# Contributing to Uzima Contracts
+# Contributing
 
-Thank you for your interest in contributing to Uzima Contracts! This document provides guidelines and standards for contributing to the project.
+## Event Topic Naming Convention
 
-## Development Workflow
+All contract event topics **must** use `snake_case` naming. This applies to both
+the primary topic (first symbol) and any subtopics.
 
-1. **Fork the repository** and create a feature branch
-2. **Follow coding standards** outlined in [CODING_STANDARDS.md](./docs/CODING_STANDARDS.md)
-3. **Write tests** for new functionality
-4. **Review the contract review checklist** in [docs/contract-review-checklist.md](./docs/contract-review-checklist.md)
-5. **Run linting and tests** before submitting
-6. **Submit a pull request** with a clear description
-
-## Code Quality Standards
-
-### Naming Conventions
-All code must follow the naming conventions defined in [CODING_STANDARDS.md](./docs/CODING_STANDARDS.md) and [CONTRACT_NAMING_CONVENTIONS.md](./docs/CONTRACT_NAMING_CONVENTIONS.md):
-
-- **Functions**: `snake_case`
-- **Types**: `PascalCase`  
-- **Constants**: `SCREAMING_SNAKE_CASE`
-- **Modules**: `snake_case`
-- **Error enums**: Always use `Error`, never `Err`
-- **File names**: `snake_case` (e.g., `lib.rs`, `errors.rs`, `types.rs`, `events.rs`, `test.rs`)
-- **Contract directories**: `snake_case`
-
-Run the naming check script before submitting PRs:
-```bash
-bash scripts/check-naming.sh
+### Do
+```rust
+env.events().publish((symbol_short!("payment_processed"),), data);
+env.events().publish((Symbol::new(&env, "record_created"),), data);
 ```
 
-### Code Style
-- Use Rust 2021 edition
-- Follow Rustfmt formatting (run `cargo fmt`)
-- Adhere to Clippy linting rules (run `cargo clippy`)
-
-### Documentation
-- Document all public APIs with `///` doc comments
-- Include examples for complex functions
-- Update relevant documentation when changing functionality
-
-## Testing Requirements
-
-### Unit Tests
-- Write tests for all new functionality
-- Test edge cases and error conditions
-- Mock external dependencies where appropriate
-
-### Integration Tests
-- Test contract interactions
-- Verify cross-contract calls work correctly
-- Ensure upgrade paths are tested
-
-## Pull Request Process
-
-1. **Ensure code compiles** without warnings
-2. **Run all tests** and verify they pass
-3. **Update documentation** if needed
-4. **Describe changes** in the PR description
-5. **Link related issues** if applicable
-
-### PR Review Checklist
-- [ ] Code follows naming conventions
-- [ ] Tests are included and pass
-- [ ] Documentation is updated
-- [ ] No new Clippy warnings
-- [ ] Code is properly formatted
-- [ ] Contract review checklist items have been considered for correctness, safety, and testing
-
-## Contract Review Checklist
-Use the shared contract review checklist for all smart contract and contract-related pull requests: [docs/contract-review-checklist.md](./docs/contract-review-checklist.md)
-
-## Development Setup
-
-### Prerequisites
-- Rust toolchain (stable)
-- Soroban CLI
-- Cargo make (optional)
-
-### Local Development
-```bash
-# Clone the repository
-git clone <repository-url>
-cd Uzima-Contracts
-
-# Install dependencies
-cargo build
-
-# Run tests
-cargo test
-
-# Run linter
-cargo clippy -- -D warnings
-
-# Format code
-cargo fmt
+### Don't
+```rust
+env.events().publish((symbol_short!("PaymentProcessed"),), data);  // PascalCase
+env.events().publish((symbol_short!("PAYMENT"),), data);           // UPPER_CASE
+env.events().publish((Symbol::new(&env, "recordCreated"),), data); // camelCase
 ```
 
-### CI/CD Pipeline
-The project uses GitHub Actions for CI/CD. The pipeline includes:
-- Build verification
-- Linting (Clippy)
-- Testing
-- Formatting check
-
-## Getting Help
-- Review existing documentation in the `docs/` directory
-- Check open issues for known problems
-- Ask questions in pull request discussions
-
-## License
-By contributing, you agree that your contributions will be licensed under the project's MIT license.
+### Rationale
+Consistent `snake_case` event naming ensures that off-chain indexers and
+monitoring tools can reliably pattern-match event topics without case
+sensitivity issues.

@@ -373,7 +373,7 @@ impl IdentityRegistryContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "Initialized"),),
+            (Symbol::new(&env, "initialized"),),
             (owner.clone(), network_id),
         );
 
@@ -587,7 +587,7 @@ impl IdentityRegistryContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "DIDCreated"),),
+            (Symbol::new(&env, "did_created"),),
             (subject, did_string.clone()),
         );
 
@@ -656,7 +656,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "DIDUpdated"),),
+            (Symbol::new(&env, "did_updated"),),
             (subject, did_doc.version),
         );
 
@@ -681,7 +681,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events()
-            .publish((Symbol::new(&env, "DIDDeactivated"),), subject);
+            .publish((Symbol::new(&env, "did_deactivated"),), subject);
 
         Ok(())
     }
@@ -757,7 +757,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "VerificationMethodAdded"),),
+            (Symbol::new(&env, "verification_method_added"),),
             (subject, method_id),
         );
 
@@ -842,7 +842,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::LastKeyRotation(subject.clone()), &timestamp);
 
         env.events()
-            .publish((Symbol::new(&env, "KeyRotated"),), (subject, method_id));
+            .publish((Symbol::new(&env, "key_rotated"),), (subject, method_id));
 
         Ok(())
     }
@@ -912,7 +912,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "VerificationMethodRevoked"),),
+            (Symbol::new(&env, "verification_method_revoked"),),
             (subject, method_id),
         );
 
@@ -992,7 +992,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::IssuerCredentials(issuer.clone()), &issuer_creds);
 
         env.events().publish(
-            (Symbol::new(&env, "CredentialIssued"),),
+            (Symbol::new(&env, "credential_issued"),),
             (issuer, subject, credential_id.clone(), credential_type),
         );
 
@@ -1068,7 +1068,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Credential(credential_id.clone()), &credential);
 
         env.events().publish(
-            (Symbol::new(&env, "CredentialRevoked"),),
+            (Symbol::new(&env, "credential_revoked"),),
             (issuer, credential_id),
         );
 
@@ -1147,7 +1147,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryGuardians(subject.clone()), &guardians);
 
         env.events().publish(
-            (Symbol::new(&env, "GuardianAdded"),),
+            (Symbol::new(&env, "guardian_added"),),
             (subject, guardian, weight),
         );
 
@@ -1181,7 +1181,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryGuardians(subject.clone()), &new_guardians);
 
         env.events()
-            .publish((Symbol::new(&env, "GuardianRemoved"),), (subject, guardian));
+            .publish((Symbol::new(&env, "guardian_removed"),), (subject, guardian));
 
         Ok(())
     }
@@ -1196,7 +1196,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryThreshold(subject.clone()), &threshold);
 
         env.events().publish(
-            (Symbol::new(&env, "ThresholdUpdated"),),
+            (Symbol::new(&env, "threshold_updated"),),
             (subject, threshold),
         );
 
@@ -1277,7 +1277,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryInitiated"),),
+            (Symbol::new(&env, "recovery_initiated"),),
             (subject, request_id),
         );
 
@@ -1324,7 +1324,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryRequest(request_id), &request);
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryApproved"),),
+            (Symbol::new(&env, "recovery_approved"),),
             (guardian, request_id),
         );
 
@@ -1424,7 +1424,7 @@ impl IdentityRegistryContract {
             .remove(&DataKey::ActiveRecovery(request.subject.clone()));
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryExecuted"),),
+            (Symbol::new(&env, "recovery_executed"),),
             (request.subject, request_id),
         );
 
@@ -1469,7 +1469,7 @@ impl IdentityRegistryContract {
             .remove(&DataKey::ActiveRecovery(subject.clone()));
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryCancelled"),),
+            (Symbol::new(&env, "recovery_cancelled"),),
             (subject, request_id),
         );
 
@@ -1524,7 +1524,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events()
-            .publish((Symbol::new(&env, "ServiceAdded"),), (subject, service_id));
+            .publish((Symbol::new(&env, "service_added"),), (subject, service_id));
 
         Ok(())
     }
@@ -1567,7 +1567,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "ServiceRemoved"),),
+            (Symbol::new(&env, "service_removed"),),
             (subject, service_id),
         );
 
@@ -1605,7 +1605,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Verifier(verifier.clone()), &true);
 
         env.events()
-            .publish((Symbol::new(&env, "VerifierAdded"),), verifier);
+            .publish((Symbol::new(&env, "verifier_added"),), verifier);
 
         Ok(())
     }
@@ -1641,7 +1641,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Verifier(verifier.clone()), &false);
 
         env.events()
-            .publish((Symbol::new(&env, "VerifierRemoved"),), verifier);
+            .publish((Symbol::new(&env, "verifier_removed"),), verifier);
 
         Ok(())
     }

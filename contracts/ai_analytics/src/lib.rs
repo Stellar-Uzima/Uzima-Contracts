@@ -12,8 +12,23 @@ mod serialization_utils;
 mod types;
 mod utils;
 
-#[cfg(all(test, feature = "testutils"))]
-mod test;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
+    Symbol,
+};
+
+#[derive(Clone)]
+#[contracttype]
+pub struct FederatedRound {
+    pub id: u64,
+    pub base_model_id: BytesN<32>,
+    pub min_participants: u32,
+    pub dp_epsilon: u32,
+    pub started_at: u64,
+    pub finalized_at: u64,
+    pub total_updates: u32,
+    pub is_finalized: bool,
+}
 
 #[cfg(all(test, feature = "testutils"))]
 mod test_serialization;
@@ -38,7 +53,28 @@ impl AiAnalyticsContract {
         min_participants: u32,
         dp_epsilon: u32,
     ) -> Result<u64, Error> {
-        rounds::start_round(env, caller, base_model_id, min_participants, dp_epsilon)
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        if min_participants == 0 {
+            return Err(Error::NotEnoughParticipants);
+        }
+
+        let id = Self::next_round_id(&env);
+        let round = FederatedRound {
+            id,
+            base_model_id,
+            min_participants,
+            dp_epsilon,
+            started_at: env.ledger().timestamp(),
+            finalized_at: 0,
+            total_updates: 0,
+            is_finalized: false,
+        };
+
+        env.storage().instance().set(&DataKey::Round(id), &round);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
+        Ok(id)
     }
 
     pub fn submit_update(

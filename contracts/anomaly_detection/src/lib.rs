@@ -210,7 +210,7 @@ impl AnomalyDetectionContract {
         }
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.events().publish((symbol_short!("CfgUpdate"),), true);
+        env.events().publish((Symbol::new(&env, "cfg_update"),), true);
 
         Ok(())
     }
@@ -477,7 +477,7 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events().publish((symbol_short!("AlertAck"),), alert_id);
+        env.events().publish((Symbol::new(&env, "alert_ack"),), alert_id);
         Ok(true)
     }
 
@@ -508,7 +508,7 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events().publish((symbol_short!("AlertRes"),), alert_id);
+        env.events().publish((Symbol::new(&env, "alert_res"),), alert_id);
         Ok(true)
     }
 

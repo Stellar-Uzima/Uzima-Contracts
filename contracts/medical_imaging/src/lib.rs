@@ -632,7 +632,7 @@ impl MedicalImagingContract {
         env.storage()
             .persistent()
             .set(&DataKey::Model(model_id), &model);
-        env.events().publish((symbol_short!("IMG_MDL"),), caller);
+        env.events().publish((symbol_short!("img_mdl"),), caller);
         Ok(true)
     }
 
