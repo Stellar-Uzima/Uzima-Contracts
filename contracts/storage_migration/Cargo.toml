@@ -1,5 +1,5 @@
 [package]
-name = "rbac"
+name = "storage_migration"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -11,8 +11,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 soroban-sdk.workspace = true
-common_error = { path = "../common_error" }
-governance_commons = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

@@ -8,7 +8,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
 // Shared multi-sig helpers (Phase 4 migration: see issue #830)
 use governance_commons::{multi_sig, ApprovalStatus};
 
@@ -85,6 +85,14 @@ impl EmergencyAccessOverride {
             .instance()
             .set(&DataKey::TrustedApprovers, &approvers);
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::Initialized,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         events::publish_initialization(&env, &admin);
         Ok(())
     }
@@ -221,13 +229,29 @@ impl EmergencyAccessOverride {
 
             if grant_count >= GLOBAL_GRANT_LIMIT {
                 // Trip circuit breaker and emit alert
-                env.storage()
-                    .instance()
-                    .set(&DataKey::CircuitBreakerTripped, &true);
-                events::publish_rate_limit_exceeded(&env, &approver, now, now);
-                return Err(Error::RateLimitExceeded);
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerTripped, &true);
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CircuitTripped,
+            &approver,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("GRANT"),
+        );
+        events::publish_rate_limit_exceeded(&env, &approver, now, now);
+        return Err(Error::RateLimitExceeded);
             }
 
+            events::record_audit_entry(
+                &env,
+                events::AuditAction::GrantGranted,
+                &approver,
+                Some(patient.clone()),
+                Some(provider.clone()),
+                symbol_short!("OK"),
+            );
             events::publish_emergency_access_granted(
                 &env,
                 &patient,
@@ -239,6 +263,14 @@ impl EmergencyAccessOverride {
         }
 
         env.storage().persistent().set(&key, &record);
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::GrantApproved,
+            &approver,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("OK"),
+        );
         events::publish_emergency_access_approved(&env, &patient, &provider, &approver, now);
         Ok(false)
     }
@@ -264,6 +296,14 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::GlobalGrantWindowStart, &env.ledger().timestamp());
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CircuitReset,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         Ok(())
     }
 
@@ -289,6 +329,14 @@ impl EmergencyAccessOverride {
             .instance()
             .set(&DataKey::CooldownPeriod, &new_period_seconds);
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CooldownUpdated,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         events::publish_cooldown_updated(&env, &admin, new_period_seconds);
         Ok(())
     }
@@ -317,11 +365,27 @@ impl EmergencyAccessOverride {
             .get::<_, EmergencyAccessRecord>(&key)
         {
             if record.approved && record.expiry_at > now {
+                events::record_audit_entry(
+                    &env,
+                    events::AuditAction::AccessCheck,
+                    &env.current_contract_address(),
+                    Some(patient.clone()),
+                    Some(provider.clone()),
+                    symbol_short!("TRUE"),
+                );
                 events::publish_emergency_access_checked(&env, &patient, &provider, true, now);
                 return Ok(true);
             }
         }
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::AccessCheck,
+            &env.current_contract_address(),
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("FALSE"),
+        );
         events::publish_emergency_access_checked(&env, &patient, &provider, false, now);
         Ok(false)
     }
@@ -354,6 +418,14 @@ impl EmergencyAccessOverride {
 
         env.storage().persistent().set(&key, &record);
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::GrantRevoked,
+            &admin,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("OK"),
+        );
         events::publish_emergency_access_revoked(
             &env,
             &patient,

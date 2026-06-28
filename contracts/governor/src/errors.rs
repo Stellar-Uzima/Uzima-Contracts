@@ -15,6 +15,7 @@ pub enum Error {
     AlreadyVoted = 371,
     NotQueued = 372,
     ProposalDisputed = 373,
+    CleanupEmpty = 374,
 
     // --- Entity Existence (400–499) ---
     ProposalNotFound = 450,

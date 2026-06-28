@@ -6,9 +6,9 @@ Use this checklist before every PR and audit. Each item must be checked (✅) or
 
 ## 1. Access Control
 
-- [ ] Every state-mutating function calls `address.require_auth()` before any logic
-- [ ] Admin-only functions verify the caller is the stored admin address
-- [ ] Role checks are performed after `require_auth()`, not instead of it
+- [ ] Every state-mutating function calls `address.require_auth()` before any logic (use the shared `require_admin!(env, caller)` or `require_role!(env, caller, role)` macros from `governance_commons` where applicable)
+- [ ] Admin-only functions verify the caller is the stored admin address (preferably using `require_admin!(env, caller)`)
+- [ ] Role checks are performed after `require_auth()`, not instead of it (preferably using `require_role!(env, caller, role)`)
 - [ ] No function relies solely on caller address comparison without `require_auth()`
 - [ ] Ownership transfer requires auth from the **current** owner, not the new one
 

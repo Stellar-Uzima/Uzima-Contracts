@@ -10,6 +10,9 @@ mod vesting;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod invariant_tests;
+
 pub use contract::{TokenSaleContract, TokenSaleContractClient};
 pub use errors::Error;
 pub use vesting::{VestingContract, VestingContractClient};
