@@ -7,10 +7,11 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk.workspace = true
+fp-math = { path = "../fp_math" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

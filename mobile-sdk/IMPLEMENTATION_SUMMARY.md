@@ -34,7 +34,9 @@ Uzima-Contracts/mobile-sdk/
 ├── core/                              # Shared TypeScript/JavaScript SDK (2.0 MB)
 │   ├── src/
 │   │   ├── index.ts                  # Main exports
-│   │   ├── types.ts                  # Type definitions
+│   │   ├── types.ts                  # SDK + re-exported contract types
+│   │   ├── generated/
+│   │   │   └── contract-bindings.ts  # Auto-generated from on-chain schemas (CI-enforced)
 │   │   ├── config/
 │   │   │   └── UzimaConfig.ts        # Configuration management
 │   │   ├── client/
@@ -95,6 +97,11 @@ Uzima-Contracts/mobile-sdk/
 │   ├── pubspec.yaml
 │   └── README.md
 │
+├── python/                            # Python SDK bindings (stellar-py style)
+│   └── uzima_sdk/
+│       ├── __init__.py               # Auto-generated exports
+│       └── contract_bindings.py      # Dataclass/Enum bindings (CI-enforced)
+│
 ├── tests/                             # Test Suite
 │   ├── acceptance.test.ts            # Acceptance criteria tests (500+ lines)
 │   ├── unit/                         # Unit tests
@@ -117,6 +124,41 @@ Uzima-Contracts/mobile-sdk/
 ├── TESTING_AND_VERIFICATION.md       # Testing guide (800+ lines)
 └── IMPLEMENTATION_SUMMARY.md         # This file
 ```
+
+---
+
+## SDK Binding Generation & CI Drift Detection
+
+Contract event and struct variants in Rust are mirrored into mobile client bindings so
+deserialization errors are caught in CI instead of production.
+
+| Output | Path | Language |
+|--------|------|----------|
+| TypeScript bindings | `mobile-sdk/core/src/generated/contract-bindings.ts` | TS enums + interfaces |
+| Python bindings | `mobile-sdk/python/uzima_sdk/contract_bindings.py` | stellar-py style dataclasses |
+
+### Generator
+
+```bash
+# Regenerate bindings after contract schema changes
+node scripts/generate-sdk-types.mjs
+
+# Verify committed copy matches generator (local CI check)
+./scripts/check-sdk-bindings.sh
+# or: npm run sdk:check
+```
+
+### CI (`sdk-bindings` job in `.github/workflows/ci.yml`)
+
+On every pull request the workflow:
+
+1. Runs `scripts/generate-sdk-types.mjs` and writes `reports/sdk_bindings_drift.txt`
+2. Uploads generated TypeScript + Python bindings as the `sdk-bindings` artifact
+3. Posts a PR comment with per-file diffs when drift is detected
+4. **Fails the PR** when bindings are out of sync, unless the PR body contains `[skip-sdk-gen]`
+
+Update the shared schema in `scripts/generate-sdk-types.mjs` (`ENUM_DEFINITIONS` /
+`INTERFACE_DEFINITIONS`) whenever on-chain contract types change, then regenerate and commit.
 
 ---
 

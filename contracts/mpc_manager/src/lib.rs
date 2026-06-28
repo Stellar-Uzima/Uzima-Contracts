@@ -1,4 +1,5 @@
 #![no_std]
+//! mpc_manager - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod test;
@@ -354,6 +355,7 @@ impl MPCManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn finalize_session(
         env: Env,
         initiator: Address,

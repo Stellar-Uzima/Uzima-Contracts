@@ -1,0 +1,18 @@
+[package]
+name = "patient_gamification"
+version = "0.1.0"
+edition = "2021"
+description = "Patient engagement gamification system with achievements, challenges, rewards, and social features"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

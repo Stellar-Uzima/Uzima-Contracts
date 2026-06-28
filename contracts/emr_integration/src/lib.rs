@@ -1,6 +1,9 @@
 #![no_std]
+//! emr_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(test)]
+mod benchmarks;
 #[cfg(test)]
 mod test;
 
@@ -8,14 +11,6 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::string::{String as RustString, ToString};
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::alloc::{GlobalAlloc, Layout};
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::arch::wasm32;
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::cell::UnsafeCell;
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::ptr;
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
@@ -872,7 +867,7 @@ impl EMRIntegrationContract {
                 framed.push('\u{001C}');
                 framed.push('\r');
                 framed
-            }
+            },
             TransportProtocol::HTTP => format!(
                 "POST /hl7 HTTP/1.1\r\nContent-Type: {}\r\nX-Message-Type: {}\r\n\r\n{}",
                 Self::to_rust_string(&message.content_type),
@@ -1043,10 +1038,10 @@ impl EMRIntegrationContract {
                 MessagingStandard::HL7v2 => Self::parse_hl7v2(env, version_override, &payload_rs)?,
                 MessagingStandard::HL7v3 => {
                     Self::parse_xml_message(env, version_override, &payload_rs, false)?
-                }
+                },
                 MessagingStandard::CDA => {
                     Self::parse_xml_message(env, version_override, &payload_rs, true)?
-                }
+                },
             };
 
         Self::assert_supported_message_type(&message_type)?;
@@ -1337,7 +1332,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &format!("{msh}\r{pid}\r{obx}"))
-            }
+            },
             MessagingStandard::HL7v3 => {
                 let root = Self::to_rust_string(message_type);
                 let xml = format!(
@@ -1365,7 +1360,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &xml)
-            }
+            },
             MessagingStandard::CDA => {
                 let xml = format!(
                     "<?xml version=\"1.0\" encoding=\"{}\"?><ClinicalDocument><id extension=\"{}\" root=\"2.16.840.1.113883.19.5\"/><code code=\"{}\"/><title>{}</title><recordTarget><patientRole patientId=\"{}\"><patient><name>{}</name></patient></patientRole></recordTarget><component><structuredBody><component><section><text>{}</text></section></component></structuredBody></component></ClinicalDocument>",
@@ -1398,7 +1393,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &xml)
-            }
+            },
         }
     }
 
@@ -1441,7 +1436,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "PID"),
                     });
                 }
-            }
+            },
             MessagingStandard::HL7v3 => {
                 if !payload.contains("interactionId") {
                     issues.push_back(ValidationIssue {
@@ -1451,7 +1446,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "interactionId"),
                     });
                 }
-            }
+            },
             MessagingStandard::CDA => {
                 if !payload.contains("<ClinicalDocument") {
                     issues.push_back(ValidationIssue {
@@ -1472,7 +1467,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "recordTarget"),
                     });
                 }
-            }
+            },
         }
 
         MessageValidationReport {

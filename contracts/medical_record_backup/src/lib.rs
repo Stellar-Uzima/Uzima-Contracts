@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_record_backup - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -896,7 +897,7 @@ impl MedicalRecordBackupContract {
             Err(e) => {
                 Self::record_failed_execution(&env, caller, scheduled, e as u32, 0);
                 return Err(e);
-            }
+            },
         };
 
         if total_cost > policy.max_total_cost_weight {

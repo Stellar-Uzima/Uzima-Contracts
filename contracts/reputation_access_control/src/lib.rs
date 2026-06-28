@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation_access_control - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
@@ -191,8 +192,8 @@ impl ReputationAccessControl {
                 if !Self::check_time_restriction(&env, time_restriction)? {
                     return Ok(false);
                 }
-            }
-            TimeRestrictionPolicy::None => {}
+            },
+            TimeRestrictionPolicy::None => {},
         }
 
         // Check if requested access level is allowed

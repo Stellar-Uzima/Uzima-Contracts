@@ -1,16 +1,7 @@
-// Core SDK exports
-export { UzimaClient } from './client/UzimaClient';
-export { AuthManager } from './auth/AuthManager';
-export { BiometricAuth } from './auth/BiometricAuth';
-export { MedicalRecordsManager } from './records/MedicalRecordsManager';
-export { OfflineManager } from './sync/OfflineManager';
-export { NotificationManager } from './notifications/NotificationManager';
-export { VoiceInterface } from './voice/VoiceInterface';
-export { EncryptionManager } from './crypto/EncryptionManager';
-export { APIClient } from './network/APIClient';
+/**
+ * Uzima SDK Core Types
+ * Generated from contract schemas for type safety and IDE support
+ * @module @uzima/sdk-core
+ */
 
-// Types
 export * from './types';
-
-// Config
-export { UzimaConfig } from './config/UzimaConfig';

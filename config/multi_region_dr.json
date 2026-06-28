@@ -1,0 +1,69 @@
+{
+  "regions": [
+    {
+      "region_name": "us-east-1",
+      "region_id": 1,
+      "latitude": 33.2,
+      "longitude": -87.6,
+      "primary": true,
+      "backup_targets": ["us-west-1", "eu-central-1"]
+    },
+    {
+      "region_name": "us-west-1",
+      "region_id": 2,
+      "latitude": 37.5,
+      "longitude": -120.5,
+      "primary": false,
+      "backup_targets": ["us-east-1", "ap-south-1"]
+    },
+    {
+      "region_name": "eu-central-1",
+      "region_id": 3,
+      "latitude": 50.1,
+      "longitude": 8.7,
+      "primary": false,
+      "backup_targets": ["eu-west-1", "us-east-1"]
+    },
+    {
+      "region_name": "eu-west-1",
+      "region_id": 4,
+      "latitude": 53.4,
+      "longitude": -8.2,
+      "primary": false,
+      "backup_targets": ["eu-central-1", "ap-north-1"]
+    },
+    {
+      "region_name": "ap-south-1",
+      "region_id": 5,
+      "latitude": 19.1,
+      "longitude": 72.9,
+      "primary": false,
+      "backup_targets": ["ap-north-1", "us-west-1"]
+    }
+  ],
+  "dr_policy": {
+    "min_replicas_per_region": 3,
+    "max_regions": 5,
+    "failover_timeout_ms": 300000,
+    "sync_interval_ms": 60000,
+    "health_check_interval_ms": 30000,
+    "auto_failover_enabled": true,
+    "rto_target_ms": 900000
+  },
+  "sync_policy": {
+    "sync_interval_ms": 60000,
+    "max_lag_ms": 5000,
+    "consistency_mode": "Eventual",
+    "max_retries": 3,
+    "auto_sync_enabled": true,
+    "conflict_resolution_strategy": 0
+  },
+  "node_config": {
+    "max_cpu_threshold": 85,
+    "max_memory_threshold": 80,
+    "max_disk_threshold": 90,
+    "max_replica_lag_ms": 5000,
+    "heartbeat_timeout_ms": 30000,
+    "health_check_interval_ms": 10000
+  }
+}

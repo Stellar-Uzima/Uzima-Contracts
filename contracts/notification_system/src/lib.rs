@@ -1,4 +1,5 @@
 #![no_std]
+//! notification_system - Healthcare smart contract on Stellar blockchain.
 #![allow(dead_code)]
 #![allow(clippy::too_many_arguments)]
 
@@ -361,7 +362,7 @@ impl NotificationContract {
 
         let notif = Self::load_notification(&env, notif_id)?;
         if notif.recipient != caller && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(notif)
     }
@@ -378,7 +379,7 @@ impl NotificationContract {
         Self::require_initialized(&env)?;
         caller.require_auth();
         if caller != user && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let limit = filter.limit.min(MAX_PAGE_SIZE);
@@ -469,7 +470,7 @@ impl NotificationContract {
 
         let mut notif = Self::load_notification(&env, notif_id)?;
         if notif.recipient != caller {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if notif.status == NotificationStatus::Read {
             return Err(Error::AlreadyRead);
@@ -549,7 +550,7 @@ impl NotificationContract {
 
         let mut notif = Self::load_notification(&env, notif_id)?;
         if notif.recipient != caller && !Self::is_admin(&env, &caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         if notif.status == NotificationStatus::Archived {
             return Err(Error::AlreadyArchived);
@@ -913,7 +914,7 @@ impl NotificationContract {
 
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if !Self::is_admin(env, caller) {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
         Ok(())
     }
@@ -1123,7 +1124,7 @@ impl NotificationContract {
                     }
                 }
                 NotificationStatus::Pending
-            }
+            },
         }
     }
 

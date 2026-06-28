@@ -1,3 +1,4 @@
+//! treasury_controller - Healthcare smart contract on Stellar blockchain.
 // Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -30,6 +31,7 @@ pub enum Error {
     NotAuthorized = 12,
     SymbolTooLong = 13,
     TransferFailed = 14,
+    ConfigNotFound = 15,
 }
 
 /// Treasury proposal types
@@ -120,6 +122,10 @@ pub enum DataKey {
 const MIN_TIMELOCK: u64 = 3600; // 1 hour minimum
 const MAX_TIMELOCK: u64 = 604800; // 1 week maximum
 const PROPOSAL_EXPIRY: u64 = 2592000; // 30 days
+
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 
 #[contract]
 pub struct TreasuryController;
@@ -282,6 +288,11 @@ impl TreasuryController {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage()
             .instance()
             .set(&DataKey::ProposalCount, &proposal_id);
@@ -349,6 +360,11 @@ impl TreasuryController {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
         // Emit approval event
         env.events().publish(
@@ -415,6 +431,11 @@ impl TreasuryController {
         env.storage()
             .persistent()
             .set(&DataKey::Proposals, &proposals);
+        env.storage().persistent().extend_ttl(
+            &DataKey::Proposals,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
         // Record withdrawal for audit trail
         if matches!(proposal.proposal_type, ProposalType::Withdrawal) {
@@ -439,6 +460,11 @@ impl TreasuryController {
             env.storage()
                 .persistent()
                 .set(&DataKey::Withdrawals, &withdrawals);
+            env.storage().persistent().extend_ttl(
+                &DataKey::Withdrawals,
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND_TO,
+            );
         }
 
         // Emit execution event
@@ -504,24 +530,36 @@ impl TreasuryController {
     // === View Functions ===
 
     /// Get treasury configuration
-    pub fn get_config(env: Env) -> TreasuryConfig {
-        env.storage().instance().get(&DataKey::Config).unwrap()
+    pub fn get_config(env: Env) -> Result<TreasuryConfig, Error> {
+        env.storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::ConfigNotFound)
     }
 
     /// Get proposal details
-    pub fn get_proposal(env: Env, proposal_id: u64) -> TreasuryProposal {
-        let proposals: Map<u64, TreasuryProposal> =
-            env.storage().persistent().get(&DataKey::Proposals).unwrap();
+    pub fn get_proposal(env: Env, proposal_id: u64) -> Result<TreasuryProposal, Error> {
+        let proposals: Map<u64, TreasuryProposal> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Proposals)
+            .ok_or(Error::ProposalNotFound)?;
 
-        proposals.get(proposal_id).unwrap()
+        proposals.get(proposal_id).ok_or(Error::ProposalNotFound)
     }
 
     /// Get total number of proposals
-    pub fn get_proposal_count(env: Env) -> u64 {
+    pub fn get_proposal_count(env: Env) -> Result<u64, Error> {
+        // Verify config exists (contract is initialized)
         env.storage()
             .instance()
+            .get::<DataKey, TreasuryConfig>(&DataKey::Config)
+            .ok_or(Error::ConfigNotFound)?;
+        Ok(env
+            .storage()
+            .instance()
             .get(&DataKey::ProposalCount)
-            .unwrap_or(0)
+            .unwrap_or(0))
     }
 
     /// Check if proposal is ready for execution
@@ -569,15 +607,15 @@ impl TreasuryController {
     // === Gnosis Safe Compatibility Interface ===
 
     /// Get threshold for Gnosis Safe compatibility
-    pub fn gnosis_get_threshold(env: Env) -> u32 {
-        let config = Self::get_config(env);
-        config.multisig_config.threshold
+    pub fn gnosis_get_threshold(env: Env) -> Result<u32, Error> {
+        let config = Self::get_config(env)?;
+        Ok(config.multisig_config.threshold)
     }
 
     /// Get owners for Gnosis Safe compatibility
-    pub fn gnosis_get_owners(env: Env) -> Vec<Address> {
-        let config = Self::get_config(env);
-        config.multisig_config.signers
+    pub fn gnosis_get_owners(env: Env) -> Result<Vec<Address>, Error> {
+        let config = Self::get_config(env)?;
+        Ok(config.multisig_config.signers)
     }
 
     // === Private Helper Functions ===

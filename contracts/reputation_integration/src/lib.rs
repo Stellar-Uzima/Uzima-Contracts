@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation_integration - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec,
@@ -176,7 +177,7 @@ impl ReputationIntegration {
                 Err(_) => {
                     // Continue with other providers even if one fails
                     results.push_back(0);
-                }
+                },
             }
         }
 

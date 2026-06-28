@@ -1,4 +1,5 @@
 #![no_std]
+//! dispute_resolution - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Vec};
 
 #[contracterror]

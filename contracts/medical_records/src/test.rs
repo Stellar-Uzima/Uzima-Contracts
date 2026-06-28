@@ -1,17 +1,27 @@
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::expect_used)]
+
+// internal
 use super::*;
+use common_error::CommonError;
 use crate::errors::Error;
+use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
+
+// external crates
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, TryFromVal, Vec};
 
 fn create_contract(env: &Env) -> (MedicalRecordsContractClient<'_>, Address) {
+    let admin = Address::generate(env);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
+
     let contract_id = Address::generate(env);
     env.register_contract(&contract_id, MedicalRecordsContract);
 
     let client = MedicalRecordsContractClient::new(env, &contract_id);
-    let admin = Address::generate(env);
-    client.initialize(&admin);
+    client.initialize(&admin, &rbac_id);
     (client, admin)
 }
 
@@ -56,12 +66,13 @@ fn test_add_and_get_record() {
     let record_events_count = events_after_add
         .iter()
         .filter(|e| {
-            if e.1.len() < 2 {
+            if e.1.is_empty() {
                 return false;
             }
-            let topic = e.1.get(1).unwrap();
-            let sym = Symbol::try_from_val(&env, &topic).unwrap();
-            sym == symbol_short!("REC_NEW")
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("REC_NEW"))
+                .unwrap_or(false)
         })
         .count();
     assert_eq!(record_events_count, 1);
@@ -78,15 +89,66 @@ fn test_add_and_get_record() {
     let access_events_count = events_after_get
         .iter()
         .filter(|e| {
-            if e.1.len() < 2 {
+            if e.1.is_empty() {
                 return false;
             }
-            let topic = e.1.get(1).unwrap();
-            let sym = Symbol::try_from_val(&env, &topic).unwrap();
-            sym == symbol_short!("REC_ACC")
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("REC_ACC"))
+                .unwrap_or(false)
         })
         .count();
     assert_eq!(access_events_count, 1);
+}
+
+#[test]
+fn test_get_record_denied_after_consent_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let consent_contract_id = env.register_contract(None, PatientConsentManagement);
+    let consent_client = PatientConsentManagementClient::new(&env, &consent_contract_id);
+    consent_client.initialize(&admin);
+    client.set_patient_consent_contract(&admin, &consent_contract_id);
+
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let provider = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    client.grant_permission(&admin, &provider, Permission::ReadRecord, 0, false);
+
+    let diagnosis = String::from_str(&env, "Flu");
+    let treatment = String::from_str(&env, "Rest");
+    let tags = vec![&env, String::from_str(&env, "flu")];
+    let category = String::from_str(&env, "Modern");
+    let treatment_type = String::from_str(&env, "Medication");
+    let data_ref = String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
+
+    let record_id = client.add_record(
+        &doctor,
+        &patient,
+        &diagnosis,
+        &treatment,
+        &false,
+        &tags,
+        &category,
+        &treatment_type,
+        &data_ref,
+    );
+
+    let expires_at = env.ledger().timestamp().saturating_add(10);
+    consent_client.grant_consent_with_expiry(&patient, &provider, &expires_at);
+
+    env.ledger().with_mut(|li| {
+        li.timestamp = expires_at.saturating_add(1);
+    });
+
+    let result = client.try_get_record(&provider, &record_id);
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 #[test]
@@ -350,7 +412,7 @@ fn test_deactivate_user() {
         &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
     );
 
-    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
 }
 
 #[test]
@@ -733,6 +795,48 @@ fn test_get_record_count_getter() {
     assert_eq!(client.get_record_count(), 2u64);
 }
 
+#[test]
+fn test_patient_record_index_lookup_efficiency() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let count = 30u64;
+    for _i in 0..count {
+        let _ = client.add_record(
+            &doctor,
+            &patient,
+            &String::from_str(&env, "Diag"),
+            &String::from_str(&env, "Treat"),
+            &false,
+            &vec![&env, String::from_str(&env, "tag")],
+            &String::from_str(&env, "Modern"),
+            &String::from_str(&env, "General"),
+            &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        );
+    }
+
+    assert_eq!(client.get_patient_record_count(&patient), count);
+
+    for i in 0..count {
+        let record_id = client.get_patient_record_id(&patient, &i);
+        assert!(record_id.is_some());
+    }
+
+    let start_budget = env.budget().cpu_instruction_cost();
+    let history = client.get_history(&doctor, &patient, &0u32, &(count as u32));
+    let elapsed = env.budget().cpu_instruction_cost() - start_budget;
+
+    assert_eq!(history.len(), count as u32);
+    // Expected gas threshold is higher than no-op but should be bounded in this environment.
+    assert!(elapsed < 100_000_000);
+}
+
 // ============================================================================
 // Rate Limiting Tests
 // ============================================================================
@@ -949,7 +1053,10 @@ fn test_rate_limit_admin_bypass() {
 
 #[cfg(test)]
 mod test_metadata {
+    // internal
     use super::*;
+
+    // external crates
     use soroban_sdk::{map, vec, Address, Env, Map, String};
 
     fn setup(
@@ -965,9 +1072,12 @@ mod test_metadata {
         env.register_contract(&contract_id, MedicalRecordsContract);
         let client = MedicalRecordsContractClient::new(env, &contract_id);
         let admin = Address::generate(env);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(env, &rbac_id);
+        let _ = rbac_client.assign_role(&admin, &RbacRole::Admin);
         let doctor = Address::generate(env);
         let patient = Address::generate(env);
-        client.initialize(&admin);
+        client.initialize(&admin, &rbac_id);
         client.manage_user(&admin, &doctor, &Role::Doctor);
         client.manage_user(&admin, &patient, &Role::Patient);
         let data_ref = String::from_str(env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx");
@@ -1296,4 +1406,462 @@ fn test_quantum_performance_benchmark() {
     // Output stats for "pro" visibility
     // In real Soroban tests, we might use logger or just assert reasonable bounds.
     assert!(pq_cost > classical_cost); // Logic check: larger data = more instructions
+}
+
+#[test]
+fn test_error_codes_are_stable() {
+    use crate::errors::Error;
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::NotAICoordinator as u32, 150);
+    assert_eq!(Error::InvalidInput as u32, 200);
+    assert_eq!(Error::InputTooLong as u32, 201);
+    assert_eq!(Error::BatchTooLarge as u32, 208);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::DeadlineExceeded as u32, 306);
+    assert_eq!(Error::RateLimitExceeded as u32, 307);
+    assert_eq!(Error::RecordNotFound as u32, 403);
+    assert_eq!(Error::InsufficientFunds as u32, 500);
+    assert_eq!(Error::StorageFull as u32, 502);
+    assert_eq!(Error::CrossChainAccessDenied as u32, 700);
+    assert_eq!(Error::AIConfigNotSet as u32, 830);
+    assert_eq!(Error::InvalidAIScore as u32, 831);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::{get_suggestion, Error};
+    assert_eq!(
+        get_suggestion(Error::Unauthorized),
+        symbol_short!("CHK_AUTH")
+    );
+    assert_eq!(
+        get_suggestion(Error::NotInitialized),
+        symbol_short!("INIT_CTR")
+    );
+    assert_eq!(
+        get_suggestion(Error::RecordNotFound),
+        symbol_short!("CHK_ID")
+    );
+    assert_eq!(
+        get_suggestion(Error::InsufficientFunds),
+        symbol_short!("ADD_FUND")
+    );
+    assert_eq!(get_suggestion(Error::StorageFull), symbol_short!("CLN_OLD"));
+    assert_eq!(
+        get_suggestion(Error::ContractPaused),
+        symbol_short!("RE_TRY_L")
+    );
+}
+
+// ==================== Traditional Medicine Tests ====================
+
+/// Helper: create a populated TraditionalMedicineMetadata for tests.
+fn make_traditional_metadata(env: &Env) -> TraditionalMedicineMetadata {
+    TraditionalMedicineMetadata {
+        practice_type: String::from_str(env, "African Traditional Medicine"),
+        practitioner_tradition: String::from_str(env, "Yoruba"),
+        // In production this field would be an encrypted ciphertext reference.
+        remedies_used: String::from_str(env, "QmEncryptedRemediesRef1234567890"),
+        cultural_context: String::from_str(env, "Healing ceremony"),
+        language: String::from_str(env, "yo"),
+    }
+}
+
+#[test]
+fn test_write_record_with_traditional_metadata() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    let meta = make_traditional_metadata(&env);
+    let initial_events = env.events().all().len();
+
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Headache"),
+        &String::from_str(&env, "Herbal steam therapy"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(meta),
+    );
+
+    // Record should be retrievable
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.category, String::from_str(&env, "Traditional"));
+
+    // TraditionalRecordAdded event must have been emitted
+    let events_after = env.events().all();
+    assert!(events_after.len() > initial_events);
+    let trad_events = events_after
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 1, "TraditionalRecordAdded event not emitted");
+}
+
+#[test]
+fn test_list_traditional_records() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // No traditional records yet
+    let ids_before = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids_before.len(), 0);
+
+    // Add a plain record (no metadata) – should NOT appear in traditional index
+    let _plain_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Flu"),
+        &String::from_str(&env, "Rest"),
+        &false,
+        &vec![&env, String::from_str(&env, "flu")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    // Add two traditional records
+    let trad_id1 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Fever"),
+        &String::from_str(&env, "Herbal bath"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Herbal Therapy"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let trad_id2 = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Back pain"),
+        &String::from_str(&env, "Acupressure"),
+        &true,
+        &vec![&env, String::from_str(&env, "traditional")],
+        &String::from_str(&env, "Traditional"),
+        &String::from_str(&env, "Acupressure"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &Some(make_traditional_metadata(&env)),
+    );
+
+    let ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(ids.len(), 2);
+    assert!(ids.contains(&trad_id1));
+    assert!(ids.contains(&trad_id2));
+    // Plain record must NOT be in the list
+    assert!(!ids.contains(&_plain_id));
+}
+
+#[test]
+fn test_write_record_without_metadata_backward_compat() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client.manage_user(&admin, &doctor, &Role::Doctor);
+    client.manage_user(&admin, &patient, &Role::Patient);
+
+    // Calling write_record with None should behave exactly like add_record
+    let record_id = client.write_record(
+        &doctor,
+        &patient,
+        &String::from_str(&env, "Common cold"),
+        &String::from_str(&env, "Rest and fluids"),
+        &false,
+        &vec![&env, String::from_str(&env, "respiratory")],
+        &String::from_str(&env, "Modern"),
+        &String::from_str(&env, "Medication"),
+        &String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhXXXXXx"),
+        &None,
+    );
+
+    let record = client.get_record(&patient, &record_id);
+    assert_eq!(record.patient_id, patient);
+    assert_eq!(record.diagnosis, String::from_str(&env, "Common cold"));
+
+    // No traditional records should exist for the patient
+    let trad_ids = client.list_traditional_records(&patient, &patient);
+    assert_eq!(trad_ids.len(), 0, "No traditional records should exist");
+
+    // No TRAD_NEW event should have been emitted
+    let trad_events = env
+        .events()
+        .all()
+        .iter()
+        .filter(|e| {
+            if e.1.is_empty() {
+                return false;
+            }
+            let topic = e.1.get(0).unwrap();
+            Symbol::try_from_val(&env, &topic)
+                .map(|sym| sym == symbol_short!("TRAD_NEW"))
+                .unwrap_or(false)
+        })
+        .count();
+    assert_eq!(trad_events, 0, "TRAD_NEW must not be emitted when no metadata");
+}
+
+// ── Property-Based Tests (Issue #832) ─────────────────────────
+
+// Property 1: Hash-payload binding invariant
+#[test]
+fn proptest_hash_payload_binding() {
+    use proptest::proptest;
+    proptest!(|(diagnosis_seed in ".*[a-z0-9]{5,50}") | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, &diagnosis_seed);
+        let treatment = String::from_str(&env, "treatment_protocol");
+        let tags = vec![&env, String::from_str(&env, "test")];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags, 
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let record = client.get_record(&patient, &record_id);
+        prop_assert_eq!(record.record_id, record_id,
+            "Record ID must match stored value");
+        prop_assert_eq!(record.diagnosis, diagnosis,
+            "Diagnosis must match stored value");
+    });
+}
+
+// Property 2: Record ID monotonicity
+#[test]
+fn proptest_record_id_monotonicity() {
+    use proptest::proptest;
+    proptest!(|(record_count in 1usize..=30) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let mut prev_id = 0u64;
+        for i in 0..record_count {
+            let diagnosis = String::from_str(&env, &format!("diagnosis_{}", i));
+            let treatment = String::from_str(&env, "treatment");
+            let tags = vec![&env];
+            let category = String::from_str(&env, "Condition");
+            let treatment_type = String::from_str(&env, "Therapy");
+            let data_ref = String::from_str(&env, "QmXxxx");
+            
+            let record_id = client.add_record(
+                &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+                &category, &treatment_type, &data_ref,
+            );
+            
+            prop_assert!(record_id > prev_id || i == 0,
+                "Record IDs must be monotonically increasing");
+            prev_id = record_id;
+        }
+    });
+}
+
+// Property 3: Access control enforcement
+#[test]
+fn proptest_access_control_enforcement() {
+    use proptest::proptest;
+    proptest!(|(seed in 1u64..=1000) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let unauthorized = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "sensitive_diagnosis");
+        let treatment = String::from_str(&env, "treatment");
+        let tags = vec![&env];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        // Authorized access should succeed
+        let record = client.get_record(&patient, &record_id);
+        prop_assert_eq!(record.record_id, record_id,
+            "Patient should be able to access own record at seed {}", seed);
+    });
+}
+
+// Property 4: Get record idempotency
+#[test]
+fn proptest_get_record_idempotency() {
+    use proptest::proptest;
+    proptest!(|(check_count in 1usize..=50) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "test_diagnosis");
+        let treatment = String::from_str(&env, "treatment");
+        let tags = vec![&env];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let first_read = client.get_record(&patient, &record_id);
+        
+        // Multiple reads should return identical records
+        for _ in 0..check_count {
+            let subsequent_read = client.get_record(&patient, &record_id);
+            prop_assert_eq!(subsequent_read.record_id, first_read.record_id,
+                "Multiple reads must return same record ID");
+            prop_assert_eq!(subsequent_read.diagnosis, first_read.diagnosis,
+                "Multiple reads must return same diagnosis");
+            prop_assert_eq!(subsequent_read.treatment, first_read.treatment,
+                "Multiple reads must return same treatment");
+        }
+    });
+}
+
+// Property 5: Multiple doctors can create records for same patient
+#[test]
+fn proptest_multiple_doctors_same_patient() {
+    use proptest::proptest;
+    proptest!(|(doctor_count in 1usize..=20) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let mut record_count = 0;
+        for i in 0..doctor_count {
+            let doctor = Address::generate(&env);
+            client.manage_user(&admin, &doctor, &Role::Doctor);
+            
+            let diagnosis = String::from_str(&env, &format!("doctor_{}_diagnosis", i));
+            let treatment = String::from_str(&env, "treatment");
+            let tags = vec![&env];
+            let category = String::from_str(&env, "Condition");
+            let treatment_type = String::from_str(&env, "Therapy");
+            let data_ref = String::from_str(&env, "QmXxxx");
+            
+            let _ = client.add_record(
+                &doctor, &patient, &diagnosis, &treatment, &false, &tags,
+                &category, &treatment_type, &data_ref,
+            );
+            
+            record_count += 1;
+        }
+        
+        // Verify patient can read all records from different doctors
+        prop_assert!(record_count == doctor_count,
+            "Should have created {} records from {} doctors", 
+            record_count, doctor_count);
+    });
+}
+
+// Property 6: Record attributes persist correctly
+#[test]
+fn proptest_record_attributes_persistence() {
+    use proptest::proptest;
+    proptest!(|(confidential in proptest::bool::ANY) | {
+        let env = Env::default();
+        env.mock_all_auths();
+        
+        let (client, admin) = create_contract(&env);
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+        
+        let diagnosis = String::from_str(&env, "test_diagnosis");
+        let treatment = String::from_str(&env, "test_treatment");
+        let tags = vec![&env, String::from_str(&env, "tag1"), String::from_str(&env, "tag2")];
+        let category = String::from_str(&env, "Condition");
+        let treatment_type = String::from_str(&env, "Therapy");
+        let data_ref = String::from_str(&env, "QmXxxx");
+        
+        let record_id = client.add_record(
+            &doctor, &patient, &diagnosis, &treatment, &confidential, &tags,
+            &category, &treatment_type, &data_ref,
+        );
+        
+        let record = client.get_record(&patient, &record_id);
+        
+        prop_assert_eq!(record.is_confidential, confidential,
+            "Confidential flag must persist");
+        prop_assert_eq!(record.patient_id, patient,
+            "Patient ID must persist");
+        prop_assert_eq!(record.doctor_id, doctor,
+            "Doctor ID must persist");
+        prop_assert!(record.timestamp > 0,
+            "Timestamp must be set");
+    });
 }

@@ -1,0 +1,86 @@
+# Comprehensive Soroban Network Configuration
+# This file defines all supported networks with their respective settings
+
+[networks.local]
+name = "Local Development Network"
+description = "Local Stellar network for development and testing"
+rpc-url = "http://localhost:8000/soroban/rpc"
+network-passphrase = "Standalone Network ; February 2017"
+horizon-url = "http://localhost:8000"
+friendbot-url = ""
+environment = "development"
+requires-funding = false
+gas-configuration = { max-instructions = 100_000_000, tx-resource-fee = 100 }
+safety-level = "low"
+confirmation-required = false
+
+[networks.testnet]
+name = "Stellar Testnet"
+description = "Official Stellar test network for testing"
+rpc-url = "https://soroban-testnet.stellar.org"
+network-passphrase = "Test SDF Network ; September 2015"
+horizon-url = "https://horizon-testnet.stellar.org"
+friendbot-url = "https://friendbot.stellar.org"
+environment = "testing"
+requires-funding = true
+gas-configuration = { max-instructions = 100_000_000, tx-resource-fee = 100 }
+safety-level = "medium"
+confirmation-required = false
+
+[networks.futurenet]
+name = "Stellar Futurenet"
+description = "Future Stellar test network for experimental features"
+rpc-url = "https://rpc-futurenet.stellar.org"
+network-passphrase = "Test SDF Future Network ; October 2022"
+horizon-url = "https://horizon-futurenet.stellar.org"
+friendbot-url = "https://friendbot-futurenet.stellar.org"
+environment = "testing"
+requires-funding = true
+gas-configuration = { max-instructions = 100_000_000, tx-resource-fee = 100 }
+safety-level = "medium"
+confirmation-required = false
+
+[networks.mainnet]
+name = "Stellar Mainnet"
+description = "Production Stellar network"
+rpc-url = "https://soroban-mainnet.stellar.org"
+network-passphrase = "Public Global Stellar Network ; September 2015"
+horizon-url = "https://horizon.stellar.org"
+friendbot-url = ""
+environment = "production"
+requires-funding = false
+gas-configuration = { max-instructions = 100_000_000, tx-resource-fee = 100 }
+safety-level = "high"
+confirmation-required = true
+
+# Network groups for easier management
+[groups.development]
+networks = ["local"]
+description = "Networks for local development"
+
+[groups.testing]
+networks = ["testnet", "futurenet"]
+description = "Networks for testing and staging"
+
+[groups.production]
+networks = ["mainnet"]
+description = "Production networks"
+
+# Default configurations for different environments
+[defaults.development]
+network = "local"
+identity = "dev"
+dry-run = false
+simulation = false
+
+[defaults.testing]
+network = "testnet"
+identity = "test"
+dry-run = false
+simulation = true
+
+[defaults.production]
+network = "mainnet"
+identity = "prod"
+dry-run = true
+simulation = true

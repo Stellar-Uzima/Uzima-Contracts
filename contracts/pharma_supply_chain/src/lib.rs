@@ -1,4 +1,5 @@
 #![no_std]
+//! pharma_supply_chain - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
@@ -16,6 +17,7 @@ pub enum Error {
     BatchNotFound = 6,
     ShipmentNotFound = 7,
     InvalidInput = 8,
+    BatchAlreadyExists = 9,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -122,6 +124,7 @@ pub enum DataKey {
     Medication(u64),
     BatchCount,
     Batch(u64),
+    BatchByLotNumber(String),
     ShipmentCount,
     Shipment(u64),
 }
@@ -234,6 +237,7 @@ impl PharmaSupplyChainContract {
         Ok(id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn create_batch(
         env: Env,
         caller: Address,
@@ -261,11 +265,19 @@ impl PharmaSupplyChainContract {
             return Err(Error::Unauthorized);
         }
 
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::BatchByLotNumber(lot_number.clone()))
+        {
+            return Err(Error::BatchAlreadyExists);
+        }
+
         let id = Self::next_counter(&env, &DataKey::BatchCount);
         let batch = Batch {
             id,
             medication_id,
-            lot_number,
+            lot_number: lot_number.clone(),
             quantity,
             auth_hash,
             manufactured_at: env.ledger().timestamp(),
@@ -275,6 +287,13 @@ impl PharmaSupplyChainContract {
             compliance_ok: true,
         };
         env.storage().persistent().set(&DataKey::Batch(id), &batch);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BatchByLotNumber(lot_number.clone()), &id);
+        env.events().publish(
+            (symbol_short!("BATCH"), symbol_short!("CREATE")),
+            (id, lot_number, env.ledger().timestamp()),
+        );
         Ok(id)
     }
 
@@ -341,6 +360,7 @@ impl PharmaSupplyChainContract {
         Ok(shipment_id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn log_condition_data(
         env: Env,
         caller: Address,
@@ -583,6 +603,58 @@ mod test {
         let recommendation = client.optimize_inventory(&distributor, &140u32);
         assert!(recommendation.reorder_needed);
         assert_eq!(recommendation.recommended_reorder_units, 40u32);
+    }
+
+    #[test]
+    fn test_duplicate_batch_lot_number_rejected() {
+        let env = Env::default();
+        let contract_id = env.register_contract(None, PharmaSupplyChainContract);
+        let client = PharmaSupplyChainContractClient::new(&env, &contract_id);
+        env.mock_all_auths();
+
+        let admin = Address::generate(&env);
+        let manufacturer_operator = Address::generate(&env);
+
+        client.initialize(&admin);
+        let manufacturer_id = client.register_manufacturer(
+            &admin,
+            &manufacturer_operator,
+            &String::from_str(&env, "Test Pharma"),
+            &String::from_str(&env, "LIC-001"),
+        );
+        let medication_id = client.register_medication(
+            &manufacturer_operator,
+            &manufacturer_id,
+            &String::from_str(&env, "Test Drug"),
+            &String::from_str(&env, "NDC-001"),
+            &false,
+            &0i32,
+            &0i32,
+            &String::from_str(&env, "FDA"),
+        );
+
+        let lot = &String::from_str(&env, "BATCH-001");
+        let auth = &BytesN::from_array(&env, &[1u8; 32]);
+
+        let first = client.try_create_batch(
+            &manufacturer_operator,
+            &medication_id,
+            lot,
+            &100u32,
+            auth,
+            &9_999_999u64,
+        );
+        assert!(first.is_ok());
+
+        let second = client.try_create_batch(
+            &manufacturer_operator,
+            &medication_id,
+            lot,
+            &200u32,
+            auth,
+            &9_999_999u64,
+        );
+        assert_eq!(second, Err(Ok(Error::BatchAlreadyExists)));
     }
 
     #[test]

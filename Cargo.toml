@@ -1,12 +1,56 @@
 [workspace]
 resolver = "2"
+rust-version = "1.92.0"
 members = [
     "contracts/*",
+    "contract_optimizer",
+    "tests/interoperability_suite",
+    "tests/integration_framework",
+    "libs/replay_protection",
 ]
+
+# Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
+# Audit" section). Entries below are deferred contracts that cannot yet
+# compile against the workspace `soroban-sdk = "=21.7.7"` pin or are
+# non-workspace-member directories (fuzz harnesses, integration test
+# repos). Newly integrated contracts are no longer listed here.
 exclude = [
-    "contracts/credential_notifications",
     "contracts/medical_imaging",
-]
+    "contracts/healthcare_compliance",
+    "contracts/clinical_nlp",
+    "contracts/remote_patient_monitoring",
+    "contracts/healthcare_analytics_dashboard",
+    "contracts/healthcare_data_marketplace",
+    "contracts/telemedicine",
+    "contracts/mental_health_support",
+    "contracts/patient_gamification",
+    "contracts/medical_imaging_ai",
+    "contracts/dicomweb_services",
+    "contracts/multi_region_orchestrator",
+    "contracts/regional_node_manager",
+    "contracts/digital_twin",
+    "contracts/aml",
+    "contracts/forensics",
+    "contracts/rbac",
+    "contracts/federated_learning",
+    "contracts/medical_records",
+    "contracts/healthcare_oracle_network",
+
+    # Deferred (issue #828 triage): contract compiles against older soroban-sdk
+    # 21 patterns (format! in #[no_std], Vec::with_capacity, BytesN::from_array
+    # arg shape mismatch) that need refactoring beyond current PR scope.
+    "contracts/health_data_access_logging",
+
+    # Non-contract or no-Cargo.toml entries (cannot be workspace members):
+    "contracts/contract_behavior_fuzzing",
+    "contracts/governance_integration_tests",
+] 
+
+[workspace.dependencies]
+soroban-sdk = { version = "=21.7.7" }
+soroban-cli = "=21.7.7"
+governance_commons = { path = "libs/governance_commons" }
+replay_protection = { path = "libs/replay_protection" }
 
 [workspace.package]
 version = "0.1.0"
@@ -21,8 +65,7 @@ soroban-cli = "21.7.7"
 common_auth = { path = "contracts/common_auth" }
 
 # Force compatible versions to fix stellar-xdr dependency conflicts
-arbitrary = "1.3.2"
-derive_arbitrary = "1.3.2"
+# Note: arbitrary dependencies removed to fix workspace inheritance issues
 
 [profile.release]
 opt-level = "z"

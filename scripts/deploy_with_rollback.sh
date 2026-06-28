@@ -126,19 +126,15 @@ rollback() {
 # Function to verify deployment
 verify_deployment() {
     local contract_id="$1"
+    local contract_name="${2:-$CONTRACT_NAME}"
     print_step "Verifying deployment..."
     
-    # Try to invoke a simple function or check contract exists
-    if soroban contract invoke \
-        --id "$contract_id" \
-        --source "$IDENTITY" \
-        --network "$NETWORK" \
-        -- --help &> /dev/null; then
+    if ./scripts/verify_deployment.sh "$contract_id" "$NETWORK" "$IDENTITY" "$contract_name"; then
         print_status "Contract verification successful"
         return 0
     else
-        print_warning "Contract verification failed (may be expected for some contracts)"
-        return 0  # Don't fail on verification, as some contracts may not have --help
+        print_error "Contract verification failed"
+        return 1
     fi
 }
 
@@ -247,8 +243,12 @@ main() {
     print_status "Contract deployed: $CONTRACT_ID"
     
     # Verify deployment
-    if ! verify_deployment "$CONTRACT_ID"; then
-        print_warning "Verification failed, but continuing..."
+    if ! verify_deployment "$CONTRACT_ID" "$CONTRACT_NAME"; then
+        print_error "Verification failed! Triggering rollback..."
+        if [ "$ENABLE_ROLLBACK" = true ] && [ -n "${backup_file:-}" ] && [ -f "${backup_file:-}" ]; then
+            rollback "$backup_file"
+        fi
+        exit 1
     fi
     
     # Save deployment info

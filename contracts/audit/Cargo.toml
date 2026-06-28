@@ -1,0 +1,21 @@
+[package]
+name = "audit"
+version = "0.1.0"
+edition = "2021"
+authors = ["Uzima Contributors"]
+license = "MIT"
+repository = "https://github.com/Stellar-Uzima/Uzima-Contracts"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = { workspace = true }
+governance_commons = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"] 

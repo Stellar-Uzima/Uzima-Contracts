@@ -1,0 +1,14 @@
+[package]
+name = "fuzz-zkp-registry"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone crate — intentionally excluded from the workspace wasm32 build.
+# Run with: cd tests/fuzz/zkp_registry && cargo test
+[workspace]
+
+[dev-dependencies]
+zkp_registry = { path = "../../../contracts/zkp_registry", features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+proptest = "1.6.0"

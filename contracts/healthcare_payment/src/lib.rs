@@ -1,34 +1,47 @@
 #![no_std]
+//! # Healthcare Payment
+//!
+//! Claims adjudication, eligibility checks, and provider payouts for the Uzima
+//! Contracts platform. Surfaces the EDI-837 / EDI-834 / EDI-835 flows used by
+//! integration partners alongside a circuit-breaker so a downstream anomaly
+//! can pause claim processing without taking the WHO platform offline.
+//!
+//! ## Surface
+//!
+//! * **Claims** — `submit_claim`, `verify_claim`, `approve_claim`,
+//!   `reject_claim`, `process_payment`, `batch_process_payments`,
+//!   `escrow_claim`.
+//! * **Eligibility & enrollment** — `verify_insurance_eligibility`,
+//!   `sync_coverage_enrollment` (HIPAA EDI-834 / EDI-837).
+//! * **EOB** — `process_eob` (HIPAA EDI-835) updates the patient's running
+//!   deductible / copay book-keeping via [`PatientResponsibility`].
+//! * **Pre-auths & payment plans** — `request_preauth`, `approve_preauth`,
+//!   `create_payment_plan`, `pay_installment`.
+//! * **ZK coverage proofs** — `submit_coverage_proof`,
+//!   `verify_coverage_with_zk`, `get_coverage_proof`.
+//! * **Circuit breaker** — `emergency_pause`, `begin_recovery`,
+//!   `resume_operations`, `report_anomaly`, `set_failure_threshold`,
+//!   `add_authorized_pauser`, `remove_authorized_pauser`.
+//!
+//! ## Example (heightened reimbursement flow)
+//!
+//! ```ignore
+//! client.initialize(&admin, &router, &escrow, &treasury, &token, &aml, &rbac);
+//! clinic.submit_claim(&patient, &clinic, &"X-22", &500i128, &"BC001", &None);
+//! prov.verify_claim(&1, &clinic);
+//! payer.approve_claim(&1, &payer);
+//! client.submit_insurance_claim(&clinic, &1, &1, &"PAYER-77", &"837")?;
+//! client.process_payment(&1)?;  // pays out via routes to clinic + treasury
+//! client.process_eob(&admin, &1, &1, &500, &400, &100, &"auto-pay", &"835")?;
+//! ```
+#![allow(clippy::too_many_arguments)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short,
-    token::Client as TokenClient, Address, Env, IntoVal, String, Symbol, Vec,
+    token::Client as TokenClient, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    NotInitialized = 1,
-    AlreadyInitialized = 2,
-    Unauthorized = 3,
-    ClaimNotFound = 4,
-    InvalidStatus = 5,
-    PreAuthNotFound = 6,
-    PaymentPlanNotFound = 7,
-    InsufficientFunds = 8,
-    FraudDetected = 9,
-    EscrowFailed = 10,
-    InvalidAmount = 11,
-    InsuranceProviderNotFound = 12,
-    CoveragePolicyNotFound = 13,
-    EligibilityCheckNotFound = 14,
-    ClaimSubmissionNotFound = 15,
-    EobNotFound = 16,
-    InvalidCoverage = 17,
-    UnsupportedTransaction = 18,
-    PolicyMismatch = 19,
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
@@ -36,9 +49,10 @@ pub enum ClaimStatus {
     Submitted = 0,
     Verified = 1,
     Approved = 2,
-    Rejected = 3,
-    Paid = 4,
-    Disputed = 5,
+    PendingAMLReview = 3,
+    Rejected = 4,
+    Paid = 5,
+    Disputed = 6,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -57,6 +71,25 @@ pub enum PaymentPlanStatus {
     Completed = 1,
     Defaulted = 2,
     Cancelled = 3,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum CircuitState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct CircuitBreaker {
+    pub state: CircuitState,
+    pub failure_count: u32,
+    pub failure_threshold: u32,
+    pub opened_at: u64,
+    pub last_state_change: u64,
+    pub triggered_by: Option<Address>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -198,12 +231,56 @@ pub struct ExplanationOfBenefits {
 
 #[derive(Clone)]
 #[contracttype]
+pub struct CoverageProof {
+    pub policy_id: u64,
+    pub patient: Address,
+    pub proof_hash: BytesN<32>,
+    pub circuit_version: u32,
+    pub is_verified: bool,
+    pub proven_coverage_bps: u32,
+    pub submitted_at: u64,
+    pub expires_at: u64,
+    pub registry_proof_id: BytesN<32>,
+}
+
+#[derive(Clone)]
+#[contracttype]
 pub struct PatientResponsibility {
     pub patient: Address,
     pub total_copay_tracked: i128,
     pub total_deductible_tracked: i128,
     pub total_patient_responsibility: i128,
     pub last_updated: u64,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
 #[derive(Clone)]
@@ -214,6 +291,8 @@ pub struct Config {
     pub escrow_contract: Address,
     pub treasury: Address,
     pub token: Address,
+    pub aml_contract: Address,
+    pub rbac_contract: Address,
 }
 
 #[derive(Clone)]
@@ -240,6 +319,11 @@ pub enum DataKey {
     CoverageEnrollment(u64),
     Eob(u64),
     PatientResponsibility(Address),
+    CircuitBreakerState,
+    AuthorizedPausers,
+    Locked,
+    CoverageProof(u64, Address),
+    CoverageProofCount,
 }
 
 #[contract]
@@ -254,20 +338,24 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::Config)
             .ok_or(Error::NotInitialized)?;
-        if config.admin != *caller {
-            return Err(Error::Unauthorized);
+        let client = RbacClient::new(env, &config.rbac_contract);
+        if client.has_role(caller, &RbacRole::Admin) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
         }
-        Ok(())
     }
 
     fn read_counter(env: &Env, key: &DataKey) -> u64 {
         env.storage().instance().get(key).unwrap_or(0u64)
     }
 
-    fn next_counter(env: &Env, key: &DataKey) -> u64 {
-        let next = Self::read_counter(env, key).saturating_add(1);
+    fn next_counter(env: &Env, key: &DataKey) -> Result<u64, Error> {
+        let next = Self::read_counter(env, key)
+            .checked_add(1)
+            .ok_or(Error::Arithmetic)?;
         env.storage().instance().set(key, &next);
-        next
+        Ok(next)
     }
 
     fn get_policy(env: &Env, policy_id: u64) -> Result<CoveragePolicy, Error> {
@@ -291,6 +379,85 @@ impl HealthcarePayment {
         Ok(())
     }
 
+    fn require_operational(env: &Env) -> Result<(), Error> {
+        if let Some(cb) = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+        {
+            if cb.state == CircuitState::Open {
+                return Err(Error::CircuitOpen);
+            }
+        }
+        Ok(())
+    }
+
+    fn acquire_lock(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get::<DataKey, bool>(&DataKey::Locked)
+            .unwrap_or(false)
+        {
+            return Err(Error::Reentrancy);
+        }
+        env.storage().instance().set(&DataKey::Locked, &true);
+        Ok(())
+    }
+
+    fn release_lock(env: &Env) {
+        env.storage().instance().set(&DataKey::Locked, &false);
+    }
+
+    fn is_authorized_pauser(env: &Env, caller: &Address) -> bool {
+        if let Some(config) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Config>(&DataKey::Config)
+        {
+            if config.admin == *caller {
+                return true;
+            }
+        }
+        if let Some(pausers) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Vec<Address>>(&DataKey::AuthorizedPausers)
+        {
+            return pausers.contains(caller);
+        }
+        false
+    }
+
+    fn trip_circuit(env: &Env, triggered_by: &Address) {
+        let now = env.ledger().timestamp();
+        let cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+        let updated = CircuitBreaker {
+            state: CircuitState::Open,
+            failure_count: cb.failure_count,
+            failure_threshold: cb.failure_threshold,
+            opened_at: now,
+            last_state_change: now,
+            triggered_by: Some(triggered_by.clone()),
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &updated);
+        env.events()
+            .publish((symbol_short!("CB_OPEN"),), (triggered_by.clone(), now));
+    }
+
     pub fn initialize(
         env: Env,
         admin: Address,
@@ -298,6 +465,8 @@ impl HealthcarePayment {
         escrow_contract: Address,
         treasury: Address,
         token: Address,
+        aml_contract: Address,
+        rbac_contract: Address,
     ) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             return Err(Error::AlreadyInitialized);
@@ -309,6 +478,8 @@ impl HealthcarePayment {
             escrow_contract,
             treasury,
             token,
+            aml_contract,
+            rbac_contract,
         };
 
         env.storage().instance().set(&DataKey::Config, &config);
@@ -329,6 +500,20 @@ impl HealthcarePayment {
         env.storage()
             .instance()
             .set(&DataKey::CoverageEnrollmentCount, &0u64);
+        env.storage().instance().set(
+            &DataKey::CircuitBreakerState,
+            &CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: env.ledger().timestamp(),
+                triggered_by: None,
+            },
+        );
+        env.storage()
+            .instance()
+            .set(&DataKey::AuthorizedPausers, &Vec::<Address>::new(&env));
 
         Ok(())
     }
@@ -347,7 +532,7 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let provider_id = Self::next_counter(&env, &DataKey::InsuranceProviderCount);
+        let provider_id = Self::next_counter(&env, &DataKey::InsuranceProviderCount)?;
         let provider = InsuranceProvider {
             id: provider_id,
             name,
@@ -366,7 +551,7 @@ impl HealthcarePayment {
         Ok(provider_id)
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_coverage_policy(
         env: Env,
         caller: Address,
@@ -395,7 +580,7 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let policy_id = Self::next_counter(&env, &DataKey::CoveragePolicyCount);
+        let policy_id = Self::next_counter(&env, &DataKey::CoveragePolicyCount)?;
         let policy = CoveragePolicy {
             id: policy_id,
             patient: patient.clone(),
@@ -436,11 +621,11 @@ impl HealthcarePayment {
             return Err(Error::InvalidCoverage);
         }
 
-        let check_id = Self::next_counter(&env, &DataKey::EligibilityCount);
+        let check_id = Self::next_counter(&env, &DataKey::EligibilityCount)?;
         let deductible_remaining = policy
             .deductible_total
-            .saturating_sub(policy.deductible_met)
-            .max(0);
+            .checked_sub(policy.deductible_met)
+            .ok_or(Error::Arithmetic)?;
         let eligibility = EligibilityCheck {
             id: check_id,
             policy_id,
@@ -472,6 +657,7 @@ impl HealthcarePayment {
         Ok(check_id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn submit_claim(
         env: Env,
         patient: Address,
@@ -482,6 +668,7 @@ impl HealthcarePayment {
         preauth_id: Option<u64>,
     ) -> Result<u64, Error> {
         provider.require_auth();
+        Self::require_operational(&env)?;
         Self::validate_positive_amount(amount)?;
 
         let claim_id: u64 = env
@@ -489,7 +676,8 @@ impl HealthcarePayment {
             .instance()
             .get(&DataKey::ClaimCount)
             .unwrap_or(0u64)
-            .saturating_add(1);
+            .checked_add(1)
+            .ok_or(Error::Arithmetic)?;
 
         let current_time = env.ledger().timestamp();
 
@@ -528,6 +716,7 @@ impl HealthcarePayment {
         transaction_code: String,
     ) -> Result<bool, Error> {
         caller.require_auth();
+        Self::require_operational(&env)?;
         if transaction_code != String::from_str(&env, "837") {
             return Err(Error::UnsupportedTransaction);
         }
@@ -711,7 +900,7 @@ impl HealthcarePayment {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn process_eob(
         env: Env,
         caller: Address,
@@ -819,6 +1008,12 @@ impl HealthcarePayment {
     }
 
     pub fn process_payment(env: Env, claim_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
+        Self::acquire_lock(&env)?;
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("ENTER")),
+            (symbol_short!("proc_pay"), claim_id),
+        );
         let config: Config = env
             .storage()
             .instance()
@@ -831,6 +1026,11 @@ impl HealthcarePayment {
             .ok_or(Error::ClaimNotFound)?;
 
         if claim.status != ClaimStatus::Approved {
+            env.events().publish(
+                (symbol_short!("DIAG"), symbol_short!("VALFAIL")),
+                (symbol_short!("proc_pay"), claim_id, claim.status as u32),
+            );
+            Self::release_lock(&env);
             return Err(Error::InvalidStatus);
         }
 
@@ -841,6 +1041,22 @@ impl HealthcarePayment {
         );
 
         let token_client = TokenClient::new(&env, &config.token);
+
+        // CEI: Update state BEFORE external token transfers to prevent reentrancy
+        claim.status = ClaimStatus::Paid;
+        claim.updated_at = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .set(&DataKey::Claim(claim_id), &claim);
+
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("STATE")),
+            (
+                claim_id,
+                ClaimStatus::Approved as u32,
+                ClaimStatus::Paid as u32,
+            ),
+        );
 
         token_client.transfer(
             &env.current_contract_address(),
@@ -856,21 +1072,77 @@ impl HealthcarePayment {
             );
         }
 
-        claim.status = ClaimStatus::Paid;
-        claim.updated_at = env.ledger().timestamp();
-
-        env.storage()
-            .persistent()
-            .set(&DataKey::Claim(claim_id), &claim);
         env.events().publish(
             (symbol_short!("claim_pd"),),
             (claim_id, claim.provider, provider_amount),
         );
 
+        env.events().publish(
+            (symbol_short!("DIAG"), symbol_short!("EXIT")),
+            (symbol_short!("proc_pay"), claim_id),
+        );
+
+        Self::release_lock(&env);
         Ok(())
     }
 
+    /// Process multiple approved claims in one call. Reads Config and creates TokenClient once.
+    pub fn batch_process_payments(env: Env, claim_ids: Vec<u64>) -> Result<Vec<u64>, Error> {
+        Self::acquire_lock(&env)?;
+        let config: Config = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .ok_or(Error::NotInitialized)?;
+        let token_client = TokenClient::new(&env, &config.token);
+        let current_time = env.ledger().timestamp();
+        let contract_addr = env.current_contract_address();
+
+        let mut paid_ids = Vec::new(&env);
+
+        for claim_id in claim_ids.iter() {
+            let mut claim: Claim = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Claim(claim_id))
+                .ok_or(Error::ClaimNotFound)?;
+
+            if claim.status != ClaimStatus::Approved {
+                Self::release_lock(&env);
+                return Err(Error::InvalidStatus);
+            }
+
+            let (provider_amount, fee_amount): (i128, i128) = env.invoke_contract(
+                &config.payment_router,
+                &Symbol::new(&env, "compute_split"),
+                Vec::from_array(&env, [claim.amount.into_val(&env)]),
+            );
+
+            // CEI: Update state BEFORE external token transfers to prevent reentrancy
+            claim.status = ClaimStatus::Paid;
+            claim.updated_at = current_time;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Claim(claim_id), &claim);
+
+            token_client.transfer(&contract_addr, &claim.provider, &provider_amount);
+            if fee_amount > 0 {
+                token_client.transfer(&contract_addr, &config.treasury, &fee_amount);
+            }
+
+            env.events().publish(
+                (symbol_short!("CLAIM_PD"),),
+                (claim_id, claim.provider, provider_amount),
+            );
+            paid_ids.push_back(claim_id);
+        }
+
+        Self::release_lock(&env);
+        Ok(paid_ids)
+    }
+
     pub fn escrow_claim(env: Env, claim_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
         let config: Config = env
             .storage()
             .instance()
@@ -1060,6 +1332,7 @@ impl HealthcarePayment {
     }
 
     pub fn pay_installment(env: Env, plan_id: u64) -> Result<(), Error> {
+        Self::require_operational(&env)?;
         let mut plan: PaymentPlan = env
             .storage()
             .persistent()
@@ -1142,12 +1415,376 @@ impl HealthcarePayment {
             .ok_or(Error::EobNotFound)
     }
 
+    // =========================================================================
+    // ZK Proof of Insurance Coverage
+    // =========================================================================
+
+    /// Submit a zero-knowledge proof of insurance coverage.
+    /// The patient proves they have active coverage without revealing
+    /// sensitive policy details on-chain.
+    pub fn submit_coverage_proof(
+        env: Env,
+        patient: Address,
+        policy_id: u64,
+        proof_hash: BytesN<32>,
+        circuit_version: u32,
+        proven_coverage_bps: u32,
+        expires_at: u64,
+        registry_proof_id: BytesN<32>,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_operational(&env)?;
+
+        if proven_coverage_bps > 10_000 {
+            return Err(Error::InvalidCoverage);
+        }
+        if expires_at <= env.ledger().timestamp() {
+            return Err(Error::InvalidCoverage);
+        }
+
+        let policy = Self::get_policy(&env, policy_id)?;
+        if policy.patient != patient {
+            return Err(Error::Unauthorized);
+        }
+
+        let proof = CoverageProof {
+            policy_id,
+            patient: patient.clone(),
+            proof_hash,
+            circuit_version,
+            is_verified: false,
+            proven_coverage_bps,
+            submitted_at: env.ledger().timestamp(),
+            expires_at,
+            registry_proof_id,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CoverageProof(policy_id, patient.clone()), &proof);
+
+        let proof_count: u64 = env
+            .storage()
+            .instance()
+            .get::<DataKey, u64>(&DataKey::CoverageProofCount)
+            .unwrap_or(0u64)
+            .saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::CoverageProofCount, &proof_count);
+
+        env.events().publish(
+            (symbol_short!("COV_PROOF"),),
+            (policy_id, patient, proven_coverage_bps),
+        );
+
+        Ok(())
+    }
+
+    /// Verify insurance coverage using a previously submitted ZK proof.
+    /// Returns the proven coverage basis points if the proof is valid.
+    pub fn verify_coverage_with_zk(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_operational(&env)?;
+
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient.clone()))
+            .ok_or(Error::CoveragePolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        if now > proof.expires_at {
+            return Err(Error::InvalidCoverage);
+        }
+
+        // Mark as verified for audit trail
+        let mut updated = proof.clone();
+        updated.is_verified = true;
+        env.storage().persistent().set(
+            &DataKey::CoverageProof(policy_id, patient.clone()),
+            &updated,
+        );
+
+        env.events().publish(
+            (symbol_short!("COV_VER"),),
+            (policy_id, caller, proof.proven_coverage_bps),
+        );
+
+        Ok(proof.proven_coverage_bps)
+    }
+
+    /// Get the ZK coverage proof for a patient's policy.
+    /// Get the ZK coverage proof for a patient's policy.
+    pub fn get_coverage_proof(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        patient: Address,
+    ) -> Result<CoverageProof, Error> {
+        caller.require_auth();
+        let proof: CoverageProof = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CoverageProof(policy_id, patient))
+            .ok_or(Error::EligibilityCheckNotFound)?;
+        Ok(proof)
+    }
+
+    /// Get the total number of coverage proofs submitted.
+    pub fn get_coverage_proof_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::CoverageProofCount)
+            .unwrap_or(0)
+    }
+
     pub fn get_patient_responsibility(env: Env, patient: Address) -> Option<PatientResponsibility> {
         env.storage()
             .persistent()
             .get(&DataKey::PatientResponsibility(patient))
     }
+
+    // Circuit breaker controls.
+
+    /// Immediately open the circuit (emergency stop). Callable by admin or any
+    /// authorized pauser.
+    pub fn emergency_pause(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        if !Self::is_authorized_pauser(&env, &caller) {
+            return Err(Error::NotAuthorizedPauser);
+        }
+        if let Some(ref cb) = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+        {
+            if cb.state == CircuitState::Open {
+                return Err(Error::AlreadyInState);
+            }
+        }
+        Self::trip_circuit(&env, &caller);
+        Ok(())
+    }
+
+    /// Transition circuit from Open -> HalfOpen to begin gradual recovery.
+    /// Admin only.
+    pub fn begin_recovery(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut cb: CircuitBreaker = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircuitBreakerState)
+            .ok_or(Error::AlreadyInState)?;
+
+        if cb.state != CircuitState::Open {
+            return Err(Error::AlreadyInState);
+        }
+
+        let now = env.ledger().timestamp();
+        cb.state = CircuitState::HalfOpen;
+        cb.last_state_change = now;
+        cb.triggered_by = Some(caller.clone());
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+        env.events()
+            .publish((symbol_short!("CB_HALF"),), (caller, now));
+
+        Ok(())
+    }
+
+    /// Transition circuit from HalfOpen -> Closed, resetting the failure counter.
+    /// Admin only.
+    pub fn resume_operations(env: Env, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut cb: CircuitBreaker = env
+            .storage()
+            .instance()
+            .get(&DataKey::CircuitBreakerState)
+            .ok_or(Error::AlreadyInState)?;
+
+        if cb.state != CircuitState::HalfOpen {
+            return Err(Error::AlreadyInState);
+        }
+
+        let now = env.ledger().timestamp();
+        cb.state = CircuitState::Closed;
+        cb.failure_count = 0;
+        cb.last_state_change = now;
+        cb.triggered_by = Some(caller.clone());
+
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+        env.events()
+            .publish((symbol_short!("CB_CLOSE"),), (caller, now));
+
+        Ok(())
+    }
+
+    /// Grant an address the ability to trigger an emergency pause. Admin only.
+    pub fn add_authorized_pauser(env: Env, caller: Address, pauser: Address) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut pausers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuthorizedPausers)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        if !pausers.contains(&pauser) {
+            pausers.push_back(pauser.clone());
+            env.storage()
+                .instance()
+                .set(&DataKey::AuthorizedPausers, &pausers);
+        }
+        env.events()
+            .publish((symbol_short!("CB_AUTH"),), (caller, pauser, true));
+
+        Ok(())
+    }
+
+    /// Revoke an address's ability to trigger an emergency pause. Admin only.
+    pub fn remove_authorized_pauser(
+        env: Env,
+        caller: Address,
+        pauser: Address,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let pausers: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuthorizedPausers)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut updated: Vec<Address> = Vec::new(&env);
+        for p in pausers.iter() {
+            if p != pauser {
+                updated.push_back(p);
+            }
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::AuthorizedPausers, &updated);
+        env.events()
+            .publish((symbol_short!("CB_AUTH"),), (caller, pauser, false));
+
+        Ok(())
+    }
+
+    /// Report an anomaly. Increments the internal failure counter and
+    /// automatically trips the circuit when the threshold is reached.
+    /// Callable by admin or any authorized pauser (e.g. the anomaly_detection
+    /// contract).
+    pub fn report_anomaly(
+        env: Env,
+        caller: Address,
+        increment: u32,
+    ) -> Result<CircuitState, Error> {
+        caller.require_auth();
+        if !Self::is_authorized_pauser(&env, &caller) {
+            return Err(Error::NotAuthorizedPauser);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+
+        if cb.state == CircuitState::Open {
+            return Ok(CircuitState::Open);
+        }
+
+        cb.failure_count = cb.failure_count.saturating_add(increment);
+        // Persist updated count before potentially tripping so trip_circuit
+        // reads the correct value.
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+
+        env.events().publish(
+            (symbol_short!("CB_ANOM"),),
+            (caller.clone(), cb.failure_count, cb.failure_threshold),
+        );
+
+        if cb.failure_count >= cb.failure_threshold {
+            Self::trip_circuit(&env, &caller);
+            return Ok(CircuitState::Open);
+        }
+
+        Ok(cb.state)
+    }
+
+    /// Set the failure threshold for automatic circuit tripping. Admin only.
+    pub fn set_failure_threshold(env: Env, caller: Address, threshold: u32) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        if threshold == 0 {
+            return Err(Error::InvalidAmount);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut cb = env
+            .storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .unwrap_or(CircuitBreaker {
+                state: CircuitState::Closed,
+                failure_count: 0,
+                failure_threshold: 5,
+                opened_at: 0,
+                last_state_change: now,
+                triggered_by: None,
+            });
+        cb.failure_threshold = threshold;
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerState, &cb);
+
+        Ok(())
+    }
+
+    /// Returns the current circuit state (defaults to Closed if never set).
+    pub fn get_circuit_state(env: Env) -> CircuitState {
+        env.storage()
+            .instance()
+            .get::<DataKey, CircuitBreaker>(&DataKey::CircuitBreakerState)
+            .map(|cb| cb.state)
+            .unwrap_or(CircuitState::Closed)
+    }
+
+    /// Returns the full circuit breaker record.
+    pub fn get_circuit_breaker(env: Env) -> Option<CircuitBreaker> {
+        env.storage().instance().get(&DataKey::CircuitBreakerState)
+    }
 }
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod concurrency_tests;

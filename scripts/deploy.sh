@@ -182,6 +182,13 @@ EOF
         print_warning "Contract initialization failed or not required"
     fi
      
+    # Automated Verification Hook
+    print_step "Running automated verification..."
+    if ! ./scripts/verify_deployment.sh "$CONTRACT_ID" "$NETWORK" "$IDENTITY" "$CONTRACT_NAME"; then
+        print_error "Automated verification failed!"
+        exit 1
+    fi
+     
 else
     print_error "Contract deployment failed (empty CONTRACT_ID)"
     exit 1

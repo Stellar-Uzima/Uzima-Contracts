@@ -1,4 +1,5 @@
 #![no_std]
+//! cross_chain_access - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::match_like_matches_macro)]
@@ -493,12 +494,7 @@ impl CrossChainAccessContract {
         }
 
         let now = env.ledger().timestamp();
-        if now
-            > request
-                .created_at
-                .checked_add(REQUEST_EXPIRY)
-                .ok_or(Error::Overflow)?
-        {
+        if replay_protection::check_message_expired(&env, request.created_at, REQUEST_EXPIRY).is_err() {
             request.status = RequestStatus::Expired;
             requests.set(request_id, request);
             env.storage()
@@ -1251,11 +1247,11 @@ impl CrossChainAccessContract {
                     if time_of_day < start || time_of_day > end {
                         return false;
                     }
-                }
+                },
                 AccessCondition::SingleUse => {
                     return true;
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
         true

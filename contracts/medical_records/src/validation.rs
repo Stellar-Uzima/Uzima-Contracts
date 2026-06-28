@@ -12,10 +12,11 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-use soroban_sdk::{Address, Env, Map, String, Vec};
+use soroban_sdk::{Address, Bytes, Env, Map, String, Vec};
 
 use crate::errors::Error;
 use crate::{
+    CleanseResult, CorrectionAction, CorrectionItem, CorrectionPriority, CorrectionWorkflow,
     DataQualityScore, FieldCompleteness, MedicalRecord, MedicalRecordType, UserProfile,
     ValidationIssue, ValidationReport, ValidationSeverity,
 };
@@ -69,11 +70,13 @@ pub const MIN_PURPOSE_LENGTH: u32 = 5;
 pub const MAX_PURPOSE_LENGTH: u32 = 256;
 
 /// Minimum length for explanation summary
+#[allow(dead_code)]
 pub const MIN_EXPLANATION_LENGTH: u32 = 10;
 /// Maximum length for explanation summary
 pub const MAX_EXPLANATION_LENGTH: u32 = 512;
 
 /// Minimum length for model version string
+#[allow(dead_code)]
 pub const MIN_MODEL_VERSION_LENGTH: u32 = 1;
 /// Maximum length for model version string
 pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
@@ -82,6 +85,7 @@ pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
 pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
+#[allow(dead_code)]
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
 
 /// Maximum number of custom metadata fields per record
@@ -381,7 +385,7 @@ pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
 /// * `address` - The address to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 ///
 /// # Note
 /// In Soroban, we validate addresses by ensuring they're provided and authorized
@@ -402,7 +406,7 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
 /// * `addr2` - Second address
 ///
 /// # Returns
-/// `Ok(())` if addresses are different, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if addresses are different, otherwise returns `Error::Unauthorized`
 pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<(), Error> {
     if addr1 == addr2 {
         return Err(Error::SameAddress);
@@ -420,6 +424,7 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[allow(dead_code)]
 pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
@@ -500,6 +505,13 @@ pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
 /// Constant for maximum emergency access duration (7 days in seconds)
 pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
 
+/// Maximum byte length for encrypted record data
+pub const MAX_ENCRYPTED_DATA_LEN: u32 = 65_536; // 64 KB
+/// Maximum byte length for metadata string
+pub const MAX_METADATA_LEN: u32 = 1_024;
+/// Maximum byte length for patient ID string
+pub const MAX_PATIENT_ID_LEN: u32 = 128;
+
 /// Validates emergency access duration
 ///
 /// # Arguments
@@ -534,7 +546,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 /// * `amount` - The amount to validate
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NumberOutOfBounds);
@@ -553,7 +565,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 /// * `page_size` - The page size
 ///
 /// # Returns
-/// `Ok(())` if valid, otherwise returns `Error::NotAuthorized`
+/// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
@@ -654,6 +666,7 @@ pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_ai_explanation(
     explanation_summary: &String,
     model_version: &String,
@@ -684,6 +697,7 @@ pub fn validate_ai_explanation(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[allow(dead_code)]
 pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> Result<(), Error> {
     // Check count
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
@@ -747,6 +761,7 @@ pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result
 // ==================== DATA QUALITY ASSESSMENT ====================
 
 /// Minimum quality score threshold for a record to be considered acceptable (60%).
+#[allow(dead_code)]
 pub const MIN_QUALITY_THRESHOLD_BPS: u32 = 6_000;
 
 /// Weight constants for quality sub-scores (out of 10_000 total).
@@ -933,7 +948,7 @@ pub fn compute_quality_score(
 
     // 3. Consistency checks
     let mut consistency_checks_passed = 0u32;
-    let consistency_checks_total = 2u32;
+    let consistency_checks_total = 4u32;
 
     // Patient and doctor should differ
     if record.patient_id != record.doctor_id {
@@ -947,7 +962,7 @@ pub fn compute_quality_score(
         });
     }
 
-    // Timestamp should be reasonable
+    // Timestamp should be reasonable (non-zero, not in far future)
     if validate_timestamp(env, record.timestamp).is_ok() {
         consistency_checks_passed += 1;
     } else {
@@ -957,6 +972,49 @@ pub fn compute_quality_score(
             issue_description: String::from_str(env, "Invalid timestamp"),
             suggestion: String::from_str(env, "Timestamp must be non-zero and not far future"),
         });
+    }
+
+    // Treatment should not be identical to diagnosis (copy-paste data entry error).
+    // Only check when both fields are non-empty and have a meaningful length.
+    if !record.diagnosis.is_empty()
+        && !record.treatment.is_empty()
+        && record.diagnosis == record.treatment
+    {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "treatment/diagnosis"),
+            issue_description: String::from_str(
+                env,
+                "Treatment text is identical to diagnosis text",
+            ),
+            suggestion: String::from_str(
+                env,
+                "Diagnosis describes the condition; treatment describes the intervention",
+            ),
+        });
+    } else {
+        consistency_checks_passed += 1;
+    }
+
+    // Timestamp should not be implausibly old (more than ~10 years = 315_360_000 s).
+    // Stale timestamps may indicate data entry mistakes or replayed records.
+    const TEN_YEARS_SECS: u64 = 315_360_000;
+    let current_time = env.ledger().timestamp();
+    if record.timestamp > 0
+        && current_time > TEN_YEARS_SECS
+        && record.timestamp < current_time.saturating_sub(TEN_YEARS_SECS)
+    {
+        issues.push_back(ValidationIssue {
+            severity: ValidationSeverity::Warning,
+            field_name: String::from_str(env, "timestamp"),
+            issue_description: String::from_str(env, "Record timestamp is more than 10 years old"),
+            suggestion: String::from_str(
+                env,
+                "Verify the record date; use current timestamp for new records",
+            ),
+        });
+    } else {
+        consistency_checks_passed += 1;
     }
 
     let consistency_score = if consistency_checks_total > 0 {
@@ -1001,6 +1059,8 @@ pub fn compute_quality_score(
 /// - Timestamp present (FHIR: `authoredOn` / `recordedDate`)
 /// - Clinical text present (FHIR: `text.div` narrative)
 /// - Category coded value (FHIR: `category` binding)
+/// - Treatment / dosage instruction present (FHIR: `dosageInstruction`)
+/// - Data reference / attachment present (FHIR: `content.attachment`)
 ///
 /// Returns `(score_bps, Vec<ValidationIssue>)`.
 #[allow(clippy::arithmetic_side_effects)]
@@ -1100,20 +1160,20 @@ pub fn validate_record_by_type(
         MedicalRecordType::General => {
             // Standard validation is sufficient
             Ok(())
-        }
+        },
         MedicalRecordType::Laboratory => {
             // Lab records MUST have a data reference for results
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Prescription => {
             // Prescriptions MUST have treatment and treatment_type
             validate_treatment(&record.treatment)?;
             validate_treatment_type(&record.treatment_type)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Imaging => {
             // Imaging records MUST have a data reference for the images
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
@@ -1121,7 +1181,7 @@ pub fn validate_record_by_type(
             }
             validate_data_ref(env, &record.data_ref)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Surgical => {
             // Surgical records need diagnosis, treatment, AND doctor DID
             validate_diagnosis(&record.diagnosis)?;
@@ -1130,7 +1190,7 @@ pub fn validate_record_by_type(
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Emergency => {
             // Emergency records: timestamp must be recent (within 1 hour)
             let current_time = env.ledger().timestamp();
@@ -1140,7 +1200,7 @@ pub fn validate_record_by_type(
             }
             validate_diagnosis(&record.diagnosis)?;
             Ok(())
-        }
+        },
     }
 }
 
@@ -1153,6 +1213,7 @@ pub fn validate_record_by_type(
 ///
 /// Returns a potentially cleaned `String`. Whitespace-only strings are returned
 /// as-is because the downstream length validators will reject them.
+#[allow(dead_code)]
 pub fn normalize_medical_string(env: &Env, input: &String) -> String {
     // In Soroban no_std, String doesn't expose slice/trim operations directly.
     // We can at least detect empty or whitespace-only strings.
@@ -1191,6 +1252,242 @@ pub fn validate_record_with_report(
         is_fhir_compliant,
         validated_at: env.ledger().timestamp(),
     }
+}
+
+// ==================== CORRECTION WORKFLOW ====================
+
+/// Maps a `ValidationSeverity` to its `CorrectionPriority` equivalent.
+fn severity_to_priority(severity: ValidationSeverity) -> CorrectionPriority {
+    match severity {
+        ValidationSeverity::Critical => CorrectionPriority::Critical,
+        ValidationSeverity::ValidationErr => CorrectionPriority::High,
+        ValidationSeverity::Warning => CorrectionPriority::Medium,
+        ValidationSeverity::Info => CorrectionPriority::Low,
+    }
+}
+
+/// Determines the most appropriate `CorrectionAction` for a validation issue
+/// based on the affected field name and the issue severity.
+fn issue_to_action(
+    env: &Env,
+    field_name: &String,
+    severity: ValidationSeverity,
+) -> CorrectionAction {
+    // FHIR issues always map to the FHIR review action.
+    // We detect them by field name: patient_id and doctor_id appear in FHIR checks.
+    let consistency_field = String::from_str(env, "patient_id/doctor_id");
+    let category_field = String::from_str(env, "category");
+    let timestamp_field = String::from_str(env, "timestamp");
+
+    if *field_name == consistency_field {
+        return CorrectionAction::CheckConsistency;
+    }
+    if *field_name == category_field {
+        return CorrectionAction::NormalizeValue;
+    }
+    if *field_name == timestamp_field {
+        return CorrectionAction::FixFormat;
+    }
+
+    // FHIR checks re-use patient_id / doctor_id field names, but the severity
+    // for those is Critical. Non-critical single-field issues on patient_id /
+    // doctor_id are treated as FHIR requirements.
+    if severity == ValidationSeverity::Critical {
+        return CorrectionAction::CheckConsistency;
+    }
+
+    // Warning-level multi-field issues that name a field clearly as a format problem.
+    if severity == ValidationSeverity::Warning || severity == ValidationSeverity::ValidationErr {
+        // Tags / treatment_type failures are format issues.
+        let tags_field = String::from_str(env, "tags");
+        let treatment_type_field = String::from_str(env, "treatment_type");
+        if *field_name == tags_field || *field_name == treatment_type_field {
+            return CorrectionAction::FixFormat;
+        }
+    }
+
+    // Default: if it is an Info-severity issue the field is merely missing (optional).
+    // Otherwise treat as a missing required field.
+    match severity {
+        ValidationSeverity::Info => CorrectionAction::AddMissingField,
+        _ => CorrectionAction::AddMissingField,
+    }
+}
+
+/// Builds a `CorrectionWorkflow` from an existing `ValidationReport`.
+///
+/// The workflow groups every validation issue into a prioritised, actionable
+/// `CorrectionItem`, counts issues by severity, and sets `can_auto_fix` to
+/// `true` when only Warning-level or lower issues remain (i.e. no blocking
+/// errors that require human clinical review).
+#[allow(clippy::arithmetic_side_effects)]
+pub fn build_correction_workflow(
+    env: &Env,
+    record_id: u64,
+    report: &ValidationReport,
+) -> CorrectionWorkflow {
+    let mut corrections: Vec<CorrectionItem> = Vec::new(env);
+    let mut critical_count = 0u32;
+    let mut error_count = 0u32;
+    let mut warning_count = 0u32;
+    let mut info_count = 0u32;
+
+    for issue in report.issues.iter() {
+        let priority = severity_to_priority(issue.severity);
+        let action = issue_to_action(env, &issue.field_name, issue.severity);
+
+        match issue.severity {
+            ValidationSeverity::Critical => critical_count += 1,
+            ValidationSeverity::ValidationErr => error_count += 1,
+            ValidationSeverity::Warning => warning_count += 1,
+            ValidationSeverity::Info => info_count += 1,
+        }
+
+        corrections.push_back(CorrectionItem {
+            field_name: issue.field_name.clone(),
+            action,
+            description: issue.issue_description.clone(),
+            suggested_value: Some(issue.suggestion.clone()),
+            priority,
+        });
+    }
+
+    // Auto-fix is only safe when there are no blocking errors.
+    let can_auto_fix = critical_count == 0 && error_count == 0;
+
+    CorrectionWorkflow {
+        record_id,
+        total_issues: report.issues.len(),
+        critical_count,
+        error_count,
+        warning_count,
+        info_count,
+        corrections,
+        can_auto_fix,
+        workflow_created_at: env.ledger().timestamp(),
+    }
+}
+
+// ==================== AUTO-CLEANSING & NORMALIZATION ====================
+
+/// Attempts to map a non-standard category string to its canonical form.
+///
+/// Handles common incorrect casings for the four recognised categories
+/// (`Modern`, `Traditional`, `Herbal`, `Spiritual`).  Returns `None` when
+/// the input is not a recognisable variant.
+fn try_normalize_category(env: &Env, input: &String) -> Option<String> {
+    // Ordered pairs: (common incorrect spelling, canonical value).
+    // The first match wins; keep the most common variants near the top.
+    let variants: [(&str, &str); 12] = [
+        ("modern", "Modern"),
+        ("MODERN", "Modern"),
+        ("Modern ", "Modern"), // trailing space variant
+        ("traditional", "Traditional"),
+        ("TRADITIONAL", "Traditional"),
+        ("Traditional ", "Traditional"),
+        ("herbal", "Herbal"),
+        ("HERBAL", "Herbal"),
+        ("Herbal ", "Herbal"),
+        ("spiritual", "Spiritual"),
+        ("SPIRITUAL", "Spiritual"),
+        ("Spiritual ", "Spiritual"),
+    ];
+
+    for (wrong, correct) in variants.iter() {
+        if *input == String::from_str(env, wrong) {
+            return Some(String::from_str(env, correct));
+        }
+    }
+    None
+}
+
+/// Attempts to auto-cleanse and normalise a `MedicalRecord` in-place.
+///
+/// Only deterministic, safe transformations are applied:
+/// - Category casing is normalised to the canonical allowed value when a
+///   recognisable variant is detected.
+///
+/// On-chain string trimming (whitespace removal) is intentionally deferred to
+/// off-chain pre-processing to minimise gas consumption.
+///
+/// Returns a `CleanseResult` containing the (possibly modified) record, a
+/// human-readable list of changes, and a flag indicating whether any change
+/// was made.
+pub fn auto_cleanse_record(env: &Env, record: &MedicalRecord) -> CleanseResult {
+    let mut cleansed = record.clone();
+    let mut changes: Vec<String> = Vec::new(env);
+
+    // --- Category normalization ---
+    if validate_category(&cleansed.category, env).is_err() {
+        if let Some(normalized) = try_normalize_category(env, &cleansed.category) {
+            cleansed.category = normalized;
+            changes.push_back(String::from_str(
+                env,
+                "category: normalized casing to canonical value",
+            ));
+        }
+    }
+
+    // --- Empty optional fields: replace empty string doctor_did with None ---
+    // An empty string doctor_did passes Some("") which fails DID validation.
+    // Cleansing sets it to None so downstream validators treat it as absent.
+    if let Some(ref did) = cleansed.doctor_did {
+        if did.is_empty() {
+            cleansed.doctor_did = None;
+            changes.push_back(String::from_str(
+                env,
+                "doctor_did: removed empty string, set to absent",
+            ));
+        }
+    }
+
+    let was_modified = !changes.is_empty();
+    CleanseResult {
+        record: cleansed,
+        changes_made: changes,
+        was_modified,
+    }
+}
+
+/// Convenience function: validates, cleanses, and re-validates a record,
+/// returning both the final `ValidationReport` and the `CorrectionWorkflow`.
+///
+/// The workflow is built from the *post-cleanse* report so that any issues
+/// resolved by auto-normalisation are not included in the correction items.
+#[allow(dead_code)]
+pub fn validate_cleanse_and_report(
+    env: &Env,
+    record_id: u64,
+    record: &MedicalRecord,
+) -> (CleanseResult, ValidationReport, CorrectionWorkflow) {
+    let cleanse_result = auto_cleanse_record(env, record);
+    let report = validate_record_with_report(env, record_id, &cleanse_result.record);
+    let workflow = build_correction_workflow(env, record_id, &report);
+    (cleanse_result, report, workflow)
+}
+
+/// Validate encrypted data length does not exceed the on-chain storage limit.
+pub fn validate_encrypted_data_len(data: &Bytes) -> Result<(), Error> {
+    if data.len() > MAX_ENCRYPTED_DATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate metadata string length.
+pub fn validate_metadata_len(metadata: &String) -> Result<(), Error> {
+    if metadata.len() > MAX_METADATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate patient ID string length.
+pub fn validate_patient_id_len(patient_id: &String) -> Result<(), Error> {
+    if patient_id.len() > MAX_PATIENT_ID_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1604,5 +1901,227 @@ mod tests {
         assert!(report.is_fhir_compliant);
         assert!(report.quality_score.overall_score >= MIN_QUALITY_THRESHOLD_BPS);
         assert_eq!(report.validated_at, 1000);
+    }
+
+    // ==================== CORRECTION WORKFLOW TESTS ====================
+
+    #[test]
+    fn test_correction_workflow_perfect_record() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+        let report = validate_record_with_report(&env, 1, &record);
+        let workflow = build_correction_workflow(&env, 1, &report);
+
+        // A perfect record should have no blocking issues.
+        assert_eq!(workflow.record_id, 1);
+        assert_eq!(workflow.critical_count, 0);
+        assert_eq!(workflow.error_count, 0);
+        assert!(workflow.can_auto_fix);
+        assert_eq!(workflow.total_issues, report.issues.len());
+        assert_eq!(workflow.corrections.len(), report.issues.len());
+    }
+
+    #[test]
+    fn test_correction_workflow_with_blocking_issues() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: patient, // same – Critical issue
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, ""),
+            treatment: String::from_str(&env, "Some treatment"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env],
+            category: String::from_str(&env, "InvalidCat"),
+            treatment_type: String::from_str(&env, "Medication"),
+            data_ref: String::from_str(&env, "short"),
+            doctor_did: None,
+        };
+
+        let report = validate_record_with_report(&env, 42, &record);
+        let workflow = build_correction_workflow(&env, 42, &report);
+
+        assert_eq!(workflow.record_id, 42);
+        // Patient == doctor generates at least one critical issue.
+        assert!(workflow.critical_count >= 1);
+        // Blocking issues mean auto-fix is not safe.
+        assert!(!workflow.can_auto_fix);
+        assert_eq!(workflow.total_issues, report.issues.len());
+    }
+
+    #[test]
+    fn test_correction_workflow_priority_mapping() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient.clone(),
+            doctor_id: patient.clone(), // Critical severity
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, "Diagnosis"),
+            treatment: String::from_str(&env, "Treatment"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env],
+            category: String::from_str(&env, "Modern"),
+            treatment_type: String::from_str(&env, "Medication"),
+            data_ref: String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: None,
+        };
+
+        let report = validate_record_with_report(&env, 5, &record);
+        let workflow = build_correction_workflow(&env, 5, &report);
+
+        // Verify Critical issues map to CorrectionPriority::Critical.
+        let has_critical_priority = workflow
+            .corrections
+            .iter()
+            .any(|c| c.priority == CorrectionPriority::Critical);
+        assert!(has_critical_priority);
+    }
+
+    // ==================== AUTO-CLEANSE TESTS ====================
+
+    #[test]
+    fn test_auto_cleanse_valid_record_unchanged() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let record = make_valid_record(&env);
+        let result = auto_cleanse_record(&env, &record);
+
+        assert!(!result.was_modified);
+        assert_eq!(result.changes_made.len(), 0);
+        // Category should be unchanged.
+        assert_eq!(result.record.category, record.category);
+    }
+
+    #[test]
+    fn test_auto_cleanse_normalizes_category_lowercase() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, "Test diagnosis"),
+            treatment: String::from_str(&env, "Test treatment"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env, String::from_str(&env, "tag1")],
+            category: String::from_str(&env, "modern"), // lowercase – should be fixed
+            treatment_type: String::from_str(&env, "Antibiotic"),
+            data_ref: String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: None,
+        };
+
+        let result = auto_cleanse_record(&env, &record);
+
+        assert!(result.was_modified);
+        assert_eq!(result.record.category, String::from_str(&env, "Modern"));
+        assert_eq!(result.changes_made.len(), 1);
+    }
+
+    #[test]
+    fn test_auto_cleanse_removes_empty_doctor_did() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, "Test"),
+            treatment: String::from_str(&env, "Treatment"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env],
+            category: String::from_str(&env, "Modern"),
+            treatment_type: String::from_str(&env, "Antibiotic"),
+            data_ref: String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: Some(String::from_str(&env, "")), // empty DID
+        };
+
+        let result = auto_cleanse_record(&env, &record);
+
+        assert!(result.was_modified);
+        assert!(result.record.doctor_did.is_none());
+    }
+
+    #[test]
+    fn test_validate_cleanse_and_report() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: 1000,
+            diagnosis: String::from_str(&env, "Flu symptoms"),
+            treatment: String::from_str(&env, "Rest and fluids"),
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env, String::from_str(&env, "flu")],
+            category: String::from_str(&env, "modern"), // will be normalized
+            treatment_type: String::from_str(&env, "Conservative"),
+            data_ref: String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: None,
+        };
+
+        let (cleanse_result, report, workflow) = validate_cleanse_and_report(&env, 10, &record);
+
+        // Category was normalized.
+        assert!(cleanse_result.was_modified);
+        assert_eq!(
+            cleanse_result.record.category,
+            String::from_str(&env, "Modern")
+        );
+
+        // After normalization the report should pass FHIR compliance.
+        assert!(report.is_fhir_compliant);
+
+        // Workflow must reference the same record ID.
+        assert_eq!(workflow.record_id, 10);
+        assert_eq!(workflow.total_issues, report.issues.len());
+    }
+
+    // ==================== ENHANCED CONSISTENCY CHECK TESTS ====================
+
+    #[test]
+    fn test_consistency_check_treatment_equals_diagnosis() {
+        let env = Env::default();
+        env.ledger().with_mut(|l| l.timestamp = 1000);
+        let patient = Address::generate(&env);
+        let doctor = Address::generate(&env);
+        let identical_text = String::from_str(&env, "Hypertension");
+        let record = MedicalRecord {
+            patient_id: patient,
+            doctor_id: doctor,
+            timestamp: 1000,
+            diagnosis: identical_text.clone(),
+            treatment: identical_text, // same as diagnosis – should produce a Warning
+            is_confidential: false,
+            tags: soroban_sdk::vec![&env, String::from_str(&env, "tag")],
+            category: String::from_str(&env, "Modern"),
+            treatment_type: String::from_str(&env, "Medication"),
+            data_ref: String::from_str(&env, "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx"),
+            doctor_did: None,
+        };
+
+        let (score, issues) = compute_quality_score(&env, &record);
+
+        // At least one warning should be generated for identical treatment/diagnosis.
+        let has_consistency_warning = issues.iter().any(|i| {
+            i.field_name == String::from_str(&env, "treatment/diagnosis")
+                && i.severity == ValidationSeverity::Warning
+        });
+        assert!(
+            has_consistency_warning,
+            "Expected warning for identical treatment/diagnosis"
+        );
+        // Score should still be decent overall.
+        assert!(score.overall_score > 0);
     }
 }

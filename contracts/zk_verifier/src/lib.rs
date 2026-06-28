@@ -1,7 +1,11 @@
 #![no_std]
+//! zk_verifier - Healthcare smart contract on Stellar blockchain.
+
+pub mod errors;
+pub use errors::Error;
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -46,19 +50,12 @@ pub enum DataKey {
     Nullifier(BytesN<32>),
 }
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    InvalidInput = 4,
-    VersionNotFound = 5,
-}
-
 const MAX_DEFAULT_TTL: u64 = 86_400;
 const MIN_DEFAULT_TTL: u64 = 1;
+
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 
 #[contract]
 pub struct ZkVerifierContract;
@@ -88,7 +85,7 @@ impl ZkVerifierContract {
         Ok(())
     }
 
-    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<bool, Error> {
+    pub fn set_default_ttl(env: Env, caller: Address, ttl: u64) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
         Self::require_admin(&env, &caller)?;
@@ -99,7 +96,7 @@ impl ZkVerifierContract {
         env.storage().instance().set(&DataKey::DefaultTtl, &ttl);
         env.events()
             .publish((symbol_short!("ZKVER"), symbol_short!("TTL")), ttl);
-        Ok(true)
+        Ok(())
     }
 
     pub fn get_default_ttl(env: Env) -> u64 {
@@ -191,6 +188,7 @@ impl ZkVerifierContract {
             .unwrap_or(0)
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_attestation(
         env: Env,
         attestor: Address,
@@ -199,13 +197,13 @@ impl ZkVerifierContract {
         proof_hash: BytesN<32>,
         verified: bool,
         ttl: u64,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         attestor.require_auth();
         Self::require_initialized(&env)?;
 
         let key = Self::read_vk(&env, vk_version)?;
         if !key.active || key.attestor != attestor {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         let effective_ttl = if ttl == 0 {
@@ -238,7 +236,7 @@ impl ZkVerifierContract {
             (symbol_short!("ZKVER"), symbol_short!("ATTEST")),
             (vk_version, verified),
         );
-        Ok(true)
+        Ok(())
     }
 
     pub fn verify_proof(
@@ -298,10 +296,10 @@ impl ZkVerifierContract {
         env.crypto().sha256(&proof).into()
     }
 
-    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
+    pub fn mark_nullifier_used(env: Env, nullifier: BytesN<32>) -> Result<(), Error> {
         let key = DataKey::Nullifier(nullifier.clone());
         if env.storage().persistent().has(&key) {
-            return false;
+            return Err(Error::InvalidInput);
         }
 
         let value = NullifierRecord {
@@ -309,7 +307,12 @@ impl ZkVerifierContract {
             consumed_at: env.ledger().timestamp(),
         };
         env.storage().persistent().set(&key, &value);
-        true
+        env.storage().persistent().extend_ttl(
+            &key,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        Ok(())
     }
 
     pub fn is_nullifier_used(env: Env, nullifier: BytesN<32>) -> bool {
@@ -401,5 +404,42 @@ mod tests {
         let public_inputs_hash_2 = BytesN::from_array(&env, &[5u8; 32]);
         let proof_2 = Bytes::from_slice(&env, b"proof-v2");
         assert!(!client.verify_proof(&1, &public_inputs_hash_2, &proof_2));
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::InvalidInput as u32, 200);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::VersionNotFound as u32, 430);
+        assert_eq!(Error::InvalidProof as u32, 600);
+        assert_eq!(Error::VerificationFailed as u32, 601);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use crate::errors::get_suggestion;
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            get_suggestion(Error::InvalidProof),
+            symbol_short!("CONTACT")
+        );
+        assert_eq!(
+            get_suggestion(Error::VerificationFailed),
+            symbol_short!("CONTACT")
+        );
     }
 }

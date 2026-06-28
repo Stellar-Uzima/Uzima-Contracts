@@ -1,10 +1,13 @@
 #![no_std]
+//! genomic_data - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 
 #[cfg(test)]
 mod test;
 
+use common_error::CommonError;
+use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
     Symbol, Vec,
@@ -128,6 +131,46 @@ pub struct ConsentEntry {
     pub active: bool,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum GenomicConsentCategory {
+    GeneralResearch,
+    DiseaseSpecific(String),
+    CommercialResearch,
+    InternationalTransfer,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ResearchConsentEntry {
+    pub record_id: u64,
+    pub patient: Address,
+    pub grantee: Address,
+    pub category: GenomicConsentCategory,
+    pub expires_at: u64,
+    pub active: bool,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct GenomicConsentAudit {
+    pub record_id: u64,
+    pub requester: Address,
+    pub category: GenomicConsentCategory,
+    pub granted: bool,
+    pub timestamp: u64,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ResearchWithdrawalNotification {
+    pub record_id: u64,
+    pub category: GenomicConsentCategory,
+    pub notified_project: Address,
+    pub revoked_grantee: Address,
+    pub timestamp: u64,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum ListingStatus {
@@ -166,7 +209,7 @@ pub struct BreachEvent {
 pub enum LogLevel {
     Info,
     Warning,
-    ErrorLevel,
+    Err,
 }
 
 #[derive(Clone)]
@@ -196,23 +239,28 @@ pub struct RateLimitEntry {
 
 #[contracttype]
 pub enum DataKey {
+    // Instance storage keys (contract config/metadata)
     Initialized,
     NextId,
+    ListingNextId,
+    ZkVerifierContract,
+    // Persistent storage keys (critical long-lived data)
     Record(u64),
     RecordHeader(u64),
     PatientRecords(Address),
-    ZkVerifierContract,
     Consent(u64, Address),
+    ResearchConsent(u64, Address, GenomicConsentCategory),
+    ActiveResearchProjects(u64, GenomicConsentCategory),
     AssocCount(u64),
     Assoc(u64, u64),
     DrugRespCount(u64),
     DrugResp(u64, u64),
     Ancestry(u64),
-    ListingNextId,
     Listing(u64),
     RecordListings(u64),
     BreachCount,
     Breach(u64),
+    // Temporary storage keys (short-lived data)
     RateLimitCfg(u32),
     RateLimit(Address, u32),
 }
@@ -243,7 +291,7 @@ impl GenomicDataContract {
         let topic = match level {
             LogLevel::Info => symbol_short!("LOG_INFO"),
             LogLevel::Warning => symbol_short!("LOG_WARN"),
-            LogLevel::ErrorLevel => symbol_short!("LOG_ERROR"),
+            LogLevel::Err => symbol_short!("LOG_ERROR"),
         };
         let entry = StructuredLog {
             timestamp: env.ledger().timestamp(),
@@ -256,18 +304,16 @@ impl GenomicDataContract {
         env.events().publish(("LOG", topic), entry);
     }
 
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), CommonError> {
         admin.require_auth();
         if env.storage().instance().has(&UPGRADE_ADMIN) {
-            return false;
+            return Err(CommonError::AlreadyInitialized);
         }
         env.storage().instance().set(&UPGRADE_ADMIN, &admin);
         env.storage().instance().set(&VERSION, &1u32);
-        env.storage().persistent().set(&DataKey::Initialized, &true);
-        env.storage().persistent().set(&DataKey::NextId, &0u64);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ListingNextId, &0u64);
+        env.storage().instance().set(&DataKey::Initialized, &true);
+        env.storage().instance().set(&DataKey::NextId, &0u64);
+        env.storage().instance().set(&DataKey::ListingNextId, &0u64);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -276,16 +322,20 @@ impl GenomicDataContract {
             None,
             "initialized",
         );
-        true
+        Ok(())
     }
 
-    pub fn set_zk_verifier(env: Env, admin: Address, contract_id: Address) -> bool {
+    pub fn set_zk_verifier(
+        env: Env,
+        admin: Address,
+        contract_id: Address,
+    ) -> Result<(), CommonError> {
         admin.require_auth();
         if !Self::require_admin(&env, &admin) {
-            return false;
+            return Err(CommonError::Unauthorized);
         }
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::ZkVerifierContract, &contract_id);
         Self::emit_log(
             &env,
@@ -295,7 +345,7 @@ impl GenomicDataContract {
             None,
             "zk verifier set",
         );
-        true
+        Ok(())
     }
 
     pub fn add_record(
@@ -314,7 +364,7 @@ impl GenomicDataContract {
         uploader.require_auth();
         let id = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, u64>(&DataKey::NextId)
             .unwrap_or(0);
         let new_id = id + 1;
@@ -350,7 +400,7 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::PatientRecords(patient), &list);
-        env.storage().persistent().set(&DataKey::NextId, &new_id);
+        env.storage().instance().set(&DataKey::NextId, &new_id);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -421,7 +471,12 @@ impl GenomicDataContract {
         true
     }
 
-    pub fn revoke_consent(env: Env, patient: Address, record_id: u64, grantee: Address) -> bool {
+    pub fn revoke_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+    ) -> Result<(), CommonError> {
         patient.require_auth();
         let ce_opt = env
             .storage()
@@ -429,11 +484,11 @@ impl GenomicDataContract {
             .get::<DataKey, ConsentEntry>(&DataKey::Consent(record_id, grantee.clone()));
         let mut entry = if let Some(entry) = ce_opt {
             if entry.patient != patient {
-                return false;
+                return Err(CommonError::Unauthorized);
             }
             entry
         } else {
-            return false;
+            return Err(CommonError::NotFound);
         };
         entry.active = false;
         env.storage()
@@ -447,7 +502,222 @@ impl GenomicDataContract {
             Some(record_id),
             "consent revoked",
         );
+        Ok(())
+    }
+
+    pub fn grant_research_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+        category: GenomicConsentCategory,
+        expires_at: u64,
+    ) -> bool {
+        patient.require_auth();
+        let header_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        if let Some(header) = header_opt.as_ref() {
+            if header.patient != patient {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        env.storage().persistent().set(
+            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+            &ResearchConsentEntry {
+                record_id,
+                patient: patient.clone(),
+                grantee: grantee.clone(),
+                category: category.clone(),
+                expires_at,
+                active: true,
+            },
+        );
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "grant_research_consent",
+            Some(&patient),
+            Some(record_id),
+            "research consent granted",
+        );
         true
+    }
+
+    pub fn revoke_research_consent(
+        env: Env,
+        patient: Address,
+        record_id: u64,
+        grantee: Address,
+        category: GenomicConsentCategory,
+    ) -> bool {
+        patient.require_auth();
+        let ce_opt = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ResearchConsentEntry>(&DataKey::ResearchConsent(
+                record_id,
+                grantee.clone(),
+                category.clone(),
+            ));
+        let mut entry = if let Some(entry) = ce_opt {
+            if entry.patient != patient {
+                return false;
+            }
+            entry
+        } else {
+            return false;
+        };
+        entry.active = false;
+        env.storage().persistent().set(
+            &DataKey::ResearchConsent(record_id, grantee.clone(), category.clone()),
+            &entry,
+        );
+        Self::notify_research_withdrawal(&env, record_id, &category, &grantee);
+        Self::emit_log(
+            &env,
+            LogLevel::Info,
+            "revoke_research_consent",
+            Some(&patient),
+            Some(record_id),
+            "research consent revoked",
+        );
+        true
+    }
+
+    pub fn get_record_header_for_research(
+        env: Env,
+        requester: Address,
+        record_id: u64,
+        category: GenomicConsentCategory,
+    ) -> Option<GenomicRecordHeader> {
+        requester.require_auth();
+        let header = env
+            .storage()
+            .persistent()
+            .get::<DataKey, GenomicRecordHeader>(&DataKey::RecordHeader(record_id));
+        let header_ref = header.as_ref()?;
+        if requester == header_ref.patient
+            || requester == header_ref.uploader
+            || Self::is_research_consent_granted(&env, record_id, &requester, &category)
+        {
+            Self::emit_research_audit(&env, record_id, &requester, &category, true);
+            Self::track_active_research_project(&env, record_id, requester.clone(), &category);
+            header
+        } else {
+            Self::emit_research_audit(&env, record_id, &requester, &category, false);
+            None
+        }
+    }
+
+    fn emit_research_audit(
+        env: &Env,
+        record_id: u64,
+        requester: &Address,
+        category: &GenomicConsentCategory,
+        granted: bool,
+    ) {
+        let audit = GenomicConsentAudit {
+            record_id,
+            requester: requester.clone(),
+            category: category.clone(),
+            granted,
+            timestamp: env.ledger().timestamp(),
+        };
+        env.events()
+            .publish(("GENOMIC_CONSENT", symbol_short!("AUDIT")), audit);
+    }
+
+    fn track_active_research_project(
+        env: &Env,
+        record_id: u64,
+        project: Address,
+        category: &GenomicConsentCategory,
+    ) {
+        let mut projects: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(
+                record_id,
+                category.clone(),
+            ))
+            .unwrap_or(Vec::new(env));
+        let mut already_present = false;
+        let len = projects.len();
+        let mut i = 0;
+        while i < len {
+            if projects.get(i) == Some(project.clone()) {
+                already_present = true;
+                break;
+            }
+            i += 1;
+        }
+        if !already_present {
+            projects.push_back(project.clone());
+            env.storage().persistent().set(
+                &DataKey::ActiveResearchProjects(record_id, category.clone()),
+                &projects,
+            );
+        }
+    }
+
+    fn notify_research_withdrawal(
+        env: &Env,
+        record_id: u64,
+        category: &GenomicConsentCategory,
+        revoked_grantee: &Address,
+    ) {
+        let projects: Vec<Address> = env
+            .storage()
+            .persistent()
+            .get::<DataKey, Vec<Address>>(&DataKey::ActiveResearchProjects(
+                record_id,
+                category.clone(),
+            ))
+            .unwrap_or(Vec::new(env));
+        let len = projects.len();
+        let mut i = 0;
+        while i < len {
+            if let Some(project) = projects.get(i) {
+                let notification = ResearchWithdrawalNotification {
+                    record_id,
+                    category: category.clone(),
+                    notified_project: project.clone(),
+                    revoked_grantee: revoked_grantee.clone(),
+                    timestamp: env.ledger().timestamp(),
+                };
+                env.events().publish(
+                    ("GENOMIC_CONSENT", Symbol::new(env, "WITHDRAWAL")),
+                    notification,
+                );
+            }
+            i += 1;
+        }
+    }
+
+    fn is_research_consent_granted(
+        env: &Env,
+        record_id: u64,
+        grantee: &Address,
+        category: &GenomicConsentCategory,
+    ) -> bool {
+        let ce = env
+            .storage()
+            .persistent()
+            .get::<DataKey, ResearchConsentEntry>(&DataKey::ResearchConsent(
+                record_id,
+                grantee.clone(),
+                category.clone(),
+            ));
+        if let Some(c) = ce {
+            if c.active && (c.expires_at == 0 || env.ledger().timestamp() <= c.expires_at) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn verify_and_grant_access(
@@ -475,7 +745,7 @@ impl GenomicDataContract {
         }
         let verifier = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, Address>(&DataKey::ZkVerifierContract);
         if let Some(addr) = verifier {
             let client = ZkVerifierClient::new(&env, &addr);
@@ -494,6 +764,12 @@ impl GenomicDataContract {
         env.storage().temporary().set(
             &(Symbol::new(&env, "pg"), record_id, requester.clone()),
             &grant,
+        );
+        // Set TTL for privacy grant temporary storage (~4 hours)
+        env.storage().temporary().extend_ttl(
+            &(Symbol::new(&env, "pg"), record_id, requester.clone()),
+            0,
+            1000,
         );
         Self::emit_log(
             &env,
@@ -663,7 +939,7 @@ impl GenomicDataContract {
         }
         let lid = env
             .storage()
-            .persistent()
+            .instance()
             .get::<DataKey, u64>(&DataKey::ListingNextId)
             .unwrap_or(0)
             + 1;
@@ -690,9 +966,7 @@ impl GenomicDataContract {
         env.storage()
             .persistent()
             .set(&DataKey::RecordListings(record_id), &ids);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ListingNextId, &lid);
+        env.storage().instance().set(&DataKey::ListingNextId, &lid);
         Self::emit_log(
             &env,
             LogLevel::Info,
@@ -704,7 +978,11 @@ impl GenomicDataContract {
         lid
     }
 
-    pub fn purchase_listing(env: Env, buyer: Address, listing_id: u64) -> bool {
+    pub fn purchase_listing(
+        env: Env,
+        buyer: Address,
+        listing_id: u64,
+    ) -> Result<(), CommonError> {
         buyer.require_auth();
         let l_opt = env
             .storage()
@@ -713,10 +991,10 @@ impl GenomicDataContract {
         let mut listing = if let Some(listing) = l_opt {
             listing
         } else {
-            return false;
+            return Err(CommonError::NotFound);
         };
         if listing.status != ListingStatus::Active {
-            return false;
+            return Err(CommonError::InvalidState);
         }
         listing.buyer = Some(buyer.clone());
         listing.status = ListingStatus::Purchased;
@@ -731,7 +1009,7 @@ impl GenomicDataContract {
             Some(listing.record_id),
             "listing purchased",
         );
-        true
+        Ok(())
     }
 
     pub fn report_breach(
@@ -788,5 +1066,49 @@ impl GenomicDataContract {
             }
         }
         false
+    }
+
+    pub fn upgrade(
+        env: Env,
+        caller: Address,
+        new_wasm_hash: BytesN<32>,
+        new_version: u32,
+    ) -> Result<(), upgradeability::UpgradeError> {
+        caller.require_auth();
+        if !Self::require_admin(&env, &caller) {
+            return Err(upgradeability::UpgradeError::NotAuthorized);
+        }
+
+        upgradeability::execute_upgrade::<Self>(
+            &env,
+            new_wasm_hash,
+            new_version,
+            symbol_short!("Upgrade"),
+        )
+    }
+
+    pub fn validate_upgrade(
+        env: Env,
+        new_wasm_hash: BytesN<32>,
+    ) -> Result<upgradeability::UpgradeValidation, upgradeability::UpgradeError> {
+        upgradeability::validate_upgrade::<Self>(&env, new_wasm_hash)
+    }
+}
+
+impl upgradeability::migration::Migratable for GenomicDataContract {
+    fn migrate(_env: &Env, _from_version: u32) -> Result<(), upgradeability::UpgradeError> {
+        Ok(())
+    }
+
+    fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
+        let next_id = env
+            .storage()
+            .persistent()
+            .get::<DataKey, u64>(&DataKey::NextId)
+            .unwrap_or(0);
+        let mut data = Vec::new(env);
+        data.push_back(next_id);
+        let hash_bytes = env.crypto().sha256(&data.to_xdr(env));
+        Ok(BytesN::from_array(env, &hash_bytes.to_array()))
     }
 }
