@@ -323,6 +323,36 @@ pub enum Error {
     ReportsNotYetAvailable = 23,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::ImageNotFound => write!(f, "image not found"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::ShareNotFound => write!(f, "share not found"),
+            Error::ShareExpired => write!(f, "share expired"),
+            Error::AnnotationNotFound => write!(f, "annotation not found"),
+            Error::LinkNotFound => write!(f, "link not found"),
+            Error::DuplicateDicomSop => write!(f, "duplicate dicom sop"),
+            Error::IntegrityMismatch => write!(f, "integrity mismatch"),
+            Error::StudyNotFound => write!(f, "study not found"),
+            Error::StudyNotInExpectedStatus => write!(f, "study not in expected status"),
+            Error::ReaderNotAssigned => write!(f, "reader not assigned"),
+            Error::ReaderAlreadySubmitted => write!(f, "reader already submitted"),
+            Error::TooManyReaders => write!(f, "too many readers"),
+            Error::TooManyImages => write!(f, "too many images"),
+            Error::AllReadersNotSubmitted => write!(f, "all readers not submitted"),
+            Error::ArbitratorNotAssigned => write!(f, "arbitrator not assigned"),
+            Error::InvalidStatusTransition => write!(f, "invalid status transition"),
+            Error::ReportsNotYetAvailable => write!(f, "reports not yet available"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalImagingContract;
 
@@ -1610,6 +1640,7 @@ impl MedicalImagingContract {
         Ok(true)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1622,6 +1653,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
@@ -1630,6 +1662,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role_or_admin(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         if Self::require_admin(env, caller).is_ok() {
             return Ok(());
@@ -1645,6 +1678,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_image_exists(env: &Env, image_id: u64) -> Result<(), Error> {
         if !env.storage().persistent().has(&DataKey::Image(image_id)) {
             return Err(Error::ImageNotFound);

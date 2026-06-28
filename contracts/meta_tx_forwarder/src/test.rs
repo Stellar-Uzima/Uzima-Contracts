@@ -114,9 +114,9 @@ fn make_user(env: &Env, forwarder: &MetaTxForwarderClient<'_>, owner: &Address) 
 struct UserKeys {
     addr: Address,
     signing_key: SigningKey,
-    #[allow(dead_code)]
+    
     pub_key: BytesN<32>,
-    #[allow(dead_code)]
+    
     _owner: Address,
 }
 

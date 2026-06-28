@@ -62,6 +62,23 @@ pub enum Error {
     InvalidFeePercentage = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::InvalidNonce => write!(f, "invalid nonce"),
+            Error::RequestExpired => write!(f, "request expired"),
+            Error::ExecutionFailed => write!(f, "execution failed"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::OwnerNotSet => write!(f, "owner not set"),
+            Error::BatchLengthMismatch => write!(f, "batch length mismatch"),
+            Error::PubKeyNotRegistered => write!(f, "pub key not registered"),
+            Error::InvalidFeePercentage => write!(f, "invalid fee percentage"),
+        }
+    }
+}
+
 // ============================================================================
 // Data Structures
 // ============================================================================
@@ -402,6 +419,7 @@ impl MetaTxForwarder {
     }
 
     /// Verify user nonce without incrementing.
+    #[must_use]
     fn verify_nonce(env: &Env, user: &Address, expected_nonce: u64) -> Result<(), Error> {
         let current: u64 = env
             .storage()
@@ -468,6 +486,7 @@ impl MetaTxForwarder {
     /// Builds `Vec<Val>` of `[from.into_val(), ...request.target_args]` and
     /// invokes `request.to.request.target_fn(...)`. Returns the XDR-encoded
     /// return value of the target.
+    #[must_use]
     fn forward_call(env: &Env, request: &ForwardRequest) -> Result<Bytes, Error> {
         // Build the positional arg list passed to the target. The forwarder
         // always prepends the original `from` so target contracts have
@@ -485,6 +504,7 @@ impl MetaTxForwarder {
     }
 
     /// Require that the caller is the contract owner.
+    #[must_use]
     fn require_owner(env: &Env, caller: &Address) -> Result<(), Error> {
         let stored: Address = env
             .storage()
@@ -498,6 +518,7 @@ impl MetaTxForwarder {
     }
 
     /// Require that the relayer is registered and active.
+    #[must_use]
     fn require_active_relayer(env: &Env, relayer: &Address) -> Result<(), Error> {
         let config: Option<RelayerConfig> = env
             .storage()

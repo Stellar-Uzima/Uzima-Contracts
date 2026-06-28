@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, symbol_short, Symbol};
+use soroban_sdk::{contracterror};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -13,13 +13,29 @@ pub enum Error {
     RateLimitExceeded = 429,
 }
 
-pub fn get_suggestion(error: Error) -> Symbol {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::InvalidDuration => write!(f, "invalid duration"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
+        }
+    }
+}
+
+#[doc(hidden)] /// Reserved for ABI consistency; not currently called from contract code.
+#[cfg(test)]
+pub fn get_suggestion(error: Error) -> soroban_sdk::Symbol {
     match error {
-        Error::Unauthorized => symbol_short!("CHK_AUTH"),
-        Error::NotInitialized => symbol_short!("INIT_CTR"),
-        Error::AlreadyInitialized => symbol_short!("ALREADY"),
-        Error::InvalidThreshold | Error::InvalidDuration => symbol_short!("CHK_LEN"),
-        Error::RecordNotFound => symbol_short!("CHK_ID"),
-        Error::RateLimitExceeded => symbol_short!("WAIT_CD"),
+        Error::Unauthorized => soroban_sdk::symbol_short!("CHK_AUTH"),
+        Error::NotInitialized => soroban_sdk::symbol_short!("INIT_CTR"),
+        Error::AlreadyInitialized => soroban_sdk::symbol_short!("ALREADY"),
+        Error::InvalidThreshold | Error::InvalidDuration => soroban_sdk::symbol_short!("CHK_LEN"),
+        Error::RecordNotFound => soroban_sdk::symbol_short!("CHK_ID"),
+        Error::RateLimitExceeded => soroban_sdk::symbol_short!("WAIT_CD"),
     }
 }

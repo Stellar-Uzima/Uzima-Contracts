@@ -88,6 +88,16 @@ pub enum MonitoringError {
     Unauthorized = 3,
 }
 
+impl core::fmt::Display for MonitoringError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            MonitoringError::NotInitialized => write!(f, "not initialized"),
+            MonitoringError::AlreadyInitialized => write!(f, "already initialized"),
+            MonitoringError::Unauthorized => write!(f, "unauthorized"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -317,6 +327,7 @@ impl ContractMonitoring {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    #[must_use]
     fn ensure_initialized(env: &Env) -> Result<(), MonitoringError> {
         if env.storage().instance().has(&DataKey::Admin) {
             Ok(())
@@ -325,6 +336,7 @@ impl ContractMonitoring {
         }
     }
 
+    #[must_use]
     fn get_admin(env: &Env) -> Result<Address, MonitoringError> {
         env.storage()
             .instance()

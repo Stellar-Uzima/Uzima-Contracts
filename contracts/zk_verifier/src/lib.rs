@@ -321,6 +321,7 @@ impl ZkVerifierContract {
             .has(&DataKey::Nullifier(nullifier))
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -329,6 +330,7 @@ impl ZkVerifierContract {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -338,6 +340,7 @@ impl ZkVerifierContract {
         common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
+    #[must_use]
     fn read_vk(env: &Env, version: u32) -> Result<VerifyingKeyConfig, Error> {
         env.storage()
             .persistent()

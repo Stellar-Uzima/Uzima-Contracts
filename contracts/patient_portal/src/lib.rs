@@ -40,6 +40,23 @@ pub enum PatientPortalError {
     NotAppointmentOwner = 10,
 }
 
+impl core::fmt::Display for PatientPortalError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            PatientPortalError::AlreadyInitialized => write!(f, "already initialized"),
+            PatientPortalError::NotInitialized => write!(f, "not initialized"),
+            PatientPortalError::NotAdmin => write!(f, "not admin"),
+            PatientPortalError::Paused => write!(f, "paused"),
+            PatientPortalError::AlreadyRegistered => write!(f, "already registered"),
+            PatientPortalError::NotRegistered => write!(f, "not registered"),
+            PatientPortalError::AppointmentNotFound => write!(f, "appointment not found"),
+            PatientPortalError::ExportTooManyRecords => write!(f, "export too many records"),
+            PatientPortalError::InvalidInput => write!(f, "invalid input"),
+            PatientPortalError::NotAppointmentOwner => write!(f, "not appointment owner"),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AppointmentStatus {
@@ -372,6 +389,7 @@ impl PatientPortalContract {
 }
 
 impl PatientPortalContract {
+    #[must_use]
     fn require_init(env: &Env) -> Result<(), PatientPortalError> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(PatientPortalError::NotInitialized);
@@ -379,6 +397,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), PatientPortalError> {
         if env
             .storage()
@@ -391,6 +410,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), PatientPortalError> {
         Self::require_init(env)?;
         let admin: Address = env
@@ -405,6 +425,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_profile(env: &Env, patient: &Address) -> Result<(), PatientPortalError> {
         if !env
             .storage()
@@ -460,6 +481,7 @@ impl PatientPortalContract {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    #[must_use]
     fn push_index(env: &Env, key: &DataKey, id: u64) -> Result<(), PatientPortalError> {
         let mut v = Self::read_index(env, key);
         if v.len() >= MAX_INDEXED_ITEMS {
@@ -477,6 +499,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_locale(s: &String) -> Result<(), PatientPortalError> {
         if s.is_empty() || s.len() > 16 {
             return Err(PatientPortalError::InvalidInput);
@@ -484,6 +507,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_notes(s: &String) -> Result<(), PatientPortalError> {
         if s.len() > MAX_NOTE_LEN {
             return Err(PatientPortalError::InvalidInput);
@@ -491,6 +515,7 @@ impl PatientPortalContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_med_ref(s: &String) -> Result<(), PatientPortalError> {
         if s.is_empty() || s.len() > MAX_MEDICATION_REF_LEN {
             return Err(PatientPortalError::InvalidInput);

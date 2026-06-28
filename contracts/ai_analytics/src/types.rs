@@ -15,6 +15,7 @@ pub struct FederatedRound {
 }
 
 impl SafeSerialize for FederatedRound {
+    #[must_use]
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
         SerializationUtils::validate_bytes_n(env, &self.base_model_id)?;
@@ -48,6 +49,7 @@ pub struct ParticipantUpdateMeta {
 }
 
 impl SafeSerialize for ParticipantUpdateMeta {
+    #[must_use]
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
         SerializationUtils::validate_address(env, &self.participant)?;
@@ -77,6 +79,7 @@ pub struct ModelMetadata {
 }
 
 impl SafeSerialize for ModelMetadata {
+    #[must_use]
     fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
         // Validate individual fields
         SerializationUtils::validate_bytes_n(env, &self.model_id)?;
@@ -135,4 +138,22 @@ pub enum Error {
     CollectionTooLarge = 9,
     StringTooLong = 10,
     NestingTooDeep = 11,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::RoundFinalized => write!(f, "round finalized"),
+            Error::NotEnoughParticipants => write!(f, "not enough participants"),
+            Error::DuplicateUpdate => write!(f, "duplicate update"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::AdminNotSet => write!(f, "admin not set"),
+            Error::SerializationError => write!(f, "serialization error"),
+            Error::CollectionTooLarge => write!(f, "collection too large"),
+            Error::StringTooLong => write!(f, "string too long"),
+            Error::NestingTooDeep => write!(f, "nesting too deep"),
+        }
+    }
 }

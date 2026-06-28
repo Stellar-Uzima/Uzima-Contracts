@@ -2,6 +2,7 @@ use soroban_sdk::{Address, Env};
 
 use crate::types::{DataKey, Error};
 
+#[must_use]
 pub fn ensure_admin(env: &Env, caller: &Address) -> Result<(), Error> {
     let admin: Address = env
         .storage()

@@ -112,6 +112,23 @@ pub enum Error {
     InsufficientReplicas = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::MaxRegionsExceeded => write!(f, "max regions exceeded"),
+            Error::AllRegionsUnavailable => write!(f, "all regions unavailable"),
+            Error::FailoverFailed => write!(f, "failover failed"),
+            Error::SyncFailed => write!(f, "sync failed"),
+            Error::RtoExceeded => write!(f, "rto exceeded"),
+            Error::InsufficientReplicas => write!(f, "insufficient replicas"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
@@ -568,6 +585,7 @@ impl MultiRegionOrchestrator {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
         if admin != *caller {
@@ -576,6 +594,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -590,6 +609,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn require_auditor(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -604,6 +624,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn check_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {

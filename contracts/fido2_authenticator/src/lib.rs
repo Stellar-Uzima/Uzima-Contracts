@@ -71,6 +71,34 @@ pub enum Error {
     AlgorithmKeyMismatch = 21,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::DeviceNotFound => write!(f, "device not found"),
+            Error::DeviceAlreadyRegistered => write!(f, "device already registered"),
+            Error::MaxDevicesReached => write!(f, "max devices reached"),
+            Error::DeviceInactive => write!(f, "device inactive"),
+            Error::InvalidPublicKey => write!(f, "invalid public key"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::InvalidAuthenticatorData => write!(f, "invalid authenticator data"),
+            Error::ChallengeExpired => write!(f, "challenge expired"),
+            Error::NoChallengeIssued => write!(f, "no challenge issued"),
+            Error::SignCountRegression => write!(f, "sign count regression"),
+            Error::InvalidDeviceName => write!(f, "invalid device name"),
+            Error::InvalidCredentialIdHash => write!(f, "invalid credential id hash"),
+            Error::ZkVerifierNotSet => write!(f, "zk verifier not set"),
+            Error::NullifierAlreadyUsed => write!(f, "nullifier already used"),
+            Error::RpIdMismatch => write!(f, "rp id mismatch"),
+            Error::UserPresenceNotVerified => write!(f, "user presence not verified"),
+            Error::InvalidRevocationReason => write!(f, "invalid revocation reason"),
+            Error::AlgorithmKeyMismatch => write!(f, "algorithm key mismatch"),
+        }
+    }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Data types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -868,6 +896,7 @@ impl Fido2AuthenticatorContract {
 
     // ─────────────────────────────── Helpers ─────────────────────────────────
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -875,6 +904,7 @@ impl Fido2AuthenticatorContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -900,6 +930,7 @@ impl Fido2AuthenticatorContract {
 
     /// Validates that a pending challenge exists for `user`, is not expired,
     /// and removes it from storage (one-time use).
+    #[must_use]
     fn consume_challenge(env: &Env, user: &Address) -> Result<(), Error> {
         let key = DataKey::PendingChallenge(user.clone());
         let pending: PendingChallenge = env
@@ -920,6 +951,7 @@ impl Fido2AuthenticatorContract {
     /// - Minimum length 37 bytes.
     /// - First 32 bytes (rpIdHash) must match the contract's configured RP ID hash.
     /// - Byte 32 (flags) must have the User Presence (UP) bit set.
+    #[must_use]
     fn validate_authenticator_data(env: &Env, auth_data: &Bytes) -> Result<(), Error> {
         if auth_data.len() < MIN_AUTH_DATA_LEN {
             return Err(Error::InvalidAuthenticatorData);
@@ -975,6 +1007,7 @@ impl Fido2AuthenticatorContract {
     }
 
     /// Converts a `Bytes` buffer of exactly 32 bytes into a `BytesN<32>`.
+    #[must_use]
     fn bytes_to_ed25519_key(env: &Env, key_bytes: &Bytes) -> Result<BytesN<32>, Error> {
         if key_bytes.len() != ED25519_KEY_LEN {
             return Err(Error::InvalidPublicKey);

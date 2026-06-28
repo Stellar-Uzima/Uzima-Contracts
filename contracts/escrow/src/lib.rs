@@ -15,8 +15,6 @@
 #![no_std]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
-#![allow(dead_code)]
-
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
@@ -89,17 +87,13 @@ const STATS: Symbol = symbol_short!("stats");
 const ADMIN: Symbol = symbol_short!("admin");
 const DAILY_STATS: Symbol = symbol_short!("dlystats");
 
-// TTL constants for storage management
-/// TTL threshold: extend persistent data if remaining TTL falls below this
-const PERSISTENT_TTL_THRESHOLD: u32 = 100;
-/// Extend persistent data to this many ledgers (~4 days at 5s/ledger)
-const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 /// TTL for temporary/session storage (reentrancy lock, ~30 min)
 const TEMP_SESSION_TTL: u32 = 500;
 
 #[contract]
 pub struct EscrowContract;
 
+#[must_use]
 fn require_not_reentrant(env: &Env) -> Result<(), Error> {
     let locked: bool = env
         .storage()
@@ -120,6 +114,13 @@ fn clear_reentrancy(env: &Env) {
     env.storage().temporary().remove(&REENTRANCY_LOCK);
 }
 
+fn add_credit(env: &Env, addr: &Address, delta: i128) -> Result<(), Error> {
+    let mut credits: Map<Address, i128> = env
+        .storage()
+        .persistent()
+        .get(&CREDITS)
+        .unwrap_or(Map::new(env));
+    let current = credits.get(addr.clone()).unwrap_or(0);
     let new_bal = current.checked_add(delta).ok_or(Error::Overflow)?;
     credits.set(addr.clone(), new_bal);
     env.storage().persistent().set(&CREDITS, &credits);

@@ -83,6 +83,24 @@ pub enum Error {
     ArithmeticOverflow = 11,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::BudgetNotFound => write!(f, "budget not found"),
+            Error::BudgetExhausted => write!(f, "budget exhausted"),
+            Error::BudgetNotActive => write!(f, "budget not active"),
+            Error::QueryNotFound => write!(f, "query not found"),
+            Error::InvalidSensitivity => write!(f, "invalid sensitivity"),
+            Error::InsufficientBudget => write!(f, "insufficient budget"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::ArithmeticOverflow => write!(f, "arithmetic overflow"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -302,6 +320,7 @@ impl DifferentialPrivacyContract {
 
     // Internal helper functions
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -310,6 +329,7 @@ impl DifferentialPrivacyContract {
         }
     }
 
+    #[must_use]
     fn load_budget(env: &Env, budget_id: &BytesN<32>) -> Result<PrivacyBudget, Error> {
         env.storage()
             .persistent()

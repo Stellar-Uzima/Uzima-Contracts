@@ -44,10 +44,23 @@ pub enum RbacError {
     AlreadyInitialized = 301,
 }
 
+impl core::fmt::Display for RbacError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            RbacError::Unauthorized => write!(f, "unauthorized"),
+            RbacError::NotInitialized => write!(f, "not initialized"),
+            RbacError::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[soroban_sdk::contractclient(name = "RbacClient")]
 pub trait RbacContract {
+    #[must_use]
     fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
@@ -427,6 +440,7 @@ impl IdentityRegistryContract {
         false
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_admin(env, caller) {
             Ok(())
@@ -435,6 +449,7 @@ impl IdentityRegistryContract {
         }
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -1598,7 +1613,7 @@ impl IdentityRegistryContract {
             return Err(Error::Unauthorized);
         }
 
-        rbac_client.assign_role(&verifier, &RbacRole::Staff);
+        let _ = rbac_client.assign_role(&verifier, &RbacRole::Staff);
 
         env.storage()
             .instance()
@@ -1634,7 +1649,7 @@ impl IdentityRegistryContract {
             return Err(Error::Unauthorized);
         }
 
-        rbac_client.remove_role(&verifier, &RbacRole::Staff);
+        let _ = rbac_client.remove_role(&verifier, &RbacRole::Staff);
 
         env.storage()
             .instance()
@@ -2160,17 +2175,20 @@ pub struct MockRbac;
 impl MockRbac {
     pub fn init_mock(_env: Env) {}
 
+    #[must_use]
     pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
+    #[must_use]
     pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &true);
         Ok(true)
     }
 
+    #[must_use]
     pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &false);

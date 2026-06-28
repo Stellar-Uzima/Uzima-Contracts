@@ -467,6 +467,7 @@ impl RemotePatientMonitoringContract {
 // ============================================================
 
 impl upgradeability::migration::Migratable for RemotePatientMonitoringContract {
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         if from_version < 1 {
             let admin: Address = env
@@ -480,6 +481,7 @@ impl upgradeability::migration::Migratable for RemotePatientMonitoringContract {
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         let admin_exists = env.storage().instance().has(&Symbol::new(env, "admin"));
         let mut data = Vec::new(env);

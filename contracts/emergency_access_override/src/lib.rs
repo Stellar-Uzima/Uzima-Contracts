@@ -1,7 +1,5 @@
 #![no_std]
 //! emergency_access_override - Healthcare smart contract on Stellar blockchain.
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -454,11 +452,7 @@ impl EmergencyAccessOverride {
             .ok_or(Error::NotInitialized)
     }
 
-    /// Query audit log entries within a range. Returns up to `max_results` entries.
-    pub fn query_audit_logs(env: Env, from_id: u64, to_id: u64, max_results: u32) -> Vec<events::AuditLogEntry> {
-        events::query_audit_logs(&env, from_id, to_id, max_results)
-    }
-
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -477,7 +471,6 @@ impl EmergencyAccessOverride {
 // Issue #655: M-of-N Multi-Sig Emergency Access Override
 // ============================================================
 
-const DEFAULT_EXPIRY_SECONDS: u64 = 3600; // 1 hour
 
 #[derive(Clone, Debug)]
 #[contracttype]

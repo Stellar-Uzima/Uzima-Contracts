@@ -114,6 +114,22 @@ pub enum Error {
     AlreadyInitialized = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ConfigNotSet => write!(f, "config not set"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::LowConfidence => write!(f, "low confidence"),
+            Error::AssessmentNotFound => write!(f, "assessment not found"),
+            Error::InvalidModel => write!(f, "invalid model"),
+            Error::DuplicateModel => write!(f, "duplicate model"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[contract]
 pub struct PatientRiskStratificationContract;
 
@@ -131,6 +147,7 @@ impl PatientRiskStratificationContract {
         Ok(())
     }
 
+    #[must_use]
     fn load_admin(env: &Env) -> Result<Address, Error> {
         env.storage()
             .instance()
@@ -138,6 +155,7 @@ impl PatientRiskStratificationContract {
             .ok_or(Error::ConfigNotSet)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin = Self::load_admin(env)?;
         if admin != *caller {

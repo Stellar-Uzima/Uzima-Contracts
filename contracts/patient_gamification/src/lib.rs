@@ -207,6 +207,32 @@ pub enum Error {
     RandomnessCommitExpired = 19,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::AchievementNotFound => write!(f, "achievement not found"),
+            Error::ChallengeNotFound => write!(f, "challenge not found"),
+            Error::ChallengeFull => write!(f, "challenge full"),
+            Error::ChallengeEnded => write!(f, "challenge ended"),
+            Error::AlreadyParticipating => write!(f, "already participating"),
+            Error::NotParticipating => write!(f, "not participating"),
+            Error::InsufficientPoints => write!(f, "insufficient points"),
+            Error::PrivacyThresholdNotMet => write!(f, "privacy threshold not met"),
+            Error::InvalidTimeRange => write!(f, "invalid time range"),
+            Error::AlreadyCompleted => write!(f, "already completed"),
+            Error::RandomnessAlreadyCommitted => write!(f, "randomness already committed"),
+            Error::RandomnessCommitNotFound => write!(f, "randomness commit not found"),
+            Error::RandomnessRevealTooEarly => write!(f, "randomness reveal too early"),
+            Error::RandomnessRevealMismatch => write!(f, "randomness reveal mismatch"),
+            Error::RandomnessCommitExpired => write!(f, "randomness commit expired"),
+        }
+    }
+}
+
 // ============================================================================
 // CONTRACT IMPLEMENTATION
 // ============================================================================
@@ -264,6 +290,7 @@ impl PatientGamificationContract {
         Ok(true)
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<GamificationConfig, Error> {
         env.storage()
             .instance()
@@ -271,6 +298,7 @@ impl PatientGamificationContract {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<GamificationConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -1146,6 +1174,7 @@ impl PatientGamificationContract {
     // DAILY STREAKS
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn update_daily_streak_internal(env: &Env, patient_id: &Address) -> Result<(), Error> {
         let timestamp = env.ledger().timestamp();
         let day_seconds = 86400u64;

@@ -557,7 +557,7 @@ impl AuditForensicsContract {
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
     }
 
-    #[allow(dead_code)]
+    
     fn check_alerts(env: &Env, action: AuditAction) {
         let key = match action {
             AuditAction::RecordAccess => Some(symbol_short!("THR_ACC")),

@@ -397,6 +397,7 @@ impl PatientConsentManagement {
             .unwrap_or(false)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -409,6 +410,7 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin = env
             .storage()
@@ -444,6 +446,7 @@ impl PatientConsentManagement {
         Ok(true)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);

@@ -10,6 +10,17 @@ pub enum Error {
     RecordNotFound = 403,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::RecordNotFound => write!(f, "record not found"),
+        }
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::Unauthorized => symbol_short!("CHK_AUTH"),
