@@ -105,6 +105,11 @@ fmt:
 	@echo "Formatting code..."
 	cargo fmt --all
 
+# Check code format
+fmt-check:
+	@echo "Checking code format..."
+	cargo fmt --all -- --check
+
 # Run linter
 lint: check-deps
 	@echo "Running clippy..."
@@ -120,6 +125,10 @@ shellcheck: check-deps
 
 # Run all checks
 check: fmt lint test shellcheck
+	@echo "All checks passed!"
+
+# Run all checks without making changes
+check-all: fmt-check lint test check-wasm-size
 	@echo "All checks passed!"
 
 # Build .wasm into dist/
