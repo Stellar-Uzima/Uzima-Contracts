@@ -203,11 +203,9 @@ impl MetaTxForwarder {
         fee_collector: Address,
         min_relayer_stake: i128,
     ) -> Result<(), Error> {
-        owner.require_auth();
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
-        if env.storage().instance().has(&DataKey::Owner) {
-            return Err(Error::AlreadyInitialized);
-        }
+        owner.require_auth();
 
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage()

@@ -64,9 +64,7 @@ pub struct RBAC;
 #[contractimpl]
 impl RBAC {
     pub fn initialize(env: Env, admin: Address, config: RBACConfig) -> Result<(), Error> {
-        if Storage::is_initialized(&env) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         admin.require_auth();
 

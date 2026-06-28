@@ -27,9 +27,7 @@ impl TokenSaleContract {
         hard_cap: u128,
         token_decimals: u32,
     ) {
-        if env.storage().instance().has(&DataKey::Config) {
-            return; // Already initialized - early return instead of panic
-        }
+        governance_commons::init_guard(&env);
 
         owner.require_auth();
 

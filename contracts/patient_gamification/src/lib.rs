@@ -255,11 +255,9 @@ impl PatientGamificationContract {
         max_daily_points: u32,
         privacy_threshold: u32,
     ) -> Result<bool, Error> {
-        admin.require_auth();
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
+        admin.require_auth();
 
         if privacy_threshold == 0 || max_daily_points == 0 {
             return Err(Error::InvalidInput);

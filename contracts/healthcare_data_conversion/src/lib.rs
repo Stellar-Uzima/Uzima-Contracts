@@ -160,6 +160,7 @@ pub enum Error {
     DataLossWarning = 14,
     InvalidMappingData = 15,
     OperationFailed = 16,
+    AlreadyInitialized = 17,
 }
 
 impl core::fmt::Display for Error {
@@ -192,11 +193,8 @@ pub struct HealthcareDataConversionContract;
 impl HealthcareDataConversionContract {
     /// Initialize the healthcare data conversion contract
     pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::OperationFailed);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage().persistent().set(&PAUSED, &false);

@@ -20,6 +20,7 @@ pub struct HealthcareComplianceAutomation;
 #[contractimpl]
 impl HealthcareComplianceAutomation {
     pub fn initialize(env: Env, admin: Address, frameworks: Vec<String>) {
+        governance_commons::init_guard(&env);
         #[cfg(not(test))]
         admin.require_auth();
         env.storage().instance().set(&ADMIN, &admin);

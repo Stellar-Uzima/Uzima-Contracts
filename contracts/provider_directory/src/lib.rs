@@ -52,9 +52,7 @@ pub struct ProviderDirectoryContract;
 #[contractimpl]
 impl ProviderDirectoryContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
 
         // Set default rate limit: 10 searches per hour (3600 seconds)

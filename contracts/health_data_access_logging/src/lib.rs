@@ -28,9 +28,7 @@ impl HealthDataAccessLogging {
     /// # Panics
     /// Panics if already initialized
     pub fn initialize(env: Env, admin: Address, config: LoggingConfig) {
-        if Storage::is_initialized(&env) {
-            panic!("Contract already initialized");
-        }
+        governance_commons::init_guard(&env);
 
         admin.require_auth();
 

@@ -478,9 +478,7 @@ impl HealthcarePayment {
         aml_contract: Address,
         rbac_contract: Address,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         let config = Config {
             admin,

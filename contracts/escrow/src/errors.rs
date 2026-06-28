@@ -17,6 +17,7 @@ pub enum Error {
     FeeNotSet = 380,
     ReentrancyGuard = 381,
     InvalidStateTransition = 382,
+    AlreadyInitialized = 383,
 
     // --- Entity Existence (400–499) ---
     EscrowExists = 480,

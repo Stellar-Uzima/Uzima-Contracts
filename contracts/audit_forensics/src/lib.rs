@@ -123,9 +123,7 @@ pub struct AuditForensicsContract;
 impl AuditForensicsContract {
     #[allow(clippy::panic)]
     pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextAuditId, &0u64);
         env.storage().instance().set(&DataKey::NextRuleId, &0u64);

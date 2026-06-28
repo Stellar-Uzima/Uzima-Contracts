@@ -59,6 +59,7 @@ pub struct Threshold {
 impl RemotePatientMonitoringContract {
     // Initialize the contract
     pub fn initialize(env: Env, admin: Address) {
+        governance_commons::init_guard(&env);
         admin.require_auth();
         env.storage()
             .instance()

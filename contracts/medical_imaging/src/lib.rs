@@ -359,10 +359,8 @@ pub struct MedicalImagingContract;
 #[contractimpl]
 impl MedicalImagingContract {
     pub fn initialize(env: Env, admin: Address, safety_threshold_mgy: u32) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
         if safety_threshold_mgy == 0 {
             return Err(Error::InvalidInput);
         }

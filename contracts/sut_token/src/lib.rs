@@ -146,10 +146,8 @@ impl SutToken {
         decimals: u32,
         supply_cap: i128,
     ) -> Result<(), Error> {
-        // Check if already initialized
-        if env.storage().instance().has(&DataKey::Metadata) {
-            return Err(Error::AlreadyInitialized);
-        }
+        // Re-initialization guard (uses governance_commons' dedicated key)
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         // Validate inputs
         if supply_cap <= 0 {

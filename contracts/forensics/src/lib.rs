@@ -47,9 +47,7 @@ pub struct OnChainForensics;
 impl OnChainForensics {
     /// Initialize with administrator
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::EvidenceCount, &0u64);
         env.storage().instance().set(&DataKey::ReportCount, &0u64);

@@ -162,9 +162,7 @@ impl SyncManager {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&INITIALIZED, &true);

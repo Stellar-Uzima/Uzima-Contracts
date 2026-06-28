@@ -360,13 +360,11 @@ impl IdentityRegistryContract {
         network_id: String,
         rbac_contract: Address,
     ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
+
         owner.require_auth();
 
         sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
-
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage()
@@ -486,11 +484,15 @@ impl IdentityRegistryContract {
 
     /// Legacy initialize for backward compatibility
     pub fn initialize_legacy(env: Env, owner: Address, rbac_contract: Address) {
-        owner.require_auth();
-
-        if env.storage().instance().has(&DataKey::Owner) {
+        // Route the legacy guard through the shared one-shot init guard so that
+        // `initialize` and `initialize_legacy` can never both run (they share the
+        // same INIT_GD flag). Preserves the original silent-return-on-re-init
+        // behavior of this entry point (no panic).
+        if governance_commons::try_init_guard(&env).is_err() {
             return; // Contract already initialized
         }
+
+        owner.require_auth();
 
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage()

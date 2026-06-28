@@ -9,9 +9,7 @@ pub fn initialize(
     arbiters: Vec<Address>,
     min_submissions: u32,
 ) -> Result<(), Error> {
-    if env.storage().instance().has(&DataKey::Config) {
-        return Err(Error::AlreadyInitialized);
-    }
+    governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
     if min_submissions == 0 {
         return Err(Error::InvalidData);

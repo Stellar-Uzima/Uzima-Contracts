@@ -60,15 +60,12 @@ impl EmergencyAccessOverride {
         approvers: Vec<Address>,
         threshold: u32,
     ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         // Delegate approval-set validation to the shared multi-sig helper.
         multi_sig::validate_approval_set(&approvers, threshold)
             .map_err(|_| Error::InvalidThreshold)?;
 
-        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -454,7 +451,7 @@ impl EmergencyAccessOverride {
 
     #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
-        if !env.storage().instance().has(&DataKey::Initialized) {
+        if !governance_commons::is_initialized(env) {
             return Err(Error::NotInitialized);
         }
         Ok(())
@@ -463,7 +460,7 @@ impl EmergencyAccessOverride {
     /// On-chain health check endpoint.
     /// Returns true if the contract is initialized and operational.
     pub fn health_check(env: Env) -> bool {
-        env.storage().instance().has(&DataKey::Initialized)
+        governance_commons::is_initialized(&env)
     }
 }
 
