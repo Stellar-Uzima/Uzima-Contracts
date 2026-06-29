@@ -55,3 +55,16 @@ pub fn publish_consent_expired(
         (patient, provider, timestamp),
     );
 }
+
+/// Emitted when a patient updates the jurisdictions_allowed for a consent record.
+pub fn publish_jurisdictions_updated(
+    env: &Env,
+    patient: &Address,
+    provider: &Address,
+    timestamp: u64,
+) {
+    env.events().publish(
+        (symbol_short!("CONSENT"), symbol_short!("JURISDICT")),
+        (patient, provider, timestamp),
+    );
+}

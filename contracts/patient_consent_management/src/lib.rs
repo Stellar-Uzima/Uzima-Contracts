@@ -39,12 +39,21 @@ mod test;
 
 mod errors;
 mod events;
+mod storage;
+mod types;
 
 pub use errors::Error;
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 use soroban_sdk::xdr::ToXdr;
 
+/// Represents a patient's consent grant to a healthcare provider.
+///
+/// # Cross-Border Data Transfer Restrictions (Issue #1001)
+/// The `jurisdictions_allowed` field restricts which legal jurisdictions
+/// the patient's data may be transferred to. An empty list means no
+/// cross-border transfers are allowed. The cross-chain bridge MUST check
+/// this field before relaying data to a foreign chain.
 #[derive(Clone)]
 #[contracttype]
 pub struct ConsentRecord {
@@ -54,6 +63,9 @@ pub struct ConsentRecord {
     pub expires_at: u64, // 0 means no expiration
     pub revoked_at: u64,
     pub active: bool,
+    /// List of ISO 3166-1 alpha-2 country codes or jurisdiction identifiers
+    /// to which data transfer is permitted. Empty = no cross-border transfers.
+    pub jurisdictions_allowed: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -101,7 +113,8 @@ impl PatientConsentManagement {
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if r.active { return Err(Error::ConsentAlreadyExists); }
         }
-        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true };
+        let empty_jurisdictions = Vec::new(&env);
+        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
         log.record_count += 1;
@@ -131,6 +144,7 @@ impl PatientConsentManagement {
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if r.active { return Err(Error::ConsentAlreadyExists); }
         }
+        let empty_jurisdictions = Vec::new(&env);
         let record = ConsentRecord {
             patient: patient.clone(),
             provider: provider.clone(),
@@ -138,6 +152,7 @@ impl PatientConsentManagement {
             expires_at,
             revoked_at: 0,
             active: true,
+            jurisdictions_allowed: empty_jurisdictions,
         };
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
@@ -161,7 +176,8 @@ impl PatientConsentManagement {
             if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
                 if r.active { continue; }
             }
-            let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true };
+            let empty_jurisdictions = Vec::new(&env);
+            let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
             let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
             log.records.push_back(record.clone());
             log.record_count += 1;
@@ -313,6 +329,79 @@ impl PatientConsentManagement {
     /// Returns true if the contract is initialized and operational.
     pub fn health_check(env: Env) -> bool {
         env.storage().instance().has(&DataKey::Initialized)
+    }
+
+    // ─── Jurisdictions Management (Issue #1001) ──────────────────────────────
+
+    /// Set the jurisdictions to which a patient's data may be transferred.
+    /// Only the patient may update their own jurisdictions list.
+    /// An empty list means no cross-border transfers are allowed.
+    pub fn set_jurisdictions_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+        jurisdictions: Vec<String>,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        let mut record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        record.jurisdictions_allowed = jurisdictions;
+        env.storage().persistent().set(&key, &record);
+        events::publish_jurisdictions_updated(
+            &env,
+            &patient,
+            &provider,
+            env.ledger().timestamp(),
+        );
+        Ok(())
+    }
+
+    /// Get the jurisdictions allowed for a patient-provider consent relationship.
+    pub fn get_jurisdictions_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+    ) -> Result<Vec<String>, Error> {
+        Self::require_initialized(&env)?;
+        let key = DataKey::ProviderIndex(patient, provider);
+        let record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        Ok(record.jurisdictions_allowed)
+    }
+
+    /// Check whether a cross-border data transfer to a given jurisdiction
+    /// is permitted under the patient's consent. Returns false if consent
+    /// is not active or the jurisdiction is not in the allowed list.
+    pub fn check_jurisdiction_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+        jurisdiction: String,
+    ) -> Result<bool, Error> {
+        Self::require_initialized(&env)?;
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        let record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        if !Self::is_consent_active(&env, &record) {
+            return Ok(false);
+        }
+        // Empty jurisdictions list means no cross-border transfers allowed
+        if record.jurisdictions_allowed.is_empty() {
+            return Ok(false);
+        }
+        Ok(record.jurisdictions_allowed.contains(&jurisdiction))
     }
 }
 
