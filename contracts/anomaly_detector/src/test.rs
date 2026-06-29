@@ -6,7 +6,7 @@ use crate::{
     AlertLevel, AlertStatus, AnomalyDetectorContract, AnomalyDetectorContractClient, Error,
     HealthcarePatternType,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 // ==================== Helpers ====================
 
@@ -1278,4 +1278,156 @@ fn test_unauthorized_caller_blocked() {
         Err(Ok(e)) => assert_eq!(e, Error::NotAuthorized),
         _ => panic!("expected NotAuthorized error"),
     }
+}
+
+// ==================== Batch Alert Tests ====================
+
+#[test]
+fn test_create_alert_batch_empty_fails() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    env.mock_all_auths();
+    let result = client.try_create_alert_batch(&admin, &Vec::new(&env));
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
+}
+
+#[test]
+fn test_create_alert_batch_single() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let model_id = make_model_id(&env, 80);
+    let patient = Address::generate(&env);
+    register_default_model(&client, &env, &admin, &model_id);
+
+    env.mock_all_auths();
+    let features = soroban_sdk::vec![&env, 9_000u32, 9_000u32, 9_000u32];
+    let names = soroban_sdk::vec![
+        &env,
+        String::from_str(&env, "f1"),
+        String::from_str(&env, "f2"),
+        String::from_str(&env, "f3"),
+    ];
+    let result = client.run_inference(
+        &admin,
+        &patient,
+        &model_id,
+        &features,
+        &names,
+        &String::from_str(&env, "{}"),
+    );
+
+    let input = crate::AlertInput {
+        patient: patient.clone(),
+        model_id: model_id.clone(),
+        result,
+        metadata: String::from_str(&env, r#"{"context":"batch-test"}"#),
+    };
+    let inputs = soroban_sdk::vec![&env, input];
+
+    let ids = client.create_alert_batch(&admin, &inputs);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids.get(0).unwrap(), 1);
+    assert_eq!(client.get_alert_count(), 1);
+
+    let alert = client.get_alert(&1).unwrap();
+    assert_eq!(alert.patient, patient);
+    assert_eq!(alert.status, AlertStatus::Active);
+}
+
+#[test]
+fn test_create_alert_batch_multiple() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let model_id = make_model_id(&env, 81);
+    let patient1 = Address::generate(&env);
+    let patient2 = Address::generate(&env);
+    register_default_model(&client, &env, &admin, &model_id);
+
+    env.mock_all_auths();
+    let features = soroban_sdk::vec![&env, 7_000u32, 7_000u32, 7_000u32];
+    let names = soroban_sdk::vec![
+        &env,
+        String::from_str(&env, "f1"),
+        String::from_str(&env, "f2"),
+        String::from_str(&env, "f3"),
+    ];
+    let r1 = client.run_inference(
+        &admin,
+        &patient1,
+        &model_id,
+        &features,
+        &names,
+        &String::from_str(&env, "{}"),
+    );
+    let r2 = client.run_inference(
+        &admin,
+        &patient2,
+        &model_id,
+        &features,
+        &names,
+        &String::from_str(&env, "{}"),
+    );
+
+    let mut inputs = Vec::new(&env);
+    inputs.push_back(crate::AlertInput {
+        patient: patient1.clone(),
+        model_id: model_id.clone(),
+        result: r1,
+        metadata: String::from_str(&env, "alert1"),
+    });
+    inputs.push_back(crate::AlertInput {
+        patient: patient2.clone(),
+        model_id: model_id.clone(),
+        result: r2,
+        metadata: String::from_str(&env, "alert2"),
+    });
+
+    let ids = client.create_alert_batch(&admin, &inputs);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(ids.get(0).unwrap(), 1);
+    assert_eq!(ids.get(1).unwrap(), 2);
+    assert_eq!(client.get_alert_count(), 2);
+
+    assert!(client.get_alert(&1).is_some());
+    assert!(client.get_alert(&2).is_some());
+}
+
+#[test]
+fn test_create_alert_batch_too_large() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let model_id = make_model_id(&env, 82);
+    let patient = Address::generate(&env);
+    register_default_model(&client, &env, &admin, &model_id);
+
+    env.mock_all_auths();
+    let features = soroban_sdk::vec![&env, 5_000u32, 5_000u32, 5_000u32];
+    let names = soroban_sdk::vec![
+        &env,
+        String::from_str(&env, "f1"),
+        String::from_str(&env, "f2"),
+        String::from_str(&env, "f3"),
+    ];
+    let detection = client.run_inference(
+        &admin,
+        &patient,
+        &model_id,
+        &features,
+        &names,
+        &String::from_str(&env, "{}"),
+    );
+
+    let mut inputs = Vec::new(&env);
+    for _ in 0..51 {
+        inputs.push_back(crate::AlertInput {
+            patient: patient.clone(),
+            model_id: model_id.clone(),
+            result: detection.clone(),
+            metadata: String::from_str(&env, "{}"),
+        });
+    }
+
+    let result = client.try_create_alert_batch(&admin, &inputs);
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
 }

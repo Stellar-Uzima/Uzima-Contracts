@@ -9,8 +9,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
-    Symbol,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
 };
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
@@ -34,6 +33,17 @@ pub enum Error {
     NotifierNotFound = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotifierNotFound => write!(f, "notifier not found"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -44,10 +54,8 @@ impl CredentialNotificationsContract {
     /// Initialize the contract with an admin address.
     /// Can only be called once.
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&ADMIN, &admin);
         env.events()
             .publish((symbol_short!("CRED"), symbol_short!("INIT")), &admin);
@@ -61,10 +69,8 @@ impl CredentialNotificationsContract {
         env.storage()
             .persistent()
             .set(&DataKey::Notifier(notifier.clone()), &true);
-        env.events().publish(
-            (symbol_short!("CRED"), symbol_short!("ADD_NTF")),
-            &notifier,
-        );
+        env.events()
+            .publish((symbol_short!("CRED"), symbol_short!("ADD_NTF")), &notifier);
         Ok(())
     }
 
@@ -82,10 +88,8 @@ impl CredentialNotificationsContract {
         env.storage()
             .persistent()
             .remove(&DataKey::Notifier(notifier.clone()));
-        env.events().publish(
-            (symbol_short!("CRED"), symbol_short!("RM_NTF")),
-            &notifier,
-        );
+        env.events()
+            .publish((symbol_short!("CRED"), symbol_short!("RM_NTF")), &notifier);
         Ok(())
     }
 
@@ -124,6 +128,7 @@ impl CredentialNotificationsContract {
 
     // ── Internal helpers ──────────────────────────────────────────────────────
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -136,6 +141,7 @@ impl CredentialNotificationsContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_notifier_or_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::require_admin(env, caller).is_ok() {
             return Ok(());

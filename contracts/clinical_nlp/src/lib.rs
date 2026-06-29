@@ -1,4 +1,5 @@
 #![no_std]
+//! clinical_nlp - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -13,6 +14,16 @@ mod test;
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 
 pub use errors::Error;
+use soroban_sdk::contracttype;
+
+#[contracttype]
+pub enum DataKey {
+    Admin,
+    Config,
+    Initialized,
+    Stats,
+}
+
 pub use events::{EventMetadata, EventType, NLPProcessingEventData, OperationCategory};
 pub use nlp_engine::{ClinicalConcept, ExtractedEntity, Language, NLPConfig, NLPEngine, NLPResult};
 pub use sentiment::{SentimentLabel, SentimentResult};
@@ -54,13 +65,13 @@ pub struct BatchProcessingResult {
 #[contractimpl]
 impl ClinicalNLP {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&"initialized") {
+        if env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::AlreadyInitialized);
         }
 
         admin.require_auth();
-        env.storage().instance().set(&"admin", &admin);
-        env.storage().instance().set(&"initialized", &true);
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Initialized, &true);
 
         let config = NLPConfig {
             medical_records_contract: None,
@@ -73,7 +84,7 @@ impl ClinicalNLP {
             phi_detection_enabled: true,
             accuracy_threshold_bps: 9000,
         };
-        env.storage().instance().set(&"config", &config);
+        env.storage().instance().set(&DataKey::Config, &config);
 
         let stats = ProcessingStats {
             total_notes_processed: 0,
@@ -85,7 +96,7 @@ impl ClinicalNLP {
             phi_detections: 0,
             last_updated: env.ledger().timestamp(),
         };
-        env.storage().instance().set(&"stats", &stats);
+        env.storage().instance().set(&DataKey::Stats, &stats);
 
         Ok(())
     }
@@ -98,11 +109,11 @@ impl ClinicalNLP {
         record_id: BytesN<32>,
         language: u32,
     ) -> Result<NLPResult, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        let config: NLPConfig = env.storage().instance().get(&"config").unwrap();
+        let config: NLPConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let mut engine = NLPEngine::new(env.clone(), config);
         engine.initialize_defaults(&env);
 
@@ -110,7 +121,7 @@ impl ClinicalNLP {
         let result = engine.process_clinical_note(&env, &note_text, &note_id, language)?;
         let processing_time = env.ledger().timestamp() - start_time;
 
-        let mut stats: ProcessingStats = env.storage().instance().get(&"stats").unwrap();
+        let mut stats: ProcessingStats = env.storage().instance().get(&DataKey::Stats).unwrap();
         stats.total_notes_processed += 1;
         stats.total_processing_time_ms += processing_time;
         stats.entities_extracted += result.entities.len() as u64;
@@ -120,7 +131,7 @@ impl ClinicalNLP {
             stats.phi_detections += 1;
         }
         stats.last_updated = env.ledger().timestamp();
-        env.storage().instance().set(&"stats", &stats);
+        env.storage().instance().set(&DataKey::Stats, &stats);
 
         let metadata = EventMetadata {
             event_type: EventType::ClinicalNoteProcessed,
@@ -149,11 +160,11 @@ impl ClinicalNLP {
     }
 
     pub fn extract_entities(env: Env, text: String) -> Result<Vec<ExtractedEntity>, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        let config: NLPConfig = env.storage().instance().get(&"config").unwrap();
+        let config: NLPConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let mut engine = NLPEngine::new(env.clone(), config);
         engine.initialize_defaults(&env);
 
@@ -161,11 +172,11 @@ impl ClinicalNLP {
     }
 
     pub fn analyze_sentiment(env: Env, text: String) -> Result<SentimentResult, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        let config: NLPConfig = env.storage().instance().get(&"config").unwrap();
+        let config: NLPConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let mut engine = NLPEngine::new(env.clone(), config);
         engine.initialize_defaults(&env);
 
@@ -177,11 +188,11 @@ impl ClinicalNLP {
         text: String,
         max_suggestions: u32,
     ) -> Result<Vec<icd_cpt_codes::CodingSuggestion>, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        let config: NLPConfig = env.storage().instance().get(&"config").unwrap();
+        let config: NLPConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let mut engine = NLPEngine::new(env.clone(), config);
         engine.initialize_defaults(&env);
 
@@ -189,22 +200,22 @@ impl ClinicalNLP {
     }
 
     pub fn get_processing_stats(env: Env) -> Result<ProcessingStats, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        Ok(env.storage().instance().get(&"stats").unwrap())
+        Ok(env.storage().instance().get(&DataKey::Stats).unwrap())
     }
 
     pub fn update_config(env: Env, admin: Address, config: NLPConfig) -> Result<(), Error> {
         admin.require_auth();
 
-        let stored_admin: Address = env.storage().instance().get(&"admin").unwrap();
+        let stored_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
         if admin != stored_admin {
             return Err(Error::Unauthorized);
         }
 
-        env.storage().instance().set(&"config", &config);
+        env.storage().instance().set(&DataKey::Config, &config);
         Ok(())
     }
 
@@ -212,11 +223,11 @@ impl ClinicalNLP {
         env: Env,
         request: BatchProcessingRequest,
     ) -> Result<BatchProcessingResult, Error> {
-        if !env.storage().instance().has(&"initialized") {
+        if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
 
-        let config: NLPConfig = env.storage().instance().get(&"config").unwrap();
+        let config: NLPConfig = env.storage().instance().get(&DataKey::Config).unwrap();
         let mut engine = NLPEngine::new(env.clone(), config);
         engine.initialize_defaults(&env);
 
@@ -326,6 +337,6 @@ impl ClinicalNLP {
     }
 
     pub fn is_initialized(env: Env) -> bool {
-        env.storage().instance().has(&"initialized")
+        env.storage().instance().has(&DataKey::Initialized)
     }
 }

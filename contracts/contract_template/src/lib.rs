@@ -20,13 +20,21 @@ pub use errors::Error;
 
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 use types::ContractData;
+use soroban_sdk::contracttype;
+
+#[contracttype]
+pub enum DataKey {
+    Admin,
+    Data,
+}
+
 
 // ---------------------------------------------------------------------------
 // Storage keys
 // ---------------------------------------------------------------------------
 
-const KEY_ADMIN: &str = "Admin";
-const KEY_DATA: &str = "Data";
+
+
 
 // ---------------------------------------------------------------------------
 // Contract
@@ -46,10 +54,10 @@ impl ContractTemplate {
     /// # Auth
     /// No auth required — the deployer becomes the admin.
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&KEY_ADMIN) {
+        if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
-        env.storage().instance().set(&KEY_ADMIN, &admin);
+        env.storage().instance().set(&DataKey::Admin, &admin);
         events::emit_initialized(&env, &admin);
         Ok(())
     }
@@ -67,7 +75,7 @@ impl ContractTemplate {
         // Always call require_auth() before any state changes.
         admin.require_auth();
 
-        env.storage().instance().set(&KEY_ADMIN, &new_admin);
+        env.storage().instance().set(&DataKey::Admin, &new_admin);
         events::emit_admin_transferred(&env, &admin, &new_admin);
         Ok(())
     }
@@ -96,7 +104,7 @@ impl ContractTemplate {
             owner: caller.clone(),
             value: data.clone(),
         };
-        env.storage().persistent().set(&KEY_DATA, &record);
+        env.storage().persistent().set(&DataKey::Data, &record);
 
         // 5. Emit an event for auditability.
         events::emit_data_updated(&env, &caller, &data);
@@ -111,12 +119,12 @@ impl ContractTemplate {
     pub fn get_admin(env: &Env) -> Result<Address, Error> {
         env.storage()
             .instance()
-            .get(&KEY_ADMIN)
+            .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)
     }
 
     /// Return the stored data, if any.
     pub fn get_data(env: Env) -> Option<ContractData> {
-        env.storage().persistent().get(&KEY_DATA)
+        env.storage().persistent().get(&DataKey::Data)
     }
 }

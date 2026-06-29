@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Workspace-wide soroban-sdk pin:** All active member crates now inherit `soroban-sdk` from the workspace root via `workspace = true`. The `contracts/upgradeability` crate was the only non-excluded member with a hardcoded version — corrected in this PR.
+- `scripts/check_sdk_version.sh` — CI guard that fails the build if any member crate overrides the workspace soroban-sdk pin. Scans all Cargo.toml files including excluded/deferred contracts.
+- `docs/VERSIONING_STRATEGY.md` — Documents SDK bump cadence (patch/minor/major), compatibility matrix, deprecation policy, and the CI enforcement mechanism.
+- Added note in changelog about `healthcare_compliance` contract's former `22.0.0` drift (issue #828 deferred).
+- Standardized re-initialization guard `init_guard` in `libs/governance_commons`
+  (`init_guard`/`try_init_guard`/`is_initialized`/`require_initialized`),
+  re-exported from `libs/validation_utils`. Documents one-shot init semantics
+  (re-init is rejected; admin transfer is a separate, independent operation) and
+  is referenced by `docs/SECURITY_CHECKLIST.md` Item 4. Unit tests cover
+  init-succeeds-once, init-fails-second-time (Result and panicking variants),
+  and admin-transfer-independence.
 - Contract versioning and release process implementation
 - Automated release scripts and GitHub Actions workflow
 - Comprehensive versioning strategy documentation
@@ -25,6 +36,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Contract deployment monitoring and health checks
 
 ### Changed
+- Audited all contracts and migrated their `initialize`/`init` entry points to
+  the shared `init_guard`, replacing inconsistent per-contract re-init checks.
+  Behavior note: a few contracts that previously treated a second `initialize`
+  call as a silent no-op now reject it (panic or `AlreadyInitialized`), and
+  contracts lacking an `AlreadyInitialized` error variant (escrow,
+  fhir_integration, healthcare_data_conversion) gained one.
+- `validation_utils` now builds against `soroban-sdk =21.7.7` (was 20.5.0) so the
+  re-exported guard shares a single `Env` type with `governance_commons`.
 - Enhanced makefile with release automation targets
 - Improved CI/CD pipeline with release validation
 - Updated project structure for better release management
@@ -39,6 +58,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Release script error handling
 
 ### Security
+- **Centralized Admin & Role Authorization Checks:** Introduced shared `require_admin!(env, caller)` and `require_role!(env, caller, role)` macros in `libs/governance_commons` to eliminate duplicate auth logic across multiple contracts (`anomaly_detector`, `cross_chain_bridge`, `aml`, `audit`, and `rbac`).
 - Enhanced security audit integration
 - Improved access control validation
 - Added security-focused clippy checks

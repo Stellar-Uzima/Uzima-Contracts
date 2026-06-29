@@ -382,6 +382,119 @@ mod tests {
         );
     }
 
+    // ── Timestamp / Time-dependent edge case tests ──────────────────
+
+    /// Test: appointment booking timestamp is recorded correctly
+    #[test]
+    fn test_appointment_booked_at_timestamp() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+
+        let now = env.ledger().timestamp();
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.booked_at, now);
+        assert_eq!(appt.scheduled_time, now); // scheduled_time defaults to booked_at
+    }
+
+    /// Test: confirm appointment timestamp is recorded
+    #[test]
+    fn test_confirm_appointment_timestamp() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+
+        // Advance time
+        env.ledger().set_timestamp(20_000);
+        let confirm_ts = env.ledger().timestamp();
+        client.confirm_appointment(&provider, &appointment_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.confirmed_at, confirm_ts);
+        assert_eq!(appt.status, AppointmentStatus::Completed);
+    }
+
+    /// Test: refund appointment timestamp is recorded
+    #[test]
+    fn test_refund_appointment_timestamp() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+
+        // Advance time
+        env.ledger().set_timestamp(30_000);
+        let refund_ts = env.ledger().timestamp();
+        client.refund_appointment(&patient, &appointment_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.refunded_at, refund_ts);
+        assert_eq!(appt.status, AppointmentStatus::Refunded);
+    }
+
+    /// Test: no-show mark timestamp
+    #[test]
+    fn test_mark_no_show_timestamp() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+
+        env.ledger().set_timestamp(40_000);
+        let no_show_ts = env.ledger().timestamp();
+        client.mark_no_show(&provider, &appointment_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.no_show_marked_at, no_show_ts);
+        assert_eq!(appt.status, AppointmentStatus::NoShow);
+    }
+
+    /// Test: reminder sent timestamp
+    #[test]
+    fn test_reminder_sent_timestamp() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+
+        env.ledger().set_timestamp(50_000);
+        let reminder_ts = env.ledger().timestamp();
+        client.send_reminder(&provider, &appointment_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.reminder_sent_at, reminder_ts);
+    }
+
+    /// Test: time manipulation - booking with far future timestamp
+    #[test]
+    fn test_far_future_booking() {
+        let (env, client, admin, token_id) = setup();
+        client.initialize(&admin, &token_id);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let amount: i128 = 1000;
+        mint(&env, &token_id, &patient, 10000);
+
+        // Set to far future
+        env.ledger().set_timestamp(u64::MAX / 2);
+        let appointment_id = client.book_appointment(&patient, &provider, &amount, &token_id);
+        let appt = client.get_appointment(&appointment_id).unwrap();
+        assert_eq!(appt.status, AppointmentStatus::Booked);
+    }
+
     #[test]
     fn test_error_codes_are_stable() {
         assert_eq!(Error::Unauthorized as u32, 100);

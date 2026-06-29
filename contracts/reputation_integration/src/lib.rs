@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation_integration - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Vec,
@@ -16,6 +17,21 @@ pub enum Error {
     HealthcareReputationContractNotFound = 6,
     InvalidScoreMapping = 7,
     SyncFailed = 8,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::ReputationContractNotFound => write!(f, "reputation contract not found"),
+            Error::HealthcareReputationContractNotFound => write!(f, "healthcare reputation contract not found"),
+            Error::InvalidScoreMapping => write!(f, "invalid score mapping"),
+            Error::SyncFailed => write!(f, "sync failed"),
+        }
+    }
 }
 
 #[contracttype]
@@ -377,11 +393,13 @@ impl ReputationIntegration {
     }
 
     // Helper functions
+    #[must_use]
     fn get_base_reputation_score(_env: &Env, _provider: Address) -> Result<i128, Error> {
         // Cross-contract call placeholder
         Ok(50)
     }
 
+    #[must_use]
     fn get_healthcare_reputation_score(_env: &Env, _provider: Address) -> Result<u32, Error> {
         // Cross-contract call placeholder
         Ok(75)
@@ -437,6 +455,7 @@ impl ReputationIntegration {
         Ok(())
     }
 
+    #[must_use]
     fn store_sync_record(env: &Env, record: SyncRecord) -> Result<(), Error> {
         let provider = record.provider.clone();
         let timestamp = record.timestamp;
@@ -471,6 +490,7 @@ impl ReputationIntegration {
         Ok(())
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -479,16 +499,13 @@ impl ReputationIntegration {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin == *caller {
-            Ok(())
-        } else {
-            Err(Error::NotAuthorized)
-        }
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 }

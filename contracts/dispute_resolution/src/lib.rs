@@ -1,4 +1,5 @@
 #![no_std]
+//! dispute_resolution - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Vec};
 
 #[contracterror]
@@ -10,12 +11,23 @@ pub enum Error {
     DisputeNotFound = 3,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotArbiter => write!(f, "not arbiter"),
+            Error::DisputeNotFound => write!(f, "dispute not found"),
+        }
+    }
+}
+
 #[contract]
 pub struct DisputeResolution;
 
 #[contractimpl]
 impl DisputeResolution {
     pub fn initialize(env: Env, arbiters: Vec<Address>) {
+        governance_commons::init_guard(&env);
         env.storage()
             .instance()
             .set(&symbol_short!("arbiters"), &arbiters);

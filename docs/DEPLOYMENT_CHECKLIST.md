@@ -12,6 +12,8 @@ Use this checklist before deploying any Uzima contract to a production or testne
 - [ ] Code formatted: `cargo fmt --all -- --check`
 - [ ] No `unwrap()` or `expect()` in production paths (use `?` or explicit error handling)
 - [ ] All public functions have doc comments
+- [ ] Module-level doc comments present (`//!` at top of `src/lib.rs`)
+- [ ] `no_std` compliance verified: `cargo build --target wasm32-unknown-unknown --release`
 
 ### Security Review
 - [ ] Security audit completed (internal or external)
@@ -23,7 +25,8 @@ Use this checklist before deploying any Uzima contract to a production or testne
 
 ### Testing
 - [ ] Unit tests cover all public functions
-- [ ] Integration tests cover cross-contract interactions
+- [ ] Integration tests cover cross-contract interactions (see `tests/integration/`)
+- [ ] Patient Consent → Medical Records → RBAC pipeline tested end-to-end
 - [ ] Edge cases tested: double-initialization, unauthorized calls, overflow inputs
 - [ ] Test coverage ≥ 80% (run `scripts/coverage_report.sh`)
 - [ ] Testnet smoke test passed
@@ -45,11 +48,11 @@ Use this checklist before deploying any Uzima contract to a production or testne
 - [ ] Previous deployment backed up: `scripts/deploy_with_rollback.sh`
 
 ### Deployment Steps
-- [ ] Build optimized WASM: `make build-opt`
+- [ ] Build optimized WASM: `make build-opt` or `cargo build --target wasm32-unknown-unknown --release`
 - [ ] Verify WASM size within limits (see `docs/CONTRACT_RESOURCE_LIMITS.md`)
 - [ ] Deploy contract: `./scripts/deploy.sh <contract> <network>`
 - [ ] Record contract ID in `deployments/<network>_<contract>.json`
-- [ ] Initialize contract with correct admin address
+- [ ] Initialize contract with correct admin address and initialization parameters
 - [ ] Verify deployment: `./scripts/verify_deployment.sh`
 
 ### Post-Deployment Verification
@@ -88,11 +91,32 @@ Use this checklist before deploying any Uzima contract to a production or testne
 The following checks run automatically on every PR and must pass before merging:
 
 ```yaml
-# .github/workflows/ci.yml (excerpt)
+# .github/workflows/ci.yml
 - cargo fmt --all -- --check
 - cargo clippy --all -- -D warnings
 - cargo test --all
+- cargo build --target wasm32-unknown-unknown --release (all contracts)
 - scripts/coverage_report.sh
 ```
 
 For testnet deployments triggered by merges to `develop`, see `.github/workflows/deploy.yml`.
+
+---
+
+## Contract Dependency Graph
+
+The following contracts have deployment dependencies (must be deployed in this order):
+
+1. **upgradeability** - Base upgradeability framework
+2. **rbac** - Role-based access control
+3. **identity_registry** - Decentralized identity (W3C DID)
+4. **patient_consent_management** - Patient consent management
+5. **medical_records** - Core medical records (depends on rbac, consent)
+6. **health_data_access_logging** - Access logging (depends on medical_records)
+7. **payment_router** - Payment processing
+8. **escrow** - Escrow services
+9. **healthcare_oracle_network** - Oracle network
+10. **audit_forensics** - Audit forensics
+11. **All remaining contracts** - No specific dependency order
+
+See `docs/DEPLOYMENT_GUIDE.md` for detailed deployment instructions per contract.

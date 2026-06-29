@@ -532,3 +532,70 @@ graph TD
 - **Monitoring**: Real-time access tracking
 
 These data access patterns provide a comprehensive, secure, and privacy-preserving framework for healthcare data access while maintaining regulatory compliance and patient control over their medical information.
+
+---
+
+## Consent and Access Control Sequence Diagrams
+
+### 1. Patient Granting Doctor Access
+
+```mermaid
+sequenceDiagram
+    participant P as Patient
+    participant MR as MedicalRecords Contract
+    participant A as Audit Log
+
+    P->>MR: grant_permission(patient, doctor, ReadRecord, expiry, delegatable)
+    MR->>MR: require_auth(patient)
+    MR->>MR: check caller is admin or has DelegatePermission
+    MR->>MR: upsert PermissionGrant for doctor
+    MR->>MR: bump access_attribute_epoch
+    MR->>A: emit PermissionGranted(granter=patient, grantee=doctor, permission, expiry)
+    MR-->>P: Ok(true)
+```
+
+### 2. Doctor Reading a Record
+
+```mermaid
+sequenceDiagram
+    participant D as Doctor
+    participant MR as MedicalRecords Contract
+    participant S as Persistent Storage
+    participant A as Audit Log
+
+    D->>MR: get_record(caller=doctor, record_id)
+    MR->>MR: require_auth(doctor)
+    MR->>S: load Record(record_id)
+    S-->>MR: MedicalRecord
+    MR->>MR: can_view_record(doctor, record) — checks PermissionGrant
+    MR->>MR: is_valid_zk_access_grant(doctor, record_id)
+    MR->>A: emit RecordAccessed(caller=doctor, record_id, patient_id)
+    MR->>A: log_to_forensics(doctor, RecordAccess, record_id)
+    MR-->>D: Ok(MedicalRecord)
+```
+
+### 3. Consent Revocation and Subsequent Access Denial
+
+```mermaid
+sequenceDiagram
+    participant P as Patient
+    participant D as Doctor
+    participant MR as MedicalRecords Contract
+    participant A as Audit Log
+
+    P->>MR: revoke_permission(revoker=patient, grantee=doctor, ReadRecord)
+    MR->>MR: require_auth(patient)
+    MR->>MR: remove PermissionGrant for doctor
+    MR->>MR: bump access_attribute_epoch
+    MR->>A: emit PermissionRevoked(revoker=patient, grantee=doctor, permission)
+    MR-->>P: Ok(true)
+
+    Note over D,MR: Doctor attempts access after revocation
+
+    D->>MR: get_record(caller=doctor, record_id)
+    MR->>MR: require_auth(doctor)
+    MR->>MR: can_view_record(doctor, record) — no valid grant found
+    MR->>A: log_to_forensics(doctor, FailedAccess, record_id)
+    MR->>A: log_error("Record access denied")
+    MR-->>D: Err(Unauthorized)
+```

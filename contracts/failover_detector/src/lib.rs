@@ -1,6 +1,10 @@
 #![no_std]
+//! failover_detector - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
+    Vec,
+};
 
 // ============================================================================
 // Data Types & Constants
@@ -95,12 +99,28 @@ pub enum Error {
     RecoveryFailed = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::NodeNotFound => write!(f, "node not found"),
+            Error::FailoverNotFound => write!(f, "failover not found"),
+            Error::NoAvailableTargets => write!(f, "no available targets"),
+            Error::FailoverInProgress => write!(f, "failover in progress"),
+            Error::MaxFailuresReached => write!(f, "max failures reached"),
+            Error::RecoveryFailed => write!(f, "recovery failed"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
-const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const DETECTIONS: Symbol = symbol_short!("DETC");
 const EXECUTIONS: Symbol = symbol_short!("EXEC");
@@ -125,12 +145,9 @@ impl FailoverDetector {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
-        env.storage().instance().set(&INITIALIZED, &true);
         env.storage().instance().set(&NEXT_DETECTION_ID, &1u64);
         env.storage().instance().set(&NEXT_EXECUTION_ID, &1u64);
         env.storage().instance().set(&NEXT_PLAN_ID, &1u64);
@@ -140,7 +157,12 @@ impl FailoverDetector {
         Ok(())
     }
 
-    pub fn assign_role(env: Env, caller: Address, user: Address, role_mask: u32) -> Result<(), Error> {
+    pub fn assign_role(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role_mask: u32,
+    ) -> Result<(), Error> {
         Self::require_admin(&env, &caller)?;
         if role_mask > ALL_ROLES {
             return Err(Error::InvalidInput);
@@ -169,7 +191,7 @@ impl FailoverDetector {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if severity_level < 1 || severity_level > 5 {
+        if !(1..=5).contains(&severity_level) {
             return Err(Error::InvalidInput);
         }
 
@@ -203,7 +225,11 @@ impl FailoverDetector {
 
         let (total_failures, recovery_attempts, last_successful_recovery) =
             if let Some(metric) = &node_metric {
-                (metric.total_failures + 1, metric.recovery_attempts, metric.last_successful_recovery)
+                (
+                    metric.total_failures + 1,
+                    metric.recovery_attempts,
+                    metric.last_successful_recovery,
+                )
             } else {
                 (1, 0, 0)
             };
@@ -246,7 +272,8 @@ impl FailoverDetector {
             .instance()
             .set(&NEXT_DETECTION_ID, &(detection_id + 1));
 
-        env.events().publish((symbol_short!("FD_DETC"),), detection_id);
+        env.events()
+            .publish((symbol_short!("FD_DETC"),), detection_id);
 
         if is_critical {
             env.events().publish((symbol_short!("FD_CRIT"),), node_id);
@@ -289,7 +316,7 @@ impl FailoverDetector {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_nodes.len() == 0 {
+        if target_nodes.is_empty() {
             return Err(Error::NoAvailableTargets);
         }
 
@@ -353,9 +380,7 @@ impl FailoverDetector {
             return Err(Error::FailoverNotFound);
         }
 
-        env.storage()
-            .instance()
-            .set(&FAILOVER_IN_PROGRESS, &true);
+        env.storage().instance().set(&FAILOVER_IN_PROGRESS, &true);
 
         let execution_id: u64 = env.storage().instance().get(&NEXT_EXECUTION_ID).unwrap();
         let initiated_at = env.ledger().timestamp();
@@ -384,9 +409,7 @@ impl FailoverDetector {
             .instance()
             .set(&NEXT_EXECUTION_ID, &(execution_id + 1));
 
-        env.storage()
-            .instance()
-            .set(&FAILOVER_IN_PROGRESS, &false);
+        env.storage().instance().set(&FAILOVER_IN_PROGRESS, &false);
 
         // Reset consecutive failures for recovered node
         let mut metrics: Vec<NodeFailureMetric> = env
@@ -407,7 +430,8 @@ impl FailoverDetector {
         }
         env.storage().persistent().set(&METRICS, &metrics);
 
-        env.events().publish((symbol_short!("FD_EXEC"),), execution_id);
+        env.events()
+            .publish((symbol_short!("FD_EXEC"),), execution_id);
         Ok(execution_id)
     }
 
@@ -429,11 +453,7 @@ impl FailoverDetector {
     // Recovery Operations
     // ========================================================================
 
-    pub fn mark_recovery_success(
-        env: Env,
-        caller: Address,
-        node_id: u32,
-    ) -> Result<(), Error> {
+    pub fn mark_recovery_success(env: Env, caller: Address, node_id: u32) -> Result<(), Error> {
         Self::require_operator(&env, &caller)?;
 
         let mut metrics: Vec<NodeFailureMetric> = env
@@ -464,11 +484,7 @@ impl FailoverDetector {
         Ok(())
     }
 
-    pub fn deactivate_failover_plan(
-        env: Env,
-        caller: Address,
-        plan_id: u64,
-    ) -> Result<(), Error> {
+    pub fn deactivate_failover_plan(env: Env, caller: Address, plan_id: u64) -> Result<(), Error> {
         Self::require_admin(&env, &caller)?;
 
         let mut plans: Vec<FailoverPlan> = env
@@ -501,14 +517,20 @@ impl FailoverDetector {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&ADMIN)
+            .ok_or(Error::NotInitialized)?;
         if admin != *caller {
             return Err(Error::NotAuthorized);
         }
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -527,55 +549,76 @@ impl FailoverDetector {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_initialize() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        let result = FailoverDetector::initialize(env.clone(), admin.clone());
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::initialize(env.clone(), admin.clone())
+        });
         assert!(result.is_ok());
 
-        let result = FailoverDetector::initialize(env, admin);
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::initialize(env.clone(), admin)
+        });
         assert!(matches!(result, Err(Error::AlreadyInitialized)));
     }
 
     #[test]
     fn test_detect_failure() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
-        FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
-        let result = FailoverDetector::detect_node_failure(
-            env.clone(),
-            operator,
-            1,
-            FailoverReason::NodeFailure,
-            3,
-        );
-
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::detect_node_failure(
+                env.clone(),
+                operator,
+                1,
+                FailoverReason::NodeFailure,
+                3,
+            )
+        });
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_failover_plan() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, FailoverDetector);
 
-        FailoverDetector::initialize(env.clone(), admin.clone()).unwrap();
-        FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
-        let target_nodes = Vec::new(&env);
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);
 
-        let result = FailoverDetector::create_failover_plan(env, operator, 1, targets);
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::create_failover_plan(env.clone(), operator, 1, targets)
+        });
         assert!(result.is_ok());
     }
 }

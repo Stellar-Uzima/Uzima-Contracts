@@ -129,6 +129,8 @@ pub fn diag_auth_fail(env: &Env, fn_name: &'static str) {
 }
 
 /// Emitted on error condition (ERROR level)
+/// Diagnostic helper; reserved for cross-contract logging scenarios.
+#[cfg(test)]
 pub fn diag_error(env: &Env, fn_name: &'static str, error_code: u32) {
     env.events().publish(
         (symbol_short!("DIAG"), symbol_short!("ERR")),

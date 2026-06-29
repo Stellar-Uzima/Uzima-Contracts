@@ -1,4 +1,5 @@
 #![no_std]
+//! forensics - Healthcare smart contract on Stellar blockchain.
 
 pub mod analysis;
 pub mod detection;
@@ -28,6 +29,17 @@ pub enum Error {
     ReportNotFound = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::ReportNotFound => write!(f, "report not found"),
+        }
+    }
+}
+
 #[contract]
 pub struct OnChainForensics;
 
@@ -35,9 +47,7 @@ pub struct OnChainForensics;
 impl OnChainForensics {
     /// Initialize with administrator
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::EvidenceCount, &0u64);
         env.storage().instance().set(&DataKey::ReportCount, &0u64);
@@ -222,6 +232,7 @@ impl OnChainForensics {
     }
 
     /// Private helper to get the administrator
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

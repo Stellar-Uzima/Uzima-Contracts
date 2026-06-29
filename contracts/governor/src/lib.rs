@@ -1,14 +1,43 @@
 #![no_std]
+//! # Governor
+//!
+//! On-chain governance for the Uzima Contracts platform. Token holders can
+//! propose, vote on, queue, and execute decisions that mutate other contracts
+//! (typically via a timelock).
+//!
+//! ## Lifecycle
+//!
+//! ```text
+//!    Propose  ->  Active (after voting_delay)  ->  Succeeded/Defeated
+//!         \                                            |
+//!          \------ Cancelable here <--------------------+
+//!                                                       |
+//!                                                  Queue (Succeeded only)
+//!                                                       |
+//!                                                  Execute (after timelock delay)
+//! ```
+//!
+//! * **Voting power** combines `token.balance_of` and (optionally)
+//!   `rep_contract.get_score` to weight votes.
+//! * **Disputes**: if a `dispute_contract` is configured, `state` and
+//!   `execute` consult `is_disputed(proposal_id)` and refuse to act on
+//!   disputed proposals.
+//! * **Storage layout** lives in instance storage so all hot reads stay
+//!   cheap.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::needless_return)]
-#![allow(dead_code)]
+#[cfg(test)]
+mod benchmarks;
+
+#[cfg(test)]
+mod governance_tests;
 
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env, IntoVal, Map,
-    Symbol,
+    Symbol, Vec,
 };
 
 #[derive(Clone)]
@@ -55,11 +84,55 @@ fn now(env: &Env) -> u64 {
 
 /// Read GovernorConfig from instance storage (cheap, cached by the host).
 /// Instance storage is cheaper than persistent for frequently-read values.
+#[must_use]
 fn get_cfg(env: &Env) -> Result<GovernorConfig, Error> {
     env.storage()
         .instance()
         .get(&CFG)
         .ok_or(Error::NotInitialized)
+}
+
+fn get_props(env: &Env) -> Map<u64, Proposal> {
+    env.storage()
+        .persistent()
+        .get(&PROPS)
+        .unwrap_or(Map::new(env))
+}
+
+fn proposal_state(env: &Env, cfg: &GovernorConfig, proposal_id: u64, p: &Proposal) -> u32 {
+    let t = now(env);
+
+    if p.canceled {
+        return 2;
+    }
+    if p.executed {
+        return 5;
+    }
+    if p.queued {
+        return 4;
+    }
+
+    if let Some(dispute_addr) = &cfg.dispute_contract {
+        let args = vec![env, proposal_id.into_val(env)];
+        let is_disputed: bool =
+            env.invoke_contract(dispute_addr, &Symbol::new(env, "is_disputed"), args);
+        if is_disputed {
+            return 6;
+        }
+    }
+
+    if t < p.start_time {
+        return 0;
+    }
+    if t <= p.end_time {
+        return 1;
+    }
+
+    if p.for_votes > p.against_votes {
+        return 3;
+    }
+
+    2
 }
 
 #[contractimpl]
@@ -75,9 +148,7 @@ impl Governor {
         reputation_contract: Option<Address>,
         dispute_contract: Option<Address>,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&CFG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let cfg = GovernorConfig {
             voting_delay,
             voting_period,
@@ -207,65 +278,48 @@ impl Governor {
 
     pub fn state(env: Env, proposal_id: u64) -> Result<u32, Error> {
         let cfg = get_cfg(&env)?;
-        let props: Map<u64, Proposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPS)
-            .unwrap_or(Map::new(&env));
+        let props = get_props(&env);
         let p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
-        let t = now(&env);
-
-        if p.canceled {
-            return Ok(2);
-        }
-        if p.executed {
-            return Ok(5);
-        }
-        if p.queued {
-            return Ok(4);
-        }
-
-        if let Some(dispute_addr) = cfg.dispute_contract {
-            let args = vec![&env, proposal_id.into_val(&env)];
-            let is_disputed: bool =
-                env.invoke_contract(&dispute_addr, &Symbol::new(&env, "is_disputed"), args);
-            if is_disputed {
-                return Ok(6);
-            }
-        }
-
-        if t < p.start_time {
-            return Ok(0);
-        }
-        if t <= p.end_time {
-            return Ok(1);
-        }
-
-        if p.for_votes > p.against_votes {
-            return Ok(3);
-        }
-
-        Ok(2)
+        Ok(proposal_state(&env, &cfg, proposal_id, &p))
     }
 
     pub fn queue(env: Env, proposal_id: u64) -> Result<(), Error> {
-        let state = Self::state(env.clone(), proposal_id)?;
-        if state != 3 {
+        let cfg = get_cfg(&env)?;
+        let mut props = get_props(&env);
+        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+
+        if proposal_state(&env, &cfg, proposal_id, &p) != 3 {
             return Err(Error::ProposalNotSuccessful);
         }
 
-        let mut props: Map<u64, Proposal> = env
-            .storage()
-            .persistent()
-            .get(&PROPS)
-            .unwrap_or(Map::new(&env));
-        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
         p.queued = true;
         props.set(proposal_id, p);
         env.storage().persistent().set(&PROPS, &props);
 
         env.events()
             .publish((symbol_short!("Queue"), proposal_id), ());
+        Ok(())
+    }
+
+    /// Cancel an active or pending proposal. Only the original proposer may cancel.
+    pub fn cancel(env: Env, proposal_id: u64, caller: Address) -> Result<(), Error> {
+        caller.require_auth();
+        let mut props = get_props(&env);
+        let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
+
+        if p.canceled || p.executed {
+            return Err(Error::InvalidState);
+        }
+        if p.proposer != caller {
+            return Err(Error::Unauthorized);
+        }
+
+        p.canceled = true;
+        props.set(proposal_id, p);
+        env.storage().persistent().set(&PROPS, &props);
+
+        env.events()
+            .publish((symbol_short!("Cancel"), proposal_id), caller);
         Ok(())
     }
 
@@ -301,6 +355,36 @@ impl Governor {
         env.events()
             .publish((symbol_short!("Execute"), proposal_id), ());
         Ok(())
+    }
+
+    pub fn cleanup_expired_proposals(env: Env, caller: Address) -> Result<u32, Error> {
+        caller.require_auth();
+        let cfg = get_cfg(&env)?;
+        let mut props = get_props(&env);
+        let mut removed = 0u32;
+
+        let ids: Vec<u64> = props.keys();
+        for id in ids.iter() {
+            let p = props.get(id).unwrap();
+            let state = proposal_state(&env, &cfg, id, &p);
+            if state == 2 || state == 5 {
+                props.remove(id);
+                removed += 1;
+            }
+        }
+
+        if removed == 0 {
+            return Err(Error::CleanupEmpty);
+        }
+
+        env.storage().persistent().set(&PROPS, &props);
+
+        env.events().publish(
+            (symbol_short!("CLEANUP"), symbol_short!("PROPS")),
+            (caller, removed),
+        );
+
+        Ok(removed)
     }
 
     fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> i128 {
@@ -354,9 +438,7 @@ mod test {
         let gov_id = env.register_contract(None, Governor);
         let gov_client = GovernorClient::new(&env, &gov_id);
 
-        gov_client.initialize(
-            &token_id, &tl, &5, &10, &100, &1, &None, &None,
-        );
+        gov_client.initialize(&token_id, &tl, &5, &10, &100, &1, &None, &None);
 
         token_client.set_bal(&voter, &200);
 

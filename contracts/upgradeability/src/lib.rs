@@ -1,4 +1,5 @@
 #![no_std]
+//! upgradeability - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec,
@@ -23,6 +24,22 @@ pub enum UpgradeError {
     HistoryNotFound = 106,
     IntegrityCheckFailed = 107,
     DeprecatedFunctionNotTracked = 108,
+}
+
+impl core::fmt::Display for UpgradeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            UpgradeError::NotAuthorized => write!(f, "not authorized"),
+            UpgradeError::InvalidWasmHash => write!(f, "invalid wasm hash"),
+            UpgradeError::VersionAlreadyExists => write!(f, "version already exists"),
+            UpgradeError::MigrationFailed => write!(f, "migration failed"),
+            UpgradeError::IncompatibleVersion => write!(f, "incompatible version"),
+            UpgradeError::ContractPaused => write!(f, "contract paused"),
+            UpgradeError::HistoryNotFound => write!(f, "history not found"),
+            UpgradeError::IntegrityCheckFailed => write!(f, "integrity check failed"),
+            UpgradeError::DeprecatedFunctionNotTracked => write!(f, "deprecated function not tracked"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -110,6 +127,7 @@ pub mod storage {
     }
 }
 
+#[must_use]
 pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
     if storage::is_frozen(env) {
         return Err(UpgradeError::ContractPaused);
@@ -199,6 +217,7 @@ pub fn validate_upgrade<T: migration::Migratable>(
     Ok(validation)
 }
 
+#[must_use]
 pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
     authorize_upgrade(env)?;
 
@@ -260,6 +279,7 @@ pub fn get_deprecated_function(env: &Env, function: Symbol) -> Option<Deprecated
     None
 }
 
+#[must_use]
 pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), UpgradeError> {
     let deprecation = get_deprecated_function(env, function.clone())
         .ok_or(UpgradeError::DeprecatedFunctionNotTracked)?;

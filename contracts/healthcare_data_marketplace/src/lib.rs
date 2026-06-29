@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_data_marketplace - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -153,6 +154,28 @@ pub enum Error {
     IntentNotFound = 13,
     EscrowNotLinked = 14,
     SettlementTimeout = 15,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::ProviderNotActive => write!(f, "provider not active"),
+            Error::ProviderExists => write!(f, "provider exists"),
+            Error::ListingNotFound => write!(f, "listing not found"),
+            Error::InvalidPricing => write!(f, "invalid pricing"),
+            Error::InvalidQuality => write!(f, "invalid quality"),
+            Error::InvalidRoyalty => write!(f, "invalid royalty"),
+            Error::InvalidAnonymization => write!(f, "invalid anonymization"),
+            Error::InvalidSettlementWindow => write!(f, "invalid settlement window"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::IntentNotFound => write!(f, "intent not found"),
+            Error::EscrowNotLinked => write!(f, "escrow not linked"),
+            Error::SettlementTimeout => write!(f, "settlement timeout"),
+        }
+    }
 }
 
 #[contract]
@@ -522,6 +545,7 @@ impl HealthcareDataMarketplace {
         env.storage().persistent().get(&DataKey::Intent(intent_id))
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             Ok(())
@@ -530,6 +554,7 @@ impl HealthcareDataMarketplace {
         }
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<Config, Error> {
         env.storage()
             .instance()
@@ -537,6 +562,7 @@ impl HealthcareDataMarketplace {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn require_provider_active(env: &Env, provider: &Address) -> Result<(), Error> {
         let profile: ProviderProfile = env
             .storage()
@@ -571,6 +597,7 @@ impl HealthcareDataMarketplace {
         Ok(())
     }
 
+    #[must_use]
     fn validate_quality(quality: &QualityMetrics) -> Result<(), Error> {
         let fields = [
             quality.completeness_bps,
@@ -586,6 +613,7 @@ impl HealthcareDataMarketplace {
         Ok(())
     }
 
+    #[must_use]
     fn validate_royalty(royalty: &RoyaltyPolicy) -> Result<(), Error> {
         let total = royalty
             .provider_bps

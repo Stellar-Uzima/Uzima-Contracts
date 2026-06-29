@@ -1,9 +1,10 @@
 #![no_std]
+//! federated_learning - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    Map, String, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
+    String, Vec, Symbol
 };
 
 // Removed unused 'max' to prevent compiler warnings
@@ -236,16 +237,45 @@ pub enum Error {
     Overflow               = 24,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::RoundNotOpen => write!(f, "round not open"),
+            Error::RoundNotAggregating => write!(f, "round not aggregating"),
+            Error::RoundFinalized => write!(f, "round finalized"),
+            Error::NotEnoughParticipants => write!(f, "not enough participants"),
+            Error::TooManyParticipants => write!(f, "too many participants"),
+            Error::DuplicateUpdate => write!(f, "duplicate update"),
+            Error::InvalidDPParam => write!(f, "invalid d p param"),
+            Error::InstitutionNotFound => write!(f, "institution not found"),
+            Error::InstitutionNotActive => write!(f, "institution not active"),
+            Error::InstitutionAlreadyRegistered => write!(f, "institution already registered"),
+            Error::LowReputation => write!(f, "low reputation"),
+            Error::InvalidParameter => write!(f, "invalid parameter"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::ValidationFailed => write!(f, "validation failed"),
+            Error::PrivacyBudgetExceeded => write!(f, "privacy budget exceeded"),
+            Error::PoisoningAttackDetected => write!(f, "poisoning attack detected"),
+            Error::CommunicationBudgetExceeded => write!(f, "communication budget exceeded"),
+            Error::VerificationFailed => write!(f, "verification failed"),
+            Error::FrameworkNotSupported => write!(f, "framework not supported"),
+            Error::ContributionQualityLow => write!(f, "contribution quality low"),
+            Error::Overflow => write!(f, "overflow"),
+        }
+    }
+}
+
 #[contract]
 pub struct FederatedLearningContract;
 
 #[contractimpl]
 impl FederatedLearningContract {
     pub fn initialize(env: Env, admin: Address, coordinator: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -253,6 +283,7 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
+    #[must_use]
     fn check_auth(env: &Env, caller: &Address, key: &DataKey) -> Result<(), Error> {
         let stored: Address = env
             .storage()
@@ -361,31 +392,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(id), &empty);
-
-        env.storage().persistent().set(
-            &DataKey::PrivacyMetrics(id),
-            &PrivacyMetrics {
-                epsilon_used: 0,
-                delta_used: 0,
-                noise_scale: cfg.dp_epsilon,
-                clipping_bound: cfg.dp_delta,
-                privacy_budget_remaining: cfg.dp_epsilon * cfg.max_participants,
-                cumulative_privacy_loss: 0,
-            },
-        );
-
-        env.storage().persistent().set(
-            &DataKey::CommunicationMetrics(id),
-            &CommunicationMetrics {
-                total_bytes_sent: 0,
-                total_bytes_received: 0,
-                compression_ratio: 100,
-                latency_ms: 0,
-                protocol_efficiency: 100,
-            },
-        );
-
-        env.events().publish((symbol_short!("RndStart"),), id);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
         Ok(id)
     }
 
@@ -668,14 +675,7 @@ impl FederatedLearningContract {
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
-        env.storage()
-            .persistent()
-            .set(&DataKey::AttackDetection(round_id), &attack_detection);
-
-        env.events().publish(
-            (symbol_short!("AggStart"),),
-            (round_id, round.verification_score),
-        );
+        env.events().publish((Symbol::new(&env, "agg_start"),), round_id);
         Ok(true)
     }
 

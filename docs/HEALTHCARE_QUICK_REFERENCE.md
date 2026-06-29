@@ -303,4 +303,78 @@ cargo test --package fhir_integration --release
 
 ---
 
-**Last Updated**: January 23, 2024
+**Last Updated**: June 2, 2026
+
+---
+
+## Traditional Medicine Records
+
+Uzima supports structured records for traditional and indigenous healing practices alongside conventional medical records.
+
+### `TraditionalMedicineMetadata` Schema
+
+| Field | Type | Description |
+|---|---|---|
+| `practice_type` | `String` | Category of practice (e.g. `"African Traditional Medicine"`, `"Ayurveda"`) |
+| `practitioner_tradition` | `String` | Cultural/lineage tradition of the practitioner (e.g. `"Yoruba"`, `"Siddha"`) |
+| `remedies_used` | `String` | Off-chain **encrypted** reference to specific remedies or preparations |
+| `cultural_context` | `String` | Cultural context or ceremony associated with the treatment |
+| `language` | `String` | ISO 639-1 language code for the consultation (e.g. `"yo"`, `"sw"`, `"ha"`) |
+
+> [!IMPORTANT]
+> `remedies_used` must be an encrypted ciphertext reference. **Never** pass plaintext remedy details; encrypt off-chain first and store the ciphertext reference here.
+
+### Writing a Traditional Record
+
+```bash
+soroban contract invoke \
+    --id "$MEDICAL_RECORDS_CONTRACT" \
+    --source-account "$DOCTOR" \
+    -- write_record \
+    --caller "$DOCTOR" \
+    --patient "$PATIENT" \
+    --diagnosis "Malaria (mild)" \
+    --treatment "Herbal decoction therapy" \
+    --is_confidential true \
+    --tags '["traditional","herbal"]' \
+    --category "Traditional" \
+    --treatment_type "Herbal Therapy" \
+    --data_ref "QmEncryptedRecordRef1234567890ABCDEF" \
+    --traditional_metadata '{
+        "practice_type": "African Traditional Medicine",
+        "practitioner_tradition": "Yoruba",
+        "remedies_used": "QmEncryptedRemediesRef1234567890",
+        "cultural_context": "Family healing ceremony",
+        "language": "yo"
+    }'
+```
+
+Calling `write_record` with `traditional_metadata: null` is fully backward-compatible with `add_record`.
+
+### Querying Traditional Records for a Patient
+
+```bash
+soroban contract invoke \
+    --id "$MEDICAL_RECORDS_CONTRACT" \
+    --source-account "$PATIENT" \
+    -- list_traditional_records \
+    --caller "$PATIENT" \
+    --patient_id "$PATIENT"
+```
+
+Returns a `Vec<u64>` of record IDs. Retrieve each record via `get_record`.
+
+### `TraditionalRecordAdded` Event
+
+Emitted on every successful `write_record` call that includes traditional metadata.
+
+| Field | Value |
+|---|---|
+| Topic[0] | `TRAD_NEW` (Symbol) |
+| Topic[1] | Doctor address |
+| Topic[2] | Patient address |
+| `record_id` | u64 — the newly created record ID |
+| `practice_type` | Non-sensitive practice category string |
+
+> [!NOTE]
+> Sensitive fields (`remedies_used`, `cultural_context`, `practitioner_tradition`, `language`) are **never** included in events. Only `practice_type` is surfaced on-chain.

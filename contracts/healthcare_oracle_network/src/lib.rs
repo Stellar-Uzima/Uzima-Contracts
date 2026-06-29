@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_oracle_network - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::len_zero)]
 #![allow(clippy::unwrap_used)]
@@ -218,6 +219,24 @@ impl HealthcareOracleNetwork {
 
     pub fn get_consensus(env: Env, kind: FeedKind, feed_id: String) -> Option<ConsensusRecord> {
         submissions::get_consensus(env, kind, feed_id)
+    }
+
+    pub fn report_oracle_misbehavior(
+        env: Env,
+        reporter: Address,
+        reported_oracle: Address,
+        kind: FeedKind,
+        feed_id: String,
+        reason: String,
+    ) -> Result<(), Error> {
+        submissions::report_oracle_misbehavior(
+            env,
+            reporter,
+            reported_oracle,
+            kind,
+            feed_id,
+            reason,
+        )
     }
 
     pub fn get_oracle(env: Env, operator: Address) -> Option<OracleNode> {

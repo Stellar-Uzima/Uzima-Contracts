@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Symbol};
 
 #[contracterror]
@@ -7,6 +8,19 @@ use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, 
 pub enum Error {
     AlreadyInitialized = 1,
     NotInitialized = 2,
+    NegativeAmount = 3,
+    InvalidAmount = 4,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NegativeAmount => write!(f, "negative amount"),
+            Error::InvalidAmount => write!(f, "invalid amount"),
+        }
+    }
 }
 
 const ADMIN: Symbol = symbol_short!("admin");
@@ -18,9 +32,7 @@ pub struct ReputationSystem;
 #[contractimpl]
 impl ReputationSystem {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&ADMIN, &admin);
         Ok(())
     }
@@ -44,6 +56,14 @@ impl ReputationSystem {
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
 
+        // Validate amount is non-negative and non-zero
+        if amount < 0 {
+            return Err(Error::NegativeAmount);
+        }
+        if amount == 0 {
+            return Err(Error::InvalidAmount);
+        }
+
         let mut scores: Map<Address, i128> = env
             .storage()
             .persistent()
@@ -63,6 +83,14 @@ impl ReputationSystem {
             .get(&ADMIN)
             .ok_or(Error::NotInitialized)?;
         admin.require_auth();
+
+        // Validate amount is non-negative and non-zero
+        if amount < 0 {
+            return Err(Error::NegativeAmount);
+        }
+        if amount == 0 {
+            return Err(Error::InvalidAmount);
+        }
 
         let mut scores: Map<Address, i128> = env
             .storage()

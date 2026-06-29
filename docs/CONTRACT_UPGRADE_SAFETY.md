@@ -63,11 +63,22 @@ Before deploying any upgrade:
 cargo test --test upgradeability_tests
 
 # Simulate migration on testnet fork
-./scripts/upgrade_contract.sh <contract_name> testnet --dry-run
+./scripts/migrate_contract.sh medical_records --network testnet --dry-run
 ```
 
-## Rollback Plans
+### Migration Plan Checklist
 
+Before either dry-run or live execution, create `deployments/<network>/<contract>/plan.json` with:
+
+- the new WASM hash
+- the version bump (`from` and `to`)
+- the expected storage migration steps
+- the expected gas budget
+- the expected event emissions
+
+The dry-run report is only as good as the plan, so treat the file as a release artifact that must be reviewed alongside the WASM diff.
+
+## Rollback Plans
 Every upgrade must have a documented rollback plan before deployment.
 
 ### Rollback Checklist
@@ -113,6 +124,8 @@ For upgrades that affect external callers:
 
 - [ ] New WASM built with `cargo build --target wasm32-unknown-unknown --release`
 - [ ] WASM hash verified: `sha256sum dist/<contract>.wasm`
+- [ ] `deployments/<network>/<contract>/plan.json` reviewed and approved
+- [ ] `./scripts/migrate_contract.sh <contract> --network <network> --dry-run` output captured
 - [ ] Migration function tested on testnet fork
 - [ ] Rollback plan documented and tested
 - [ ] Backup of current deployment created

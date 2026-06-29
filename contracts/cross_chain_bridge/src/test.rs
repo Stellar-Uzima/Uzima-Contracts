@@ -2,10 +2,11 @@
 #![allow(clippy::expect_used)]
 use crate::{
     AtomicTxStatus, ChainId, CrossChainBridgeContract, CrossChainBridgeContractClient,
-    CrossChainEventType, DataKey, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
-    RollbackOpType, RollbackStatus, SyncStatus,
+    CrossChainEventType, Error, EventSyncStatus, MessageStatus, MessageType, OracleStatus,
+    RollbackOpType, RollbackStatus, SubmitMessageRequest, SyncStatus,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec};
 
 fn create_contract(
     env: &Env,
@@ -47,20 +48,41 @@ fn generate_message_id(env: &Env) -> BytesN<32> {
     BytesN::from_array(env, &[1u8; 32])
 }
 
-fn generate_signature(env: &Env) -> BytesN<64> {
+fn dummy_sig(env: &Env) -> BytesN<64> {
     BytesN::from_array(env, &[2u8; 64])
 }
 
-fn generate_public_key(env: &Env) -> BytesN<32> {
-    BytesN::from_array(env, &[3u8; 32])
+fn generate_keypair() -> (VerifyingKey, SigningKey) {
+    let mut rng = rand::thread_rng();
+    let signing_key = SigningKey::generate(&mut rng);
+    let verifying_key = signing_key.verifying_key();
+    (verifying_key, signing_key)
 }
 
-fn setup_validator(env: &Env, client: &CrossChainBridgeContractClient, admin: &Address) -> Address {
+fn make_public_key(env: &Env, vk: &VerifyingKey) -> BytesN<32> {
+    BytesN::from_array(env, &vk.to_bytes())
+}
+
+fn create_sig(env: &Env, signing_key: &SigningKey, data: &BytesN<32>, nonce: u64) -> BytesN<64> {
+    let mut payload = Bytes::new(env);
+    payload.extend_from_array(&data.to_array());
+    payload.extend_from_array(&nonce.to_be_bytes());
+    let hash = env.crypto().sha256(&payload);
+    let sig = signing_key.sign(&hash.to_array());
+    BytesN::from_array(env, &sig.to_bytes())
+}
+
+fn setup_validator(
+    env: &Env,
+    client: &CrossChainBridgeContractClient,
+    admin: &Address,
+) -> (Address, SigningKey) {
+    let (vk, sk) = generate_keypair();
+    let public_key = make_public_key(env, &vk);
     let validator = Address::generate(env);
-    let public_key = generate_public_key(env);
     env.mock_all_auths();
     client.add_validator(admin, &validator, &public_key, &1000);
-    validator
+    (validator, sk)
 }
 
 // ==================== Initialization Tests ====================
@@ -97,7 +119,7 @@ fn test_add_validator() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let validator = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
 
     env.mock_all_auths();
     let result = client.add_validator(&admin, &validator, &public_key, &1000);
@@ -119,7 +141,7 @@ fn test_deactivate_validator() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let validator = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
 
     env.mock_all_auths();
     client.add_validator(&admin, &validator, &public_key, &1000);
@@ -137,7 +159,7 @@ fn test_add_validator_not_admin() {
 
     let non_admin = Address::generate(&env);
     let validator = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
 
     env.mock_all_auths();
     let result = client.try_add_validator(&non_admin, &validator, &public_key, &1000);
@@ -179,26 +201,30 @@ fn test_submit_message() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     let message_id = generate_message_id(&env);
     let sender = String::from_str(&env, "0x1234567890abcdef");
     let payload = String::from_str(&env, "{\"record_id\": 1}");
-    let signature = generate_signature(&env);
 
     env.mock_all_auths();
+    let v_sig = create_sig(&env, &sk, &message_id, 1);
     let result = client.submit_message(
         &validator,
-        &message_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &sender,
-        &recipient,
-        &MessageType::RecordRequest,
-        &payload,
-        &1,
-        &signature,
+        &SubmitMessageRequest {
+            message_id: message_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: payload.clone(),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: 1,
+        },
     );
 
     assert_eq!(result, message_id);
@@ -214,21 +240,25 @@ fn test_submit_message_invalid_chain() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, _sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
     let result = client.try_submit_message(
         &validator,
-        &generate_message_id(&env),
-        &ChainId::BinanceSmartChain,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: generate_message_id(&env),
+            source_chain: ChainId::BinanceSmartChain,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: dummy_sig(&env),
+            v_nonce: 1,
+        },
     );
 
     assert_eq!(result, Err(Ok(Error::ChainNotSupported)));
@@ -240,31 +270,38 @@ fn test_confirm_message() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     let message_id = generate_message_id(&env);
+    let v_sig1 = create_sig(&env, &sk1, &message_id, 1);
     client.submit_message(
         &validator1,
-        &message_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234567890abcdef"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 1}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: message_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234567890abcdef"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 1}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig1,
+            v_nonce: 1,
+        },
     );
 
-    client.confirm_message(&validator1, &message_id);
+    let confirm_sig1 = create_sig(&env, &sk1, &message_id, 2);
+    client.confirm_message(&validator1, &message_id, &confirm_sig1, &2);
     let msg = client.get_message(&message_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Pending);
 
-    client.confirm_message(&validator2, &message_id);
+    let confirm_sig2 = create_sig(&env, &sk2, &message_id, 1);
+    client.confirm_message(&validator2, &message_id, &confirm_sig2, &1);
     let msg = client.get_message(&message_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Verified);
 }
@@ -278,45 +315,57 @@ fn test_confirmations_unique_per_message() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     // Submit message A
     let msg_id_a = BytesN::from_array(&env, &[0xaau8; 32]);
+    let v_sig_a = create_sig(&env, &sk1, &msg_id_a, 1);
     client.submit_message(
         &validator1,
-        &msg_id_a,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xAAA"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_a.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xAAA"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_a,
+            v_nonce: 1,
+        },
     );
 
-    // Submit message B
+    // Submit message B (different data, same validator, needs nonce 2)
     let msg_id_b = BytesN::from_array(&env, &[0xbbu8; 32]);
+    let v_sig_b = create_sig(&env, &sk1, &msg_id_b, 2);
     client.submit_message(
         &validator1,
-        &msg_id_b,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xBBB"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &2,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_b.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xBBB"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_b,
+            v_nonce: 2,
+        },
     );
 
-    // Confirm only message A with both validators
-    client.confirm_message(&validator1, &msg_id_a);
-    client.confirm_message(&validator2, &msg_id_a);
+    // Confirm only message A with both validators (nonce resets per validator pubkey)
+    let conf_sig_1a = create_sig(&env, &sk1, &msg_id_a, 3);
+    let conf_sig_2a = create_sig(&env, &sk2, &msg_id_a, 1);
+    client.confirm_message(&validator1, &msg_id_a, &conf_sig_1a, &3);
+    client.confirm_message(&validator2, &msg_id_a, &conf_sig_2a, &1);
 
     // Message A should be Verified, message B should still be Pending
     assert_eq!(
@@ -337,7 +386,7 @@ fn test_record_refs_unique_per_chain() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let caller = Address::generate(&env);
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
@@ -366,7 +415,18 @@ fn test_record_refs_unique_per_chain() {
     );
 
     // Each should have its own sync status — update Ethereum record 1 only
-    client.update_sync_status(&validator, &1, &ChainId::Ethereum, &SyncStatus::Synced);
+    let mut target_id_bytes = [0u8; 32];
+    target_id_bytes[24..32].copy_from_slice(&1u64.to_be_bytes());
+    let target_id = BytesN::from_array(&env, &target_id_bytes);
+    let update_sig = create_sig(&env, &sk, &target_id, 1);
+    client.update_sync_status(
+        &validator,
+        &1,
+        &ChainId::Ethereum,
+        &SyncStatus::Synced,
+        &update_sig,
+        &1,
+    );
 
     let eth_ref = client.get_record_ref(&1, &ChainId::Ethereum).unwrap();
     let poly_ref = client.get_record_ref(&1, &ChainId::Polygon).unwrap();
@@ -391,28 +451,35 @@ fn test_execute_message() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     let message_id = generate_message_id(&env);
+    let v_sig = create_sig(&env, &sk1, &message_id, 1);
     client.submit_message(
         &validator1,
-        &message_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234567890abcdef"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 1}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: message_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234567890abcdef"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 1}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: 1,
+        },
     );
 
-    client.confirm_message(&validator1, &message_id);
-    client.confirm_message(&validator2, &message_id);
+    let conf_sig1 = create_sig(&env, &sk1, &message_id, 2);
+    let conf_sig2 = create_sig(&env, &sk2, &message_id, 1);
+    client.confirm_message(&validator1, &message_id, &conf_sig1, &2);
+    client.confirm_message(&validator2, &message_id, &conf_sig2, &1);
 
     let result = client.execute_message(&recipient, &message_id);
     assert!(result);
@@ -429,8 +496,8 @@ fn test_atomic_transaction_flow() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let caller = Address::generate(&env);
 
     env.mock_all_auths();
@@ -444,11 +511,13 @@ fn test_atomic_transaction_flow() {
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
 
-    client.prepare_atomic_tx(&validator1, &tx_id);
+    let prep_sig1 = create_sig(&env, &sk1, &tx_id, 1);
+    client.prepare_atomic_tx(&validator1, &tx_id, &prep_sig1, &1);
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Initiated);
 
-    client.prepare_atomic_tx(&validator2, &tx_id);
+    let prep_sig2 = create_sig(&env, &sk2, &tx_id, 1);
+    client.prepare_atomic_tx(&validator2, &tx_id, &prep_sig2, &1);
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
     assert_eq!(atomic_tx.status, AtomicTxStatus::Prepared);
 
@@ -504,14 +573,25 @@ fn test_update_sync_status() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let caller = Address::generate(&env);
 
     env.mock_all_auths();
     let external_record_id = String::from_str(&env, "eth_record_123");
     client.register_record_ref(&caller, &1, &ChainId::Ethereum, &external_record_id);
 
-    client.update_sync_status(&validator, &1, &ChainId::Ethereum, &SyncStatus::Synced);
+    let mut target_id_bytes = [0u8; 32];
+    target_id_bytes[24..32].copy_from_slice(&1u64.to_be_bytes());
+    let target_id = BytesN::from_array(&env, &target_id_bytes);
+    let update_sig = create_sig(&env, &sk, &target_id, 1);
+    client.update_sync_status(
+        &validator,
+        &1,
+        &ChainId::Ethereum,
+        &SyncStatus::Synced,
+        &update_sig,
+        &1,
+    );
 
     let record_ref = client.get_record_ref(&1, &ChainId::Ethereum).unwrap();
     assert_eq!(record_ref.sync_status, SyncStatus::Synced);
@@ -526,7 +606,7 @@ fn test_register_oracle() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let oracle = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
     let supported_chains = soroban_sdk::vec![&env, ChainId::Ethereum, ChainId::Polygon];
 
     env.mock_all_auths();
@@ -546,7 +626,7 @@ fn test_deactivate_oracle() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let oracle = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
     let chains = soroban_sdk::vec![&env, ChainId::Ethereum];
 
     env.mock_all_auths();
@@ -564,7 +644,7 @@ fn test_submit_oracle_report() {
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
     let oracle = Address::generate(&env);
-    let public_key = generate_public_key(&env);
+    let public_key = BytesN::from_array(&env, &[3u8; 32]);
     let chains = soroban_sdk::vec![&env, ChainId::Ethereum];
 
     env.mock_all_auths();
@@ -572,7 +652,6 @@ fn test_submit_oracle_report() {
 
     let data_hash = BytesN::from_array(&env, &[0xabu8; 32]);
     let data = String::from_str(&env, "{\"block\": 12345678}");
-    let signature = generate_signature(&env);
 
     let report_id = client.submit_oracle_report(
         &oracle,
@@ -580,7 +659,7 @@ fn test_submit_oracle_report() {
         &data_hash,
         &data,
         &100000,
-        &signature,
+        &dummy_sig(&env),
     );
 
     assert_eq!(report_id, 1);
@@ -602,36 +681,41 @@ fn test_aggregate_oracle_data() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     // Register 3 oracles and submit reports
     let oracle1 = Address::generate(&env);
     let oracle2 = Address::generate(&env);
     let oracle3 = Address::generate(&env);
     let chains = soroban_sdk::vec![&env, ChainId::Ethereum];
-    let pk = generate_public_key(&env);
     let data_hash = BytesN::from_array(&env, &[0xabu8; 32]);
-    let sig = generate_signature(&env);
 
     env.mock_all_auths();
 
     let mut report_ids = soroban_sdk::vec![&env];
     for oracle in [&oracle1, &oracle2, &oracle3] {
-        client.register_oracle(&admin, oracle, &pk, &chains);
+        client.register_oracle(&admin, oracle, &data_hash, &chains);
         let rid = client.submit_oracle_report(
             oracle,
             &ChainId::Ethereum,
             &data_hash,
             &String::from_str(&env, "{}"),
             &100,
-            &sig,
+            &dummy_sig(&env),
         );
         report_ids.push_back(rid);
     }
 
     let consensus_hash = BytesN::from_array(&env, &[0xccu8; 32]);
-    let result =
-        client.aggregate_oracle_data(&validator, &ChainId::Ethereum, &report_ids, &consensus_hash);
+    let agg_sig = create_sig(&env, &sk, &consensus_hash, 1);
+    let result = client.aggregate_oracle_data(
+        &validator,
+        &ChainId::Ethereum,
+        &report_ids,
+        &consensus_hash,
+        &agg_sig,
+        &1,
+    );
     assert!(result);
 
     let aggregated = client.get_aggregated_oracle(&ChainId::Ethereum).unwrap();
@@ -646,19 +730,22 @@ fn test_aggregate_oracle_insufficient_reports() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     // Only 2 reports (below MIN_ORACLE_REPORTS = 3)
     let report_ids = soroban_sdk::vec![&env, 1u64, 2u64];
     let consensus_hash = BytesN::from_array(&env, &[0xaau8; 32]);
-
+    // Signature is verified before the report count check
+    let agg_sig = create_sig(&env, &sk, &consensus_hash, 1);
     let result = client.try_aggregate_oracle_data(
         &validator,
         &ChainId::Ethereum,
         &report_ids,
         &consensus_hash,
+        &agg_sig,
+        &1,
     );
     assert_eq!(result, Err(Ok(Error::InsufficientOracleReports)));
 }
@@ -671,7 +758,7 @@ fn test_submit_proof() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
@@ -681,6 +768,7 @@ fn test_submit_proof() {
     let merkle_root = BytesN::from_array(&env, &[0x33u8; 32]);
     let prover = String::from_str(&env, "0x1234567890abcdef1234567890abcdef12345678");
 
+    let proof_sig = create_sig(&env, &sk, &proof_id, 1);
     let result = client.submit_proof(
         &validator,
         &proof_id,
@@ -689,6 +777,8 @@ fn test_submit_proof() {
         &block_hash,
         &merkle_root,
         &prover,
+        &proof_sig,
+        &1,
     );
     assert_eq!(result, proof_id);
 
@@ -703,13 +793,14 @@ fn test_verify_cross_chain_proof() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     let proof_id = BytesN::from_array(&env, &[0xeeu8; 32]);
 
+    let proof_sig1 = create_sig(&env, &sk1, &proof_id, 1);
     client.submit_proof(
         &validator1,
         &proof_id,
@@ -718,10 +809,13 @@ fn test_verify_cross_chain_proof() {
         &BytesN::from_array(&env, &[2u8; 32]),
         &BytesN::from_array(&env, &[3u8; 32]),
         &String::from_str(&env, "0x1234567890abcdef1234567890abcdef12345678"),
+        &proof_sig1,
+        &1,
     );
 
     // First verification — not yet verified (needs min_confirmations = 2)
-    let verified = client.verify_cross_chain_proof(&validator2, &proof_id);
+    let verify_sig = create_sig(&env, &sk2, &proof_id, 1);
+    let verified = client.verify_cross_chain_proof(&validator2, &verify_sig, &1, &proof_id);
     assert!(verified); // 1 (submit) + 1 = 2 => matches min_confirmations
 
     let proof = client.get_proof(&proof_id).unwrap();
@@ -735,12 +829,18 @@ fn test_proof_not_found() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     let bad_id = BytesN::from_array(&env, &[0xffu8; 32]);
-    let result = client.try_verify_cross_chain_proof(&validator, &bad_id);
+    // Proof check happens before signature verification, so dummy sig is fine
+    let result = client.try_verify_cross_chain_proof(
+        &validator,
+        &create_sig(&env, &sk, &bad_id, 1),
+        &1,
+        &bad_id,
+    );
     assert_eq!(result, Err(Ok(Error::ProofNotFound)));
 }
 
@@ -806,11 +906,12 @@ fn test_sync_cross_chain_event() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     let payload_hash = BytesN::from_array(&env, &[0x55u8; 32]);
+    let sync_sig = create_sig(&env, &sk, &payload_hash, 1);
     let event_id = client.sync_cross_chain_event(
         &validator,
         &ChainId::Ethereum,
@@ -818,6 +919,8 @@ fn test_sync_cross_chain_event() {
         &CrossChainEventType::RecordCreated,
         &payload_hash,
         &99999,
+        &sync_sig,
+        &1,
     );
 
     assert_eq!(event_id, 1);
@@ -835,11 +938,12 @@ fn test_process_sync_event() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     let payload_hash = BytesN::from_array(&env, &[0x66u8; 32]);
+    let sync_sig = create_sig(&env, &sk, &payload_hash, 1);
     let event_id = client.sync_cross_chain_event(
         &validator,
         &ChainId::Ethereum,
@@ -847,9 +951,22 @@ fn test_process_sync_event() {
         &CrossChainEventType::AccessGranted,
         &payload_hash,
         &200,
+        &sync_sig,
+        &1,
     );
 
-    client.process_sync_event(&validator, &event_id, &EventSyncStatus::Synced);
+    // process_sync_event signs target_id constructed from event_id
+    let mut target_bytes = [0u8; 32];
+    target_bytes[24..32].copy_from_slice(&event_id.to_be_bytes());
+    let target_id = BytesN::from_array(&env, &target_bytes);
+    let process_sig = create_sig(&env, &sk, &target_id, 2);
+    client.process_sync_event(
+        &validator,
+        &event_id,
+        &EventSyncStatus::Synced,
+        &process_sig,
+        &2,
+    );
 
     let event = client.get_sync_event(&event_id).unwrap();
     assert_eq!(event.sync_status, EventSyncStatus::Synced);
@@ -861,13 +978,14 @@ fn test_multiple_events_unique_ids() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
 
     let hash1 = BytesN::from_array(&env, &[0x11u8; 32]);
     let hash2 = BytesN::from_array(&env, &[0x22u8; 32]);
 
+    let sig1 = create_sig(&env, &sk, &hash1, 1);
     let id1 = client.sync_cross_chain_event(
         &validator,
         &ChainId::Ethereum,
@@ -875,8 +993,11 @@ fn test_multiple_events_unique_ids() {
         &CrossChainEventType::RecordCreated,
         &hash1,
         &100,
+        &sig1,
+        &1,
     );
 
+    let sig2 = create_sig(&env, &sk, &hash2, 2);
     let id2 = client.sync_cross_chain_event(
         &validator,
         &ChainId::Polygon,
@@ -884,6 +1005,8 @@ fn test_multiple_events_unique_ids() {
         &CrossChainEventType::AccessRevoked,
         &hash2,
         &200,
+        &sig2,
+        &2,
     );
 
     assert_ne!(id1, id2);
@@ -929,24 +1052,29 @@ fn test_execute_rollback_for_message() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     // Submit a message
     let message_id = generate_message_id(&env);
+    let v_sig = create_sig(&env, &sk, &message_id, 1);
     client.submit_message(
         &validator,
-        &message_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: message_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: 1,
+        },
     );
 
     // Initiate and execute rollback on that message
@@ -1072,22 +1200,26 @@ fn test_operations_blocked_when_paused() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, _sk) = setup_validator(&env, &client, &admin);
 
     env.mock_all_auths();
     client.pause(&admin);
 
     let result = client.try_submit_message(
         &validator,
-        &generate_message_id(&env),
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234567890abcdef"),
-        &Address::generate(&env),
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 1}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: generate_message_id(&env),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234567890abcdef"),
+            recipient: Address::generate(&env),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 1}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: dummy_sig(&env),
+            v_nonce: 1,
+        },
     );
 
     assert_eq!(result, Err(Ok(Error::ContractPaused)));
@@ -1101,40 +1233,53 @@ fn test_nonce_replay_protection() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     let sender = String::from_str(&env, "0x1234567890abcdef");
 
+    let msg_id_1 = BytesN::from_array(&env, &[1u8; 32]);
+    let v_sig_1 = create_sig(&env, &sk, &msg_id_1, 1);
     client.submit_message(
         &validator,
-        &BytesN::from_array(&env, &[1u8; 32]),
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &sender,
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_1,
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_1,
+            v_nonce: 1,
+        },
     );
 
-    // Same nonce should fail
+    // Same nonce should fail (nonce 1 already used for this validator's pubkey)
+    let msg_id_4 = BytesN::from_array(&env, &[4u8; 32]);
+    let v_sig_2 = create_sig(&env, &sk, &msg_id_4, 2); // new nonce for second call
     let result = client.try_submit_message(
         &validator,
-        &BytesN::from_array(&env, &[4u8; 32]),
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &sender,
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_4,
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: 1, // <-- sender nonce, not validator nonce
+            signature: dummy_sig(&env),
+            v_signature: v_sig_2, // validator nonce is 2, which IS valid
+            v_nonce: 2,
+        },
     );
 
+    // This test checks sender nonce replay, not validator nonce
     assert_eq!(result, Err(Ok(Error::InvalidNonce)));
 }
 
@@ -1147,33 +1292,41 @@ fn test_chaos_lost_acknowledgment_retry() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     let message_id = BytesN::from_array(&env, &[0xca_u8; 32]);
+    let v_sig = create_sig(&env, &sk, &message_id, 1);
     client.submit_message(
         &validator,
-        &message_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xSENDER"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\":42}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: message_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xSENDER"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\":42}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: 1,
+        },
     );
 
     let msg = client.get_message(&message_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Pending);
 
-    // Acknowledge (confirm) once
-    client.confirm_message(&validator, &message_id);
+    // Acknowledge (confirm) once — needs new nonce
+    let conf_sig = create_sig(&env, &sk, &message_id, 2);
+    client.confirm_message(&validator, &message_id, &conf_sig, &2);
 
     // Second confirm by the same validator must be rejected (idempotency guard)
-    let dup = client.try_confirm_message(&validator, &message_id);
+    // Need a new nonce to call confirm_message (nonce check passes), but duplicate validator
+    let dup_sig = create_sig(&env, &sk, &message_id, 3);
+    let dup = client.try_confirm_message(&validator, &message_id, &dup_sig, &3);
     assert_eq!(dup, Err(Ok(Error::DuplicateConfirmation)));
 
     // Message should still be manageable
@@ -1188,7 +1341,7 @@ fn test_chaos_partial_delivery_atomicity() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
@@ -1198,36 +1351,47 @@ fn test_chaos_partial_delivery_atomicity() {
     let msg_id_a = BytesN::from_array(&env, &[0xbc_u8; 32]);
     let msg_id_b = BytesN::from_array(&env, &[0xbd_u8; 32]);
 
+    let v_sig_a = create_sig(&env, &sk, &msg_id_a, 1);
     client.submit_message(
         &validator,
-        &msg_id_a,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xA"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"data\":\"a\"}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_a.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xA"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"data\":\"a\"}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_a,
+            v_nonce: 1,
+        },
     );
+    let v_sig_b = create_sig(&env, &sk, &msg_id_b, 2);
     client.submit_message(
         &validator,
-        &msg_id_b,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xB"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"data\":\"b\"}"),
-        &2,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_b.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xB"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"data\":\"b\"}"),
+            nonce: 2,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_b,
+            v_nonce: 2,
+        },
     );
 
     let message_ids = soroban_sdk::vec![&env, msg_id_a.clone(), msg_id_b.clone()];
     client.initiate_atomic_tx(&recipient, &tx_id, &message_ids);
 
     // Only confirm message A, not B
-    client.confirm_message(&validator, &msg_id_a);
+    let conf_sig = create_sig(&env, &sk, &msg_id_a, 3);
+    client.confirm_message(&validator, &msg_id_a, &conf_sig, &3);
 
     // Atomic tx should NOT be committable — partial state
     let atomic_tx = client.get_atomic_tx(&tx_id).unwrap();
@@ -1252,7 +1416,7 @@ fn test_chaos_relayer_offline_recovery() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
@@ -1262,40 +1426,64 @@ fn test_chaos_relayer_offline_recovery() {
         let mut arr = [0u8; 32];
         arr[31] = i as u8;
         let msg_id = BytesN::from_array(&env, &arr);
+        let nonce = i + 1;
+        let v_sig = create_sig(&env, &sk, &msg_id, nonce);
         client.submit_message(
             &validator,
-            &msg_id,
-            &ChainId::Ethereum,
-            &ChainId::Stellar,
-            &String::from_str(&env, "0xRELAY"),
-            &recipient,
-            &MessageType::RecordSync,
-            &String::from_str(&env, "{\"seq\":"),
-            &(i + 1),
-            &generate_signature(&env),
+            &SubmitMessageRequest {
+                message_id: msg_id.clone(),
+                source_chain: ChainId::Ethereum,
+                dest_chain: ChainId::Stellar,
+                sender: String::from_str(&env, "0xRELAY"),
+                recipient: recipient.clone(),
+                payload_type: MessageType::RecordSync,
+                payload: String::from_str(&env, "{\"seq\":"),
+                nonce,
+                signature: dummy_sig(&env),
+                v_signature: v_sig,
+                v_nonce: nonce,
+            },
         );
         ids.push_back(msg_id);
     }
 
     // Confirm only first 2 (simulating relayer going offline)
-    client.confirm_message(&validator, &ids.get(0).unwrap());
-    client.confirm_message(&validator, &ids.get(1).unwrap());
+    let conf_sig_0 = create_sig(&env, &sk, &ids.get(0).unwrap(), 6);
+    let conf_sig_1 = create_sig(&env, &sk, &ids.get(1).unwrap(), 7);
+    client.confirm_message(&validator, &ids.get(0).unwrap(), &conf_sig_0, &6);
+    client.confirm_message(&validator, &ids.get(1).unwrap(), &conf_sig_1, &7);
 
     // Remaining messages should still be Pending (recoverable)
     for i in 2..5 {
         let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
-        assert_eq!(msg.status, MessageStatus::Pending, "Message {} should be recoverable", i);
+        assert_eq!(
+            msg.status,
+            MessageStatus::Pending,
+            "Message {} should be recoverable",
+            i
+        );
     }
 
     // After relayer comes back online, confirm remaining
     for i in 2..5 {
-        client.confirm_message(&validator, &ids.get(i).unwrap());
+        let conf_sig = create_sig(&env, &sk, &ids.get(i).unwrap(), (8 + i - 2) as u64);
+        client.confirm_message(
+            &validator,
+            &ids.get(i).unwrap(),
+            &conf_sig,
+            &((8 + i - 2) as u64),
+        );
     }
 
     // All messages remain Pending with single validator (min_confirmations=2)
     for i in 0..5 {
         let msg = client.get_message(&ids.get(i).unwrap()).unwrap();
-        assert_eq!(msg.status, MessageStatus::Pending, "Message {} is still recoverable", i);
+        assert_eq!(
+            msg.status,
+            MessageStatus::Pending,
+            "Message {} is still recoverable",
+            i
+        );
     }
 }
 
@@ -1340,40 +1528,48 @@ fn test_chaos_acknowledgment_lost_idempotent_retry() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     // Submit message (simulates successful submission)
     let msg_id = generate_message_id(&env);
+    let v_sig = create_sig(&env, &sk1, &msg_id, 1);
     client.submit_message(
         &validator1,
-        &msg_id,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0x1234"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 1}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0x1234"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 1}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: 1,
+        },
     );
 
     // First confirmation (acknowledgment is "lost" - not processed further)
-    client.confirm_message(&validator1, &msg_id);
+    let conf_sig1 = create_sig(&env, &sk1, &msg_id, 2);
+    client.confirm_message(&validator1, &msg_id, &conf_sig1, &2);
 
     // Second confirmation (retry - idempotent)
-    client.confirm_message(&validator2, &msg_id);
+    let conf_sig2 = create_sig(&env, &sk2, &msg_id, 1);
+    client.confirm_message(&validator2, &msg_id, &conf_sig2, &1);
 
     // Message should be Verified despite simulated ack loss
     let msg = client.get_message(&msg_id).unwrap();
     assert_eq!(msg.status, MessageStatus::Verified);
 
-    // Duplicate confirmation should not error (idempotent)
-    let result = client.try_confirm_message(&validator2, &msg_id);
-    assert_eq!(result, Err(Ok(Error::DuplicateConfirmation)));
+    // Duplicate confirmation should error (message is already Verified)
+    let dup_sig = create_sig(&env, &sk2, &msg_id, 2);
+    let result = client.try_confirm_message(&validator2, &msg_id, &dup_sig, &2);
+    assert_eq!(result, Err(Ok(Error::MessageAlreadyProcessed)));
 }
 
 /// Simulates partial message delivery — verifies atomicity (all or nothing)
@@ -1383,44 +1579,57 @@ fn test_chaos_partial_message_delivery_atomicity() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
 
     // Submit message A (simulates partial delivery - never confirmed)
     let msg_id_a = BytesN::from_array(&env, &[0xaa; 32]);
+    let v_sig_a = create_sig(&env, &sk, &msg_id_a, 1);
     client.submit_message(
         &validator,
-        &msg_id_a,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xAAA"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 1}"),
-        &1,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_a.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xAAA"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 1}"),
+            nonce: 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_a,
+            v_nonce: 1,
+        },
     );
 
     // Message B sent at nonce 2 (nonce prevents replay on A)
     let msg_id_b = BytesN::from_array(&env, &[0xbb; 32]);
+    let v_sig_b = create_sig(&env, &sk, &msg_id_b, 2);
     client.submit_message(
         &validator,
-        &msg_id_b,
-        &ChainId::Ethereum,
-        &ChainId::Stellar,
-        &String::from_str(&env, "0xAAA"),
-        &recipient,
-        &MessageType::RecordRequest,
-        &String::from_str(&env, "{\"record_id\": 2}"),
-        &2,
-        &generate_signature(&env),
+        &SubmitMessageRequest {
+            message_id: msg_id_b.clone(),
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: String::from_str(&env, "0xAAA"),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{\"record_id\": 2}"),
+            nonce: 2,
+            signature: dummy_sig(&env),
+            v_signature: v_sig_b,
+            v_nonce: 2,
+        },
     );
 
-    // Only message B is confirmed
-    client.confirm_message(&validator, &msg_id_b);
-    client.confirm_message(&setup_validator(&env, &client, &admin), &msg_id_b);
+    // Only message B is confirmed by both validators
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
+    let conf_sig_b1 = create_sig(&env, &sk, &msg_id_b, 3);
+    let conf_sig_b2 = create_sig(&env, &sk2, &msg_id_b, 1);
+    client.confirm_message(&validator, &msg_id_b, &conf_sig_b1, &3);
+    client.confirm_message(&validator2, &msg_id_b, &conf_sig_b2, &1);
 
     // Message A should still be Pending (not lost, not executed)
     let msg_a = client.get_message(&msg_id_a).unwrap();
@@ -1432,7 +1641,10 @@ fn test_chaos_partial_message_delivery_atomicity() {
 
     // Execute only message B
     assert!(client.execute_message(&recipient, &msg_id_b));
-    assert_eq!(client.get_message(&msg_id_b).unwrap().status, MessageStatus::Executed);
+    assert_eq!(
+        client.get_message(&msg_id_b).unwrap().status,
+        MessageStatus::Executed
+    );
 }
 
 /// Simulates relayer going offline mid-batch — verifies pending messages are recoverable
@@ -1442,8 +1654,8 @@ fn test_chaos_relayer_offline_mid_batch_recovery() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator1 = setup_validator(&env, &client, &admin);
-    let validator2 = setup_validator(&env, &client, &admin);
+    let (validator1, sk1) = setup_validator(&env, &client, &admin);
+    let (validator2, sk2) = setup_validator(&env, &client, &admin);
     let recipient = Address::generate(&env);
 
     env.mock_all_auths();
@@ -1458,31 +1670,41 @@ fn test_chaos_relayer_offline_mid_batch_recovery() {
 
     // Submit all messages (relayer is online for submission)
     for (i, msg_id) in msg_ids.iter().enumerate() {
+        let nonce = i as u64 + 1;
+        let v_sig = create_sig(&env, &sk1, &msg_id, nonce);
         client.submit_message(
             &validator1,
-            msg_id,
-            &ChainId::Ethereum,
-            &ChainId::Stellar,
-            &String::from_str(&env, "0xBatch"),
-            &recipient,
-            &MessageType::RecordSync,
-            &String::from_str(&env, "{\"batch\": true}"),
-            &(i as u64 + 1),
-            &generate_signature(&env),
+            &SubmitMessageRequest {
+                message_id: msg_id.clone(),
+                source_chain: ChainId::Ethereum,
+                dest_chain: ChainId::Stellar,
+                sender: String::from_str(&env, "0xBatch"),
+                recipient: recipient.clone(),
+                payload_type: MessageType::RecordSync,
+                payload: String::from_str(&env, "{\"batch\": true}"),
+                nonce,
+                signature: dummy_sig(&env),
+                v_signature: v_sig,
+                v_nonce: nonce,
+            },
         );
     }
 
     // Relayer goes offline — only first two messages get confirmed
-    client.confirm_message(&validator1, &msg_ids.get(0).unwrap());
-    client.confirm_message(&validator1, &msg_ids.get(1).unwrap());
+    let conf_sig_0 = create_sig(&env, &sk1, &msg_ids.get(0).unwrap(), 4);
+    let conf_sig_1 = create_sig(&env, &sk1, &msg_ids.get(1).unwrap(), 5);
+    client.confirm_message(&validator1, &msg_ids.get(0).unwrap(), &conf_sig_0, &4);
+    client.confirm_message(&validator1, &msg_ids.get(1).unwrap(), &conf_sig_1, &5);
 
     // Third message remains unconfirmed (relayer offline)
     let msg_2 = client.get_message(&msg_ids.get(2).unwrap()).unwrap();
     assert_eq!(msg_2.status, MessageStatus::Pending);
 
     // Relayer comes back online — can still confirm remaining messages
-    client.confirm_message(&validator1, &msg_ids.get(2).unwrap());
-    client.confirm_message(&validator2, &msg_ids.get(2).unwrap());
+    let conf_sig_2 = create_sig(&env, &sk1, &msg_ids.get(2).unwrap(), 6);
+    let conf_sig_v2 = create_sig(&env, &sk2, &msg_ids.get(2).unwrap(), 1);
+    client.confirm_message(&validator1, &msg_ids.get(2).unwrap(), &conf_sig_2, &6);
+    client.confirm_message(&validator2, &msg_ids.get(2).unwrap(), &conf_sig_v2, &1);
 
     let msg_2 = client.get_message(&msg_ids.get(2).unwrap()).unwrap();
     assert_eq!(msg_2.status, MessageStatus::Verified);
@@ -1495,27 +1717,214 @@ fn test_chaos_oracle_offline_mid_consensus() {
     let (client, admin, medical, identity, access) = create_contract(&env);
     initialize_contract(&env, &client, &admin, &medical, &identity, &access);
 
-    let validator = setup_validator(&env, &client, &admin);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
     let oracle1 = Address::generate(&env);
     let oracle2 = Address::generate(&env);
     let chains = soroban_sdk::vec![&env, ChainId::Ethereum];
-    let pk = generate_public_key(&env);
-    let sig = generate_signature(&env);
+    let dummy_pk = BytesN::from_array(&env, &[3u8; 32]);
 
     env.mock_all_auths();
 
     // Register 3 oracles
     for oracle in [&oracle1, &oracle2] {
-        client.register_oracle(&admin, oracle, &pk, &chains);
+        client.register_oracle(&admin, oracle, &dummy_pk, &chains);
     }
 
     // Only 2 out of 3 reports (oracle #3 is offline)
     let data_hash = BytesN::from_array(&env, &[0xcc; 32]);
-    client.submit_oracle_report(&oracle1, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &sig);
-    client.submit_oracle_report(&oracle2, &ChainId::Ethereum, &data_hash, &String::from_str(&env, "{}"), &100, &sig);
+    client.submit_oracle_report(
+        &oracle1,
+        &ChainId::Ethereum,
+        &data_hash,
+        &String::from_str(&env, "{}"),
+        &100,
+        &dummy_sig(&env),
+    );
+    client.submit_oracle_report(
+        &oracle2,
+        &ChainId::Ethereum,
+        &data_hash,
+        &String::from_str(&env, "{}"),
+        &100,
+        &dummy_sig(&env),
+    );
 
     // Attempt to aggregate with only 2 reports (MIN_ORACLE_REPORTS = 3)
     let report_ids = soroban_sdk::vec![&env, 1u64, 2u64];
-    let result = client.try_aggregate_oracle_data(&validator, &ChainId::Ethereum, &report_ids, &data_hash);
+    let agg_sig = create_sig(&env, &sk, &data_hash, 1);
+    let result = client.try_aggregate_oracle_data(
+        &validator,
+        &ChainId::Ethereum,
+        &report_ids,
+        &data_hash,
+        &agg_sig,
+        &1,
+    );
     assert_eq!(result, Err(Ok(Error::InsufficientOracleReports)));
+}
+
+// ==================== Batch Submit Message Tests ====================
+
+#[test]
+fn test_submit_message_batch_empty_fails() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, _sk) = setup_validator(&env, &client, &admin);
+
+    env.mock_all_auths();
+    let result = client.try_submit_message_batch(&validator, &Vec::new(&env));
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
+}
+
+#[test]
+fn test_submit_message_batch_single() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+
+    let message_id = generate_message_id(&env);
+    let sender = String::from_str(&env, "0xsender");
+    let payload = String::from_str(&env, "{}");
+
+    env.mock_all_auths();
+    let v_sig = create_sig(&env, &sk, &message_id, 1);
+    let request = SubmitMessageRequest {
+        message_id: message_id.clone(),
+        source_chain: ChainId::Ethereum,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordRequest,
+        payload: payload.clone(),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig,
+        v_nonce: 1,
+    };
+
+    let ids = client.submit_message_batch(&validator, &soroban_sdk::vec![&env, request]);
+    assert_eq!(ids.len(), 1);
+    assert_eq!(ids.get(0).unwrap(), message_id);
+    assert_eq!(client.get_message_count(), 1);
+
+    let msg = client.get_message(&message_id).unwrap();
+    assert_eq!(msg.status, MessageStatus::Pending);
+}
+
+#[test]
+fn test_submit_message_batch_multiple() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    env.mock_all_auths();
+    let id1 = BytesN::from_array(&env, &[0x01; 32]);
+    let id2 = BytesN::from_array(&env, &[0x02; 32]);
+
+    let v_sig1 = create_sig(&env, &sk, &id1, 1);
+    let v_sig2 = create_sig(&env, &sk, &id2, 2);
+
+    let req1 = SubmitMessageRequest {
+        message_id: id1.clone(),
+        source_chain: ChainId::Ethereum,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordRequest,
+        payload: String::from_str(&env, "{}"),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig1,
+        v_nonce: 1,
+    };
+    let req2 = SubmitMessageRequest {
+        message_id: id2.clone(),
+        source_chain: ChainId::Polygon,
+        dest_chain: ChainId::Stellar,
+        sender: sender.clone(),
+        recipient: recipient.clone(),
+        payload_type: MessageType::RecordResponse,
+        payload: String::from_str(&env, r#"{"data":"test"}"#),
+        nonce: 2,
+        signature: dummy_sig(&env),
+        v_signature: v_sig2,
+        v_nonce: 2,
+    };
+
+    let ids = client.submit_message_batch(&validator, &soroban_sdk::vec![&env, req1, req2]);
+    assert_eq!(ids.len(), 2);
+    assert_eq!(client.get_message_count(), 2);
+
+    assert!(client.get_message(&id1).is_some());
+    assert!(client.get_message(&id2).is_some());
+}
+
+#[test]
+fn test_submit_message_batch_too_large() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    env.mock_all_auths();
+    let mut requests = Vec::new(&env);
+    for i in 0..51 {
+        let mid = BytesN::from_array(&env, &[i as u8; 32]);
+        let v_sig = create_sig(&env, &sk, &mid, i as u64 + 1);
+        requests.push_back(SubmitMessageRequest {
+            message_id: mid,
+            source_chain: ChainId::Ethereum,
+            dest_chain: ChainId::Stellar,
+            sender: sender.clone(),
+            recipient: recipient.clone(),
+            payload_type: MessageType::RecordRequest,
+            payload: String::from_str(&env, "{}"),
+            nonce: i as u64 + 1,
+            signature: dummy_sig(&env),
+            v_signature: v_sig,
+            v_nonce: i as u64 + 1,
+        });
+    }
+
+    let result = client.try_submit_message_batch(&validator, &requests);
+    assert_eq!(result, Err(Ok(Error::BatchTooLarge)));
+}
+
+#[test]
+fn test_submit_message_batch_rejects_invalid_chain() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    let recipient = Address::generate(&env);
+    let sender = String::from_str(&env, "0xsender");
+
+    let mid = generate_message_id(&env);
+    let v_sig = create_sig(&env, &sk, &mid, 1);
+
+    env.mock_all_auths();
+    let request = SubmitMessageRequest {
+        message_id: mid,
+        source_chain: ChainId::BinanceSmartChain,
+        dest_chain: ChainId::Stellar,
+        sender,
+        recipient,
+        payload_type: MessageType::RecordRequest,
+        payload: String::from_str(&env, "{}"),
+        nonce: 1,
+        signature: dummy_sig(&env),
+        v_signature: v_sig,
+        v_nonce: 1,
+    };
+
+    let result = client.try_submit_message_batch(&validator, &soroban_sdk::vec![&env, request]);
+    assert_eq!(result, Err(Ok(Error::ChainNotSupported)));
 }

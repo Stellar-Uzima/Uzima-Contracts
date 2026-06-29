@@ -1,4 +1,5 @@
 #![no_std]
+//! sanitization - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{Env, String};
 
@@ -23,8 +24,21 @@ pub enum SanitizationError {
     InvalidFormat = 5,
 }
 
+impl core::fmt::Display for SanitizationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            SanitizationError::InputTooLong => write!(f, "input too long"),
+            SanitizationError::EmptyInput => write!(f, "empty input"),
+            SanitizationError::NullByte => write!(f, "null byte"),
+            SanitizationError::InvalidCharacter => write!(f, "invalid character"),
+            SanitizationError::InvalidFormat => write!(f, "invalid format"),
+        }
+    }
+}
+
 /// Validates a general-purpose string: non-empty, within `max_len` bytes,
 /// no null bytes, no ASCII control characters (allows tab/LF/CR).
+#[must_use]
 pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), SanitizationError> {
     let len = input.len();
 
@@ -60,6 +74,7 @@ pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), S
 
 /// Validates a human name: letters (any UTF-8), digits, spaces, hyphens,
 /// apostrophes, commas, and periods only (ASCII subset).
+#[must_use]
 pub fn sanitize_name(_env: &Env, input: &String) -> Result<(), SanitizationError> {
     let len = input.len();
 
@@ -95,6 +110,7 @@ pub fn sanitize_name(_env: &Env, input: &String) -> Result<(), SanitizationError
 
 /// Validates an email address: single '@', non-empty local and domain parts,
 /// domain contains at least one '.', all chars from the RFC 5321 allowed set.
+#[must_use]
 pub fn sanitize_email(_env: &Env, input: &String) -> Result<(), SanitizationError> {
     let len = input.len();
 
@@ -155,6 +171,7 @@ pub fn sanitize_email(_env: &Env, input: &String) -> Result<(), SanitizationErro
 
 /// Validates an identifier: alphanumeric chars, hyphens, underscores, colons,
 /// dots, and forward slashes (covers DIDs, slugs, and resource paths).
+#[must_use]
 pub fn sanitize_id(_env: &Env, input: &String) -> Result<(), SanitizationError> {
     let len = input.len();
 
@@ -183,6 +200,7 @@ pub fn sanitize_id(_env: &Env, input: &String) -> Result<(), SanitizationError> 
 }
 
 /// Validates a URL: printable ASCII only, length within MAX_URL_LEN.
+#[must_use]
 pub fn sanitize_url(_env: &Env, input: &String) -> Result<(), SanitizationError> {
     let len = input.len();
 

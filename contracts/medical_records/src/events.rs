@@ -39,6 +39,9 @@ pub enum EventType {
     PermissionRevoked,
     MetadataUpdated,
     DataQualityValidated,
+    /// Emitted when a traditional-medicine record is written; contains only
+    /// non-sensitive practice_type to preserve patient privacy.
+    TraditionalRecordAdded,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -332,7 +335,7 @@ pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patien
         .publish((symbol_short!("REC_ACC"), accessor, patient), event);
 }
 
-#[allow(dead_code)]
+
 pub fn emit_access_requested(
     env: &Env,
     requester: Address,
@@ -365,7 +368,7 @@ pub fn emit_access_requested(
         .publish((symbol_short!("ACC_REQ"), requester, patient), event);
 }
 
-#[allow(dead_code)]
+
 pub fn emit_access_granted(
     env: &Env,
     granter: Address,
@@ -658,7 +661,7 @@ pub fn emit_risk_score_submitted(
         .publish((symbol_short!("RISK_SCR"), ai_coordinator, patient), event);
 }
 
-#[allow(dead_code)]
+
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
     let event = BaseEvent {
         metadata: EventMetadata {
@@ -866,7 +869,7 @@ pub struct MonitoringDashboard {
     pub health_status: String,
 }
 
-#[allow(dead_code)]
+
 pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
     let mut filtered = Vec::new(events.env());
 
@@ -939,7 +942,7 @@ pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseE
     }
 }
 
-#[allow(dead_code)]
+
 pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
     let env = &events.env();
     let mut events_by_type: Map<EventType, u64> = Map::new(env);
@@ -994,4 +997,42 @@ pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
         events_by_user,
         time_range: (min_time, max_time),
     }
+}
+
+/// Emit `TraditionalRecordAdded` – exposes only the non-sensitive `practice_type`.
+/// Fields like `remedies_used` or `cultural_context` must NEVER appear in events.
+pub fn emit_traditional_record_added(
+    env: &Env,
+    doctor: Address,
+    record_id: u64,
+    patient: Address,
+    practice_type: String,
+) {
+    let event = BaseEvent {
+        metadata: EventMetadata {
+            event_type: EventType::TraditionalRecordAdded,
+            category: OperationCategory::RecordOperations,
+            timestamp: env.ledger().timestamp(),
+            user_id: doctor.clone(),
+            session_id: None,
+            ipfs_ref: None,
+            gas_used: None,
+            block_height: env.ledger().sequence() as u64,
+        },
+        data: EventData::RecordEvent(RecordEventData {
+            record_id,
+            patient_id: patient.clone(),
+            doctor_id: Some(doctor.clone()),
+            is_confidential: true, // traditional records are always treated as confidential
+            category: String::from_str(env, "Traditional"),
+            // practice_type is safe to surface; all other fields remain off-chain.
+            tags: {
+                let mut t = soroban_sdk::Vec::new(env);
+                t.push_back(practice_type);
+                t
+            },
+        }),
+    };
+    env.events()
+        .publish((symbol_short!("TRAD_NEW"), doctor, patient), event);
 }

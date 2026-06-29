@@ -1,4 +1,5 @@
 #![no_std]
+//! runtime_validation - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -22,11 +23,8 @@ pub struct RuntimeValidation;
 impl RuntimeValidation {
     /// Initialize the runtime validation system
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -376,6 +374,7 @@ impl RuntimeValidation {
             .unwrap_or(0)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

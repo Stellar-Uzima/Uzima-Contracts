@@ -1,4 +1,5 @@
 #![no_std]
+//! iot_device_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_pass_by_value)]
 #![allow(clippy::cast_possible_truncation)]
@@ -221,10 +222,8 @@ impl IoTDeviceManagement {
     // ============================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
@@ -297,6 +296,7 @@ impl IoTDeviceManagement {
     // INTERNAL HELPERS
     // ============================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -308,6 +308,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
+    #[must_use]
     fn check_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -320,6 +321,7 @@ impl IoTDeviceManagement {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, required: Role) -> Result<(), Error> {
         let role: Role = env
             .storage()

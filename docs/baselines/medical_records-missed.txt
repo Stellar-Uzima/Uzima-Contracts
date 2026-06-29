@@ -1,0 +1,23 @@
+# =============================================================================
+# Mutation testing baseline — medical_records
+# -----------------------------------------------------------------------------
+# Each non-comment line is an `unconditional_missed` mutant entry from
+# cargo-mutants (one per line, in src/lib.rs relative path format).
+#
+# IMPORTANT: This file is currently an empty baseline. The first scheduled
+# mutation-testing CI run after this PR merges will surface every currently
+# uncaught mutant for review. A maintainer must then:
+#   1. Download the `mutants-out-medical_records` artifact from that
+#      workflow run.
+#   2. Inspect `mutants.out/missed.txt` and decide which mutants are real
+#      coverage gaps vs acceptable gaps.
+#   3. Copy `mutants.out/missed.txt` over this file (or commit a curated
+#      subset) and push.
+# After that, the workflow will fail only when NEW misses appear beyond
+# this list.
+#
+# medical_records is excluded from the workspace `members` list, so the
+# workflow switches into `contracts/medical_records` directly (which is
+# why the paths in missed.txt will be relative to that directory even
+# though baseline diffing is done relative to the repo root).
+# =============================================================================

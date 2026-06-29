@@ -1,47 +1,133 @@
-//! End-to-end test: full patient journey
+//! End-to-end smoke tests for testnet deployment verification.
 //!
-//! Steps tested:
-//! 1. Register patient identity
-//! 2. Patient grants consent to a doctor
-//! 3. Doctor writes a medical record (consent verified)
-//! 4. Audit contract logs the access
-//! 5. Patient revokes consent; subsequent doctor write is rejected
-//! 6. Audit log reflects both access and revocation
+//! Tests deploy contracts in a local Soroban environment and verify basic
+//! CRUD operations through their public entrypoints.
 
 #[cfg(test)]
-mod e2e_patient_journey {
-    use soroban_sdk::{testutils::Address as _, Address, Env};
+mod e2e_smoke {
+    use soroban_sdk::{
+        testutils::Address as _, vec, Address, Env, String, Vec,
+    };
+    use medical_records::{
+        MedicalRecordsContract, MedicalRecordsContractClient, MockRbac, MockRbacClient,
+        RbacRole, Role,
+    };
 
-    /// Smoke test: verify the E2E journey compiles and basic address
-    /// generation works. Full contract interaction requires deployed
-    /// contracts on a local network (see scripts/dev_quickstart.sh).
-    #[test]
-    fn test_patient_journey_addresses_distinct() {
+    struct SmokeEnv {
+        _env: Env,
+        admin: Address,
+        doctor: Address,
+        patient: Address,
+        client: MedicalRecordsContractClient<'static>,
+    }
+
+    fn setup() -> SmokeEnv {
         let env = Env::default();
-        let patient = Address::generate(&env);
-        let doctor = Address::generate(&env);
+        env.mock_all_auths();
+
         let admin = Address::generate(&env);
-        // All participants must have distinct addresses
-        assert_ne!(patient, doctor);
-        assert_ne!(patient, admin);
-        assert_ne!(doctor, admin);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
+        rbac_client.assign_role(&admin, &RbacRole::Admin);
+
+        let contract_id = Address::generate(&env);
+        env.register_contract(&contract_id, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+        client.initialize(&admin, &rbac_id);
+
+        let doctor = Address::generate(&env);
+        let patient = Address::generate(&env);
+        client.manage_user(&admin, &doctor, &Role::Doctor);
+        client.manage_user(&admin, &patient, &Role::Patient);
+
+        SmokeEnv { _env: env, admin, doctor, patient, client }
     }
 
-    /// Step 1: Patient identity registration produces a unique address.
+    /// Deploy contracts and verify initialization succeeds.
     #[test]
-    fn test_step1_patient_identity() {
+    fn test_contracts_deploy_and_initialize() {
+        let smoke = setup();
+        assert_ne!(smoke.admin, smoke.doctor);
+        assert_ne!(smoke.doctor, smoke.patient);
+    }
+
+    /// Perform basic CRUD: add a record then retrieve it.
+    #[test]
+    fn test_medical_record_write_and_read() {
+        let smoke = setup();
+        let record_id = smoke.client.add_record(
+            &smoke.doctor,
+            &smoke.patient,
+            &String::from_str(&smoke._env, "Smoke Diagnosis"),
+            &String::from_str(&smoke._env, "Smoke Treatment"),
+            &false,
+            &vec![&smoke._env, String::from_str(&smoke._env, "smoke")],
+            &String::from_str(&smoke._env, "General"),
+            &String::from_str(&smoke._env, "Medication"),
+            &String::from_str(&smoke._env, "ipfs://smoke-record"),
+        );
+        let record = smoke.client.get_record(&smoke.patient, &record_id);
+        assert_eq!(
+            record.diagnosis,
+            String::from_str(&smoke._env, "Smoke Diagnosis")
+        );
+    }
+
+    /// Verify that an unauthorized caller cannot write records.
+    #[test]
+    fn test_unauthorized_write_rejected() {
         let env = Env::default();
-        let patient_a = Address::generate(&env);
-        let patient_b = Address::generate(&env);
-        assert_ne!(patient_a, patient_b, "Each patient must have a unique identity");
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let contract_id = Address::generate(&env);
+        env.register_contract(&contract_id, MedicalRecordsContract);
+        let client = MedicalRecordsContractClient::new(&env, &contract_id);
+        client.initialize(&admin, &rbac_id);
+
+        let stranger = Address::generate(&env);
+        let result = client.try_add_record(
+            &stranger,
+            &Address::generate(&env),
+            &String::from_str(&env, "Unauthorized"),
+            &String::from_str(&env, "Test"),
+            &false,
+            &Vec::new(&env),
+            &String::from_str(&env, "General"),
+            &String::from_str(&env, "Medication"),
+            &String::from_str(&env, "ipfs://unauth"),
+        );
+        assert!(result.is_err(), "Unauthorized write must be rejected");
     }
 
-    /// Steps 2-6 are exercised via integration tests in
-    /// tests/integration/healthcare_workflows.rs once contracts are deployed.
-    /// This placeholder ensures the e2e module is always compiled and
-    /// included in `cargo test --test e2e`.
+    /// Verify record count tracking.
     #[test]
-    fn test_e2e_module_compiles() {
-        // Intentionally empty: compilation success is the assertion.
+    fn test_record_count_tracking() {
+        let smoke = setup();
+        let count_before = smoke.client.get_patient_record_count(&smoke.patient);
+        assert_eq!(count_before, 0, "New patient should have zero records");
+
+        smoke.client.add_record(
+            &smoke.doctor,
+            &smoke.patient,
+            &String::from_str(&smoke._env, "Count Test"),
+            &String::from_str(&smoke._env, "Treatment"),
+            &false,
+            &Vec::new(&smoke._env),
+            &String::from_str(&smoke._env, "General"),
+            &String::from_str(&smoke._env, "Medication"),
+            &String::from_str(&smoke._env, "ipfs://count"),
+        );
+
+        let count_after = smoke.client.get_patient_record_count(&smoke.patient);
+        assert_eq!(count_after, 1, "Record count should increment");
+    }
+
+    /// Verify the contract health check returns OK.
+    #[test]
+    fn test_health_check() {
+        let smoke = setup();
+        let (status, _version, _gas) = smoke.client.health_check();
+        assert_eq!(status, symbol_short!("OK"));
     }
 }

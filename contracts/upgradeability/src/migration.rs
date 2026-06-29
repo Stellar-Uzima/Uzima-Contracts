@@ -14,9 +14,11 @@ pub struct UpgradeValidation {
 
 pub trait Migratable {
     /// Function called after an upgrade to perform data migration
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), UpgradeError>;
 
     /// Function called to verify state integrity (pre and post migration)
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, UpgradeError>;
 
     /// Function called to validate the upgrade safety before execution

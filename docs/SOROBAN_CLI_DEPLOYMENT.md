@@ -322,8 +322,62 @@ soroban contract invoke \
   --arg-feature "advanced_features"
 ```
 
-## Troubleshooting
+## Planned Upgrade Migrations
 
+For upgradeable Uzima contracts, use the migration helper before any live upgrade so operators can inspect the storage and gas impact locally.
+
+### Step 1: Install the New WASM and Scaffold the Plan
+
+```bash
+./scripts/upgrade_contract.sh medical_records testnet \
+  target/wasm32-unknown-unknown/release/medical_records.wasm \
+  3 \
+  4 \
+  --identity testnet-admin
+```
+
+This writes `deployments/testnet/medical_records/plan.json` with the installed WASM hash and placeholder migration metadata that should be reviewed before continuing.
+
+### Step 2: Run the Local Dry Run
+
+```bash
+./scripts/migrate_contract.sh medical_records --network testnet --dry-run
+```
+
+Dry-run mode does not submit a transaction. It prints:
+
+- the projected storage state diff from `expected_storage_migration_steps`
+- the projected gas cost from `expected_gas`
+- the projected event emissions from `expected_event_emissions`
+
+### Step 3: Execute the Live Upgrade
+
+```bash
+./scripts/migrate_contract.sh medical_records \
+  --network testnet \
+  --identity testnet-admin \
+  --i-understand-this-is-live
+```
+
+Live mode is guarded in two ways:
+
+- `--i-understand-this-is-live` must be present
+- the operator must type `LIVE` at the interactive confirmation prompt
+
+The plan file can also carry contract-specific invocation metadata:
+
+```json
+{
+  "contract_id": "REPLACE_WITH_DEPLOYED_CONTRACT_ID",
+  "admin_identity": "testnet-admin",
+  "upgrade_entrypoint": "upgrade",
+  "caller_arg_name": "caller"
+}
+```
+
+That keeps the live invocation reproducible and reviewable alongside the storage-migration expectations.
+
+## Troubleshooting
 ### Common Deployment Issues
 
 #### Network Connectivity
@@ -457,7 +511,7 @@ soroban config network add --global custom \
    ```bash
    # Standard deployment
    soroban contract deploy --fee 100
-   
+
    # High-priority deployment
    soroban contract deploy --fee 1000
    ```
@@ -496,7 +550,7 @@ soroban config network add --global custom \
    ```bash
    # Start local network
    docker run --rm -d -p 8000:8000 stellar/soroban-rpc:latest
-   
+
    # Deploy and test locally
    soroban contract deploy --wasm contract.wasm --source dev-admin --network local
    ```
@@ -505,7 +559,7 @@ soroban config network add --global custom \
    ```bash
    # Deploy to testnet
    soroban contract deploy --wasm contract.wasm --source testnet-admin --network testnet
-   
+
    # Run integration tests
    ./scripts/integration_test.sh $CONTRACT_ID testnet
    ```
@@ -516,6 +570,33 @@ soroban config network add --global custom \
    soroban contract deploy --wasm contract_optimized.wasm --source mainnet-admin --network mainnet
    soroban contract info --id $CONTRACT_ID --network mainnet
    ```
+
+---
+
+## Deterministic Build Verification (audited == deployed)
+
+Before deploying, record the SHA-256 of the exact artifacts you are shipping so
+the deployed bytecode can be proven to match the audited build. After deploying
+(and in CI), verify a fresh build still matches that record.
+
+```sh
+# 1. Build release artifacts from the pinned toolchain (rust-toolchain.toml)
+make dist
+
+# 2. Record the audited hashes for this network + release, with the auditor key
+./scripts/verify_deployment.sh record testnet v1.0.0 <auditor_pubkey>
+#    -> deployments/testnet/v1.0.0/hashes.txt   (commit this file)
+
+# 3. Deploy as usual (see sections above), then verify nothing drifted
+make dist
+./scripts/verify_deployment.sh compare testnet v1.0.0
+```
+
+`compare` exits non-zero on any mismatch (failing CI), and is a no-op when no
+record exists yet for the target. See
+[`docs/SECURITY_BEST_PRACTICES.md`](./SECURITY_BEST_PRACTICES.md) §8 and
+[`deployments/README.md`](../deployments/README.md) for the full workflow,
+file format, and the `Signed-by:` convention.
 
 ---
 

@@ -1,4 +1,5 @@
 #![no_std]
+//! emr_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -14,6 +15,57 @@ use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
     Symbol, Vec,
+};
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+/// WASM page size in bytes (64 KiB)
+const WASM_PAGE_SIZE: usize = 65536;
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+struct WasmBumpAllocator {
+    next: UnsafeCell<usize>,
+}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+unsafe impl Sync for WasmBumpAllocator {}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+unsafe impl GlobalAlloc for WasmBumpAllocator {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let align = layout.align().max(1);
+        let size = layout.size();
+        let next = self.next.get();
+
+        if *next == 0 {
+            *next = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
+        }
+
+        let aligned = (*next + align - 1) & !(align - 1);
+        let end = match aligned.checked_add(size) {
+            Some(end) => end,
+            None => return ptr::null_mut(),
+        };
+
+        let current_bytes = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
+        if end > current_bytes {
+            let additional = end - current_bytes;
+            let pages = additional.div_ceil(WASM_PAGE_SIZE);
+            if wasm32::memory_grow(0, pages) == usize::MAX {
+                return ptr::null_mut();
+            }
+        }
+
+        *next = end;
+        aligned as *mut u8
+    }
+
+    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {}
+}
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+#[global_allocator]
+static ALLOC: WasmBumpAllocator = WasmBumpAllocator {
+    next: UnsafeCell::new(0),
 };
 
 const MAX_MESSAGE_BYTES: usize = 8192;
@@ -283,17 +335,52 @@ pub enum Error {
     UnsupportedEncoding = 31,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::EMRSystemNotFound => write!(f, "e m r system not found"),
+            Error::EMRSystemAlreadyExists => write!(f, "e m r system already exists"),
+            Error::OnboardingNotFound => write!(f, "onboarding not found"),
+            Error::OnboardingAlreadyExists => write!(f, "onboarding already exists"),
+            Error::VerificationNotFound => write!(f, "verification not found"),
+            Error::NetworkNodeNotFound => write!(f, "network node not found"),
+            Error::AgreementNotFound => write!(f, "agreement not found"),
+            Error::TestNotFound => write!(f, "test not found"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::InvalidEMRSystem => write!(f, "invalid e m r system"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::InvalidNPI => write!(f, "invalid n p i"),
+            Error::InvalidLicenseNumber => write!(f, "invalid license number"),
+            Error::LicenseExpired => write!(f, "license expired"),
+            Error::InvalidAgreement => write!(f, "invalid agreement"),
+            Error::AgreementNotActive => write!(f, "agreement not active"),
+            Error::TestFailed => write!(f, "test failed"),
+            Error::InvalidTestType => write!(f, "invalid test type"),
+            Error::DuplicateTest => write!(f, "duplicate test"),
+            Error::FHIRContractNotSet => write!(f, "f h i r contract not set"),
+            Error::OperationFailed => write!(f, "operation failed"),
+            Error::UnsupportedMessageFormat => write!(f, "unsupported message format"),
+            Error::MessageParseFailed => write!(f, "message parse failed"),
+            Error::UnsupportedMessageType => write!(f, "unsupported message type"),
+            Error::InvalidMessagePayload => write!(f, "invalid message payload"),
+            Error::MessageNotFound => write!(f, "message not found"),
+            Error::ValidationReportNotFound => write!(f, "validation report not found"),
+            Error::TransformationNotFound => write!(f, "transformation not found"),
+            Error::UnsupportedEncoding => write!(f, "unsupported encoding"),
+        }
+    }
+}
+
 #[contract]
 pub struct EMRIntegrationContract;
 
 #[contractimpl]
 impl EMRIntegrationContract {
     pub fn initialize(env: Env, admin: Address, fhir_contract: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::EMRSystemAlreadyExists)?;
         admin.require_auth();
-
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::EMRSystemAlreadyExists);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage()
@@ -929,6 +1016,7 @@ impl EMRIntegrationContract {
         Ok(true)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
         let contract_admin: Address = env
             .storage()
@@ -941,6 +1029,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
@@ -948,6 +1037,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_emr_system_exists(env: &Env, system_id: &String) -> Result<(), Error> {
         let systems: Map<String, EMRSystem> = env
             .storage()
@@ -960,6 +1050,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_supported_encoding(encoding: CharacterEncoding) -> Result<(), Error> {
         match encoding {
             CharacterEncoding::UTF8
@@ -1492,6 +1583,7 @@ impl EMRIntegrationContract {
         ]
     }
 
+    #[must_use]
     fn assert_supported_message_type(message_type: &String) -> Result<(), Error> {
         let candidate = Self::to_rust_string(message_type);
         if Self::supported_message_types()

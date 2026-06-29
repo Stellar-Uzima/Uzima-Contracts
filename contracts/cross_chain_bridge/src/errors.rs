@@ -17,6 +17,7 @@ pub enum Error {
     InvalidNonce = 281,
     InvalidPayload = 282,
     InvalidAddress = 290,
+    BatchTooLarge = 283,
 
     // --- Lifecycle & State (300–399) ---
     AlreadyInitialized = 301,
@@ -54,6 +55,51 @@ pub enum Error {
     OperationAlreadyCompleted = 802,
     MaxExtensionsReached = 803,
     RefundFailed = 804,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::UnauthorizedRelayer => write!(f, "unauthorized relayer"),
+            Error::InsufficientConfirmations => write!(f, "insufficient confirmations"),
+            Error::InsufficientOracleReports => write!(f, "insufficient oracle reports"),
+            Error::DuplicateOracleReport => write!(f, "duplicate oracle report"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::InvalidMessage => write!(f, "invalid message"),
+            Error::InvalidNonce => write!(f, "invalid nonce"),
+            Error::InvalidPayload => write!(f, "invalid payload"),
+            Error::InvalidAddress => write!(f, "invalid address"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::MessageNotFound => write!(f, "message not found"),
+            Error::MessageExpired => write!(f, "message expired"),
+            Error::MessageAlreadyProcessed => write!(f, "message already processed"),
+            Error::AtomicTxNotFound => write!(f, "atomic tx not found"),
+            Error::AtomicTxExpired => write!(f, "atomic tx expired"),
+            Error::AtomicTxAlreadyProcessed => write!(f, "atomic tx already processed"),
+            Error::RecordRefNotFound => write!(f, "record ref not found"),
+            Error::RollbackNotFound => write!(f, "rollback not found"),
+            Error::RollbackAlreadyProcessed => write!(f, "rollback already processed"),
+            Error::EventNotFound => write!(f, "event not found"),
+            Error::ValidatorNotFound => write!(f, "validator not found"),
+            Error::ValidatorNotActive => write!(f, "validator not active"),
+            Error::DuplicateConfirmation => write!(f, "duplicate confirmation"),
+            Error::ProofNotFound => write!(f, "proof not found"),
+            Error::ProofAlreadyVerified => write!(f, "proof already verified"),
+            Error::InvalidChain => write!(f, "invalid chain"),
+            Error::ChainNotSupported => write!(f, "chain not supported"),
+            Error::OracleNotFound => write!(f, "oracle not found"),
+            Error::OracleNotActive => write!(f, "oracle not active"),
+            Error::OperationNotFound => write!(f, "operation not found"),
+            Error::OperationExpired => write!(f, "operation expired"),
+            Error::OperationAlreadyCompleted => write!(f, "operation already completed"),
+            Error::MaxExtensionsReached => write!(f, "max extensions reached"),
+            Error::RefundFailed => write!(f, "refund failed"),
+        }
+    }
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {

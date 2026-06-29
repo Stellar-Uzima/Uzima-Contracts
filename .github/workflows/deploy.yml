@@ -1,0 +1,85 @@
+# Matrix Deploy for testnet / futurenet (issue #980)
+# Runs on every push to main and on schedule (weekly), deploying
+# all contracts to both test environments using the shared deploy scripts.
+#
+# Each network gets its own identity (deployer-testnet / deployer-futurenet)
+# and the deployment JSON is uploaded as a workflow artifact for audit.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment (testnet, futurenet, or "all")'
+        required: false
+        default: 'all'
+
+env:
+  RUST_BACKTRACE: '1'
+
+jobs:
+  detect:
+    name: Detect targets
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          TARGETS='["testnet","futurenet"]'
+          echo "matrix=${TARGETS}" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Deploy (${{ matrix.network }})
+    runs-on: ubuntu-latest
+    needs: detect
+    strategy:
+      fail-fast: false
+      matrix:
+        network: ${{ fromJson(needs.detect.outputs.matrix) }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build optimized WASM
+        run: make build-opt
+
+      - name: Deploy to ${{ matrix.network }}
+        id: deploy
+        continue-on-error: true
+        run: |
+          bash ./scripts/deploy_environment.sh "${{ matrix.network }}"
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deployment-${{ matrix.network }}-${{ github.sha }}
+          path: deployments/${{ matrix.network }}/
+          retention-days: 30
+
+      - name: File issue on deployment failure
+        if: steps.deploy.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Deploy to ${{ matrix.network }} failed ($(date -u +%Y-%m-%d))" \
+            --label "deploy,ops" \
+            --body "## Deploy failure
+
+**Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+**Network:** ${{ matrix.network }}
+**Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+See the workflow run logs for details." \
+            || echo "::warning::Could not file issue"

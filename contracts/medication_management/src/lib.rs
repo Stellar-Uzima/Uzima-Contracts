@@ -1,4 +1,5 @@
 #![no_std]
+//! medication_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
@@ -20,6 +21,24 @@ pub enum Error {
     DuplicateMedication = 9,
     DoseAlreadyRecorded = 10,
     AutoRefillDisabled = 11,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::MedicationNotFound => write!(f, "medication not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::InvalidData => write!(f, "invalid data"),
+            Error::RefillNotFound => write!(f, "refill not found"),
+            Error::InteractionAlreadyExists => write!(f, "interaction already exists"),
+            Error::DuplicateMedication => write!(f, "duplicate medication"),
+            Error::DoseAlreadyRecorded => write!(f, "dose already recorded"),
+            Error::AutoRefillDisabled => write!(f, "auto refill disabled"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -254,9 +273,7 @@ impl MedicationManagement {
         medical_records_contract: Address,
         healthcare_payment_contract: Address,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         let config = Config {
             admin,
@@ -498,27 +515,23 @@ impl MedicationManagement {
         caller.require_auth();
         let schedule = Self::get_schedule_internal(&env, schedule_id)?;
         let config = Self::get_config(&env)?;
-        if caller != schedule.patient
-            && caller != schedule.provider
-            && caller != config.admin
-        {
+        if caller != schedule.patient && caller != schedule.provider && caller != config.admin {
             return Err(Error::Unauthorized);
         }
 
-        let mut alerts: Vec<InteractionAlert> = env
+        let alerts: Vec<InteractionAlert> = env
             .storage()
             .persistent()
             .get(&DataKey::ScheduleAlerts(schedule_id))
             .unwrap_or(Vec::new(&env));
 
-        let idx = alert_index as usize;
-        if idx >= alerts.len() {
+        if alert_index >= alerts.len() {
             return Err(Error::InvalidData);
         }
 
         let mut new_alerts = Vec::new(&env);
         for i in 0..alerts.len() {
-            if i != idx {
+            if i != alert_index {
                 new_alerts.push_back(alerts.get(i).unwrap());
             }
         }
@@ -771,6 +784,7 @@ impl MedicationManagement {
         Self::medication_count(&env)
     }
 
+    #[must_use]
     fn get_config(env: &Env) -> Result<Config, Error> {
         env.storage()
             .instance()
@@ -778,6 +792,7 @@ impl MedicationManagement {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn get_schedule_internal(env: &Env, schedule_id: u64) -> Result<MedicationSchedule, Error> {
         env.storage()
             .persistent()
@@ -806,6 +821,7 @@ impl MedicationManagement {
             .unwrap_or(Vec::new(env))
     }
 
+    #[must_use]
     fn validate_medication_definition(medication: &MedicationDefinition) -> Result<(), Error> {
         if medication.code.is_empty()
             || medication.ndc_code.is_empty()
@@ -819,6 +835,7 @@ impl MedicationManagement {
         Ok(())
     }
 
+    #[must_use]
     fn authorize_catalog_operator(env: &Env, operator: &Address) -> Result<(), Error> {
         let config = Self::get_config(env)?;
         if operator != &config.admin && operator != &config.fda_oracle {

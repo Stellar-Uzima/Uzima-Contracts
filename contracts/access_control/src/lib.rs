@@ -66,6 +66,17 @@ pub enum AccessError {
     InvalidRole = 4,
 }
 
+impl core::fmt::Display for AccessError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            AccessError::Unauthorized => write!(f, "unauthorized"),
+            AccessError::NotInitialized => write!(f, "not initialized"),
+            AccessError::AlreadyInitialized => write!(f, "already initialized"),
+            AccessError::InvalidRole => write!(f, "invalid role"),
+        }
+    }
+}
+
 // ── AccessControl trait ───────────────────────────────────────────────────────
 
 /// Trait that any contract can implement to gain standardised access control.
@@ -74,11 +85,13 @@ pub enum AccessError {
 /// only needs to call the associated functions – no boilerplate required.
 pub trait AccessControl {
     /// Panics (via `require_auth`) unless the caller is the stored admin.
+    #[must_use]
     fn require_admin(env: &Env) -> Result<(), AccessError> {
         AccessControlImpl::require_admin(env)
     }
 
     /// Panics unless the given address holds `role`.
+    #[must_use]
     fn require_role(env: &Env, address: &Address, role: Role) -> Result<(), AccessError> {
         AccessControlImpl::require_role(env, address, role)
     }
@@ -99,6 +112,7 @@ impl AccessControlImpl {
 
     /// Store the initial admin.  Must be called once during contract `initialize`.
     pub fn init(env: &Env, admin: &Address) {
+        governance_commons::init_guard(env);
         env.storage().instance().set(&DataKey::Admin, admin);
     }
 
@@ -113,6 +127,7 @@ impl AccessControlImpl {
     }
 
     /// Require that the transaction was authorised by the admin.
+    #[must_use]
     pub fn require_admin(env: &Env) -> Result<(), AccessError> {
         let admin = Self::get_admin(env);
         admin.require_auth();
@@ -120,6 +135,7 @@ impl AccessControlImpl {
     }
 
     /// Transfer admin rights to a new address.
+    #[must_use]
     pub fn transfer_admin(env: &Env, new_admin: &Address) -> Result<(), AccessError> {
         Self::require_admin(env)?;
         env.storage().instance().set(&DataKey::Admin, new_admin);
@@ -133,6 +149,7 @@ impl AccessControlImpl {
     // ── Role helpers ──────────────────────────────────────────────────────────
 
     /// Assign `role` to `address`.  Caller must be admin.
+    #[must_use]
     pub fn grant_role(env: &Env, address: &Address, role: Role) -> Result<(), AccessError> {
         Self::require_admin(env)?;
         env.storage()
@@ -143,6 +160,7 @@ impl AccessControlImpl {
     }
 
     /// Remove the role from `address`.  Caller must be admin.
+    #[must_use]
     pub fn revoke_role(env: &Env, address: &Address) -> Result<(), AccessError> {
         Self::require_admin(env)?;
         env.storage()
@@ -170,6 +188,7 @@ impl AccessControlImpl {
     }
 
     /// Require that `address` holds `role`, otherwise return `Unauthorized`.
+    #[must_use]
     pub fn require_role(env: &Env, address: &Address, role: Role) -> Result<(), AccessError> {
         if Self::has_role(env, address, role) {
             Ok(())
@@ -293,11 +312,24 @@ mod test {
         let admin = Address::generate(&env);
         let staff = Address::generate(&env);
 
-        env.as_contract(&env.register_contract(None, DummyContract), || {
+        let contract_id = env.register_contract(None, DummyContract);
+
+        // Split each mutating operation into its own as_contract block
+        // to avoid Soroban v21 auth frame conflicts with mock_all_auths().
+        env.as_contract(&contract_id, || {
             AccessControlImpl::init(&env, &admin);
             AccessControlImpl::grant_role(&env, &staff, Role::Staff).unwrap();
+        });
+
+        env.as_contract(&contract_id, || {
             assert!(AccessControlImpl::has_role(&env, &staff, Role::Staff));
+        });
+
+        env.as_contract(&contract_id, || {
             AccessControlImpl::revoke_role(&env, &staff).unwrap();
+        });
+
+        env.as_contract(&contract_id, || {
             assert!(!AccessControlImpl::has_role(&env, &staff, Role::Staff));
         });
     }

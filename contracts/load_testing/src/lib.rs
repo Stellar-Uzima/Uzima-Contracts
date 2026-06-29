@@ -8,10 +8,13 @@
 //! * `LoadTestRunner` – on-chain contract that executes a configurable number of
 //!   simulated operations and stores the results.
 //! * `LoadTestResult` – summary struct returned after a run.
+//! * `LoadScenarioRunner` – runs realistic healthcare workload scenarios.
 //! * Tests at the bottom demonstrate concurrent-style simulation inside the
 //!   Soroban test environment.
 
 #![no_std]
+
+pub mod scenarios;
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, vec, Env, Vec};
 

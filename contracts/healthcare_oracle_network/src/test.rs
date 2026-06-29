@@ -164,6 +164,53 @@ fn test_clinical_trial_and_regulatory_feeds() {
 }
 
 #[test]
+fn test_duplicate_submission_slashes_oracle() {
+    let env = Env::default();
+    let (client, admin, _arbiter) = setup_contract(&env, 1);
+
+    let oracle = Address::generate(&env);
+    register_and_verify_oracle(&env, &client, &admin, &oracle, "https://dup.example");
+
+    let feed_id = String::from_str(&env, "NDC:8888-0001-01:US");
+    let ndc = String::from_str(&env, "8888-0001-01");
+    let currency = String::from_str(&env, "USD");
+
+    let pre = client.get_oracle(&oracle).unwrap();
+    let first = client.submit_drug_price(&oracle, &feed_id, &ndc, &currency, &1000i128, &50u32, &123u64);
+    assert_eq!(first, 1);
+
+    let duplicated = client.try_submit_drug_price(&oracle, &feed_id, &ndc, &currency, &1000i128, &50u32, &123u64);
+    assert_eq!(duplicated, Err(Ok(Error::SubmissionAlreadyExists)));
+
+    let post = client.get_oracle(&oracle).unwrap();
+    assert!(post.reputation < pre.reputation);
+}
+
+#[test]
+fn test_misbehavior_report_prevents_repeated_reports() {
+    let env = Env::default();
+    let (client, admin, _arbiter) = setup_contract(&env, 1);
+
+    let reporter = Address::generate(&env);
+    let reported = Address::generate(&env);
+    register_and_verify_oracle(&env, &client, &admin, &reporter, "https://reporter.example");
+    register_and_verify_oracle(&env, &client, &admin, &reported, "https://reported.example");
+
+    let feed_id = String::from_str(&env, "NDC:9999-0002-01:US");
+    let reason = String::from_str(&env, "Repeated bad payload");
+
+    let pre = client.get_oracle(&reported).unwrap();
+    let result = client.report_oracle_misbehavior(&reporter, &reported, &FeedKind::DrugPricing, &feed_id, &reason);
+    assert_eq!(result, Ok(()));
+
+    let post = client.get_oracle(&reported).unwrap();
+    assert!(post.reputation < pre.reputation);
+
+    let second = client.try_report_oracle_misbehavior(&reporter, &reported, &FeedKind::DrugPricing, &feed_id, &reason);
+    assert_eq!(second, Err(Ok(Error::AlreadyReported)));
+}
+
+#[test]
 fn test_treatment_outcome_feed_consensus() {
     let env = Env::default();
     let (client, admin, _arbiter) = setup_contract(&env, 2);

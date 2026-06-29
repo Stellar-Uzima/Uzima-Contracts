@@ -1,0 +1,15 @@
+[package]
+name = "fuzz-cross-chain-bridge"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone crate — intentionally excluded from the workspace wasm32 build.
+# Run with: cd tests/fuzz/cross_chain_bridge && cargo test
+[workspace]
+
+[dev-dependencies]
+cross_chain_bridge = { path = "../../../contracts/cross_chain_bridge", features = ["testutils"] }
+replay_protection = { path = "../../../libs/replay_protection" }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+proptest = "1.6.0"

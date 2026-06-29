@@ -1,4 +1,5 @@
 #![no_std]
+//! upgrade_manager - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;
 pub use errors::Error;
@@ -6,6 +7,8 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol, Vec,
 };
 use upgradeability::UpgradeValidation;
+// Shared multi-sig helpers (Phase 4 migration: see issue #830)
+use governance_commons::{multi_sig, ApprovalStatus};
 
 #[cfg(test)]
 mod test;
@@ -57,9 +60,7 @@ pub trait TargetContract {
 #[contractimpl]
 impl UpgradeManager {
     pub fn initialize(env: Env, admin: Address, validators: Vec<Address>) -> Result<(), Error> {
-        if env.storage().instance().has(&CONFIG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let config = Config {
             admin,
             min_delay: MIN_DELAY,
@@ -139,9 +140,9 @@ impl UpgradeManager {
             .get(&CONFIG)
             .ok_or(Error::ConfigNotFound)?;
 
-        if !config.validators.contains(&validator) {
-            return Err(Error::NotAValidator);
-        }
+        // Delegate validator-membership check to the shared multi-sig helper.
+        multi_sig::validate_approver(&validator, &config.validators)
+            .map_err(|_| Error::NotAValidator)?;
 
         let mut proposals: Map<u64, UpgradeProposal> = env
             .storage()
@@ -151,11 +152,12 @@ impl UpgradeManager {
 
         let mut proposal = proposals.get(proposal_id).ok_or(Error::ProposalNotFound)?;
 
-        if proposal.approvals.contains(&validator) {
+        // add_approval returns true when the approver is newly added,
+        // false when the approver already approved (idempotent).
+        if !multi_sig::add_approval(validator.clone(), &mut proposal.approvals) {
             return Err(Error::AlreadyApproved);
         }
 
-        proposal.approvals.push_back(validator);
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
         env.storage().persistent().extend_ttl(
@@ -188,7 +190,13 @@ impl UpgradeManager {
             return Err(Error::TimelockNotExpired);
         }
 
-        if proposal.approvals.len() < config.required_approvals {
+        // Use shared approval status check rather than ad-hoc length compare.
+        // `proposal.executed` is guaranteed false at this point because we
+        // early-returned on `proposal.executed || proposal.canceled` above,
+        // so we pass `false` explicitly for the executed flag.
+        if multi_sig::check_approval_status(&proposal.approvals, config.required_approvals, false)
+            != ApprovalStatus::Ready
+        {
             return Err(Error::NotEnoughApprovals);
         }
 
@@ -232,7 +240,11 @@ impl UpgradeManager {
             return Err(Error::InvalidState);
         }
 
-        if proposal.approvals.len() < config.emergency_approvals {
+        // Emergency path requires unanimous validator approvals.
+        // `proposal.executed` is guaranteed false (early-returned above).
+        if multi_sig::check_approval_status(&proposal.approvals, config.emergency_approvals, false)
+            != ApprovalStatus::Ready
+        {
             return Err(Error::NotEnoughApprovals);
         }
 

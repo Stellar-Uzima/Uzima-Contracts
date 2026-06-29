@@ -22,6 +22,33 @@ pub enum Error {
     InvalidDisputeState = 16,
     InvalidFeedType = 17,
     ArbiterExists = 18,
+    AlreadyReported = 19,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::OracleAlreadyRegistered => write!(f, "oracle already registered"),
+            Error::OracleNotFound => write!(f, "oracle not found"),
+            Error::OracleNotVerified => write!(f, "oracle not verified"),
+            Error::OracleInactive => write!(f, "oracle inactive"),
+            Error::InvalidData => write!(f, "invalid data"),
+            Error::SubmissionAlreadyExists => write!(f, "submission already exists"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::InsufficientSubmissions => write!(f, "insufficient submissions"),
+            Error::ConsensusAlreadyFinalized => write!(f, "consensus already finalized"),
+            Error::ConsensusNotFound => write!(f, "consensus not found"),
+            Error::DisputeNotFound => write!(f, "dispute not found"),
+            Error::DisputeAlreadyResolved => write!(f, "dispute already resolved"),
+            Error::InvalidDisputeState => write!(f, "invalid dispute state"),
+            Error::InvalidFeedType => write!(f, "invalid feed type"),
+            Error::ArbiterExists => write!(f, "arbiter exists"),
+            Error::AlreadyReported => write!(f, "already reported"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -204,6 +231,8 @@ pub enum DataKey {
     RoundCounter(FeedKey),
     Round(FeedKey, u64),
     Submission(FeedKey, u64, Address),
+    LastSubmissionHash(FeedKey, Address),
+    MisbehaviorReport(FeedKey, Address, Address),
     Consensus(FeedKey),
     DisputeCount,
     Dispute(u64),

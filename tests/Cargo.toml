@@ -8,13 +8,21 @@ publish = false
 soroban-sdk = { workspace = true, features = ["testutils"] }
 medical_records = { path = "../contracts/medical_records" }
 sut_token = { path = "../contracts/sut_token" }
-multi_region_orchestrator = { path = "../contracts/multi_region_orchestrator", package = "multi-region-orchestrator", features = ["testutils"] }
-failover_detector = { path = "../contracts/failover_detector", package = "failover-detector", features = ["testutils"] }
-sync_manager = { path = "../contracts/sync_manager", package = "sync-manager", features = ["testutils"] }
-regional_node_manager = { path = "../contracts/regional_node_manager", package = "regional-node-manager", features = ["testutils"] }
+healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
+reputation = { path = "../contracts/reputation" }
+healthcare_payment = { path = "../contracts/healthcare_payment" }
+meta_tx_forwarder = { path = "../contracts/meta_tx_forwarder" }
+identity_registry = { path = "../contracts/identity_registry" }
+timelock = { path = "../contracts/timelock" }
+escrow = { path = "../contracts/escrow" }
+audit = { path = "../contracts/audit" }
+patient_consent_management = { path = "../contracts/patient_consent_management" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
+serde_json = "1"
 
 [lib]
 name = "uzima_tests"

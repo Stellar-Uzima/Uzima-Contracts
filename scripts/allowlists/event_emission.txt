@@ -1,0 +1,832 @@
+# Event emission allowlist — legacy state-changing functions pending refactor
+# (SECURITY_CHECKLIST §5 / docs/EVENT_SYSTEM.md §Event Emission Audit)
+#
+# Format: contract_name::function_name   (one entry per line)
+# Lines starting with # are ignored.
+#
+# Why this list exists
+# ---------------------
+# scripts/check_events.sh enforces that every state-changing pub fn emits a
+# Soroban event via env.events().publish(...).  Functions listed here were
+# written before that requirement and have not yet been refactored.
+#
+# Rules for using this list
+# --------------------------
+# ADD    — only for pre-existing functions that lack events and cannot be
+#           refactored in the same PR.  Include a GitHub issue reference in
+#           a comment on the line above if possible.
+# REMOVE — when the corresponding function is updated to emit an event.
+#           Removing entries here shrinks the technical-debt surface.
+# NEVER  — add a brand-new function here.  All new pub fns must emit events;
+#           the CI gate will fail otherwise.
+
+# ── access_control ──────────────────────────────────────────────────────────
+access_control::init
+access_control::require_admin
+access_control::grant_role
+access_control::require_role
+access_control::grant_permission
+access_control::revoke_permission
+
+# ── ai_analytics ────────────────────────────────────────────────────────────
+ai_analytics::initialize
+ai_analytics::start_round
+ai_analytics::submit_update
+ai_analytics::finalize_round
+
+# ── aml ─────────────────────────────────────────────────────────────────────
+aml::configure_rule
+aml::monitor_transaction
+aml::update_user_status
+aml::set_user_status
+aml::register_deprecated_functions
+aml::upgrade
+aml::validate_upgrade
+
+# ── anomaly_detection ───────────────────────────────────────────────────────
+anomaly_detection::initialize
+anomaly_detection::set_audit_forensics
+
+# ── appointment_booking_escrow ──────────────────────────────────────────────
+appointment_booking_escrow::initialize
+appointment_booking_escrow::book_appointment
+appointment_booking_escrow::confirm_appointment
+appointment_booking_escrow::refund_appointment
+appointment_booking_escrow::mark_no_show
+appointment_booking_escrow::send_reminder
+appointment_booking_escrow::health_check
+appointment_booking_escrow::set_paused
+
+# ── audit ───────────────────────────────────────────────────────────────────
+audit::log_data_access
+audit::log_permission_change
+audit::log_auth_attempt
+audit::log_cross_chain_transfer
+audit::set_retention_policy
+audit::verify_retention
+audit::verify_log_integrity
+audit::verify_integrity
+audit::generate_summary
+
+# ── audit_forensics ─────────────────────────────────────────────────────────
+audit_forensics::initialize
+audit_forensics::record_formal_verification
+audit_forensics::generate_remediation_plan
+audit_forensics::analyze_timeline
+audit_forensics::investigate_user
+audit_forensics::generate_compliance_report
+audit_forensics::set_alert_threshold
+
+# ── clinical_decision_support ───────────────────────────────────────────────
+clinical_decision_support::initialize
+clinical_decision_support::check_drug_interactions
+clinical_decision_support::optimize_pathway
+clinical_decision_support::update_guideline
+clinical_decision_support::set_interaction
+
+# ── clinical_nlp ────────────────────────────────────────────────────────────
+clinical_nlp::initialize
+clinical_nlp::process_clinical_note
+clinical_nlp::extract_entities
+clinical_nlp::analyze_sentiment
+clinical_nlp::generate_coding_suggestions
+clinical_nlp::update_config
+clinical_nlp::process_batch
+clinical_nlp::version
+
+# ── code_ownership ──────────────────────────────────────────────────────────
+code_ownership::initialize
+code_ownership::register_module
+code_ownership::update_module_ownership
+code_ownership::configure_review_route
+
+# ── contract_monitoring ─────────────────────────────────────────────────────
+contract_monitoring::initialize
+contract_monitoring::record_call
+contract_monitoring::update_alert_config
+
+# ── contract_template ───────────────────────────────────────────────────────
+contract_template::initialize
+contract_template::transfer_admin
+contract_template::update_data
+
+# ── contract_usage_analytics ────────────────────────────────────────────────
+contract_usage_analytics::initialize
+contract_usage_analytics::take_snapshot
+
+# ── contract_verification ───────────────────────────────────────────────────
+contract_verification::initialize
+
+# ── cross_chain_access ──────────────────────────────────────────────────────
+cross_chain_access::update_grant_conditions
+cross_chain_access::extend_grant
+cross_chain_access::verify_access
+
+# ── cross_chain_bridge ──────────────────────────────────────────────────────
+cross_chain_bridge::set_min_confirmations
+cross_chain_bridge::validate_chain_address
+
+# ── cross_chain_enhancements ────────────────────────────────────────────────
+cross_chain_enhancements::check_replay_protection
+cross_chain_enhancements::check_rate_limit
+
+# ── cross_chain_identity ────────────────────────────────────────────────────
+cross_chain_identity::update_trust_score
+cross_chain_identity::set_min_attestations
+cross_chain_identity::verify_identity
+
+# ── deprecation_framework ───────────────────────────────────────────────────
+deprecation_framework::initialize
+deprecation_framework::mark_for_deprecation
+deprecation_framework::set_sunset_timeline
+deprecation_framework::add_migration_guide
+deprecation_framework::update_deprecation_phase
+deprecation_framework::publish_user_communication
+deprecation_framework::create_removal_checklist
+deprecation_framework::mark_checklist_item_complete
+
+# ── dicomweb_services ───────────────────────────────────────────────────────
+dicomweb_services::set_paused
+dicomweb_services::qido_search_studies
+dicomweb_services::qido_search_series
+dicomweb_services::qido_search_instances
+dicomweb_services::wado_retrieve_study
+dicomweb_services::wado_retrieve_series
+dicomweb_services::wado_retrieve_instance
+dicomweb_services::wado_retrieve_bulk_data
+dicomweb_services::wado_retrieve_bulk_data_batch
+dicomweb_services::stow_store_batch
+dicomweb_services::cache_set
+dicomweb_services::cache_get
+dicomweb_services::cache_invalidate
+dicomweb_services::list_studies
+
+# ── differential_privacy ────────────────────────────────────────────────────
+differential_privacy::initialize
+
+# ── dispute_resolution ──────────────────────────────────────────────────────
+dispute_resolution::initialize
+dispute_resolution::dispute
+dispute_resolution::resolve
+
+# ── drug_discovery ──────────────────────────────────────────────────────────
+drug_discovery::initialize
+drug_discovery::register_molecule
+drug_discovery::analyze_molecular_structure
+drug_discovery::predict_drug_target_interaction
+drug_discovery::predict_adverse_effects
+drug_discovery::optimize_clinical_trial_matching
+drug_discovery::request_quantum_simulation
+drug_discovery::run_screening_campaign
+
+# ── emergency_access_override ───────────────────────────────────────────────
+emergency_access_override::initialize
+emergency_access_override::grant_emergency_access
+emergency_access_override::reset_circuit_breaker
+emergency_access_override::update_cooldown_period
+emergency_access_override::check_emergency_access
+emergency_access_override::revoke_emergency_access
+emergency_access_override::health_check
+
+# ── emr_integration ─────────────────────────────────────────────────────────
+emr_integration::initialize
+emr_integration::register_emr_system
+emr_integration::initiate_onboarding
+emr_integration::complete_onboarding
+emr_integration::register_network_node
+emr_integration::register_interop_agreement
+emr_integration::record_interop_test
+emr_integration::parse_message
+emr_integration::generate_message
+emr_integration::transform_message
+emr_integration::validate_message
+emr_integration::wrap_transport_payload
+emr_integration::benchmark_message_processing
+emr_integration::pause
+emr_integration::resume
+
+# ── escrow ──────────────────────────────────────────────────────────────────
+escrow::initialize
+escrow::set_fee_config
+escrow::approve_release
+escrow::export_summary
+
+# ── explainable_ai ──────────────────────────────────────────────────────────
+explainable_ai::initialize
+explainable_ai::run_fairness_metrics
+
+# ── failover_detector ───────────────────────────────────────────────────────
+failover_detector::assign_role
+
+# ── federated_learning ──────────────────────────────────────────────────────
+federated_learning::initialize
+federated_learning::update_communication_metrics
+
+# ── fhir_integration ────────────────────────────────────────────────────────
+fhir_integration::initialize
+fhir_integration::register_provider
+fhir_integration::verify_provider
+fhir_integration::configure_emr
+fhir_integration::store_observation
+fhir_integration::store_condition
+fhir_integration::store_medication
+fhir_integration::store_procedure
+fhir_integration::store_allergy
+fhir_integration::register_data_mapping
+fhir_integration::pause
+fhir_integration::resume
+fhir_integration::configure_export
+
+# ── fido2_authenticator ─────────────────────────────────────────────────────
+fido2_authenticator::initialize
+fido2_authenticator::set_identity_registry
+fido2_authenticator::set_zk_verifier
+fido2_authenticator::issue_registration_challenge
+fido2_authenticator::register_device
+fido2_authenticator::issue_auth_challenge
+fido2_authenticator::verify_ed25519_assertion
+fido2_authenticator::verify_zk_assertion
+fido2_authenticator::revoke_device
+fido2_authenticator::update_device_name
+fido2_authenticator::list_devices
+
+# ── forensics ───────────────────────────────────────────────────────────────
+forensics::initialize
+forensics::analyze_pattern
+forensics::detect_suspicious
+forensics::update_investigation
+
+# ── genomic_data ────────────────────────────────────────────────────────────
+genomic_data::initialize
+genomic_data::set_zk_verifier
+genomic_data::add_record
+genomic_data::grant_consent
+genomic_data::revoke_consent
+genomic_data::grant_research_consent
+genomic_data::revoke_research_consent
+genomic_data::verify_and_grant_access
+genomic_data::add_gene_disease_assoc
+genomic_data::add_drug_response
+genomic_data::set_ancestry_profile
+genomic_data::create_listing
+genomic_data::purchase_listing
+genomic_data::report_breach
+genomic_data::upgrade
+genomic_data::validate_upgrade
+
+# ── governor ────────────────────────────────────────────────────────────────
+governor::initialize
+governor::state
+
+# ── health_check ────────────────────────────────────────────────────────────
+health_check::initialize
+health_check::health_check
+health_check::record_operation
+health_check::record_error
+health_check::set_paused
+health_check::storage_usage
+health_check::last_activity
+health_check::reset_recent_errors
+health_check::check_alert_thresholds
+
+# ── health_data_access_logging ──────────────────────────────────────────────
+health_data_access_logging::verify_logs_integrity
+
+# ── healthcare_compliance ───────────────────────────────────────────────────
+healthcare_compliance::initialize
+healthcare_compliance::update_config
+healthcare_compliance::register_retention_record
+healthcare_compliance::set_retention_policy
+healthcare_compliance::request_data_deletion
+healthcare_compliance::enforce_retention
+healthcare_compliance::pause
+healthcare_compliance::resume
+
+# ── healthcare_compliance_automation ────────────────────────────────────────
+healthcare_compliance_automation::initialize
+healthcare_compliance_automation::add_framework
+
+# ── healthcare_data_conversion ──────────────────────────────────────────────
+healthcare_data_conversion::initialize
+healthcare_data_conversion::register_conversion_rule
+healthcare_data_conversion::register_coding_mapping
+healthcare_data_conversion::find_coding_mapping
+healthcare_data_conversion::register_format_specification
+healthcare_data_conversion::validate_conversion
+healthcare_data_conversion::record_conversion
+healthcare_data_conversion::record_lossy_conversion_warning
+healthcare_data_conversion::pause
+healthcare_data_conversion::resume
+
+# ── healthcare_data_marketplace ─────────────────────────────────────────────
+healthcare_data_marketplace::initialize
+healthcare_data_marketplace::register_provider
+healthcare_data_marketplace::set_provider_status
+healthcare_data_marketplace::reserve_purchase
+healthcare_data_marketplace::initiate_transaction
+healthcare_data_marketplace::cancel_listing
+
+# ── healthcare_oracle_network ───────────────────────────────────────────────
+healthcare_oracle_network::initialize
+healthcare_oracle_network::register_oracle
+healthcare_oracle_network::verify_oracle
+healthcare_oracle_network::update_oracle_endpoint
+healthcare_oracle_network::update_config
+healthcare_oracle_network::add_arbiter
+healthcare_oracle_network::submit_drug_price
+healthcare_oracle_network::submit_clinical_trial
+healthcare_oracle_network::submit_regulatory_update
+healthcare_oracle_network::submit_treatment_outcome
+healthcare_oracle_network::finalize_feed
+healthcare_oracle_network::raise_dispute
+healthcare_oracle_network::resolve_dispute
+healthcare_oracle_network::report_oracle_misbehavior
+healthcare_oracle_network::fetch_external_payload
+
+# ── healthcare_payment ──────────────────────────────────────────────────────
+healthcare_payment::initialize
+healthcare_payment::register_coverage_policy
+healthcare_payment::escrow_claim
+healthcare_payment::request_preauth
+healthcare_payment::approve_preauth
+healthcare_payment::create_payment_plan
+healthcare_payment::pay_installment
+healthcare_payment::emergency_pause
+healthcare_payment::set_failure_threshold
+
+# ── healthcare_reputation ───────────────────────────────────────────────────
+healthcare_reputation::check_reputation_threshold
+healthcare_reputation::check_expired_credentials
+
+# ── homomorphic_registry ────────────────────────────────────────────────────
+homomorphic_registry::encrypt_ckks_vector
+homomorphic_registry::encrypt_bgv_vector
+homomorphic_registry::fhe_add
+homomorphic_registry::fhe_multiply
+homomorphic_registry::encrypted_statistics
+homomorphic_registry::encrypted_linear_inference
+homomorphic_registry::estimate_operation_cost
+
+# ── identity_registry ───────────────────────────────────────────────────────
+identity_registry::resolve_did
+identity_registry::resolve_did_by_string
+identity_registry::verify_credential
+identity_registry::verify_did_authorization
+identity_registry::add_fido2_device
+identity_registry::init_mock
+identity_registry::assign_role
+identity_registry::remove_role
+
+# ── ihe_integration ─────────────────────────────────────────────────────────
+ihe_integration::xds_register_document
+ihe_integration::xds_query_documents
+ihe_integration::xds_retrieve_document
+ihe_integration::pix_query_identifiers
+ihe_integration::pdq_query
+ihe_integration::pdq_get_demographics
+ihe_integration::atna_get_event
+ihe_integration::mpi_find_patient
+ihe_integration::bppc_verify_consent
+ihe_integration::dsg_verify_signature
+ihe_integration::dsg_get_document_signatures
+ihe_integration::hpd_get_provider
+ihe_integration::svs_get_value_set_by_oid
+ihe_integration::connectathon_get_profile_results
+ihe_integration::connectathon_is_compliant
+
+# ── iot_device_management ───────────────────────────────────────────────────
+iot_device_management::initialize
+iot_device_management::pause
+iot_device_management::unpause
+iot_device_management::set_role
+iot_device_management::register_manufacturer
+iot_device_management::deactivate_manufacturer
+iot_device_management::register_device
+iot_device_management::activate_device
+iot_device_management::suspend_device
+iot_device_management::decommission_device
+iot_device_management::publish_firmware
+iot_device_management::approve_firmware
+iot_device_management::reject_firmware
+iot_device_management::update_device_firmware
+iot_device_management::submit_heartbeat
+iot_device_management::set_heartbeat_interval
+iot_device_management::create_comm_channel
+iot_device_management::rotate_encryption_key
+iot_device_management::rotate_device_key
+iot_device_management::set_key_rotation_interval
+
+# ── load_testing ────────────────────────────────────────────────────────────
+load_testing::last_result
+load_testing::run_count
+
+# ── medical_consent_nft ─────────────────────────────────────────────────────
+medical_consent_nft::initialize
+medical_consent_nft::add_issuer
+medical_consent_nft::remove_issuer
+medical_consent_nft::owner_of
+medical_consent_nft::tokens_of_owner
+medical_consent_nft::set_access_controls
+medical_consent_nft::check_access_allowed
+medical_consent_nft::record_access
+medical_consent_nft::revoke_delegation
+medical_consent_nft::set_inheritance
+medical_consent_nft::add_emergency_authority
+medical_consent_nft::set_marketplace_enabled
+medical_consent_nft::enable_dynamic_updates
+medical_consent_nft::generate_consent_report
+
+# ── medical_imaging ─────────────────────────────────────────────────────────
+medical_imaging::initialize
+medical_imaging::set_paused
+medical_imaging::assign_role
+medical_imaging::set_safety_threshold
+medical_imaging::verify_share_access
+medical_imaging::add_annotation_reply
+medical_imaging::list_images_by_patient
+medical_imaging::list_images_by_modality_hash
+medical_imaging::list_images_by_body_part_hash
+medical_imaging::list_annotations_for_image
+medical_imaging::assign_arbitrator
+medical_imaging::link_ai_results
+
+# ── medical_imaging_ai ──────────────────────────────────────────────────────
+medical_imaging_ai::initialize
+medical_imaging_ai::pause
+medical_imaging_ai::unpause
+medical_imaging_ai::register_evaluator
+medical_imaging_ai::revoke_evaluator
+medical_imaging_ai::configure_thresholds
+
+# ── medical_record_backup ───────────────────────────────────────────────────
+medical_record_backup::set_paused
+medical_record_backup::set_target_active
+medical_record_backup::list_targets
+medical_record_backup::run_scheduled_backup
+medical_record_backup::run_backup_now
+medical_record_backup::verify_backup_integrity
+medical_record_backup::report_target_failure
+medical_record_backup::resolve_alert
+medical_record_backup::list_alerts
+medical_record_backup::list_artifacts
+
+# ── medical_record_hash_registry ────────────────────────────────────────────
+medical_record_hash_registry::initialize
+medical_record_hash_registry::store_record
+medical_record_hash_registry::verify_record
+
+# ── medical_record_search ───────────────────────────────────────────────────
+medical_record_search::initialize
+medical_record_search::set_paused
+medical_record_search::assign_role
+medical_record_search::set_cache_policy
+medical_record_search::set_ranking
+medical_record_search::batch_index_records
+medical_record_search::search
+medical_record_search::invalidate_cache
+medical_record_search::preview_query_hash
+
+# ── medical_records ─────────────────────────────────────────────────────────
+medical_records::initialize
+medical_records::health_check
+medical_records::set_audit_forensics
+medical_records::manage_user
+medical_records::set_user_qkd_status
+medical_records::deactivate_user
+medical_records::pause
+medical_records::unpause
+medical_records::grant_permission
+medical_records::revoke_permission
+medical_records::issue_access_attribute
+medical_records::revoke_access_attribute
+medical_records::add_record
+medical_records::write_record
+medical_records::write_record_batch
+medical_records::list_traditional_records
+medical_records::add_record_with_did
+medical_records::list_records
+medical_records::set_zk_verifier_contract
+medical_records::set_credential_registry_contract
+medical_records::set_patient_consent_contract
+medical_records::set_zk_enforced
+medical_records::set_zk_grant_ttl
+medical_records::submit_zk_access_proof
+medical_records::update_record_metadata
+medical_records::search_records_by_tag
+medical_records::export_record_metadata
+medical_records::import_record_metadata
+medical_records::set_crypto_registry
+medical_records::set_homomorphic_registry
+medical_records::set_mpc_manager
+medical_records::set_encryption_required
+medical_records::set_regulatory_compliance
+medical_records::set_require_pq_envelopes
+medical_records::propose_crypto_config_update
+medical_records::approve_crypto_config_update
+medical_records::execute_crypto_config_update
+medical_records::set_quantum_threat_level
+medical_records::upgrade_record_to_quantum_safe
+medical_records::add_advanced_encrypted_record
+medical_records::add_encrypted_record
+medical_records::bind_encrypted_record_abe_policy
+medical_records::upsert_encrypted_record_envelope
+medical_records::set_identity_registry
+medical_records::set_did_auth_level
+medical_records::link_did_to_user
+medical_records::verify_professional_credential
+medical_records::set_ai_config
+medical_records::submit_anomaly_score
+medical_records::submit_risk_score
+medical_records::grant_emergency_access
+medical_records::revoke_emergency_access
+medical_records::propose_recovery
+medical_records::approve_recovery
+medical_records::execute_recovery
+medical_records::set_cross_chain_contracts
+medical_records::set_cross_chain_enabled
+medical_records::register_cross_chain_ref
+medical_records::update_cross_chain_sync
+medical_records::upgrade
+medical_records::validate_upgrade
+medical_records::version
+medical_records::set_rate_limit_config
+medical_records::set_rate_limit_bypass
+medical_records::validate_record_quality
+medical_records::validate_record_type
+medical_records::cleanse_record_data
+medical_records::assign_role
+medical_records::remove_role
+
+# ── medication_management ───────────────────────────────────────────────────
+medication_management::initialize
+medication_management::upsert_fda_medication
+medication_management::update_schedule_status
+medication_management::register_interaction
+medication_management::check_interactions
+medication_management::update_interaction
+medication_management::resolve_interaction
+medication_management::record_dose
+medication_management::process_refill
+medication_management::trigger_auto_refill
+medication_management::generate_adherence_report
+
+# ── mental_health_support ───────────────────────────────────────────────────
+mental_health_support::initialize
+mental_health_support::set_integration_contracts
+mental_health_support::set_emergency_routing_commitment
+mental_health_support::pause
+mental_health_support::unpause
+mental_health_support::enroll
+mental_health_support::log_mood
+mental_health_support::book_teletherapy
+mental_health_support::report_crisis
+mental_health_support::create_peer_community
+mental_health_support::join_peer_community
+mental_health_support::list_community_members
+mental_health_support::open_crisis_queue
+
+# ── meta_tx_forwarder ───────────────────────────────────────────────────────
+meta_tx_forwarder::execute
+meta_tx_forwarder::execute_batch
+meta_tx_forwarder::domain_separator
+
+# ── mfa ─────────────────────────────────────────────────────────────────────
+mfa::initialize
+mfa::add_factor
+mfa::start_session
+mfa::verify_mfa_factor
+mfa::initiate_recovery
+mfa::emergency_override
+
+# ── mpc_manager ─────────────────────────────────────────────────────────────
+mpc_manager::create_secret_shares
+
+# ── multi_region_orchestrator ───────────────────────────────────────────────
+multi_region_orchestrator::set_paused
+multi_region_orchestrator::assign_role
+multi_region_orchestrator::list_regions
+
+# ── notification_system ─────────────────────────────────────────────────────
+notification_system::initialize
+notification_system::add_authorized_sender
+notification_system::remove_authorized_sender
+notification_system::set_preferences
+notification_system::create_notification
+notification_system::create_bulk_notifications
+notification_system::mark_read
+notification_system::mark_all_read
+notification_system::archive_notification
+notification_system::create_alert_rule
+notification_system::update_alert_rule
+notification_system::delete_alert_rule
+notification_system::trigger_alert
+notification_system::set_template
+
+# ── patient_consent_management ──────────────────────────────────────────────
+patient_consent_management::initialize
+patient_consent_management::grant_consent
+patient_consent_management::grant_consent_with_expiry
+patient_consent_management::batch_grant_consent
+patient_consent_management::revoke_consent
+patient_consent_management::check_consent
+patient_consent_management::cleanup_expired_consents
+patient_consent_management::verify_consent_with_audit
+patient_consent_management::health_check
+# request_erasure and execute_erasure emit events via helper fns (events::publish_*)
+# which the script's .events() pattern-match does not detect
+patient_consent_management::request_erasure
+patient_consent_management::execute_erasure
+
+# ── patient_gamification ────────────────────────────────────────────────────
+patient_gamification::update_social_profile
+patient_gamification::deactivate_achievement
+patient_gamification::deactivate_challenge
+
+# ── patient_portal ──────────────────────────────────────────────────────────
+patient_portal::initialize
+patient_portal::set_integration_contracts
+patient_portal::pause
+patient_portal::unpause
+patient_portal::register
+patient_portal::request_phr_export
+patient_portal::schedule_appointment
+patient_portal::set_appointment_status
+patient_portal::list_my_appointment_ids
+patient_portal::log_medication_event
+patient_portal::list_my_adherence_ids
+
+# ── patient_risk_stratification ─────────────────────────────────────────────
+patient_risk_stratification::initialize
+
+# ── payment_router ──────────────────────────────────────────────────────────
+payment_router::set_fee_config
+
+# ── pharma_supply_chain ─────────────────────────────────────────────────────
+pharma_supply_chain::initialize
+pharma_supply_chain::register_manufacturer
+pharma_supply_chain::register_medication
+pharma_supply_chain::verify_batch_authenticity
+pharma_supply_chain::log_condition_data
+pharma_supply_chain::complete_shipment
+pharma_supply_chain::run_compliance_check
+pharma_supply_chain::optimize_inventory
+
+# ── predictive_analytics ────────────────────────────────────────────────────
+predictive_analytics::initialize
+predictive_analytics::update_config
+predictive_analytics::make_prediction
+predictive_analytics::update_model_metrics
+predictive_analytics::whitelist_predictor
+
+# ── provider_directory ──────────────────────────────────────────────────────
+provider_directory::initialize
+provider_directory::set_rate_limit_config
+provider_directory::set_institution_exemption
+provider_directory::search_providers
+
+# ── rbac ────────────────────────────────────────────────────────────────────
+rbac::initialize
+rbac::assign_role
+rbac::remove_role
+
+# ── regional_node_manager ───────────────────────────────────────────────────
+regional_node_manager::assign_role
+regional_node_manager::list_nodes
+
+# ── regulatory_compliance ───────────────────────────────────────────────────
+regulatory_compliance::initialize
+regulatory_compliance::set_rule
+regulatory_compliance::grant_consent
+regulatory_compliance::revoke_consent
+regulatory_compliance::log_audit
+regulatory_compliance::invoke_right_to_be_forgotten
+
+# ── remote_patient_monitoring ───────────────────────────────────────────────
+remote_patient_monitoring::initialize
+remote_patient_monitoring::register_device
+remote_patient_monitoring::add_caregiver
+remote_patient_monitoring::set_threshold
+
+# ── reputation ──────────────────────────────────────────────────────────────
+reputation::initialize
+reputation::mint
+reputation::slash
+
+# ── reputation_access_control ───────────────────────────────────────────────
+reputation_access_control::check_access
+
+# ── reputation_integration ──────────────────────────────────────────────────
+reputation_integration::batch_sync_providers
+reputation_integration::trigger_credential_sync
+reputation_integration::trigger_feedback_sync
+reputation_integration::trigger_conduct_sync
+
+# ── runtime_validation ──────────────────────────────────────────────────────
+runtime_validation::initialize
+runtime_validation::register_invariant
+runtime_validation::register_state_check
+runtime_validation::register_permission_check
+runtime_validation::register_resource_tracker
+runtime_validation::report_violation
+runtime_validation::verify_invariant
+runtime_validation::verify_state_consistency
+runtime_validation::verify_permission
+runtime_validation::update_resource_usage
+
+# ── secure_enclave ──────────────────────────────────────────────────────────
+secure_enclave::initialize
+secure_enclave::register_enclave
+secure_enclave::verify_attestation
+secure_enclave::submit_task
+secure_enclave::assign_task
+secure_enclave::complete_task
+secure_enclave::fallback_to_mpc
+
+# ── storage_cleanup ─────────────────────────────────────────────────────────
+storage_cleanup::initialize
+storage_cleanup::set_paused
+storage_cleanup::set_retention_config
+storage_cleanup::register_credential
+storage_cleanup::register_audit_log
+storage_cleanup::register_escrow
+storage_cleanup::register_consent
+storage_cleanup::register_schedule
+storage_cleanup::preview_cleanup
+storage_cleanup::cleanup_credentials
+storage_cleanup::cleanup_audit_logs
+storage_cleanup::cleanup_escrows
+storage_cleanup::cleanup_consents
+storage_cleanup::cleanup_schedules
+
+# ── storage_migration ───────────────────────────────────────────────────────
+# Added by feat(storage_migration) — event emission pending a follow-up refactor
+storage_migration::initialize
+storage_migration::set_paused
+storage_migration::store
+storage_migration::read
+
+# ── sut_token ───────────────────────────────────────────────────────────────
+sut_token::initialize
+sut_token::name
+sut_token::symbol
+sut_token::decimals
+sut_token::total_supply
+sut_token::supply_cap
+sut_token::balance_of
+sut_token::allowance
+sut_token::add_minter
+sut_token::remove_minter
+sut_token::balance_of_at
+sut_token::total_supply_at
+
+# ── sync_manager ────────────────────────────────────────────────────────────
+sync_manager::assign_role
+sync_manager::list_sync_operations
+
+# ── telemedicine ────────────────────────────────────────────────────────────
+telemedicine::initialize
+telemedicine::pause
+telemedicine::unpause
+telemedicine::register_provider
+telemedicine::deactivate_provider
+telemedicine::register_patient
+telemedicine::grant_consent
+telemedicine::revoke_consent
+telemedicine::schedule_consultation
+telemedicine::start_consultation
+telemedicine::complete_consultation
+telemedicine::issue_prescription
+telemedicine::start_monitoring_session
+telemedicine::end_monitoring_session
+telemedicine::upsert_knowledge_entry
+telemedicine::configure_emergency_protocol
+telemedicine::submit_chatbot_inquiry
+telemedicine::resolve_emergency_case
+
+# ── timelock ────────────────────────────────────────────────────────────────
+timelock::initialize
+
+# ── treasury_controller ─────────────────────────────────────────────────────
+treasury_controller::gnosis_get_threshold
+treasury_controller::gnosis_get_owners
+
+# ── upgrade_manager ─────────────────────────────────────────────────────────
+upgrade_manager::initialize
+upgrade_manager::approve
+upgrade_manager::validate_proposal
+
+# ── upgradeability ──────────────────────────────────────────────────────────
+upgradeability::set_version
+upgradeability::set_admin
+upgradeability::freeze
+upgradeability::add_history
+upgradeability::set_deprecated_functions
+
+# ── zk_verifier ─────────────────────────────────────────────────────────────
+zk_verifier::verify_proof
+zk_verifier::compute_proof_hash
+zk_verifier::mark_nullifier_used
+
+# ── zkp_registry ────────────────────────────────────────────────────────────
+zkp_registry::verify_range_proof
+zkp_registry::export_state
