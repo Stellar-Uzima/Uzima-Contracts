@@ -385,6 +385,7 @@ pub enum CryptoAuditAction {
     QuantumThreatDetected,
     QuantumMigrationStarted,
     QuantumMigrationCompleted,
+    RetentionOverride,
 }
 
 #[derive(Clone)]
@@ -496,6 +497,10 @@ pub enum DataKey {
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
     QuantumThreatLevel,       // 0-100 (percentage)
+
+    // Retention policy
+    RecordRetention(u64),        // record_id -> RetentionPolicy
+    RetentionDefault,            // global default retention_secs (u64)
 }
 
 // ==================== Errors ====================
@@ -690,6 +695,22 @@ pub struct CorrectionWorkflow {
     pub can_auto_fix: bool,
     /// Ledger timestamp when this workflow was generated.
     pub workflow_created_at: u64,
+}
+
+/// Configurable per-record retention policy.
+#[derive(Clone)]
+#[contracttype]
+pub struct RetentionPolicy {
+    /// Duration in seconds this record should be retained.
+    pub retention_secs: u64,
+    /// Timestamp when the retention period started (usually record creation time).
+    pub retention_start: u64,
+    /// True if retention has been overridden by admin (record is force-accessible).
+    pub overridden: bool,
+    /// Address of the admin who overrode retention, if applicable.
+    pub overridden_by: Option<Address>,
+    /// Timestamp when the override was applied.
+    pub overridden_at: u64,
 }
 
 /// Result returned by the on-chain record cleansing operation.
@@ -2953,6 +2974,201 @@ impl MedicalRecordsContract {
             .unwrap_or(0)
     }
 
+    // ---------------------------------------------------------------------
+    // Data Retention Policy Enforcement (Issue #1000)
+    // ---------------------------------------------------------------------
+
+    /// Sets a per-record retention period. Records past retention are
+    /// flagged as expired and inaccessible except via admin override.
+    pub fn set_record_retention(
+        env: Env,
+        admin: Address,
+        record_id: u64,
+        retention_secs: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        if retention_secs == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        // Verify the record exists
+        env.storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let policy = RetentionPolicy {
+            retention_secs,
+            retention_start: now,
+            overridden: false,
+            overridden_by: None,
+            overridden_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordRetention(record_id), &policy);
+
+        Self::log_info(
+            &env,
+            "set_record_retention",
+            Some(&admin),
+            None,
+            Some(record_id),
+            "Per-record retention policy set",
+        );
+        Ok(true)
+    }
+
+    /// Returns the retention policy for a record, if one was set.
+    pub fn get_record_retention(env: Env, record_id: u64) -> Option<RetentionPolicy> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordRetention(record_id))
+    }
+
+    /// Sets the global default retention period applied when no per-record
+    /// policy exists. 0 disables global default retention.
+    pub fn set_retention_default(
+        env: Env,
+        admin: Address,
+        retention_secs: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RetentionDefault, &retention_secs);
+
+        Self::log_info(
+            &env,
+            "set_retention_default",
+            Some(&admin),
+            None,
+            None,
+            "Global retention default updated",
+        );
+        Ok(true)
+    }
+
+    /// Returns the global default retention period in seconds (0 = no default).
+    pub fn get_retention_default(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RetentionDefault)
+            .unwrap_or(0)
+    }
+
+    /// Admin-only override that makes an expired record accessible again.
+    /// Every override is logged via the crypto audit trail.
+    pub fn admin_override_retention(
+        env: Env,
+        admin: Address,
+        record_id: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        // Record must exist
+        env.storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let now = env.ledger().timestamp();
+
+        let mut policy: RetentionPolicy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordRetention(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        policy.overridden = true;
+        policy.overridden_by = Some(admin.clone());
+        policy.overridden_at = now;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordRetention(record_id), &policy);
+
+        // Log the override as a crypto audit event
+        let mut payload = Bytes::new(&env);
+        payload.append(&Bytes::from_slice(&env, &record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(&env, &now.to_be_bytes()));
+        let details_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+        Self::log_crypto_event(
+            &env,
+            &admin,
+            CryptoAuditAction::RetentionOverride,
+            Some(record_id),
+            details_hash,
+            None,
+        );
+
+        Self::log_info(
+            &env,
+            "admin_override_retention",
+            Some(&admin),
+            None,
+            Some(record_id),
+            "Admin override applied to retention-expired record",
+        );
+        Ok(true)
+    }
+
+    /// Returns true when a record has a retention policy AND is past its
+    /// retention window AND has not been overridden by an admin.
+    fn is_record_retention_expired(env: &Env, record_id: u64) -> bool {
+        let policy: Option<RetentionPolicy> =
+            env.storage()
+                .persistent()
+                .get(&DataKey::RecordRetention(record_id));
+
+        let now = env.ledger().timestamp();
+
+        if let Some(policy) = policy {
+            if policy.overridden {
+                return false;
+            }
+            let expiry = policy.retention_start.saturating_add(policy.retention_secs);
+            if now > expiry {
+                return true;
+            }
+        }
+
+        // Also check global default retention against the record timestamp
+        let default_secs: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RetentionDefault)
+            .unwrap_or(0);
+
+        if default_secs > 0 && policy.is_none() {
+            if let Some(meta) = env
+                .storage()
+                .persistent()
+                .get::<_, RecordMetadata>(&DataKey::RecordMeta(record_id))
+            {
+                let default_expiry = meta.timestamp.saturating_add(default_secs);
+                if now > default_expiry {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
+
     /// Migrates a record to include a new quantum-safe envelope.
     /// Accessible by the patient or an authorized doctor.
     pub fn upgrade_record_to_quantum_safe(
@@ -5067,6 +5283,30 @@ impl MedicalRecordsContract {
             return false;
         }
 
+        // Data retention enforcement: expired records are only accessible by admin
+        if Self::is_record_retention_expired(env, record_id) {
+            if Self::is_admin(env, caller) {
+                Self::log_warning(
+                    env,
+                    "can_view_record",
+                    Some(caller),
+                    Some(&record.patient_id),
+                    Some(record_id),
+                    "Admin accessed a retention-expired record",
+                );
+                return true;
+            }
+            Self::log_warning(
+                env,
+                "can_view_record",
+                Some(caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Record access denied due to retention expiry",
+            );
+            return false;
+        }
+
         if Self::is_admin(env, caller) {
             return true;
         }
@@ -5189,6 +5429,30 @@ impl MedicalRecordsContract {
         record: &EncryptedRecord,
         record_id: u64,
     ) -> bool {
+        // Data retention enforcement for encrypted records
+        if Self::is_record_retention_expired(env, record_id) {
+            if Self::is_admin(env, caller) {
+                Self::log_warning(
+                    env,
+                    "can_view_encrypted_record",
+                    Some(caller),
+                    Some(&record.patient_id),
+                    Some(record_id),
+                    "Admin accessed a retention-expired encrypted record",
+                );
+                return true;
+            }
+            Self::log_warning(
+                env,
+                "can_view_encrypted_record",
+                Some(caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Encrypted record access denied due to retention expiry",
+            );
+            return false;
+        }
+
         if Self::is_admin(env, caller) {
             return true;
         }

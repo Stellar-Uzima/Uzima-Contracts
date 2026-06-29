@@ -8,6 +8,7 @@ pub enum Error {
     Unauthorized = 100,
     NotAICoordinator = 150,
     EmergencyAccessExpired = 160,
+    RecordRetentionExpired = 170,
 
     // --- Input Validation (200–299) ---
     InvalidInput = 200,
@@ -83,6 +84,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::Unauthorized | Error::NotAICoordinator => symbol_short!("CHK_AUTH"),
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),
+        Error::RecordRetentionExpired => symbol_short!("ADM_OVR"),
         Error::InvalidCategory => symbol_short!("FIX_CAT"),
         Error::InvalidBatch => symbol_short!("CHK_DATA"),
         Error::NotInitialized => symbol_short!("INIT_CTR"),

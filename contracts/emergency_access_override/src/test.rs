@@ -182,4 +182,123 @@ mod tests {
             symbol_short!("CHK_LEN")
         );
     }
+
+    #[test]
+    fn test_emergency_access_expiry_and_auto_revoke() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // Grant emergency access with a short 60-second TTL
+        client.grant_emergency_access(&approver1, &patient, &provider, &60);
+        client.grant_emergency_access(&approver2, &patient, &provider, &60);
+
+        // Immediately after granting, access should be valid
+        assert!(client.check_emergency_access(&patient, &provider));
+
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+        assert!(record.approved);
+        assert!(record.expiry_at > record.granted_at);
+
+        // Advance the ledger timestamp past the expiry
+        env.ledger().set_timestamp(record.expiry_at + 1);
+
+        // After the TTL has elapsed, access should be auto-revoked (no longer valid)
+        assert!(!client.check_emergency_access(&patient, &provider));
+
+        // Verify the record still exists but check_emergency_access returns false
+        let record_after = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+        assert!(record_after.approved);
+        // Expiry timestamp should still be in the past
+        assert!(env.ledger().timestamp() > record_after.expiry_at);
+    }
+
+    #[test]
+    fn test_emergency_access_expiry_event_emitted_on_check() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // Grant access and let it expire
+        client.grant_emergency_access(&approver1, &patient, &provider, &10);
+        client.grant_emergency_access(&approver2, &patient, &provider, &10);
+
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+
+        // Move past expiry
+        env.ledger().set_timestamp(record.expiry_at + 1);
+
+        // Verify that checking expired access emits the appropriate events
+        assert!(!client.check_emergency_access(&patient, &provider));
+
+        // Verify event was published at check time
+        let events = env.events().all();
+        let check_events: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                let topics = e.0.clone();
+                topics.len() >= 2
+                    && topics.get(0).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("EMER"))
+                    && topics.get(1).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("CHECK"))
+            })
+            .collect();
+
+        // There should be at least one EMER/CHECK event emitted
+        assert!(!check_events.is_empty(), "Expected EMER/CHECK events to be emitted");
+
+        // The functional test above already verified access is expired:
+        // assert!(!client.check_emergency_access(...)) confirms the auto-revoke behavior
+        // Event emission is verified by the non-empty check above
+    }
+
+    #[test]
+    fn test_revoke_emits_audit_event() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        client.grant_emergency_access(&approver1, &patient, &provider, &600);
+        client.grant_emergency_access(&approver2, &patient, &provider, &600);
+
+        assert!(client.check_emergency_access(&patient, &provider));
+
+        // Perform admin revocation
+        client.revoke_emergency_access(&admin, &patient, &provider);
+
+        // Verify revocation event was emitted
+        let events = env.events().all();
+        let revoke_events: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                let topics = e.0.clone();
+                topics.len() >= 2
+                    && topics.get(0).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("EMER"))
+                    && topics.get(1).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("REVOKE"))
+            })
+            .collect();
+
+        assert!(
+            !revoke_events.is_empty(),
+            "Expected EMER/REVOKE event to be emitted on revocation"
+        );
+
+        // Access should be revoked after admin action
+        assert!(!client.check_emergency_access(&patient, &provider));
+    }
 }

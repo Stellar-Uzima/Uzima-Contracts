@@ -1,0 +1,80 @@
+name: Release ABI Artifacts
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  generate-abi:
+    name: Generate and attach ABI JSON files
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Soroban CLI
+        run: cargo install --locked soroban-cli
+
+      - name: Add Cargo bin to PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Build contracts
+        run: |
+          cargo build --target wasm32-unknown-unknown --release --workspace 2>&1 || \
+          for contract in contracts/*/; do
+            if [ -d "$contract" ]; then
+              (cd "$contract" && cargo build --target wasm32-unknown-unknown --release) || true
+            fi
+          done
+
+      - name: Generate ABI JSON artifacts
+        run: |
+          mkdir -p abi-artifacts dist
+          # Find .wasm files from target directories
+          for contract_dir in contracts/*/; do
+            if [ -d "$contract_dir" ]; then
+              contract_name=$(basename "$contract_dir")
+              wasm_file="$contract_dir/target/wasm32-unknown-unknown/release/${contract_name}.wasm"
+              if [ -f "$wasm_file" ]; then
+                cp "$wasm_file" "dist/${contract_name}.wasm"
+                echo "Generating ABI for: $contract_name"
+                soroban contract bindings json \
+                  --wasm "dist/${contract_name}.wasm" \
+                  --output-dir "abi-artifacts/${contract_name}" || {
+                    echo "Warning: Failed to generate ABI for ${contract_name}, skipping"
+                    continue
+                  }
+                if [ -f "abi-artifacts/${contract_name}/contract.json" ]; then
+                  cp "abi-artifacts/${contract_name}/contract.json" "abi-artifacts/${contract_name}.json"
+                fi
+              fi
+            fi
+          done
+          echo "ABI artifacts generated in abi-artifacts/"
+
+      - name: Validate ABI artifacts
+        run: |
+          abi_count=$(find abi-artifacts -name "*.json" | wc -l)
+          echo "Generated ${abi_count} ABI JSON files"
+          if [ "$abi_count" -eq 0 ]; then
+            echo "Error: No ABI artifacts were generated"
+            exit 1
+          fi
+
+      - name: Upload ABI artifacts to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: abi-artifacts/*.json
+          fail_on_unmatched_files: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
