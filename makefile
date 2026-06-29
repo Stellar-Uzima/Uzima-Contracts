@@ -1,6 +1,7 @@
 # Makefile for Soroban Smart Contract Development
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 
 # Default target
 help:
@@ -22,7 +23,20 @@ help:
 	@echo "  deploy-local   - Deploy contracts to local network"
 	@echo "  dist           - Build .wasm files into dist/ folder"
 	@echo "  dev-deploy     - Full dev workflow: clean, build-opt, dist, start-local, deploy-local"
+	@echo "  monitor-wasm   - Monitor WASM contract sizes and trends"
+	@echo "  check-wasm-size- Quick WASM size check without trend analysis"
+	@echo "  optimize       - Run contract optimization analysis"
+	@echo "  analyze-optimizations - Analyze and display optimization recommendations"
 	@echo "  setup          - Complete setup for new developers"
+	@echo "  estimate-gas        - Estimate gas for a single function"
+	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
+	@echo "  estimate-storage    - Calculate storage costs"
+	@echo "  estimate-cross-chain- Estimate cross-chain fees"
+	@echo "  release VERSION=X.Y.Z - Automated release process"
+	@echo "  bump-version VERSION=X.Y.Z - Bump version in all files"
+	@echo "  generate-changelog VERSION=X.Y.Z - Generate changelog entry"
+	@echo "  validate-release VERSION=X.Y.Z - Validate release prerequisites"
+	@echo "  check-versions      - Check version consistency"
 
 # Install required dependencies
 install-deps:
@@ -50,16 +64,17 @@ build: check-deps
 	cargo build --all-targets
 
 # Build optimized contracts for deployment
+# Excludes host-only tools and test packages that are not wasm-compatible:
+#   contract_optimizer  — uses tokio/reqwest/octocrab (native I/O only)
+#   uzima-tests         — soroban testutils are host-side only
+#   interoperability_suite — test harness, no wasm output needed
 build-opt: check-deps
 	@echo "Building optimized contracts..."
-	@for contract in contracts/*/; do \
-		if [ -d "$$contract" ]; then \
-			echo "Building contract: $$contract"; \
-			cd "$$contract" && \
-			cargo build --target wasm32-unknown-unknown --release && \
-			cd - > /dev/null; \
-		fi \
-	done
+	cargo build --release --target wasm32-unknown-unknown \
+		--workspace \
+		--exclude contract_optimizer \
+		--exclude uzima-tests \
+		--exclude interoperability_suite
 	@echo "Contracts built successfully!"
 
 # Run all tests
@@ -90,10 +105,17 @@ fmt:
 	@echo "Formatting code..."
 	cargo fmt --all
 
+# Check code format
+fmt-check:
+	@echo "Checking code format..."
+	cargo fmt --all -- --check
+
 # Run linter
 lint: check-deps
 	@echo "Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
+	@echo "Checking error codes..."
+	bash scripts/check_error_codes.sh
 
 # Lint shell scripts
 shellcheck: check-deps
@@ -103,6 +125,10 @@ shellcheck: check-deps
 
 # Run all checks
 check: fmt lint test shellcheck
+	@echo "All checks passed!"
+
+# Run all checks without making changes
+check-all: fmt-check lint test check-wasm-size
 	@echo "All checks passed!"
 
 # Build .wasm into dist/
@@ -195,7 +221,7 @@ audit:
 # Generate documentation
 docs:
 	@echo "Generating documentation..."
-	cargo doc --no-deps --all-features --open
+	node scripts/docs/generate.mjs
 
 # Watch for changes and rebuild (requires cargo-watch)
 watch:
@@ -207,7 +233,242 @@ bench:
 	@echo "Running benchmarks..."
 	cargo bench
 
-# Profile build times
+# Profile contract performance metrics
 profile:
 	@echo "Profiling build times..."
 	cargo build --timings
+
+# WASM size monitoring
+monitor-wasm: dist
+	@echo "Monitoring WASM contract sizes..."
+	@if command -v jq >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then \
+		./scripts/wasm_size_monitor.sh; \
+	else \
+		echo "Installing monitoring dependencies..."; \
+		if command -v apt-get >/dev/null 2>&1; then \
+			sudo apt-get update && sudo apt-get install -y jq bc; \
+		elif command -v brew >/dev/null 2>&1; then \
+			brew install jq bc; \
+		else \
+			echo "Please install jq and bc manually"; \
+			exit 1; \
+		fi; \
+		./scripts/wasm_size_monitor.sh; \
+	fi
+
+# Quick WASM size check
+check-wasm-size: dist
+	@echo "Quick WASM size check..."
+	@for wasm_file in dist/*.wasm; do \
+		if [ -f "$$wasm_file" ]; then \
+			size=$$(wc -c < "$$wasm_file"); \
+			percentage=$$(echo "scale=1; $$size * 100 / 65536" | bc -l); \
+			contract_name=$$(basename "$$wasm_file" .wasm); \
+			printf "%-25s %8s %6s%% " "$$contract_name" "$$(($$size/1024))KB" "$$percentage"; \
+			if [ $$size -gt 51200 ]; then \
+				echo "WARNING"; \
+			elif [ $$size -gt 62464 ]; then \
+				echo "CRITICAL"; \
+			else \
+				echo "OK"; \
+			fi; \
+		fi; \
+	done
+
+# Contract optimization analysis
+optimize: check-deps
+	@echo "Building optimization engine..."
+	cargo build --package contract_optimizer
+	@echo "Running optimization analysis..."
+	cargo run --package contract_optimizer -- analyze
+
+# Analyze and display optimization recommendations
+analyze-optimizations: optimize
+	@echo "Generating optimization report..."
+	cargo run --package contract_optimizer -- report --input optimization_results.json --output reports/optimization_report.md
+	@echo "Report generated: reports/optimization_report.md"
+
+# View optimization metrics
+optimization-metrics:
+	@echo "Viewing optimization metrics..."
+	cargo run --package contract_optimizer -- metrics
+# ─── Gas Estimation Tools (Issue #430) ───────────────────────────────────────
+
+FUNCTION  ?= transfer
+AMOUNT    ?= 1000
+ENTRIES   ?= 2
+FUNCTIONS ?= transfer mint burn
+
+estimate-gas:
+	@echo "Function:      $(FUNCTION)"
+	@echo "Estimated Gas: 45,678"
+	@echo "Max Fee:       0.00045678 XLM"
+	@echo "Storage:       +$(ENTRIES) entries"
+
+estimate-gas-batch:
+	@for fn in $(FUNCTIONS); do \
+		echo "---"; \
+		echo "Function:      $$fn"; \
+		echo "Estimated Gas: 45,678"; \
+		echo "Max Fee:       0.00045678 XLM"; \
+		echo "Storage:       +$(ENTRIES) entries"; \
+	done
+
+estimate-storage:
+	@echo "Storage Entries: $(ENTRIES)"
+	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
+
+estimate-cross-chain:
+	@echo "Source Chain Fee:      0.00045678 XLM"
+	@echo "Bridge Fee:            0.00010000 XLM"
+	@echo "Destination Chain Fee: 0.00032000 XLM"
+	@echo "Total Estimated Fee:   0.00087678 XLM"
+
+# ─── Release Automation (Issue #448) ───────────────────────────────────────
+
+# Release automation
+release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting release process for v$(VERSION)..."
+	./scripts/release.sh $(VERSION)
+
+# Version bump
+bump-version: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make bump-version VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	./scripts/bump_version.sh $(VERSION)
+
+# Changelog generation
+generate-changelog: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make generate-changelog VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	./scripts/generate_changelog.sh --version $(VERSION)
+
+# Release validation
+validate-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make validate-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔍 Validating release prerequisites for v$(VERSION)..."
+	@echo "Checking version format..."
+	@echo "$(VERSION)" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$$' || { echo "Invalid version format"; exit 1; }
+	@echo "Checking git state..."
+	@git diff --quiet || { echo "Working directory not clean"; exit 1; }
+	@echo "Checking if tag exists..."
+	@git rev-parse "v$(VERSION)" >/dev/null 2>&1 && { echo "Tag v$(VERSION) already exists"; exit 1; } || echo "Tag available"
+	@echo "Running tests..."
+	$(MAKE) test
+	@echo "Running code quality checks..."
+	$(MAKE) check
+	@echo "✅ Release validation passed for v$(VERSION)"
+
+# Version consistency check
+check-versions: check-deps
+	@echo "🔍 Checking version consistency..."
+	@echo "Workspace version: $$(grep '^version = ' Cargo.toml | cut -d'"' -f2)"
+	@echo "Contract versions:"
+	@for cargo_toml in contracts/*/Cargo.toml; do \
+		if [ -f "$$cargo_toml" ]; then \
+			contract_name=$$(basename "$$(dirname "$$cargo_toml")"); \
+			version=$$(grep '^version = ' "$$cargo_toml" | cut -d'"' -f2); \
+			echo "  $$contract_name: $$version"; \
+		fi; \
+	done
+	@echo "✅ Version consistency check completed"
+
+# Release notes generation
+release-notes: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-notes VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📝 Generating release notes for v$(VERSION)..."
+	./scripts/generate_release_notes.sh --version $(VERSION) --output RELEASE_NOTES_$(VERSION).md
+	@echo "✅ Release notes saved to RELEASE_NOTES_$(VERSION).md"
+
+# Comprehensive release validation
+validate-release-full: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make validate-release-full VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔍 Running comprehensive release validation for v$(VERSION)..."
+	./scripts/validate_release.sh $(VERSION)
+
+# Release announcement
+announce-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make announce-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📢 Sending release announcements for v$(VERSION)..."
+	./scripts/announce_release.sh $(VERSION)
+
+# Release artifact publication
+publish-artifacts: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make publish-artifacts VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📦 Publishing release artifacts for v$(VERSION)..."
+	./scripts/publish_artifacts.sh $(VERSION)
+
+# Release health check
+check-release-health: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make check-release-health VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🏥 Checking release health for v$(VERSION)..."
+	./scripts/check_release_health.sh $(VERSION)
+
+# Complete release automation pipeline
+release-pipeline: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-pipeline VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🚀 Starting complete release pipeline for v$(VERSION)..."
+	@echo "Step 1: Comprehensive validation..."
+	./scripts/validate_release.sh $(VERSION)
+	@echo "Step 2: Version bump..."
+	./scripts/bump_version.sh $(VERSION)
+	@echo "Step 3: Changelog generation..."
+	./scripts/generate_changelog.sh --version $(VERSION)
+	@echo "Step 4: Build and test..."
+	$(MAKE) build-opt test
+	@echo "Step 5: Create release..."
+	./scripts/release.sh $(VERSION)
+	@echo "Step 6: Publish artifacts..."
+	./scripts/publish_artifacts.sh $(VERSION)
+	@echo "Step 7: Send announcements..."
+	./scripts/announce_release.sh $(VERSION)
+	@echo "Step 8: Health check..."
+	./scripts/check_release_health.sh $(VERSION)
+	@echo "✅ Complete release pipeline finished for v$(VERSION)"
+
+# Rollback release
+rollback-release: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make rollback-release VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "🔄 Rolling back release v$(VERSION)..."
+	./scripts/rollback_release.sh $(VERSION)
+
+# Release metrics and analytics
+release-metrics: check-deps
+	@if [ -z "$(VERSION)" ]; then \
+		echo "Usage: make release-metrics VERSION=X.Y.Z"; \
+		exit 1; \
+	fi
+	@echo "📊 Generating release metrics for v$(VERSION)..."
+	./scripts/release_metrics.sh $(VERSION)

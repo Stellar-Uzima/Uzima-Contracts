@@ -58,6 +58,16 @@ A flexible point system that rewards various patient activities and achievements
 - Recording health metrics
 - Participating in social features
 
+### 3.1 Secure Random Bonus Rewards
+
+Randomized bonus rewards are implemented with a commit-reveal flow instead of predictable ledger metadata.
+
+**Security Properties:**
+- Commit a `sha256` reveal hash before the target ledger
+- Enforce a future-ledger reveal window to prevent same-ledger manipulation
+- Derive bonus outcomes from the commitment, reveal secret, target ledger, and contract context
+- Never use timestamps, ledger sequence alone, or user-controlled inputs as sole entropy
+
 ### 4. Social Features and Leaderboards
 
 Privacy-preserving social features that encourage community engagement while protecting patient data.

@@ -1,17 +1,149 @@
 #!/bin/bash
 
 # Coverage Report Generator
-# Generates detailed test coverage reports and analysis
+#
+# Generates either:
+#   - default mode: test coverage report via cargo-tarpaulin
+#   - docs mode:    public-API documentation coverage via cargo doc + missing_docs
+#
+# Usage:
+#   ./scripts/coverage_report.sh          # test coverage (default)
+#   ./scripts/coverage_report.sh docs    # documentation coverage
 
 set -e
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 COVERAGE_DIR="${PROJECT_ROOT}/coverage"
-# shellcheck disable=SC2034  # Reserved for future use in quality gates
-COVERAGE_THRESHOLD=90
+REPORTS_DIR="${PROJECT_ROOT}/reports"
+mkdir -p "${COVERAGE_DIR}" "${REPORTS_DIR}"
 
-# Create coverage directory
-mkdir -p "${COVERAGE_DIR}"
+# ─────────────────────────────────────────────────────────────────────────────
+# docs mode — public-API documentation coverage
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "docs" ]]; then
+    echo "=== Uzima Contracts - Documentation Coverage ==="
+    echo ""
+
+    CARGO_DOC_LOG="${REPORTS_DIR}/cargo_doc.log"
+    DOC_COVERAGE_TXT="${REPORTS_DIR}/doc_coverage.txt"
+
+    : > "${CARGO_DOC_LOG}"
+
+    echo "Generating docs (RUSTDOCFLAGS=\"-W missing_docs\")..."
+    # `-W missing_docs` upgrades missing_docs to a warning. `--no-deps` skips
+    # documenting external dependencies. We do not fail on doc-build errors so
+    # we can still emit a coverage report; the gating happens below on warning
+    # count, not on build success.
+    RUSTDOCFLAGS="-W missing_docs" cargo doc \
+        --workspace \
+        --no-deps \
+        >> "${CARGO_DOC_LOG}" 2>&1 || true
+
+    MISSING_DOC_WARNINGS=$(grep -c "warning: missing documentation" "${CARGO_DOC_LOG}" || echo 0)
+    echo "Total missing_docs warnings: ${MISSING_DOC_WARNINGS}"
+    # Stable, terse token read by `.github/workflows/ci.yml`. Keep one-keyword
+    # KEY=VALUE on its own line so the JS regex doesn't break if other report
+    # formatting shifts.
+    echo "MISSING_DOCS_COUNT=${MISSING_DOC_WARNINGS}"
+    echo ""
+
+    # Heuristic per-contract coverage: count `pub` items in lib.rs files and
+    # count `///` doc lines in the same file. The doc-line count is intentionally
+    # generous: an item can have multiple doc-comment lines. The exact item-to-
+    # doc mapping is enforced by rustdoc above, this is human-readable context.
+    {
+        echo "Public-API documentation coverage report"
+        echo "Generated: $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+        echo "Workspace: $(basename "${PROJECT_ROOT}")"
+        echo ""
+        echo "Missing-docs warnings (rustdoc missing_docs lint): ${MISSING_DOC_WARNINGS}"
+        echo ""
+        printf '%-32s %12s %12s\n' "contract" "pub_items" "doc_lines"
+        printf '%-32s %12s %12s\n' "--------------------------------" "------------" "------------"
+    } > "${DOC_COVERAGE_TXT}"
+
+    for lib in \
+        "${PROJECT_ROOT}/contracts"/*/src/lib.rs \
+        "${PROJECT_ROOT}/libs"/*/src/lib.rs; do
+        [ -f "${lib}" ] || continue
+        contract="$(basename "$(dirname "$(dirname "${lib}")")")"
+        pub_total=$(grep -cE '^[[:space:]]*pub[[:space:]]*(fn|struct|enum|type|const|static|trait|mod|use)[[:space:](]|^\s*pub[[:space:]]*\(' "${lib}" 2>/dev/null || echo 0)
+        doc_lines=$(grep -cE '^[[:space:]]*///' "${lib}" 2>/dev/null || echo 0)
+        printf '%-32s %12s %12s\n' "${contract}" "${pub_total}" "${doc_lines}" >> "${DOC_COVERAGE_TXT}"
+    done
+
+    {
+        echo ""
+        echo "Notes:"
+        echo "  - pub_items is a heuristic count of `pub fn/struct/enum/type/const/static/trait/mod/use`"
+        echo "    declarations in each lib.rs (including `pub use` re-exports). It is not authoritative."
+        echo "  - doc_lines counts `///` lines per file. Multiple docs per item are common,"
+        echo "    so doc_lines >= pub_items does not imply 100% coverage."
+        echo "  - The authoritative metric is the rustdoc missing_docs warning count above,"
+        echo "    which is gated at 50 by this script."
+    } >> "${DOC_COVERAGE_TXT}"
+
+    cat "${DOC_COVERAGE_TXT}"
+
+    # Top-10 most-used contracts focus list (issue #824).
+    {
+        echo ""
+        echo "Top-10 most-used contracts (focus list for >=80% public-API documentation):"
+        for contract in \
+            identity_registry \
+            access_control \
+            escrow \
+            governor \
+            audit \
+            common_error \
+            cross_chain_bridge \
+            credential_registry \
+            meta_tx_forwarder \
+            healthcare_payment; do
+            lib="${PROJECT_ROOT}/contracts/${contract}/src/lib.rs"
+            if [ -f "${lib}" ]; then
+                pub_total=$(grep -cE '^[[:space:]]*pub[[:space:]]*(fn|struct|enum|type|const|static|trait|mod|use)[[:space:](]|^\s*pub[[:space:]]*\(' "${lib}" 2>/dev/null || echo 0)
+                doc_lines=$(grep -cE '^[[:space:]]*///' "${lib}" 2>/dev/null || echo 0)
+                if [ "${pub_total}" -gt 0 ]; then
+                    pct=$(( doc_lines * 100 / (pub_total * 3) ))
+                    [ "${pct}" -gt 100 ] && pct=100
+                else
+                    pct=0
+                fi
+                marker="✓"
+                [ "${pct}" -lt 80 ] && marker="⚠"
+                printf '  %s %-26s pub_items=%-4s doc_lines=%-6s coverage≈%s%%\n' \
+                    "${marker}" "${contract}" "${pub_total}" "${doc_lines}" "${pct}"
+            fi
+        done
+    } | tee -a "${DOC_COVERAGE_TXT}"
+
+    # Gradual enforcement gate.
+    DOC_WARN_LIMIT="${DOC_WARN_LIMIT:-50}"
+    if [ "${MISSING_DOC_WARNINGS}" -gt "${DOC_WARN_LIMIT}" ]; then
+        echo ""
+        echo "::error::Documentation coverage gate failed: ${MISSING_DOC_WARNINGS} missing_docs warnings > ${DOC_WARN_LIMIT}"
+        echo "Run 'cargo doc --workspace --no-deps' locally to see warnings."
+        exit 1
+    fi
+
+    echo ""
+    echo "Documentation coverage report written to: ${DOC_COVERAGE_TXT}"
+    if [ "${MISSING_DOC_WARNINGS}" -eq 0 ]; then
+        echo "✅ Missing-docs warnings: 0"
+    else
+        echo "⚠️  Missing-docs warnings: ${MISSING_DOC_WARNINGS} (gate: ${DOC_WARN_LIMIT})"
+    fi
+    exit 0
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# default mode — test coverage via cargo-tarpaulin
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Test-coverage threshold (used by future quality gates, not enforced here).
+# shellcheck disable=SC2034
+COVERAGE_THRESHOLD=90
 
 echo "=== Uzima Contracts - Coverage Report Generator ==="
 echo ""
@@ -92,6 +224,14 @@ cat > "${COVERAGE_DIR}/coverage_summary.md" << EOF
 
 ## Generated: $(date)
 EOF
+
+# Optional: also generate a documentation coverage report.
+# Skipped by default; pass any second argument (e.g. `auto`) to include it.
+if [[ "${2:-}" == "docs" ]]; then
+    echo ""
+    echo "Also generating documentation coverage report..."
+    bash "${BASH_SOURCE[0]}" docs || true
+fi
 
 echo ""
 echo "Coverage report generated: ${COVERAGE_DIR}/index.html"

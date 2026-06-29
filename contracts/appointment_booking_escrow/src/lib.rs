@@ -1,6 +1,5 @@
 #![no_std]
-#![allow(dead_code)]
-
+//! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
 #[cfg(test)]
 mod test;
 
@@ -9,9 +8,7 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, token, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, token, Address, Env, String, Vec};
 
 // ==================== Data Types ====================
 
@@ -23,6 +20,7 @@ pub enum AppointmentStatus {
     Confirmed = 1,
     Refunded = 2,
     Completed = 3,
+    NoShow = 4,
 }
 
 #[derive(Clone)]
@@ -34,8 +32,11 @@ pub struct AppointmentEscrow {
     pub amount: i128,
     pub token: Address,
     pub booked_at: u64,
+    pub scheduled_time: u64,
     pub confirmed_at: u64, // 0 if not confirmed
     pub refunded_at: u64,  // 0 if not refunded
+    pub reminder_sent_at: u64,
+    pub no_show_marked_at: u64,
     pub status: AppointmentStatus,
     pub funds_released: bool, // Prevents double withdrawal
 }
@@ -48,6 +49,26 @@ pub enum DataKey {
     Appointment(u64),              // appointment_id -> AppointmentEscrow
     PatientAppointments(Address),  // patient -> Vec<u64>
     ProviderAppointments(Address), // provider -> Vec<u64>
+    Paused,
+    LastActivity,
+    TotalOperations,
+    FailedOperations,
+    Version,
+}
+
+/// Contract health status
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct ContractHealth {
+    pub version: String,
+    pub is_paused: bool,
+    pub storage_usage: u64,
+    pub last_activity: u64,
+    pub total_operations: u64,
+    pub failed_operations: u64,
+    pub success_rate: u32,
+    pub total_appointments: u64,
+    pub active_escrow_balance: i128,
 }
 
 // ==================== Contract ====================
@@ -58,18 +79,28 @@ pub struct AppointmentBookingEscrow;
 #[contractimpl]
 impl AppointmentBookingEscrow {
     /// Initialize the contract with an admin and token address
-    pub fn initialize(env: Env, admin: Address, token: Address) -> Result<(), Error> {
+    pub fn initialize(env: Env, admin: Address, _token: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
             .set(&DataKey::AppointmentCounter, &0u64);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage()
+            .instance()
+            .set(&DataKey::LastActivity, &env.ledger().timestamp());
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::FailedOperations, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::Version, &String::from_str(&env, "1.0.0"));
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -86,13 +117,18 @@ impl AppointmentBookingEscrow {
     ) -> Result<u64, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "book_appointment");
 
         // Validate inputs
         if amount <= 0 {
+            events::diag_validation_fail(&env, "book_appointment", "invalid_amount");
+            Self::record_operation(&env, false);
             return Err(Error::InvalidAmount);
         }
 
         if patient == provider {
+            events::diag_validation_fail(&env, "book_appointment", "patient_eq_provider");
+            Self::record_operation(&env, false);
             return Err(Error::InvalidProvider);
         }
 
@@ -123,8 +159,11 @@ impl AppointmentBookingEscrow {
             amount,
             token: token.clone(),
             booked_at: timestamp,
+            scheduled_time: timestamp,
             confirmed_at: 0,
             refunded_at: 0,
+            reminder_sent_at: 0,
+            no_show_marked_at: 0,
             status: AppointmentStatus::Booked,
             funds_released: false,
         };
@@ -141,9 +180,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::PatientAppointments(patient.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         patient_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::PatientAppointments(patient), &patient_appts);
+        env.storage().persistent().set(
+            &DataKey::PatientAppointments(patient.clone()),
+            &patient_appts,
+        );
 
         // Add to provider's appointments list
         let mut provider_appts: Vec<u64> = env
@@ -152,9 +192,10 @@ impl AppointmentBookingEscrow {
             .get(&DataKey::ProviderAppointments(provider.clone()))
             .unwrap_or_else(|| Vec::new(&env));
         provider_appts.push_back(appointment_id);
-        env.storage()
-            .persistent()
-            .set(&DataKey::ProviderAppointments(provider), &provider_appts);
+        env.storage().persistent().set(
+            &DataKey::ProviderAppointments(provider.clone()),
+            &provider_appts,
+        );
 
         events::publish_appointment_booked(
             &env,
@@ -165,6 +206,8 @@ impl AppointmentBookingEscrow {
             timestamp,
         );
 
+        events::diag_fn_exit(&env, "book_appointment");
+        Self::record_operation(&env, true);
         Ok(appointment_id)
     }
 
@@ -177,6 +220,7 @@ impl AppointmentBookingEscrow {
     ) -> Result<(), Error> {
         provider.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "confirm_appointment");
 
         // Get appointment
         let appointment_key = DataKey::Appointment(appointment_id);
@@ -184,55 +228,74 @@ impl AppointmentBookingEscrow {
             .storage()
             .persistent()
             .get(&appointment_key)
-            .ok_or(Error::AppointmentNotFound)?;
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Verify provider matches
         if appointment.provider != provider {
+            events::diag_auth_fail(&env, "confirm_appointment");
+            Self::record_operation(&env, false);
             return Err(Error::OnlyProviderCanConfirm);
         }
 
         // Check if already confirmed or refunded
-        if appointment.status == AppointmentStatus::Confirmed {
+        if appointment.status == AppointmentStatus::Confirmed
+            || appointment.status == AppointmentStatus::Completed
+        {
+            events::diag_validation_fail(&env, "confirm_appointment", "already_confirmed");
+            Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyConfirmed);
         }
         if appointment.status == AppointmentStatus::Refunded {
+            events::diag_validation_fail(&env, "confirm_appointment", "already_refunded");
+            Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyRefunded);
+        }
+        if appointment.status == AppointmentStatus::NoShow {
+            events::diag_validation_fail(&env, "confirm_appointment", "no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::AppointmentNoShow);
         }
 
         // Prevent double withdrawal
         if appointment.funds_released {
+            events::diag_validation_fail(&env, "confirm_appointment", "double_withdrawal");
+            Self::record_operation(&env, false);
             return Err(Error::DoubleWithdrawal);
         }
 
         let timestamp = env.ledger().timestamp();
+        let transfer_amount = appointment.amount;
+        let token_addr = appointment.token.clone();
 
-        // Transfer funds from contract to provider
-        let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &provider,
-            &appointment.amount,
-        );
-
-        // Update appointment status
+        // CEI: Update state BEFORE external call to prevent reentrancy
         appointment.confirmed_at = timestamp;
         appointment.status = AppointmentStatus::Completed;
         appointment.funds_released = true;
 
-        // Store updated appointment
+        // Store updated appointment before transfer
         env.storage()
             .persistent()
             .set(&appointment_key, &appointment);
 
-        events::publish_appointment_confirmed(&env, appointment_id, &provider, timestamp);
-        events::publish_funds_released(
+        events::diag_state_change(
             &env,
             appointment_id,
-            &provider,
-            appointment.amount,
-            timestamp,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::Completed as u32,
         );
 
+        // Interaction: Transfer funds from contract to provider
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &provider, &transfer_amount);
+
+        events::publish_appointment_confirmed(&env, appointment_id, &provider, timestamp);
+        events::publish_funds_released(&env, appointment_id, &provider, transfer_amount, timestamp);
+
+        events::diag_fn_exit(&env, "confirm_appointment");
+        Self::record_operation(&env, true);
         Ok(())
     }
 
@@ -246,6 +309,7 @@ impl AppointmentBookingEscrow {
     ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "refund_appointment");
 
         // Get appointment
         let appointment_key = DataKey::Appointment(appointment_id);
@@ -253,15 +317,22 @@ impl AppointmentBookingEscrow {
             .storage()
             .persistent()
             .get(&appointment_key)
-            .ok_or(Error::AppointmentNotFound)?;
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
 
         // Verify patient matches
         if appointment.patient != patient {
+            events::diag_auth_fail(&env, "refund_appointment");
+            Self::record_operation(&env, false);
             return Err(Error::OnlyPatientCanRefund);
         }
 
         // Check if already refunded
         if appointment.status == AppointmentStatus::Refunded {
+            events::diag_validation_fail(&env, "refund_appointment", "already_refunded");
+            Self::record_operation(&env, false);
             return Err(Error::AppointmentAlreadyRefunded);
         }
 
@@ -269,42 +340,174 @@ impl AppointmentBookingEscrow {
         if appointment.status == AppointmentStatus::Confirmed
             || appointment.status == AppointmentStatus::Completed
         {
+            events::diag_validation_fail(&env, "refund_appointment", "already_confirmed");
+            Self::record_operation(&env, false);
             return Err(Error::InvalidState);
+        }
+        if appointment.status == AppointmentStatus::NoShow {
+            events::diag_validation_fail(&env, "refund_appointment", "no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::AppointmentNoShow);
         }
 
         // Prevent double withdrawal
         if appointment.funds_released {
+            events::diag_validation_fail(&env, "refund_appointment", "double_withdrawal");
+            Self::record_operation(&env, false);
             return Err(Error::DoubleWithdrawal);
         }
 
         let timestamp = env.ledger().timestamp();
+        let refund_amount = appointment.amount;
+        let token_addr = appointment.token.clone();
 
-        // Transfer funds from contract back to patient
-        let token_client = token::Client::new(&env, &appointment.token);
-        token_client.transfer(
-            &env.current_contract_address(),
-            &patient,
-            &appointment.amount,
-        );
-
-        // Update appointment status
+        // CEI: Update state BEFORE external call to prevent reentrancy
         appointment.refunded_at = timestamp;
         appointment.status = AppointmentStatus::Refunded;
         appointment.funds_released = true;
 
-        // Store updated appointment
+        // Store updated appointment before transfer
         env.storage()
             .persistent()
             .set(&appointment_key, &appointment);
+
+        events::diag_state_change(
+            &env,
+            appointment_id,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::Refunded as u32,
+        );
+
+        // Interaction: Transfer funds from contract back to patient
+        let token_client = token::Client::new(&env, &token_addr);
+        token_client.transfer(&env.current_contract_address(), &patient, &refund_amount);
 
         events::publish_appointment_refunded(
             &env,
             appointment_id,
             &patient,
-            appointment.amount,
+            refund_amount,
             timestamp,
         );
 
+        events::diag_fn_exit(&env, "refund_appointment");
+        Self::record_operation(&env, true);
+        Ok(())
+    }
+
+    /// Mark an appointment as a no-show (provider only).
+    /// Only callable by the appointment's provider. No funds are released.
+    pub fn mark_no_show(env: Env, provider: Address, appointment_id: u64) -> Result<(), Error> {
+        provider.require_auth();
+        Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "mark_no_show");
+
+        let appointment_key = DataKey::Appointment(appointment_id);
+        let mut appointment: AppointmentEscrow = env
+            .storage()
+            .persistent()
+            .get(&appointment_key)
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
+
+        // Only the assigned provider may mark no-show
+        if appointment.provider != provider {
+            events::diag_auth_fail(&env, "mark_no_show");
+            Self::record_operation(&env, false);
+            return Err(Error::OnlyProviderCanConfirm);
+        }
+
+        // Only allow no-show on Booked appointments
+        if appointment.status != AppointmentStatus::Booked {
+            events::diag_validation_fail(&env, "mark_no_show", "not_booked");
+            Self::record_operation(&env, false);
+            return Err(Error::InvalidState);
+        }
+
+        let timestamp = env.ledger().timestamp();
+
+        appointment.status = AppointmentStatus::NoShow;
+        appointment.no_show_marked_at = timestamp;
+
+        env.storage()
+            .persistent()
+            .set(&appointment_key, &appointment);
+
+        events::diag_state_change(
+            &env,
+            appointment_id,
+            AppointmentStatus::Booked as u32,
+            AppointmentStatus::NoShow as u32,
+        );
+
+        events::publish_marked_no_show(
+            &env,
+            appointment_id,
+            &provider,
+            &appointment.patient,
+            timestamp,
+        );
+
+        events::diag_fn_exit(&env, "mark_no_show");
+        Self::record_operation(&env, true);
+        Ok(())
+    }
+
+    /// Send an appointment reminder (provider or admin only).
+    /// Records the timestamp when the reminder was last sent.
+    pub fn send_reminder(env: Env, caller: Address, appointment_id: u64) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        events::diag_fn_enter(&env, "send_reminder");
+
+        let appointment_key = DataKey::Appointment(appointment_id);
+        let mut appointment: AppointmentEscrow = env
+            .storage()
+            .persistent()
+            .get(&appointment_key)
+            .ok_or_else(|| {
+            Self::record_operation(&env, false);
+            Error::AppointmentNotFound
+        })?;
+
+        // Only the provider or admin can send a reminder
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if appointment.provider != caller && admin != caller {
+            events::diag_auth_fail(&env, "send_reminder");
+            Self::record_operation(&env, false);
+            return Err(Error::OnlyProviderCanConfirm);
+        }
+
+        // Reminders only make sense for Booked appointments
+        if appointment.status != AppointmentStatus::Booked {
+            events::diag_validation_fail(&env, "send_reminder", "not_booked");
+            Self::record_operation(&env, false);
+            return Err(Error::InvalidState);
+        }
+
+        let timestamp = env.ledger().timestamp();
+        appointment.reminder_sent_at = timestamp;
+
+        env.storage()
+            .persistent()
+            .set(&appointment_key, &appointment);
+
+        events::publish_reminder_sent(
+            &env,
+            appointment_id,
+            &appointment.provider,
+            &appointment.patient,
+            timestamp,
+        );
+
+        events::diag_fn_exit(&env, "send_reminder");
+        Self::record_operation(&env, true);
         Ok(())
     }
 
@@ -374,12 +577,128 @@ impl AppointmentBookingEscrow {
             .ok_or(Error::NotInitialized)
     }
 
+    /// Get comprehensive health check
+    pub fn health_check(env: Env) -> ContractHealth {
+        let version = env
+            .storage()
+            .instance()
+            .get(&DataKey::Version)
+            .unwrap_or_else(|| String::from_str(&env, "1.0.0"));
+
+        let is_paused = env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false);
+
+        let last_activity = env
+            .storage()
+            .instance()
+            .get(&DataKey::LastActivity)
+            .unwrap_or(0);
+
+        let total_operations: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalOperations)
+            .unwrap_or(0);
+
+        let failed_operations: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::FailedOperations)
+            .unwrap_or(0);
+
+        let success_rate = if total_operations > 0 {
+            let successful = total_operations.saturating_sub(failed_operations);
+            ((successful * 10000) / total_operations) as u32
+        } else {
+            10000u32
+        };
+
+        let total_appointments = env
+            .storage()
+            .instance()
+            .get(&DataKey::AppointmentCounter)
+            .unwrap_or(0);
+
+        let active_escrow_balance = Self::get_escrow_balance(env.clone());
+
+        let storage_usage = 1024u64 + (total_appointments * 256);
+
+        ContractHealth {
+            version,
+            is_paused,
+            storage_usage,
+            last_activity,
+            total_operations,
+            failed_operations,
+            success_rate,
+            total_appointments,
+            active_escrow_balance,
+        }
+    }
+
+    /// Set pause status (admin only)
+    pub fn set_paused(env: Env, admin: Address, paused: bool) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+
+        if admin != stored_admin {
+            return Err(Error::NotInitialized); // Reusing error for unauthorized
+        }
+
+        env.storage().instance().set(&DataKey::Paused, &paused);
+        Ok(())
+    }
+
+    /// Check if contract is paused
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
         }
         Ok(())
+    }
+
+    fn record_operation(env: &Env, success: bool) {
+        env.storage()
+            .instance()
+            .set(&DataKey::LastActivity, &env.ledger().timestamp());
+
+        let total: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalOperations)
+            .unwrap_or(0);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalOperations, &(total + 1));
+
+        if !success {
+            let failed: u64 = env
+                .storage()
+                .instance()
+                .get(&DataKey::FailedOperations)
+                .unwrap_or(0);
+            env.storage()
+                .instance()
+                .set(&DataKey::FailedOperations, &(failed + 1));
+        }
     }
 }

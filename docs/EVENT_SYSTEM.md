@@ -377,6 +377,89 @@ The event system is designed to be extensible:
 - Custom event data structures support
 - Plugin architecture for specialized event handlers
 
+## Event Emission Audit
+
+### Background
+
+`docs/REFACTORING_SUGGESTIONS.md` (§5) notes that several functions mutate state without
+emitting events, making off-chain indexing harder. `docs/SECURITY_CHECKLIST.md` (§5)
+requires that every state-changing operation emit a corresponding event. The
+`scripts/check_events.sh` script enforces this requirement automatically.
+
+### How the audit works
+
+`scripts/check_events.sh` parses every `contracts/*/src/lib.rs` file and:
+
+1. Identifies all `pub fn` entrypoints at the standard 4-space contract-impl indent.
+2. Skips read-only functions whose names start with `get_`, `is_`, `has_`, or `query_`.
+3. Extracts each function body via brace-depth counting (suitable for `no_std` Soroban
+   code, which never contains string literals with unbalanced braces).
+4. Reports any function that does not contain a `.events()` call in its body.
+
+Functions in `scripts/allowlists/event_emission.txt` are exempt from the check. The
+allowlist exists solely for pre-existing functions that were written before this
+requirement; it must never be used to silence a newly added function.
+
+### Running locally
+
+```bash
+bash ./scripts/check_events.sh
+```
+
+A clean repo prints:
+
+```
+OK: all non-allowlisted state-changing pub fn(s) emit events.
+```
+
+A violation prints the offending file and function name and exits with code 1:
+
+```
+FAIL [missing event]: contracts/foo/src/lib.rs  fn transfer_funds
+```
+
+### CI enforcement
+
+The `event-audit` job in `.github/workflows/ci.yml` runs `check_events.sh` on every
+push and pull request targeting `main` or `develop`. A PR that introduces a new
+state-mutating function without an event emission call will fail this job.
+
+### Adding events to a function
+
+```rust
+pub fn transfer_funds(env: Env, recipient: Address, amount: i128) -> Result<(), Error> {
+    // ... validation and mutation ...
+    env.events().publish(
+        (symbol_short!("TRANSFER"),),
+        (recipient.clone(), amount),
+    );
+    Ok(())
+}
+```
+
+Topic conventions follow the event schema in **Event Publishing** above. Choose a
+`symbol_short!` name that matches the event type defined in `EventType`.
+
+### Managing the allowlist
+
+The allowlist file `scripts/allowlists/event_emission.txt` uses the format:
+
+```
+# comment
+contract_name::function_name
+```
+
+- **Remove** an entry when the corresponding function is updated to emit an event.
+- **Add** an entry only for a pre-existing legacy function that cannot be refactored in
+  the same PR. Include a comment with a GitHub issue reference above the entry.
+- **Never** add a brand-new function to the allowlist; new functions must always emit
+  events.
+
 ## Conclusion
 
-The Uzima Medical Records event system provides comprehensive monitoring, auditing, and integration capabilities essential for healthcare applications. Its structured approach ensures consistency, efficiency, and compliance with healthcare requirements while maintaining gas efficiency and data privacy.
+The Uzima Medical Records event system provides comprehensive monitoring, auditing, and
+integration capabilities essential for healthcare applications. Its structured approach
+ensures consistency, efficiency, and compliance with healthcare requirements while
+maintaining gas efficiency and data privacy. The automated event emission audit
+(`scripts/check_events.sh`) ensures that the off-chain indexing contract remains intact
+as the codebase grows.

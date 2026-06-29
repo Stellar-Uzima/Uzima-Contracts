@@ -1,11 +1,12 @@
-use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role};
+// external crates
+use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role, MockRbac, MockRbacClient, RbacRole};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 // Added <'a> to struct definition
 pub struct UzimaTest<'a> {
     pub client: MedicalRecordsContractClient<'a>, // Client needs lifetime
     pub admin1: Address,
-    #[allow(dead_code)]
+    
     pub admin2: Address,
     pub doctor: Address,
     pub patient: Address,
@@ -20,11 +21,16 @@ pub fn setup_uzima<'a>(env: &'a Env) -> UzimaTest<'a> {
     let doctor = Address::generate(env);
     let patient = Address::generate(env);
 
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(env, &rbac_id);
+    let _ = rbac_client.assign_role(&admin1, &RbacRole::Admin);
+    let _ = rbac_client.assign_role(&admin2, &RbacRole::Admin);
+
     let contract_id = env.register_contract(None, MedicalRecordsContract);
     let client = MedicalRecordsContractClient::new(env, &contract_id);
 
     // Initialize with first admin
-    client.initialize(&admin1);
+    client.initialize(&admin1, &rbac_id);
 
     // Make the second admin an Admin (for multisig tests)
     client.manage_user(&admin1, &admin2, &Role::Admin);

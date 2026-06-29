@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_imaging - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -322,16 +323,44 @@ pub enum Error {
     ReportsNotYetAvailable = 23,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::ImageNotFound => write!(f, "image not found"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::ShareNotFound => write!(f, "share not found"),
+            Error::ShareExpired => write!(f, "share expired"),
+            Error::AnnotationNotFound => write!(f, "annotation not found"),
+            Error::LinkNotFound => write!(f, "link not found"),
+            Error::DuplicateDicomSop => write!(f, "duplicate dicom sop"),
+            Error::IntegrityMismatch => write!(f, "integrity mismatch"),
+            Error::StudyNotFound => write!(f, "study not found"),
+            Error::StudyNotInExpectedStatus => write!(f, "study not in expected status"),
+            Error::ReaderNotAssigned => write!(f, "reader not assigned"),
+            Error::ReaderAlreadySubmitted => write!(f, "reader already submitted"),
+            Error::TooManyReaders => write!(f, "too many readers"),
+            Error::TooManyImages => write!(f, "too many images"),
+            Error::AllReadersNotSubmitted => write!(f, "all readers not submitted"),
+            Error::ArbitratorNotAssigned => write!(f, "arbitrator not assigned"),
+            Error::InvalidStatusTransition => write!(f, "invalid status transition"),
+            Error::ReportsNotYetAvailable => write!(f, "reports not yet available"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalImagingContract;
 
 #[contractimpl]
 impl MedicalImagingContract {
     pub fn initialize(env: Env, admin: Address, safety_threshold_mgy: u32) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
         if safety_threshold_mgy == 0 {
             return Err(Error::InvalidInput);
         }
@@ -631,7 +660,7 @@ impl MedicalImagingContract {
         env.storage()
             .persistent()
             .set(&DataKey::Model(model_id), &model);
-        env.events().publish((symbol_short!("IMG_MDL"),), caller);
+        env.events().publish((symbol_short!("img_mdl"),), caller);
         Ok(true)
     }
 
@@ -1362,7 +1391,7 @@ impl MedicalImagingContract {
                 .storage()
                 .persistent()
                 .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
+                .ok_or(Error::ReportsNotYetAvailable)?;
             if existing.reader == reader {
                 return Err(Error::ReaderAlreadySubmitted);
             }
@@ -1421,14 +1450,15 @@ impl MedicalImagingContract {
         let mut reader_report_count = 0u32;
         let mut all_diagnosis_hashes: Vec<BytesN<32>> = Vec::new(&env);
         for rid in updated_report_ids.iter() {
-            let rpt: ReaderReport = env
+            if let Some(rpt) = env
                 .storage()
                 .persistent()
-                .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
-            if readers.iter().any(|r| r == rpt.reader) {
-                reader_report_count = reader_report_count.saturating_add(1);
-                all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+                .get::<_, ReaderReport>(&DataKey::ReaderReportEntry(rid))
+            {
+                if readers.iter().any(|r| r == rpt.reader) {
+                    reader_report_count = reader_report_count.saturating_add(1);
+                    all_diagnosis_hashes.push_back(rpt.diagnosis_hash);
+                }
             }
         }
 
@@ -1440,11 +1470,11 @@ impl MedicalImagingContract {
                 .storage()
                 .persistent()
                 .get(&DataKey::Study(study_id))
-                .unwrap();
+                .ok_or(Error::StudyNotFound)?;
             let current_status = study.status;
 
             // Check if all hashes match
-            let first_hash = all_diagnosis_hashes.get(0).unwrap();
+            let first_hash = all_diagnosis_hashes.get(0).unwrap_or_default();
             let all_match = all_diagnosis_hashes.iter().all(|h| h == first_hash);
 
             if all_match {
@@ -1517,7 +1547,7 @@ impl MedicalImagingContract {
         out
     }
 
-    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> ReaderReport {
+    pub fn get_my_report(env: Env, reader: Address, study_id: u64) -> Result<ReaderReport, Error> {
         reader.require_auth();
         let report_ids: Vec<u64> = env
             .storage()
@@ -1526,16 +1556,17 @@ impl MedicalImagingContract {
             .unwrap_or(Vec::new(&env));
 
         for rid in report_ids.iter() {
-            let rpt: ReaderReport = env
+            if let Some(rpt) = env
                 .storage()
                 .persistent()
-                .get(&DataKey::ReaderReportEntry(rid))
-                .unwrap();
-            if rpt.reader == reader {
-                return rpt;
+                .get::<_, ReaderReport>(&DataKey::ReaderReportEntry(rid))
+            {
+                if rpt.reader == reader {
+                    return Ok(rpt);
+                }
             }
         }
-        panic!("report not found");
+        Err(Error::ReportsNotYetAvailable)
     }
 
     // ── Study Finalization & Amendment ──
@@ -1607,6 +1638,7 @@ impl MedicalImagingContract {
         Ok(true)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1619,6 +1651,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
@@ -1627,6 +1660,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role_or_admin(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         if Self::require_admin(env, caller).is_ok() {
             return Ok(());
@@ -1642,6 +1676,7 @@ impl MedicalImagingContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_image_exists(env: &Env, image_id: u64) -> Result<(), Error> {
         if !env.storage().persistent().has(&DataKey::Image(image_id)) {
             return Err(Error::ImageNotFound);

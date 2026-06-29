@@ -1,0 +1,1794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Uzima Contracts — API Documentation Portal</title>
+  <style>
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+      --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --code-bg: #1f2937;
+      --sidebar-w: 260px; --header-h: 56px;
+    }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+    header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; z-index: 100; justify-content: space-between; }
+    nav { position: fixed; top: var(--header-h); left: 0; bottom: 0; width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 0; }
+    nav a { display: block; padding: 8px 20px; color: var(--text2); text-decoration: none; font-size: 13px; }
+    nav a:hover { background: var(--bg3); color: var(--text); }
+    main { margin-left: var(--sidebar-w); margin-top: var(--header-h); padding: 40px; }
+    .hero { margin-bottom: 40px; }
+    .badge { display: inline-block; background: var(--bg3); padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 8px; }
+    article { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+    code { background: var(--code-bg); padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+    pre { background: var(--code-bg); padding: 16px; border-radius: 6px; overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="font-weight:bold;color:var(--accent)">⚕ Uzima Contracts</div>
+    <div style="font-size:12px;color:var(--text2)">Generated: 2026-04-27T14:52:36.307Z</div>
+  </header>
+  <nav>
+    <div style="padding:10px 20px;font-size:11px;color:var(--text2);text-transform:uppercase">Contracts</div>
+    <a href="#ai_analytics">ai_analytics</a><a href="#aml">aml</a><a href="#anomaly_detection">anomaly_detection</a><a href="#anomaly_detector">anomaly_detector</a><a href="#appointment_booking_escrow">appointment_booking_escrow</a><a href="#audit">audit</a><a href="#audit_forensics">audit_forensics</a><a href="#clinical_decision_support">clinical_decision_support</a><a href="#clinical_nlp">clinical_nlp</a><a href="#clinical_trial">clinical_trial</a><a href="#credential_notifications">credential_notifications</a><a href="#credential_registry">credential_registry</a><a href="#cross_chain_access">cross_chain_access</a><a href="#cross_chain_bridge">cross_chain_bridge</a><a href="#cross_chain_enhancements">cross_chain_enhancements</a><a href="#cross_chain_identity">cross_chain_identity</a><a href="#crypto_registry">crypto_registry</a><a href="#dicomweb_services">dicomweb_services</a><a href="#differential_privacy">differential_privacy</a><a href="#digital_twin">digital_twin</a><a href="#dispute_resolution">dispute_resolution</a><a href="#drug_discovery">drug_discovery</a><a href="#emergency_access_override">emergency_access_override</a><a href="#emr_integration">emr_integration</a><a href="#escrow">escrow</a><a href="#explainable_ai">explainable_ai</a><a href="#failover_detector">failover_detector</a><a href="#federated_learning">federated_learning</a><a href="#fhir_integration">fhir_integration</a><a href="#fido2_authenticator">fido2_authenticator</a><a href="#forensics">forensics</a><a href="#fp_math">fp_math</a><a href="#genomic_data">genomic_data</a><a href="#governor">governor</a><a href="#health_check">health_check</a><a href="#health_data_access_logging">health_data_access_logging</a><a href="#healthcare_analytics_dashboard">healthcare_analytics_dashboard</a><a href="#healthcare_compliance">healthcare_compliance</a><a href="#healthcare_compliance_automation">healthcare_compliance_automation</a><a href="#healthcare_data_conversion">healthcare_data_conversion</a><a href="#healthcare_data_marketplace">healthcare_data_marketplace</a><a href="#healthcare_oracle_network">healthcare_oracle_network</a><a href="#healthcare_payment">healthcare_payment</a><a href="#healthcare_reputation">healthcare_reputation</a><a href="#homomorphic_registry">homomorphic_registry</a><a href="#identity_registry">identity_registry</a><a href="#ihe_integration">ihe_integration</a><a href="#iot_device_management">iot_device_management</a><a href="#medical_consent_nft">medical_consent_nft</a><a href="#medical_imaging">medical_imaging</a><a href="#medical_imaging_ai">medical_imaging_ai</a><a href="#medical_record_backup">medical_record_backup</a><a href="#medical_record_hash_registry">medical_record_hash_registry</a><a href="#medical_record_search">medical_record_search</a><a href="#medical_records">medical_records</a><a href="#medication_management">medication_management</a><a href="#mental_health_support">mental_health_support</a><a href="#meta_tx_forwarder">meta_tx_forwarder</a><a href="#mfa">mfa</a><a href="#mpc_manager">mpc_manager</a><a href="#multi_region_orchestrator">multi_region_orchestrator</a><a href="#notification_system">notification_system</a><a href="#patient_consent_management">patient_consent_management</a><a href="#patient_gamification">patient_gamification</a><a href="#patient_portal">patient_portal</a><a href="#patient_risk_stratification">patient_risk_stratification</a><a href="#payment_router">payment_router</a><a href="#pharma_supply_chain">pharma_supply_chain</a><a href="#predictive_analytics">predictive_analytics</a><a href="#provider_directory">provider_directory</a><a href="#public_health_surveillance">public_health_surveillance</a><a href="#rbac">rbac</a><a href="#regional_node_manager">regional_node_manager</a><a href="#regulatory_compliance">regulatory_compliance</a><a href="#remote_patient_monitoring">remote_patient_monitoring</a><a href="#reputation">reputation</a><a href="#reputation_access_control">reputation_access_control</a><a href="#reputation_integration">reputation_integration</a><a href="#secure_enclave">secure_enclave</a><a href="#storage_cleanup">storage_cleanup</a><a href="#sut_token">sut_token</a><a href="#sync_manager">sync_manager</a><a href="#telemedicine">telemedicine</a><a href="#timelock">timelock</a><a href="#token_sale">token_sale</a><a href="#treasury_controller">treasury_controller</a><a href="#upgrade_manager">upgrade_manager</a><a href="#upgradeability">upgradeability</a><a href="#zk_verifier">zk_verifier</a><a href="#zkp_registry">zkp_registry</a>
+  </nav>
+  <main>
+    <div class="hero">
+      <h1>API Documentation Portal</h1>
+      <p>Auto-generated reference for 90 smart contracts.</p>
+      <div>
+        <span class="badge">777 Functions</span>
+        <span class="badge">781 Types</span>
+        <span class="badge">537 Examples</span>
+      </div>
+    </div>
+    
+      <article id="ai_analytics">
+        <h2 style="color:var(--accent)">ai_analytics</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_round</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<FederatedRound></code></td></tr><tr><td><code>get_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<ModelMetadata></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, AiAnalyticsContract);
+    let client = AiAnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let participant1 = Address::generate(&env);
+    let participant2 = Address::generate(&env);
+
+    client.mock_all_auths().initialize(&admin);</code></pre></section>
+      </article>
+    
+      <article id="aml">
+        <h2 style="color:var(--accent)">aml</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>is_compliant</code></td><td><code>env: Env, user: Address</code></td><td><code>bool</code></td></tr><tr><td><code>update_user_status</code></td><td><code>env: Env, admin: Address, user: Address, is_blacklisted: bool</code></td><td><code>()</code></td></tr><tr><td><code>set_user_status</code></td><td><code>env: Env, admin: Address, user: Address, is_blacklisted: bool</code></td><td><code>()</code></td></tr><tr><td><code>get_deprecated_functions</code></td><td><code>env: Env</code></td><td><code>Vec<upgradeability::DeprecatedFunction></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register_contract(None, AntiMoneyLaundering);
+    let client = AntiMoneyLaunderingClient::new(&env, &contract_id);
+
+    // 1. Initialize
+    client.initialize(&admin);</code></pre></section>
+      </article>
+    
+      <article id="anomaly_detection">
+        <h2 style="color:var(--accent)">anomaly_detection</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, detector: Address, threshold_bps: u32</code></td><td><code>bool</code></td></tr><tr><td><code>get_anomaly_record</code></td><td><code>env: Env, anomaly_id: u64</code></td><td><code>Option<AnomalyRecord></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Option<AnomalyDetectionConfig></code></td></tr><tr><td><code>get_stats</code></td><td><code>env: Env</code></td><td><code>DetectionStats</code></td></tr><tr><td><code>get_anomaly_count_for_patient</code></td><td><code>env: Env, patient: Address</code></td><td><code>u64</code></td></tr><tr><td><code>is_whitelisted_detector</code></td><td><code>env: Env, detector_addr: Address</code></td><td><code>bool</code></td></tr><tr><td><code>create_alert</code></td><td><code>env: Env, caller: Address, anomaly_id: u64</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>acknowledge_alert</code></td><td><code>env: Env, caller: Address, alert_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>mark_false_positive</code></td><td><code>env: Env, caller: Address, alert_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_alert</code></td><td><code>env: Env, alert_id: u64</code></td><td><code>Option<AnomalyAlert></code></td></tr><tr><td><code>get_alert_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum AlertStatus</h4></div><div><h4>struct AnomalyAlert</h4></div><div><h4>struct AnomalyDetectionConfig</h4></div><div><h4>struct AnomalyRecord</h4></div><div><h4>struct DetectionStats</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="anomaly_detector">
+        <h2 style="color:var(--accent)">anomaly_detector</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>add_validator</code></td><td><code>env: Env, caller: Address, validator: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>remove_validator</code></td><td><code>env: Env, caller: Address, validator: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>clear_alerts</code></td><td><code>env: Env, caller: Address, count: u64</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>acknowledge_alert</code></td><td><code>env: Env, caller: Address, alert_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>mark_false_positive</code></td><td><code>env: Env, caller: Address, alert_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_alert</code></td><td><code>env: Env, alert_id: u64</code></td><td><code>Option<Alert></code></td></tr><tr><td><code>get_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<AnomalyModel></code></td></tr><tr><td><code>get_model_weights</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<Vec<u32>></code></td></tr><tr><td><code>get_patient_profile</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<PatientRiskProfile></code></td></tr><tr><td><code>get_alert_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_feedback</code></td><td><code>env: Env, feedback_id: u64</code></td><td><code>Option<ModelFeedback></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>is_validator</code></td><td><code>env: Env, addr: Address</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum AlertLevel</h4></div><div><h4>enum AlertStatus</h4></div><div><h4>enum HealthcarePatternType</h4></div><div><h4>struct FeatureContribution</h4></div><div><h4>struct DetectionResult</h4></div><div><h4>struct AnomalyModel</h4></div><div><h4>struct Alert</h4></div><div><h4>struct ModelFeedback</h4></div><div><h4>struct FederatedUpdate</h4></div><div><h4>struct PatientRiskProfile</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin) = setup(&env);
+    assert!(!client.is_paused());
+    assert_eq!(client.get_alert_count(), 0);</code></pre></section>
+      </article>
+    
+      <article id="appointment_booking_escrow">
+        <h2 style="color:var(--accent)">appointment_booking_escrow</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, token: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_appointment</code></td><td><code>env: Env, appointment_id: u64</code></td><td><code>Option<AppointmentEscrow></code></td></tr><tr><td><code>get_patient_appointments</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_provider_appointments</code></td><td><code>env: Env, provider: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_escrow_balance</code></td><td><code>env: Env</code></td><td><code>i128</code></td></tr><tr><td><code>get_admin</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr><tr><td><code>health_check</code></td><td><code>env: Env</code></td><td><code>ContractHealth</code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, admin: Address, paused: bool</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum AppointmentStatus</h4></div><div><h4>struct AppointmentEscrow</h4></div><div><h4>enum DataKey</h4></div><div><h4>struct ContractHealth</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, admin, token) = setup();
+        let result = client.initialize(&admin, &token);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_twice_fails() {
+        let (env, client, admin, token) = setup();
+        client.initialize(&admin, &token).unwrap();</code></pre></section>
+      </article>
+    
+      <article id="audit">
+        <h2 style="color:var(--accent)">audit</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, config: AuditConfig</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, config: AuditConfig</code></td><td><code>()</code></td></tr><tr><td><code>get_log</code></td><td><code>env: Env, id: u64</code></td><td><code>AuditLog</code></td></tr><tr><td><code>get_logs_by_actor</code></td><td><code>env: Env, caller: Address, actor: Address</code></td><td><code>Vec<AuditLog></code></td></tr><tr><td><code>get_logs_by_action</code></td><td><code>env: Env, caller: Address, action: ActionType</code></td><td><code>Vec<AuditLog></code></td></tr><tr><td><code>grant_log_access</code></td><td><code>env: Env, admin: Address, reader: Address</code></td><td><code>()</code></td></tr><tr><td><code>revoke_log_access</code></td><td><code>env: Env, admin: Address, reader: Address</code></td><td><code>()</code></td></tr><tr><td><code>has_log_access</code></td><td><code>env: Env, reader: Address</code></td><td><code>bool</code></td></tr><tr><td><code>set_retention_policy</code></td><td><code>env: Env, admin: Address, policy: RetentionPolicy</code></td><td><code>()</code></td></tr><tr><td><code>get_retention_policy</code></td><td><code>env: Env</code></td><td><code>RetentionPolicy</code></td></tr><tr><td><code>verify_retention</code></td><td><code>env: Env, log_id: u64</code></td><td><code>bool</code></td></tr><tr><td><code>export_logs</code></td><td><code>env: Env, caller: Address, start_id: u64, end_id: u64</code></td><td><code>ExportBundle</code></td></tr><tr><td><code>get_log_rolling_hash</code></td><td><code>env: Env</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>verify_log_integrity</code></td><td><code>env: Env</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>is_log_tampered</code></td><td><code>env: Env, expected: BytesN<32></code></td><td><code>bool</code></td></tr><tr><td><code>verify_integrity</code></td><td><code>env: Env</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>generate_summary</code></td><td><code>env: Env, start: u64, end: u64</code></td><td><code>AuditSummary</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    let id = client.log_event(
+        &actor,
+        &ActionType::DataRead,</code></pre></section>
+      </article>
+    
+      <article id="audit_forensics">
+        <h2 style="color:var(--accent)">audit_forensics</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>()</code></td></tr><tr><td><code>get_execution</code></td><td><code>env: Env, execution_id: u64</code></td><td><code>Option<AnalysisExecution></code></td></tr><tr><td><code>get_finding</code></td><td><code>env: Env, finding_id: u64</code></td><td><code>Option<VulnerabilityFinding></code></td></tr><tr><td><code>get_findings_by_execution</code></td><td><code>env: Env, execution_id: u64</code></td><td><code>Vec<VulnerabilityFinding></code></td></tr><tr><td><code>generate_remediation_plan</code></td><td><code>env: Env, execution_id: u64</code></td><td><code>Vec<String></code></td></tr><tr><td><code>analyze_timeline</code></td><td><code>env: Env, record_id: u64</code></td><td><code>Vec<AuditEntry></code></td></tr><tr><td><code>investigate_user</code></td><td><code>env: Env, user: Address</code></td><td><code>Vec<AuditEntry></code></td></tr><tr><td><code>set_alert_threshold</code></td><td><code>env: Env, admin: Address, action: AuditAction, threshold: u32</code></td><td><code>()</code></td></tr><tr><td><code>compress_logs</code></td><td><code>env: Env, admin: Address, before_timestamp: u64</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>archive_logs</code></td><td><code>env: Env, admin: Address, archive_ref: String</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum AuditAction</h4></div><div><h4>struct AuditEntry</h4></div><div><h4>struct ForensicReport</h4></div><div><h4>struct AuditRule</h4></div><div><h4>struct VulnerabilityFinding</h4></div><div><h4>struct AnalysisExecution</h4></div><div><h4>struct FormalVerificationSummary</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+        let contract_id = env.register_contract(None, AuditForensicsContract);
+        let client = AuditForensicsContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        client.initialize(&admin);
+
+        let doctor = Address::generate(&env);
+        let record_id = 101u64;</code></pre></section>
+      </article>
+    
+      <article id="clinical_decision_support">
+        <h2 style="color:var(--accent)">clinical_decision_support</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, oracle: Address, medical_records: Address</code></td><td><code>()</code></td></tr><tr><td><code>record_outcome</code></td><td><code>env: Env, condition_code: String, was_successful: bool</code></td><td><code>()</code></td></tr><tr><td><code>update_guideline</code></td><td><code>env: Env, oracle: Address, guideline: ClinicalGuideline</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum RecommendationType</h4></div><div><h4>struct FHIRCode</h4></div><div><h4>struct Recommendation</h4></div><div><h4>struct ClinicalGuideline</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="clinical_nlp">
+        <h2 style="color:var(--accent)">clinical_nlp</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>extract_entities</code></td><td><code>env: Env, text: String</code></td><td><code>Result<Vec<ExtractedEntity>, Error></code></td></tr><tr><td><code>analyze_sentiment</code></td><td><code>env: Env, text: String</code></td><td><code>Result<SentimentResult, Error></code></td></tr><tr><td><code>get_processing_stats</code></td><td><code>env: Env</code></td><td><code>Result<ProcessingStats, Error></code></td></tr><tr><td><code>update_config</code></td><td><code>env: Env, admin: Address, config: NLPConfig</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>version</code></td><td><code>_env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>is_initialized</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct ProcessingStats</h4></div><div><h4>struct BatchProcessingRequest</h4></div><div><h4>struct BatchProcessingResult</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, ClinicalNLP);
+    let client = ClinicalNLPClient::new(&env, &contract_id);
+
+    let admin = Address::random(&env);
+
+    // Initialize contract
+    let result = client.initialize(&admin);
+    assert!(result.is_ok());</code></pre></section>
+      </article>
+    
+      <article id="clinical_trial">
+        <h2 style="color:var(--accent)">clinical_trial</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>()</code></td></tr><tr><td><code>get_protocol</code></td><td><code>env: Env, id: u64</code></td><td><code>Option<Protocol></code></td></tr><tr><td><code>register_site</code></td><td><code>env: Env, registrar: Address, name: String</code></td><td><code>u64</code></td></tr><tr><td><code>recruit_patient</code></td><td><code>env: Env, site: Address, patient: Address, protocol_id: u64</code></td><td><code>()</code></td></tr><tr><td><code>has_consent</code></td><td><code>env: Env, patient: Address, protocol_id: u64</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct Protocol</h4></div><div><h4>struct Site</h4></div><div><h4>struct Consent</h4></div><div><h4>struct AdverseEvent</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="credential_notifications">
+        <h2 style="color:var(--accent)">credential_notifications</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        
+      </article>
+    
+      <article id="credential_registry">
+        <h2 style="color:var(--accent)">credential_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_issuer_admin</code></td><td><code>env: Env, issuer: Address</code></td><td><code>Option<Address></code></td></tr><tr><td><code>get_active_root</code></td><td><code>env: Env, issuer: Address</code></td><td><code>Option<BytesN<32>></code></td></tr><tr><td><code>get_active_version</code></td><td><code>env: Env, issuer: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_root</code></td><td><code>env: Env, issuer: Address, version: u32</code></td><td><code>Option<CredentialRootRecord></code></td></tr><tr><td><code>get_revocation_root</code></td><td><code>env: Env, issuer: Address</code></td><td><code>Option<BytesN<32>></code></td></tr><tr><td><code>is_root_revoked</code></td><td><code>env: Env, issuer: Address, root: BytesN<32></code></td><td><code>bool</code></td></tr><tr><td><code>has_active_root</code></td><td><code>env: Env, issuer: Address</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct CredentialRootRecord</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="cross_chain_access">
+        <h2 style="color:var(--accent)">cross_chain_access</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>revoke_access</code></td><td><code>env: Env, caller: Address, grant_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>cancel_access_swap</code></td><td><code>env: Env, caller: Address, swap_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_grant</code></td><td><code>env: Env, grant_id: u64</code></td><td><code>Option<AccessGrant></code></td></tr><tr><td><code>get_request</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Option<AccessRequest></code></td></tr><tr><td><code>get_delegation</code></td><td><code>env: Env, delegator: Address, delegate: Address</code></td><td><code>Option<Delegation></code></td></tr><tr><td><code>get_emergency_config</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<EmergencyConfig></code></td></tr><tr><td><code>get_audit_entry</code></td><td><code>env: Env, entry_id: u64</code></td><td><code>Option<AuditEntry></code></td></tr><tr><td><code>get_swap</code></td><td><code>env: Env, swap_id: u64</code></td><td><code>Option<SwapProposal></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum PermissionLevel</h4></div><div><h4>enum ChainId</h4></div><div><h4>struct AccessGrant</h4></div><div><h4>enum AccessScope</h4></div><div><h4>enum AccessCondition</h4></div><div><h4>struct AccessRequest</h4></div><div><h4>enum RequestStatus</h4></div><div><h4>struct AuditEntry</h4></div><div><h4>enum AccessAction</h4></div><div><h4>struct Delegation</h4></div><div><h4>struct EmergencyConfig</h4></div><div><h4>struct SwapProposal</h4></div><div><h4>enum SwapStatus</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin, bridge, identity) = create_contract(&env);
+
+    initialize_contract(&env, &client, &admin, &bridge, &identity);
+
+    assert!(!client.is_paused());</code></pre></section>
+      </article>
+    
+      <article id="cross_chain_bridge">
+        <h2 style="color:var(--accent)">cross_chain_bridge</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>add_supported_chain</code></td><td><code>env: Env, caller: Address, chain: ChainId</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>commit_atomic_tx</code></td><td><code>env: Env, caller: Address, tx_id: BytesN<32></code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>abort_atomic_tx</code></td><td><code>env: Env, caller: Address, tx_id: BytesN<32></code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>validate_chain_address</code></td><td><code>_env: Env, chain: ChainId, address: String</code></td><td><code>bool</code></td></tr><tr><td><code>get_chain_address_length</code></td><td><code>_env: Env, chain: ChainId</code></td><td><code>u32</code></td></tr><tr><td><code>check_timeout</code></td><td><code>env: Env, op_id: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_operation</code></td><td><code>env: Env, op_id: BytesN<32></code></td><td><code>Result<CrossChainOp, Error></code></td></tr><tr><td><code>execute_rollback</code></td><td><code>env: Env, caller: Address, op_id: BytesN<32></code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>cancel_rollback</code></td><td><code>env: Env, caller: Address, op_id: BytesN<32></code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_message</code></td><td><code>env: Env, message_id: BytesN<32></code></td><td><code>Option<CrossChainMessage></code></td></tr><tr><td><code>get_atomic_tx</code></td><td><code>env: Env, tx_id: BytesN<32></code></td><td><code>Option<AtomicTransaction></code></td></tr><tr><td><code>get_validator</code></td><td><code>env: Env, validator_address: Address</code></td><td><code>Option<Validator></code></td></tr><tr><td><code>get_oracle_node</code></td><td><code>env: Env, oracle_address: Address</code></td><td><code>Option<OracleNode></code></td></tr><tr><td><code>get_oracle_report</code></td><td><code>env: Env, report_id: u64</code></td><td><code>Option<OracleReport></code></td></tr><tr><td><code>get_aggregated_oracle</code></td><td><code>env: Env, chain: ChainId</code></td><td><code>Option<AggregatedOracleData></code></td></tr><tr><td><code>get_proof</code></td><td><code>env: Env, proof_id: BytesN<32></code></td><td><code>Option<CrossChainProof></code></td></tr><tr><td><code>get_rollback</code></td><td><code>env: Env, op_id: BytesN<32></code></td><td><code>Option<RollbackRecord></code></td></tr><tr><td><code>get_sync_event</code></td><td><code>env: Env, event_id: u64</code></td><td><code>Option<CrossChainEvent></code></td></tr><tr><td><code>get_supported_chains</code></td><td><code>env: Env</code></td><td><code>Vec<ChainId></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>get_message_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_oracle_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_event_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_rollback_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_default_timeout_internal</code></td><td><code>_env: Env, op_type: OperationType</code></td><td><code>u64</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum MessageStatus</h4></div><div><h4>enum ChainId</h4></div><div><h4>struct CrossChainMessage</h4></div><div><h4>enum MessageType</h4></div><div><h4>struct Validator</h4></div><div><h4>struct CrossChainRecordRef</h4></div><div><h4>enum SyncStatus</h4></div><div><h4>struct AtomicTransaction</h4></div><div><h4>enum AtomicTxStatus</h4></div><div><h4>struct OracleNode</h4></div><div><h4>struct OracleReport</h4></div><div><h4>enum OracleStatus</h4></div><div><h4>struct AggregatedOracleData</h4></div><div><h4>struct CrossChainProof</h4></div><div><h4>struct RollbackRecord</h4></div><div><h4>enum RollbackOpType</h4></div><div><h4>enum RollbackStatus</h4></div><div><h4>struct CrossChainOp</h4></div><div><h4>enum OperationType</h4></div><div><h4>enum OperationStatus</h4></div><div><h4>struct CrossChainEvent</h4></div><div><h4>enum CrossChainEventType</h4></div><div><h4>enum EventSyncStatus</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    assert!(!client.is_paused());
+    assert_eq!(client.get_message_count(), 0);</code></pre></section>
+      </article>
+    
+      <article id="cross_chain_enhancements">
+        <h2 style="color:var(--accent)">cross_chain_enhancements</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>check_rate_limit</code></td><td><code>env: Env, caller: Address, amount: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_zk_proof</code></td><td><code>env: Env, proof_id: BytesN<32></code></td><td><code>Option<ZKOwnershipProof></code></td></tr><tr><td><code>get_integrity_proof</code></td><td><code>env: Env, proof_id: BytesN<32></code></td><td><code>Option<ZKDataIntegrityProof></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct ZKOwnershipProof</h4></div><div><h4>struct ZKDataIntegrityProof</h4></div><div><h4>enum ChainId</h4></div><div><h4>struct ReplayProtection</h4></div><div><h4>struct RateLimit</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="cross_chain_identity">
+        <h2 style="color:var(--accent)">cross_chain_identity</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, bridge_contract: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>verify_identity</code></td><td><code>env: Env, stellar_address: Address, external_chain: ChainId</code></td><td><code>bool</code></td></tr><tr><td><code>get_request</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Option<VerificationRequest></code></td></tr><tr><td><code>get_sync</code></td><td><code>env: Env, sync_id: u64</code></td><td><code>Option<IdentitySync></code></td></tr><tr><td><code>get_validator</code></td><td><code>env: Env, validator_address: Address</code></td><td><code>Option<IdentityValidator></code></td></tr><tr><td><code>get_attestation</code></td><td><code>env: Env, request_id: u64, validator: Address</code></td><td><code>Option<Attestation></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum VerificationStatus</h4></div><div><h4>enum ChainId</h4></div><div><h4>struct CrossChainIdentity</h4></div><div><h4>struct VerificationRequest</h4></div><div><h4>enum RequestStatus</h4></div><div><h4>struct Attestation</h4></div><div><h4>struct IdentityValidator</h4></div><div><h4>struct IdentitySync</h4></div><div><h4>enum SyncStatus</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin, bridge) = create_contract(&env);
+
+    initialize_contract(&env, &client, &admin, &bridge);
+
+    assert!(!client.is_paused());</code></pre></section>
+      </article>
+    
+      <article id="crypto_registry">
+        <h2 style="color:var(--accent)">crypto_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>revoke_key_bundle</code></td><td><code>env: Env, owner: Address, version: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_current_version</code></td><td><code>env: Env, owner: Address</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_current_key_bundle</code></td><td><code>env: Env, owner: Address</code></td><td><code>Result<Option<KeyBundle>, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum KeyAlgorithm</h4></div><div><h4>struct PublicKey</h4></div><div><h4>struct KeyBundle</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = register_contract(&env);
+    let admin = soroban_sdk::Address::generate(&env);
+    client.initialize(&admin);
+
+    let alice = soroban_sdk::Address::generate(&env);
+    let enc_key = PublicKey {</code></pre></section>
+      </article>
+    
+      <article id="dicomweb_services">
+        <h2 style="color:var(--accent)">dicomweb_services</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>cache_get</code></td><td><code>env: Env, key: BytesN<32></code></td><td><code>Result<Bytes, Error></code></td></tr><tr><td><code>cache_invalidate</code></td><td><code>env: Env, caller: Address, key: BytesN<32></code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_study</code></td><td><code>env: Env, study_instance_uid: String</code></td><td><code>Option<DicomwebStudy></code></td></tr><tr><td><code>get_instance_by_sop</code></td><td><code>env: Env, sop_instance_uid: String</code></td><td><code>Option<DicomwebInstance></code></td></tr><tr><td><code>list_studies</code></td><td><code>env: Env</code></td><td><code>Vec<String></code></td></tr><tr><td><code>get_concurrency_stats</code></td><td><code>env: Env</code></td><td><code>ConcurrencyTracker</code></td></tr><tr><td><code>placeholder</code></td><td><code>_env: Env</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DicomwebServiceType</h4></div><div><h4>enum QueryLevel</h4></div><div><h4>enum TransferSyntax</h4></div><div><h4>struct DicomJsonAttribute</h4></div><div><h4>struct DicomJsonObject</h4></div><div><h4>struct DicomwebQueryParams</h4></div><div><h4>struct DicomwebStudy</h4></div><div><h4>struct DicomwebSeries</h4></div><div><h4>struct DicomwebInstance</h4></div><div><h4>struct DicomwebBulkData</h4></div><div><h4>struct StowRequest</h4></div><div><h4>struct StowResponse</h4></div><div><h4>struct CacheEntry</h4></div><div><h4>struct ConcurrencyTracker</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, DicomwebServicesContract);
+    let client = DicomwebServicesContractClient::new(&env, &contract_id);
+
+    let admin = Address::random(&env);
+    let medical_imaging = Address::random(&env);
+
+    let result = client.initialize(&admin, &medical_imaging);
+    assert!(result.is_ok());</code></pre></section>
+      </article>
+    
+      <article id="differential_privacy">
+        <h2 style="color:var(--accent)">differential_privacy</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_remaining_budget</code></td><td><code>env: Env, budget_id: BytesN<32></code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>get_query</code></td><td><code>env: Env, query_id: BytesN<32></code></td><td><code>Option<PrivacyQuery></code></td></tr><tr><td><code>deactivate_budget</code></td><td><code>env: Env, admin: Address, budget_id: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum NoiseMechanism</h4></div><div><h4>enum DataType</h4></div><div><h4>struct PrivacyBudget</h4></div><div><h4>struct PrivacyQuery</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, _id) = setup();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let data_owner = Address::generate(&env);
+
+    // Initialize
+    client.initialize(&admin);</code></pre></section>
+      </article>
+    
+      <article id="digital_twin">
+        <h2 style="color:var(--accent)">digital_twin</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_digital_twin</code></td><td><code>env: Env, twin_id: u64</code></td><td><code>Result<DigitalTwinProfile, Error></code></td></tr><tr><td><code>get_twin_by_patient</code></td><td><code>env: Env, patient: Address</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>get_data_stream</code></td><td><code>env: Env, stream_id: u64</code></td><td><code>Result<DataStream, Error></code></td></tr><tr><td><code>get_predictive_model</code></td><td><code>env: Env, model_id: u64</code></td><td><code>Result<PredictiveModel, Error></code></td></tr><tr><td><code>get_prediction</code></td><td><code>env: Env, prediction_id: u64</code></td><td><code>Result<Prediction, Error></code></td></tr><tr><td><code>get_simulation</code></td><td><code>env: Env, simulation_id: u64</code></td><td><code>Result<Simulation, Error></code></td></tr><tr><td><code>get_research_snapshot</code></td><td><code>env: Env, snapshot_id: u64</code></td><td><code>Result<ResearchSnapshot, Error></code></td></tr><tr><td><code>get_global_stats</code></td><td><code>env: Env</code></td><td><code>Result<Map<String, u64>, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum TwinStatus</h4></div><div><h4>enum DataSource</h4></div><div><h4>enum DataType</h4></div><div><h4>enum ModelType</h4></div><div><h4>enum SimulationType</h4></div><div><h4>struct DigitalTwinProfile</h4></div><div><h4>struct DataStream</h4></div><div><h4>struct DataPoint</h4></div><div><h4>struct PredictiveModel</h4></div><div><h4>struct Prediction</h4></div><div><h4>struct Simulation</h4></div><div><h4>struct SyncStatus</h4></div><div><h4>struct ResearchSnapshot</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="dispute_resolution">
+        <h2 style="color:var(--accent)">dispute_resolution</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, arbiters: Vec<Address></code></td><td><code>()</code></td></tr><tr><td><code>dispute</code></td><td><code>env: Env, proposal_id: u64, challenger: Address</code></td><td><code>()</code></td></tr><tr><td><code>is_disputed</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="drug_discovery">
+        <h2 style="color:var(--accent)">drug_discovery</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, analyzer: Address, predictor: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Result<PlatformConfig, Error></code></td></tr><tr><td><code>get_molecule</code></td><td><code>env: Env, molecule_id: u64</code></td><td><code>Result<MolecularStructure, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct PlatformConfig</h4></div><div><h4>struct MolecularStructure</h4></div><div><h4>struct StructureAnalysis</h4></div><div><h4>struct DrugTargetPrediction</h4></div><div><h4>struct AdverseEffectPrediction</h4></div><div><h4>struct TrialMatchResult</h4></div><div><h4>struct QuantumSimulationRequest</h4></div><div><h4>struct ScreeningCampaignReport</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div><div><h4>struct TrialProtocolView</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin, analyzer, predictor) = setup(&env);
+
+    let fingerprint = Vec::from_array(&env, [13u32, 37u32, 101u32, 211u32]);
+    let db_refs = Vec::from_array(
+        &env,
+        [
+            String::from_str(&env, "pubchem:2244"),
+            String::from_str(&env, "chembl:25"),</code></pre></section>
+      </article>
+    
+      <article id="emergency_access_override">
+        <h2 style="color:var(--accent)">emergency_access_override</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_admin</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct EmergencyAccessRecord</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, admin, _, _, _, approvers) = setup();
+        let result = client.initialize(&admin, &approvers, &2);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_threshold_invalid() {
+        let (env, client, admin, _, _, _, approvers) = setup();
+        // threshold 0 invalid</code></pre></section>
+      </article>
+    
+      <article id="emr_integration">
+        <h2 style="color:var(--accent)">emr_integration</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, fhir_contract: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_emr_system</code></td><td><code>env: Env, system_id: String</code></td><td><code>Result<EMRSystem, Error></code></td></tr><tr><td><code>get_network_node</code></td><td><code>env: Env, node_id: String</code></td><td><code>Result<NetworkNode, Error></code></td></tr><tr><td><code>get_interop_test</code></td><td><code>env: Env, test_id: String</code></td><td><code>Result<InteroperabilityTest, Error></code></td></tr><tr><td><code>wrap_transport_payload</code></td><td><code>env: Env, message_id: String</code></td><td><code>Result<String, Error></code></td></tr><tr><td><code>get_message</code></td><td><code>env: Env, message_id: String</code></td><td><code>Result<HealthcareMessage, Error></code></td></tr><tr><td><code>get_supported_message_types</code></td><td><code>env: Env</code></td><td><code>Vec<String></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>resume</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum EMRStatus</h4></div><div><h4>enum IntegrationStatus</h4></div><div><h4>struct EMRSystem</h4></div><div><h4>struct ProviderOnboarding</h4></div><div><h4>struct ProviderVerification</h4></div><div><h4>struct NetworkNode</h4></div><div><h4>struct InteroperabilityAgreement</h4></div><div><h4>struct InteroperabilityTest</h4></div><div><h4>enum MessagingStandard</h4></div><div><h4>enum TransportProtocol</h4></div><div><h4>enum CharacterEncoding</h4></div><div><h4>enum ValidationSeverity</h4></div><div><h4>struct HealthcareMessage</h4></div><div><h4>struct ValidationIssue</h4></div><div><h4>struct MessageValidationReport</h4></div><div><h4>struct MessageTransformation</h4></div><div><h4>struct ThroughputBenchmark</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin, _) = setup(&env);
+
+    let generated = client.mock_all_auths().generate_message(
+        &Address::generate(&env),
+        &String::from_str(&env, "msg-1"),
+        &String::from_str(&env, "epic-prod"),
+        &MessagingStandard::HL7v2,
+        &String::from_str(&env, "2.5.1"),</code></pre></section>
+      </article>
+    
+      <article id="escrow">
+        <h2 style="color:var(--accent)">escrow</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_fee_config</code></td><td><code>env: Env</code></td><td><code>Option<FeeConfig></code></td></tr><tr><td><code>mark_disputed</code></td><td><code>env: Env, caller: Address, order_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve_release</code></td><td><code>env: Env, order_id: u64, approver: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>release_escrow</code></td><td><code>env: Env, order_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>refund_escrow</code></td><td><code>env: Env, order_id: u64, reason: String</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_escrow</code></td><td><code>env: Env, order_id: u64</code></td><td><code>Option<Escrow></code></td></tr><tr><td><code>get_credit</code></td><td><code>env: Env, addr: Address</code></td><td><code>i128</code></td></tr><tr><td><code>withdraw</code></td><td><code>env: Env, caller: Address, token: Address, to: Address</code></td><td><code>Result<i128, Error></code></td></tr><tr><td><code>get_total_volume</code></td><td><code>env: Env</code></td><td><code>i128</code></td></tr><tr><td><code>get_total_escrows</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_settled_rate</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>get_refund_rate</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>get_dispute_rate</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>get_active_escrows_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_stats_summary</code></td><td><code>env: Env</code></td><td><code>PlatformStats</code></td></tr><tr><td><code>get_platform_health_score</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>get_token_volume</code></td><td><code>env: Env, token: Address</code></td><td><code>i128</code></td></tr><tr><td><code>get_donor_reputation</code></td><td><code>env: Env, donor: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_daily_stats</code></td><td><code>env: Env, day_id: u64</code></td><td><code>Option<DailyStats></code></td></tr><tr><td><code>export_summary</code></td><td><code>env: Env, format: String</code></td><td><code>ExportMetadata</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum EscrowStatus</h4></div><div><h4>struct Escrow</h4></div><div><h4>struct PlatformStats</h4></div><div><h4>struct DailyStats</h4></div><div><h4>struct ExportMetadata</h4></div><div><h4>struct FeeConfig</h4></div></section>
+        
+      </article>
+    
+      <article id="explainable_ai">
+        <h2 style="color:var(--accent)">explainable_ai</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>bool</code></td></tr><tr><td><code>request_explanation</code></td><td><code>env: Env, caller: Address, ai_insight_id: u64</code></td><td><code>u64</code></td></tr><tr><td><code>get_explanation_request</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Option<ExplanationRequest></code></td></tr><tr><td><code>get_explanation</code></td><td><code>env: Env, explanation_id: u64</code></td><td><code>Option<ExplanationMetadata></code></td></tr><tr><td><code>get_bias_audit</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<BiasAuditResult></code></td></tr><tr><td><code>get_shap_explanation</code></td><td><code>env: Env, shap_id: u64</code></td><td><code>Option<ShapExplanation></code></td></tr><tr><td><code>get_counterfactual</code></td><td><code>env: Env, cf_id: u64</code></td><td><code>Option<CounterfactualExplanation></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct ShapValue</h4></div><div><h4>struct ShapExplanation</h4></div><div><h4>struct CounterfactualExplanation</h4></div><div><h4>struct FeatureChange</h4></div><div><h4>struct ExplanationRequest</h4></div><div><h4>struct FeatureImportance</h4></div><div><h4>struct ExplanationMetadata</h4></div><div><h4>enum ExplanationStatus</h4></div><div><h4>struct BiasAuditResult</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="failover_detector">
+        <h2 style="color:var(--accent)">failover_detector</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>assign_role</code></td><td><code>env: Env, caller: Address, user: Address, role_mask: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_detections</code></td><td><code>env: Env</code></td><td><code>Vec<FailoverDetection></code></td></tr><tr><td><code>get_node_metrics</code></td><td><code>env: Env, node_id: u32</code></td><td><code>Option<NodeFailureMetric></code></td></tr><tr><td><code>get_failover_executions</code></td><td><code>env: Env</code></td><td><code>Vec<FailoverExecution></code></td></tr><tr><td><code>get_failover_plans</code></td><td><code>env: Env</code></td><td><code>Vec<FailoverPlan></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum FailoverReason</h4></div><div><h4>enum FailoverState</h4></div><div><h4>struct FailoverDetection</h4></div><div><h4>struct FailoverExecution</h4></div><div><h4>struct NodeFailureMetric</h4></div><div><h4>struct FailoverPlan</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="federated_learning">
+        <h2 style="color:var(--accent)">federated_learning</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, coordinator: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>begin_aggregation</code></td><td><code>env: Env, coordinator: Address, round_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_institution</code></td><td><code>env: Env, institution: Address</code></td><td><code>Option<Institution></code></td></tr><tr><td><code>get_round</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<FederatedRound></code></td></tr><tr><td><code>get_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<ModelMetadata></code></td></tr><tr><td><code>get_privacy_metrics</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<PrivacyMetrics></code></td></tr><tr><td><code>get_attack_detection</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<AttackDetection></code></td></tr><tr><td><code>get_communication_metrics</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<CommunicationMetrics></code></td></tr><tr><td><code>get_contribution_verification</code></td><td><code>env: Env, round_id: u64, institution: Address</code></td><td><code>Option<ContributionVerification></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ModelType</h4></div><div><h4>enum Framework</h4></div><div><h4>enum AggregationMethod</h4></div><div><h4>enum RoundStatus</h4></div><div><h4>enum InstitutionStatus</h4></div><div><h4>struct Institution</h4></div><div><h4>struct RoundConfig</h4></div><div><h4>struct FederatedRound</h4></div><div><h4>struct ModelOutput</h4></div><div><h4>struct ModelMetadata</h4></div><div><h4>struct ContributionVerification</h4></div><div><h4>struct PrivacyMetrics</h4></div><div><h4>struct AttackDetection</h4></div><div><h4>struct CommunicationMetrics</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="fhir_integration">
+        <h2 style="color:var(--accent)">fhir_integration</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_provider</code></td><td><code>env: Env, provider_id: String</code></td><td><code>Result<HealthcareProvider, Error></code></td></tr><tr><td><code>get_observation</code></td><td><code>env: Env, observation_id: String</code></td><td><code>Result<FHIRObservation, Error></code></td></tr><tr><td><code>get_condition</code></td><td><code>env: Env, condition_id: String</code></td><td><code>Result<FHIRCondition, Error></code></td></tr><tr><td><code>get_procedure</code></td><td><code>env: Env, procedure_id: String</code></td><td><code>Result<FHIRProcedure, Error></code></td></tr><tr><td><code>get_allergy</code></td><td><code>env: Env, allergy_id: String</code></td><td><code>Result<FHIRAllergyIntolerance, Error></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>resume</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum FHIRResourceType</h4></div><div><h4>enum CodingSystem</h4></div><div><h4>struct FHIRCode</h4></div><div><h4>struct FHIRIdentifier</h4></div><div><h4>struct FHIRPatient</h4></div><div><h4>struct FHIRObservation</h4></div><div><h4>struct FHIRCondition</h4></div><div><h4>struct FHIRMedicationStatement</h4></div><div><h4>struct FHIRProcedure</h4></div><div><h4>struct FHIRAllergyIntolerance</h4></div><div><h4>struct FHIRBundle</h4></div><div><h4>struct HealthcareProvider</h4></div><div><h4>struct EMRConfiguration</h4></div><div><h4>struct DataMapping</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    let medical_records_contract = Address::generate(&env);
+    assert!(client.initialize(&admin, &medical_records_contract));</code></pre></section>
+      </article>
+    
+      <article id="fido2_authenticator">
+        <h2 style="color:var(--accent)">fido2_authenticator</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, rp_id_hash: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_zk_verifier</code></td><td><code>env: Env, caller: Address, contract_id: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>issue_registration_challenge</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<BytesN<32>, Error></code></td></tr><tr><td><code>issue_auth_challenge</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<BytesN<32>, Error></code></td></tr><tr><td><code>get_device_count</code></td><td><code>env: Env, user: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_active_device_count</code></td><td><code>env: Env, user: Address</code></td><td><code>u32</code></td></tr><tr><td><code>is_device_registered</code></td><td><code>env: Env, user: Address, credential_id_hash: BytesN<32></code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum PublicKeyAlgorithm</h4></div><div><h4>enum AuthenticatorTransport</h4></div><div><h4>enum AuthenticatorAttachment</h4></div><div><h4>struct Fido2Device</h4></div><div><h4>struct PendingChallenge</h4></div><div><h4>struct AssertionResult</h4></div><div><h4>struct RevocationRecord</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="forensics">
+        <h2 style="color:var(--accent)">forensics</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>()</code></td></tr><tr><td><code>analyze_pattern</code></td><td><code>env: Env, pattern_id: String</code></td><td><code>PatternAnalysis</code></td></tr><tr><td><code>detect_suspicious</code></td><td><code>env: Env, actor: Address, threshold: u32</code></td><td><code>bool</code></td></tr><tr><td><code>update_investigation</code></td><td><code>env: Env, admin: Address, report_id: u64, status: String</code></td><td><code>bool</code></td></tr><tr><td><code>blacklist_actor</code></td><td><code>env: Env, admin: Address, actor_to_blacklist: Address</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register_contract(None, OnChainForensics);
+    let client = OnChainForensicsClient::new(&env, &contract_id);
+
+    // 1. Initialize
+    client.initialize(&admin);</code></pre></section>
+      </article>
+    
+      <article id="fp_math">
+        <h2 style="color:var(--accent)">fp_math</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>mul_bps</code></td><td><code>amount: i128, bps: u32</code></td><td><code>Option<i128></code></td></tr><tr><td><code>mul_bps_round_half_up</code></td><td><code>amount: i128, bps: u32</code></td><td><code>Option<i128></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        
+      </article>
+    
+      <article id="genomic_data">
+        <h2 style="color:var(--accent)">genomic_data</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>bool</code></td></tr><tr><td><code>set_zk_verifier</code></td><td><code>env: Env, admin: Address, contract_id: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_record_header</code></td><td><code>env: Env, caller: Address, id: u64</code></td><td><code>Option<GenomicRecordHeader></code></td></tr><tr><td><code>revoke_consent</code></td><td><code>env: Env, patient: Address, record_id: u64, grantee: Address</code></td><td><code>bool</code></td></tr><tr><td><code>purchase_listing</code></td><td><code>env: Env, buyer: Address, listing_id: u64</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum GenomicFormat</h4></div><div><h4>enum Compression</h4></div><div><h4>enum EnvelopeAlgorithm</h4></div><div><h4>struct KeyEnvelope</h4></div><div><h4>struct GenomicRecordHeader</h4></div><div><h4>struct GenomicRecord</h4></div><div><h4>struct PrivacyGrant</h4></div><div><h4>struct GeneDiseaseAssoc</h4></div><div><h4>struct DrugResponse</h4></div><div><h4>struct PopulationShare</h4></div><div><h4>struct AncestryProfile</h4></div><div><h4>struct ConsentEntry</h4></div><div><h4>enum ListingStatus</h4></div><div><h4>struct Listing</h4></div><div><h4>struct BreachEvent</h4></div><div><h4>enum LogLevel</h4></div><div><h4>struct StructuredLog</h4></div><div><h4>struct RateLimitConfig</h4></div><div><h4>struct RateLimitEntry</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    assert!(client.initialize(&admin));
+
+    let patient = Address::generate(&env);
+    let uploader = Address::generate(&env);
+    let data_ref = String::from_str(&env, "ipfs://QmData");</code></pre></section>
+      </article>
+    
+      <article id="governor">
+        <h2 style="color:var(--accent)">governor</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>state</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>queue</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>execute</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>balance_of</code></td><td><code>env: Env, user: Address</code></td><td><code>i128</code></td></tr><tr><td><code>set_bal</code></td><td><code>env: Env, user: Address, amount: i128</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct GovernorConfig</h4></div><div><h4>struct Proposal</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="health_check">
+        <h2 style="color:var(--accent)">health_check</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>health_check</code></td><td><code>env: Env</code></td><td><code>ContractHealth</code></td></tr><tr><td><code>get_monitoring_metrics</code></td><td><code>env: Env</code></td><td><code>MonitoringMetrics</code></td></tr><tr><td><code>get_gas_metrics</code></td><td><code>env: Env</code></td><td><code>GasMetrics</code></td></tr><tr><td><code>get_error_metrics</code></td><td><code>env: Env</code></td><td><code>ErrorMetrics</code></td></tr><tr><td><code>record_operation</code></td><td><code>env: Env, gas_used: u64, success: bool</code></td><td><code>()</code></td></tr><tr><td><code>record_error</code></td><td><code>env: Env, error_code: u32</code></td><td><code>()</code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, paused: bool</code></td><td><code>()</code></td></tr><tr><td><code>is_paused</code></td><td><code>env: &Env</code></td><td><code>bool</code></td></tr><tr><td><code>storage_usage</code></td><td><code>env: &Env</code></td><td><code>u64</code></td></tr><tr><td><code>last_activity</code></td><td><code>env: &Env</code></td><td><code>u64</code></td></tr><tr><td><code>reset_recent_errors</code></td><td><code>env: Env</code></td><td><code>()</code></td></tr><tr><td><code>check_alert_thresholds</code></td><td><code>env: Env</code></td><td><code>Vec<String></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct ContractHealth</h4></div><div><h4>struct MonitoringMetrics</h4></div><div><h4>struct GasMetrics</h4></div><div><h4>struct ErrorMetrics</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, HealthCheckContract);
+    let client = HealthCheckContractClient::new(&env, &contract_id);
+
+    assert!(client.initialize());
+    assert!(!client.initialize()); // Second init should fail</code></pre></section>
+      </article>
+    
+      <article id="health_data_access_logging">
+        <h2 style="color:var(--accent)">health_data_access_logging</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, config: LoggingConfig</code></td><td><code>()</code></td></tr><tr><td><code>get_access_logs</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Vec<AccessLogEntry></code></td></tr><tr><td><code>get_access_log_summary</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>types::AccessLogSummary</code></td></tr><tr><td><code>get_unique_accessors_count</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_unique_accessors</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Vec<Address></code></td></tr><tr><td><code>verify_logs_integrity</code></td><td><code>env: Env</code></td><td><code>soroban_sdk::BytesN<32></code></td></tr><tr><td><code>update_config</code></td><td><code>env: Env, config: LoggingConfig</code></td><td><code>()</code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>LoggingConfig</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = create_test_env();
+        let admin = Address::random(&env);
+        let config = LoggingConfig {
+            max_logs_per_patient: 1000,
+            allow_public_queries: false,
+            retention_period: 0,
+        };
+
+        HealthDataAccessLogging::initialize(env.clone(), admin.clone(), config.clone());</code></pre></section>
+      </article>
+    
+      <article id="healthcare_analytics_dashboard">
+        <h2 style="color:var(--accent)">healthcare_analytics_dashboard</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Result<DashboardConfig, Error></code></td></tr><tr><td><code>get_latest_snapshot</code></td><td><code>env: Env</code></td><td><code>Option<DashboardSnapshot></code></td></tr><tr><td><code>get_performance_kpi</code></td><td><code>env: Env</code></td><td><code>Option<PerformanceKpi></code></td></tr><tr><td><code>get_report_template</code></td><td><code>env: Env, template_id: u64</code></td><td><code>Option<ReportTemplate></code></td></tr><tr><td><code>get_report_schedule</code></td><td><code>env: Env, schedule_id: u64</code></td><td><code>Option<ReportSchedule></code></td></tr><tr><td><code>get_compliance_summary</code></td><td><code>env: Env, period_id: u64</code></td><td><code>Option<ComplianceSummary></code></td></tr><tr><td><code>get_export_record</code></td><td><code>env: Env, export_id: u64</code></td><td><code>Option<ExportRecord></code></td></tr><tr><td><code>get_data_lake_connection</code></td><td><code>env: Env, connection_id: u64</code></td><td><code>Option<DataLakeConnection></code></td></tr><tr><td><code>get_data_lake_partition</code></td><td><code>env: Env, partition_id: u64</code></td><td><code>Option<DataLakePartition></code></td></tr><tr><td><code>get_lineage_record</code></td><td><code>env: Env, export_id: u64</code></td><td><code>Option<LineageRecord></code></td></tr><tr><td><code>get_ai_round_insight</code></td><td><code>env: Env, round_id: u64</code></td><td><code>Option<AiRoundInsight></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct DashboardConfig</h4></div><div><h4>struct MetricAggregate</h4></div><div><h4>struct DashboardSnapshot</h4></div><div><h4>struct PerformanceKpi</h4></div><div><h4>struct ReportTemplate</h4></div><div><h4>struct ReportSchedule</h4></div><div><h4>struct ComplianceSummary</h4></div><div><h4>struct VisualizationPoint</h4></div><div><h4>struct ExportRecord</h4></div><div><h4>struct DataLakeConnection</h4></div><div><h4>struct DataLakePartition</h4></div><div><h4>struct LineageRecord</h4></div><div><h4>struct QueryOptimizationProfile</h4></div><div><h4>struct AiRoundInsight</h4></div><div><h4>struct AiFederatedRound</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="healthcare_compliance">
+        <h2 style="color:var(--accent)">healthcare_compliance</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>update_config</code></td><td><code>env: Env, admin: Address, config: ComplianceConfig</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Result<ComplianceConfig, Error></code></td></tr><tr><td><code>grant_consent</code></td><td><code>env: Env, patient: Address, consent: ConsentRecord</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>report_breach</code></td><td><code>env: Env, reporter: Address, breach: BreachReport</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_compliance_metrics</code></td><td><code>env: Env</code></td><td><code>Result<ComplianceMetrics, Error></code></td></tr><tr><td><code>get_retention_policy</code></td><td><code>env: Env, data_type: DataType</code></td><td><code>Result<RetentionPolicy, Error></code></td></tr><tr><td><code>enforce_retention</code></td><td><code>env: Env</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_deletion_audit</code></td><td><code>env: Env</code></td><td><code>Vec<DeletionAuditEntry></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>resume</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_compliance_report</code></td><td><code>env: Env, report_id: String</code></td><td><code>Result<ReportRecord, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ComplianceFramework</h4></div><div><h4>enum HIPAACategory</h4></div><div><h4>enum GDPRProcessingCategory</h4></div><div><h4>enum FHIRResourceType</h4></div><div><h4>enum ConsentStatus</h4></div><div><h4>enum AuditEventType</h4></div><div><h4>enum BreachSeverity</h4></div><div><h4>enum ViolationType</h4></div><div><h4>enum DataType</h4></div><div><h4>struct RetentionPolicy</h4></div><div><h4>struct RetentionRecord</h4></div><div><h4>struct DeletionAuditEntry</h4></div><div><h4>struct ConsentRecord</h4></div><div><h4>struct AuditLogEntry</h4></div><div><h4>struct BreachReport</h4></div><div><h4>struct ViolationReport</h4></div><div><h4>struct ReportRecord</h4></div><div><h4>struct ComplianceMetrics</h4></div><div><h4>struct ComplianceConfig</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin) = setup_contract(&env);
+
+    let reporter = Address::generate(&env);
+    let report_id = String::from_str(&env, "report-1");
+    let report_hash = BytesN::from_array(&env, &[1u8; 32]);
+    let uri = String::from_str(&env, "ipfs://report-1");
+
+    let r = client.submit_compliance_report(&reporter, &report_id, &report_hash, &uri);</code></pre></section>
+      </article>
+    
+      <article id="healthcare_compliance_automation">
+        <h2 style="color:var(--accent)">healthcare_compliance_automation</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, frameworks: Vec<String></code></td><td><code>()</code></td></tr><tr><td><code>add_framework</code></td><td><code>env: Env, admin: Address, framework: String</code></td><td><code>()</code></td></tr><tr><td><code>get_supported_frameworks</code></td><td><code>env: Env</code></td><td><code>FrameworkList</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct FrameworkList</h4></div></section>
+        
+      </article>
+    
+      <article id="healthcare_data_conversion">
+        <h2 style="color:var(--accent)">healthcare_data_conversion</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_conversion_rule</code></td><td><code>env: Env, rule_id: String</code></td><td><code>Result<ConversionRule, Error></code></td></tr><tr><td><code>get_coding_mapping</code></td><td><code>env: Env, mapping_id: String</code></td><td><code>Result<CodingMapping, Error></code></td></tr><tr><td><code>get_conversion_request</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Result<ConversionRequest, Error></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>resume</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataFormat</h4></div><div><h4>enum FieldType</h4></div><div><h4>struct ConversionRule</h4></div><div><h4>struct CodingMapping</h4></div><div><h4>struct FormatSpecification</h4></div><div><h4>struct ConversionRequest</h4></div><div><h4>struct ValidationResult</h4></div><div><h4>struct LossyConversionWarning</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    assert!(client.initialize(&admin));</code></pre></section>
+      </article>
+    
+      <article id="healthcare_data_marketplace">
+        <h2 style="color:var(--accent)">healthcare_data_marketplace</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>register_provider</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>reserve_purchase</code></td><td><code>env: Env, buyer: Address, listing_id: u64</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>initiate_transaction</code></td><td><code>env: Env, buyer: Address, intent_id: u64</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>cancel_listing</code></td><td><code>env: Env, actor: Address, listing_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_provider_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_provider</code></td><td><code>env: Env, provider: Address</code></td><td><code>Option<ProviderProfile></code></td></tr><tr><td><code>get_listing</code></td><td><code>env: Env, listing_id: u64</code></td><td><code>Option<Listing></code></td></tr><tr><td><code>get_intent</code></td><td><code>env: Env, intent_id: u64</code></td><td><code>Option<PurchaseIntent></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataFormat</h4></div><div><h4>enum AnonymizationLevel</h4></div><div><h4>enum ListingStatus</h4></div><div><h4>struct QualityMetrics</h4></div><div><h4>struct RoyaltyPolicy</h4></div><div><h4>struct Config</h4></div><div><h4>struct ProviderProfile</h4></div><div><h4>struct Listing</h4></div><div><h4>struct ListingPayload</h4></div><div><h4>struct PurchaseIntent</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (client, _) = setup(&env);
+    let admin = Address::generate(&env);
+    let payment_router = Address::generate(&env);
+    let escrow = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    client.initialize(&admin, &payment_router, &escrow, &treasury, &300u64);</code></pre></section>
+      </article>
+    
+      <article id="healthcare_oracle_network">
+        <h2 style="color:var(--accent)">healthcare_oracle_network</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>add_arbiter</code></td><td><code>env: Env, admin: Address, arbiter: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_consensus</code></td><td><code>env: Env, kind: FeedKind, feed_id: String</code></td><td><code>Option<ConsensusRecord></code></td></tr><tr><td><code>get_oracle</code></td><td><code>env: Env, operator: Address</code></td><td><code>Option<OracleNode></code></td></tr><tr><td><code>get_dispute</code></td><td><code>env: Env, dispute_id: u64</code></td><td><code>Option<Dispute></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Option<Config></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, _admin, _arbiter) = setup_contract(&env, 1);
+
+    let oracle = Address::generate(&env);
+    let endpoint = String::from_str(&env, "https://oracle.example");
+    let feed_id = String::from_str(&env, "NDC:0002-8215-01:US");
+    let ndc = String::from_str(&env, "0002-8215-01");
+    let currency = String::from_str(&env, "USD");</code></pre></section>
+      </article>
+    
+      <article id="healthcare_payment">
+        <h2 style="color:var(--accent)">healthcare_payment</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>verify_claim</code></td><td><code>env: Env, claim_id: u64, verifier: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve_claim</code></td><td><code>env: Env, claim_id: u64, approver: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>process_payment</code></td><td><code>env: Env, claim_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>escrow_claim</code></td><td><code>env: Env, claim_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve_preauth</code></td><td><code>env: Env, preauth_id: u64, approver: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>pay_installment</code></td><td><code>env: Env, plan_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_coverage_policy</code></td><td><code>env: Env, coverage_policy_id: u64</code></td><td><code>Result<CoveragePolicy, Error></code></td></tr><tr><td><code>get_eligibility_check</code></td><td><code>env: Env, eligibility_id: u64</code></td><td><code>Result<EligibilityCheck, Error></code></td></tr><tr><td><code>get_claim_submission</code></td><td><code>env: Env, claim_id: u64</code></td><td><code>Result<ClaimSubmission, Error></code></td></tr><tr><td><code>get_patient_responsibility</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<PatientResponsibility></code></td></tr><tr><td><code>emergency_pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>begin_recovery</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>resume_operations</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>add_authorized_pauser</code></td><td><code>env: Env, caller: Address, pauser: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_failure_threshold</code></td><td><code>env: Env, caller: Address, threshold: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_circuit_state</code></td><td><code>env: Env</code></td><td><code>CircuitState</code></td></tr><tr><td><code>get_circuit_breaker</code></td><td><code>env: Env</code></td><td><code>Option<CircuitBreaker></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum ClaimStatus</h4></div><div><h4>enum PreAuthStatus</h4></div><div><h4>enum PaymentPlanStatus</h4></div><div><h4>enum CircuitState</h4></div><div><h4>struct CircuitBreaker</h4></div><div><h4>enum ClaimSubmissionStatus</h4></div><div><h4>struct Claim</h4></div><div><h4>struct PreAuth</h4></div><div><h4>struct PaymentPlan</h4></div><div><h4>struct FraudReport</h4></div><div><h4>struct InsuranceProvider</h4></div><div><h4>struct CoveragePolicy</h4></div><div><h4>struct EligibilityCheck</h4></div><div><h4>struct ClaimSubmission</h4></div><div><h4>struct CoverageEnrollment</h4></div><div><h4>struct ExplanationOfBenefits</h4></div><div><h4>struct PatientResponsibility</h4></div><div><h4>struct Config</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, admin, provider, patient, treasury, _, token_client) =
+        setup_env_and_clients();
+
+    let claim_id = client.submit_claim(
+        &patient,
+        &provider,
+        &String::from_str(&env, "SERVICE-123"),
+        &1000i128,
+        &String::from_str(&env, "POLICY-XYZ"),</code></pre></section>
+      </article>
+    
+      <article id="healthcare_reputation">
+        <h2 style="color:var(--accent)">healthcare_reputation</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_reputation_score</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<u32, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum CredentialType</h4></div><div><h4>struct ProviderCredential</h4></div><div><h4>enum VerificationStatus</h4></div><div><h4>struct PatientFeedback</h4></div><div><h4>enum FeedbackType</h4></div><div><h4>struct ConductEntry</h4></div><div><h4>enum ConductType</h4></div><div><h4>struct ReputationDispute</h4></div><div><h4>enum DisputeType</h4></div><div><h4>enum DisputeStatus</h4></div><div><h4>struct ReputationComponents</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="homomorphic_registry">
+        <h2 style="color:var(--accent)">homomorphic_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_context</code></td><td><code>env: Env, context_id: BytesN<32></code></td><td><code>Result<Option<HEContext>, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum HEScheme</h4></div><div><h4>struct HEContext</h4></div><div><h4>struct EncryptedComputation</h4></div><div><h4>struct FHEKeyBundle</h4></div><div><h4>struct PerformanceProfile</h4></div><div><h4>struct EncryptedVector</h4></div><div><h4>struct EncryptedStats</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let ctx_id = BytesN::from_array(&env, &[7u8; 32]);
+    let params_ref = String::from_str(&env, "ipfs://he-params");</code></pre></section>
+      </article>
+    
+      <article id="identity_registry">
+        <h2 style="color:var(--accent)">identity_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, owner: Address, network_id: String</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>initialize_legacy</code></td><td><code>env: Env, owner: Address</code></td><td><code>()</code></td></tr><tr><td><code>resolve_did</code></td><td><code>env: Env, subject: Address</code></td><td><code>Result<DIDDocument, Error></code></td></tr><tr><td><code>resolve_did_by_string</code></td><td><code>env: Env, did_string: String</code></td><td><code>Result<DIDDocument, Error></code></td></tr><tr><td><code>deactivate_did</code></td><td><code>env: Env, subject: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_subject_credentials</code></td><td><code>env: Env, subject: Address</code></td><td><code>Vec<VerifiableCredential></code></td></tr><tr><td><code>set_recovery_threshold</code></td><td><code>env: Env, subject: Address, threshold: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve_recovery</code></td><td><code>env: Env, guardian: Address, request_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>execute_recovery</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>cancel_recovery</code></td><td><code>env: Env, subject: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>remove_service</code></td><td><code>env: Env, subject: Address, service_id: String</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>add_verifier</code></td><td><code>env: Env, verifier: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>remove_verifier</code></td><td><code>env: Env, verifier: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>is_verifier</code></td><td><code>env: Env, account: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_owner</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr><tr><td><code>register_identity_hash</code></td><td><code>env: Env, hash: BytesN<32>, subject: Address, meta: String</code></td><td><code>()</code></td></tr><tr><td><code>attest</code></td><td><code>env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32></code></td><td><code>()</code></td></tr><tr><td><code>get_identity_hash</code></td><td><code>env: Env, subject: Address</code></td><td><code>Option<BytesN<32>></code></td></tr><tr><td><code>get_identity_meta</code></td><td><code>env: Env, subject: Address</code></td><td><code>Option<String></code></td></tr><tr><td><code>is_attested</code></td><td><code>env: Env, subject: Address, claim_hash: BytesN<32></code></td><td><code>bool</code></td></tr><tr><td><code>get_attestations</code></td><td><code>env: Env, subject: Address</code></td><td><code>Vec<BytesN<32>></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum VerificationMethodType</h4></div><div><h4>enum VerificationRelationship</h4></div><div><h4>struct VerificationMethod</h4></div><div><h4>struct ServiceEndpoint</h4></div><div><h4>enum DIDStatus</h4></div><div><h4>struct DIDDocument</h4></div><div><h4>enum CredentialType</h4></div><div><h4>struct VerifiableCredential</h4></div><div><h4>enum CredentialStatus</h4></div><div><h4>struct RecoveryGuardian</h4></div><div><h4>struct RecoveryRequest</h4></div><div><h4>struct IdentityRecord</h4></div><div><h4>struct Attestation</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="ihe_integration">
+        <h2 style="color:var(--accent)">ihe_integration</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>atna_get_event</code></td><td><code>env: Env, event_id: u64</code></td><td><code>Result<ATNAAuditEvent, Error></code></td></tr><tr><td><code>bppc_revoke_consent</code></td><td><code>env: Env, author: Address, consent_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>bppc_verify_consent</code></td><td><code>env: Env, consent_id: u64</code></td><td><code>Result<BPPCConsent, Error></code></td></tr><tr><td><code>dsg_verify_signature</code></td><td><code>env: Env, signature_id: u64</code></td><td><code>Result<DSGSignature, Error></code></td></tr><tr><td><code>hpd_get_provider</code></td><td><code>env: Env, provider_id: u64</code></td><td><code>Result<HPDProvider, Error></code></td></tr><tr><td><code>svs_get_value_set_by_oid</code></td><td><code>env: Env, oid: String</code></td><td><code>Result<SVSValueSet, Error></code></td></tr><tr><td><code>connectathon_is_compliant</code></td><td><code>env: Env, profile: IHEProfile</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum IHEProfile</h4></div><div><h4>enum HL7MessageType</h4></div><div><h4>enum DocumentStatus</h4></div><div><h4>struct XDSDocumentEntry</h4></div><div><h4>struct XDSSubmissionSet</h4></div><div><h4>struct PatientIdentifier</h4></div><div><h4>struct PIXCrossReference</h4></div><div><h4>struct PatientDemographics</h4></div><div><h4>struct PDQQuery</h4></div><div><h4>enum ATNAEventType</h4></div><div><h4>enum ATNAEventOutcome</h4></div><div><h4>struct ATNAParticipant</h4></div><div><h4>struct ATNAParticipantObject</h4></div><div><h4>struct ATNAAuditEvent</h4></div><div><h4>struct XCAGateway</h4></div><div><h4>struct MPIMasterPatient</h4></div><div><h4>enum ConsentStatus</h4></div><div><h4>struct BPPCConsent</h4></div><div><h4>struct DSGSignature</h4></div><div><h4>enum ProviderType</h4></div><div><h4>struct HPDProvider</h4></div><div><h4>struct SVSConcept</h4></div><div><h4>struct SVSValueSet</h4></div><div><h4>struct ConnectathonTestResult</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (_, _, _) = setup();</code></pre></section>
+      </article>
+    
+      <article id="iot_device_management">
+        <h2 style="color:var(--accent)">iot_device_management</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), IoTError></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), IoTError></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), IoTError></code></td></tr><tr><td><code>set_role</code></td><td><code>env: Env, admin: Address, user: Address, role: Role</code></td><td><code>Result<(), IoTError></code></td></tr><tr><td><code>get_role</code></td><td><code>env: Env, user: Address</code></td><td><code>Role</code></td></tr><tr><td><code>get_device</code></td><td><code>env: Env, device_id: BytesN<32></code></td><td><code>Result<Device, IoTError></code></td></tr><tr><td><code>get_device_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_devices_by_operator</code></td><td><code>env: Env, operator: Address</code></td><td><code>Vec<BytesN<32>></code></td></tr><tr><td><code>get_device_uptime_bps</code></td><td><code>env: Env, device_id: BytesN<32></code></td><td><code>Result<u32, IoTError></code></td></tr><tr><td><code>get_active_device_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_comm_channel</code></td><td><code>env: Env, channel_id: BytesN<32></code></td><td><code>Result<CommChannel, IoTError></code></td></tr><tr><td><code>get_devices_by_manufacturer</code></td><td><code>env: Env, manufacturer_id: BytesN<32></code></td><td><code>Vec<BytesN<32>></code></td></tr><tr><td><code>get_manufacturer_count</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DeviceStatus</h4></div><div><h4>enum DeviceType</h4></div><div><h4>enum FirmwareStatus</h4></div><div><h4>enum HealthStatus</h4></div><div><h4>enum Role</h4></div><div><h4>struct Manufacturer</h4></div><div><h4>struct Device</h4></div><div><h4>struct FirmwareVersion</h4></div><div><h4>struct FirmwareUpdateRecord</h4></div><div><h4>struct Heartbeat</h4></div><div><h4>struct CommChannel</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    // Calling initialize again should fail
+    let result = client.try_initialize(&admin);
+    assert_eq!(result, Err(Ok(IoTError::AlreadyInitialized)));</code></pre></section>
+      </article>
+    
+      <article id="medical_consent_nft">
+        <h2 style="color:var(--accent)">medical_consent_nft</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), ContractError></code></td></tr><tr><td><code>add_issuer</code></td><td><code>env: Env, issuer: Address</code></td><td><code>()</code></td></tr><tr><td><code>remove_issuer</code></td><td><code>env: Env, issuer: Address</code></td><td><code>()</code></td></tr><tr><td><code>is_issuer</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>revoke_consent</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Result<(), ContractError></code></td></tr><tr><td><code>owner_of</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Address</code></td></tr><tr><td><code>get_metadata</code></td><td><code>env: Env, token_id: u64</code></td><td><code>ConsentMetadata</code></td></tr><tr><td><code>is_revoked</code></td><td><code>env: Env, token_id: u64</code></td><td><code>bool</code></td></tr><tr><td><code>get_history</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Vec<ConsentHistoryEntry></code></td></tr><tr><td><code>tokens_of_owner</code></td><td><code>env: Env, owner: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>has_consent</code></td><td><code>env: Env, patient: Address, doctor: Address, consent_type: String</code></td><td><code>bool</code></td></tr><tr><td><code>is_valid</code></td><td><code>env: Env, token_id: u64</code></td><td><code>bool</code></td></tr><tr><td><code>get_delegations</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Vec<Delegation></code></td></tr><tr><td><code>add_emergency_authority</code></td><td><code>env: Env, authority: Address</code></td><td><code>Result<(), ContractError></code></td></tr><tr><td><code>set_marketplace_enabled</code></td><td><code>env: Env, enabled: bool</code></td><td><code>Result<(), ContractError></code></td></tr><tr><td><code>get_version_history</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Vec<VersionHistoryEntry></code></td></tr><tr><td><code>enable_dynamic_updates</code></td><td><code>env: Env, token_id: u64</code></td><td><code>Result<(), ContractError></code></td></tr><tr><td><code>get_analytics</code></td><td><code>env: Env</code></td><td><code>AnalyticsData</code></td></tr><tr><td><code>generate_consent_report</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<u64></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataKey</h4></div><div><h4>enum ContractError</h4></div><div><h4>enum DataType</h4></div><div><h4>enum PermissionLevel</h4></div><div><h4>struct GranularPermissions</h4></div><div><h4>enum AccessCondition</h4></div><div><h4>struct AccessControl</h4></div><div><h4>struct Delegation</h4></div><div><h4>struct Inheritance</h4></div><div><h4>struct EmergencyOverride</h4></div><div><h4>struct MarketplaceListing</h4></div><div><h4>struct VersionHistoryEntry</h4></div><div><h4>struct ConsentMetadata</h4></div><div><h4>struct ConsentHistoryEntry</h4></div><div><h4>struct AnalyticsData</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+        let contract_id = env.register_contract(None, PatientConsentToken);
+        let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let issuer = Address::generate(&env);
+
+        client.initialize(&admin);
+        client.add_issuer(&issuer);</code></pre></section>
+      </article>
+    
+      <article id="medical_imaging">
+        <h2 style="color:var(--accent)">medical_imaging</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, safety_threshold_mgy: u32</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>verify_share_access</code></td><td><code>env: Env, image_id: u64, viewer: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_image</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Option<MedicalImage></code></td></tr><tr><td><code>get_dicom</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Option<DicomMetadata></code></td></tr><tr><td><code>get_image_by_sop</code></td><td><code>env: Env, sop_uid_hash: BytesN<32></code></td><td><code>Option<u64></code></td></tr><tr><td><code>list_images_by_patient</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>list_images_by_modality_hash</code></td><td><code>env: Env, modality_code_hash: BytesN<32></code></td><td><code>Vec<u64></code></td></tr><tr><td><code>list_images_by_body_part_hash</code></td><td><code>env: Env, body_part_hash: BytesN<32></code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_compression_ratio_bps</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_metadata_index</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Option<ImageMetadataIndex></code></td></tr><tr><td><code>get_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<AiDiagnosticModel></code></td></tr><tr><td><code>get_diagnostic</code></td><td><code>env: Env, diagnosis_id: u64</code></td><td><code>Option<DiagnosticAssistance></code></td></tr><tr><td><code>get_share_grant</code></td><td><code>env: Env, image_id: u64, grantee: Address</code></td><td><code>Option<ImageShareGrant></code></td></tr><tr><td><code>get_annotation</code></td><td><code>env: Env, annotation_id: u64</code></td><td><code>Option<ImageAnnotation></code></td></tr><tr><td><code>list_annotations_for_image</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Vec<ImageAnnotation></code></td></tr><tr><td><code>get_image_record_link</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Option<ImageRecordLink></code></td></tr><tr><td><code>get_dose_entry</code></td><td><code>env: Env, dose_id: u64</code></td><td><code>Option<RadiationDoseEntry></code></td></tr><tr><td><code>get_dose_summary</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<DoseSummary></code></td></tr><tr><td><code>get_study</code></td><td><code>env: Env, study_id: u64</code></td><td><code>Option<ImagingStudy></code></td></tr><tr><td><code>get_studies_by_reader</code></td><td><code>env: Env, reader: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_studies_by_status</code></td><td><code>env: Env, status: StudyStatus</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_studies_by_patient</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_reader_reports</code></td><td><code>env: Env, caller: Address, study_id: u64</code></td><td><code>Vec<ReaderReport></code></td></tr><tr><td><code>get_my_report</code></td><td><code>env: Env, reader: Address, study_id: u64</code></td><td><code>ReaderReport</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ImagingModality</h4></div><div><h4>enum CompressionAlgorithm</h4></div><div><h4>enum ProcessingKind</h4></div><div><h4>enum ShareScope</h4></div><div><h4>enum AnnotationVisibility</h4></div><div><h4>struct DicomMetadata</h4></div><div><h4>struct MedicalImage</h4></div><div><h4>struct ImageMetadataIndex</h4></div><div><h4>struct ProcessingResult</h4></div><div><h4>struct AiDiagnosticModel</h4></div><div><h4>struct DiagnosticAssistance</h4></div><div><h4>struct ImageShareGrant</h4></div><div><h4>struct ImageAnnotation</h4></div><div><h4>struct ImageRecordLink</h4></div><div><h4>struct RadiationDoseEntry</h4></div><div><h4>struct DoseSummary</h4></div><div><h4>enum StudyStatus</h4></div><div><h4>struct ImagingStudy</h4></div><div><h4>struct ReaderReport</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let patient = Address::generate(&env);
+    let tech = Address::generate(&env);
+    let radiologist = Address::generate(&env);
+    let physician = Address::generate(&env);
+    let auditor = Address::generate(&env);</code></pre></section>
+      </article>
+    
+      <article id="medical_imaging_ai">
+        <h2 style="color:var(--accent)">medical_imaging_ai</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>pause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>register_evaluator</code></td><td><code>env: Env, admin: Address, evaluator: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>revoke_evaluator</code></td><td><code>env: Env, admin: Address, evaluator: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_analysis</code></td><td><code>env: Env, result_id: u64</code></td><td><code>AnalysisResult</code></td></tr><tr><td><code>get_image_analyses</code></td><td><code>env: Env, image_id: u64</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>get_segmentation</code></td><td><code>env: Env, seg_id: u64</code></td><td><code>SegmentationResult</code></td></tr><tr><td><code>get_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>CnnModelMetadata</code></td></tr><tr><td><code>is_model_active</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>bool</code></td></tr><tr><td><code>get_performance</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>ModelPerformance</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ImagingModality</h4></div><div><h4>enum ModelStatus</h4></div><div><h4>struct BoundingBox</h4></div><div><h4>struct CnnModelInput</h4></div><div><h4>struct CnnModelMetadata</h4></div><div><h4>struct Finding</h4></div><div><h4>struct AnalysisResult</h4></div><div><h4>struct SegmentedRegion</h4></div><div><h4>struct SegmentationResult</h4></div><div><h4>struct ModelPerformance</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (_, _) = setup(&env);</code></pre></section>
+      </article>
+    
+      <article id="medical_record_backup">
+        <h2 style="color:var(--accent)">medical_record_backup</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>set_policy</code></td><td><code>env: Env, caller: Address, policy: BackupPolicy</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_policy</code></td><td><code>env: Env</code></td><td><code>Result<BackupPolicy, Error></code></td></tr><tr><td><code>get_target</code></td><td><code>env: Env, target_id: u32</code></td><td><code>Option<BackupTarget></code></td></tr><tr><td><code>list_targets</code></td><td><code>env: Env</code></td><td><code>Vec<BackupTarget></code></td></tr><tr><td><code>approve_restore</code></td><td><code>env: Env, caller: Address, request_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>execute_restore</code></td><td><code>env: Env, caller: Address, request_id: u64</code></td><td><code>Result<String, Error></code></td></tr><tr><td><code>optimize_and_cleanup</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<CleanupReport, Error></code></td></tr><tr><td><code>resolve_alert</code></td><td><code>env: Env, caller: Address, alert_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>list_alerts</code></td><td><code>env: Env, open_only: bool</code></td><td><code>Vec<AlertEntry></code></td></tr><tr><td><code>list_artifacts</code></td><td><code>env: Env, include_archived: bool</code></td><td><code>Vec<BackupArtifact></code></td></tr><tr><td><code>get_artifact</code></td><td><code>env: Env, artifact_id: u64</code></td><td><code>Option<BackupArtifact></code></td></tr><tr><td><code>get_execution</code></td><td><code>env: Env, execution_id: u64</code></td><td><code>Option<BackupExecution></code></td></tr><tr><td><code>get_restore_request</code></td><td><code>env: Env, request_id: u64</code></td><td><code>Option<RestoreRequest></code></td></tr><tr><td><code>get_recovery_test</code></td><td><code>env: Env, test_id: u64</code></td><td><code>Option<RecoveryTest></code></td></tr><tr><td><code>get_health</code></td><td><code>env: Env</code></td><td><code>BackupHealth</code></td></tr><tr><td><code>get_schedule</code></td><td><code>env: Env</code></td><td><code>(u64, u64)</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum BackupNetwork</h4></div><div><h4>enum GeoRegion</h4></div><div><h4>enum BackupStatus</h4></div><div><h4>enum ReplicaStatus</h4></div><div><h4>enum AlertSeverity</h4></div><div><h4>enum AlertKind</h4></div><div><h4>enum RestoreStatus</h4></div><div><h4>struct BackupPolicy</h4></div><div><h4>struct BackupTarget</h4></div><div><h4>struct BackupArtifact</h4></div><div><h4>struct BackupReplica</h4></div><div><h4>struct BackupExecution</h4></div><div><h4>struct AlertEntry</h4></div><div><h4>struct RecoveryTest</h4></div><div><h4>struct RestoreRequest</h4></div><div><h4>struct BackupHealth</h4></div><div><h4>struct CleanupReport</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    register_two_targets(&client, &admin, &env);
+
+    let id = client.run_backup_now(
+        &admin,
+        &sample_hash(&env, 7),
+        &String::from_str(&env, "ipfs://snapshot-a"),</code></pre></section>
+      </article>
+    
+      <article id="medical_record_hash_registry">
+        <h2 style="color:var(--accent)">medical_record_hash_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_patient_by_hash</code></td><td><code>env: Env, record_hash: BytesN<32></code></td><td><code>Option<Address></code></td></tr><tr><td><code>get_patient_records</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Option<PatientRecords></code></td></tr><tr><td><code>get_record_count</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_admin</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct RecordEntry</h4></div><div><h4>struct PatientRecords</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, admin) = setup();
+        let result = client.initialize(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_twice_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin).unwrap();</code></pre></section>
+      </article>
+    
+      <article id="medical_record_search">
+        <h2 style="color:var(--accent)">medical_record_search</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>set_cache_policy</code></td><td><code>env: Env, caller: Address, policy: CachePolicy</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>set_ranking</code></td><td><code>env: Env, caller: Address, cfg: RankingConfig</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>index_record</code></td><td><code>env: Env, caller: Address, input: IndexInput</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_cache_entry</code></td><td><code>env: Env, query_hash: BytesN<32></code></td><td><code>Result<QueryCacheEntry, Error></code></td></tr><tr><td><code>invalidate_cache</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_audit</code></td><td><code>env: Env, caller: Address, query_id: u64</code></td><td><code>Result<SearchAuditEntry, Error></code></td></tr><tr><td><code>preview_query_hash</code></td><td><code>env: Env, query: SearchQuery</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>get_indexed_entry</code></td><td><code>env: Env, record_id: u64</code></td><td><code>Result<SearchIndexEntry, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ChainId</h4></div><div><h4>struct IndexInput</h4></div><div><h4>struct SearchIndexEntry</h4></div><div><h4>struct SearchQuery</h4></div><div><h4>struct SearchResult</h4></div><div><h4>struct QueryCacheEntry</h4></div><div><h4>struct CachePolicy</h4></div><div><h4>struct RankingConfig</h4></div><div><h4>struct SearchAuditEntry</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+
+    let indexer = Address::generate(&env);
+    let searcher = Address::generate(&env);
+    client.assign_role(
+        &admin,
+        &indexer,</code></pre></section>
+      </article>
+    
+      <article id="medical_records">
+        <h2 style="color:var(--accent)">medical_records</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_audit_forensics</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>is_user_qkd_capable</code></td><td><code>env: Env, user: Address</code></td><td><code>bool</code></td></tr><tr><td><code>deactivate_user</code></td><td><code>env: Env, caller: Address, user: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_user_role</code></td><td><code>env: Env, user: Address</code></td><td><code>Role</code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_record</code></td><td><code>env: Env, caller: Address, record_id: u64</code></td><td><code>Result<MedicalRecord, Error></code></td></tr><tr><td><code>get_record_metadata</code></td><td><code>env: Env, record_id: u64</code></td><td><code>Result<RecordMetadata, Error></code></td></tr><tr><td><code>get_record_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_patient_record_count</code></td><td><code>env: Env, patient: Address</code></td><td><code>u64</code></td></tr><tr><td><code>get_patient_record_id</code></td><td><code>env: Env, patient: Address, index: u64</code></td><td><code>Option<u64></code></td></tr><tr><td><code>get_zk_verifier_contract</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>get_credential_registry_contract</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>set_zk_enforced</code></td><td><code>env: Env, caller: Address, enforced: bool</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>is_zk_enforced</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>set_zk_grant_ttl</code></td><td><code>env: Env, caller: Address, ttl_secs: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_zk_grant_ttl</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_record_commitment</code></td><td><code>env: Env, record_id: u64</code></td><td><code>Option<BytesN<32>></code></td></tr><tr><td><code>has_valid_zk_access_grant</code></td><td><code>env: Env, requester: Address, record_id: u64</code></td><td><code>bool</code></td></tr><tr><td><code>get_crypto_registry</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>get_homomorphic_registry</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>set_mpc_manager</code></td><td><code>env: Env, caller: Address, manager: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_mpc_manager</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>is_encryption_required</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>get_regulatory_compliance</code></td><td><code>env: &Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>is_require_pq_envelopes</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>set_quantum_threat_level</code></td><td><code>env: Env, admin: Address, level: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_quantum_threat_level</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>get_identity_registry</code></td><td><code>env: Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>get_did_auth_level</code></td><td><code>env: Env</code></td><td><code>DIDAuthLevel</code></td></tr><tr><td><code>get_user_did</code></td><td><code>env: Env, user: Address</code></td><td><code>Option<String></code></td></tr><tr><td><code>verify_professional_credential</code></td><td><code>env: Env, user: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_ai_config</code></td><td><code>env: Env</code></td><td><code>Option<AIConfig></code></td></tr><tr><td><code>get_patient_emergency_grants</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<EmergencyAccess></code></td></tr><tr><td><code>get_access_logs</code></td><td><code>env: Env, page: u32, page_size: u32</code></td><td><code>Vec<AccessRequest></code></td></tr><tr><td><code>approve_recovery</code></td><td><code>env: Env, caller: Address, proposal_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>execute_recovery</code></td><td><code>env: Env, caller: Address, proposal_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>is_cross_chain_enabled</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr><tr><td><code>get_all_cross_chain_refs</code></td><td><code>env: Env, record_id: u64</code></td><td><code>Vec<CrossChainRecordRef></code></td></tr><tr><td><code>version</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ChainId</h4></div><div><h4>struct CrossChainRecordRef</h4></div><div><h4>struct RecordMetadata</h4></div><div><h4>struct RecordMetadataHistoryEntry</h4></div><div><h4>enum Role</h4></div><div><h4>enum Permission</h4></div><div><h4>struct PermissionGrant</h4></div><div><h4>struct UserProfile</h4></div><div><h4>enum DIDAuthLevel</h4></div><div><h4>struct AccessRequest</h4></div><div><h4>struct EmergencyAccess</h4></div><div><h4>struct ZkPublicInputs</h4></div><div><h4>struct ZkAccessGrant</h4></div><div><h4>struct ZkAuditRecord</h4></div><div><h4>struct MedicalRecord</h4></div><div><h4>enum AIInsightType</h4></div><div><h4>struct AIInsight</h4></div><div><h4>struct AIConfig</h4></div><div><h4>struct RecoveryProposal</h4></div><div><h4>enum EnvelopeAlgorithm</h4></div><div><h4>struct KeyEnvelope</h4></div><div><h4>struct EncryptedRecord</h4></div><div><h4>struct EncryptedRecordHeader</h4></div><div><h4>struct UserAccessAttribute</h4></div><div><h4>struct AbePolicyMetadata</h4></div><div><h4>struct AdvancedAccessState</h4></div><div><h4>struct AdvancedEncryptedRecordInput</h4></div><div><h4>enum CryptoAuditAction</h4></div><div><h4>struct CryptoAuditEntry</h4></div><div><h4>struct CryptoConfigProposal</h4></div><div><h4>enum DataKey</h4></div><div><h4>struct FailureInfo</h4></div><div><h4>struct BatchResult</h4></div><div><h4>struct RateLimitConfig</h4></div><div><h4>struct RateLimitEntry</h4></div><div><h4>enum MedicalRecordType</h4></div><div><h4>struct DataQualityScore</h4></div><div><h4>enum ValidationSeverity</h4></div><div><h4>struct ValidationIssue</h4></div><div><h4>struct ValidationReport</h4></div><div><h4>struct FieldCompleteness</h4></div><div><h4>enum CorrectionPriority</h4></div><div><h4>enum CorrectionAction</h4></div><div><h4>struct CorrectionItem</h4></div><div><h4>struct CorrectionWorkflow</h4></div><div><h4>struct CleanseResult</h4></div><div><h4>enum LogLevel</h4></div><div><h4>struct StructuredLog</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+    let diagnosis = String::from_str(&env, "Common cold");
+    let treatment = String::from_str(&env, "Rest and fluids");
+    let is_confidential = false;</code></pre></section>
+      </article>
+    
+      <article id="medication_management">
+        <h2 style="color:var(--accent)">medication_management</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_schedule</code></td><td><code>env: Env, schedule_id: u64</code></td><td><code>Result<MedicationSchedule, Error></code></td></tr><tr><td><code>get_refill_status</code></td><td><code>env: Env, schedule_id: u64</code></td><td><code>Result<RefillReminder, Error></code></td></tr><tr><td><code>get_patient_schedules</code></td><td><code>env: Env, patient: Address</code></td><td><code>Vec<u64></code></td></tr><tr><td><code>generate_adherence_report</code></td><td><code>env: Env, schedule_id: u64</code></td><td><code>Result<AdherenceReport, Error></code></td></tr><tr><td><code>get_catalog_size</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum MedicationSource</h4></div><div><h4>enum Severity</h4></div><div><h4>enum ScheduleStatus</h4></div><div><h4>enum AdherenceEventStatus</h4></div><div><h4>enum RefillStatus</h4></div><div><h4>enum DosingSchedule</h4></div><div><h4>struct Config</h4></div><div><h4>struct MedicationDefinition</h4></div><div><h4>struct MedicationSchedule</h4></div><div><h4>struct ScheduleLinks</h4></div><div><h4>struct ScheduleRequest</h4></div><div><h4>struct RefillPolicy</h4></div><div><h4>struct RefillReminder</h4></div><div><h4>struct DrugInteraction</h4></div><div><h4>struct InteractionAlert</h4></div><div><h4>struct DoseEvent</h4></div><div><h4>struct AdherenceReport</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="mental_health_support">
+        <h2 style="color:var(--accent)">mental_health_support</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), MentalHealthError></code></td></tr><tr><td><code>get_telemedicine_contract</code></td><td><code>env: Env</code></td><td><code>Result<Option<Address>, MentalHealthError></code></td></tr><tr><td><code>get_notification_contract</code></td><td><code>env: Env</code></td><td><code>Result<Option<Address>, MentalHealthError></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), MentalHealthError></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), MentalHealthError></code></td></tr><tr><td><code>enroll</code></td><td><code>env: Env, patient: Address</code></td><td><code>Result<(), MentalHealthError></code></td></tr><tr><td><code>is_enrolled</code></td><td><code>env: Env, patient: Address</code></td><td><code>Result<bool, MentalHealthError></code></td></tr><tr><td><code>get_mood</code></td><td><code>env: Env, id: u64</code></td><td><code>Result<MoodEntry, MentalHealthError></code></td></tr><tr><td><code>get_booking</code></td><td><code>env: Env, id: u64</code></td><td><code>Result<TeletherapyBooking, MentalHealthError></code></td></tr><tr><td><code>get_crisis</code></td><td><code>env: Env, id: u64</code></td><td><code>Result<CrisisIntervention, MentalHealthError></code></td></tr><tr><td><code>open_crisis_queue</code></td><td><code>env: Env</code></td><td><code>Result<Vec<u64>, MentalHealthError></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum MentalHealthError</h4></div><div><h4>enum CrisisSeverity</h4></div><div><h4>enum TherapyModality</h4></div><div><h4>struct MoodEntry</h4></div><div><h4>struct TeletherapyBooking</h4></div><div><h4>struct CrisisIntervention</h4></div><div><h4>struct PeerCommunity</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin) = setup(&env);
+    let patient = Address::generate(&env);
+    client.try_enroll(&patient).unwrap().unwrap();
+    assert!(client.try_is_enrolled(&patient).unwrap().unwrap());
+
+    let mid = client
+        .try_log_mood(&patient, &6u32, &BytesN::from_array(&env, &[1u8; 32]))
+        .unwrap()</code></pre></section>
+      </article>
+    
+      <article id="meta_tx_forwarder">
+        <h2 style="color:var(--accent)">meta_tx_forwarder</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>deactivate_relayer</code></td><td><code>env: Env, owner: Address, relayer: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_nonce</code></td><td><code>env: Env, user: Address</code></td><td><code>u64</code></td></tr><tr><td><code>is_relayer</code></td><td><code>env: Env, relayer: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_relayer_config</code></td><td><code>env: Env, relayer: Address</code></td><td><code>Option<RelayerConfig></code></td></tr><tr><td><code>get_trusted_forwarder</code></td><td><code>env: Env</code></td><td><code>Address</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>struct ForwardRequest</h4></div><div><h4>struct RelayerConfig</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let fee_collector = Address::generate(&env);
+    let min_stake = 1000i128;
+
+    let (_, forwarder) = create_forwarder_contract(&env);</code></pre></section>
+      </article>
+    
+      <article id="mfa">
+        <h2 style="color:var(--accent)">mfa</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, config: MFAConfig</code></td><td><code>()</code></td></tr><tr><td><code>start_session</code></td><td><code>env: Env, user: Address, required: Vec<FactorType></code></td><td><code>u64</code></td></tr><tr><td><code>verify_mfa_factor</code></td><td><code>env: Env, user: Address, factor: FactorType, proof: Bytes</code></td><td><code>bool</code></td></tr><tr><td><code>is_authenticated</code></td><td><code>env: Env, user: Address</code></td><td><code>bool</code></td></tr><tr><td><code>initiate_recovery</code></td><td><code>env: Env, user: Address, secret_hash: BytesN<32></code></td><td><code>()</code></td></tr><tr><td><code>emergency_override</code></td><td><code>env: Env, admin: Address, target_user: Address</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register_contract(None, MultiFactorAuth);
+    let client = MultiFactorAuthClient::new(&env, &contract_id);
+
+    let config = MFAConfig {
+        session_ttl: 3600,</code></pre></section>
+      </article>
+    
+      <article id="mpc_manager">
+        <h2 style="color:var(--accent)">mpc_manager</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_session</code></td><td><code>env: Env, session_id: BytesN<32></code></td><td><code>Result<Option<MPCSession>, Error></code></td></tr><tr><td><code>get_audit_trail</code></td><td><code>env: Env, session_id: BytesN<32></code></td><td><code>Result<Vec<AuditEntry>, Error></code></td></tr><tr><td><code>get_gas_stats</code></td><td><code>env: Env, session_id: BytesN<32></code></td><td><code>Result<u64, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct SecretShare</h4></div><div><h4>struct ComputationProof</h4></div><div><h4>enum ComputationType</h4></div><div><h4>struct AuditEntry</h4></div><div><h4>enum SessionStatus</h4></div><div><h4>struct ShareReveal</h4></div><div><h4>struct MPCSession</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let initiator = Address::generate(&env);
+    let p1 = Address::generate(&env);</code></pre></section>
+      </article>
+    
+      <article id="multi_region_orchestrator">
+        <h2 style="color:var(--accent)">multi_region_orchestrator</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>assign_role</code></td><td><code>env: Env, caller: Address, user: Address, role_mask: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>list_regions</code></td><td><code>env: Env</code></td><td><code>Vec<RegionNode></code></td></tr><tr><td><code>get_region_status</code></td><td><code>env: Env, region_id: u32</code></td><td><code>Option<RegionStatus></code></td></tr><tr><td><code>get_failover_events</code></td><td><code>env: Env</code></td><td><code>Vec<FailoverEvent></code></td></tr><tr><td><code>get_sync_operations</code></td><td><code>env: Env</code></td><td><code>Vec<SyncOperation></code></td></tr><tr><td><code>check_health</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_uptime_metrics</code></td><td><code>env: Env</code></td><td><code>Vec<UptimeMetric></code></td></tr><tr><td><code>get_current_uptime</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>set_policy</code></td><td><code>env: Env, caller: Address, policy: DRPolicy</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_policy</code></td><td><code>env: Env</code></td><td><code>DRPolicy</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum GeoRegion</h4></div><div><h4>enum RegionStatus</h4></div><div><h4>struct RegionNode</h4></div><div><h4>struct FailoverEvent</h4></div><div><h4>struct UptimeMetric</h4></div><div><h4>struct DRPolicy</h4></div><div><h4>struct SyncOperation</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="notification_system">
+        <h2 style="color:var(--accent)">notification_system</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_admin</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr><tr><td><code>add_authorized_sender</code></td><td><code>env: Env, caller: Address, sender: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_authorized_senders</code></td><td><code>env: Env</code></td><td><code>Result<Vec<Address>, Error></code></td></tr><tr><td><code>get_unread_count</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>mark_read</code></td><td><code>env: Env, caller: Address, notif_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>mark_all_read</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>archive_notification</code></td><td><code>env: Env, caller: Address, notif_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>delete_alert_rule</code></td><td><code>env: Env, caller: Address, rule_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_alert_rules</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<Vec<AlertRule>, Error></code></td></tr><tr><td><code>get_analytics</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<NotificationAnalytics, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin) = setup(&env);
+    assert_eq!(client.get_admin(), admin);</code></pre></section>
+      </article>
+    
+      <article id="patient_consent_management">
+        <h2 style="color:var(--accent)">patient_consent_management</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>grant_consent</code></td><td><code>env: Env, patient: Address, provider: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>revoke_consent</code></td><td><code>env: Env, patient: Address, provider: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>check_consent</code></td><td><code>env: Env, patient: Address, provider: Address</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_patient_consents</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<ConsentLog></code></td></tr><tr><td><code>get_active_consent_count</code></td><td><code>env: Env, patient: Address</code></td><td><code>u32</code></td></tr><tr><td><code>get_admin</code></td><td><code>env: Env</code></td><td><code>Result<Address, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct ConsentRecord</h4></div><div><h4>struct ConsentLog</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let (env, client, admin) = setup();
+        let result = client.initialize(&admin);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_initialize_twice_fails() {
+        let (env, client, admin) = setup();
+        client.initialize(&admin).unwrap();</code></pre></section>
+      </article>
+    
+      <article id="patient_gamification">
+        <h2 style="color:var(--accent)">patient_gamification</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_achievement</code></td><td><code>env: Env, achievement_id: u64</code></td><td><code>Result<Achievement, Error></code></td></tr><tr><td><code>get_patient_achievements</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Result<Vec<u64>, Error></code></td></tr><tr><td><code>get_challenge</code></td><td><code>env: Env, challenge_id: u64</code></td><td><code>Result<HealthChallenge, Error></code></td></tr><tr><td><code>get_reward_points</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Result<RewardPoints, Error></code></td></tr><tr><td><code>get_social_profile</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Result<SocialProfile, Error></code></td></tr><tr><td><code>get_leaderboard</code></td><td><code>env: Env, limit: u32</code></td><td><code>Result<Vec<LeaderboardEntry>, Error></code></td></tr><tr><td><code>get_patient_rank</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_daily_streak</code></td><td><code>env: Env, patient_id: Address</code></td><td><code>Result<DailyStreak, Error></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Result<GamificationConfig, Error></code></td></tr><tr><td><code>get_total_achievements</code></td><td><code>env: Env</code></td><td><code>Result<u64, Error></code></td></tr><tr><td><code>get_total_challenges</code></td><td><code>env: Env</code></td><td><code>Result<u64, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct GamificationConfig</h4></div><div><h4>struct Achievement</h4></div><div><h4>struct PatientAchievement</h4></div><div><h4>struct HealthChallenge</h4></div><div><h4>struct ChallengeParticipant</h4></div><div><h4>struct RewardPoints</h4></div><div><h4>struct RandomBonusCommitment</h4></div><div><h4>struct RandomBonusOutcome</h4></div><div><h4>struct LeaderboardEntry</h4></div><div><h4>struct SocialProfile</h4></div><div><h4>struct HealthMetric</h4></div><div><h4>struct DailyStreak</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, PatientGamificationContract);
+    let client = PatientGamificationContractClient::new(&env, &contract_id);
+
+    let admin = Address::random(&env);
+
+    let result = client.initialize(
+        &admin,
+        &100u32,  // points_per_achievement</code></pre></section>
+      </article>
+    
+      <article id="patient_portal">
+        <h2 style="color:var(--accent)">patient_portal</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), PatientPortalError></code></td></tr><tr><td><code>get_medical_records_contract</code></td><td><code>env: Env</code></td><td><code>Result<Option<Address>, PatientPortalError></code></td></tr><tr><td><code>get_identity_registry_contract</code></td><td><code>env: Env</code></td><td><code>Result<Option<Address>, PatientPortalError></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), PatientPortalError></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), PatientPortalError></code></td></tr><tr><td><code>get_profile</code></td><td><code>env: Env, patient: Address</code></td><td><code>Result<PortalProfile, PatientPortalError></code></td></tr><tr><td><code>get_export</code></td><td><code>env: Env, id: u64</code></td><td><code>Result<PhrExportManifest, PatientPortalError></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum PatientPortalError</h4></div><div><h4>enum AppointmentStatus</h4></div><div><h4>struct PortalProfile</h4></div><div><h4>struct PortalAppointment</h4></div><div><h4>struct MedicationAdherenceEvent</h4></div><div><h4>struct PhrExportManifest</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let (client, admin) = setup(&env);
+    let med = Address::generate(&env);
+    let ident = Address::generate(&env);
+    client
+        .try_set_integration_contracts(&admin, &med, &ident)
+        .unwrap()
+        .unwrap();
+    assert_eq!(</code></pre></section>
+      </article>
+    
+      <article id="patient_risk_stratification">
+        <h2 style="color:var(--accent)">patient_risk_stratification</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>bool</code></td></tr><tr><td><code>get_risk_assessment</code></td><td><code>env: Env, assessment_id: u64</code></td><td><code>Option<RiskAssessment></code></td></tr><tr><td><code>get_patient_risk_profile</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<PatientRiskProfile></code></td></tr><tr><td><code>get_risk_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<RiskModel></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum RiskModelType</h4></div><div><h4>struct RiskModel</h4></div><div><h4>struct RiskAssessment</h4></div><div><h4>struct RiskFactor</h4></div><div><h4>struct InterventionRecommendation</h4></div><div><h4>struct PatientRiskProfile</h4></div><div><h4>struct SpecialtyRiskSummary</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="payment_router">
+        <h2 style="color:var(--accent)">payment_router</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_fee_config</code></td><td><code>env: Env</code></td><td><code>Option<RouterFeeConfig></code></td></tr><tr><td><code>compute_split</code></td><td><code>env: Env, amount: i128</code></td><td><code>Result<(i128, i128), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>struct RouterFeeConfig</h4></div></section>
+        
+      </article>
+    
+      <article id="pharma_supply_chain">
+        <h2 style="color:var(--accent)">pharma_supply_chain</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>run_compliance_check</code></td><td><code>env: Env, batch_id: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_inventory_snapshot</code></td><td><code>env: Env, owner: Address</code></td><td><code>InventorySnapshot</code></td></tr><tr><td><code>get_batch</code></td><td><code>env: Env, batch_id: u64</code></td><td><code>Result<Batch, Error></code></td></tr><tr><td><code>get_shipment</code></td><td><code>env: Env, shipment_id: u64</code></td><td><code>Result<Shipment, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum BatchStatus</h4></div><div><h4>enum ShipmentStatus</h4></div><div><h4>struct Manufacturer</h4></div><div><h4>struct Medication</h4></div><div><h4>struct Batch</h4></div><div><h4>struct Shipment</h4></div><div><h4>struct InventorySnapshot</h4></div><div><h4>struct InventoryRecommendation</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="predictive_analytics">
+        <h2 style="color:var(--accent)">predictive_analytics</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_prediction</code></td><td><code>env: Env, prediction_id: u64</code></td><td><code>Option<HealthPrediction></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Option<PredictionConfig></code></td></tr><tr><td><code>get_patient_summary</code></td><td><code>env: Env, patient: Address</code></td><td><code>Option<PatientPredictionsSummary></code></td></tr><tr><td><code>get_model_metrics</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Option<PredictionMetrics></code></td></tr><tr><td><code>has_high_risk_prediction</code></td><td><code>env: Env, patient: Address</code></td><td><code>bool</code></td></tr><tr><td><code>is_whitelisted_predictor</code></td><td><code>env: Env, predictor_addr: Address</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let contract_id = env.register_contract(None, PredictiveAnalyticsContract);
+    let client = PredictiveAnalyticsContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    let predictor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    client</code></pre></section>
+      </article>
+    
+      <article id="provider_directory">
+        <h2 style="color:var(--accent)">provider_directory</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, identity_registry: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_profile</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<ProviderProfile, Error></code></td></tr><tr><td><code>get_availability</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<Vec<Availability>, Error></code></td></tr><tr><td><code>search_by_specialty</code></td><td><code>env: Env, specialty: Symbol</code></td><td><code>Vec<ProviderProfile></code></td></tr><tr><td><code>verify_provider</code></td><td><code>env: Env, admin: Address, provider: Address</code></td><td><code>Result<(), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    let admin = Address::generate(&env);
+    let identity_registry = Address::generate(&env);
+    
+    let contract_id = env.register_contract(None, ProviderDirectoryContract);
+    let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin, &identity_registry);</code></pre></section>
+      </article>
+    
+      <article id="public_health_surveillance">
+        <h2 style="color:var(--accent)">public_health_surveillance</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_outbreak_data</code></td><td><code>env: Env, data_id: BytesN<32></code></td><td><code>Result<OutbreakData, Error></code></td></tr><tr><td><code>get_epidemic_model</code></td><td><code>env: Env, model_id: BytesN<32></code></td><td><code>Result<EpidemicModel, Error></code></td></tr><tr><td><code>get_public_health_alert</code></td><td><code>env: Env, alert_id: u64</code></td><td><code>Result<PublicHealthAlert, Error></code></td></tr><tr><td><code>get_privacy_budget</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<u64, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DiseaseSeverity</h4></div><div><h4>enum AlertType</h4></div><div><h4>enum OutbreakStatus</h4></div><div><h4>enum AggregationMethod</h4></div><div><h4>struct OutbreakData</h4></div><div><h4>struct EpidemicModel</h4></div><div><h4>struct PublicHealthAlert</h4></div><div><h4>struct VaccinationCoverage</h4></div><div><h4>struct EnvironmentalHealth</h4></div><div><h4>struct AntimicrobialResistance</h4></div><div><h4>struct SocialHealthDeterminants</h4></div><div><h4>struct PublicHealthIntervention</h4></div><div><h4>struct GlobalHealthCollaboration</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    // Test that initialization works</code></pre></section>
+      </article>
+    
+      <article id="rbac">
+        <h2 style="color:var(--accent)">rbac</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, config: RBACConfig</code></td><td><code>()</code></td></tr><tr><td><code>assign_role</code></td><td><code>env: Env, address: Address, role: Role</code></td><td><code>bool</code></td></tr><tr><td><code>remove_role</code></td><td><code>env: Env, address: Address, role: Role</code></td><td><code>bool</code></td></tr><tr><td><code>has_role</code></td><td><code>env: Env, address: Address, role: Role</code></td><td><code>bool</code></td></tr><tr><td><code>get_roles</code></td><td><code>env: Env, address: Address</code></td><td><code>Vec<Role></code></td></tr><tr><td><code>has_any_role</code></td><td><code>env: Env, address: Address, roles: Vec<Role></code></td><td><code>bool</code></td></tr><tr><td><code>has_all_roles</code></td><td><code>env: Env, address: Address, roles: Vec<Role></code></td><td><code>bool</code></td></tr><tr><td><code>get_address_roles</code></td><td><code>env: Env, address: Address</code></td><td><code>types::AddressRoles</code></td></tr><tr><td><code>get_role_members</code></td><td><code>env: Env, role: Role</code></td><td><code>Vec<Address></code></td></tr><tr><td><code>get_role_member_count</code></td><td><code>env: Env, role: Role</code></td><td><code>u32</code></td></tr><tr><td><code>is_admin</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>is_doctor</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>is_patient</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>is_staff</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>update_config</code></td><td><code>env: Env, config: RBACConfig</code></td><td><code>()</code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>RBACConfig</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = create_test_env();
+        let admin = Address::random(&env);
+        let config = RBACConfig {
+            emit_events: true,
+            max_roles_per_address: 10,
+        };
+
+        RBAC::initialize(env.clone(), admin.clone(), config.clone());</code></pre></section>
+      </article>
+    
+      <article id="regional_node_manager">
+        <h2 style="color:var(--accent)">regional_node_manager</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>assign_role</code></td><td><code>env: Env, caller: Address, user: Address, role_mask: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_node</code></td><td><code>env: Env, node_id: u32</code></td><td><code>Option<RegionalNode></code></td></tr><tr><td><code>list_nodes</code></td><td><code>env: Env</code></td><td><code>Vec<RegionalNode></code></td></tr><tr><td><code>get_health_checks</code></td><td><code>env: Env</code></td><td><code>Vec<HealthCheckResult></code></td></tr><tr><td><code>get_recent_health_check</code></td><td><code>env: Env, node_id: u32</code></td><td><code>Option<HealthCheckResult></code></td></tr><tr><td><code>get_replicas_for_node</code></td><td><code>env: Env, node_id: u32</code></td><td><code>Vec<ReplicaInfo></code></td></tr><tr><td><code>set_configuration</code></td><td><code>env: Env, caller: Address, config: NodeConfiguration</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_configuration</code></td><td><code>env: Env</code></td><td><code>NodeConfiguration</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum NodeStatus</h4></div><div><h4>struct RegionalNode</h4></div><div><h4>struct HealthCheckResult</h4></div><div><h4>struct ReplicaInfo</h4></div><div><h4>struct NodeConfiguration</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="regulatory_compliance">
+        <h2 style="color:var(--accent)">regulatory_compliance</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_rule</code></td><td><code>env: Env, framework: String, rule: ComplianceRule</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_rule</code></td><td><code>env: Env, framework: String</code></td><td><code>Option<ComplianceRule></code></td></tr><tr><td><code>grant_consent</code></td><td><code>env: Env, user: Address, action: String</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>revoke_consent</code></td><td><code>env: Env, user: Address, action: String</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>has_consent</code></td><td><code>env: Env, user: Address, action: String</code></td><td><code>bool</code></td></tr><tr><td><code>log_audit</code></td><td><code>env: Env, user: Address, action: String, details: String</code></td><td><code>()</code></td></tr><tr><td><code>get_audit_logs</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<Vec<AuditLog>, Error></code></td></tr><tr><td><code>invoke_right_to_be_forgotten</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>is_forgotten</code></td><td><code>env: &Env, user: Address</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum DataResidency</h4></div><div><h4>struct ComplianceRule</h4></div><div><h4>struct AuditLog</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="remote_patient_monitoring">
+        <h2 style="color:var(--accent)">remote_patient_monitoring</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>()</code></td></tr><tr><td><code>add_caregiver</code></td><td><code>env: Env, caller: Address, device_id: u64, caregiver: Address</code></td><td><code>()</code></td></tr><tr><td><code>update_battery_level</code></td><td><code>env: Env, caller: Address, device_id: u64, battery_level: u32</code></td><td><code>()</code></td></tr><tr><td><code>get_device</code></td><td><code>env: Env, device_id: u64</code></td><td><code>Option<Device></code></td></tr><tr><td><code>get_vitals</code></td><td><code>_env: Env, _patient: Address, _limit: u32</code></td><td><code>Vec<VitalSign></code></td></tr><tr><td><code>get_alerts</code></td><td><code>_env: Env, _patient: Address, _limit: u32</code></td><td><code>Vec<Alert></code></td></tr><tr><td><code>get_caregiver_alerts</code></td><td><code>_env: Env, _caregiver: Address</code></td><td><code>Vec<Alert></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct Device</h4></div><div><h4>struct VitalSign</h4></div><div><h4>struct Alert</h4></div><div><h4>struct Threshold</h4></div></section>
+        
+      </article>
+    
+      <article id="reputation">
+        <h2 style="color:var(--accent)">reputation</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_score</code></td><td><code>env: Env, user: Address</code></td><td><code>i128</code></td></tr><tr><td><code>mint</code></td><td><code>env: Env, user: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>slash</code></td><td><code>env: Env, user: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="reputation_access_control">
+        <h2 style="color:var(--accent)">reputation_access_control</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>approve_request</code></td><td><code>env: Env, admin: Address, request_id: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>deny_request</code></td><td><code>env: Env, admin: Address, request_id: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_provider_requests</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<Vec<AccessRequest>, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum ResourceType</h4></div><div><h4>enum AccessLevel</h4></div><div><h4>enum TimeRestrictionPolicy</h4></div><div><h4>struct AccessPolicy</h4></div><div><h4>struct TimeRestriction</h4></div><div><h4>struct AccessRequest</h4></div><div><h4>enum RequestStatus</h4></div><div><h4>enum DataKey</h4></div></section>
+        
+      </article>
+    
+      <article id="reputation_integration">
+        <h2 style="color:var(--accent)">reputation_integration</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>auto_sync_all_providers</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_combined_score</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<i128, Error></code></td></tr><tr><td><code>trigger_credential_sync</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>trigger_feedback_sync</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>trigger_conduct_sync</code></td><td><code>env: Env, provider: Address</code></td><td><code>Result<(), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>struct ScoreMapping</h4></div><div><h4>struct SyncRecord</h4></div><div><h4>enum SyncType</h4></div><div><h4>enum DataKey</h4></div><div><h4>struct SyncSettings</h4></div></section>
+        
+      </article>
+    
+      <article id="secure_enclave">
+        <h2 style="color:var(--accent)">secure_enclave</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>()</code></td></tr><tr><td><code>verify_attestation</code></td><td><code>env: Env, admin: Address, node_id: BytesN<32>, is_valid: bool</code></td><td><code>()</code></td></tr><tr><td><code>assign_task</code></td><td><code>env: Env, admin: Address, task_id: BytesN<32>, node_id: BytesN<32></code></td><td><code>()</code></td></tr><tr><td><code>fallback_to_mpc</code></td><td><code>env: Env, admin: Address, task_id: BytesN<32>, mpc_manager_id: Address</code></td><td><code>()</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataKey</h4></div><div><h4>enum CloudProvider</h4></div><div><h4>enum EnclaveStatus</h4></div><div><h4>struct EnclaveNode</h4></div><div><h4>enum TaskStatus</h4></div><div><h4>struct ProcessingTask</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = env.register_contract(None, SecureEnclaveContract);
+    let client = SecureEnclaveContractClient::new(&env, &contract_id);
+
+    client.initialize(&admin);</code></pre></section>
+      </article>
+    
+      <article id="storage_cleanup">
+        <h2 style="color:var(--accent)">storage_cleanup</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_paused</code></td><td><code>env: Env, caller: Address, paused: bool</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>register_credential</code></td><td><code>env: Env, id: u64, expires_at: u64</code></td><td><code>()</code></td></tr><tr><td><code>register_audit_log</code></td><td><code>env: Env, id: u64, logged_at: u64</code></td><td><code>()</code></td></tr><tr><td><code>register_escrow</code></td><td><code>env: Env, id: u64, settled_at: u64</code></td><td><code>()</code></td></tr><tr><td><code>register_consent</code></td><td><code>env: Env, id: u64, revoked_at: u64</code></td><td><code>()</code></td></tr><tr><td><code>register_schedule</code></td><td><code>env: Env, id: u64, end_at: u64</code></td><td><code>()</code></td></tr><tr><td><code>cleanup_expired</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>preview_cleanup</code></td><td><code>env: Env, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>cleanup_credentials</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>cleanup_audit_logs</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>cleanup_escrows</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>cleanup_consents</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>cleanup_schedules</code></td><td><code>env: Env, caller: Address, max_items: u32</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>get_cleanup_log</code></td><td><code>env: Env</code></td><td><code>Vec<CleanupEntry></code></td></tr><tr><td><code>is_paused</code></td><td><code>env: Env</code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum DataKey</h4></div><div><h4>struct RetentionConfig</h4></div><div><h4>struct CleanupEntry</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="sut_token">
+        <h2 style="color:var(--accent)">sut_token</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>name</code></td><td><code>env: Env</code></td><td><code>Result<String, Error></code></td></tr><tr><td><code>symbol</code></td><td><code>env: Env</code></td><td><code>Result<String, Error></code></td></tr><tr><td><code>decimals</code></td><td><code>env: Env</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>total_supply</code></td><td><code>env: Env</code></td><td><code>Result<i128, Error></code></td></tr><tr><td><code>supply_cap</code></td><td><code>env: Env</code></td><td><code>Result<i128, Error></code></td></tr><tr><td><code>balance_of</code></td><td><code>env: Env, account: Address</code></td><td><code>i128</code></td></tr><tr><td><code>allowance</code></td><td><code>env: Env, owner: Address, spender: Address</code></td><td><code>i128</code></td></tr><tr><td><code>transfer</code></td><td><code>env: Env, from: Address, to: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve</code></td><td><code>env: Env, owner: Address, spender: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>mint</code></td><td><code>env: Env, minter: Address, to: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>burn</code></td><td><code>env: Env, minter: Address, from: Address, amount: i128</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>add_minter</code></td><td><code>env: Env, minter: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>remove_minter</code></td><td><code>env: Env, minter: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>is_minter</code></td><td><code>env: Env, address: Address</code></td><td><code>bool</code></td></tr><tr><td><code>snapshot</code></td><td><code>env: Env</code></td><td><code>Result<u32, Error></code></td></tr><tr><td><code>balance_of_at</code></td><td><code>env: Env, account: Address, snapshot_id: u32</code></td><td><code>Result<i128, Error></code></td></tr><tr><td><code>total_supply_at</code></td><td><code>env: Env, snapshot_id: u32</code></td><td><code>Result<i128, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>struct TokenMetadata</h4></div><div><h4>struct TokenInfo</h4></div><div><h4>struct Snapshot</h4></div><div><h4>struct Checkpoint</h4></div><div><h4>enum DataKey</h4></div><div><h4>struct TransferEvent</h4></div><div><h4>struct ApprovalEvent</h4></div><div><h4>struct MintEvent</h4></div><div><h4>struct BurnEvent</h4></div><div><h4>struct SnapshotEvent</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let contract_id = create_token_contract(&env);
+
+    let (name, symbol, decimals, supply_cap) = initialize_token(&env, &contract_id, &admin);
+    let client = SutTokenClient::new(&env, &contract_id);</code></pre></section>
+      </article>
+    
+      <article id="sync_manager">
+        <h2 style="color:var(--accent)">sync_manager</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>assign_role</code></td><td><code>env: Env, caller: Address, user: Address, role_mask: u32</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_sync_operation</code></td><td><code>env: Env, operation_id: u64</code></td><td><code>Option<SyncOperation></code></td></tr><tr><td><code>list_sync_operations</code></td><td><code>env: Env</code></td><td><code>Vec<SyncOperation></code></td></tr><tr><td><code>get_replication_lags</code></td><td><code>env: Env</code></td><td><code>Vec<ReplicationLag></code></td></tr><tr><td><code>get_region_lag</code></td><td><code>env: Env, source_region_id: u32, target_region_id: u32</code></td><td><code>Option<ReplicationLag></code></td></tr><tr><td><code>get_conflicts</code></td><td><code>env: Env</code></td><td><code>Vec<ConflictResolution></code></td></tr><tr><td><code>set_sync_policy</code></td><td><code>env: Env, caller: Address, policy: SyncPolicy</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_sync_policy</code></td><td><code>env: Env</code></td><td><code>SyncPolicy</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum SyncStatus</h4></div><div><h4>enum ConsistencyLevel</h4></div><div><h4>struct SyncOperation</h4></div><div><h4>struct SyncWindow</h4></div><div><h4>struct ReplicationLag</h4></div><div><h4>struct SyncPolicy</h4></div><div><h4>struct ConflictResolution</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="telemedicine">
+        <h2 style="color:var(--accent)">telemedicine</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), TelemedicineError></code></td></tr><tr><td><code>pause</code></td><td><code>env: Env</code></td><td><code>Result<(), TelemedicineError></code></td></tr><tr><td><code>unpause</code></td><td><code>env: Env</code></td><td><code>Result<(), TelemedicineError></code></td></tr><tr><td><code>get_provider</code></td><td><code>env: &Env, provider_id: BytesN<32></code></td><td><code>Result<Provider, TelemedicineError></code></td></tr><tr><td><code>get_patient</code></td><td><code>env: &Env, patient_id: BytesN<32></code></td><td><code>Result<Patient, TelemedicineError></code></td></tr><tr><td><code>revoke_consent</code></td><td><code>env: &Env, consent_id: BytesN<32></code></td><td><code>Result<(), TelemedicineError></code></td></tr><tr><td><code>get_emergency_protocol</code></td><td><code>env: &Env</code></td><td><code>EmergencyProtocol</code></td></tr><tr><td><code>get_active_emergencies</code></td><td><code>env: &Env</code></td><td><code>Vec<BytesN<32>></code></td></tr><tr><td><code>get_platform_stats</code></td><td><code>env: Env</code></td><td><code>(u64, u64, u64, u64, u64, u64)</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum TelemedicineError</h4></div><div><h4>enum ConsentType</h4></div><div><h4>enum ConsultationStatus</h4></div><div><h4>enum EmergencyLevel</h4></div><div><h4>enum QualityRating</h4></div><div><h4>enum ChatIntent</h4></div><div><h4>struct Provider</h4></div><div><h4>struct Patient</h4></div><div><h4>struct ConsentRecord</h4></div><div><h4>struct Consultation</h4></div><div><h4>struct Prescription</h4></div><div><h4>struct VitalSigns</h4></div><div><h4>struct MonitoringSession</h4></div><div><h4>struct AppointmentSlot</h4></div><div><h4>struct ComplianceRecord</h4></div><div><h4>struct DigitalTherapeutic</h4></div><div><h4>struct QualityAssessment</h4></div><div><h4>struct EmergencyCase</h4></div><div><h4>struct MedicalKnowledgeEntry</h4></div><div><h4>struct EmergencyProtocol</h4></div><div><h4>struct ChatbotInquiry</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register_contract(None, TelemedicineContract);
+    let client = TelemedicineContractClient::new(&env, &contract_id);
+    let admin = generate_test_address(&env);
+
+    client.initialize(&admin);
+
+    let (providers, patients, consultations, prescriptions, alerts, emergencies) =</code></pre></section>
+      </article>
+    
+      <article id="timelock">
+        <h2 style="color:var(--accent)">timelock</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, delay_seconds: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>Option<TimelockConfig></code></td></tr><tr><td><code>queue</code></td><td><code>env: Env, id: u64, target: Address, call: BytesN<32></code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>execute</code></td><td><code>env: Env, id: u64</code></td><td><code>Result<(), Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct TimelockConfig</h4></div><div><h4>struct QueuedTx</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="token_sale">
+        <h2 style="color:var(--accent)">token_sale</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              
+            </tbody>
+          </table>
+        </section>
+        
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let owner = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let (token_address, _token_client, _token_admin) = create_token_contract(&env, &owner);
+
+    let contract_id = env.register_contract(None, TokenSaleContract);
+    let client = TokenSaleContractClient::new(&env, &contract_id);</code></pre></section>
+      </article>
+    
+      <article id="treasury_controller">
+        <h2 style="color:var(--accent)">treasury_controller</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>add_supported_token</code></td><td><code>env: Env, token_address: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>approve_proposal</code></td><td><code>env: Env, signer: Address, proposal_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>execute_proposal</code></td><td><code>env: Env, executor: Address, proposal_id: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>emergency_halt</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>resume_operations</code></td><td><code>env: Env, caller: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_config</code></td><td><code>env: Env</code></td><td><code>TreasuryConfig</code></td></tr><tr><td><code>get_proposal</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>TreasuryProposal</code></td></tr><tr><td><code>get_proposal_count</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>is_proposal_executable</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>bool</code></td></tr><tr><td><code>gnosis_get_threshold</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>gnosis_get_owners</code></td><td><code>env: Env</code></td><td><code>Vec<Address></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum Error</h4></div><div><h4>enum ProposalType</h4></div><div><h4>enum ProposalStatus</h4></div><div><h4>struct TreasuryProposal</h4></div><div><h4>struct MultisigConfig</h4></div><div><h4>struct TreasuryConfig</h4></div><div><h4>struct WithdrawalRecord</h4></div><div><h4>enum DataKey</h4></div></section>
+        <section><h3>Examples</h3><pre><code>// Simple test to verify error types are defined correctly
+        let _error = Error::NotInitialized;
+        let _error = Error::TransferFailed;
+    }
+
+    #[test]
+    fn test_proposal_types_exist() {
+        // Test that our proposal types are properly defined
+        let _withdrawal = ProposalType::Withdrawal;</code></pre></section>
+      </article>
+    
+      <article id="upgrade_manager">
+        <h2 style="color:var(--accent)">upgrade_manager</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>execute</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>Result<(), UpgradeManagerError></code></td></tr><tr><td><code>execute_emergency</code></td><td><code>env: Env, proposal_id: u64</code></td><td><code>Result<(), UpgradeManagerError></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct UpgradeProposal</h4></div><div><h4>enum UpgradeManagerError</h4></div><div><h4>struct Config</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let v1 = Address::generate(&env);
+    let v2 = Address::generate(&env);
+    let v3 = Address::generate(&env);
+    let validators = Vec::from_array(&env, [v1.clone(), v2.clone(), v3.clone()]);</code></pre></section>
+      </article>
+    
+      <article id="upgradeability">
+        <h2 style="color:var(--accent)">upgradeability</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>get_version</code></td><td><code>env: &Env</code></td><td><code>u32</code></td></tr><tr><td><code>set_version</code></td><td><code>env: &Env, version: u32</code></td><td><code>()</code></td></tr><tr><td><code>get_admin</code></td><td><code>env: &Env</code></td><td><code>Option<Address></code></td></tr><tr><td><code>set_admin</code></td><td><code>env: &Env, admin: &Address</code></td><td><code>()</code></td></tr><tr><td><code>is_frozen</code></td><td><code>env: &Env</code></td><td><code>bool</code></td></tr><tr><td><code>freeze</code></td><td><code>env: &Env</code></td><td><code>()</code></td></tr><tr><td><code>add_history</code></td><td><code>env: &Env, history: UpgradeHistory</code></td><td><code>()</code></td></tr><tr><td><code>get_history</code></td><td><code>env: &Env</code></td><td><code>Vec<UpgradeHistory></code></td></tr><tr><td><code>set_deprecated_functions</code></td><td><code>env: &Env, deprecations: &Vec<DeprecatedFunction></code></td><td><code>()</code></td></tr><tr><td><code>get_deprecated_functions</code></td><td><code>env: &Env</code></td><td><code>Vec<DeprecatedFunction></code></td></tr><tr><td><code>authorize_upgrade</code></td><td><code>env: &Env</code></td><td><code>Result<Address, UpgradeError></code></td></tr><tr><td><code>rollback</code></td><td><code>env: &Env</code></td><td><code>Result<(), UpgradeError></code></td></tr><tr><td><code>get_deprecated_functions</code></td><td><code>env: &Env</code></td><td><code>Vec<DeprecatedFunction></code></td></tr><tr><td><code>get_deprecated_function</code></td><td><code>env: &Env, function: Symbol</code></td><td><code>Option<DeprecatedFunction></code></td></tr><tr><td><code>emit_deprecation_warning</code></td><td><code>env: &Env, function: Symbol</code></td><td><code>Result<(), UpgradeError></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum UpgradeError</h4></div><div><h4>struct UpgradeHistory</h4></div><div><h4>struct DeprecatedFunction</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    storage::set_admin(&env, &admin);
+
+    let deprecation = sample_deprecation(&env);
+    let deprecations = Vec::from_array(&env, [deprecation.clone()]);</code></pre></section>
+      </article>
+    
+      <article id="zk_verifier">
+        <h2 style="color:var(--accent)">zk_verifier</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address, default_ttl: u64</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>set_default_ttl</code></td><td><code>env: Env, caller: Address, ttl: u64</code></td><td><code>Result<bool, Error></code></td></tr><tr><td><code>get_default_ttl</code></td><td><code>env: Env</code></td><td><code>u64</code></td></tr><tr><td><code>get_verifying_key</code></td><td><code>env: Env, version: u32</code></td><td><code>Option<VerifyingKeyConfig></code></td></tr><tr><td><code>get_current_version</code></td><td><code>env: Env</code></td><td><code>u32</code></td></tr><tr><td><code>compute_proof_hash</code></td><td><code>env: Env, proof: Bytes</code></td><td><code>BytesN<32></code></td></tr><tr><td><code>mark_nullifier_used</code></td><td><code>env: Env, nullifier: BytesN<32></code></td><td><code>bool</code></td></tr><tr><td><code>is_nullifier_used</code></td><td><code>env: Env, nullifier: BytesN<32></code></td><td><code>bool</code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>struct VerifyingKeyConfig</h4></div><div><h4>struct ProofAttestation</h4></div><div><h4>struct NullifierRecord</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        
+      </article>
+    
+      <article id="zkp_registry">
+        <h2 style="color:var(--accent)">zkp_registry</h2>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Params</th><th>Returns</th></tr></thead>
+            <tbody>
+              <tr><td><code>initialize</code></td><td><code>env: Env, admin: Address</code></td><td><code>Result<(), Error></code></td></tr><tr><td><code>get_range_proof</code></td><td><code>env: Env, proof_id: BytesN<32></code></td><td><code>Result<RangeProof, Error></code></td></tr><tr><td><code>get_circuit_params</code></td><td><code>env: Env, circuit_id: String</code></td><td><code>Result<ZKPCircuitParams, Error></code></td></tr><tr><td><code>get_gas_stats</code></td><td><code>env: Env, user: Address</code></td><td><code>Result<u64, Error></code></td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section><h3>Types</h3><div><h4>enum ZKPType</h4></div><div><h4>enum ZKPHashFunction</h4></div><div><h4>struct ZKProof</h4></div><div><h4>struct MedicalRecordProof</h4></div><div><h4>struct RangeProof</h4></div><div><h4>struct CredentialProof</h4></div><div><h4>struct RecursiveProof</h4></div><div><h4>struct ZKPCircuitParams</h4></div><div><h4>struct ZKPVerificationResult</h4></div><div><h4>enum DataKey</h4></div><div><h4>enum Error</h4></div></section>
+        <section><h3>Examples</h3><pre><code>let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+
+    client.initialize(&admin);
+
+    let result = client.try_get_circuit_params(&String::from_str(&env, "test_circuit"));</code></pre></section>
+      </article>
+    
+  </main>
+</body>
+</html>

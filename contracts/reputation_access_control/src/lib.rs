@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation_access_control - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
@@ -19,6 +20,22 @@ pub enum Error {
     PolicyNotFound = 7,
     ProviderNotVerified = 8,
     CredentialExpired = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InsufficientReputation => write!(f, "insufficient reputation"),
+            Error::AccessDenied => write!(f, "access denied"),
+            Error::InvalidResource => write!(f, "invalid resource"),
+            Error::PolicyNotFound => write!(f, "policy not found"),
+            Error::ProviderNotVerified => write!(f, "provider not verified"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+        }
+    }
 }
 
 #[contracttype]
@@ -191,8 +208,8 @@ impl ReputationAccessControl {
                 if !Self::check_time_restriction(&env, time_restriction)? {
                     return Ok(false);
                 }
-            }
-            TimeRestrictionPolicy::None => {}
+            },
+            TimeRestrictionPolicy::None => {},
         }
 
         // Check if requested access level is allowed
@@ -409,6 +426,7 @@ impl ReputationAccessControl {
     }
 
     // Helper functions
+    #[must_use]
     fn set_default_policies(env: &Env) -> Result<(), Error> {
         // Credential symbols – all ≤ 9 chars
         let med_lic = symbol_short!("MedLic");
@@ -515,6 +533,7 @@ impl ReputationAccessControl {
         Ok(true)
     }
 
+    #[must_use]
     fn has_emergency_access(env: &Env, provider: &Address) -> Result<bool, Error> {
         Ok(env
             .storage()
@@ -530,6 +549,7 @@ impl ReputationAccessControl {
         BytesN::from_array(env, &data)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -538,16 +558,13 @@ impl ReputationAccessControl {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin == *caller {
-            Ok(())
-        } else {
-            Err(Error::NotAuthorized)
-        }
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 }

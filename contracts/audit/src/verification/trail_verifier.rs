@@ -1,41 +1,40 @@
-use crate::types::{AuditRecord, DataKey};
-use soroban_sdk::{xdr::ToXdr, Address, BytesN, Env};
+use crate::types::{AuditLog, DataKey};
+use soroban_sdk::{xdr::ToXdr, BytesN, Env};
 
 pub struct TrailVerifier;
 
 impl TrailVerifier {
-    /// Recalculates the cumulative Hash to verify entire audit trail integrity.
-    pub fn verify_full_integrity(env: &Env) -> BytesN<32> {
-        let count = env
+    /// Recomputes the rolling hash over all AuditLog entries and returns it.
+    /// Compare against the stored `RollingHash` to detect tampering.
+    pub fn verify_log_integrity(env: &Env) -> BytesN<32> {
+        let count: u64 = env
             .storage()
             .instance()
-            .get(&DataKey::RecordCount)
+            .get(&DataKey::LogCount)
             .unwrap_or(0u64);
         let mut rolling = BytesN::from_array(env, &[0u8; 32]);
 
-        for i in 0..count {
-            if let Some(record) = env
+        for i in 1..=count {
+            if let Some(log) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, AuditRecord>(&DataKey::Record(i))
+                .get::<DataKey, AuditLog>(&DataKey::Log(i))
             {
                 let mut buffer = soroban_sdk::Bytes::new(env);
                 buffer.append(&rolling.to_xdr(env));
-                buffer.append(&record.id.to_xdr(env));
-                buffer.append(&record.action_hash.to_xdr(env));
+                buffer.append(&log.id.to_xdr(env));
+                buffer.append(&log.timestamp.to_xdr(env));
+                let action_disc = log.action as u32;
+                buffer.append(&action_disc.to_xdr(env));
+                buffer.append(&log.target.clone().to_xdr(env));
                 rolling = env.crypto().sha256(&buffer).into();
             }
         }
         rolling
     }
 
-    /// Verifies if a specific record's rolling hash matches the stored value.
-    pub fn is_audit_tampered(env: &Env, stored_rolling: BytesN<32>) -> bool {
-        let current_rolling: BytesN<32> = env
-            .storage()
-            .instance()
-            .get(&DataKey::RollingHash)
-            .unwrap_or(BytesN::from_array(env, &[0u8; 32]));
-        current_rolling != stored_rolling
+    /// Returns true if the AuditLog chain has been tampered with.
+    pub fn is_log_chain_tampered(env: &Env, expected: BytesN<32>) -> bool {
+        Self::verify_log_integrity(env) != expected
     }
 }

@@ -1,6 +1,9 @@
 #![no_std]
+//! emr_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
+#[cfg(test)]
+mod benchmarks;
 #[cfg(test)]
 mod test;
 
@@ -8,19 +11,15 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::string::{String as RustString, ToString};
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::alloc::{GlobalAlloc, Layout};
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::arch::wasm32;
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::cell::UnsafeCell;
-#[cfg(all(target_arch = "wasm32", not(test)))]
-use core::ptr;
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, vec, Address, BytesN, Env, Map, String,
     Symbol, Vec,
 };
+
+#[cfg(all(target_arch = "wasm32", not(test)))]
+/// WASM page size in bytes (64 KiB)
+const WASM_PAGE_SIZE: usize = 65536;
 
 #[cfg(all(target_arch = "wasm32", not(test)))]
 struct WasmBumpAllocator {
@@ -38,7 +37,7 @@ unsafe impl GlobalAlloc for WasmBumpAllocator {
         let next = self.next.get();
 
         if *next == 0 {
-            *next = (wasm32::memory_size(0) as usize) * 65536;
+            *next = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
         }
 
         let aligned = (*next + align - 1) & !(align - 1);
@@ -47,10 +46,10 @@ unsafe impl GlobalAlloc for WasmBumpAllocator {
             None => return ptr::null_mut(),
         };
 
-        let current_bytes = (wasm32::memory_size(0) as usize) * 65536;
+        let current_bytes = (wasm32::memory_size(0) as usize) * WASM_PAGE_SIZE;
         if end > current_bytes {
             let additional = end - current_bytes;
-            let pages = additional.div_ceil(65536);
+            let pages = additional.div_ceil(WASM_PAGE_SIZE);
             if wasm32::memory_grow(0, pages) == usize::MAX {
                 return ptr::null_mut();
             }
@@ -336,17 +335,52 @@ pub enum Error {
     UnsupportedEncoding = 31,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::EMRSystemNotFound => write!(f, "e m r system not found"),
+            Error::EMRSystemAlreadyExists => write!(f, "e m r system already exists"),
+            Error::OnboardingNotFound => write!(f, "onboarding not found"),
+            Error::OnboardingAlreadyExists => write!(f, "onboarding already exists"),
+            Error::VerificationNotFound => write!(f, "verification not found"),
+            Error::NetworkNodeNotFound => write!(f, "network node not found"),
+            Error::AgreementNotFound => write!(f, "agreement not found"),
+            Error::TestNotFound => write!(f, "test not found"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::InvalidEMRSystem => write!(f, "invalid e m r system"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::InvalidNPI => write!(f, "invalid n p i"),
+            Error::InvalidLicenseNumber => write!(f, "invalid license number"),
+            Error::LicenseExpired => write!(f, "license expired"),
+            Error::InvalidAgreement => write!(f, "invalid agreement"),
+            Error::AgreementNotActive => write!(f, "agreement not active"),
+            Error::TestFailed => write!(f, "test failed"),
+            Error::InvalidTestType => write!(f, "invalid test type"),
+            Error::DuplicateTest => write!(f, "duplicate test"),
+            Error::FHIRContractNotSet => write!(f, "f h i r contract not set"),
+            Error::OperationFailed => write!(f, "operation failed"),
+            Error::UnsupportedMessageFormat => write!(f, "unsupported message format"),
+            Error::MessageParseFailed => write!(f, "message parse failed"),
+            Error::UnsupportedMessageType => write!(f, "unsupported message type"),
+            Error::InvalidMessagePayload => write!(f, "invalid message payload"),
+            Error::MessageNotFound => write!(f, "message not found"),
+            Error::ValidationReportNotFound => write!(f, "validation report not found"),
+            Error::TransformationNotFound => write!(f, "transformation not found"),
+            Error::UnsupportedEncoding => write!(f, "unsupported encoding"),
+        }
+    }
+}
+
 #[contract]
 pub struct EMRIntegrationContract;
 
 #[contractimpl]
 impl EMRIntegrationContract {
     pub fn initialize(env: Env, admin: Address, fhir_contract: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::EMRSystemAlreadyExists)?;
         admin.require_auth();
-
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::EMRSystemAlreadyExists);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage()
@@ -868,7 +902,7 @@ impl EMRIntegrationContract {
                 framed.push('\u{001C}');
                 framed.push('\r');
                 framed
-            }
+            },
             TransportProtocol::HTTP => format!(
                 "POST /hl7 HTTP/1.1\r\nContent-Type: {}\r\nX-Message-Type: {}\r\n\r\n{}",
                 Self::to_rust_string(&message.content_type),
@@ -982,6 +1016,7 @@ impl EMRIntegrationContract {
         Ok(true)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
         let contract_admin: Address = env
             .storage()
@@ -994,6 +1029,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().persistent().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);
@@ -1001,6 +1037,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_emr_system_exists(env: &Env, system_id: &String) -> Result<(), Error> {
         let systems: Map<String, EMRSystem> = env
             .storage()
@@ -1013,6 +1050,7 @@ impl EMRIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn assert_supported_encoding(encoding: CharacterEncoding) -> Result<(), Error> {
         match encoding {
             CharacterEncoding::UTF8
@@ -1039,10 +1077,10 @@ impl EMRIntegrationContract {
                 MessagingStandard::HL7v2 => Self::parse_hl7v2(env, version_override, &payload_rs)?,
                 MessagingStandard::HL7v3 => {
                     Self::parse_xml_message(env, version_override, &payload_rs, false)?
-                }
+                },
                 MessagingStandard::CDA => {
                     Self::parse_xml_message(env, version_override, &payload_rs, true)?
-                }
+                },
             };
 
         Self::assert_supported_message_type(&message_type)?;
@@ -1333,7 +1371,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &format!("{msh}\r{pid}\r{obx}"))
-            }
+            },
             MessagingStandard::HL7v3 => {
                 let root = Self::to_rust_string(message_type);
                 let xml = format!(
@@ -1361,7 +1399,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &xml)
-            }
+            },
             MessagingStandard::CDA => {
                 let xml = format!(
                     "<?xml version=\"1.0\" encoding=\"{}\"?><ClinicalDocument><id extension=\"{}\" root=\"2.16.840.1.113883.19.5\"/><code code=\"{}\"/><title>{}</title><recordTarget><patientRole patientId=\"{}\"><patient><name>{}</name></patient></patientRole></recordTarget><component><structuredBody><component><section><text>{}</text></section></component></structuredBody></component></ClinicalDocument>",
@@ -1394,7 +1432,7 @@ impl EMRIntegrationContract {
                     )),
                 );
                 String::from_str(env, &xml)
-            }
+            },
         }
     }
 
@@ -1437,7 +1475,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "PID"),
                     });
                 }
-            }
+            },
             MessagingStandard::HL7v3 => {
                 if !payload.contains("interactionId") {
                     issues.push_back(ValidationIssue {
@@ -1447,7 +1485,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "interactionId"),
                     });
                 }
-            }
+            },
             MessagingStandard::CDA => {
                 if !payload.contains("<ClinicalDocument") {
                     issues.push_back(ValidationIssue {
@@ -1468,7 +1506,7 @@ impl EMRIntegrationContract {
                         location: String::from_str(env, "recordTarget"),
                     });
                 }
-            }
+            },
         }
 
         MessageValidationReport {
@@ -1545,6 +1583,7 @@ impl EMRIntegrationContract {
         ]
     }
 
+    #[must_use]
     fn assert_supported_message_type(message_type: &String) -> Result<(), Error> {
         let candidate = Self::to_rust_string(message_type);
         if Self::supported_message_types()

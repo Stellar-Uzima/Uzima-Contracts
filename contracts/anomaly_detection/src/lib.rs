@@ -1,10 +1,10 @@
+//! anomaly_detection - Healthcare smart contract on Stellar blockchain.
 // Anomaly Detection Contract - Healthcare anomaly detection with proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]
-#![allow(dead_code)]
-
+use common_error::{get_suggestion as common_suggestion, CommonError};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     IntoVal, Map, String, Symbol,
@@ -96,6 +96,24 @@ pub enum Error {
     NotWhitelisted = 7,
     AlertNotFound = 8,
     AlertAlreadyResolved = 9,
+    AlreadyInitialized = 10,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ConfigNotSet => write!(f, "config not set"),
+            Error::Disabled => write!(f, "disabled"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::NotWhitelisted => write!(f, "not whitelisted"),
+            Error::AlertNotFound => write!(f, "alert not found"),
+            Error::AlertAlreadyResolved => write!(f, "alert already resolved"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
 }
 
 #[contract]
@@ -103,15 +121,20 @@ pub struct AnomalyDetectionContract;
 
 #[contractimpl]
 impl AnomalyDetectionContract {
-    pub fn initialize(env: Env, admin: Address, detector: Address, threshold_bps: u32) -> bool {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        detector: Address,
+        threshold_bps: u32,
+    ) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            panic!("Already initialized");
+            return Err(Error::AlreadyInitialized);
         }
 
         if threshold_bps > 10_000 {
-            panic!("threshold_bps must be <= 10000");
+            return Err(Error::InvalidScore);
         }
 
         let config = AnomalyDetectionConfig {
@@ -124,9 +147,10 @@ impl AnomalyDetectionContract {
 
         env.storage().instance().set(&DataKey::Config, &config);
         env.storage().instance().set(&ANOMALY_COUNTER, &0u64);
-        true
+        Ok(())
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
         env.storage()
             .instance()
@@ -134,6 +158,7 @@ impl AnomalyDetectionContract {
             .ok_or(Error::ConfigNotSet)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -142,19 +167,12 @@ impl AnomalyDetectionContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_detector(env: &Env, caller: &Address) -> Result<AnomalyDetectionConfig, Error> {
         let config = Self::load_config(env)?;
         if config.detector != *caller {
             return Err(Error::NotAuthorized);
         }
-        if !config.enabled {
-            return Err(Error::Disabled);
-        }
-        Ok(config)
-    }
-
-    fn ensure_enabled(env: &Env) -> Result<AnomalyDetectionConfig, Error> {
-        let config = Self::load_config(env)?;
         if !config.enabled {
             return Err(Error::Disabled);
         }
@@ -175,7 +193,7 @@ impl AnomalyDetectionContract {
         new_threshold: Option<u32>,
         new_sensitivity: Option<u32>,
         enabled: Option<bool>,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         let mut config = Self::ensure_admin(&env, &caller)?;
 
@@ -202,22 +220,22 @@ impl AnomalyDetectionContract {
         }
 
         env.storage().instance().set(&DataKey::Config, &config);
-        env.events().publish((symbol_short!("CfgUpdate"),), true);
+        env.events().publish((Symbol::new(&env, "cfg_update"),), true);
 
-        Ok(true)
+        Ok(())
     }
 
     pub fn set_audit_forensics(
         env: Env,
         admin: Address,
         forensics: Address,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         admin.require_auth();
         Self::ensure_admin(&env, &admin)?;
         env.storage()
             .instance()
             .set(&DataKey::AuditForensicsContract, &forensics);
-        Ok(true)
+        Ok(())
     }
 
     pub fn detect_anomaly(
@@ -469,7 +487,7 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events().publish((symbol_short!("AlertAck"),), alert_id);
+        env.events().publish((Symbol::new(&env, "alert_ack"),), alert_id);
         Ok(true)
     }
 
@@ -500,7 +518,7 @@ impl AnomalyDetectionContract {
             .instance()
             .set(&DataKey::Alert(alert_id), &alert);
 
-        env.events().publish((symbol_short!("AlertRes"),), alert_id);
+        env.events().publish((Symbol::new(&env, "alert_res"),), alert_id);
         Ok(true)
     }
 
@@ -579,6 +597,21 @@ impl AnomalyDetectionContract {
             .instance()
             .get(&DataKey::AlertCount)
             .unwrap_or(0)
+    }
+}
+
+pub fn get_suggestion(error: Error) -> Symbol {
+    match error {
+        Error::NotAuthorized => common_suggestion(CommonError::Unauthorized),
+        Error::ConfigNotSet => common_suggestion(CommonError::NotInitialized),
+        Error::AlreadyInitialized => common_suggestion(CommonError::AlreadyInitialized),
+        Error::Disabled => common_suggestion(CommonError::InvalidState),
+        Error::RecordNotFound | Error::AlertNotFound => common_suggestion(CommonError::NotFound),
+        Error::NotWhitelisted => common_suggestion(CommonError::AccessDenied),
+        Error::InvalidScore | Error::InvalidSeverity => {
+            common_suggestion(CommonError::InvalidInput)
+        },
+        Error::AlertAlreadyResolved => common_suggestion(CommonError::InvalidState),
     }
 }
 

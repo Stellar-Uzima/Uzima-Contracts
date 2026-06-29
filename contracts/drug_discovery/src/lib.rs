@@ -1,4 +1,5 @@
 #![no_std]
+//! drug_discovery - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]
@@ -10,6 +11,7 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
     String, Symbol, Vec,
 };
+use common_error::{get_suggestion as common_suggestion, CommonError};
 
 #[derive(Clone)]
 #[contracttype]
@@ -148,6 +150,23 @@ pub enum Error {
     BenchmarkNotMet = 6,
     IntegrationMissing = 7,
     QuantumDisabled = 8,
+    AlreadyInitialized = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::MoleculeNotFound => write!(f, "molecule not found"),
+            Error::PredictionNotFound => write!(f, "prediction not found"),
+            Error::BenchmarkNotMet => write!(f, "benchmark not met"),
+            Error::IntegrationMissing => write!(f, "integration missing"),
+            Error::QuantumDisabled => write!(f, "quantum disabled"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
 }
 
 #[soroban_sdk::contractclient(name = "GenomicDataClient")]
@@ -177,11 +196,16 @@ pub struct DrugDiscoveryPlatform;
 
 #[contractimpl]
 impl DrugDiscoveryPlatform {
-    pub fn initialize(env: Env, admin: Address, analyzer: Address, predictor: Address) -> bool {
+    pub fn initialize(
+        env: Env,
+        admin: Address,
+        analyzer: Address,
+        predictor: Address,
+    ) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            return false;
+            return Err(Error::AlreadyInitialized);
         }
 
         let cfg = PlatformConfig {
@@ -203,9 +227,10 @@ impl DrugDiscoveryPlatform {
         env.storage().instance().set(&MATCH_COUNT, &0u64);
         env.storage().instance().set(&QUANTUM_COUNT, &0u64);
         env.storage().instance().set(&CAMPAIGN_COUNT, &0u64);
-        true
+        Ok(())
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<PlatformConfig, Error> {
         env.storage()
             .instance()
@@ -213,6 +238,7 @@ impl DrugDiscoveryPlatform {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.admin != *caller {
@@ -221,6 +247,7 @@ impl DrugDiscoveryPlatform {
         Ok(cfg)
     }
 
+    #[must_use]
     fn ensure_analyzer(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.analyzer != *caller {
@@ -229,6 +256,7 @@ impl DrugDiscoveryPlatform {
         Ok(cfg)
     }
 
+    #[must_use]
     fn ensure_predictor(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.predictor != *caller {
@@ -251,7 +279,7 @@ impl DrugDiscoveryPlatform {
         clinical_trial_contract: Option<Address>,
         large_scale_mode: Option<bool>,
         quantum_enabled: Option<bool>,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         caller.require_auth();
         let mut cfg = Self::ensure_admin(&env, &caller)?;
 
@@ -270,7 +298,7 @@ impl DrugDiscoveryPlatform {
 
         env.storage().instance().set(&DataKey::Config, &cfg);
         env.events().publish((symbol_short!("CfgInt"),), true);
-        Ok(true)
+        Ok(())
     }
 
     pub fn register_molecule(
@@ -615,5 +643,20 @@ impl DrugDiscoveryPlatform {
             .instance()
             .get(&DataKey::CampaignReport(campaign_id))
             .ok_or(Error::PredictionNotFound)
+    }
+}
+
+pub fn get_suggestion(error: Error) -> Symbol {
+    match error {
+        Error::NotAuthorized => common_suggestion(CommonError::Unauthorized),
+        Error::NotInitialized => common_suggestion(CommonError::NotInitialized),
+        Error::AlreadyInitialized => common_suggestion(CommonError::AlreadyInitialized),
+        Error::InvalidInput => common_suggestion(CommonError::InvalidInput),
+        Error::MoleculeNotFound | Error::PredictionNotFound => {
+            common_suggestion(CommonError::NotFound)
+        },
+        Error::BenchmarkNotMet => common_suggestion(CommonError::InvalidState),
+        Error::IntegrationMissing => common_suggestion(CommonError::ExternalContractNotSet),
+        Error::QuantumDisabled => common_suggestion(CommonError::InvalidState),
     }
 }

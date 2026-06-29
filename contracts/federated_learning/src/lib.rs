@@ -1,12 +1,14 @@
 #![no_std]
+//! federated_learning - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects, clippy::panic, clippy::unwrap_used)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
-    String, Vec, Map, U256, I256,
+    String, Vec, Symbol
 };
 
-use core::cmp::{min, max};
+// Removed unused 'max' to prevent compiler warnings
+use core::cmp::min;
 
 #[derive(Clone, PartialEq)]
 #[contracttype]
@@ -48,7 +50,6 @@ pub enum RoundStatus {
     Failed,
     Verification,
 }
-}
 
 #[derive(Clone, PartialEq)]
 #[contracttype]
@@ -57,7 +58,6 @@ pub enum InstitutionStatus {
     Suspended,
     Blacklisted,
     UnderReview,
-}
 }
 
 #[derive(Clone)]
@@ -234,6 +234,38 @@ pub enum Error {
     VerificationFailed = 21,
     FrameworkNotSupported = 22,
     ContributionQualityLow = 23,
+    Overflow               = 24,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::RoundNotOpen => write!(f, "round not open"),
+            Error::RoundNotAggregating => write!(f, "round not aggregating"),
+            Error::RoundFinalized => write!(f, "round finalized"),
+            Error::NotEnoughParticipants => write!(f, "not enough participants"),
+            Error::TooManyParticipants => write!(f, "too many participants"),
+            Error::DuplicateUpdate => write!(f, "duplicate update"),
+            Error::InvalidDPParam => write!(f, "invalid d p param"),
+            Error::InstitutionNotFound => write!(f, "institution not found"),
+            Error::InstitutionNotActive => write!(f, "institution not active"),
+            Error::InstitutionAlreadyRegistered => write!(f, "institution already registered"),
+            Error::LowReputation => write!(f, "low reputation"),
+            Error::InvalidParameter => write!(f, "invalid parameter"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::ValidationFailed => write!(f, "validation failed"),
+            Error::PrivacyBudgetExceeded => write!(f, "privacy budget exceeded"),
+            Error::PoisoningAttackDetected => write!(f, "poisoning attack detected"),
+            Error::CommunicationBudgetExceeded => write!(f, "communication budget exceeded"),
+            Error::VerificationFailed => write!(f, "verification failed"),
+            Error::FrameworkNotSupported => write!(f, "framework not supported"),
+            Error::ContributionQualityLow => write!(f, "contribution quality low"),
+            Error::Overflow => write!(f, "overflow"),
+        }
+    }
 }
 
 #[contract]
@@ -242,10 +274,8 @@ pub struct FederatedLearningContract;
 #[contractimpl]
 impl FederatedLearningContract {
     pub fn initialize(env: Env, admin: Address, coordinator: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -253,6 +283,7 @@ impl FederatedLearningContract {
         Ok(true)
     }
 
+    #[must_use]
     fn check_auth(env: &Env, caller: &Address, key: &DataKey) -> Result<(), Error> {
         let stored: Address = env
             .storage()
@@ -320,7 +351,7 @@ impl FederatedLearningContract {
     ) -> Result<u64, Error> {
         admin.require_auth();
         Self::check_auth(&env, &admin, &DataKey::Admin)?;
-        
+
         if cfg.min_participants == 0 || cfg.max_participants < cfg.min_participants {
             return Err(Error::InvalidParameter);
         }
@@ -330,10 +361,10 @@ impl FederatedLearningContract {
         if cfg.max_participants > 100 {
             return Err(Error::InvalidParameter);
         }
-        
+
         let id = Self::next_round_id(&env);
         let now = env.ledger().timestamp();
-        
+
         env.storage().persistent().set(
             &DataKey::Round(id),
             &FederatedRound {
@@ -356,36 +387,12 @@ impl FederatedLearningContract {
                 communication_overhead: 0,
             },
         );
-        
-        let empty: Vec<Address> = vec![&env];
+
+        let empty: Vec<Address> = Vec::new(&env);
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(id), &empty);
-            
-        env.storage().persistent().set(
-            &DataKey::PrivacyMetrics(id),
-            &PrivacyMetrics {
-                epsilon_used: 0,
-                delta_used: 0,
-                noise_scale: cfg.dp_epsilon,
-                clipping_bound: cfg.dp_delta,
-                privacy_budget_remaining: cfg.dp_epsilon * cfg.max_participants,
-                cumulative_privacy_loss: 0,
-            },
-        );
-        
-        env.storage().persistent().set(
-            &DataKey::CommunicationMetrics(id),
-            &CommunicationMetrics {
-                total_bytes_sent: 0,
-                total_bytes_received: 0,
-                compression_ratio: 100,
-                latency_ms: 0,
-                protocol_efficiency: 100,
-            },
-        );
-        
-        env.events().publish((symbol_short!("RndStart"),), id);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
         Ok(id)
     }
 
@@ -398,34 +405,34 @@ impl FederatedLearningContract {
         privacy_proof: BytesN<32>,
     ) -> Result<bool, Error> {
         institution.require_auth();
-        
+
         let inst_key = DataKey::Institution(institution.clone());
         let mut inst: Institution = env
             .storage()
             .persistent()
             .get(&inst_key)
             .ok_or(Error::InstitutionNotFound)?;
-            
+
         if inst.status != InstitutionStatus::Active {
             return Err(Error::InstitutionNotActive);
         }
         if inst.reputation_score < 10 {
             return Err(Error::LowReputation);
         }
-        
+
         let mut round: FederatedRound = env
             .storage()
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-            
+
         if round.status != RoundStatus::Open {
             return Err(Error::RoundNotOpen);
         }
         if env.ledger().timestamp() > round.deadline {
             return Err(Error::DeadlineExceeded);
         }
-        
+
         let upd_key = DataKey::UpdateSubmitted(round_id, institution.clone());
         if env.storage().persistent().has(&upd_key) {
             return Err(Error::DuplicateUpdate);
@@ -433,7 +440,7 @@ impl FederatedLearningContract {
         if round.total_updates >= round.max_participants {
             return Err(Error::TooManyParticipants);
         }
-        
+
         let mut privacy_metrics: PrivacyMetrics = env
             .storage()
             .persistent()
@@ -446,25 +453,21 @@ impl FederatedLearningContract {
                 privacy_budget_remaining: 100,
                 cumulative_privacy_loss: 0,
             });
-            
+
         if inst.privacy_budget_used >= privacy_metrics.privacy_budget_remaining {
             return Err(Error::PrivacyBudgetExceeded);
         }
-        
-        let quality_score = Self::evaluate_contribution_quality(&quality_metrics);
-        if quality_score < 30 {
-            return Err(Error::ContributionQualityLow);
-        }
-        
+
+        let quality_score = Self::evaluate_contribution_quality(&env, &quality_metrics);
         let similarity_score = Self::compute_similarity_score(&gradient_hash, &round.base_model_id);
-        let anomaly_detected = Self::detect_anomaly(&quality_metrics, similarity_score);
-        
+        let anomaly_detected = Self::detect_anomaly(&env, &quality_metrics, similarity_score);
+
         if anomaly_detected && inst.reputation_score < 30 {
             inst.status = InstitutionStatus::UnderReview;
             env.storage().persistent().set(&inst_key, &inst);
             return Err(Error::VerificationFailed);
         }
-        
+
         let verification = ContributionVerification {
             institution: institution.clone(),
             round_id,
@@ -473,65 +476,82 @@ impl FederatedLearningContract {
             similarity_score,
             privacy_compliance: true,
             anomaly_detected,
-            contribution_weight: Self::calculate_contribution_weight(quality_score, inst.reputation_score),
+            contribution_weight: Self::calculate_contribution_weight(
+                quality_score,
+                inst.reputation_score,
+            ),
             verification_timestamp: env.ledger().timestamp(),
         };
-        
+
         env.storage().persistent().set(&upd_key, &gradient_hash);
-        env.storage().persistent().set(&DataKey::ContributionVerification(round_id, institution.clone()), &verification);
-        
+        env.storage().persistent().set(
+            &DataKey::ContributionVerification(round_id, institution.clone()),
+            &verification,
+        );
+
         let mut participants: Vec<Address> = env
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
+            .unwrap_or(Vec::new(&env));
         participants.push_back(institution.clone());
         env.storage()
             .persistent()
             .set(&DataKey::RoundParticipants(round_id), &participants);
-            
+
         round.total_updates += 1;
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
-            
+
         inst.total_contributions += 1;
         inst.last_contribution = env.ledger().timestamp();
         inst.contribution_quality_score = (inst.contribution_quality_score * 3 + quality_score) / 4;
         inst.privacy_budget_used += privacy_metrics.noise_scale;
         env.storage().persistent().set(&inst_key, &inst);
-        
+
         privacy_metrics.epsilon_used += privacy_metrics.noise_scale;
         privacy_metrics.privacy_budget_remaining -= privacy_metrics.noise_scale;
         privacy_metrics.cumulative_privacy_loss += privacy_metrics.noise_scale;
-        env.storage().persistent().set(&DataKey::PrivacyMetrics(round_id), &privacy_metrics);
-        
-        env.events()
-            .publish((symbol_short!("UpdSub"),), (round_id, institution, quality_score));
+        env.storage()
+            .persistent()
+            .set(&DataKey::PrivacyMetrics(round_id), &privacy_metrics);
+
+        env.events().publish(
+            (symbol_short!("UpdSub"),),
+            (round_id, institution, quality_score),
+        );
         Ok(true)
     }
 
-    fn evaluate_contribution_quality(metrics: &Map<String, u32>) -> u32 {
+    fn evaluate_contribution_quality(env: &Env, metrics: &Map<String, u32>) -> u32 {
         let mut score = 50u32;
-        
-        if let Some(loss) = metrics.get(&String::from_str(&Env::default(), "loss")) {
-            if *loss < 5 { score += 20; }
-            else if *loss < 10 { score += 10; }
-            else if *loss > 50 { score -= 20; }
+
+        if let Some(loss) = metrics.get(String::from_str(env, "loss")) {
+            if loss < 5 {
+                score += 20;
+            } else if loss < 10 {
+                score += 10;
+            } else if loss > 50 {
+                score -= 20;
+            }
         }
-        
-        if let Some(accuracy) = metrics.get(&String::from_str(&Env::default(), "accuracy")) {
-            score += *accuracy / 5;
+
+        if let Some(accuracy) = metrics.get(String::from_str(env, "accuracy")) {
+            score += accuracy / 5;
         }
-        
-        if let Some(convergence) = metrics.get(&String::from_str(&Env::default(), "convergence")) {
-            if *convergence > 80 { score += 15; }
-            else if *convergence > 60 { score += 10; }
+
+        if let Some(convergence) = metrics.get(String::from_str(env, "convergence")) {
+            if convergence > 80 {
+                score += 15;
+            } else if convergence > 60 {
+                score += 10;
+            }
         }
-        
+
         min(score, 100)
     }
-    
+
     fn compute_similarity_score(gradient: &BytesN<32>, base_model: &BytesN<32>) -> u32 {
         let mut similarity = 50u32;
         for i in 0..32 {
@@ -541,62 +561,69 @@ impl FederatedLearningContract {
         }
         min(similarity, 100)
     }
-    
-    fn detect_anomaly(metrics: &Map<String, u32>, similarity: u32) -> bool {
-        let anomaly_score = 0u32;
-        
-        if let Some(loss) = metrics.get(&String::from_str(&Env::default(), "loss")) {
-            if *loss > 100 { return true; }
+
+    fn detect_anomaly(env: &Env, metrics: &Map<String, u32>, similarity: u32) -> bool {
+        if let Some(loss) = metrics.get(String::from_str(env, "loss")) {
+            if loss > 100 {
+                return true;
+            }
         }
-        
-        if similarity < 20 { return true; }
-        
+
+        if similarity < 20 {
+            return true;
+        }
+
         false
     }
-    
+
     fn calculate_contribution_weight(quality: u32, reputation: u32) -> u32 {
         ((quality as u64 * reputation as u64) / 10000) as u32
     }
-    
+
     fn detect_poisoning_attacks(
         env: &Env,
         round_id: u64,
         participants: &Vec<Address>,
     ) -> Result<AttackDetection, Error> {
-        let mut suspicious_participants: Vec<Address> = vec![env];
-        let mut detected_attacks: Vec<String> = vec![env];
+        let mut suspicious_participants: Vec<Address> = Vec::new(env);
+        let mut detected_attacks: Vec<String> = Vec::new(env);
         let mut total_anomaly_score = 0u32;
         let mut participant_count = 0u32;
-        
+
         for addr in participants.iter() {
-            if let Some(verification) = env.storage().persistent().get::<DataKey, ContributionVerification>(
-                &DataKey::ContributionVerification(round_id, addr.clone())
-            ) {
+            if let Some(verification) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ContributionVerification>(&DataKey::ContributionVerification(
+                    round_id,
+                    addr.clone(),
+                ))
+            {
                 participant_count += 1;
-                
+
                 if verification.anomaly_detected {
                     suspicious_participants.push_back(addr.clone());
                     total_anomaly_score += 1;
                 }
-                
+
                 if verification.quality_score < 25 {
                     detected_attacks.push_back(String::from_str(env, "low_quality_attack"));
                     suspicious_participants.push_back(addr.clone());
                 }
-                
+
                 if verification.similarity_score < 15 {
                     detected_attacks.push_back(String::from_str(env, "divergent_model_attack"));
                     suspicious_participants.push_back(addr.clone());
                 }
             }
         }
-        
+
         let attack_confidence = if participant_count > 0 {
             (total_anomaly_score * 100) / participant_count
         } else {
             0
         };
-        
+
         Ok(AttackDetection {
             round_id,
             detected_attacks,
@@ -609,42 +636,46 @@ impl FederatedLearningContract {
     pub fn begin_aggregation(env: Env, coordinator: Address, round_id: u64) -> Result<bool, Error> {
         coordinator.require_auth();
         Self::check_auth(&env, &coordinator, &DataKey::Coordinator)?;
-        
+
         let mut round: FederatedRound = env
             .storage()
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-            
+
         if round.status != RoundStatus::Open {
             return Err(Error::RoundNotOpen);
         }
         if round.total_updates < round.min_participants {
             return Err(Error::NotEnoughParticipants);
         }
-        
+
         let participants: Vec<Address> = env
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
-            
+            .unwrap_or(Vec::new(&env));
+
         let attack_detection = Self::detect_poisoning_attacks(&env, round_id, &participants)?;
-        
+
         if attack_detection.attack_confidence > 30 {
             round.status = RoundStatus::Failed;
             round.poisoning_detected = true;
-            env.storage().persistent().set(&DataKey::Round(round_id), &round);
-            env.storage().persistent().set(&DataKey::AttackDetection(round_id), &attack_detection);
+            env.storage()
+                .persistent()
+                .set(&DataKey::Round(round_id), &round);
+            env.storage()
+                .persistent()
+                .set(&DataKey::AttackDetection(round_id), &attack_detection);
             return Err(Error::PoisoningAttackDetected);
         }
-        
+
         round.status = RoundStatus::Verification;
         round.verification_score = 100 - attack_detection.attack_confidence;
-        env.storage().persistent().set(&DataKey::Round(round_id), &round);
-        env.storage().persistent().set(&DataKey::AttackDetection(round_id), &attack_detection);
-        
-        env.events().publish((symbol_short!("AggStart"),), (round_id, round.verification_score));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Round(round_id), &round);
+        env.events().publish((Symbol::new(&env, "agg_start"),), round_id);
         Ok(true)
     }
 
@@ -656,29 +687,33 @@ impl FederatedLearningContract {
     ) -> Result<bool, Error> {
         coordinator.require_auth();
         Self::check_auth(&env, &coordinator, &DataKey::Coordinator)?;
-        
+
         let mut round: FederatedRound = env
             .storage()
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-            
+
         if round.status == RoundStatus::Finalized {
             return Err(Error::RoundFinalized);
         }
         if round.status != RoundStatus::Verification {
             return Err(Error::RoundNotAggregating);
         }
-        
+
         if out.validation_score < 60 {
             return Err(Error::ValidationFailed);
         }
-        
-        let accuracy_diff = if out.global_accuracy > 80 { 0 } else { 80 - out.global_accuracy };
+
+        let accuracy_diff = if out.global_accuracy > 80 {
+            0
+        } else {
+            80 - out.global_accuracy
+        };
         if accuracy_diff > 5 {
             return Err(Error::ValidationFailed);
         }
-        
+
         let mut comm_metrics: CommunicationMetrics = env
             .storage()
             .persistent()
@@ -690,23 +725,23 @@ impl FederatedLearningContract {
                 latency_ms: 0,
                 protocol_efficiency: 100,
             });
-            
+
         let expected_comm_cost = round.total_updates * 1024;
         if comm_metrics.total_bytes_sent > expected_comm_cost * 3 {
             return Err(Error::CommunicationBudgetExceeded);
         }
-        
+
         let vscore = out.validation_score;
         let vid = out.model_id.clone();
         round.status = RoundStatus::Finalized;
         round.finalized_at = env.ledger().timestamp();
         round.aggregated_model_id = vid.clone();
         round.communication_overhead = comm_metrics.total_bytes_sent;
-        
+
         env.storage()
             .persistent()
             .set(&DataKey::Round(round_id), &round);
-            
+
         let privacy_metrics: PrivacyMetrics = env
             .storage()
             .persistent()
@@ -719,7 +754,7 @@ impl FederatedLearningContract {
                 privacy_budget_remaining: 100,
                 cumulative_privacy_loss: 0,
             });
-        
+
         env.storage().persistent().set(
             &DataKey::Model(vid.clone()),
             &ModelMetadata {
@@ -735,13 +770,13 @@ impl FederatedLearningContract {
                 robustness_score: round.verification_score,
             },
         );
-        
+
         let participants: Vec<Address> = env
             .storage()
             .persistent()
             .get(&DataKey::RoundParticipants(round_id))
-            .unwrap_or(vec![&env]);
-            
+            .unwrap_or(Vec::new(&env));
+
         let rep_delta: u32 = if vscore >= 90 {
             3
         } else if vscore >= 70 {
@@ -749,27 +784,35 @@ impl FederatedLearningContract {
         } else {
             1
         };
-        
+
         for addr in participants.iter() {
             let k = DataKey::Institution(addr.clone());
             if let Some(mut inst) = env.storage().persistent().get::<DataKey, Institution>(&k) {
-                inst.reward_balance += round.reward_per_participant;
-                inst.reputation_score = (inst.reputation_score + rep_delta).min(100);
-                
-                if let Some(verification) = env.storage().persistent().get::<DataKey, ContributionVerification>(
-                    &DataKey::ContributionVerification(round_id, addr.clone())
-                ) {
+                inst.reward_balance = inst.reward_balance
+                    .checked_add(round.reward_per_participant)
+                    .ok_or(Error::Overflow)?;
+                inst.reputation_score = inst.reputation_score.saturating_add(rep_delta).min(100);
+
+                if let Some(verification) =
+                    env.storage()
+                        .persistent()
+                        .get::<DataKey, ContributionVerification>(
+                            &DataKey::ContributionVerification(round_id, addr.clone()),
+                        )
+                {
                     if verification.quality_score > 80 {
-                        inst.reputation_score = (inst.reputation_score + 1).min(100);
+                        inst.reputation_score = inst.reputation_score.saturating_add(1).min(100);
                     }
                 }
-                
+
                 env.storage().persistent().set(&k, &inst);
             }
         }
-        
-        env.events()
-            .publish((symbol_short!("RndFin"),), (round_id, vid, vscore, round.communication_overhead));
+
+        env.events().publish(
+            (symbol_short!("RndFin"),),
+            (round_id, vid, vscore, round.communication_overhead),
+        );
         Ok(true)
     }
 
@@ -786,23 +829,35 @@ impl FederatedLearningContract {
     pub fn get_model(env: Env, model_id: BytesN<32>) -> Option<ModelMetadata> {
         env.storage().persistent().get(&DataKey::Model(model_id))
     }
-    
+
     pub fn get_privacy_metrics(env: Env, round_id: u64) -> Option<PrivacyMetrics> {
-        env.storage().persistent().get(&DataKey::PrivacyMetrics(round_id))
+        env.storage()
+            .persistent()
+            .get(&DataKey::PrivacyMetrics(round_id))
     }
-    
+
     pub fn get_attack_detection(env: Env, round_id: u64) -> Option<AttackDetection> {
-        env.storage().persistent().get(&DataKey::AttackDetection(round_id))
+        env.storage()
+            .persistent()
+            .get(&DataKey::AttackDetection(round_id))
     }
-    
+
     pub fn get_communication_metrics(env: Env, round_id: u64) -> Option<CommunicationMetrics> {
-        env.storage().persistent().get(&DataKey::CommunicationMetrics(round_id))
+        env.storage()
+            .persistent()
+            .get(&DataKey::CommunicationMetrics(round_id))
     }
-    
-    pub fn get_contribution_verification(env: Env, round_id: u64, institution: Address) -> Option<ContributionVerification> {
-        env.storage().persistent().get(&DataKey::ContributionVerification(round_id, institution))
+
+    pub fn get_contribution_verification(
+        env: Env,
+        round_id: u64,
+        institution: Address,
+    ) -> Option<ContributionVerification> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ContributionVerification(round_id, institution))
     }
-    
+
     pub fn update_communication_metrics(
         env: Env,
         coordinator: Address,
@@ -811,21 +866,23 @@ impl FederatedLearningContract {
     ) -> Result<bool, Error> {
         coordinator.require_auth();
         Self::check_auth(&env, &coordinator, &DataKey::Coordinator)?;
-        
+
         let round: FederatedRound = env
             .storage()
             .persistent()
             .get(&DataKey::Round(round_id))
             .ok_or(Error::RoundNotFound)?;
-            
+
         if round.status != RoundStatus::Open && round.status != RoundStatus::Verification {
             return Err(Error::RoundNotOpen);
         }
-        
-        env.storage().persistent().set(&DataKey::CommunicationMetrics(round_id), &metrics);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::CommunicationMetrics(round_id), &metrics);
         Ok(true)
     }
-    
+
     pub fn blacklist_institution(
         env: Env,
         admin: Address,
@@ -834,17 +891,20 @@ impl FederatedLearningContract {
     ) -> Result<bool, Error> {
         admin.require_auth();
         Self::check_auth(&env, &admin, &DataKey::Admin)?;
-        
+
         let mut inst: Institution = env
             .storage()
             .persistent()
             .get(&DataKey::Institution(institution.clone()))
             .ok_or(Error::InstitutionNotFound)?;
-            
+
         inst.status = InstitutionStatus::Blacklisted;
-        env.storage().persistent().set(&DataKey::Institution(institution.clone()), &inst);
-        
-        env.events().publish((symbol_short!("InstBlack"),), (institution, reason));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Institution(institution.clone()), &inst);
+
+        env.events()
+            .publish((symbol_short!("InstBlack"),), (institution, reason));
         Ok(true)
     }
 }
@@ -900,18 +960,18 @@ mod test {
         let (client, admin, coord) = setup(&env);
         let inst1 = add_inst(&client, &env, &admin);
         let inst2 = add_inst(&client, &env, &admin);
-        
+
         let round_id = client.mock_all_auths().start_round(
             &admin,
             &BytesN::from_array(&env, &[1u8; 32]),
             &default_cfg(&env, 2, 50),
         );
-        
+
         let mut quality_metrics: Map<String, u32> = Map::new(&env);
         quality_metrics.set(String::from_str(&env, "loss"), &5u32);
         quality_metrics.set(String::from_str(&env, "accuracy"), &85u32);
         quality_metrics.set(String::from_str(&env, "convergence"), &90u32);
-        
+
         client.mock_all_auths().submit_update(
             &inst1,
             &round_id,
@@ -919,12 +979,12 @@ mod test {
             &quality_metrics,
             &BytesN::from_array(&env, &[7u8; 32]),
         );
-        
+
         let mut quality_metrics2: Map<String, u32> = Map::new(&env);
         quality_metrics2.set(String::from_str(&env, "loss"), &8u32);
         quality_metrics2.set(String::from_str(&env, "accuracy"), &82u32);
         quality_metrics2.set(String::from_str(&env, "convergence"), &85u32);
-        
+
         client.mock_all_auths().submit_update(
             &inst2,
             &round_id,
@@ -932,13 +992,13 @@ mod test {
             &quality_metrics2,
             &BytesN::from_array(&env, &[8u8; 32]),
         );
-        
+
         assert!(client.mock_all_auths().begin_aggregation(&coord, &round_id));
-        
+
         let mut convergence_metrics: Map<String, u32> = Map::new(&env);
         convergence_metrics.set(String::from_str(&env, "training_loss"), &3u32);
         convergence_metrics.set(String::from_str(&env, "validation_loss"), &4u32);
-        
+
         let mid = BytesN::from_array(&env, &[4u8; 32]);
         client.mock_all_auths().finalize_round(
             &coord,
@@ -955,31 +1015,39 @@ mod test {
                 communication_cost: 2048,
             },
         );
-        
+
         assert_eq!(
             client.get_round(&round_id).unwrap().status,
             RoundStatus::Finalized
         );
-        
+
         let model = client.get_model(&mid).unwrap();
         assert_eq!(model.num_contributors, 2);
         assert_eq!(model.framework, Framework::TensorFlow);
         assert_eq!(model.aggregation_method, AggregationMethod::FedAvg);
-        
+
         let privacy_metrics = client.get_privacy_metrics(&round_id).unwrap();
         assert!(privacy_metrics.cumulative_privacy_loss > 0);
-        
+
         let institution1 = client.get_institution(&inst1).unwrap();
         assert!(institution1.reward_balance >= 50);
         assert!(institution1.contribution_quality_score > 70);
-        
-        let verification = client.get_contribution_verification(&round_id, &inst1).unwrap();
+
+        let verification = client
+            .get_contribution_verification(&round_id, &inst1)
+            .unwrap();
         assert!(verification.quality_score > 50);
         assert!(verification.privacy_compliance);
-        
+
         assert!(client
             .mock_all_auths()
-            .try_submit_update(&inst1, &round_id, &BytesN::from_array(&env, &[9u8; 32]), &quality_metrics, &BytesN::from_array(&env, &[10u8; 32]))
+            .try_submit_update(
+                &inst1,
+                &round_id,
+                &BytesN::from_array(&env, &[9u8; 32]),
+                &quality_metrics,
+                &BytesN::from_array(&env, &[10u8; 32])
+            )
             .is_err());
     }
 }

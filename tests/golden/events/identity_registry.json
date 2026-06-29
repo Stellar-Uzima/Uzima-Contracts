@@ -1,0 +1,31 @@
+{
+  "contract": "identity_registry",
+  "events": [
+    {
+      "name": "DIDCreated",
+      "topics": ["DIDCreated"],
+      "data": {
+        "subject": "Address",
+        "did_string": "String"
+      }
+    },
+    {
+      "name": "KeyRotated",
+      "topics": ["KeyRotated"],
+      "data": {
+        "subject": "Address",
+        "method_id": "String"
+      }
+    },
+    {
+      "name": "CredentialIssued",
+      "topics": ["CredentialIssued"],
+      "data": {
+        "issuer": "Address",
+        "subject": "Address",
+        "credential_id": "BytesN<32>",
+        "credential_type": "CredentialType"
+      }
+    }
+  ]
+}

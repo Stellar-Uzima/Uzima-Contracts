@@ -1,4 +1,5 @@
 #![no_std]
+//! digital_twin - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 
@@ -250,6 +251,32 @@ pub enum Error {
     ContractNotSet = 19,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::TwinNotFound => write!(f, "twin not found"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::DataStreamNotFound => write!(f, "data stream not found"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::SimulationNotFound => write!(f, "simulation not found"),
+            Error::InvalidParameter => write!(f, "invalid parameter"),
+            Error::InsufficientAccuracy => write!(f, "insufficient accuracy"),
+            Error::SyncInProgress => write!(f, "sync in progress"),
+            Error::ResearchAccessDenied => write!(f, "research access denied"),
+            Error::SnapshotExpired => write!(f, "snapshot expired"),
+            Error::DuplicateDataStream => write!(f, "duplicate data stream"),
+            Error::ModelNotActive => write!(f, "model not active"),
+            Error::SimulationInvalid => write!(f, "simulation invalid"),
+            Error::PrivacyLevelInsufficient => write!(f, "privacy level insufficient"),
+            Error::ConsentRequired => write!(f, "consent required"),
+            Error::ContractNotSet => write!(f, "contract not set"),
+        }
+    }
+}
+
 // ==================== Contract Implementation ====================
 
 #[contract]
@@ -260,10 +287,8 @@ impl DigitalTwinContract {
     // ==================== Initialization ====================
 
     pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&VERSION, &1u32);
@@ -968,6 +993,7 @@ impl DigitalTwinContract {
 
     // ==================== Helper Functions ====================
 
+    #[must_use]
     fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
         let stored_admin: Address = env
             .storage()
@@ -980,6 +1006,7 @@ impl DigitalTwinContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin_or_patient(env: &Env, caller: &Address, twin_id: u64) -> Result<(), Error> {
         let stored_admin: Address = env
             .storage()
@@ -1004,10 +1031,12 @@ impl DigitalTwinContract {
         Err(Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_admin_or_twin_owner(env: &Env, caller: &Address, twin_id: u64) -> Result<(), Error> {
         Self::require_admin_or_patient(env, caller, twin_id)
     }
 
+    #[must_use]
     fn require_twin_owner(env: &Env, caller: &Address, twin_id: u64) -> Result<(), Error> {
         let twin: DigitalTwinProfile = env
             .storage()

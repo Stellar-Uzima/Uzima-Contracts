@@ -11,10 +11,13 @@ Comprehensive guidance for developers building, integrating, deploying, and main
 6. [Diagrams & Visual Aids](#diagrams--visual-aids)
 7. [Cross-references](#cross-references)
 8. [Maintenance & Updates](#maintenance--updates)
+9. [Type Safety Guidelines](./TYPE_SAFETY_GUIDELINES.md)
 
 ---
 
 ## 1. API Reference
+
+See [Contract API Stability Guarantees](./api.md) for stability levels, deprecation policy, and compatibility guidance for public contract entrypoints.
 
 ### 1.1 Contracts and modules
 - `contracts/medical_records`: core medical records contract
@@ -128,6 +131,7 @@ await server.invokeContract({
 - Use immutable record IDs and versioned metadata (history entries) when updating.
 - Use `set_rate_limit_config` to avoid DoS via hot accounts.
 - Use `grant_emergency_access` for auditable emergency workflows.
+- Adhere to the [Type Safety Guidelines](./TYPE_SAFETY_GUIDELINES.md) for all contract development.
 
 ---
 

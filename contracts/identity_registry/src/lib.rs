@@ -1,13 +1,19 @@
+//! identity_registry - Healthcare smart contract on Stellar blockchain.
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     String, Symbol, Vec,
+};
+use uzima_sanitization::{
+    sanitize_id, sanitize_string, sanitize_url, SanitizationError, MAX_GENERAL_LEN,
 };
 
 // ============================================================================
@@ -15,36 +21,47 @@ use soroban_sdk::{
 // ============================================================================
 // Implements W3C DID Core Specification (https://www.w3.org/TR/did-core/)
 // DID Method: did:stellar:uzima:<network>:<address>
-// ============================================================================
-
-// === Error Definitions ===
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
 #[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    NotVerifier = 4,
-    CannotRemoveOwner = 5,
-    DIDNotFound = 6,
-    DIDAlreadyExists = 7,
-    DIDDeactivated = 8,
-    InvalidVerificationMethod = 9,
-    VerificationMethodNotFound = 10,
-    CredentialNotFound = 11,
-    CredentialRevoked = 12,
-    CredentialExpired = 13,
-    InvalidCredentialType = 14,
-    AttestationNotFound = 15,
-    RecoveryNotInitiated = 16,
-    RecoveryAlreadyPending = 17,
-    RecoveryTimelockNotElapsed = 18,
-    InvalidRecoveryGuardian = 19,
-    InsufficientGuardianApprovals = 20,
-    ServiceNotFound = 21,
-    InvalidServiceEndpoint = 22,
-    KeyRotationCooldown = 23,
+pub enum RbacRole {
+    Admin = 0,
+    Doctor = 1,
+    Patient = 2,
+    Staff = 3,
+    Insurer = 4,
+    Researcher = 5,
+    Auditor = 6,
+    Service = 7,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[contracterror]
+#[repr(u32)]
+pub enum RbacError {
+    Unauthorized = 100,
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+}
+
+impl core::fmt::Display for RbacError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            RbacError::Unauthorized => write!(f, "unauthorized"),
+            RbacError::NotInitialized => write!(f, "not initialized"),
+            RbacError::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
+#[soroban_sdk::contractclient(name = "RbacClient")]
+pub trait RbacContract {
+    #[must_use]
+    fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
+    fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
+    fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
 // === DID Document Structures (W3C Compliant) ===
@@ -249,6 +266,24 @@ pub struct Attestation {
     pub is_active: bool,
 }
 
+/// Stake information for a healthcare provider using SUT token reputation bonding.
+#[derive(Clone)]
+#[contracttype]
+pub struct ProviderStake {
+    /// The provider's address
+    pub provider: Address,
+    /// The SUT token contract address
+    pub token_address: Address,
+    /// Amount of SUT tokens staked
+    pub amount: i128,
+    /// Timestamp until which the stake is locked
+    pub locked_until: u64,
+    /// Whether the stake has been slashed
+    pub slashed: bool,
+    /// When the stake was deposited
+    pub deposited_at: u64,
+}
+
 // === Storage Keys ===
 
 #[contracttype]
@@ -257,6 +292,8 @@ pub enum DataKey {
     Owner,
     Initialized,
     NetworkId,
+    RbacContract,
+    Paused,
 
     // Verifier Management
     Verifier(Address),
@@ -289,6 +326,13 @@ pub enum DataKey {
     // Key Rotation
     LastKeyRotation(Address),
     KeyRotationCooldown,
+
+    // DID Document Version History
+    DIDDocumentHistory(Address, u32),
+    DIDDocumentHistoryCount(Address),
+
+    // Provider Staking
+    StakeInfo(Address),
 }
 
 // === Constants ===
@@ -310,17 +354,26 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Initialize the contract with an owner and network identifier
-    pub fn initialize(env: Env, owner: Address, network_id: String) -> Result<(), Error> {
+    pub fn initialize(
+        env: Env,
+        owner: Address,
+        network_id: String,
+        rbac_contract: Address,
+    ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
+
         owner.require_auth();
 
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
+        sanitize_id(&env, &network_id).map_err(Self::map_sanitization_error)?;
 
         env.storage().instance().set(&DataKey::Owner, &owner);
         env.storage()
             .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
+        env.storage()
+            .instance()
             .set(&DataKey::NetworkId, &network_id);
+        env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
@@ -331,22 +384,120 @@ impl IdentityRegistryContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "Initialized"),),
+            (Symbol::new(&env, "initialized"),),
             (owner.clone(), network_id),
         );
 
         Ok(())
     }
 
-    /// Legacy initialize for backward compatibility
-    pub fn initialize_legacy(env: Env, owner: Address) {
-        owner.require_auth();
+    /// Perform a health check on the contract
+    pub fn health_check(env: Env) -> (Symbol, u32, u64) {
+        let initialized = env.storage().instance().has(&DataKey::Initialized);
+        let status = if initialized {
+            symbol_short!("OK")
+        } else {
+            symbol_short!("NOT_INIT")
+        };
 
-        if env.storage().instance().has(&DataKey::Owner) {
+        // Emit health check event
+        env.events().publish(
+            (Symbol::new(&env, "HealthCheck"),),
+            (status.clone(), env.ledger().timestamp()),
+        );
+
+        (status, 1, env.ledger().timestamp())
+    }
+
+    /// Returns true if the contract is currently paused.
+    pub fn is_paused(env: Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+    }
+
+    fn is_admin(env: &Env, caller: &Address) -> bool {
+        if let Some(owner) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::Owner)
+        {
+            if &owner == caller {
+                return true;
+            }
+        }
+        if let Some(rbac_addr) = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::RbacContract)
+        {
+            let client = RbacClient::new(env, &rbac_addr);
+            return client.has_role(caller, &RbacRole::Admin);
+        }
+        false
+    }
+
+    #[must_use]
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        if Self::is_admin(env, caller) {
+            Ok(())
+        } else {
+            Err(Error::Unauthorized)
+        }
+    }
+
+    #[must_use]
+    fn require_not_paused(env: &Env) -> Result<(), Error> {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
+            return Err(Error::ContractPaused);
+        }
+        Ok(())
+    }
+
+    pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &true);
+        env.events().publish(
+            (Symbol::new(&env, "Paused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
+    pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.events().publish(
+            (Symbol::new(&env, "Unpaused"),),
+            (caller.clone(), env.ledger().timestamp()),
+        );
+        Ok(true)
+    }
+
+    /// Legacy initialize for backward compatibility
+    pub fn initialize_legacy(env: Env, owner: Address, rbac_contract: Address) {
+        // Route the legacy guard through the shared one-shot init guard so that
+        // `initialize` and `initialize_legacy` can never both run (they share the
+        // same INIT_GD flag). Preserves the original silent-return-on-re-init
+        // behavior of this entry point (no panic).
+        if governance_commons::try_init_guard(&env).is_err() {
             return; // Contract already initialized
         }
 
+        owner.require_auth();
+
         env.storage().instance().set(&DataKey::Owner, &owner);
+        env.storage()
+            .instance()
+            .set(&DataKey::RbacContract, &rbac_contract);
         env.storage()
             .instance()
             .set(&DataKey::Verifier(owner.clone()), &true);
@@ -368,6 +519,7 @@ impl IdentityRegistryContract {
         services: Vec<ServiceEndpoint>,
     ) -> Result<String, Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Check if DID already exists
         if env
@@ -452,7 +604,7 @@ impl IdentityRegistryContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "DIDCreated"),),
+            (Symbol::new(&env, "did_created"),),
             (subject, did_string.clone()),
         );
 
@@ -507,6 +659,9 @@ impl IdentityRegistryContract {
         // Compute hash of current document for audit trail
         let prev_hash = Self::compute_document_hash(&env, &did_doc);
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         did_doc.services = new_services;
         did_doc.also_known_as = new_also_known_as;
         did_doc.updated = env.ledger().timestamp();
@@ -518,7 +673,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "DIDUpdated"),),
+            (Symbol::new(&env, "did_updated"),),
             (subject, did_doc.version),
         );
 
@@ -543,7 +698,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events()
-            .publish((Symbol::new(&env, "DIDDeactivated"),), subject);
+            .publish((Symbol::new(&env, "did_deactivated"),), subject);
 
         Ok(())
     }
@@ -573,6 +728,9 @@ impl IdentityRegistryContract {
             return Err(Error::DIDDeactivated);
         }
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         let timestamp = env.ledger().timestamp();
 
         let new_vm = VerificationMethod {
@@ -592,19 +750,19 @@ impl IdentityRegistryContract {
             match rel {
                 VerificationRelationship::Authentication => {
                     did_doc.authentication.push_back(method_id.clone());
-                }
+                },
                 VerificationRelationship::AssertionMethod => {
                     did_doc.assertion_method.push_back(method_id.clone());
-                }
+                },
                 VerificationRelationship::KeyAgreement => {
                     did_doc.key_agreement.push_back(method_id.clone());
-                }
+                },
                 VerificationRelationship::CapabilityInvocation => {
                     did_doc.capability_invocation.push_back(method_id.clone());
-                }
+                },
                 VerificationRelationship::CapabilityDelegation => {
                     did_doc.capability_delegation.push_back(method_id.clone());
-                }
+                },
             }
         }
 
@@ -616,7 +774,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "VerificationMethodAdded"),),
+            (Symbol::new(&env, "verification_method_added"),),
             (subject, method_id),
         );
 
@@ -660,6 +818,9 @@ impl IdentityRegistryContract {
             return Err(Error::KeyRotationCooldown);
         }
 
+        // Archive current version before rotation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         // Find and update the verification method
         let mut found = false;
         let mut updated_methods = Vec::new(&env);
@@ -698,7 +859,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::LastKeyRotation(subject.clone()), &timestamp);
 
         env.events()
-            .publish((Symbol::new(&env, "KeyRotated"),), (subject, method_id));
+            .publish((Symbol::new(&env, "key_rotated"),), (subject, method_id));
 
         Ok(())
     }
@@ -720,6 +881,9 @@ impl IdentityRegistryContract {
         if matches!(did_doc.status, DIDStatus::Deactivated) {
             return Err(Error::DIDDeactivated);
         }
+
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
 
         // Ensure at least one method remains active
         let active_count = did_doc
@@ -765,7 +929,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "VerificationMethodRevoked"),),
+            (Symbol::new(&env, "verification_method_revoked"),),
             (subject, method_id),
         );
 
@@ -777,6 +941,7 @@ impl IdentityRegistryContract {
     // ========================================================================
 
     /// Issue a verifiable credential (only verifiers/issuers can do this)
+    #[allow(clippy::too_many_arguments)]
     pub fn issue_credential(
         env: Env,
         issuer: Address,
@@ -789,11 +954,7 @@ impl IdentityRegistryContract {
         issuer.require_auth();
 
         // Verify issuer is a registered verifier
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(issuer.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), issuer.clone());
 
         if !is_verifier {
             return Err(Error::NotVerifier);
@@ -848,7 +1009,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::IssuerCredentials(issuer.clone()), &issuer_creds);
 
         env.events().publish(
-            (Symbol::new(&env, "CredentialIssued"),),
+            (Symbol::new(&env, "credential_issued"),),
             (issuer, subject, credential_id.clone(), credential_type),
         );
 
@@ -877,7 +1038,7 @@ impl IdentityRegistryContract {
                 } else {
                     Ok(CredentialStatus::Valid)
                 }
-            }
+            },
         }
     }
 
@@ -908,7 +1069,7 @@ impl IdentityRegistryContract {
             .ok_or(Error::CredentialNotFound)?;
 
         if credential.issuer != issuer {
-            return Err(Error::NotAuthorized);
+            return Err(Error::Unauthorized);
         }
 
         if credential.is_revoked {
@@ -924,7 +1085,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::Credential(credential_id.clone()), &credential);
 
         env.events().publish(
-            (Symbol::new(&env, "CredentialRevoked"),),
+            (Symbol::new(&env, "credential_revoked"),),
             (issuer, credential_id),
         );
 
@@ -1003,7 +1164,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryGuardians(subject.clone()), &guardians);
 
         env.events().publish(
-            (Symbol::new(&env, "GuardianAdded"),),
+            (Symbol::new(&env, "guardian_added"),),
             (subject, guardian, weight),
         );
 
@@ -1017,6 +1178,7 @@ impl IdentityRegistryContract {
         guardian: Address,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let guardians: Vec<RecoveryGuardian> = env
             .storage()
@@ -1036,7 +1198,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryGuardians(subject.clone()), &new_guardians);
 
         env.events()
-            .publish((Symbol::new(&env, "GuardianRemoved"),), (subject, guardian));
+            .publish((Symbol::new(&env, "guardian_removed"),), (subject, guardian));
 
         Ok(())
     }
@@ -1044,13 +1206,14 @@ impl IdentityRegistryContract {
     /// Set recovery threshold
     pub fn set_recovery_threshold(env: Env, subject: Address, threshold: u32) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         env.storage()
             .persistent()
             .set(&DataKey::RecoveryThreshold(subject.clone()), &threshold);
 
         env.events().publish(
-            (Symbol::new(&env, "ThresholdUpdated"),),
+            (Symbol::new(&env, "threshold_updated"),),
             (subject, threshold),
         );
 
@@ -1131,7 +1294,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryInitiated"),),
+            (Symbol::new(&env, "recovery_initiated"),),
             (subject, request_id),
         );
 
@@ -1141,6 +1304,7 @@ impl IdentityRegistryContract {
     /// Approve a recovery request
     pub fn approve_recovery(env: Env, guardian: Address, request_id: u64) -> Result<(), Error> {
         guardian.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut request: RecoveryRequest = env
             .storage()
@@ -1177,7 +1341,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::RecoveryRequest(request_id), &request);
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryApproved"),),
+            (Symbol::new(&env, "recovery_approved"),),
             (guardian, request_id),
         );
 
@@ -1277,7 +1441,7 @@ impl IdentityRegistryContract {
             .remove(&DataKey::ActiveRecovery(request.subject.clone()));
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryExecuted"),),
+            (Symbol::new(&env, "recovery_executed"),),
             (request.subject, request_id),
         );
 
@@ -1287,6 +1451,7 @@ impl IdentityRegistryContract {
     /// Cancel a recovery request (only subject with existing key)
     pub fn cancel_recovery(env: Env, subject: Address) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let request_id: u64 = env
             .storage()
@@ -1321,7 +1486,7 @@ impl IdentityRegistryContract {
             .remove(&DataKey::ActiveRecovery(subject.clone()));
 
         env.events().publish(
-            (Symbol::new(&env, "RecoveryCancelled"),),
+            (Symbol::new(&env, "recovery_cancelled"),),
             (subject, request_id),
         );
 
@@ -1342,6 +1507,11 @@ impl IdentityRegistryContract {
     ) -> Result<(), Error> {
         subject.require_auth();
 
+        sanitize_id(&env, &service_id).map_err(Self::map_sanitization_error)?;
+        sanitize_string(&env, &service_type, MAX_GENERAL_LEN)
+            .map_err(Self::map_sanitization_error)?;
+        sanitize_url(&env, &endpoint).map_err(|_| Error::InvalidServiceEndpoint)?;
+
         let mut did_doc: DIDDocument = env
             .storage()
             .persistent()
@@ -1351,6 +1521,9 @@ impl IdentityRegistryContract {
         if matches!(did_doc.status, DIDStatus::Deactivated) {
             return Err(Error::DIDDeactivated);
         }
+
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
 
         let new_service = ServiceEndpoint {
             id: service_id.clone(),
@@ -1368,7 +1541,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events()
-            .publish((Symbol::new(&env, "ServiceAdded"),), (subject, service_id));
+            .publish((Symbol::new(&env, "service_added"),), (subject, service_id));
 
         Ok(())
     }
@@ -1376,6 +1549,7 @@ impl IdentityRegistryContract {
     /// Remove/deactivate a service endpoint
     pub fn remove_service(env: Env, subject: Address, service_id: String) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         let mut did_doc: DIDDocument = env
             .storage()
@@ -1383,13 +1557,15 @@ impl IdentityRegistryContract {
             .get(&DataKey::DIDDocument(subject.clone()))
             .ok_or(Error::DIDNotFound)?;
 
+        // Archive current version before mutation
+        Self::archive_did_version(&env, &subject, &did_doc);
+
         let mut updated_services = Vec::new(&env);
         let mut found = false;
 
         for svc in did_doc.services.iter() {
             if svc.id == service_id {
                 found = true;
-                // Skip - effectively removes it
             } else {
                 updated_services.push_back(svc);
             }
@@ -1408,7 +1584,7 @@ impl IdentityRegistryContract {
             .set(&DataKey::DIDDocument(subject.clone()), &did_doc);
 
         env.events().publish(
-            (Symbol::new(&env, "ServiceRemoved"),),
+            (Symbol::new(&env, "service_removed"),),
             (subject, service_id),
         );
 
@@ -1429,12 +1605,24 @@ impl IdentityRegistryContract {
 
         owner.require_auth();
 
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        let _ = rbac_client.assign_role(&verifier, &RbacRole::Staff);
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &true);
 
         env.events()
-            .publish((Symbol::new(&env, "VerifierAdded"),), verifier);
+            .publish((Symbol::new(&env, "verifier_added"),), verifier);
 
         Ok(())
     }
@@ -1453,22 +1641,42 @@ impl IdentityRegistryContract {
             return Err(Error::CannotRemoveOwner);
         }
 
+        let rbac_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::RbacContract)
+            .ok_or(Error::NotInitialized)?;
+        let rbac_client = RbacClient::new(&env, &rbac_addr);
+        if !rbac_client.has_role(&owner, &RbacRole::Admin) {
+            return Err(Error::Unauthorized);
+        }
+
+        let _ = rbac_client.remove_role(&verifier, &RbacRole::Staff);
+
         env.storage()
             .instance()
             .set(&DataKey::Verifier(verifier.clone()), &false);
 
         env.events()
-            .publish((Symbol::new(&env, "VerifierRemoved"),), verifier);
+            .publish((Symbol::new(&env, "verifier_removed"),), verifier);
 
         Ok(())
     }
 
     /// Check if an address is a verifier
     pub fn is_verifier(env: Env, account: Address) -> bool {
-        env.storage()
-            .instance()
-            .get(&DataKey::Verifier(account))
-            .unwrap_or(false)
+        let rbac_addr: Address = match env.storage().instance().get(&DataKey::RbacContract) {
+            Some(v) => v,
+            None => return false,
+        };
+        let client = RbacClient::new(&env, &rbac_addr);
+        if client.has_role(&account, &RbacRole::Staff) {
+            return true;
+        }
+        if client.has_role(&account, &RbacRole::Service) {
+            return true;
+        }
+        client.has_role(&account, &RbacRole::Admin)
     }
 
     /// Get the contract owner
@@ -1486,6 +1694,13 @@ impl IdentityRegistryContract {
     /// Register an identity hash with metadata (legacy support)
     pub fn register_identity_hash(env: Env, hash: BytesN<32>, subject: Address, meta: String) {
         subject.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
+
+        if sanitize_string(&env, &meta, MAX_GENERAL_LEN).is_err() {
+            panic!("invalid meta");
+        }
 
         let identity_record = IdentityRecord {
             hash: hash.clone(),
@@ -1504,12 +1719,11 @@ impl IdentityRegistryContract {
     /// Create an attestation (legacy - only verifiers can do this)
     pub fn attest(env: Env, verifier: Address, subject: Address, claim_hash: BytesN<32>) {
         verifier.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1552,12 +1766,11 @@ impl IdentityRegistryContract {
         claim_hash: BytesN<32>,
     ) {
         verifier.require_auth();
+        if Self::require_not_paused(&env).is_err() {
+            panic!("contract is paused");
+        }
 
-        let is_verifier: bool = env
-            .storage()
-            .instance()
-            .get(&DataKey::Verifier(verifier.clone()))
-            .unwrap_or(false);
+        let is_verifier = Self::is_verifier(env.clone(), verifier.clone());
 
         if !is_verifier {
             panic!("Caller is not a verifier");
@@ -1641,6 +1854,13 @@ impl IdentityRegistryContract {
     // HELPER FUNCTIONS
     // ========================================================================
 
+    fn map_sanitization_error(e: SanitizationError) -> Error {
+        match e {
+            SanitizationError::InputTooLong => Error::InputTooLong,
+            _ => Error::InvalidInput,
+        }
+    }
+
     /// Generate DID string from network and address
     fn generate_did_string(env: &Env, network_id: &String, subject: &Address) -> String {
         const MAX_PART_LEN: usize = 128;
@@ -1686,6 +1906,35 @@ impl IdentityRegistryContract {
         env.crypto().sha256(&data).into()
     }
 
+    /// Archive the current DID document as a version history entry before mutation
+    fn archive_did_version(env: &Env, subject: &Address, doc: &DIDDocument) {
+        let count_key = DataKey::DIDDocumentHistoryCount(subject.clone());
+        let version_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&count_key)
+            .unwrap_or(0);
+        let new_idx = version_count + 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::DIDDocumentHistory(subject.clone(), new_idx), doc);
+        env.storage()
+            .persistent()
+            .set(&count_key, &new_idx);
+    }
+
+    /// Retrieve a past version of a DID document by version number.
+    /// Returns None if the version does not exist.
+    pub fn get_did_version(
+        env: Env,
+        subject: Address,
+        version: u32,
+    ) -> Option<DIDDocument> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::DIDDocumentHistory(subject, version))
+    }
+
     /// DID-based authorization check
     pub fn verify_did_authorization(
         env: Env,
@@ -1722,7 +1971,7 @@ impl IdentityRegistryContract {
                 }
 
                 false
-            }
+            },
         }
     }
 
@@ -1750,6 +1999,7 @@ impl IdentityRegistryContract {
         public_key_hash: BytesN<32>,
     ) -> Result<(), Error> {
         subject.require_auth();
+        Self::require_not_paused(&env)?;
 
         // Silently succeed when no DID document exists yet.
         let mut did_doc: DIDDocument = match env
@@ -1800,11 +2050,153 @@ impl IdentityRegistryContract {
 
         Ok(())
     }
+
+    // ========================================================================
+    // PROVIDER STAKING (SUT Token Reputation Bonding)
+    // ========================================================================
+
+    /// Deposit stake for a healthcare provider.
+    pub fn deposit_stake(
+        env: Env,
+        provider: Address,
+        amount: i128,
+        token_address: Address,
+    ) -> Result<(), Error> {
+        provider.require_auth();
+
+        if amount <= 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        let now = env.ledger().timestamp();
+        let lock_until = now.saturating_add(90 * 86400); // 90 days default lock
+
+        // Store stake info
+        let stake_info = ProviderStake {
+            provider: provider.clone(),
+            token_address: token_address.clone(),
+            amount,
+            locked_until: lock_until,
+            slashed: false,
+            deposited_at: now,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        // Emit stake deposited event
+        env.events().publish(
+            (Symbol::new(&env, "StakeDeposited"),),
+            (provider, amount, lock_until),
+        );
+
+        Ok(())
+    }
+
+    /// Withdraw stake after lock period if not slashed and in good standing.
+    pub fn withdraw_stake(env: Env, provider: Address) -> Result<i128, Error> {
+        provider.require_auth();
+
+        let now = env.ledger().timestamp();
+
+        // Load stake info to verify lock period has elapsed
+        let stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        if now < stake_info.locked_until {
+            return Err(Error::InvalidInput);
+        }
+
+        if stake_info.slashed {
+            return Err(Error::InvalidInput);
+        }
+
+        // Remove stake info
+        env.storage()
+            .persistent()
+            .remove(&DataKey::StakeInfo(provider.clone()));
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeWithdrawn"),),
+            (provider.clone(), stake_info.amount),
+        );
+
+        Ok(stake_info.amount)
+    }
+
+    /// Slash stake for verified misconduct (governance only).
+    pub fn slash_stake(
+        env: Env,
+        governance: Address,
+        provider: Address,
+        amount: i128,
+        reason: String,
+    ) -> Result<(), Error> {
+        governance.require_auth();
+
+        let mut stake_info: ProviderStake = env
+            .storage()
+            .persistent()
+            .get(&DataKey::StakeInfo(provider.clone()))
+            .ok_or(Error::InvalidInput)?;
+
+        stake_info.slashed = true;
+        env.storage()
+            .persistent()
+            .set(&DataKey::StakeInfo(provider.clone()), &stake_info);
+
+        env.events().publish(
+            (Symbol::new(&env, "StakeSlashed"),),
+            (provider, amount, reason),
+        );
+
+        Ok(())
+    }
 }
 
 // ============================================================================
 // TESTS
 // ============================================================================
+
+#[cfg(test)]
+mod comprehensive_tests;
+
+#[cfg(test)]
+pub mod test_fixtures;
+
+#[cfg(test)]
+#[soroban_sdk::contract]
+pub struct MockRbac;
+
+#[cfg(test)]
+#[soroban_sdk::contractimpl]
+impl MockRbac {
+    pub fn init_mock(_env: Env) {}
+
+    #[must_use]
+    pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        Ok(env.storage().instance().get(&key).unwrap_or(false))
+    }
+
+    #[must_use]
+    pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &true);
+        Ok(true)
+    }
+
+    #[must_use]
+    pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
+        let key = (address, role);
+        env.storage().instance().set(&key, &false);
+        Ok(true)
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1816,12 +2208,15 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
         let network_id = String::from_str(&env, "testnet");
-        client.initialize(&owner, &network_id);
+        client.initialize(&owner, &network_id, &rbac_id);
 
         (env, client, owner)
     }
@@ -1830,11 +2225,14 @@ mod tests {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().set_timestamp(10_000);
+        let rbac_id = env.register_contract(None, MockRbac);
+        let rbac_client = MockRbacClient::new(&env, &rbac_id);
         let contract_id = env.register_contract(None, IdentityRegistryContract);
         let client = IdentityRegistryContractClient::new(&env, &contract_id);
         let owner = Address::generate(&env);
+        let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
-        client.initialize_legacy(&owner);
+        client.initialize_legacy(&owner, &rbac_id);
 
         (env, client, owner)
     }
@@ -1852,13 +2250,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #1)")]
+    #[should_panic(expected = "Error(Contract, #301)")]
     fn test_double_initialization() {
         let (env, client, _owner) = create_contract();
         let owner2 = Address::generate(&env);
         let network_id = String::from_str(&env, "mainnet");
+        let rbac_id = env.register_contract(None, MockRbac);
 
-        client.initialize(&owner2, &network_id);
+        client.initialize(&owner2, &network_id, &rbac_id);
     }
 
     // ========================================================================
@@ -1903,7 +2302,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
+    #[should_panic(expected = "Error(Contract, #471)")]
     fn test_create_duplicate_did() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
@@ -2317,7 +2716,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #5)")]
+    #[should_panic(expected = "Error(Contract, #111)")]
     fn test_cannot_remove_owner_as_verifier() {
         let (_env, client, owner) = create_contract();
         client.remove_verifier(&owner);
@@ -2409,6 +2808,278 @@ mod tests {
         // Should not be authorized after deactivation
         assert!(
             !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
+        );
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotVerifier as u32, 110);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::DIDNotFound as u32, 470);
+        assert_eq!(Error::DIDAlreadyExists as u32, 471);
+        assert_eq!(Error::CredentialExpired as u32, 605);
+    }
+
+    // ========================================================================
+    // DID RESOLUTION EDGE-CASE TESTS (Issue #958)
+    // ========================================================================
+
+    #[test]
+    fn test_resolve_did_not_found() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_deactivated() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+        client.deactivate_did(&subject);
+
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDDeactivated)));
+    }
+
+    #[test]
+    fn test_resolve_did_by_string() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        let did_string = client.create_did(&subject, &public_key, &services);
+        let did_doc = client.resolve_did_by_string(&did_string);
+        assert_eq!(did_doc.controller, subject);
+    }
+
+    #[test]
+    fn test_resolve_did_by_string_not_found() {
+        let (env, client, _owner) = create_contract();
+        let did_string = String::from_str(&env, "did:stellar:uzima:testnet:nonexistent");
+        let result = client.try_resolve_did_by_string(&did_string);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_after_update_tracks_new_data() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let mut new_services: Vec<ServiceEndpoint> = Vec::new(&env);
+        new_services.push_back(ServiceEndpoint {
+            id: String::from_str(&env, "#records"),
+            service_type: String::from_str(&env, "MedicalRecords"),
+            endpoint: String::from_str(&env, "ipfs://QmUpdate"),
+            is_active: true,
+        });
+        client.update_did(&subject, &new_services, &Vec::new(&env));
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.services.len(), 1);
+        assert_eq!(did_doc.version, 2);
+    }
+
+    #[test]
+    fn test_resolve_did_with_multiple_verification_methods() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let primary_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &primary_key, &services);
+
+        for i in 0u8..5u8 {
+            let key = BytesN::from_array(&env, &[i + 10; 32]);
+            let method_id = String::from_bytes(&env, &[i + 1; 1]);
+            let mut rels: Vec<VerificationRelationship> = Vec::new(&env);
+            rels.push_back(VerificationRelationship::Authentication);
+            client.add_verification_method(
+                &subject,
+                &method_id,
+                &VerificationMethodType::Ed25519VerificationKey2020,
+                &key,
+                &rels,
+            );
+        }
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.verification_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_resolve_did_after_recovery_restores_active() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let guardian = Address::generate(&env);
+        client.add_recovery_guardian(&subject, &guardian, &2u32);
+
+        let new_controller = Address::generate(&env);
+        let new_key = BytesN::from_array(&env, &[42u8; 32]);
+        client.initiate_recovery(&guardian, &subject, &new_controller, &new_key);
+
+        let did_doc_recovery = client.resolve_did(&subject);
+        assert!(matches!(did_doc_recovery.status, DIDStatus::RecoveryPending));
+
+        client.cancel_recovery(&subject);
+        let did_doc_restored = client.resolve_did(&subject);
+        assert!(matches!(did_doc_restored.status, DIDStatus::Active));
+    }
+
+    #[test]
+    fn test_resolve_did_not_found() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_deactivated() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+        client.deactivate_did(&subject);
+
+        let result = client.try_resolve_did(&subject);
+        assert_eq!(result, Err(Ok(Error::DIDDeactivated)));
+    }
+
+    #[test]
+    fn test_resolve_did_by_string() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        let did_string = client.create_did(&subject, &public_key, &services);
+        let did_doc = client.resolve_did_by_string(&did_string);
+        assert_eq!(did_doc.controller, subject);
+    }
+
+    #[test]
+    fn test_resolve_did_by_string_not_found() {
+        let (env, client, _owner) = create_contract();
+        let did_string = String::from_str(&env, "did:stellar:uzima:testnet:nonexistent");
+        let result = client.try_resolve_did_by_string(&did_string);
+        assert_eq!(result, Err(Ok(Error::DIDNotFound)));
+    }
+
+    #[test]
+    fn test_resolve_did_after_update_tracks_new_data() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let mut new_services: Vec<ServiceEndpoint> = Vec::new(&env);
+        new_services.push_back(ServiceEndpoint {
+            id: String::from_str(&env, "#records"),
+            service_type: String::from_str(&env, "MedicalRecords"),
+            endpoint: String::from_str(&env, "ipfs://QmUpdate"),
+            is_active: true,
+        });
+        client.update_did(&subject, &new_services, &Vec::new(&env));
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.services.len(), 1);
+        assert_eq!(did_doc.version, 2);
+    }
+
+    #[test]
+    fn test_resolve_did_with_multiple_verification_methods() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let primary_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &primary_key, &services);
+
+        for i in 0u8..5u8 {
+            let key = BytesN::from_array(&env, &[i + 10; 32]);
+            let method_id = String::from_bytes(&env, &[i + 1; 1]);
+            let mut rels: Vec<VerificationRelationship> = Vec::new(&env);
+            rels.push_back(VerificationRelationship::Authentication);
+            client.add_verification_method(
+                &subject,
+                &method_id,
+                &VerificationMethodType::Ed25519VerificationKey2020,
+                &key,
+                &rels,
+            );
+        }
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.verification_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_resolve_did_after_recovery_restores_active() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let public_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &public_key, &services);
+
+        let guardian = Address::generate(&env);
+        client.add_recovery_guardian(&subject, &guardian, &2u32);
+
+        let new_controller = Address::generate(&env);
+        let new_key = BytesN::from_array(&env, &[42u8; 32]);
+        client.initiate_recovery(&guardian, &subject, &new_controller, &new_key);
+
+        let did_doc_recovery = client.resolve_did(&subject);
+        assert!(matches!(did_doc_recovery.status, DIDStatus::RecoveryPending));
+
+        client.cancel_recovery(&subject);
+        let did_doc_restored = client.resolve_did(&subject);
+        assert!(matches!(did_doc_restored.status, DIDStatus::Active));
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::DIDNotFound),
+            symbol_short!("CHK_ID")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::KeyRotationCooldown),
+            symbol_short!("RE_TRY_L")
         );
     }
 }

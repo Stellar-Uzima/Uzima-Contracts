@@ -1,8 +1,10 @@
 #![no_std]
+//! timelock - Healthcare smart contract on Stellar blockchain.
 
+pub mod errors;
+pub use errors::Error;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
-    Symbol,
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, Symbol,
 };
 
 #[derive(Clone)]
@@ -20,19 +22,12 @@ pub struct QueuedTx {
     pub eta: u64,
 }
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    AlreadyQueued = 3,
-    NotQueued = 4,
-    NotReady = 5,
-}
-
 const CFG: Symbol = symbol_short!("cfg");
 const QUEUE: Symbol = symbol_short!("queue");
+
+// TTL constants for storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 
 #[contract]
 pub struct Timelock;
@@ -40,25 +35,23 @@ pub struct Timelock;
 #[contractimpl]
 impl Timelock {
     pub fn initialize(env: Env, admin: Address, delay_seconds: u64) -> Result<(), Error> {
-        if env.storage().persistent().has(&CFG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let cfg = TimelockConfig {
             admin,
             delay_seconds,
         };
-        env.storage().persistent().set(&CFG, &cfg);
+        env.storage().instance().set(&CFG, &cfg);
         Ok(())
     }
 
     pub fn get_config(env: Env) -> Option<TimelockConfig> {
-        env.storage().persistent().get(&CFG)
+        env.storage().instance().get(&CFG)
     }
 
     pub fn queue(env: Env, id: u64, target: Address, call: BytesN<32>) -> Result<(), Error> {
         let cfg: TimelockConfig = env
             .storage()
-            .persistent()
+            .instance()
             .get(&CFG)
             .ok_or(Error::NotInitialized)?;
         let now: u64 = env.ledger().timestamp();
@@ -73,7 +66,7 @@ impl Timelock {
         }
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
-        env.events().publish((symbol_short!("Queued"), id), (eta,));
+        env.events().publish((symbol_short!("queued"), id), (eta,));
         Ok(())
     }
 
@@ -83,8 +76,18 @@ impl Timelock {
             .persistent()
             .get(&QUEUE)
             .unwrap_or(Map::new(&env));
+        env.storage().persistent().extend_ttl(
+            &QUEUE,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
+        let _cfg: TimelockConfig = env
+            .storage()
+            .instance()
+            .get(&CFG)
+            .ok_or(Error::NotInitialized)?;
         if now < tx.eta {
             return Err(Error::NotReady);
         }
@@ -92,11 +95,19 @@ impl Timelock {
         // Here we just emit execution event and remove from queue.
         q.remove(id);
         env.storage().persistent().set(&QUEUE, &q);
+        env.storage().persistent().extend_ttl(
+            &QUEUE,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.events()
             .publish((symbol_short!("Exec"), id), (tx.target, tx.call));
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "testutils"))]
+mod time_dependent_tests;
 
 #[cfg(all(test, feature = "testutils"))]
 #[allow(clippy::unwrap_used, clippy::panic)]
@@ -156,5 +167,40 @@ mod test {
             // Or rather we should unwrap it to force panic for should_panic test
             Timelock::execute(env.clone(), 1).unwrap();
         });
+    }
+
+    #[test]
+    fn test_error_codes_are_stable() {
+        assert_eq!(Error::Unauthorized as u32, 100);
+        assert_eq!(Error::NotInitialized as u32, 300);
+        assert_eq!(Error::AlreadyInitialized as u32, 301);
+        assert_eq!(Error::ContractPaused as u32, 302);
+        assert_eq!(Error::DeadlineExceeded as u32, 306);
+        assert_eq!(Error::InsufficientFunds as u32, 500);
+    }
+
+    #[test]
+    fn test_get_suggestion_returns_expected_hint() {
+        use soroban_sdk::symbol_short;
+        assert_eq!(
+            crate::errors::get_suggestion(Error::Unauthorized),
+            symbol_short!("CHK_AUTH")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::NotInitialized),
+            symbol_short!("INIT_CTR")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::AlreadyInitialized),
+            symbol_short!("ALREADY")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::ContractPaused),
+            symbol_short!("RE_TRY_L")
+        );
+        assert_eq!(
+            crate::errors::get_suggestion(Error::InsufficientFunds),
+            symbol_short!("ADD_FUND")
+        );
     }
 }

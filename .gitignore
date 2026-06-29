@@ -47,6 +47,10 @@ lcov.info
 # Documentation
 /docs/book/
 
+# Generated complexity reports (issue #481 — run ./scripts/complexity_score.sh)
+dashboard/data/complexity_report.json
+dashboard/data/complexity_trends.json
+
 # Temporary files
 *.tmp
 *.temp
@@ -94,3 +98,6 @@ soroban
 deployments/*_backup_*.json
 deployments/alerts.log
 deployments/*.tmp
+
+CLAUDE.md
+plan.md

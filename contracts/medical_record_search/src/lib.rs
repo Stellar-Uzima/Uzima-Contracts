@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_record_search - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -158,16 +159,29 @@ pub enum Error {
     CacheMiss = 8,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::RecordNotIndexed => write!(f, "record not indexed"),
+            Error::QueryTooLarge => write!(f, "query too large"),
+            Error::CacheMiss => write!(f, "cache miss"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalRecordSearchContract;
 
 #[contractimpl]
 impl MedicalRecordSearchContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&PAUSED, &false);
@@ -755,6 +769,7 @@ impl MedicalRecordSearchContract {
         current
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&ADMIN) {
             return Err(Error::NotInitialized);
@@ -762,6 +777,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -775,6 +791,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -796,6 +813,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);

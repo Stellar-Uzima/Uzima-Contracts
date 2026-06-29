@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_data_marketplace - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -153,6 +154,28 @@ pub enum Error {
     IntentNotFound = 13,
     EscrowNotLinked = 14,
     SettlementTimeout = 15,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::ProviderNotActive => write!(f, "provider not active"),
+            Error::ProviderExists => write!(f, "provider exists"),
+            Error::ListingNotFound => write!(f, "listing not found"),
+            Error::InvalidPricing => write!(f, "invalid pricing"),
+            Error::InvalidQuality => write!(f, "invalid quality"),
+            Error::InvalidRoyalty => write!(f, "invalid royalty"),
+            Error::InvalidAnonymization => write!(f, "invalid anonymization"),
+            Error::InvalidSettlementWindow => write!(f, "invalid settlement window"),
+            Error::InvalidStatus => write!(f, "invalid status"),
+            Error::IntentNotFound => write!(f, "intent not found"),
+            Error::EscrowNotLinked => write!(f, "escrow not linked"),
+            Error::SettlementTimeout => write!(f, "settlement timeout"),
+        }
+    }
 }
 
 #[contract]
@@ -522,6 +545,7 @@ impl HealthcareDataMarketplace {
         env.storage().persistent().get(&DataKey::Intent(intent_id))
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Config) {
             Ok(())
@@ -530,6 +554,7 @@ impl HealthcareDataMarketplace {
         }
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<Config, Error> {
         env.storage()
             .instance()
@@ -537,6 +562,7 @@ impl HealthcareDataMarketplace {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn require_provider_active(env: &Env, provider: &Address) -> Result<(), Error> {
         let profile: ProviderProfile = env
             .storage()
@@ -571,6 +597,7 @@ impl HealthcareDataMarketplace {
         Ok(())
     }
 
+    #[must_use]
     fn validate_quality(quality: &QualityMetrics) -> Result<(), Error> {
         let fields = [
             quality.completeness_bps,
@@ -586,6 +613,7 @@ impl HealthcareDataMarketplace {
         Ok(())
     }
 
+    #[must_use]
     fn validate_royalty(royalty: &RoyaltyPolicy) -> Result<(), Error> {
         let total = royalty
             .provider_bps
@@ -595,5 +623,134 @@ impl HealthcareDataMarketplace {
             return Err(Error::InvalidRoyalty);
         }
         Ok(())
+    }
+}
+
+
+// ============================================================
+// Issue #658: Token-Gated Access Tiers
+// ============================================================
+
+const BASIC_COST: i128 = 0;
+const STANDARD_COST: i128 = 100;   // 100 SUT
+const PREMIUM_COST: i128 = 1000;   // 1000 SUT
+const TIER_DURATION_LEDGERS: u32 = 30 * 24 * 60 * 12; // ~30 days at 5s/ledger
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub enum AccessTier {
+    Basic,
+    Standard,
+    Premium,
+}
+
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct TierGrant {
+    pub tier: AccessTier,
+    pub granted_at: u32, // ledger sequence
+    pub expires_at: u32,
+}
+
+#[contracttype]
+pub enum TierKey {
+    Grant(Address), // keyed by buyer/researcher address
+}
+
+/// Purchase an access tier by transferring SUT tokens to treasury.
+/// Basic is free; Standard costs 100 SUT; Premium costs 1000 SUT.
+pub fn purchase_access_tier(
+    env: Env,
+    buyer: Address,
+    tier: AccessTier,
+    sut_token: Address,
+    treasury: Address,
+) {
+    buyer.require_auth();
+    let cost: i128 = match &tier {
+        AccessTier::Basic => BASIC_COST,
+        AccessTier::Standard => STANDARD_COST,
+        AccessTier::Premium => PREMIUM_COST,
+    };
+    if cost > 0 {
+        let token_client = token::Client::new(&env, &sut_token);
+        token_client.transfer(&buyer, &treasury, &cost);
+    }
+    let current = env.ledger().sequence();
+    let grant = TierGrant {
+        tier: tier.clone(),
+        granted_at: current,
+        expires_at: current + TIER_DURATION_LEDGERS,
+    };
+    env.storage()
+        .persistent()
+        .set(&TierKey::Grant(buyer.clone()), &grant);
+    env.events().publish(
+        (Symbol::new(&env, "TierPurchased"),),
+        (buyer, tier, cost),
+    );
+}
+
+/// Get a caller's current tier. Returns Basic if grant is missing or expired.
+pub fn get_effective_tier(env: Env, caller: Address) -> AccessTier {
+    match env
+        .storage()
+        .persistent()
+        .get::<TierKey, TierGrant>(&TierKey::Grant(caller))
+    {
+        Some(grant) if env.ledger().sequence() <= grant.expires_at => grant.tier,
+        _ => AccessTier::Basic,
+    }
+}
+
+/// Query data — returns granularity matching the caller's tier.
+/// Basic: aggregated only. Standard: anonymized records. Premium: full de-identified.
+pub fn query_data(env: Env, caller: Address) -> Symbol {
+    match get_effective_tier(env.clone(), caller) {
+        AccessTier::Basic => Symbol::new(&env, "aggregated_only"),
+        AccessTier::Standard => Symbol::new(&env, "anonymized_records"),
+        AccessTier::Premium => Symbol::new(&env, "full_deidentified"),
+    }
+}
+
+#[cfg(test)]
+mod tier_tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::Env;
+
+    #[test]
+    fn test_basic_tier_default() {
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let tier = get_effective_tier(env.clone(), caller);
+        assert_eq!(tier, AccessTier::Basic);
+    }
+
+    #[test]
+    fn test_query_returns_correct_granularity_by_tier() {
+        // Basic returns aggregated_only
+        let env = Env::default();
+        let caller = Address::generate(&env);
+        let result = query_data(env.clone(), caller);
+        assert_eq!(result, Symbol::new(&env, "aggregated_only"));
+    }
+
+    #[test]
+    fn test_expired_tier_reverts_to_basic() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let caller = Address::generate(&env);
+        // Manually write an already-expired grant
+        let grant = TierGrant {
+            tier: AccessTier::Premium,
+            granted_at: 0,
+            expires_at: 0,
+        };
+        env.storage()
+            .persistent()
+            .set(&TierKey::Grant(caller.clone()), &grant);
+        let tier = get_effective_tier(env.clone(), caller);
+        assert_eq!(tier, AccessTier::Basic);
     }
 }

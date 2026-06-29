@@ -300,7 +300,7 @@ fn test_health_check_events() {
 
     let events_after = env.events().all();
     let health_events: Vec<_> = events_after.iter()
-        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("HEALTH_CHECK"))
+        .filter(|e| e.topics.len() >= 2 && e.topics[1] == symbol_short!("HEALTH"))
         .collect();
     assert_eq!(health_events.len(), 1);
 }
@@ -393,34 +393,34 @@ fn test_event_data_structure() {
     let env = Env::default();
 
     // Test that event data structures are properly defined
-    let user_event = events::EventData::UserEvent {
+    let user_event = events::EventData::UserEvent(events::UserEventData {
         target_user: Address::generate(&env),
         role: Some(String::from_str(&env, "Doctor")),
         previous_role: None,
         did_reference: None,
-    };
+    });
 
-    let record_event = events::EventData::RecordEvent {
+    let record_event = events::EventData::RecordEvent(events::RecordEventData {
         record_id: 123,
         patient_id: Address::generate(&env),
         doctor_id: Some(Address::generate(&env)),
         is_confidential: false,
         category: String::from_str(&env, "Modern"),
         tags: vec![&env, String::from_str(&env, "cardiology")],
-    };
+    });
 
     // Test that we can create events with different data types
     match user_event {
-        events::EventData::UserEvent { target_user, .. } => {
-            assert!(!target_user.is_zero());
+        events::EventData::UserEvent(data) => {
+            assert!(!data.target_user.is_zero());
         }
         _ => panic!("Wrong event type"),
     }
 
     match record_event {
-        events::EventData::RecordEvent { record_id, tags, .. } => {
-            assert_eq!(record_id, 123);
-            assert_eq!(tags.len(), 1);
+        events::EventData::RecordEvent(data) => {
+            assert_eq!(data.record_id, 123);
+            assert_eq!(data.tags.len(), 1);
         }
         _ => panic!("Wrong event type"),
     }

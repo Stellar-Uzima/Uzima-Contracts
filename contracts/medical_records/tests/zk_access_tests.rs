@@ -2,7 +2,10 @@
 
 mod common;
 
-use common::setup_uzima;
+// std
+use std::time::Instant;
+
+// external crates
 use credential_registry::{CredentialRegistryContract, CredentialRegistryContractClient};
 use medical_records::{Error, ZkAuditRecord, ZkPublicInputs};
 use soroban_sdk::xdr::ToXdr;
@@ -11,8 +14,10 @@ use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
     Address, Bytes, BytesN, Env, String, Symbol, TryFromVal,
 };
-use std::time::Instant;
 use zk_verifier::{ZkVerifierContract, ZkVerifierContractClient};
+
+// test helpers
+use common::setup_uzima;
 
 fn append_bytes32(env: &Env, payload: &mut Bytes, value: &BytesN<32>) {
     payload.append(&Bytes::from_slice(env, &value.to_array()));
@@ -94,6 +99,8 @@ fn setup_zk_gate<'a>(
         &issuer,
         &credential_root,
         &BytesN::from_array(env, &[0x11; 32]),
+        &2_000_000_000u64,
+        &BytesN::from_array(env, &[0xAA; 64]),
     );
 
     let vk_version = zk_verifier.register_verifying_key(
@@ -522,7 +529,7 @@ fn test_acl_and_zk_gate_interplay() {
         &intruder_proof,
     ));
     let intruder_read = t.client.try_get_record(&intruder, &record_id);
-    assert!(matches!(intruder_read, Err(Ok(Error::NotAuthorized))));
+    assert!(matches!(intruder_read, Err(Ok(Error::Unauthorized))));
 
     // Patient with valid proof succeeds.
     let public_inputs_patient = build_public_inputs(

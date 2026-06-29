@@ -1,4 +1,7 @@
 #![no_std]
+//! payment_router - Healthcare smart contract on Stellar blockchain.
+
+extern crate fp_math;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Symbol,
@@ -10,6 +13,31 @@ use soroban_sdk::{
 pub enum Error {
     InvalidFeeBps = 1,
     FeeNotSet = 2,
+    Overflow = 3,
+    InsufficientFunds = 10,
+    DeadlineExceeded = 11,
+    InvalidSignature = 12,
+    UnauthorizedCaller = 13,
+    ContractPaused = 14,
+    StorageFull = 15,
+    CrossChainTimeout = 16,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::InvalidFeeBps => write!(f, "invalid fee bps"),
+            Error::FeeNotSet => write!(f, "fee not set"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::UnauthorizedCaller => write!(f, "unauthorized caller"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::StorageFull => write!(f, "storage full"),
+            Error::CrossChainTimeout => write!(f, "cross chain timeout"),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -52,7 +80,7 @@ impl PaymentRouter {
             .persistent()
             .get(&FEE_CONF)
             .ok_or(Error::FeeNotSet)?;
-        let fee = amount.saturating_mul(conf.platform_fee_bps as i128) / 10_000;
+        let fee = fp_math::mul_bps(amount, conf.platform_fee_bps).ok_or(Error::Overflow)?;
         let provider = amount.saturating_sub(fee);
         env.events()
             .publish((symbol_short!("FeeSplit"),), (provider, fee));

@@ -275,3 +275,36 @@ fn test_version() {
     let version = client.version(&env);
     assert_eq!(version, 1);
 }
+
+#[test]
+fn test_error_codes_are_stable() {
+    assert_eq!(Error::Unauthorized as u32, 100);
+    assert_eq!(Error::InsufficientPermissions as u32, 101);
+    assert_eq!(Error::HIPAAComplianceViolation as u32, 104);
+    assert_eq!(Error::InputTooLong as u32, 201);
+    assert_eq!(Error::BatchTooLarge as u32, 208);
+    assert_eq!(Error::EmptyClinicalNote as u32, 209);
+    assert_eq!(Error::NotInitialized as u32, 300);
+    assert_eq!(Error::AlreadyInitialized as u32, 301);
+    assert_eq!(Error::ContractPaused as u32, 302);
+    assert_eq!(Error::RateLimitExceeded as u32, 307);
+    assert_eq!(Error::Timeout as u32, 308);
+    assert_eq!(Error::RecordNotFound as u32, 403);
+    assert_eq!(Error::ExternalContractNotSet as u32, 705);
+    assert_eq!(Error::NLPEngineNotInitialized as u32, 800);
+    assert_eq!(Error::ICD10CodeNotFound as u32, 810);
+}
+
+#[test]
+fn test_get_suggestion_returns_expected_hint() {
+    use crate::errors::get_suggestion;
+    use soroban_sdk::symbol_short;
+    assert_eq!(get_suggestion(Error::Unauthorized), symbol_short!("CHK_AUTH"));
+    assert_eq!(get_suggestion(Error::NotInitialized), symbol_short!("INIT_CTR"));
+    assert_eq!(get_suggestion(Error::AlreadyInitialized), symbol_short!("ALREADY"));
+    assert_eq!(get_suggestion(Error::EmptyClinicalNote), symbol_short!("ADD_TEXT"));
+    assert_eq!(get_suggestion(Error::InputTooLong), symbol_short!("CHK_LEN"));
+    assert_eq!(get_suggestion(Error::ContractPaused), symbol_short!("RE_TRY_L"));
+    assert_eq!(get_suggestion(Error::HIPAAComplianceViolation), symbol_short!("CHK_PHI"));
+    assert_eq!(get_suggestion(Error::ExternalContractNotSet), symbol_short!("SET_CNTR"));
+}

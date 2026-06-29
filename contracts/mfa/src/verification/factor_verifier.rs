@@ -5,6 +5,7 @@ pub struct FactorVerifier;
 
 impl FactorVerifier {
     /// Validates factor proof with advanced algorithms (simulation).
+    #[allow(unused_variables)]
     pub fn verify_factor_proof(
         env: &Env,
         user: &Address,

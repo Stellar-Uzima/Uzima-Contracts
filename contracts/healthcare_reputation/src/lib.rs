@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_reputation - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects)]
 
 use soroban_sdk::{
@@ -27,6 +28,29 @@ pub enum Error {
     NotVerifiedProvider = 14,
     InvalidConductEntry = 15,
     ConductEntryNotFound = 16,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::CredentialNotFound => write!(f, "credential not found"),
+            Error::InvalidCredentialType => write!(f, "invalid credential type"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+            Error::CredentialRevoked => write!(f, "credential revoked"),
+            Error::DuplicateCredential => write!(f, "duplicate credential"),
+            Error::InvalidRating => write!(f, "invalid rating"),
+            Error::FeedbackNotFound => write!(f, "feedback not found"),
+            Error::DisputeNotFound => write!(f, "dispute not found"),
+            Error::InsufficientReputation => write!(f, "insufficient reputation"),
+            Error::NotVerifiedProvider => write!(f, "not verified provider"),
+            Error::InvalidConductEntry => write!(f, "invalid conduct entry"),
+            Error::ConductEntryNotFound => write!(f, "conduct entry not found"),
+        }
+    }
 }
 
 // Credential types for healthcare providers
@@ -409,6 +433,7 @@ impl HealthcareReputationSystem {
     }
 
     // Add professional conduct entry
+    #[allow(clippy::too_many_arguments)]
     pub fn add_conduct_entry(
         env: Env,
         reporter: Address,
@@ -630,6 +655,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate and update reputation score
+    #[must_use]
     fn update_reputation_score(env: &Env, provider: Address) -> Result<(), Error> {
         let components = Self::calculate_reputation_components(env, provider.clone())?;
         let total_score = components.credential_score * 40 / 100
@@ -669,6 +695,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate credential score (0-100)
+    #[must_use]
     fn calculate_credential_score(env: &Env, provider: Address) -> Result<u32, Error> {
         let credentials: Vec<BytesN<32>> = env
             .storage()
@@ -716,6 +743,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate feedback score (0-100)
+    #[must_use]
     fn calculate_feedback_score(env: &Env, provider: Address) -> Result<u32, Error> {
         let feedback_list: Vec<BytesN<32>> = env
             .storage()
@@ -750,6 +778,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate conduct score (0-100)
+    #[must_use]
     fn calculate_conduct_score(env: &Env, provider: Address) -> Result<u32, Error> {
         let conduct_list: Vec<BytesN<32>> = env
             .storage()
@@ -772,17 +801,17 @@ impl HealthcareReputationSystem {
                 match entry.conduct_type {
                     ConductType::Positive | ConductType::ProfessionalAchievement => {
                         score = score.saturating_add(5);
-                    }
+                    },
                     ConductType::Complaint => {
                         score = score.saturating_sub(entry.severity);
-                    }
+                    },
                     ConductType::Malpractice => {
                         score = score.saturating_sub(entry.severity * 2);
-                    }
+                    },
                     ConductType::EthicsViolation => {
                         score = score.saturating_sub(entry.severity * 3);
-                    }
-                    _ => {}
+                    },
+                    _ => {},
                 }
             }
         }
@@ -791,6 +820,7 @@ impl HealthcareReputationSystem {
     }
 
     // Calculate experience score (0-100)
+    #[must_use]
     fn calculate_experience_score(env: &Env, _provider: Address) -> Result<u32, Error> {
         // Get provider profile from provider directory if available
         // For now, use a simple time-based calculation
@@ -907,6 +937,7 @@ impl HealthcareReputationSystem {
     }
 
     // Helper functions
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -915,16 +946,13 @@ impl HealthcareReputationSystem {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin == *caller {
-            Ok(())
-        } else {
-            Err(Error::NotAuthorized)
-        }
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 }
