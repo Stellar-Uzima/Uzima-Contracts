@@ -13,7 +13,9 @@
 
 #![no_std]
 
-use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, String};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+};
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -86,6 +88,16 @@ pub enum MonitoringError {
     Unauthorized = 3,
 }
 
+impl core::fmt::Display for MonitoringError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            MonitoringError::NotInitialized => write!(f, "not initialized"),
+            MonitoringError::AlreadyInitialized => write!(f, "already initialized"),
+            MonitoringError::Unauthorized => write!(f, "unauthorized"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -99,9 +111,8 @@ impl ContractMonitoring {
         admin: Address,
         alert_config: AlertConfig,
     ) -> Result<(), MonitoringError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(MonitoringError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env)
+            .map_err(|_| MonitoringError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -315,6 +326,7 @@ impl ContractMonitoring {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    #[must_use]
     fn ensure_initialized(env: &Env) -> Result<(), MonitoringError> {
         if env.storage().instance().has(&DataKey::Admin) {
             Ok(())
@@ -323,6 +335,7 @@ impl ContractMonitoring {
         }
     }
 
+    #[must_use]
     fn get_admin(env: &Env) -> Result<Address, MonitoringError> {
         env.storage()
             .instance()

@@ -1,14 +1,13 @@
 #![no_std]
+//! fhir_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
-#![allow(dead_code)]
-
 // #[cfg(test)]
 // mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, Map, String, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
 };
 
 // ==================== FHIR Data Types ====================
@@ -214,12 +213,10 @@ const CONDITIONS: Symbol = symbol_short!("CONDITION");
 const MEDICATIONS: Symbol = symbol_short!("MEDICATE");
 const PROCEDURES: Symbol = symbol_short!("PROCEDURE");
 const ALLERGIES: Symbol = symbol_short!("ALLERGIES");
-const BUNDLES: Symbol = symbol_short!("BUNDLES");
 const EMR_CONFIG: Symbol = symbol_short!("EMR_CFG");
 const DATA_MAPPINGS: Symbol = symbol_short!("MAPPINGS");
 const ADMIN: Symbol = symbol_short!("ADMIN");
 const MEDICAL_RECORD_CONTRACT: Symbol = symbol_short!("MED_REC");
-const PROVIDER_COUNT: Symbol = symbol_short!("PROV_CNT");
 const PAUSED: Symbol = symbol_short!("PAUSED");
 
 #[contracterror]
@@ -246,6 +243,34 @@ pub enum Error {
     OperationFailed = 18,
     InvalidBundleType = 19,
     DataMappingFailed = 20,
+    AlreadyInitialized = 21,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::ProviderAlreadyExists => write!(f, "provider already exists"),
+            Error::ObservationNotFound => write!(f, "observation not found"),
+            Error::ConditionNotFound => write!(f, "condition not found"),
+            Error::InvalidFHIRData => write!(f, "invalid f h i r data"),
+            Error::EMRConfigNotSet => write!(f, "e m r config not set"),
+            Error::InvalidResourceType => write!(f, "invalid resource type"),
+            Error::MappingNotFound => write!(f, "mapping not found"),
+            Error::ProviderNotVerified => write!(f, "provider not verified"),
+            Error::InvalidNPI => write!(f, "invalid n p i"),
+            Error::InvalidTaxId => write!(f, "invalid tax id"),
+            Error::BundleNotFound => write!(f, "bundle not found"),
+            Error::InvalidDataFormat => write!(f, "invalid data format"),
+            Error::ProviderAlreadyVerified => write!(f, "provider already verified"),
+            Error::MedicalRecordsContractNotSet => write!(f, "medical records contract not set"),
+            Error::OperationFailed => write!(f, "operation failed"),
+            Error::InvalidBundleType => write!(f, "invalid bundle type"),
+            Error::DataMappingFailed => write!(f, "data mapping failed"),
+        }
+    }
 }
 
 #[contract]
@@ -259,12 +284,8 @@ impl FHIRIntegrationContract {
         admin: Address,
         medical_records_contract: Address,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        // Check if already initialized
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::ProviderAlreadyExists);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage()
@@ -484,8 +505,10 @@ impl FHIRIntegrationContract {
         }
         // R4 Observation.status is required and must be a valid value
         let valid_statuses = ["registered", "preliminary", "final", "amended", "cancelled"];
-        let status_str = observation.status.to_string();
-        if !valid_statuses.iter().any(|s| status_str == *s) {
+        if !valid_statuses
+            .iter()
+            .any(|s| observation.status == String::from_str(&env, s))
+        {
             return Err(Error::InvalidFHIRData);
         }
         // R4 Observation.subject (patient reference) must be present
@@ -776,8 +799,7 @@ pub struct ExportConfig {
     pub export_size_limit_bytes: u32,
 }
 
-const EXPORT_COUNT: Symbol = symbol_short!("EXPORT_CNT");
-const EXPORT_CFG: Symbol = symbol_short!("EXPORT_CFG");
+const EXPORT_CFG: Symbol = symbol_short!("XPORT_CFG");
 
 impl FHIRIntegrationContract {
     /// Export patient data in a standard format (FHIR Bundle, HL7 v2, or CDA).
@@ -787,27 +809,21 @@ impl FHIRIntegrationContract {
         env: Env,
         patient: Address,
         format: ExportFormat,
-        medical_records_contract: Address,
+        _medical_records_contract: Address,
     ) -> Result<BytesN<32>, Error> {
         patient.require_auth();
 
         // Rate limit: max 1 export per 24 hours
         let now = env.ledger().timestamp();
         let export_key = Symbol::new(&env, "EXPORT_TS");
-        let last_export: u64 = env
-            .storage()
-            .persistent()
-            .get(&export_key)
-            .unwrap_or(0);
-        
+        let last_export: u64 = env.storage().persistent().get(&export_key).unwrap_or(0);
+
         if now < last_export.saturating_add(86400) {
             return Err(Error::InvalidDataFormat);
         }
 
         // Record export timestamp for rate limiting
-        env.storage()
-            .persistent()
-            .set(&export_key, &now);
+        env.storage().persistent().set(&export_key, &now);
 
         // Generate export reference hash
         let format_str = match format {

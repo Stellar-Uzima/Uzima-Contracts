@@ -1,6 +1,5 @@
 #![no_std]
-#![allow(dead_code)]
-
+//! medical_record_hash_registry - Healthcare smart contract on Stellar blockchain.
 #[cfg(test)]
 mod test;
 
@@ -9,9 +8,8 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 use soroban_sdk::xdr::ToXdr;
-use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Vec};
 
 // ==================== Data Types ====================
 
@@ -48,11 +46,8 @@ pub struct MedicalRecordHashRegistry;
 impl MedicalRecordHashRegistry {
     /// Initialize the contract with an admin
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -186,6 +181,7 @@ impl MedicalRecordHashRegistry {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);

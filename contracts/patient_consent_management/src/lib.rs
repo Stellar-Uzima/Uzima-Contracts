@@ -44,8 +44,10 @@ mod types;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 use soroban_sdk::xdr::ToXdr;
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec,
+};
 
 /// Represents a patient's consent grant to a healthcare provider.
 ///
@@ -75,6 +77,22 @@ pub struct ConsentLog {
     pub record_count: u32,
 }
 
+#[derive(Clone, PartialEq, Debug)]
+#[contracttype]
+pub enum ErasureStatus {
+    None,
+    Requested,
+    Executed,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct ErasureRequest {
+    pub patient: Address,
+    pub requested_at: u64,
+    pub status: ErasureStatus,
+}
+
 #[contracttype]
 pub enum DataKey {
     Initialized,
@@ -82,6 +100,7 @@ pub enum DataKey {
     Paused,
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
+    ErasureRequest(Address),
 }
 
 #[contract]
@@ -111,14 +130,18 @@ impl PatientConsentManagement {
         let ts = env.ledger().timestamp();
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
-            if r.active { return Err(Error::ConsentAlreadyExists); }
+            if r.active {
+                return Err(Error::ConsentAlreadyExists);
+            }
         }
         let empty_jurisdictions = Vec::new(&env);
         let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
         let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
         log.record_count += 1;
-        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentStorage(patient.clone()), &log);
         env.storage().persistent().set(&key, &record);
         events::publish_consent_granted(&env, &patient, &provider, ts);
         Ok(())
@@ -142,7 +165,9 @@ impl PatientConsentManagement {
         }
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
         if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
-            if r.active { return Err(Error::ConsentAlreadyExists); }
+            if r.active {
+                return Err(Error::ConsentAlreadyExists);
+            }
         }
         let empty_jurisdictions = Vec::new(&env);
         let record = ConsentRecord {
@@ -154,34 +179,53 @@ impl PatientConsentManagement {
             active: true,
             jurisdictions_allowed: empty_jurisdictions,
         };
-        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
+        let mut log: ConsentLog = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ConsentStorage(patient.clone()))
+            .unwrap_or(ConsentLog {
+                records: Vec::new(&env),
+                record_count: 0,
+            });
         log.records.push_back(record.clone());
         log.record_count += 1;
-        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentStorage(patient.clone()), &log);
         env.storage().persistent().set(&key, &record);
         events::publish_consent_granted(&env, &patient, &provider, ts);
         Ok(())
     }
 
     /// Grant consent to multiple providers in a single transaction.
-    pub fn batch_grant_consent(env: Env, patient: Address, grantees: Vec<Address>) -> Result<u32, Error> {
+    pub fn batch_grant_consent(
+        env: Env,
+        patient: Address,
+        grantees: Vec<Address>,
+    ) -> Result<u32, Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let mut granted: u32 = 0;
         for provider in grantees.iter() {
-            if provider == patient { continue; }
+            if provider == patient {
+                continue;
+            }
             let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
             if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
-                if r.active { continue; }
+                if r.active {
+                    continue;
+                }
             }
             let empty_jurisdictions = Vec::new(&env);
             let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
             let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
             log.records.push_back(record.clone());
             log.record_count += 1;
-            env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+            env.storage()
+                .persistent()
+                .set(&DataKey::ConsentStorage(patient.clone()), &log);
             env.storage().persistent().set(&key, &record);
             events::publish_consent_granted(&env, &patient, &provider, ts);
             granted += 1;
@@ -195,19 +239,34 @@ impl PatientConsentManagement {
         Self::require_not_paused(&env)?;
         let ts = env.ledger().timestamp();
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
-        let mut record: ConsentRecord = env.storage().persistent().get(&key).ok_or(Error::ConsentNotFound)?;
-        if !record.active { return Err(Error::ConsentNotFound); }
+        let mut record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        if !record.active {
+            return Err(Error::ConsentNotFound);
+        }
         record.revoked_at = ts;
         record.active = false;
         env.storage().persistent().set(&key, &record);
-        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).ok_or(Error::ConsentNotFound)?;
+        let mut log: ConsentLog = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ConsentStorage(patient.clone()))
+            .ok_or(Error::ConsentNotFound)?;
         let mut updated = soroban_sdk::Vec::new(&env);
         for mut r in log.records.iter() {
-            if r.provider == provider && r.patient == patient { r.revoked_at = ts; r.active = false; }
+            if r.provider == provider && r.patient == patient {
+                r.revoked_at = ts;
+                r.active = false;
+            }
             updated.push_back(r);
         }
         log.records = updated;
-        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentStorage(patient.clone()), &log);
         events::publish_consent_revoked(&env, &patient, &provider, ts);
         Ok(())
     }
@@ -226,7 +285,12 @@ impl PatientConsentManagement {
         let mut result = false;
         if let Some(record) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if Self::is_consent_expired(&env, &record) {
-                events::publish_consent_expired(&env, &patient, &provider, env.ledger().timestamp());
+                events::publish_consent_expired(
+                    &env,
+                    &patient,
+                    &provider,
+                    env.ledger().timestamp(),
+                );
             }
             result = Self::is_consent_active(&env, &record);
         }
@@ -239,58 +303,108 @@ impl PatientConsentManagement {
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
         let now = env.ledger().timestamp();
-        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
+        let mut log: ConsentLog = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ConsentStorage(patient.clone()))
+            .unwrap_or(ConsentLog {
+                records: Vec::new(&env),
+                record_count: 0,
+            });
         let mut updated = Vec::new(&env);
         let mut cleaned: u32 = 0;
         for mut record in log.records.iter() {
             if record.active && Self::is_consent_expired(&env, &record) {
                 record.active = false;
                 record.revoked_at = now;
-                env.storage().persistent().set(&DataKey::ProviderIndex(patient.clone(), record.provider.clone()), &record);
+                env.storage().persistent().set(
+                    &DataKey::ProviderIndex(patient.clone(), record.provider.clone()),
+                    &record,
+                );
                 events::publish_consent_expired(&env, &patient, &record.provider, now);
                 cleaned = cleaned.saturating_add(1);
             }
             updated.push_back(record);
         }
         log.records = updated;
-        env.storage().persistent().set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentStorage(patient.clone()), &log);
         Ok(cleaned)
     }
 
     pub fn get_patient_consents(env: Env, patient: Address) -> Option<ConsentLog> {
-        env.storage().persistent().get(&DataKey::ConsentStorage(patient))
+        env.storage()
+            .persistent()
+            .get(&DataKey::ConsentStorage(patient))
     }
 
     pub fn get_active_consent_count(env: Env, patient: Address) -> u32 {
-        env.storage().persistent().get::<_, ConsentLog>(&DataKey::ConsentStorage(patient))
-            .map(|log| log.records.iter().filter(|r| Self::is_consent_active(&env, r)).count() as u32)
+        env.storage()
+            .persistent()
+            .get::<_, ConsentLog>(&DataKey::ConsentStorage(patient))
+            .map(|log| {
+                log.records
+                    .iter()
+                    .filter(|r| Self::is_consent_active(&env, r))
+                    .count() as u32
+            })
             .unwrap_or(0)
     }
 
-    pub fn verify_consent_with_audit(env: Env, patient: Address, provider: Address) -> Result<(bool, u64, u64), Error> {
+    pub fn verify_consent_with_audit(
+        env: Env,
+        patient: Address,
+        provider: Address,
+    ) -> Result<(bool, u64, u64), Error> {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient, provider);
-        let record: ConsentRecord = env.storage().persistent().get(&key).ok_or(Error::ConsentNotFound)?;
-        Ok((Self::is_consent_active(&env, &record), record.granted_at, record.revoked_at))
+        let record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        Ok((
+            Self::is_consent_active(&env, &record),
+            record.granted_at,
+            record.revoked_at,
+        ))
     }
 
     pub fn get_admin(env: Env) -> Result<Address, Error> {
-        env.storage().instance().get(&DataKey::Admin).ok_or(Error::NotInitialized)
+        env.storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)
     }
 
     pub fn is_paused(env: Env) -> bool {
-        env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env.storage().instance().get(&DataKey::Paused).unwrap_or(false) {
+        if env
+            .storage()
+            .instance()
+            .get(&DataKey::Paused)
+            .unwrap_or(false)
+        {
             return Err(Error::ContractPaused);
         }
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin = env.storage().instance().get::<DataKey, Address>(&DataKey::Admin).ok_or(Error::NotInitialized)?;
+        let admin = env
+            .storage()
+            .instance()
+            .get::<DataKey, Address>(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
         if caller == &admin {
             Ok(())
         } else {
@@ -320,8 +434,11 @@ impl PatientConsentManagement {
         Ok(true)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
-        if !env.storage().instance().has(&DataKey::Initialized) { return Err(Error::NotInitialized); }
+        if !env.storage().instance().has(&DataKey::Initialized) {
+            return Err(Error::NotInitialized);
+        }
         Ok(())
     }
 
@@ -453,27 +570,18 @@ pub fn revoke_proxy(env: Env, patient: Address) {
     patient.require_auth();
     let key = ProxyKey::Proxy(patient.clone());
     env.storage().persistent().remove(&key);
-    env.events().publish(
-        (Symbol::new(&env, "ProxyRevoked"),),
-        (patient,),
-    );
+    env.events()
+        .publish((Symbol::new(&env, "ProxyRevoked"),), (patient,));
 }
 
 /// Retrieve the proxy record for a patient, if one exists.
 pub fn get_proxy(env: Env, patient: Address) -> Option<ProxyRecord> {
-    env.storage()
-        .persistent()
-        .get(&ProxyKey::Proxy(patient))
+    env.storage().persistent().get(&ProxyKey::Proxy(patient))
 }
 
 /// Proxy grants consent on behalf of an incapacitated patient.
 /// Checks that caller is the designated proxy and scope allows it.
-pub fn proxy_grant_consent(
-    env: Env,
-    proxy: Address,
-    patient: Address,
-    grantee: Address,
-) {
+pub fn proxy_grant_consent(env: Env, proxy: Address, patient: Address, grantee: Address) {
     proxy.require_auth();
     let record: ProxyRecord = env
         .storage()
@@ -495,12 +603,7 @@ pub fn proxy_grant_consent(
 }
 
 /// Proxy revokes consent on behalf of an incapacitated patient.
-pub fn proxy_revoke_consent(
-    env: Env,
-    proxy: Address,
-    patient: Address,
-    grantee: Address,
-) {
+pub fn proxy_revoke_consent(env: Env, proxy: Address, patient: Address, grantee: Address) {
     proxy.require_auth();
     let record: ProxyRecord = env
         .storage()
@@ -570,17 +673,31 @@ impl upgradeability::migration::Migratable for PatientConsentManagement {
 #[cfg(test)]
 mod proxy_tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger};
+    use soroban_sdk::testutils::Address as _;
     use soroban_sdk::Env;
+
+    /// Register a dummy contract instance so storage-using free functions
+    /// can be called inside `env.as_contract()`.
+    fn register_dummy(env: &Env) -> Address {
+        env.register_contract(None, PatientConsentManagement)
+    }
 
     #[test]
     fn test_designate_and_get_proxy() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
-        let record = get_proxy(env.clone(), patient).unwrap();
+        env.as_contract(&contract_id, || {
+            designate_proxy(
+                env.clone(),
+                patient.clone(),
+                proxy.clone(),
+                ProxyScope::FullAuthority,
+            );
+        });
+        let record = env.as_contract(&contract_id, || get_proxy(env.clone(), patient).unwrap());
         assert_eq!(record.proxy_address, proxy);
         assert_eq!(record.scope, ProxyScope::FullAuthority);
     }
@@ -588,46 +705,86 @@ mod proxy_tests {
     #[test]
     fn test_revoke_proxy() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
-        revoke_proxy(env.clone(), patient.clone());
-        let record = get_proxy(env.clone(), patient);
+        env.as_contract(&contract_id, || {
+            designate_proxy(
+                env.clone(),
+                patient.clone(),
+                proxy.clone(),
+                ProxyScope::ReadOnly,
+            );
+        });
+        env.as_contract(&contract_id, || {
+            revoke_proxy(env.clone(), patient.clone());
+        });
+        let record = env.as_contract(&contract_id, || get_proxy(env.clone(), patient));
         assert!(record.is_none());
     }
 
     #[test]
     fn test_proxy_grant_consent_full_authority() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::FullAuthority);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(
+                env.clone(),
+                patient.clone(),
+                proxy.clone(),
+                ProxyScope::FullAuthority,
+            );
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
 
     #[test]
     #[should_panic(expected = "Proxy scope does not permit granting consent")]
     fn test_readonly_proxy_cannot_grant() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::ReadOnly);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(
+                env.clone(),
+                patient.clone(),
+                proxy.clone(),
+                ProxyScope::ReadOnly,
+            );
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
 
     #[test]
     fn test_emergency_proxy_can_grant_but_not_revoke() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let patient = Address::generate(&env);
         let proxy = Address::generate(&env);
         let grantee = Address::generate(&env);
-        designate_proxy(env.clone(), patient.clone(), proxy.clone(), ProxyScope::EmergencyOnly);
-        proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        env.as_contract(&contract_id, || {
+            designate_proxy(
+                env.clone(),
+                patient.clone(),
+                proxy.clone(),
+                ProxyScope::EmergencyOnly,
+            );
+        });
+        env.as_contract(&contract_id, || {
+            proxy_grant_consent(env.clone(), proxy.clone(), patient.clone(), grantee.clone());
+        });
     }
-    }
+}

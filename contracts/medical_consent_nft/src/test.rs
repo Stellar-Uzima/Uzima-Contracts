@@ -327,4 +327,202 @@ mod test {
         assert_eq!(report.len(), 1);
         assert_eq!(report.get(0).unwrap(), token_id);
     }
+
+    // ── Property-Based Tests (Issue #832) ─────────────────────────
+
+    // Property 1: Token counter monotonicity
+    #[test]
+    fn proptest_token_counter_monotonicity() {
+        use proptest::proptest;
+        proptest!(|(token_count in 1usize..=50)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let metadata_uri = String::from_str(&env, "ipfs://QmXxx...");
+            let consent_type = String::from_str(&env, "treatment");
+            
+            for i in 0..token_count {
+                let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+                prop_assert_eq!(token_id as usize, i,
+                    "Token ID must equal iteration index (0-indexed)");
+            }
+        });
+    }
+
+    // Property 2: Can't revoke token twice
+    #[test]
+    fn proptest_revoke_idempotency() {
+        use proptest::proptest;
+        proptest!(|(seed in 1u64..=1000)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let metadata_uri = String::from_str(&env, "ipfs://QmXxx...");
+            let consent_type = String::from_str(&env, "treatment");
+            let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+            
+            client.revoke_consent(&token_id);
+            
+            // Second revoke should panic or fail (idempotent protection)
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                client.revoke_consent(&token_id);
+            }));
+            prop_assert!(result.is_err(), "Revoking already revoked token should fail at seed {}", seed);
+        });
+    }
+
+    // Property 3: Revoked tokens are not queryable
+    #[test]
+    fn proptest_revoked_token_not_queryable() {
+        use proptest::proptest;
+        proptest!(|(seed in 1u64..=1000)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let metadata_uri = String::from_str(&env, "ipfs://QmXxx...");
+            let consent_type = String::from_str(&env, "treatment");
+            let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+            
+            // Before revoke - should be valid
+            let valid_before = client.is_valid(&token_id);
+            prop_assert!(valid_before, "Token should be valid before revoke at seed {}", seed);
+            
+            client.revoke_consent(&token_id);
+            
+            // After revoke - should not be valid
+            let valid_after = client.is_valid(&token_id);
+            prop_assert!(!valid_after, "Revoked token should not be valid at seed {}", seed);
+            
+            let is_revoked = client.is_revoked(&token_id);
+            prop_assert!(is_revoked, "Token should be marked as revoked at seed {}", seed);
+        });
+    }
+
+    // Property 4: Token ownership is persistent
+    #[test]
+    fn proptest_token_ownership_persistent() {
+        use proptest::proptest;
+        proptest!(|(check_count in 1usize..=20)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let metadata_uri = String::from_str(&env, "ipfs://QmXxx...");
+            let consent_type = String::from_str(&env, "treatment");
+            let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+            
+            // Multiple checks should always return the same owner
+            for _ in 0..check_count {
+                let owner = client.owner_of(&token_id);
+                prop_assert_eq!(owner, patient,
+                    "Token owner must remain the same across multiple queries");
+            }
+        });
+    }
+
+    // Property 5: Version history increases monotonically
+    #[test]
+    fn proptest_version_history_monotonicity() {
+        use proptest::proptest;
+        proptest!(|(update_count in 1usize..=20)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let metadata_uri = String::from_str(&env, "ipfs://QmXxx...");
+            let consent_type = String::from_str(&env, "treatment");
+            let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+            
+            let mut prev_version = 0u32;
+            for i in 0..update_count {
+                let new_uri = String::from_str(&env, 
+                    &format!("ipfs://version{}", i));
+                client.update_metadata(&token_id, &new_uri, &consent_type);
+                
+                let updated_consent = client.get_consent(&token_id);
+                let version = updated_consent.version;
+                prop_assert!(version > prev_version,
+                    "Version must increase with each update (prev: {}, current: {})", 
+                    prev_version, version);
+                prev_version = version;
+            }
+        });
+    }
+
+    // Property 6: Multiple tokens for same patient
+    #[test]
+    fn proptest_multiple_tokens_same_patient() {
+        use proptest::proptest;
+        proptest!(|(token_count in 1usize..=30)| {
+            let env = Env::default();
+            let contract_id = env.register_contract(None, PatientConsentToken);
+            let client = PatientConsentTokenClient::new(&env, &contract_id);
+
+            let admin = Address::generate(&env);
+            let issuer = Address::generate(&env);
+            let patient = Address::generate(&env);
+
+            client.initialize(&admin);
+            client.add_issuer(&issuer);
+
+            let mut token_ids = Vec::new();
+            for i in 0..token_count {
+                let metadata_uri = String::from_str(&env, 
+                    &format!("ipfs://QmXxx{}", i));
+                let consent_type = String::from_str(&env, "treatment");
+                let token_id = client.mint_consent(&issuer, &patient, &metadata_uri, &consent_type, &0);
+                token_ids.push(token_id);
+            }
+
+            // All tokens should have same owner
+            let analytics = client.get_analytics();
+            prop_assert_eq!(analytics.total_consents as usize, token_count,
+                "Total consents must equal number of minted tokens");
+            
+            // Verify each token owner
+            for token_id in token_ids {
+                let owner = client.owner_of(&token_id);
+                prop_assert_eq!(owner, patient,
+                    "All tokens must have same owner");
+            }
+        });
+    }
 }

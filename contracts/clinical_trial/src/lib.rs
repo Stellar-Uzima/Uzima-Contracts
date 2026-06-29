@@ -1,7 +1,11 @@
 #![no_std]
-#![allow(dead_code)]
+//! clinical_trial - Healthcare smart contract on Stellar blockchain.
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::absurd_extreme_comparisons)]
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec,
+};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -16,6 +20,22 @@ pub enum Error {
     InvalidMaxParticipants = 7,
     InvalidDescriptionRef = 8,
     InvalidSeverity = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::ProtocolNotFound => write!(f, "protocol not found"),
+            Error::TrialFull => write!(f, "trial full"),
+            Error::InvalidTitle => write!(f, "invalid title"),
+            Error::InvalidMetadataRef => write!(f, "invalid metadata ref"),
+            Error::InvalidName => write!(f, "invalid name"),
+            Error::InvalidConsentRef => write!(f, "invalid consent ref"),
+            Error::InvalidMaxParticipants => write!(f, "invalid max participants"),
+            Error::InvalidDescriptionRef => write!(f, "invalid description ref"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+        }
+    }
 }
 
 // ==================== VALIDATION CONSTANTS ====================
@@ -43,6 +63,7 @@ const MAX_SEVERITY: u32 = 10;
 // ==================== VALIDATION FUNCTIONS ====================
 
 /// Validates that a title string has appropriate length
+#[must_use]
 fn validate_title(title: &String) -> Result<(), Error> {
     let len = title.len();
     if len == 0 || len < MIN_TITLE_LENGTH || len > MAX_TITLE_LENGTH {
@@ -52,6 +73,7 @@ fn validate_title(title: &String) -> Result<(), Error> {
 }
 
 /// Validates that a name string has appropriate length
+#[must_use]
 fn validate_name(name: &String) -> Result<(), Error> {
     let len = name.len();
     if len == 0 || len < MIN_NAME_LENGTH || len > MAX_NAME_LENGTH {
@@ -61,6 +83,7 @@ fn validate_name(name: &String) -> Result<(), Error> {
 }
 
 /// Validates that a reference string (IPFS CID, etc.) has appropriate length
+#[must_use]
 fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error> {
     let len = reference.len();
     if len == 0 || len < MIN_REF_LENGTH || len > MAX_REF_LENGTH {
@@ -70,6 +93,7 @@ fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error
 }
 
 /// Validates that max_participants is positive
+#[must_use]
 fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
     if max_participants == 0 {
         return Err(Error::InvalidMaxParticipants);
@@ -78,6 +102,7 @@ fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
 }
 
 /// Validates severity level is within acceptable range
+#[must_use]
 fn validate_severity(severity: u32) -> Result<(), Error> {
     if severity < MIN_SEVERITY || severity > MAX_SEVERITY {
         return Err(Error::InvalidSeverity);
@@ -158,10 +183,8 @@ pub struct ClinicalTrial;
 #[contractimpl]
 impl ClinicalTrial {
     pub fn initialize(env: Env, admin: Address) {
+        governance_commons::init_guard(&env);
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return;
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
@@ -171,7 +194,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &1u64);
         env.events()
-            .publish((Symbol::new(&env, "Initialized"),), (admin,));
+            .publish((Symbol::new(&env, "initialized"),), (admin,));
     }
 
     // Create or version a trial protocol
@@ -183,12 +206,12 @@ impl ClinicalTrial {
         max_participants: u64,
     ) -> Result<u64, Error> {
         proposer.require_auth();
-        
+
         // Validate inputs
         validate_title(&title)?;
         validate_reference(&metadata_ref, Error::InvalidMetadataRef)?;
         validate_max_participants(max_participants)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -213,8 +236,8 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::ProtocolNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "ProtocolCreated"),), (id, proposer));
-        Ok(id)
+            .publish((Symbol::new(&env, "protocol_created"),), (id, proposer));
+        id
     }
 
     pub fn get_protocol(env: Env, id: u64) -> Option<Protocol> {
@@ -223,10 +246,10 @@ impl ClinicalTrial {
 
     pub fn register_site(env: Env, registrar: Address, name: String) -> Result<u64, Error> {
         registrar.require_auth();
-        
+
         // Validate inputs
         validate_name(&name)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -244,25 +267,32 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::SiteNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "SiteRegistered"),), (id, registrar));
-        Ok(id)
+            .publish((Symbol::new(&env, "site_registered"),), (id, registrar));
+        id
     }
 
     // Patient recruitment / eligibility with enrollment cap enforcement
-    pub fn recruit_patient(env: Env, site: Address, patient: Address, protocol_id: u64) -> Result<(), Error> {
+    pub fn recruit_patient(
+        env: Env,
+        site: Address,
+        patient: Address,
+        protocol_id: u64,
+    ) -> Result<(), Error> {
         site.require_auth();
-        
+
         // Check protocol exists and has capacity
         let mut protocol: Protocol = env
             .storage()
             .persistent()
             .get(&DataKey::Protocol(protocol_id))
             .ok_or(Error::ProtocolNotFound)?;
-        
-        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
             return Err(Error::TrialFull);
         }
-        
+
         // Store recruitment state
         let key = DataKey::ParticipantRecords(patient.clone());
         let mut v: Vec<u64> = env
@@ -272,24 +302,28 @@ impl ClinicalTrial {
             .unwrap_or(Vec::new(&env));
         v.push_back(protocol_id);
         env.storage().persistent().set(&key, &v);
-        
+
         // Update enrollment count
         protocol.current_participants = protocol.current_participants.saturating_add(1);
-        env.storage().persistent().set(&DataKey::Protocol(protocol_id), &protocol);
-        
+        env.storage()
+            .persistent()
+            .set(&DataKey::Protocol(protocol_id), &protocol);
+
         // Check if trial is now full and emit event
-        if protocol.max_participants > 0 && protocol.current_participants >= protocol.max_participants {
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
             env.events().publish(
                 (Symbol::new(&env, "TrialCapacityReached"),),
                 (protocol_id, protocol.max_participants),
             );
         }
-        
+
         env.events().publish(
-            (Symbol::new(&env, "PatientRecruited"),),
+            (Symbol::new(&env, "patient_recruited"),),
             (patient, protocol_id, site),
         );
-        
+
         Ok(())
     }
 
@@ -300,10 +334,10 @@ impl ClinicalTrial {
         consent_ref: String,
     ) -> Result<u64, Error> {
         patient.require_auth();
-        
+
         // Validate inputs
         validate_reference(&consent_ref, Error::InvalidConsentRef)?;
-        
+
         let count: u64 = env
             .storage()
             .instance()
@@ -320,7 +354,7 @@ impl ClinicalTrial {
         env.storage().persistent().set(&DataKey::Consent(id), &c);
         env.storage().instance().set(&DataKey::ConsentCount, &id);
         env.events().publish(
-            (Symbol::new(&env, "ConsentRecorded"),),
+            (Symbol::new(&env, "consent_recorded"),),
             (id, patient, protocol_id),
         );
         Ok(id)
@@ -337,11 +371,11 @@ impl ClinicalTrial {
         description_ref: String,
     ) -> Result<u64, Error> {
         reporter.require_auth();
-        
+
         // Validate inputs
         validate_severity(severity)?;
         validate_reference(&description_ref, Error::InvalidDescriptionRef)?;
-        
+
         let next: u64 = env
             .storage()
             .instance()
@@ -364,7 +398,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &next.saturating_add(1));
         env.events().publish(
-            (Symbol::new(&env, "AdverseEvent"),),
+            (Symbol::new(&env, "adverse_event"),),
             (id, patient, protocol_id, site_id, severity),
         );
         Ok(id)
@@ -500,11 +534,11 @@ mod tests {
         let p3 = Address::generate(&env);
 
         // Enrolling up to capacity should all succeed
-        assert!(client.enroll_participant(&site, &p1, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p2, &protocol_id).is_ok());
-        assert!(client.enroll_participant(&site, &p3, &protocol_id).is_ok());
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
+        client.enroll_participant(&site, &p3, &protocol_id);
 
-        let (_, enrolled, max) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, max) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 3);
         assert_eq!(max, 3);
     }
@@ -527,15 +561,15 @@ mod tests {
         let p2 = Address::generate(&env);
         let p3 = Address::generate(&env); // would exceed cap
 
-        client.enroll_participant(&site, &p1, &protocol_id).unwrap();
-        client.enroll_participant(&site, &p2, &protocol_id).unwrap();
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
 
         // Third enrollment must return TrialFull
         let result = client.try_enroll_participant(&site, &p3, &protocol_id);
         assert_eq!(result, Err(Ok(Error::TrialFull)));
 
         // Enrollment count must remain at 2
-        let (_, enrolled, _) = client.get_trial_status(&protocol_id).unwrap();
+        let (_, enrolled, _) = client.get_trial_status(&protocol_id);
         assert_eq!(enrolled, 2);
     }
 }

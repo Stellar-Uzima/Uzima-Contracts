@@ -1,4 +1,5 @@
 #![no_std]
+//! timelock - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;
 pub use errors::Error;
@@ -34,10 +35,11 @@ pub struct Timelock;
 #[contractimpl]
 impl Timelock {
     pub fn initialize(env: Env, admin: Address, delay_seconds: u64) -> Result<(), Error> {
-        if env.storage().instance().has(&CFG) {
-            return Err(Error::AlreadyInitialized);
-        }
-        let cfg = TimelockConfig { admin, delay_seconds };
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
+        let cfg = TimelockConfig {
+            admin,
+            delay_seconds,
+        };
         env.storage().instance().set(&CFG, &cfg);
         Ok(())
     }
@@ -64,12 +66,7 @@ impl Timelock {
         }
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
-        env.storage().persistent().extend_ttl(
-            &QUEUE,
-            PERSISTENT_TTL_THRESHOLD,
-            PERSISTENT_TTL_EXTEND_TO,
-        );
-        env.events().publish((symbol_short!("Queued"), id), (eta,));
+        env.events().publish((symbol_short!("queued"), id), (eta,));
         Ok(())
     }
 
@@ -86,7 +83,7 @@ impl Timelock {
         );
         let tx = q.get(id).ok_or(Error::NotQueued)?;
         let now: u64 = env.ledger().timestamp();
-        let cfg: TimelockConfig = env
+        let _cfg: TimelockConfig = env
             .storage()
             .instance()
             .get(&CFG)

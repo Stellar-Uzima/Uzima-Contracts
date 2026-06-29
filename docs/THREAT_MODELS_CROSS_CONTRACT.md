@@ -11,10 +11,18 @@
 - Delaying or censoring cross-chain messages to cause inconsistencies
 - Manipulating external chain identifiers to route to wrong chains
 - Exploiting sync timestamp manipulation for replay attacks
+- **Message replay with same nonce** — re-submitting an already-processed message with the same nonce to trigger state changes twice
+- **Stale-message replay** — executing an expired message that was pending confirmation
+- **Cross-chain replay** — intercepting a message on chain A and submitting it to chain B (e.g., claiming an attestation on a different chain)
+- **Hash collision / idempotency bypass** — forging a distinct message hash that passes the seen-message check
 - Attacking light client or oracle mechanisms used for cross-chain verification
 - Front-running cross-chain transactions to extract value
 
 **Mitigations**:
+- **Shared `replay_protection` library** (`libs/replay_protection/`) enforces the triple-check pattern in every cross-chain contract:
+  - **Nonce uniqueness** — each `(sender_key, nonce)` pair is strictly increasing; replay of the same nonce returns `ReplayError::NonceReused`
+  - **Expiration** — messages past `timestamp + ttl_secs` are rejected with `ReplayError::MessageExpired`
+  - **Chain binding** — messages are cryptographically bound to their source chain; cross-chain submit returns `ReplayError::ChainMismatch`
 - Cross-chain contract address validation via admin-controlled settings
 - External chain ID validation in `CrossChainRecordRef`
 - Sync timestamps to prevent replay attacks

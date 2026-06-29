@@ -1,6 +1,5 @@
 #![no_std]
-#![allow(dead_code)]
-
+//! emergency_access_override - Healthcare smart contract on Stellar blockchain.
 #[cfg(test)]
 mod test;
 
@@ -9,7 +8,9 @@ mod events;
 
 pub use errors::Error;
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, Vec};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+// Shared multi-sig helpers (Phase 4 migration: see issue #830)
+use governance_commons::{multi_sig, ApprovalStatus};
 
 // ==================== Data Types ====================
 
@@ -30,7 +31,7 @@ pub enum DataKey {
     Initialized,
     Admin,
     ApprovalThreshold,
-    TrustedApprover(Address),          // approver -> bool (exists)
+    TrustedApprovers,                  // Vec<Address> of configured approvers
     EmergencyAccess(Address, Address), // (patient, provider)
     Cooldown(Address),                 // approver -> last_used timestamp
     CooldownPeriod,                    // configurable cooldown in seconds (default 86400 = 24h)
@@ -59,15 +60,12 @@ impl EmergencyAccessOverride {
         approvers: Vec<Address>,
         threshold: u32,
     ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
-        if threshold == 0 || threshold > approvers.len() {
-            return Err(Error::InvalidThreshold);
-        }
+        // Delegate approval-set validation to the shared multi-sig helper.
+        multi_sig::validate_approval_set(&approvers, threshold)
+            .map_err(|_| Error::InvalidThreshold)?;
 
-        env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -75,13 +73,23 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::CooldownPeriod, &DEFAULT_COOLDOWN_SECONDS);
+        // Store the approver set as a Vec<Address> in instance storage so
+        // that the shared multi-sig helper can validate membership. The
+        // previous implementation kept a per-address boolean in persistent
+        // storage; under soroban-sdk 21.x we consolidate to a single
+        // instance entry which the multi-sig helpers can iterate directly.
+        env.storage()
+            .instance()
+            .set(&DataKey::TrustedApprovers, &approvers);
 
-        for approver in approvers.iter() {
-            env.storage()
-                .persistent()
-                .set(&DataKey::TrustedApprover(approver.clone()), &true);
-        }
-
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::Initialized,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         events::publish_initialization(&env, &admin);
         Ok(())
     }
@@ -100,14 +108,13 @@ impl EmergencyAccessOverride {
             return Err(Error::InvalidDuration);
         }
 
-        let is_trusted: Option<bool> = env
+        // Delegate approver-membership check to the shared multi-sig helper.
+        let trusted: Vec<Address> = env
             .storage()
-            .persistent()
-            .get(&DataKey::TrustedApprover(approver.clone()));
-
-        if is_trusted != Some(true) {
-            return Err(Error::Unauthorized);
-        }
+            .instance()
+            .get(&DataKey::TrustedApprovers)
+            .ok_or(Error::NotInitialized)?;
+        multi_sig::validate_approver(&approver, &trusted).map_err(|_| Error::Unauthorized)?;
 
         let now = env.ledger().timestamp();
 
@@ -128,16 +135,20 @@ impl EmergencyAccessOverride {
             .get(&DataKey::CooldownPeriod)
             .unwrap_or(DEFAULT_COOLDOWN_SECONDS);
 
-        let last_used: u64 = env
+        // Check cooldown only if the approver has been used before.
+        // Using `Option` distinguishes "never called" (None) from
+        // "called at timestamp 0" (Some(0)), which matters in tests
+        // where the ledger timestamp starts at 0.
+        if let Some(last_used) = env
             .storage()
             .persistent()
-            .get(&DataKey::Cooldown(approver.clone()))
-            .unwrap_or(0);
-
-        let next_allowed_at = last_used.saturating_add(cooldown_period);
-        if now < next_allowed_at {
-            events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
-            return Err(Error::RateLimitExceeded);
+            .get::<_, u64>(&DataKey::Cooldown(approver.clone()))
+        {
+            let next_allowed_at = last_used.saturating_add(cooldown_period);
+            if now < next_allowed_at {
+                events::publish_rate_limit_exceeded(&env, &approver, next_allowed_at, now);
+                return Err(Error::RateLimitExceeded);
+            }
         }
 
         // Record this invocation timestamp
@@ -165,16 +176,14 @@ impl EmergencyAccessOverride {
             return Ok(true);
         }
 
-        // Avoid duplicate approver records
-        for a in record.approvers.iter() {
-            if a == approver {
-                // already approved by this approver, no changes
-                events::publish_duplicate_approval(&env, &patient, &provider, &approver, now);
-                return Ok(false);
-            }
+        // Use shared helper for idempotent approval. add_approval returns
+        // false if the approver already approved; we preserve the existing
+        // duplicate-approval event so callers can observe rejection.
+        let newly_added = multi_sig::add_approval(approver.clone(), &mut record.approvers);
+        if !newly_added {
+            events::publish_duplicate_approval(&env, &patient, &provider, &approver, now);
+            return Ok(false);
         }
-
-        record.approvers.push_back(approver.clone());
 
         // Determine if approval threshold reached
         let threshold: u32 = env
@@ -182,9 +191,10 @@ impl EmergencyAccessOverride {
             .instance()
             .get(&DataKey::ApprovalThreshold)
             .ok_or(Error::NotInitialized)?;
-        let current = record.approvers.len();
 
-        if current >= threshold {
+        if multi_sig::check_approval_status(&record.approvers, threshold, false)
+            == ApprovalStatus::Ready
+        {
             record.approved = true;
             record.granted_at = now;
             record.expiry_at = now.saturating_add(duration_seconds);
@@ -216,13 +226,29 @@ impl EmergencyAccessOverride {
 
             if grant_count >= GLOBAL_GRANT_LIMIT {
                 // Trip circuit breaker and emit alert
-                env.storage()
-                    .instance()
-                    .set(&DataKey::CircuitBreakerTripped, &true);
-                events::publish_rate_limit_exceeded(&env, &approver, now, now);
-                return Err(Error::RateLimitExceeded);
+        env.storage()
+            .instance()
+            .set(&DataKey::CircuitBreakerTripped, &true);
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CircuitTripped,
+            &approver,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("GRANT"),
+        );
+        events::publish_rate_limit_exceeded(&env, &approver, now, now);
+        return Err(Error::RateLimitExceeded);
             }
 
+            events::record_audit_entry(
+                &env,
+                events::AuditAction::GrantGranted,
+                &approver,
+                Some(patient.clone()),
+                Some(provider.clone()),
+                symbol_short!("OK"),
+            );
             events::publish_emergency_access_granted(
                 &env,
                 &patient,
@@ -234,6 +260,14 @@ impl EmergencyAccessOverride {
         }
 
         env.storage().persistent().set(&key, &record);
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::GrantApproved,
+            &approver,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("OK"),
+        );
         events::publish_emergency_access_approved(&env, &patient, &provider, &approver, now);
         Ok(false)
     }
@@ -259,6 +293,14 @@ impl EmergencyAccessOverride {
         env.storage()
             .instance()
             .set(&DataKey::GlobalGrantWindowStart, &env.ledger().timestamp());
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CircuitReset,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         Ok(())
     }
 
@@ -284,6 +326,14 @@ impl EmergencyAccessOverride {
             .instance()
             .set(&DataKey::CooldownPeriod, &new_period_seconds);
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::CooldownUpdated,
+            &admin,
+            None,
+            None,
+            symbol_short!("OK"),
+        );
         events::publish_cooldown_updated(&env, &admin, new_period_seconds);
         Ok(())
     }
@@ -312,11 +362,27 @@ impl EmergencyAccessOverride {
             .get::<_, EmergencyAccessRecord>(&key)
         {
             if record.approved && record.expiry_at > now {
+                events::record_audit_entry(
+                    &env,
+                    events::AuditAction::AccessCheck,
+                    &env.current_contract_address(),
+                    Some(patient.clone()),
+                    Some(provider.clone()),
+                    symbol_short!("TRUE"),
+                );
                 events::publish_emergency_access_checked(&env, &patient, &provider, true, now);
                 return Ok(true);
             }
         }
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::AccessCheck,
+            &env.current_contract_address(),
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("FALSE"),
+        );
         events::publish_emergency_access_checked(&env, &patient, &provider, false, now);
         Ok(false)
     }
@@ -349,6 +415,14 @@ impl EmergencyAccessOverride {
 
         env.storage().persistent().set(&key, &record);
 
+        events::record_audit_entry(
+            &env,
+            events::AuditAction::GrantRevoked,
+            &admin,
+            Some(patient.clone()),
+            Some(provider.clone()),
+            symbol_short!("OK"),
+        );
         events::publish_emergency_access_revoked(
             &env,
             &patient,
@@ -375,8 +449,9 @@ impl EmergencyAccessOverride {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
-        if !env.storage().instance().has(&DataKey::Initialized) {
+        if !governance_commons::is_initialized(env) {
             return Err(Error::NotInitialized);
         }
         Ok(())
@@ -385,16 +460,14 @@ impl EmergencyAccessOverride {
     /// On-chain health check endpoint.
     /// Returns true if the contract is initialized and operational.
     pub fn health_check(env: Env) -> bool {
-        env.storage().instance().has(&DataKey::Initialized)
+        governance_commons::is_initialized(&env)
     }
 }
-
 
 // ============================================================
 // Issue #655: M-of-N Multi-Sig Emergency Access Override
 // ============================================================
 
-const DEFAULT_EXPIRY_SECONDS: u64 = 3600; // 1 hour
 
 #[derive(Clone, Debug)]
 #[contracttype]
@@ -409,8 +482,8 @@ pub struct EmergencyRequest {
 
 #[contracttype]
 pub enum EmergencyKey {
-    Request(u64),       // keyed by request_id
-    Config,             // stores (approvers: Vec<Address>, required: u32)
+    Request(u64), // keyed by request_id
+    Config,       // stores (approvers: Vec<Address>, required: u32)
     RequestCounter,
 }
 
@@ -478,16 +551,19 @@ pub fn request_emergency_access(
 
 /// An approver signs off on a pending request.
 /// Access is granted automatically once M approvals are collected.
-pub fn approve_emergency_access(env: Env, approver: Address, request_id: u64) -> Result<bool, Error> {
+pub fn approve_emergency_access(
+    env: Env,
+    approver: Address,
+    request_id: u64,
+) -> Result<bool, Error> {
     approver.require_auth();
     let config: MultiSigConfig = env
         .storage()
         .persistent()
         .get(&EmergencyKey::Config)
         .ok_or(Error::NotInitialized)?;
-    if !config.approvers.contains(&approver) {
-        return Err(Error::Unauthorized);
-    }
+    // Delegate approver-membership check to the shared multi-sig helper.
+    multi_sig::validate_approver(&approver, &config.approvers).map_err(|_| Error::Unauthorized)?;
     let mut request: EmergencyRequest = env
         .storage()
         .persistent()
@@ -500,15 +576,17 @@ pub fn approve_emergency_access(env: Env, approver: Address, request_id: u64) ->
     if elapsed > config.expiry_seconds {
         return Err(Error::InvalidDuration); // reuse: expired
     }
-    if request.approvals.contains(&approver) {
+    // add_approval is idempotent: returns false if approver already signed.
+    if !multi_sig::add_approval(approver.clone(), &mut request.approvals) {
         return Err(Error::RateLimitExceeded); // reuse: already signed
     }
-    request.approvals.push_back(approver.clone());
     env.events().publish(
         (Symbol::new(&env, "EmergencyApproval"),),
         (request_id, approver.clone()),
     );
-    if request.approvals.len() >= config.required_approvals {
+    if multi_sig::check_approval_status(&request.approvals, config.required_approvals, false)
+        == ApprovalStatus::Ready
+    {
         request.granted = true;
         env.events().publish(
             (Symbol::new(&env, "EmergencyAccessGranted"),),
@@ -531,24 +609,33 @@ pub fn get_emergency_request(env: Env, request_id: u64) -> Option<EmergencyReque
 #[cfg(test)]
 mod multisig_tests {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Ledger, LedgerInfo};
+    use soroban_sdk::testutils::{Address as _, Ledger};
     use soroban_sdk::{Env, Symbol, Vec};
 
-    fn setup_config(env: &Env, approvers: Vec<Address>, m: u32) -> Address {
+    /// Register a dummy contract and return its ID, so storage-using calls
+    /// can be wrapped in `env.as_contract(&contract_id, || ...)`.
+    fn register_dummy(env: &Env) -> Address {
+        env.register_contract(None, EmergencyAccessOverride)
+    }
+
+    fn setup_config(env: &Env, contract_id: &Address, approvers: Vec<Address>, m: u32) -> Address {
         let admin = Address::generate(env);
-        configure_multisig(
-            env.clone(),
-            admin.clone(),
-            approvers,
-            m,
-            DEFAULT_EXPIRY_SECONDS,
-        );
+        env.as_contract(contract_id, || {
+            configure_multisig(
+                env.clone(),
+                admin.clone(),
+                approvers,
+                m,
+                DEFAULT_EXPIRY_SECONDS,
+            );
+        });
         admin
     }
 
     #[test]
     fn test_m_approvals_grant_access() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let a2 = Address::generate(&env);
@@ -557,63 +644,98 @@ mod multisig_tests {
         approvers.push_back(a1.clone());
         approvers.push_back(a2.clone());
         approvers.push_back(a3.clone());
-        setup_config(&env, approvers, 2);
+        setup_config(&env, &contract_id, approvers, 2);
         let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P001"),
-            Symbol::new(&env, "cardiac_arrest"),
-        );
-        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
-        approve_emergency_access(env.clone(), a2.clone(), id).unwrap();
-        let req = get_emergency_request(env.clone(), id).unwrap();
+
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P001"),
+                Symbol::new(&env, "cardiac_arrest"),
+            )
+        });
+
+        env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
+        });
+
+        let granted = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a2.clone(), id).unwrap()
+        });
+        assert!(granted);
+
+        let req = env.as_contract(&contract_id, || {
+            get_emergency_request(env.clone(), id).unwrap()
+        });
         assert!(req.granted);
     }
 
     #[test]
     fn test_m_minus_1_does_not_grant() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let a2 = Address::generate(&env);
         let mut approvers = Vec::new(&env);
         approvers.push_back(a1.clone());
         approvers.push_back(a2.clone());
-        setup_config(&env, approvers, 2);
+        setup_config(&env, &contract_id, approvers, 2);
         let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P002"),
-            Symbol::new(&env, "reason"),
-        );
-        approve_emergency_access(env.clone(), a1.clone(), id).unwrap();
-        let req = get_emergency_request(env.clone(), id).unwrap();
+
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P002"),
+                Symbol::new(&env, "reason"),
+            )
+        });
+
+        let granted = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id).unwrap()
+        });
+        assert!(!granted);
+
+        let req = env.as_contract(&contract_id, || {
+            get_emergency_request(env.clone(), id).unwrap()
+        });
         assert!(!req.granted);
     }
 
     #[test]
     fn test_expired_request_rejected() {
         let env = Env::default();
+        let contract_id = register_dummy(&env);
         env.mock_all_auths();
         let a1 = Address::generate(&env);
         let mut approvers = Vec::new(&env);
         approvers.push_back(a1.clone());
-        configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10); // 10s expiry
-        let requester = Address::generate(&env);
-        let id = request_emergency_access(
-            env.clone(),
-            requester,
-            Symbol::new(&env, "P003"),
-            Symbol::new(&env, "reason"),
-        );
-        // Fast-forward time past expiry
-        env.ledger().set(LedgerInfo {
-            timestamp: env.ledger().timestamp() + 100,
-            ..env.ledger().get()
+
+        env.as_contract(&contract_id, || {
+            configure_multisig(env.clone(), Address::generate(&env), approvers, 1, 10);
+            // 10s expiry
         });
-        let result = approve_emergency_access(env.clone(), a1.clone(), id);
+
+        let requester = Address::generate(&env);
+        let id = env.as_contract(&contract_id, || {
+            request_emergency_access(
+                env.clone(),
+                requester.clone(),
+                Symbol::new(&env, "P003"),
+                Symbol::new(&env, "reason"),
+            )
+        });
+
+        // Fast-forward time past expiry
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(100);
+        });
+
+        let result = env.as_contract(&contract_id, || {
+            approve_emergency_access(env.clone(), a1.clone(), id)
+        });
         assert!(result.is_err());
     }
 }

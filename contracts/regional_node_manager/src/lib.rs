@@ -1,4 +1,5 @@
 #![no_std]
+//! regional_node_manager - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map, String};
 
@@ -85,12 +86,28 @@ pub enum Error {
     DuplicateNode = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::NodeNotFound => write!(f, "node not found"),
+            Error::HealthCheckFailed => write!(f, "health check failed"),
+            Error::ReplicaOutOfSync => write!(f, "replica out of sync"),
+            Error::NodeUnreachable => write!(f, "node unreachable"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::DuplicateNode => write!(f, "duplicate node"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
 
 const ADMIN: Symbol = symbol_short!("ADMIN");
-const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const NODES: Symbol = symbol_short!("NODES");
 const CONFIG: Symbol = symbol_short!("CFG");
@@ -113,12 +130,9 @@ impl RegionalNodeManager {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
-        env.storage().instance().set(&INITIALIZED, &true);
         env.storage().instance().set(&NEXT_NODE_ID, &1u32);
         env.storage().instance().set(&NEXT_CHECK_ID, &1u64);
 
@@ -486,6 +500,7 @@ impl RegionalNodeManager {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
         if admin != *caller {
@@ -494,6 +509,7 @@ impl RegionalNodeManager {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -508,6 +524,7 @@ impl RegionalNodeManager {
         Ok(())
     }
 
+    #[must_use]
     fn require_monitor(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()

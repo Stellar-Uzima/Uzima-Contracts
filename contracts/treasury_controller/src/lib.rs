@@ -1,3 +1,4 @@
+//! treasury_controller - Healthcare smart contract on Stellar blockchain.
 // Treasury Controller - Multi-sig treasury with timelocks and proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -5,8 +6,6 @@
 #![allow(clippy::manual_range_contains)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
-#![allow(dead_code)]
-
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     IntoVal, Map, String, Symbol, Vec,
@@ -31,6 +30,28 @@ pub enum Error {
     SymbolTooLong = 13,
     TransferFailed = 14,
     ConfigNotFound = 15,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::InvalidTimelock => write!(f, "invalid timelock"),
+            Error::NotSigner => write!(f, "not signer"),
+            Error::ProposalNotFound => write!(f, "proposal not found"),
+            Error::NotPending => write!(f, "not pending"),
+            Error::AlreadyApproved => write!(f, "already approved"),
+            Error::TimelockNotExpired => write!(f, "timelock not expired"),
+            Error::NotApproved => write!(f, "not approved"),
+            Error::Halted => write!(f, "halted"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::SymbolTooLong => write!(f, "symbol too long"),
+            Error::TransferFailed => write!(f, "transfer failed"),
+            Error::ConfigNotFound => write!(f, "config not found"),
+        }
+    }
 }
 
 /// Treasury proposal types
@@ -141,12 +162,8 @@ impl TreasuryController {
         emergency_threshold: u32,
         max_withdrawal_amount: i128,
     ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        // Check if already initialized
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         // Validate parameters
         if (signers.len() as u32) < threshold {
@@ -180,7 +197,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::ProposalCount, &0u64);
 
         // Emit initialization event
-        env.events().publish((symbol_short!("INIT"),), admin);
+        env.events().publish((symbol_short!("init"),), admin);
 
         Ok(())
     }
@@ -497,7 +514,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit emergency halt event
-        env.events().publish((symbol_short!("EMERGENCY"),), caller);
+        env.events().publish((symbol_short!("emergency"),), caller);
 
         Ok(())
     }
@@ -521,7 +538,7 @@ impl TreasuryController {
         env.storage().instance().set(&DataKey::Config, &config);
 
         // Emit resume event
-        env.events().publish((symbol_short!("RESUMED"),), caller);
+        env.events().publish((symbol_short!("resumed"),), caller);
 
         Ok(())
     }

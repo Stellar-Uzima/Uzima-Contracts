@@ -1,4 +1,5 @@
 #![no_std]
+//! remote_patient_monitoring - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 use soroban_sdk::xdr::ToXdr;
@@ -58,6 +59,7 @@ pub struct Threshold {
 impl RemotePatientMonitoringContract {
     // Initialize the contract
     pub fn initialize(env: Env, admin: Address) {
+        governance_commons::init_guard(&env);
         admin.require_auth();
         env.storage()
             .instance()
@@ -466,6 +468,7 @@ impl RemotePatientMonitoringContract {
 // ============================================================
 
 impl upgradeability::migration::Migratable for RemotePatientMonitoringContract {
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         if from_version < 1 {
             let admin: Address = env
@@ -479,6 +482,7 @@ impl upgradeability::migration::Migratable for RemotePatientMonitoringContract {
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         let admin_exists = env.storage().instance().has(&Symbol::new(env, "admin"));
         let mut data = Vec::new(env);

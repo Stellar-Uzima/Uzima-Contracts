@@ -247,6 +247,13 @@ Comprehensive test suite covering:
 - Compliance metrics calculation
 - Edge cases and error handling
 
+### Data Minimization Test Coverage
+A specific test case has been added to enforce the data minimization principle. This test ensures that the contract rejects attempts to store excessive or unnecessary data fields within a `ConsentRecord`.
+
+- **`test_data_minimization_rejects_excessive_fields`**: This test attempts to grant consent with a `ConsentRecord` containing an excessive number of data categories (e.g., >20). It asserts that the `grant_consent` function returns an error, confirming that the contract correctly enforces the data minimization rule by limiting the scope of data that can be included in a consent record.
+
+This test is a critical component of our HIPAA compliance strategy, as it directly validates the "minimum necessary" standard.
+
 ### Compliance Verification
 - Automated compliance checking for each operation
 - Real-time violation detection

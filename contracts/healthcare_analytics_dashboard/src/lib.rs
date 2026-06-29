@@ -1,9 +1,10 @@
 #![no_std]
+//! healthcare_analytics_dashboard - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
-    BytesN, Env, String, Vec,
+    BytesN, Env, String, Vec, Symbol
 };
 
 #[derive(Clone)]
@@ -260,6 +261,27 @@ pub enum Error {
     UnsupportedDataLakeProvider = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::PrivacyThresholdNotMet => write!(f, "privacy threshold not met"),
+            Error::MetricNotFound => write!(f, "metric not found"),
+            Error::TemplateNotFound => write!(f, "template not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::ComplianceNotFound => write!(f, "compliance not found"),
+            Error::AiAnalyticsNotConfigured => write!(f, "ai analytics not configured"),
+            Error::AiRoundNotFound => write!(f, "ai round not found"),
+            Error::DataLakeNotFound => write!(f, "data lake not found"),
+            Error::ExportNotFound => write!(f, "export not found"),
+            Error::UnsupportedDataLakeProvider => write!(f, "unsupported data lake provider"),
+        }
+    }
+}
+
 #[contract]
 pub struct HealthcareAnalyticsDashboardContract;
 
@@ -298,11 +320,9 @@ impl HealthcareAnalyticsDashboardContract {
         min_cohort_size: u32,
         noise_bps: u32,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
 
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
         if min_cohort_size == 0 || noise_bps > 10_000 {
             return Err(Error::InvalidInput);
         }
@@ -329,10 +349,11 @@ impl HealthcareAnalyticsDashboardContract {
             .instance()
             .set(&DataKey::DataLakePartitionCounter, &0u64);
 
-        env.events().publish((symbol_short!("DashInit"),), true);
+        env.events().publish((Symbol::new(&env, "dash_init"),), true);
         Ok(true)
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<DashboardConfig, Error> {
         env.storage()
             .instance()
@@ -340,6 +361,7 @@ impl HealthcareAnalyticsDashboardContract {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -348,6 +370,7 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_collector_or_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin == *caller {
@@ -827,7 +850,7 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage()
             .instance()
             .set(&DataKey::Template(id), &template);
-        env.events().publish((symbol_short!("TplCreate"),), id);
+        env.events().publish((Symbol::new(&env, "tpl_create"),), id);
         Ok(id)
     }
 

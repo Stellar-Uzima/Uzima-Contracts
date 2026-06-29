@@ -12,9 +12,9 @@
 //! 3. Once threshold is reached, item is ready for execution
 //! 4. Mark as executed once action is taken
 
-use soroban_sdk::{Address, Env, Vec};
 use crate::errors::GovernanceError;
-use crate::types::{ApprovalRecord, ApprovalStatus};
+use crate::types::ApprovalStatus;
+use soroban_sdk::{Address, Vec};
 
 /// Validates that an approval set configuration is valid
 ///
@@ -31,7 +31,7 @@ pub fn validate_approval_set(
     if threshold == 0 {
         return Err(GovernanceError::InvalidThreshold);
     }
-    if threshold as usize > members.len() {
+    if threshold > members.len() {
         return Err(GovernanceError::InvalidThreshold);
     }
     Ok(())
@@ -70,17 +70,12 @@ pub fn is_already_approved(address: &Address, list: &Vec<Address>) -> bool {
 /// Adds an approval if not already present
 ///
 /// # Arguments
-/// * `env` - Soroban environment
 /// * `approver` - Address to add
 /// * `approvers` - Mutable vector of approvers
 ///
 /// # Returns
 /// `true` if approval was added, `false` if already approved
-pub fn add_approval(
-    env: &Env,
-    approver: Address,
-    approvers: &mut Vec<Address>,
-) -> bool {
+pub fn add_approval(approver: Address, approvers: &mut Vec<Address>) -> bool {
     if is_already_approved(&approver, approvers) {
         return false; // Already approved
     }
@@ -106,8 +101,7 @@ pub fn check_approval_status(
         return ApprovalStatus::Executed;
     }
 
-    let approval_count = approvers.len() as u32;
-    if approval_count >= threshold {
+    if approvers.len() >= threshold {
         ApprovalStatus::Ready
     } else {
         ApprovalStatus::Pending
@@ -137,7 +131,7 @@ pub fn validate_unique_approval(
     item_id: u64,
     existing_ids: &Vec<u64>,
 ) -> Result<(), GovernanceError> {
-    if existing_ids.contains(&item_id) {
+    if existing_ids.contains(item_id) {
         return Err(GovernanceError::DuplicateEntry);
     }
     Ok(())

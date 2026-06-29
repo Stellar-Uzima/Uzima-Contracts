@@ -87,3 +87,87 @@ fn test_get_suggestion_returns_expected_hint() {
         symbol_short!("RE_TRY_L")
     );
 }
+
+// ===== Phase 4 governance_commons migration tests (issue #830) =====
+//
+// These tests document that UpgradeManager now delegates multi-sig logic to
+// governance_commons::multi_sig helpers (validate_approver, add_approval,
+// check_approval_status).
+
+/// `approve` should reject callers who are not in the validator set via
+/// `governance_commons::multi_sig::validate_approver`, producing
+/// `Error::NotAValidator` (mapped from `GovernanceError::NotApprover`).
+#[test]
+fn test_approve_with_non_validator_rejected_by_validate_approver() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let v1 = Address::generate(&env);
+    let v2 = Address::generate(&env);
+    let v3 = Address::generate(&env);
+    let validators = Vec::from_array(&env, [v1.clone(), v2.clone(), v3.clone()]);
+
+    let manager_id = env.register_contract(None, UpgradeManager);
+    let manager_client = UpgradeManagerClient::new(&env, &manager_id);
+    manager_client.initialize(&admin, &validators);
+
+    let target_id = env.register_contract(None, UpgradeManager);
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let prop_id = manager_client.propose_upgrade(
+        &admin,
+        &target_id,
+        &new_wasm_hash,
+        &2,
+        &symbol_short!("V2"),
+        &false,
+    );
+
+    // A non-validator must be rejected.
+    let outsider = Address::generate(&env);
+    let result = manager_client.try_approve(&outsider, &prop_id);
+    assert_eq!(result, Err(Ok(crate::errors::Error::NotAValidator)));
+
+    // A configured validator must still be accepted.
+    assert!(manager_client.try_approve(&v1, &prop_id).is_ok());
+}
+
+/// Duplicate approval via `governance_commons::multi_sig::add_approval` must
+/// surface as `Error::AlreadyApproved`, and the underlying approvals vector
+/// on the proposal must still contain only one entry after the duplicate
+/// attempt (idempotency).
+#[test]
+fn test_duplicate_approval_rejected_by_add_approval_helper() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let v1 = Address::generate(&env);
+    let v2 = Address::generate(&env);
+    let v3 = Address::generate(&env);
+    let validators = Vec::from_array(&env, [v1.clone(), v2.clone(), v3.clone()]);
+
+    let manager_id = env.register_contract(None, UpgradeManager);
+    let manager_client = UpgradeManagerClient::new(&env, &manager_id);
+    manager_client.initialize(&admin, &validators);
+
+    let target_id = env.register_contract(None, UpgradeManager);
+    let new_wasm_hash = BytesN::from_array(&env, &[0u8; 32]);
+    let prop_id = manager_client.propose_upgrade(
+        &admin,
+        &target_id,
+        &new_wasm_hash,
+        &2,
+        &symbol_short!("V2"),
+        &false,
+    );
+
+    // First approval succeeds.
+    assert!(manager_client.try_approve(&v1, &prop_id).is_ok());
+    // Re-approving must fail with Error::AlreadyApproved via the shared helper.
+    let result = manager_client.try_approve(&v1, &prop_id);
+    assert_eq!(result, Err(Ok(crate::errors::Error::AlreadyApproved)));
+    // A distinct validator should still be accepted, demonstrating that
+    // dedup only rejected the duplicate entry, not all subsequent approvals.
+    assert!(manager_client.try_approve(&v2, &prop_id).is_ok());
+}

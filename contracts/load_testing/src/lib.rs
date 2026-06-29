@@ -12,9 +12,9 @@
 //! * Tests at the bottom demonstrate concurrent-style simulation inside the
 //!   Soroban test environment.
 
-pub mod scenarios;
-
 #![no_std]
+
+pub mod scenarios;
 
 use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, vec, Env, Vec};
 

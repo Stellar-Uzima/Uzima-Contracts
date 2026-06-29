@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_compliance - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -319,6 +320,39 @@ pub enum Error {
     LegalHoldActive = 26,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::ConsentNotFound => write!(f, "consent not found"),
+            Error::ConsentAlreadyExists => write!(f, "consent already exists"),
+            Error::InvalidConsentStatus => write!(f, "invalid consent status"),
+            Error::ConsentExpired => write!(f, "consent expired"),
+            Error::AuditLogNotFound => write!(f, "audit log not found"),
+            Error::BreachReportNotFound => write!(f, "breach report not found"),
+            Error::ViolationNotFound => write!(f, "violation not found"),
+            Error::InvalidFramework => write!(f, "invalid framework"),
+            Error::InvalidResourceType => write!(f, "invalid resource type"),
+            Error::DataBreachAlreadyReported => write!(f, "data breach already reported"),
+            Error::ViolationAlreadyExists => write!(f, "violation already exists"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::RetentionPolicyNotFound => write!(f, "retention policy not found"),
+            Error::ComplianceConfigNotSet => write!(f, "compliance config not set"),
+            Error::InsufficientPermissions => write!(f, "insufficient permissions"),
+            Error::DataPurgeFailed => write!(f, "data purge failed"),
+            Error::NotificationFailed => write!(f, "notification failed"),
+            Error::InvalidPatientAddress => write!(f, "invalid patient address"),
+            Error::ReportAlreadyExists => write!(f, "report already exists"),
+            Error::ReportNotFound => write!(f, "report not found"),
+            Error::RecordAlreadyExists => write!(f, "record already exists"),
+            Error::RetentionRecordNotFound => write!(f, "retention record not found"),
+            Error::RecordNotDeletable => write!(f, "record not deletable"),
+            Error::LegalHoldActive => write!(f, "legal hold active"),
+        }
+    }
+}
+
 #[contract]
 pub struct HealthcareComplianceContract;
 
@@ -326,12 +360,10 @@ pub struct HealthcareComplianceContract;
 impl HealthcareComplianceContract {
     /// Initialize the compliance contract
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::ConsentAlreadyExists)?;
+
         #[cfg(not(test))]
         admin.require_auth();
-
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::ConsentAlreadyExists);
-        }
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&PAUSED, &false);
@@ -404,6 +436,11 @@ impl HealthcareComplianceContract {
         #[cfg(not(test))]
         patient.require_auth();
         Self::check_paused(&env)?;
+
+        // Data Minimization Check
+        if consent.data_categories.len() > 20 {
+            return Err(Error::InvalidResourceType); // Re-using an existing error for simplicity
+        }
 
         // Validate consent
         if consent.patient != patient {
@@ -932,6 +969,7 @@ impl HealthcareComplianceContract {
 
     // ==================== Helper Functions ====================
 
+    #[must_use]
     fn check_admin(env: &Env, address: &Address) -> Result<(), Error> {
         let config = Self::get_config(env.clone())?;
         for admin in config.admin_addresses.iter() {
@@ -942,6 +980,7 @@ impl HealthcareComplianceContract {
         Err(Error::NotAuthorized)
     }
 
+    #[must_use]
     fn check_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             Err(Error::ContractPaused)
@@ -955,6 +994,7 @@ impl HealthcareComplianceContract {
         String::from_str(env, "id_")
     }
 
+    #[must_use]
     fn update_compliance_score(env: &Env, positive: bool) -> Result<(), Error> {
         let mut score = env
             .storage()
@@ -1109,6 +1149,7 @@ impl HealthcareComplianceContract {
         }
     }
 
+    #[must_use]
     fn should_auto_delete(env: &Env, record: &RetentionRecord, now: u64) -> Result<bool, Error> {
         let policy = Self::get_retention_policy(env.clone(), record.data_type)?;
         if !policy.auto_delete || policy.retention_period == 0 {

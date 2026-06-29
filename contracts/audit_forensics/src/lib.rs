@@ -1,4 +1,5 @@
 #![no_std]
+//! audit_forensics - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -126,9 +127,7 @@ pub struct AuditForensicsContract;
 impl AuditForensicsContract {
     #[allow(clippy::panic)]
     pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextAuditId, &0u64);
         env.storage().instance().set(&DataKey::NextRuleId, &0u64);
@@ -166,7 +165,7 @@ impl AuditForensicsContract {
             .persistent()
             .set(&DataKey::Rule(rule_id), &rule);
         env.events()
-            .publish((symbol_short!("AUDIT"), symbol_short!("RULE")), rule_id);
+            .publish((symbol_short!("audit"), symbol_short!("RULE")), rule_id);
 
         rule_id
     }
@@ -223,7 +222,7 @@ impl AuditForensicsContract {
             .set(&DataKey::NextAuditId, &id.saturating_add(1));
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("LOG")),
+            (symbol_short!("audit"), symbol_short!("log")),
             (id, entry.timestamp, entry.action),
         );
 
@@ -304,7 +303,7 @@ impl AuditForensicsContract {
 
         Self::log_internal(&env, caller, AuditAction::AnomalyDetected, None);
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("RUN")),
+            (symbol_short!("audit"), symbol_short!("run")),
             (execution_id, execution.duration_minutes, execution.passed),
         );
 
@@ -509,7 +508,7 @@ impl AuditForensicsContract {
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("COMPRESS")),
+            (symbol_short!("audit"), symbol_short!("compress")),
             (before_timestamp, count, last_hash.clone()),
         );
 
@@ -521,7 +520,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("ARCHIVE")),
+            (symbol_short!("audit"), symbol_short!("archive")),
             archive_ref,
         );
     }
@@ -536,7 +535,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("XCSYNC")),
+            (symbol_short!("audit"), symbol_short!("xcsync")),
             (target_chain, audit_root),
         );
     }
@@ -553,14 +552,14 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("SHARE")),
+            (symbol_short!("audit"), symbol_short!("share")),
             (regulator, filter_start, filter_end, proof_ref),
         );
 
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
     }
 
-    #[allow(dead_code)]
+    
     fn check_alerts(env: &Env, action: AuditAction) {
         let key = match action {
             AuditAction::RecordAccess => Some(symbol_short!("THR_ACC")),

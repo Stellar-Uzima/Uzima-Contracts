@@ -1,4 +1,5 @@
 #![no_std]
+//! reputation - Healthcare smart contract on Stellar blockchain.
 use soroban_sdk::{contract, contracterror, contractimpl, symbol_short, Address, Env, Map, Symbol};
 
 #[contracterror]
@@ -11,6 +12,17 @@ pub enum Error {
     InvalidAmount = 4,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NegativeAmount => write!(f, "negative amount"),
+            Error::InvalidAmount => write!(f, "invalid amount"),
+        }
+    }
+}
+
 const ADMIN: Symbol = symbol_short!("admin");
 const SCORES: Symbol = symbol_short!("scores");
 
@@ -20,9 +32,7 @@ pub struct ReputationSystem;
 #[contractimpl]
 impl ReputationSystem {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&ADMIN, &admin);
         Ok(())
     }

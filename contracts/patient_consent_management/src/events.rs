@@ -19,18 +19,7 @@ pub fn publish_initialization(env: &Env, admin: &Address) {
         .publish((symbol_short!("CONSENT"), symbol_short!("INIT")), admin);
 }
 
-#[allow(dead_code)]
-pub fn publish_unauthorized_attempt(
-    env: &Env,
-    caller: &Address,
-    patient: &Address,
-    timestamp: u64,
-) {
-    env.events().publish(
-        (symbol_short!("CONSENT"), symbol_short!("UNAUTH")),
-        (caller, patient, timestamp),
-    );
-}
+
 
 pub fn publish_consent_checked(
     env: &Env,
@@ -44,12 +33,7 @@ pub fn publish_consent_checked(
     );
 }
 
-pub fn publish_consent_expired(
-    env: &Env,
-    patient: &Address,
-    provider: &Address,
-    timestamp: u64,
-) {
+pub fn publish_consent_expired(env: &Env, patient: &Address, provider: &Address, timestamp: u64) {
     env.events().publish(
         (symbol_short!("CONSENT"), symbol_short!("EXPIRED")),
         (patient, provider, timestamp),

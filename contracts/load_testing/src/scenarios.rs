@@ -138,7 +138,8 @@ impl LoadScenarioRunner {
             successful: total_ops,
             failed: 0,
             duration_ledgers: if duration == 0 { 1 } else { duration },
-            throughput_per_ledger: (total_ops / if duration == 0 { 1 } else { duration }.max(1)) as u32,
+            throughput_per_ledger: (total_ops / if duration == 0 { 1 } else { duration }.max(1))
+                as u32,
         }
     }
 }

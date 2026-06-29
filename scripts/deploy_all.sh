@@ -9,31 +9,15 @@ set -euo pipefail
 CONFIG_DIR="config"
 DEFAULT_CONFIG="$CONFIG_DIR/default.json"
 
-# --- Colors for output ---
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-NC='\033[0m'
-
-# --- Helper functions ---
-print_status() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-    exit 1
-}
-
-print_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
+# Source the logger script
+source "$(dirname "$0")/logger.sh"
 
 # --- Argument validation ---
 if [ $# -lt 2 ]; then
-    print_error "Usage: $0 <environment> <network> [identity]"
-    print_error "Example: $0 development local"
-    print_error "Available environments: development, staging, production"
+    log "ERROR" "Usage: $0 <environment> <network> [identity]"
+    log "ERROR" "Example: $0 development local"
+    log "ERROR" "Available environments: development, staging, production"
+    exit 1
 fi
 
 ENVIRONMENT="$1"
@@ -43,15 +27,17 @@ ENV_CONFIG="$CONFIG_DIR/$ENVIRONMENT.json"
 
 # --- Pre-flight checks ---
 if ! command -v jq &> /dev/null; then
-    print_error "'jq' is not installed. Please install it to continue."
+    log "ERROR" "'jq' is not installed. Please install it to continue."
+    exit 1
 fi
 
 if [ ! -f "$ENV_CONFIG" ]; then
-    print_error "Configuration file for environment '$ENVIRONMENT' not found at '$ENV_CONFIG'"
+    log "ERROR" "Configuration file for environment '$ENVIRONMENT' not found at '$ENV_CONFIG'"
+    exit 1
 fi
 
 # --- Main script ---
-print_status "Starting deployment for environment: $ENVIRONMENT on $NETWORK network"
+log "INFO" "Starting deployment for environment: $ENVIRONMENT on $NETWORK network"
 
 # Merge configurations
 # This uses jq to deeply merge the default and environment-specific configs
@@ -61,26 +47,26 @@ CONFIG=$(jq -s '.[0] * .[1]' "$DEFAULT_CONFIG" "$ENV_CONFIG")
 ENABLED_CONTRACTS=$(echo "$CONFIG" | jq -r '.contracts | to_entries[] | select(.value.enabled == true) | .key')
 
 if [ -z "$ENABLED_CONTRACTS" ]; then
-    print_status "No contracts are enabled for deployment in the '$ENVIRONMENT' configuration."
+    log "INFO" "No contracts are enabled for deployment in the '$ENVIRONMENT' configuration."
     exit 0
 fi
 
-print_status "Enabled contracts for deployment: 
-$ENABLED_CONTRACTS"
+log "INFO" "Enabled contracts for deployment: $ENABLED_CONTRACTS"
 
 # Loop and deploy each contract
 for CONTRACT_NAME in $ENABLED_CONTRACTS; do
-    print_step "Deploying contract: $CONTRACT_NAME"
+    log "INFO" "Deploying contract: $CONTRACT_NAME"
     
     # Construct deployment command
     DEPLOY_CMD="./scripts/deploy.sh $CONTRACT_NAME $NETWORK $IDENTITY"
     
     # Execute the deployment script
     if ! $DEPLOY_CMD; then
-        print_error "Deployment of '$CONTRACT_NAME' failed. Aborting."
+        log "ERROR" "Deployment of '$CONTRACT_NAME' failed. Aborting."
+        exit 1
     fi
     
-    print_status "Successfully deployed contract: $CONTRACT_NAME"
+    log "INFO" "Successfully deployed contract: $CONTRACT_NAME"
 done
 
-print_status "All enabled contracts deployed successfully for '$ENVIRONMENT' environment. ✅"
+log "INFO" "All enabled contracts deployed successfully for '$ENVIRONMENT' environment. ✅"

@@ -1,3 +1,4 @@
+//! contract_behavior_fuzzing - Healthcare smart contract on Stellar blockchain.
 use core::fmt::Debug;
 use std::panic::{self, AssertUnwindSafe};
 use std::vec::Vec;

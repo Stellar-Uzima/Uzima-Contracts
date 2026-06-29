@@ -27,9 +27,7 @@ impl TokenSaleContract {
         hard_cap: u128,
         token_decimals: u32,
     ) {
-        if env.storage().instance().has(&DataKey::Config) {
-            return; // Already initialized - early return instead of panic
-        }
+        governance_commons::init_guard(&env);
 
         owner.require_auth();
 
@@ -171,7 +169,7 @@ impl TokenSaleContract {
 
         let tokens_to_allocate =
             fp_math::tokens_for_payment(amount, phase.price_per_token, config.token_decimals)
-                .expect("token allocation overflow");
+                .ok_or(Error::Overflow)?;
 
         let new_sold = phase
             .sold_tokens

@@ -106,3 +106,38 @@ fn test_request_data_deletion_for_user_preferences() {
     assert_eq!(entry.record_id, pref_id);
     assert_eq!(entry.reason, String::from_str(&env, "user_deletion_request"));
 }
+
+#[test]
+fn test_data_minimization_rejects_excessive_fields() {
+    let env = Env::default();
+    let (client, _admin) = setup_contract(&env);
+
+    let patient = Address::generate(&env);
+    let data_controller = Address::generate(&env);
+
+    // Create a consent record with an excessive number of data categories
+    let mut excessive_categories = soroban_sdk::Vec::new(&env);
+    for i in 0..100 {
+        excessive_categories.push_back(String::from_str(&env, &format!("category-{}", i)));
+    }
+
+    let consent = crate::ConsentRecord {
+        consent_id: String::from_str(&env, "consent-1"),
+        patient: patient.clone(),
+        data_controller,
+        data_processor: Address::generate(&env),
+        purpose: String::from_str(&env, "treatment"),
+        data_categories: excessive_categories,
+        processing_categories: soroban_sdk::Vec::new(&env),
+        status: crate::ConsentStatus::Active,
+        granted_at: env.ledger().timestamp(),
+        expires_at: env.ledger().timestamp() + 3600,
+        revoked_at: 0,
+        revocation_reason: String::from_str(&env, ""),
+        signature: BytesN::from_array(&env, &[0; 64]),
+    };
+
+    // The contract should reject this due to the excessive data categories
+    let result = client.try_grant_consent(&patient, &consent);
+    assert!(result.is_err(), "should reject excessive data");
+}

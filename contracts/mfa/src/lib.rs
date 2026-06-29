@@ -1,4 +1,5 @@
 #![no_std]
+//! mfa - Healthcare smart contract on Stellar blockchain.
 
 pub mod factors;
 pub mod recovery;
@@ -22,9 +23,7 @@ pub struct MultiFactorAuth;
 impl MultiFactorAuth {
     /// Initialize with global MFA configuration
     pub fn initialize(env: Env, admin: Address, config: MFAConfig) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -163,7 +162,7 @@ impl MultiFactorAuth {
     }
 
     /// Recovery mechanism for lost factors
-    pub fn initiate_recovery(env: Env, user: Address, secret_hash: BytesN<32>) {
+    pub fn initiate_recovery(env: Env, user: Address, _secret_hash: BytesN<32>) {
         user.require_auth();
 
         let cfg: MFAConfig = env
@@ -182,7 +181,7 @@ impl MultiFactorAuth {
         env.storage()
             .persistent()
             .set(&DataKey::Recovery(user), &recovery);
-        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY_I"));
+        Self::log_auth_event(&env, 0, symbol_short!("RECOVERY"));
     }
 
     /// Emergency override using admin signatures (multi-sig simulation)

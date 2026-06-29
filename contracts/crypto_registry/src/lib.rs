@@ -1,4 +1,7 @@
 #![no_std]
+#![allow(clippy::too_many_arguments)]
+
+//! crypto_registry - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod benchmarks;
@@ -7,8 +10,11 @@ mod test;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
-    Symbol,
+    Symbol, Vec,
 };
+
+/// Maximum key length in bytes (1 MiB, supports McEliece public keys)
+const MAX_KEY_LENGTH: u32 = 1_048_576;
 
 // =============================================================================
 // Types
@@ -120,6 +126,20 @@ pub enum Error {
     InvalidKeyLength = 7,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidKey => write!(f, "invalid key"),
+            Error::KeyNotFound => write!(f, "key not found"),
+            Error::KeyAlreadyRevoked => write!(f, "key already revoked"),
+            Error::InvalidKeyLength => write!(f, "invalid key length"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -133,10 +153,8 @@ impl CryptoRegistry {
     /// Initialize the registry with an admin address for policy upgrades.
     /// Key registration/rotation is always self-authorized by the account.
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&INIT, &true);
@@ -283,6 +301,7 @@ impl CryptoRegistry {
     // Internal helpers
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -300,6 +319,7 @@ impl CryptoRegistry {
         current.saturating_add(1)
     }
 
+    #[must_use]
     fn validate_public_key(key: &PublicKey) -> Result<(), Error> {
         // Enforce minimal and maximal length to prevent pathological storage use.
         let len = key.key.len();
@@ -307,7 +327,7 @@ impl CryptoRegistry {
             return Err(Error::InvalidKey);
         }
         // McEliece public keys are large, increase limit.
-        if len > 1048576 {
+        if len > MAX_KEY_LENGTH {
             return Err(Error::InvalidKeyLength);
         }
 
@@ -447,7 +467,11 @@ impl CryptoRegistry {
         // Revoke old key bundle if it exists
         if old_version > 0 {
             let old_key = DataKey::Bundle(owner.clone(), old_version);
-            if let Some(mut old_bundle) = env.storage().persistent().get::<DataKey, KeyBundle>(&old_key) {
+            if let Some(mut old_bundle) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, KeyBundle>(&old_key)
+            {
                 old_bundle.revoked = true;
                 env.storage().persistent().set(&old_key, &old_bundle);
             }

@@ -1,4 +1,5 @@
 #![no_std]
+//! deprecation_framework - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -19,11 +20,8 @@ pub struct DeprecationFramework;
 impl DeprecationFramework {
     /// Initialize the deprecation framework
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::ContractCount, &0u32);
@@ -315,6 +313,7 @@ impl DeprecationFramework {
             .has(&DataKey::DeprecatedContract(contract_id))
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
