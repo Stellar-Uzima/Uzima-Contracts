@@ -1,0 +1,22 @@
+# Complexity thresholds
+too-many-arguments-threshold = 6
+cognitive-complexity-threshold = 25
+too-many-lines-threshold = 100
+
+# Type/enum thresholds
+enum-variant-size-threshold = 256
+
+# Documentation — activates pub(crate) coverage when #![warn(missing_docs)] is present
+missing-docs-in-crate-items = true
+
+# Healthcare domain acronyms — prevents doc_markdown from flagging these
+doc-valid-idents = [
+    "DID", "ZKP", "RBAC", "FHIR", "AML", "ABE",
+    "IHE", "MPC", "QKD", "ZK", "AI", "API",
+    "EMR", "W3C", "WASM", "IPFS", "HIPAA"
+]
+
+# Suppress noisy lints inside #[cfg(test)] modules
+allow-expect-in-tests = true
+allow-unwrap-in-tests = true
+allow-panic-in-tests = true

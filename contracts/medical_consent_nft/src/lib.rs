@@ -1,3 +1,4 @@
+//! medical_consent_nft - Healthcare smart contract on Stellar blockchain.
 // Medical Consent NFT - Advanced Patient consent management with dynamic features
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
@@ -51,6 +52,25 @@ pub enum ContractError {
     MarketplaceNotEnabled = 10,
     InvalidCondition = 11,
     InheritanceCycle = 12,
+}
+
+impl core::fmt::Display for ContractError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            ContractError::NotAuthorized => write!(f, "not authorized"),
+            ContractError::TokenNotFound => write!(f, "token not found"),
+            ContractError::ConsentRevoked => write!(f, "consent revoked"),
+            ContractError::AlreadyInitialized => write!(f, "already initialized"),
+            ContractError::NotTokenOwner => write!(f, "not token owner"),
+            ContractError::InvalidPermission => write!(f, "invalid permission"),
+            ContractError::AccessDenied => write!(f, "access denied"),
+            ContractError::InvalidDelegation => write!(f, "invalid delegation"),
+            ContractError::EmergencyOverrideFailed => write!(f, "emergency override failed"),
+            ContractError::MarketplaceNotEnabled => write!(f, "marketplace not enabled"),
+            ContractError::InvalidCondition => write!(f, "invalid condition"),
+            ContractError::InheritanceCycle => write!(f, "inheritance cycle"),
+        }
+    }
 }
 
 // Data type enum for granular permissions
@@ -927,7 +947,7 @@ impl PatientConsentToken {
                     if current_time < start || current_time > end {
                         return Ok(false);
                     }
-                }
+                },
                 AccessCondition::DayOfWeek(days) => {
                     // Simple day check (assuming timestamp % 7 gives day of week)
                     let day = (current_time / 86400) % 7;
@@ -941,20 +961,20 @@ impl PatientConsentToken {
                     if !found {
                         return Ok(false);
                     }
-                }
+                },
                 AccessCondition::TimeOfDay(start_hour, end_hour) => {
                     let hour = (current_time % 86400) / 3600;
                     if hour < (start_hour as u64) || hour > (end_hour as u64) {
                         return Ok(false);
                     }
-                }
+                },
                 AccessCondition::EmergencyOnly => {
                     // Only emergency overrides can access
                     return Ok(false);
-                }
+                },
                 _ => {
                     // Other conditions would need additional context
-                }
+                },
             }
         }
 
@@ -1177,7 +1197,7 @@ impl PatientConsentToken {
                     }
                     current = inh.parent_token_id;
                     visited.push_back(current);
-                }
+                },
                 None => break,
             }
         }

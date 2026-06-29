@@ -12,7 +12,7 @@
 //! - Custom error types for clear error reporting
 //! - Gas-optimized validation checks
 
-use soroban_sdk::{Address, Env, Map, String, Vec};
+use soroban_sdk::{Address, Bytes, Env, Map, String, Vec};
 
 use crate::errors::Error;
 use crate::{
@@ -70,11 +70,13 @@ pub const MIN_PURPOSE_LENGTH: u32 = 5;
 pub const MAX_PURPOSE_LENGTH: u32 = 256;
 
 /// Minimum length for explanation summary
+
 pub const MIN_EXPLANATION_LENGTH: u32 = 10;
 /// Maximum length for explanation summary
 pub const MAX_EXPLANATION_LENGTH: u32 = 512;
 
 /// Minimum length for model version string
+
 pub const MIN_MODEL_VERSION_LENGTH: u32 = 1;
 /// Maximum length for model version string
 pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
@@ -83,6 +85,7 @@ pub const MAX_MODEL_VERSION_LENGTH: u32 = 50;
 pub const MAX_SCORE_BPS: u32 = 10_000;
 
 /// Maximum number of feature importance entries
+
 pub const MAX_FEATURE_IMPORTANCE_COUNT: u32 = 50;
 
 /// Maximum number of custom metadata fields per record
@@ -143,6 +146,7 @@ pub fn validate_string_length(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidDataRefCharset`
+#[must_use]
 pub fn validate_string_charset(_env: &Env, value: &String) -> Result<(), Error> {
     if value.is_empty() {
         return Err(Error::InvalidDataRefCharset);
@@ -170,6 +174,7 @@ pub fn validate_string_charset(_env: &Env, value: &String) -> Result<(), Error> 
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_diagnosis(diagnosis: &String) -> Result<(), Error> {
     validate_string_length(
         diagnosis,
@@ -187,6 +192,7 @@ pub fn validate_diagnosis(diagnosis: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_treatment(treatment: &String) -> Result<(), Error> {
     validate_string_length(
         treatment,
@@ -205,6 +211,7 @@ pub fn validate_treatment(treatment: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidCategory`
+#[must_use]
 pub fn validate_category(category: &String, env: &Env) -> Result<(), Error> {
     // First validate length
     validate_string_length(
@@ -238,6 +245,7 @@ pub fn validate_category(category: &String, env: &Env) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_treatment_type(treatment_type: &String) -> Result<(), Error> {
     validate_string_length(
         treatment_type,
@@ -255,6 +263,7 @@ pub fn validate_treatment_type(treatment_type: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_data_ref(env: &Env, data_ref: &String) -> Result<(), Error> {
     validate_string_length(
         data_ref,
@@ -270,6 +279,7 @@ pub fn validate_data_ref(env: &Env, data_ref: &String) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 pub fn validate_policy_ref(env: &Env, policy_ref: &String) -> Result<(), Error> {
     validate_string_length(
         policy_ref,
@@ -281,6 +291,7 @@ pub fn validate_policy_ref(env: &Env, policy_ref: &String) -> Result<(), Error> 
     validate_string_charset(env, policy_ref)
 }
 
+#[must_use]
 pub fn validate_attribute_namespace(namespace: &String) -> Result<(), Error> {
     validate_string_length(
         namespace,
@@ -291,6 +302,7 @@ pub fn validate_attribute_namespace(namespace: &String) -> Result<(), Error> {
     )
 }
 
+#[must_use]
 pub fn validate_attribute_value(value: &String) -> Result<(), Error> {
     validate_string_length(
         value,
@@ -308,6 +320,7 @@ pub fn validate_attribute_value(value: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::EmptyTag` or length error
+#[must_use]
 pub fn validate_tag(tag: &String) -> Result<(), Error> {
     validate_string_length(
         tag,
@@ -325,6 +338,7 @@ pub fn validate_tag(tag: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if all tags are valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_tags(tags: &Vec<String>) -> Result<(), Error> {
     // Check count
     if tags.len() > MAX_TAGS_COUNT {
@@ -346,6 +360,7 @@ pub fn validate_tags(tags: &Vec<String>) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_did_reference(did: &String) -> Result<(), Error> {
     validate_string_length(
         did,
@@ -363,6 +378,7 @@ pub fn validate_did_reference(did: &String) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
     validate_string_length(
         purpose,
@@ -387,6 +403,7 @@ pub fn validate_purpose(purpose: &String) -> Result<(), Error> {
 /// # Note
 /// In Soroban, we validate addresses by ensuring they're provided and authorized
 /// The actual zero-address check is handled by the SDK
+#[must_use]
 pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
     // In Soroban, addresses are validated by the SDK at construction time.
     // Any `Address` value that exists is already valid.
@@ -404,6 +421,7 @@ pub fn validate_address(env: &Env, address: &Address) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if addresses are different, otherwise returns `Error::Unauthorized`
+#[must_use]
 pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<(), Error> {
     if addr1 == addr2 {
         return Err(Error::SameAddress);
@@ -421,6 +439,8 @@ pub fn validate_addresses_different(addr1: &Address, addr2: &Address) -> Result<
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+
+#[must_use]
 pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
     if score_bps > MAX_SCORE_BPS {
         return Err(Error::InvalidScore);
@@ -437,6 +457,7 @@ pub fn validate_score_bps(score_bps: u32) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
     if timestamp == 0 {
         return Err(Error::InvalidInput); // Reusing error for invalid timestamp
@@ -460,6 +481,7 @@ pub fn validate_timestamp(env: &Env, timestamp: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::RecordNotFound`
+#[must_use]
 pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
     if record_id == 0 {
         return Err(Error::RecordNotFound);
@@ -475,6 +497,7 @@ pub fn validate_record_id(record_id: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[must_use]
 pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
     if !(MIN_DP_EPSILON..=MAX_DP_EPSILON).contains(&dp_epsilon) {
         return Err(Error::InvalidDPEpsilon);
@@ -490,6 +513,7 @@ pub fn validate_dp_epsilon(dp_epsilon: u32) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidAIScore`
+#[must_use]
 pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
     if !(MIN_FEDERATED_PARTICIPANTS..=MAX_FEDERATED_PARTICIPANTS).contains(&min_participants) {
         return Err(Error::InvalidParticipantCount);
@@ -501,6 +525,13 @@ pub fn validate_min_participants(min_participants: u32) -> Result<(), Error> {
 /// Constant for maximum emergency access duration (7 days in seconds)
 pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
 
+/// Maximum byte length for encrypted record data
+pub const MAX_ENCRYPTED_DATA_LEN: u32 = 65_536; // 64 KB
+/// Maximum byte length for metadata string
+pub const MAX_METADATA_LEN: u32 = 1_024;
+/// Maximum byte length for patient ID string
+pub const MAX_PATIENT_ID_LEN: u32 = 128;
+
 /// Validates emergency access duration
 ///
 /// # Arguments
@@ -508,6 +539,7 @@ pub const MAX_EMERGENCY_DURATION: u64 = 604_800;
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::InvalidInput`
+#[must_use]
 pub fn validate_duration(duration: u64) -> Result<(), Error> {
     if duration == 0 || duration > MAX_EMERGENCY_DURATION {
         return Err(Error::InvalidInput);
@@ -522,6 +554,7 @@ pub fn validate_duration(duration: u64) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::RecordNotFound`
+#[must_use]
 pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
     for id in record_ids.iter() {
         validate_record_id(id)?;
@@ -536,6 +569,7 @@ pub fn validate_record_ids(record_ids: &Vec<u64>) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
+#[must_use]
 pub fn validate_amount(amount: i128) -> Result<(), Error> {
     if amount <= 0 {
         return Err(Error::NumberOutOfBounds);
@@ -555,6 +589,7 @@ pub fn validate_amount(amount: i128) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns `Error::Unauthorized`
+#[must_use]
 pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
     // Ensure page size is reasonable (not 0 and not too large for gas efficiency)
     if page_size == 0 || page_size > 100 {
@@ -587,7 +622,8 @@ pub fn validate_pagination(_page: u32, page_size: u32) -> Result<(), Error> {
 /// - Data reference is valid
 /// - Tags are all valid
 /// - DID reference is valid (if present)
-#[allow(dead_code)]
+
+#[must_use]
 pub fn validate_medical_record(env: &Env, record: &MedicalRecord) -> Result<(), Error> {
     // Validate addresses
     validate_address(env, &record.patient_id)?;
@@ -635,7 +671,8 @@ pub fn validate_medical_record(env: &Env, record: &MedicalRecord) -> Result<(), 
 ///
 /// # Validation Checks
 /// - DID reference is valid (if present)
-#[allow(dead_code)]
+
+#[must_use]
 pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
     // Validate DID reference if present
     if let Some(ref did) = profile.did_reference {
@@ -655,6 +692,7 @@ pub fn validate_user_profile(profile: &UserProfile) -> Result<(), Error> {
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+
 pub fn validate_ai_explanation(
     explanation_summary: &String,
     model_version: &String,
@@ -685,6 +723,8 @@ pub fn validate_ai_explanation(
 ///
 /// # Returns
 /// `Ok(())` if valid, otherwise returns an appropriate error
+
+#[must_use]
 pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> Result<(), Error> {
     // Check count
     if feature_importance.len() > MAX_FEATURE_IMPORTANCE_COUNT {
@@ -717,6 +757,7 @@ pub fn validate_feature_importance(feature_importance: &Vec<(String, u32)>) -> R
 ///
 /// # Returns
 /// `Ok(())` if all fields are valid, otherwise returns an appropriate error
+#[must_use]
 pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result<(), Error> {
     let _ = env;
     // Reuses BatchTooLarge (too many items), InvalidTagLength (key too long),
@@ -748,6 +789,7 @@ pub fn validate_custom_fields(env: &Env, fields: &Map<String, String>) -> Result
 // ==================== DATA QUALITY ASSESSMENT ====================
 
 /// Minimum quality score threshold for a record to be considered acceptable (60%).
+
 pub const MIN_QUALITY_THRESHOLD_BPS: u32 = 6_000;
 
 /// Weight constants for quality sub-scores (out of 10_000 total).
@@ -1146,20 +1188,20 @@ pub fn validate_record_by_type(
         MedicalRecordType::General => {
             // Standard validation is sufficient
             Ok(())
-        }
+        },
         MedicalRecordType::Laboratory => {
             // Lab records MUST have a data reference for results
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Prescription => {
             // Prescriptions MUST have treatment and treatment_type
             validate_treatment(&record.treatment)?;
             validate_treatment_type(&record.treatment_type)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Imaging => {
             // Imaging records MUST have a data reference for the images
             if record.data_ref.len() < MIN_DATA_REF_LENGTH {
@@ -1167,7 +1209,7 @@ pub fn validate_record_by_type(
             }
             validate_data_ref(env, &record.data_ref)?;
             Ok(())
-        }
+        },
         MedicalRecordType::Surgical => {
             // Surgical records need diagnosis, treatment, AND doctor DID
             validate_diagnosis(&record.diagnosis)?;
@@ -1176,7 +1218,7 @@ pub fn validate_record_by_type(
                 return Err(Error::InvalidBatch);
             }
             Ok(())
-        }
+        },
         MedicalRecordType::Emergency => {
             // Emergency records: timestamp must be recent (within 1 hour)
             let current_time = env.ledger().timestamp();
@@ -1186,7 +1228,7 @@ pub fn validate_record_by_type(
             }
             validate_diagnosis(&record.diagnosis)?;
             Ok(())
-        }
+        },
     }
 }
 
@@ -1199,6 +1241,7 @@ pub fn validate_record_by_type(
 ///
 /// Returns a potentially cleaned `String`. Whitespace-only strings are returned
 /// as-is because the downstream length validators will reject them.
+
 pub fn normalize_medical_string(env: &Env, input: &String) -> String {
     // In Soroban no_std, String doesn't expose slice/trim operations directly.
     // We can at least detect empty or whitespace-only strings.
@@ -1439,6 +1482,7 @@ pub fn auto_cleanse_record(env: &Env, record: &MedicalRecord) -> CleanseResult {
 ///
 /// The workflow is built from the *post-cleanse* report so that any issues
 /// resolved by auto-normalisation are not included in the correction items.
+
 pub fn validate_cleanse_and_report(
     env: &Env,
     record_id: u64,
@@ -1448,6 +1492,33 @@ pub fn validate_cleanse_and_report(
     let report = validate_record_with_report(env, record_id, &cleanse_result.record);
     let workflow = build_correction_workflow(env, record_id, &report);
     (cleanse_result, report, workflow)
+}
+
+/// Validate encrypted data length does not exceed the on-chain storage limit.
+#[must_use]
+pub fn validate_encrypted_data_len(data: &Bytes) -> Result<(), Error> {
+    if data.len() > MAX_ENCRYPTED_DATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate metadata string length.
+#[must_use]
+pub fn validate_metadata_len(metadata: &String) -> Result<(), Error> {
+    if metadata.len() > MAX_METADATA_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
+}
+
+/// Validate patient ID string length.
+#[must_use]
+pub fn validate_patient_id_len(patient_id: &String) -> Result<(), Error> {
+    if patient_id.len() > MAX_PATIENT_ID_LEN {
+        return Err(Error::InputTooLong);
+    }
+    Ok(())
 }
 
 #[cfg(test)]

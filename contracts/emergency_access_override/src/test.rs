@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use crate::{EmergencyAccessOverride, EmergencyAccessOverrideClient, Error};
-    use soroban_sdk::{testutils::Address as _, Address, Env, Vec};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Env, Vec,
+    };
 
     fn setup() -> (
         Env,
@@ -14,6 +17,14 @@ mod tests {
     ) {
         let env = Env::default();
         env.mock_all_auths();
+
+        // Set a realistic ledger timestamp so cooldown checks
+        // behave correctly (default zero timestamp would cause
+        // false-positive rate limits on second calls).
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1_000_000;
+        });
+
         let admin = Address::generate(&env);
         let approver1 = Address::generate(&env);
         let approver2 = Address::generate(&env);
@@ -71,6 +82,11 @@ mod tests {
 
         let first = client.grant_emergency_access(&approver1, &patient, &provider, &600);
         assert!(!first);
+
+        // Advance past the cooldown period so the same approver can call again
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(86_401);
+        });
 
         let second = client.grant_emergency_access(&approver1, &patient, &provider, &600);
         assert!(!second);
@@ -155,6 +171,7 @@ mod tests {
         assert_eq!(Error::InvalidThreshold as u32, 230);
         assert_eq!(Error::InvalidDuration as u32, 231);
         assert_eq!(Error::RecordNotFound as u32, 403);
+        assert_eq!(Error::RateLimitExceeded as u32, 429);
     }
 
     #[test]

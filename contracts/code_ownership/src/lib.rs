@@ -1,4 +1,5 @@
 #![no_std]
+//! code_ownership - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -10,33 +11,28 @@ mod test;
 pub use errors::Error;
 pub use types::{DataKey, ModuleOwnership, OwnershipMatrix, ReviewRoute};
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, Address, Env, String, Vec};
 
 #[contract]
 pub struct CodeOwnership;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl CodeOwnership {
     /// Initialize the code ownership tracking system
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
 
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
-
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::ModuleCount, &0u32);
+        env.storage().instance().set(&DataKey::ModuleCount, &0u32);
 
         events::publish_initialization(&env, &admin);
         Ok(())
     }
 
     /// Register a module with ownership information
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn register_module(
         env: Env,
         admin: Address,
@@ -234,6 +230,7 @@ impl CodeOwnership {
         owned_modules
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

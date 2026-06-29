@@ -12,15 +12,20 @@ pub fn initialize(
     prediction_horizon_days: u32,
     min_confidence_bps: u32,
 ) -> bool {
-    admin.require_auth();
-
-    if env.storage().instance().has(&DataKey::Config) {
-        return false;
-    }
-
+    // Validate inputs before the re-init guard: a `bool`-returning init that
+    // returns `false` does so via a *successful* (committed) return, so if the
+    // guard ran first it would persist the init flag and a corrected retry
+    // would be permanently blocked. Validation mutates no state, so running it
+    // first is safe and preserves retryability on bad input.
     if min_confidence_bps > utils::MAX_BPS {
         return false;
     }
+
+    if governance_commons::try_init_guard(&env).is_err() {
+        return false;
+    }
+
+    admin.require_auth();
 
     let config = PredictionConfig {
         admin,

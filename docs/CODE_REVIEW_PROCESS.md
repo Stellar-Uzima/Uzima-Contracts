@@ -74,6 +74,7 @@ The following automations are configured:
 - **Branch protection**: Direct pushes to `main` are blocked; PRs are required.
 - **Auto-assign**: PRs are auto-assigned to the on-call reviewer via CODEOWNERS.
 - **Stale bot**: PRs with no activity for 7 days are labeled `stale` and closed after 14 days.
+- **Security Checklist**: A security checklist is automatically included in every pull request description via a template (`.github/PULL_REQUEST_TEMPLATE.md`). For added visibility, a GitHub Action (`.github/workflows/security_checklist.yml`) also posts the checklist as a comment. Authors must complete this checklist before a PR can be merged, especially for changes affecting security-sensitive contracts.
 
 ### CODEOWNERS
 

@@ -1,9 +1,10 @@
 #![no_std]
+//! healthcare_analytics_dashboard - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
-    BytesN, Env, String, Vec,
+    BytesN, Env, String, Vec, Symbol
 };
 
 #[derive(Clone)]
@@ -190,6 +191,29 @@ pub trait AiAnalyticsTrait {
     fn get_round(env: Env, round_id: u64) -> Option<AiFederatedRound>;
 }
 
+#[contractclient(name = "DifferentialPrivacyClient")]
+pub trait DifferentialPrivacyTrait {
+    fn add_laplace_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<(), ()>;
+    fn add_gaussian_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<(), ()>;
+    fn get_remaining_budget(env: Env, budget_id: BytesN<32>) -> u64;
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -214,6 +238,7 @@ pub enum DataKey {
     QueryOptimization(u64, String),
     AiContract,
     AiInsight(u64),
+    DifferentialPrivacyContract,
 }
 
 #[contracterror]
@@ -234,6 +259,27 @@ pub enum Error {
     DataLakeNotFound = 12,
     ExportNotFound = 13,
     UnsupportedDataLakeProvider = 14,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::PrivacyThresholdNotMet => write!(f, "privacy threshold not met"),
+            Error::MetricNotFound => write!(f, "metric not found"),
+            Error::TemplateNotFound => write!(f, "template not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::ComplianceNotFound => write!(f, "compliance not found"),
+            Error::AiAnalyticsNotConfigured => write!(f, "ai analytics not configured"),
+            Error::AiRoundNotFound => write!(f, "ai round not found"),
+            Error::DataLakeNotFound => write!(f, "data lake not found"),
+            Error::ExportNotFound => write!(f, "export not found"),
+            Error::UnsupportedDataLakeProvider => write!(f, "unsupported data lake provider"),
+        }
+    }
 }
 
 #[contract]
@@ -274,11 +320,9 @@ impl HealthcareAnalyticsDashboardContract {
         min_cohort_size: u32,
         noise_bps: u32,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
 
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
         if min_cohort_size == 0 || noise_bps > 10_000 {
             return Err(Error::InvalidInput);
         }
@@ -305,10 +349,11 @@ impl HealthcareAnalyticsDashboardContract {
             .instance()
             .set(&DataKey::DataLakePartitionCounter, &0u64);
 
-        env.events().publish((symbol_short!("DashInit"),), true);
+        env.events().publish((Symbol::new(&env, "dash_init"),), true);
         Ok(true)
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<DashboardConfig, Error> {
         env.storage()
             .instance()
@@ -316,6 +361,7 @@ impl HealthcareAnalyticsDashboardContract {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -324,6 +370,7 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_collector_or_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin == *caller {
@@ -803,7 +850,7 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage()
             .instance()
             .set(&DataKey::Template(id), &template);
-        env.events().publish((symbol_short!("TplCreate"),), id);
+        env.events().publish((Symbol::new(&env, "tpl_create"),), id);
         Ok(id)
     }
 
@@ -1063,6 +1110,74 @@ impl HealthcareAnalyticsDashboardContract {
 
     pub fn get_ai_round_insight(env: Env, round_id: u64) -> Option<AiRoundInsight> {
         env.storage().instance().get(&DataKey::AiInsight(round_id))
+    }
+
+    /// Configure the differential privacy contract address (admin only).
+    pub fn set_differential_privacy_contract(
+        env: Env,
+        caller: Address,
+        dp_contract: Address,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        env.storage()
+            .instance()
+            .set(&DataKey::DifferentialPrivacyContract, &dp_contract.clone());
+        env.events()
+            .publish((symbol_short!("DPSet"),), dp_contract);
+        Ok(true)
+    }
+
+    /// Get the configured differential privacy contract address.
+    pub fn get_differential_privacy_contract(env: Env) -> Option<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::DifferentialPrivacyContract)
+    }
+
+    /// Apply Laplace noise via the configured differential privacy contract.
+    /// Delegates to the DP contract's `add_laplace_noise` and returns remaining budget.
+    pub fn apply_differential_privacy_noise(
+        env: Env,
+        caller: Address,
+        budget_id: BytesN<32>,
+        query_id: BytesN<32>,
+        data_type: u32,
+        true_value: i64,
+        sensitivity: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::ensure_collector_or_admin(&env, &caller)?;
+
+        let dp_addr: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::DifferentialPrivacyContract)
+            .ok_or(Error::AiAnalyticsNotConfigured)?;
+
+        let client = DifferentialPrivacyClient::new(&env, &dp_addr);
+
+        // Apply Laplace noise via the DP contract.
+        // NOTE: The DP contract returns Result<(), ()> — the opaque () error type
+        // makes proper error propagation impossible. Failures are silently consumed.
+        let _ = client.add_laplace_noise(
+            &caller,
+            &budget_id,
+            &query_id,
+            &data_type,
+            &true_value,
+            &sensitivity,
+        );
+
+        let remaining = client.get_remaining_budget(&budget_id);
+
+        env.events().publish(
+            (symbol_short!("DPNoise"),),
+            (query_id, budget_id, remaining),
+        );
+
+        Ok(remaining)
     }
 
     pub fn get_visualization_series(

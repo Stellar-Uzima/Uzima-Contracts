@@ -1,5 +1,5 @@
 #![no_std]
-#![allow(dead_code)]
+//! notification_system - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -73,7 +73,6 @@ const MAX_PAGE_SIZE: u32 = 50;
 /// Maximum recipients for bulk notification (create_bulk_notifications).
 const MAX_BULK_RECIPIENTS: u32 = 20;
 /// Maximum number of localised templates stored per notification type.
-const MAX_TEMPLATES_PER_TYPE: u32 = 10;
 /// Maximum enabled-type entries in NotificationPreferences.
 const MAX_ENABLED_TYPES: u32 = 14;
 
@@ -100,9 +99,7 @@ impl NotificationContract {
 
     /// Initialise the contract. Must be called exactly once.
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -904,6 +901,7 @@ impl NotificationContract {
     // Private helpers
     // ------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -911,6 +909,7 @@ impl NotificationContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if !Self::is_admin(env, caller) {
             return Err(Error::Unauthorized);
@@ -919,6 +918,7 @@ impl NotificationContract {
     }
 
     /// Caller must be admin OR in the authorised-senders list.
+    #[must_use]
     fn require_authorized(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_admin(env, caller) {
             return Ok(());
@@ -944,6 +944,7 @@ impl NotificationContract {
         Self::read_authorized_senders(env).contains(addr.clone())
     }
 
+    #[must_use]
     fn read_admin(env: &Env) -> Result<Address, Error> {
         env.storage()
             .instance()
@@ -1055,6 +1056,7 @@ impl NotificationContract {
         );
     }
 
+    #[must_use]
     fn load_notification(env: &Env, notif_id: u64) -> Result<Notification, Error> {
         env.storage()
             .persistent()
@@ -1062,6 +1064,7 @@ impl NotificationContract {
             .ok_or(Error::NotificationNotFound)
     }
 
+    #[must_use]
     fn load_rule(env: &Env, rule_id: u64) -> Result<AlertRule, Error> {
         env.storage()
             .persistent()
@@ -1123,7 +1126,7 @@ impl NotificationContract {
                     }
                 }
                 NotificationStatus::Pending
-            }
+            },
         }
     }
 
@@ -1221,6 +1224,7 @@ impl NotificationContract {
     // ------ Rate limiting ------
 
     /// Enforce the per-sender rolling-window rate limit.
+    #[must_use]
     fn check_and_update_sender_rate(env: &Env, sender: &Address) -> Result<(), Error> {
         let key = DataKey::SenderRate(sender.clone());
         let now = env.ledger().timestamp();
@@ -1257,6 +1261,7 @@ impl NotificationContract {
 
     // ------ Validation ------
 
+    #[must_use]
     fn validate_title(title: &String) -> Result<(), Error> {
         if title.len() > MAX_TITLE_LEN {
             return Err(Error::TitleTooLong);
@@ -1264,6 +1269,7 @@ impl NotificationContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_message(message: &String) -> Result<(), Error> {
         if message.len() > MAX_MESSAGE_LEN {
             return Err(Error::MessageTooLong);

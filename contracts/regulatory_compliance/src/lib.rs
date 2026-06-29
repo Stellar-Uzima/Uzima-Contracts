@@ -1,4 +1,5 @@
 #![no_std]
+//! regulatory_compliance - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
 
@@ -11,6 +12,18 @@ pub enum Error {
     UserAlreadyForgotten = 3,
     RuleNotConfigured = 4,
     RightToBeForgottenDisabled = 5,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::UserAlreadyForgotten => write!(f, "user already forgotten"),
+            Error::RuleNotConfigured => write!(f, "rule not configured"),
+            Error::RightToBeForgottenDisabled => write!(f, "right to be forgotten disabled"),
+        }
+    }
 }
 
 #[contracttype]
@@ -55,9 +68,7 @@ pub struct RegulatoryComplianceContract;
 #[contractimpl]
 impl RegulatoryComplianceContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
     }

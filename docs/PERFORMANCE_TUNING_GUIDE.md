@@ -254,6 +254,42 @@ pub fn get_user_history(env: Env, user: Address) -> Result<Vec<Record>, Error> {
 }
 ```
 
+### 3.3 Storage-Read Audit Workflow
+
+Use the storage benchmark harness to capture before/after CPU snapshots for hot storage paths.
+
+Audit focus:
+- `medical_records`: cached RBAC contract reads in `manage_user`, `get_history`, and encrypted-record visibility checks.
+- `governor`: `queue` now reuses the already-loaded proposal map instead of reloading it after `state`.
+- `cross_chain_bridge`: top-complexity entrypoints were audited; no same-key instance-storage rereads were found in the current hot paths, and the new benchmarks act as regression guards.
+
+Note: `medical_records` is currently listed under `[workspace].exclude` in `Cargo.toml` and does not compile standalone on the pinned Soroban SDK. Its source changes are kept scoped, but the default storage script skips that contract until the deferred compile debt is resolved.
+
+Local measurement:
+
+```bash
+bash scripts/measure_storage.sh
+bash scripts/measure_storage.sh governor cross_chain_bridge
+```
+
+When running from WSL against a checkout under `/mnt/c`, keep build artifacts on the Linux filesystem to avoid intermittent `os error 5` writes:
+
+```bash
+CARGO_TARGET_DIR=/tmp/uzima-contracts-target cargo test --all
+```
+
+Expected benchmark output:
+
+```text
+[STORAGE-BENCH] medical_records::manage_user_rbac_flow before=... after=... saved=... reduction_pct=...
+[STORAGE-BENCH] governor::queue before=... after=... saved=... reduction_pct=...
+```
+
+PR description checklist:
+- Paste the three `[STORAGE-BENCH]` lines for each audited contract.
+- Record both `before` and `after` CPU counts, plus the `saved` delta.
+- Call out any scenario that intentionally shows `saved=0` because the audit found no duplicate same-key instance reads.
+
 ---
 
 ## 4. Batch Processing

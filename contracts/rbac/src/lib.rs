@@ -1,3 +1,44 @@
+//! # Role-Based Access Control (RBAC) Contract
+//!
+//! Provides role-based access control for Uzima healthcare contracts.
+//! Supports multiple role types including Admin, Doctor, Patient, Staff,
+//! Insurer, Researcher, Auditor, and Service.
+//!
+//! ## Purpose
+//! Enables fine-grained access control across all Uzima contracts by assigning
+//! roles to addresses. Roles determine what actions an address can perform.
+//!
+//! ## Key Dependencies
+//! - None (standalone contract)
+//!
+//! ## Initialization Requirements
+//! - Must be initialized with an admin address and RBACConfig
+//!
+//! ## Role/Permission Requirements
+//! - **Admin**: Can assign/remove roles and update config
+//! - **Anyone**: Can query role information (read-only)
+//!
+//! ## Supported Roles
+//! - `Admin` - System administration
+//! - `Doctor` - Healthcare provider
+//! - `Patient` - Healthcare recipient
+//! - `Staff` - Support staff
+//! - `Insurer` - Insurance provider
+//! - `Researcher` - Medical researcher
+//! - `Auditor` - Compliance auditor
+//! - `Service` - Automated service account
+//!
+//! ## Error Ranges
+//! - 100: Unauthorized
+//! - 300-301: Lifecycle & State
+//!
+//! ## Example Usage
+//! ```rust,ignore
+//! client.initialize(&admin, &config);
+//! client.assign_role(&doctor_addr, &Role::Doctor);
+//! let is_doctor = client.has_role(&doctor_addr, &Role::Doctor);
+//! ```
+
 #![no_std]
 
 pub mod errors;
@@ -11,6 +52,7 @@ mod test;
 
 use crate::errors::Error;
 use events::{emit_initialized, emit_role_assigned, emit_role_removed};
+use governance_commons::require_admin;
 use queries::Queries;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, Env, String, Vec};
 use storage::Storage;
@@ -22,9 +64,7 @@ pub struct RBAC;
 #[contractimpl]
 impl RBAC {
     pub fn initialize(env: Env, admin: Address, config: RBACConfig) -> Result<(), Error> {
-        if Storage::is_initialized(&env) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         admin.require_auth();
 
@@ -42,7 +82,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         let success = Storage::add_role(&env, &address, role);
 
@@ -76,7 +116,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         let success = Storage::remove_role(&env, &address, role);
 
@@ -191,7 +231,7 @@ impl RBAC {
         }
 
         let admin = Storage::get_admin(&env);
-        admin.require_auth();
+        require_admin!(env, admin);
 
         Storage::set_config(&env, &config);
 
@@ -206,5 +246,13 @@ impl RBAC {
         }
 
         Storage::get_config(&env).ok_or(Error::NotInitialized)
+    }
+
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+        let admin = Storage::get_admin(env);
+        if *caller != admin {
+            return Err(Error::Unauthorized);
+        }
+        Ok(())
     }
 }

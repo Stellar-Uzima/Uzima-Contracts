@@ -1,5 +1,7 @@
 #![no_std]
+//! audit - Healthcare smart contract on Stellar blockchain.
 
+pub mod errors;
 pub mod querying;
 pub mod storage;
 pub mod types;
@@ -8,39 +10,26 @@ pub mod verification;
 #[cfg(test)]
 mod test;
 
+use crate::errors::Error;
 use crate::types::{
-    ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle,
-    LogAccessEntry, OperationResult, RetentionPolicy,
+    ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
+    OperationResult, RetentionPolicy,
 };
+use governance_commons::require_admin;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
-    Symbol, Vec,
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-}
 
 #[contract]
 pub struct AuditTrail;
 
 #[contractimpl]
 impl AuditTrail {
-    /// Initialize with global audit configuration
-    pub fn initialize(env: Env, admin: Address, config: AuditConfig) -> Result<(), Error> {
     // ─── Initialisation ──────────────────────────────────────────────────────
 
     /// Initialize the contract with an admin address and audit configuration.
     pub fn initialize(env: Env, admin: Address, config: AuditConfig) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::init_guard(&env);
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Config, &config);
@@ -49,8 +38,6 @@ impl AuditTrail {
         env.storage()
             .instance()
             .set(&DataKey::RollingHash, &BytesN::from_array(&env, &[0u8; 32]));
-        env.events().publish((symbol_short!("Init"),), admin);
-        Ok(())
 
         // Default HIPAA-compliant retention: 7 years minimum (220_752_000 s)
         let default_retention = RetentionPolicy {
@@ -66,19 +53,13 @@ impl AuditTrail {
         env.storage()
             .instance()
             .set(&DataKey::LogReaderList, &empty);
+
+        env.events().publish((symbol_short!("Init"),), admin);
     }
 
     // ─── Comprehensive Logging (Issue #399) ──────────────────────────────────
 
     /// Record a structured AuditLog entry.
-    ///
-    /// Covers all required event categories:
-    /// - Data access events (DataRead, DataWrite, DataDelete, DataExport)
-    /// - Permission changes (PermissionGrant/Revoke, RoleAssign/Revoke)
-    /// - Record modifications (RecordCreate/Update/Archive/Restore)
-    /// - Authentication attempts (AuthSuccess/Failure/Logout/TokenRefresh)
-    /// - Cross-chain transfers (CrossChainTransfer*)
-    /// - Compliance events (ConsentGranted/Revoked, DataBreach, RetentionViolation)
     pub fn log_event(
         env: Env,
         actor: Address,
@@ -102,7 +83,7 @@ impl AuditTrail {
         };
 
         // Immutable persistent storage
-        env.storage().persistent().set(&DataKey::Log(id), &log);
+        crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
 
         // Update rolling hash for tamper-evidence
         Self::update_log_rolling_hash(&env, &log);
@@ -146,7 +127,7 @@ impl AuditTrail {
             ActionType::PermissionGrant
             | ActionType::PermissionRevoke
             | ActionType::RoleAssign
-            | ActionType::RoleRevoke => {}
+            | ActionType::RoleRevoke => {},
             _ => panic!("action must be a permission-related ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -165,7 +146,7 @@ impl AuditTrail {
             ActionType::AuthSuccess
             | ActionType::AuthFailure
             | ActionType::AuthLogout
-            | ActionType::AuthTokenRefresh => {}
+            | ActionType::AuthTokenRefresh => {},
             _ => panic!("action must be an auth-related ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -184,7 +165,7 @@ impl AuditTrail {
             ActionType::CrossChainTransferInitiated
             | ActionType::CrossChainTransferCompleted
             | ActionType::CrossChainTransferFailed
-            | ActionType::CrossChainTransferReverted => {}
+            | ActionType::CrossChainTransferReverted => {},
             _ => panic!("action must be a cross-chain ActionType"),
         }
         Self::log_event(env, actor, action, target, result, metadata)
@@ -194,9 +175,7 @@ impl AuditTrail {
 
     /// Fetch a single AuditLog by ID.
     pub fn get_log(env: Env, id: u64) -> AuditLog {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Log(id))
+        crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
             .expect("AuditLog not found")
     }
 
@@ -215,12 +194,7 @@ impl AuditTrail {
     }
 
     /// Fetch logs within a timestamp range (requires log access).
-    pub fn get_logs_by_timeframe(
-        env: Env,
-        caller: Address,
-        start: u64,
-        end: u64,
-    ) -> Vec<AuditLog> {
+    pub fn get_logs_by_timeframe(env: Env, caller: Address, start: u64, end: u64) -> Vec<AuditLog> {
         caller.require_auth();
         Self::require_log_access(&env, &caller);
         crate::querying::audit_query::AuditQuery::logs_by_timeframe(&env, start, end)
@@ -229,9 +203,8 @@ impl AuditTrail {
     // ─── Access Control ──────────────────────────────────────────────────────
 
     /// Grant log-read access to an address (admin only).
-    pub fn grant_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn grant_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         let entry = LogAccessEntry {
             reader: reader.clone(),
@@ -248,20 +221,18 @@ impl AuditTrail {
             .get(&DataKey::LogReaderList)
             .unwrap_or(Vec::new(&env));
         list.push_back(reader.clone());
-        env.storage()
-            .instance()
-            .set(&DataKey::LogReaderList, &list);
+        env.storage().instance().set(&DataKey::LogReaderList, &list);
 
         env.events().publish(
             (symbol_short!("AUDIT"), symbol_short!("GRANT")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Revoke log-read access (admin only).
-    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         env.storage()
             .persistent()
@@ -271,24 +242,23 @@ impl AuditTrail {
             (symbol_short!("AUDIT"), symbol_short!("REVOKE")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Check whether an address has log-read access.
     pub fn has_log_access(env: Env, reader: Address) -> bool {
-        env.storage()
-            .persistent()
-            .has(&DataKey::LogReader(reader))
+        env.storage().persistent().has(&DataKey::LogReader(reader))
     }
 
     // ─── Retention Policy ────────────────────────────────────────────────────
 
     /// Update the retention policy (admin only).
-    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) -> Result<(), Error> {
+        require_admin!(env, admin);
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
+        Ok(())
     }
 
     /// Read the current retention policy.
@@ -302,10 +272,7 @@ impl AuditTrail {
     /// Verify that a log entry satisfies the retention policy.
     /// Returns true if the log is within the required retention window.
     pub fn verify_retention(env: Env, log_id: u64) -> bool {
-        let log: AuditLog = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Log(log_id))
+        let log = crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, log_id)
             .expect("AuditLog not found");
 
         let policy: RetentionPolicy = env
@@ -335,10 +302,8 @@ impl AuditTrail {
         let mut hash_input = Bytes::new(&env);
 
         for id in start_id..=end_id {
-            if let Some(log) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, AuditLog>(&DataKey::Log(id))
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
             {
                 use soroban_sdk::xdr::ToXdr;
                 hash_input.append(&log.id.to_xdr(&env));
@@ -385,11 +350,6 @@ impl AuditTrail {
     }
 
     // ─── Legacy API (backward compatibility) ─────────────────────────────────
-    // NOTE: record_event / get_record / verify_integrity / generate_summary are
-    // preserved below. The pre-existing AuditRecord type uses Option<BytesN<32>>
-    // which has a known upstream incompatibility with soroban-sdk 21 contracttype
-    // macro (tracked separately). These functions compile only when the legacy
-    // feature flag is enabled.
 
     /// Returns the stored rolling hash (legacy alias kept for compatibility).
     pub fn verify_integrity(env: Env) -> BytesN<32> {
@@ -411,10 +371,8 @@ impl AuditTrail {
         let mut admins = 0u32;
 
         for i in 1..=count {
-            if let Some(log) = env
-                .storage()
-                .persistent()
-                .get::<DataKey, AuditLog>(&DataKey::Log(i))
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
             {
                 if log.timestamp >= start && log.timestamp <= end {
                     total += 1;
@@ -427,7 +385,7 @@ impl AuditTrail {
                         | ActionType::PermissionRevoke
                         | ActionType::RoleAssign
                         | ActionType::RoleRevoke => admins += 1,
-                        _ => {}
+                        _ => {},
                     }
                 }
             }
@@ -445,15 +403,16 @@ impl AuditTrail {
 
     // ─── Private helpers ─────────────────────────────────────────────────────
 
-    fn require_admin(env: &Env, caller: &Address) {
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("Contract not initialized");
+            .ok_or(Error::NotInitialized)?;
         if *caller != admin {
-            panic!("Caller is not the admin");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     fn require_log_access(env: &Env, caller: &Address) {
@@ -504,49 +463,7 @@ impl AuditTrail {
         let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
         env.storage()
             .instance()
-            .get(&DataKey::Admin)
-            .expect("Contract not initialized");
-        if *caller == admin {
-            return;
-        }
-        if !env
-            .storage()
-            .persistent()
-            .has(&DataKey::LogReader(caller.clone()))
-        {
-            panic!("Caller does not have log-read access");
-        }
-    }
-
-    fn next_log_id(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .instance()
-            .get(&DataKey::LogCount)
-            .unwrap_or(0u64);
-        let next = current.saturating_add(1);
-        env.storage().instance().set(&DataKey::LogCount, &next);
-        next
-    }
-
-    fn update_log_rolling_hash(env: &Env, log: &AuditLog) {
-        use soroban_sdk::xdr::ToXdr;
-        let current: BytesN<32> = env
-            .storage()
-            .instance()
-            .get(&DataKey::RollingHash)
-            .unwrap_or(BytesN::from_array(env, &[0u8; 32]));
-
-        let mut buffer = Bytes::new(env);
-        buffer.append(&current.to_xdr(env));
-        buffer.append(&log.id.to_xdr(env));
-        buffer.append(&log.timestamp.to_xdr(env));
-        let action_disc = log.action as u32;
-        buffer.append(&action_disc.to_xdr(env));
-        buffer.append(&log.target.clone().to_xdr(env));
-
-        let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
-        env.storage().instance().set(&DataKey::RollingHash, &new_hash);
+            .set(&DataKey::RollingHash, &new_hash);
     }
 
     fn index_log_by_actor(env: &Env, actor: &Address, id: u64) {

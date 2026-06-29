@@ -1,24 +1,28 @@
-use soroban_sdk::{symbol_short, Address, Env, String, Vec};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec, xdr::ToXdr};
 
 use crate::types::{
-    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, DrugPriceData, Error,
-    FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData, TreatmentOutcomeData,
+    AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
+    DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData,
+    TreatmentOutcomeData,
 };
 
-pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> String {
+#[must_use]
+pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::ClinicalTrial(data) => data.trial_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::ClinicalTrial(data) => Ok(data.trial_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
-pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> String {
+#[must_use]
+pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
-        FeedPayload::TreatmentOutcome(data) => data.outcome_id.clone(),
-        _ => unreachable!(),
+        FeedPayload::TreatmentOutcome(data) => Ok(data.outcome_id.clone()),
+        _ => Err(Error::InvalidFeedType),
     }
 }
 
+#[must_use]
 pub fn require_initialized(env: &Env) -> Result<(), Error> {
     if !env.storage().instance().has(&DataKey::Config) {
         return Err(Error::NotInitialized);
@@ -26,6 +30,7 @@ pub fn require_initialized(env: &Env) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     admin.require_auth();
     let cfg: Config = env
@@ -41,6 +46,39 @@ pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     Ok(())
 }
 
+pub fn make_cross_contract_cache_key(
+    env: &Env,
+    contract: &Address,
+    function_name: Symbol,
+    args: &Vec<RawVal>,
+) -> CallCacheKey {
+    let args_hash: BytesN<32> = env.crypto().sha256(&args.to_xdr(env)).into();
+    CallCacheKey {
+        contract: contract.clone(),
+        function_name,
+        args_hash,
+    }
+}
+
+pub fn invoke_contract_cached<
+    T: TryFromVal<Env, Val> + IntoVal<Env, Val> + Clone,
+>(
+    env: &Env,
+    contract: Address,
+    function_name: Symbol,
+    args: Vec<RawVal>,
+) -> T {
+    let cache_key = make_cross_contract_cache_key(env, &contract, function_name.clone(), &args);
+    if let Some(value) = env.storage().temporary().get(&cache_key) {
+        return value;
+    }
+
+    let result: T = env.invoke_contract(&contract, &function_name, args.clone());
+    env.storage().temporary().set(&cache_key, &result);
+    result
+}
+
+#[must_use]
 pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, Error> {
     let cfg: Config = env
         .storage()
@@ -59,11 +97,57 @@ pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, E
     Ok(cfg)
 }
 
+#[must_use]
 pub fn read_oracle(env: &Env, operator: Address) -> Result<OracleNode, Error> {
     env.storage()
         .persistent()
         .get(&DataKey::Oracle(operator))
         .ok_or(Error::OracleNotFound)
+}
+
+pub fn hash_payload(env: &Env, payload: &FeedPayload) -> BytesN<32> {
+    env.crypto().sha256(&payload.to_xdr(env)).into()
+}
+
+#[must_use]
+pub fn slash_oracle(env: &Env, operator: Address, penalty: i128, reason: String) -> Result<(), Error> {
+    adjust_reputation(env, operator.clone(), penalty.saturating_neg(), true)?;
+    env.events().publish(
+        (symbol_short!("ORACLE_SLASHED"),),
+        (operator, penalty, reason),
+    );
+    Ok(())
+}
+
+pub fn detect_duplicate_submission(
+    env: &Env,
+    key: &FeedKey,
+    operator: &Address,
+    payload: &FeedPayload,
+    round_id: u64,
+) -> Result<(), Error> {
+    let current_hash = hash_payload(env, payload);
+    let duplicate_key = DataKey::LastSubmissionHash(key.clone(), operator.clone());
+    let previous_hash: Option<BytesN<32>> = env.storage().persistent().get(&duplicate_key);
+
+    if let Some(previous) = previous_hash {
+        if previous == current_hash {
+            slash_oracle(
+                env,
+                operator.clone(),
+                10,
+                String::from_str(env, "Duplicate submission detected"),
+            )?;
+            env.events().publish(
+                (symbol_short!("DUPLICATE_SUBMISSION"),),
+                (operator.clone(), key.kind, key.feed_id.clone(), round_id),
+            );
+            return Err(Error::SubmissionAlreadyExists);
+        }
+    }
+
+    env.storage().persistent().set(&duplicate_key, &current_hash);
+    Ok(())
 }
 
 pub fn submit_payload(
@@ -76,6 +160,8 @@ pub fn submit_payload(
 ) -> Result<u64, Error> {
     let key = FeedKey { kind, feed_id };
     let round_id = ensure_active_round(&env, key.clone())?;
+
+    detect_duplicate_submission(&env, &key, &operator, &payload, round_id)?;
 
     let submission_key = DataKey::Submission(key.clone(), round_id, operator.clone());
     if env.storage().persistent().has(&submission_key) {
@@ -108,6 +194,7 @@ pub fn submit_payload(
     Ok(round_id)
 }
 
+#[must_use]
 pub fn finalize_round(env: Env, key: FeedKey, round_id: u64) -> Result<ConsensusRecord, Error> {
     let cfg: Config = env
         .storage()
@@ -243,7 +330,7 @@ pub fn aggregate_payload(
                         if value.observed_at > observed_at {
                             observed_at = value.observed_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -256,7 +343,7 @@ pub fn aggregate_payload(
                 availability_units: (availability_weighted / sum_weight) as u32,
                 observed_at,
             }))
-        }
+        },
         FeedKind::ClinicalTrial => {
             let mut phase_weighted = 0i128;
             let mut enrolled_weighted = 0i128;
@@ -284,7 +371,7 @@ pub fn aggregate_payload(
                             published_at = value.published_at;
                             result_hash = value.result_hash.clone();
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -299,7 +386,7 @@ pub fn aggregate_payload(
                 result_hash,
                 published_at,
             }))
-        }
+        },
         FeedKind::RegulatoryUpdate => {
             let mut best_weight = -1i128;
             let mut picked: Option<RegulatoryUpdateData> = None;
@@ -312,7 +399,7 @@ pub fn aggregate_payload(
                             best_weight = weight;
                             picked = Some(value.clone());
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -324,7 +411,7 @@ pub fn aggregate_payload(
             } else {
                 Err(Error::InvalidData)
             }
-        }
+        },
         FeedKind::TreatmentOutcome => {
             let mut improvement_weighted = 0i128;
             let mut readmission_weighted = 0i128;
@@ -357,7 +444,7 @@ pub fn aggregate_payload(
                         if value.reported_at > reported_at {
                             reported_at = value.reported_at;
                         }
-                    }
+                    },
                     _ => return Err(Error::InvalidFeedType),
                 }
                 i += 1;
@@ -373,7 +460,7 @@ pub fn aggregate_payload(
                 sample_size: (sample_weighted / sum_weight) as u32,
                 reported_at,
             }))
-        }
+        },
     }
 }
 
@@ -415,7 +502,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -3
             }
-        }
+        },
         (FeedPayload::ClinicalTrial(consensus_data), FeedPayload::ClinicalTrial(payload_data)) => {
             let diff = if payload_data.success_rate_bps > consensus_data.success_rate_bps {
                 payload_data
@@ -431,7 +518,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         (
             FeedPayload::RegulatoryUpdate(consensus_data),
             FeedPayload::RegulatoryUpdate(payload_data),
@@ -441,7 +528,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -4
             }
-        }
+        },
         (
             FeedPayload::TreatmentOutcome(consensus_data),
             FeedPayload::TreatmentOutcome(payload_data),
@@ -460,7 +547,7 @@ pub fn reputation_delta(consensus: FeedPayload, payload: FeedPayload) -> i128 {
             } else {
                 -2
             }
-        }
+        },
         _ => -5,
     }
 }
@@ -486,6 +573,7 @@ pub fn adjust_reputation(
     Ok(())
 }
 
+#[must_use]
 pub fn ensure_active_round(env: &Env, key: FeedKey) -> Result<u64, Error> {
     if let Ok(round_id) = active_round_id(env, key.clone()) {
         return Ok(round_id);
@@ -515,6 +603,7 @@ pub fn ensure_active_round(env: &Env, key: FeedKey) -> Result<u64, Error> {
     Ok(next_id)
 }
 
+#[must_use]
 pub fn active_round_id(env: &Env, key: FeedKey) -> Result<u64, Error> {
     let latest: u64 = env
         .storage()

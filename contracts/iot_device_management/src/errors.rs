@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, symbol_short, Symbol};
+use soroban_sdk::contracterror;
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -47,32 +47,70 @@ pub enum Error {
     DeviceOffline = 826,
 }
 
-#[allow(dead_code)]
-pub fn get_suggestion(error: Error) -> Symbol {
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotAdmin => write!(f, "not admin"),
+            Error::NotDeviceOperator => write!(f, "not device operator"),
+            Error::NotManufacturer => write!(f, "not manufacturer"),
+            Error::InputTooLong => write!(f, "input too long"),
+            Error::InputTooShort => write!(f, "input too short"),
+            Error::InvalidDeviceType => write!(f, "invalid device type"),
+            Error::InvalidFirmwareHash => write!(f, "invalid firmware hash"),
+            Error::InvalidMetricValue => write!(f, "invalid metric value"),
+            Error::InvalidTimestamp => write!(f, "invalid timestamp"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::NotPaused => write!(f, "not paused"),
+            Error::DeviceNotFound => write!(f, "device not found"),
+            Error::DeviceAlreadyRegistered => write!(f, "device already registered"),
+            Error::ManufacturerNotRegistered => write!(f, "manufacturer not registered"),
+            Error::ManufacturerAlreadyRegistered => write!(f, "manufacturer already registered"),
+            Error::FirmwareVersionNotFound => write!(f, "firmware version not found"),
+            Error::FirmwareAlreadyExists => write!(f, "firmware already exists"),
+            Error::ChannelNotFound => write!(f, "channel not found"),
+            Error::InvalidEncryptionKey => write!(f, "invalid encryption key"),
+            Error::KeyRotationTooFrequent => write!(f, "key rotation too frequent"),
+            Error::DeviceDecommissioned => write!(f, "device decommissioned"),
+            Error::FirmwareNotApproved => write!(f, "firmware not approved"),
+            Error::HeartbeatTooFrequent => write!(f, "heartbeat too frequent"),
+            Error::DeviceNotActive => write!(f, "device not active"),
+            Error::DeviceSuspended => write!(f, "device suspended"),
+            Error::DowngradeNotAllowed => write!(f, "downgrade not allowed"),
+            Error::DeviceOffline => write!(f, "device offline"),
+        }
+    }
+}
+
+
+#[cfg(test)]
+pub fn get_suggestion(error: Error) -> soroban_sdk::soroban_sdk::Symbol {
     match error {
         Error::Unauthorized
         | Error::NotAdmin
         | Error::NotDeviceOperator
         | Error::NotManufacturer => {
-            symbol_short!("CHK_AUTH")
-        }
-        Error::NotInitialized => symbol_short!("INIT_CTR"),
+            soroban_sdk::soroban_sdk::symbol_short!("CHK_AUTH")
+        },
+        Error::NotInitialized => soroban_sdk::symbol_short!("INIT_CTR"),
         Error::AlreadyInitialized
         | Error::DeviceAlreadyRegistered
         | Error::ManufacturerAlreadyRegistered
         | Error::FirmwareAlreadyExists => {
-            symbol_short!("ALREADY")
-        }
+            soroban_sdk::soroban_sdk::symbol_short!("ALREADY")
+        },
         Error::ContractPaused | Error::HeartbeatTooFrequent | Error::KeyRotationTooFrequent => {
-            symbol_short!("RE_TRY_L")
-        }
-        Error::InputTooLong | Error::InputTooShort => symbol_short!("CHK_LEN"),
+            soroban_sdk::symbol_short!("RE_TRY_L")
+        },
+        Error::InputTooLong | Error::InputTooShort => soroban_sdk::symbol_short!("CHK_LEN"),
         Error::DeviceNotFound
         | Error::ManufacturerNotRegistered
         | Error::FirmwareVersionNotFound
         | Error::ChannelNotFound => {
-            symbol_short!("CHK_ID")
-        }
-        _ => symbol_short!("CONTACT"),
+            soroban_sdk::soroban_sdk::symbol_short!("CHK_ID")
+        },
+        _ => soroban_sdk::soroban_sdk::symbol_short!("CONTACT"),
     }
 }

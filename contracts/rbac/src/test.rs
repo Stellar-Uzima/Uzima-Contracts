@@ -2,6 +2,7 @@
 mod tests {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{vec, Address, Env};
+    use common_error::CommonError;
 
     use crate::types::{RBACConfig, Role};
     use crate::{RBACClient, RBAC};

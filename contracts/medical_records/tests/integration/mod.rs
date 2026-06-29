@@ -1,11 +1,11 @@
 // tests/integration/mod.rs
-use soroban_sdk::{Address, Env, String};
 
 pub mod medical_records_tests {
-    use super::*;
-    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Role, Error, RateLimitConfig};
+    // external crates
+    use medical_records::{MedicalRecordsContract, MedicalRecordsContractClient, Error, RateLimitConfig, Role};
     use soroban_sdk::{
         testutils::{Address as _, MockAuth, MockAuthInvoke},
+        Address, Env, String,
     };
 
     #[test]

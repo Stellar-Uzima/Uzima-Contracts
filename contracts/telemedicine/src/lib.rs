@@ -1,4 +1,5 @@
 #![no_std]
+//! telemedicine - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::fn_params_excessive_bools)]
 #![allow(clippy::needless_pass_by_value)]
@@ -54,6 +55,41 @@ pub enum TelemedicineError {
     KnowledgeEntryNotFound = 28,
 }
 
+impl core::fmt::Display for TelemedicineError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            TelemedicineError::ContractPaused => write!(f, "contract paused"),
+            TelemedicineError::NotPaused => write!(f, "not paused"),
+            TelemedicineError::NotAdmin => write!(f, "not admin"),
+            TelemedicineError::ProviderAlreadyRegistered => write!(f, "provider already registered"),
+            TelemedicineError::ProviderNotFound => write!(f, "provider not found"),
+            TelemedicineError::ProviderNotActive => write!(f, "provider not active"),
+            TelemedicineError::LicenseExpired => write!(f, "license expired"),
+            TelemedicineError::PatientAlreadyRegistered => write!(f, "patient already registered"),
+            TelemedicineError::PatientNotFound => write!(f, "patient not found"),
+            TelemedicineError::ConsentNotGiven => write!(f, "consent not given"),
+            TelemedicineError::ConsultationNotFound => write!(f, "consultation not found"),
+            TelemedicineError::ConsultationNotScheduled => write!(f, "consultation not scheduled"),
+            TelemedicineError::ConsultationNotActive => write!(f, "consultation not active"),
+            TelemedicineError::ConsultationAlreadyCompleted => write!(f, "consultation already completed"),
+            TelemedicineError::PrescriptionNotFound => write!(f, "prescription not found"),
+            TelemedicineError::MonitoringSessionNotFound => write!(f, "monitoring session not found"),
+            TelemedicineError::AppointmentNotFound => write!(f, "appointment not found"),
+            TelemedicineError::DigitalTherapeuticNotFound => write!(f, "digital therapeutic not found"),
+            TelemedicineError::QualityAssessmentNotFound => write!(f, "quality assessment not found"),
+            TelemedicineError::EmergencyNotFound => write!(f, "emergency not found"),
+            TelemedicineError::EmergencyAlreadyResolved => write!(f, "emergency already resolved"),
+            TelemedicineError::InvalidJurisdiction => write!(f, "invalid jurisdiction"),
+            TelemedicineError::DataTransferNotApproved => write!(f, "data transfer not approved"),
+            TelemedicineError::UnsupportedLanguage => write!(f, "unsupported language"),
+            TelemedicineError::ChatbotInquiryNotFound => write!(f, "chatbot inquiry not found"),
+            TelemedicineError::InvalidChatMessage => write!(f, "invalid chat message"),
+            TelemedicineError::KnowledgeEntryAlreadyExists => write!(f, "knowledge entry already exists"),
+            TelemedicineError::KnowledgeEntryNotFound => write!(f, "knowledge entry not found"),
+        }
+    }
+}
+
 // ============================================================
 // DATA STRUCTURES
 // ============================================================
@@ -66,6 +102,7 @@ pub enum ConsentType {
     DigitalTherapeutic = 2,
     EmergencyContact = 3,
     DataSharing = 4,
+    SessionRecording = 5,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -159,6 +196,8 @@ pub struct Consultation {
     pub appointment_id: BytesN<32>,
     pub consultation_type: String,
     pub quality_score: u32,
+    pub recording_consent_granted_at: u64,
+    pub recording_consent_expiry: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -390,9 +429,7 @@ impl TelemedicineContract {
     // ============================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), TelemedicineError> {
-        if env.storage().instance().has(&DataKey::Paused) {
-            return Err(TelemedicineError::NotPaused);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| TelemedicineError::NotPaused)?;
         // Store admin and config in instance storage (contract metadata)
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
@@ -664,6 +701,36 @@ impl TelemedicineContract {
         Ok(false)
     }
 
+    /// Check whether a patient has granted session recording consent.
+    /// Returns (has_consent, expiry) where expiry is 0 if no consent exists.
+    pub fn has_recording_consent(
+        env: &Env,
+        patient_id: BytesN<32>,
+    ) -> Result<(bool, u64), TelemedicineError> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientConsents(patient_id.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        env.storage().persistent().extend_ttl(&DataKey::PatientConsents(patient_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+
+        let now = env.ledger().timestamp();
+        for id in ids.iter() {
+            let consent_key = DataKey::Consent(id.clone());
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ConsentRecord>(&consent_key)
+            {
+                env.storage().persistent().extend_ttl(&consent_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+                if record.granted && record.consent_type == ConsentType::SessionRecording && record.expiry >= now {
+                    return Ok((true, record.expiry));
+                }
+            }
+        }
+        Ok((false, 0))
+    }
+
     // ============================================================
     // CONSULTATION MANAGEMENT
     // ============================================================
@@ -694,6 +761,10 @@ impl TelemedicineContract {
         if !Self::has_valid_consent(env, patient_id.clone(), ConsentType::VideoConsultation)? {
             return Err(TelemedicineError::ConsentNotGiven);
         }
+        // Determine recording consent for audit trail
+        let (recording_consent, recording_expiry) =
+            Self::has_recording_consent(env, patient_id.clone()).unwrap_or((false, 0));
+
         let consultation = Consultation {
             session_id: session_id.clone(),
             patient_id: patient_id.clone(),
@@ -706,6 +777,8 @@ impl TelemedicineContract {
             appointment_id: _appointment_id.clone(),
             consultation_type,
             quality_score: 0,
+            recording_consent_granted_at: if recording_consent { scheduled_time } else { 0 },
+            recording_consent_expiry: recording_expiry,
         };
         env.storage()
             .persistent()
@@ -1232,6 +1305,7 @@ impl TelemedicineContract {
     // UTILITY FUNCTIONS
     // ============================================================
 
+    #[must_use]
     fn require_admin(env: &Env) -> Result<(), TelemedicineError> {
         // Retrieve the stored admin address from instance storage
         let admin: Address = env
@@ -1243,6 +1317,7 @@ impl TelemedicineContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), TelemedicineError> {
         if env
             .storage()
@@ -1255,6 +1330,7 @@ impl TelemedicineContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_supported_language(language: &String) -> Result<(), TelemedicineError> {
         let lang = Self::normalize_string(language);
         if matches!(lang.as_str(), "english" | "swahili" | "french" | "en" | "sw" | "fr") {
@@ -1800,7 +1876,7 @@ impl TelemedicineContract {
         filtered
     }
 
-    #[allow(dead_code)]
+    
     fn is_valid_jurisdiction(jurisdiction: &str) -> bool {
         matches!(
             jurisdiction,

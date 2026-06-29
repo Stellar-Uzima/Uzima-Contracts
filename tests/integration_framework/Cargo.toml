@@ -1,0 +1,19 @@
+[package]
+name = "integration_framework"
+version = "0.1.0"
+edition = "2021"
+description = "Shared cross-contract integration test framework for Uzima Contracts"
+license = "MIT"
+
+[lib]
+name = "integration_framework"
+path = "src/lib.rs"
+
+[features]
+testutils = ["soroban-sdk/testutils"]
+
+[dependencies]
+soroban-sdk = { version = "=21.7.7" }
+
+[dev-dependencies]
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }

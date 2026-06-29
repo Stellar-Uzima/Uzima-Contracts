@@ -12,8 +12,7 @@ mod tests {
         let contract_id = env.register_contract(None, CodeOwnership);
         let client = CodeOwnershipClient::new(&env, &contract_id);
 
-        let result = client.initialize(&admin);
-        assert_eq!(result, ());
+        client.initialize(&admin);
     }
 
     #[test]
@@ -46,7 +45,7 @@ mod tests {
         let module_name = String::from_str(&env, "Anti-Money Laundering");
         let expertise = Vec::from_slice(&env, &[String::from_str(&env, "compliance")]);
 
-        let result = client.register_module(
+        client.register_module(
             &admin,
             &module_id,
             &module_name,
@@ -54,8 +53,6 @@ mod tests {
             &Vec::new(&env),
             &expertise,
         );
-
-        assert_eq!(result, ());
     }
 
     #[test]
@@ -120,14 +117,7 @@ mod tests {
             &expertise,
         );
 
-        let result = client.update_module_ownership(
-            &admin,
-            &module_id,
-            &owner2,
-            &Vec::new(&env),
-        );
-
-        assert_eq!(result, ());
+        client.update_module_ownership(&admin, &module_id, &owner2, &Vec::new(&env));
 
         let ownership = client.get_module_ownership(&module_id);
         assert_eq!(ownership.primary_owner, owner2);
@@ -159,15 +149,7 @@ mod tests {
             &expertise,
         );
 
-        let result = client.configure_review_route(
-            &admin,
-            &module_id,
-            &2,
-            &5,
-            &escalation_owner,
-        );
-
-        assert_eq!(result, ());
+        client.configure_review_route(&admin, &module_id, &2, &5, &escalation_owner);
 
         let route = client.get_review_route(&module_id);
         assert_eq!(route.required_reviewers, 2);

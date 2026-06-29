@@ -1,4 +1,5 @@
 #![no_std]
+//! ihe_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -455,6 +456,38 @@ pub enum Error {
     EmptyDocumentId = 25,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::DocumentNotFound => write!(f, "document not found"),
+            Error::DocumentAlreadyExists => write!(f, "document already exists"),
+            Error::DocumentDeprecated => write!(f, "document deprecated"),
+            Error::PatientNotFound => write!(f, "patient not found"),
+            Error::CrossReferenceNotFound => write!(f, "cross reference not found"),
+            Error::DemographicsNotFound => write!(f, "demographics not found"),
+            Error::AuditEventNotFound => write!(f, "audit event not found"),
+            Error::GatewayNotFound => write!(f, "gateway not found"),
+            Error::GatewayAlreadyExists => write!(f, "gateway already exists"),
+            Error::MasterPatientNotFound => write!(f, "master patient not found"),
+            Error::ConsentNotFound => write!(f, "consent not found"),
+            Error::ConsentRevoked => write!(f, "consent revoked"),
+            Error::ConsentExpired => write!(f, "consent expired"),
+            Error::SignatureNotFound => write!(f, "signature not found"),
+            Error::SignatureInvalid => write!(f, "signature invalid"),
+            Error::ProviderNotFound => write!(f, "provider not found"),
+            Error::ValueSetNotFound => write!(f, "value set not found"),
+            Error::ValueSetOidExists => write!(f, "value set oid exists"),
+            Error::InvalidHL7Message => write!(f, "invalid h l7 message"),
+            Error::ConnectathonTestNotFound => write!(f, "connectathon test not found"),
+            Error::EmptyPatientId => write!(f, "empty patient id"),
+            Error::EmptyDocumentId => write!(f, "empty document id"),
+        }
+    }
+}
+
 // ==================== Contract ====================
 
 #[contract]
@@ -465,9 +498,7 @@ impl IHEIntegrationContract {
     // ==================== Initialization ====================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
@@ -1366,7 +1397,7 @@ impl IHEIntegrationContract {
         match consent.consent_status {
             ConsentStatus::Revoked => return Err(Error::ConsentRevoked),
             ConsentStatus::Expired => return Err(Error::ConsentExpired),
-            ConsentStatus::Active => {}
+            ConsentStatus::Active => {},
         }
 
         if consent.expiry_time > 0 && env.ledger().timestamp() > consent.expiry_time {
@@ -1667,6 +1698,7 @@ impl IHEIntegrationContract {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::NotInitialized);
@@ -1674,6 +1706,7 @@ impl IHEIntegrationContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

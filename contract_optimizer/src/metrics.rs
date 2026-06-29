@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-#[derive(Debug, Serialize, Deserialize)]
+use crate::ContractAnalysis;
+
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct AccuracyMetrics {
     pub total_recommendations: usize,
     pub applied_recommendations: usize,
@@ -44,8 +46,12 @@ impl AccuracyMetrics {
         for analysis in recommendations {
             for opt in &analysis.optimizations {
                 self.total_recommendations += 1;
-                self.categories.entry(opt.category.clone())
-                    .or_insert(CategoryMetrics { total: 0, applied: 0 })
+                self.categories
+                    .entry(opt.category.clone())
+                    .or_insert(CategoryMetrics {
+                        total: 0,
+                        applied: 0,
+                    })
                     .total += 1;
             }
         }

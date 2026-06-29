@@ -1,4 +1,5 @@
 #![no_std]
+//! runtime_validation - Healthcare smart contract on Stellar blockchain.
 
 mod errors;
 mod events;
@@ -13,9 +14,7 @@ pub use types::{
     ValidationReport, ViolationType,
 };
 
-use soroban_sdk::{
-    contract, contractimpl, Address, Env, String, Vec,
-};
+use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
 #[contract]
 pub struct RuntimeValidation;
@@ -24,19 +23,14 @@ pub struct RuntimeValidation;
 impl RuntimeValidation {
     /// Initialize the runtime validation system
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()
             .set(&DataKey::ViolationCount, &0u64);
-        env.storage()
-            .instance()
-            .set(&DataKey::CheckCount, &0u32);
+        env.storage().instance().set(&DataKey::CheckCount, &0u32);
 
         events::publish_initialization(&env, &admin);
         Ok(())
@@ -53,7 +47,7 @@ impl RuntimeValidation {
         admin.require_auth();
         Self::require_admin(&env, &admin)?;
 
-        if severity < 1 || severity > 4 {
+        if !(1..=4).contains(&severity) {
             return Err(Error::InvalidSeverity);
         }
 
@@ -309,11 +303,7 @@ impl RuntimeValidation {
     }
 
     /// Check permission
-    pub fn verify_permission(
-        env: Env,
-        check_id: String,
-        user_role: String,
-    ) -> Result<bool, Error> {
+    pub fn verify_permission(env: Env, check_id: String, user_role: String) -> Result<bool, Error> {
         let check: PermissionCheck = env
             .storage()
             .persistent()
@@ -384,6 +374,7 @@ impl RuntimeValidation {
             .unwrap_or(0)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, actor: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()

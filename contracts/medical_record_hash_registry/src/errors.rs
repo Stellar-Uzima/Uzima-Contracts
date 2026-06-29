@@ -1,4 +1,4 @@
-use soroban_sdk::{contracterror, symbol_short, Symbol};
+use soroban_sdk::{contracterror};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -19,18 +19,40 @@ pub enum Error {
     CrossChainTimeout = 702,
 }
 
-pub fn get_suggestion(error: Error) -> Symbol {
-    match error {
-        Error::Unauthorized => symbol_short!("CHK_AUTH"),
-        Error::NotInitialized => symbol_short!("INIT_CTR"),
-        Error::AlreadyInitialized => symbol_short!("ALREADY"),
-        Error::ContractPaused | Error::DeadlineExceeded => symbol_short!("RE_TRY_L"),
-        Error::InvalidId | Error::DuplicateRecord | Error::RecordNotFound => {
-            symbol_short!("CHK_ID")
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::InvalidId => write!(f, "invalid id"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::InvalidRecordHash => write!(f, "invalid record hash"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::DuplicateRecord => write!(f, "duplicate record"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+            Error::StorageFull => write!(f, "storage full"),
+            Error::CrossChainTimeout => write!(f, "cross chain timeout"),
         }
-        Error::InsufficientFunds => symbol_short!("ADD_FUND"),
-        Error::StorageFull => symbol_short!("CLN_OLD"),
-        Error::CrossChainTimeout => symbol_short!("RE_TRY_L"),
-        _ => symbol_short!("CONTACT"),
+    }
+}
+
+#[doc(hidden)] /// Reserved for ABI consistency; not currently called from contract code.
+#[cfg(test)]
+pub fn get_suggestion(error: Error) -> soroban_sdk::Symbol {
+    match error {
+        Error::Unauthorized => soroban_sdk::symbol_short!("CHK_AUTH"),
+        Error::NotInitialized => soroban_sdk::symbol_short!("INIT_CTR"),
+        Error::AlreadyInitialized => soroban_sdk::symbol_short!("ALREADY"),
+        Error::ContractPaused | Error::DeadlineExceeded => soroban_sdk::symbol_short!("RE_TRY_L"),
+        Error::InvalidId | Error::DuplicateRecord | Error::RecordNotFound => {
+            soroban_sdk::symbol_short!("CHK_ID")
+        },
+        Error::InsufficientFunds => soroban_sdk::symbol_short!("ADD_FUND"),
+        Error::StorageFull => soroban_sdk::symbol_short!("CLN_OLD"),
+        Error::CrossChainTimeout => soroban_sdk::symbol_short!("RE_TRY_L"),
+        _ => soroban_sdk::symbol_short!("CONTACT"),
     }
 }

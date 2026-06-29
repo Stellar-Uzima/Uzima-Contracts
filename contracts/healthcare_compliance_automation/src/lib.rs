@@ -1,4 +1,5 @@
 #![no_std]
+//! healthcare_compliance_automation - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol, Vec,
@@ -19,6 +20,7 @@ pub struct HealthcareComplianceAutomation;
 #[contractimpl]
 impl HealthcareComplianceAutomation {
     pub fn initialize(env: Env, admin: Address, frameworks: Vec<String>) {
+        governance_commons::init_guard(&env);
         #[cfg(not(test))]
         admin.require_auth();
         env.storage().instance().set(&ADMIN, &admin);
