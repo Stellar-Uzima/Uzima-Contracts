@@ -30,7 +30,8 @@ help:
 	@echo "  setup          - Complete setup for new developers"
 	@echo "  estimate-gas        - Estimate gas for a single function"
 	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
-	@echo "  estimate-storage    - Calculate storage costs"
+	@echo "  estimate-storage    - Measure storage budget for all built contracts"
+	@echo "  measure-storage     - Alias for estimate-storage"
 	@echo "  estimate-cross-chain- Estimate cross-chain fees"
 	@echo "  release VERSION=X.Y.Z - Automated release process"
 	@echo "  bump-version VERSION=X.Y.Z - Bump version in all files"
@@ -314,9 +315,11 @@ estimate-gas-batch:
 		echo "Storage:       +$(ENTRIES) entries"; \
 	done
 
-estimate-storage:
-	@echo "Storage Entries: $(ENTRIES)"
-	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
+estimate-storage: dist
+	@echo "Running storage budget measurement..."
+	@bash scripts/measure_storage.sh
+
+measure-storage: estimate-storage
 
 estimate-cross-chain:
 	@echo "Source Chain Fee:      0.00045678 XLM"
