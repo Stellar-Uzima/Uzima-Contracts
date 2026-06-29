@@ -2177,20 +2177,17 @@ pub struct MockRbac;
 impl MockRbac {
     pub fn init_mock(_env: Env) {}
 
-    #[must_use]
     pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
-    #[must_use]
     pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &true);
         Ok(true)
     }
 
-    #[must_use]
     pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &false);
@@ -2943,7 +2940,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_not_found() {
+    fn test_resolve_did_not_found_dup() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let result = client.try_resolve_did(&subject);
@@ -2951,7 +2948,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_deactivated() {
+    fn test_resolve_did_deactivated_dup() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let public_key = BytesN::from_array(&env, &[1u8; 32]);
@@ -2965,7 +2962,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_by_string() {
+    fn test_resolve_did_by_string_dup() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let public_key = BytesN::from_array(&env, &[1u8; 32]);
@@ -2977,7 +2974,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_by_string_not_found() {
+    fn test_resolve_did_by_string_not_found_dup() {
         let (env, client, _owner) = create_contract();
         let did_string = String::from_str(&env, "did:stellar:uzima:testnet:nonexistent");
         let result = client.try_resolve_did_by_string(&did_string);
@@ -2985,7 +2982,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_after_update_tracks_new_data() {
+    fn test_resolve_did_after_update_tracks_new_data_dup() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let public_key = BytesN::from_array(&env, &[1u8; 32]);
@@ -3008,7 +3005,7 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_with_multiple_verification_methods() {
+    fn test_resolve_did_with_multiple_verification_methods_dup() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let primary_key = BytesN::from_array(&env, &[1u8; 32]);
@@ -3035,7 +3032,34 @@ mod tests {
     }
 
     #[test]
-    fn test_resolve_did_after_recovery_restores_active() {
+    fn test_resolve_did_with_multiple_verification_methods_tri() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let primary_key = BytesN::from_array(&env, &[1u8; 32]);
+        let services: Vec<ServiceEndpoint> = Vec::new(&env);
+
+        client.create_did(&subject, &primary_key, &services);
+
+        for i in 0u8..5u8 {
+            let key = BytesN::from_array(&env, &[i + 10; 32]);
+            let method_id = String::from_bytes(&env, &[i + 1; 1]);
+            let mut rels: Vec<VerificationRelationship> = Vec::new(&env);
+            rels.push_back(VerificationRelationship::Authentication);
+            client.add_verification_method(
+                &subject,
+                &method_id,
+                &VerificationMethodType::Ed25519VerificationKey2020,
+                &key,
+                &rels,
+            );
+        }
+
+        let did_doc = client.resolve_did(&subject);
+        assert_eq!(did_doc.verification_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_resolve_did_after_recovery_restores_active_tri() {
         let (env, client, _owner) = create_contract();
         let subject = Address::generate(&env);
         let public_key = BytesN::from_array(&env, &[1u8; 32]);

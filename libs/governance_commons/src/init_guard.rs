@@ -110,12 +110,10 @@ pub fn try_init_guard(env: &Env) -> Result<(), GovernanceError> {
 ///
 /// Panics with [`GovernanceError::AlreadyInitialized`] if called more than once.
 pub fn init_guard(env: &Env) {
-    if try_init_guard(env).is_err() {
-        // Static message (no formatting) to keep the helper `#![no_std]`-friendly
-        // and avoid pulling `core::fmt` into the contract WASM. Corresponds to
-        // `GovernanceError::AlreadyInitialized`.
-        panic!("governance_commons::init_guard: already initialized");
-    }
+    assert!(
+        try_init_guard(env).is_ok(),
+        "governance_commons::init_guard: already initialized",
+    );
 }
 
 /// Asserts that the contract **has** been initialized, returning

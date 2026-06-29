@@ -269,6 +269,7 @@ impl core::fmt::Display for Error {
             Error::OperationFailed => write!(f, "operation failed"),
             Error::InvalidBundleType => write!(f, "invalid bundle type"),
             Error::DataMappingFailed => write!(f, "data mapping failed"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
         }
     }
 }

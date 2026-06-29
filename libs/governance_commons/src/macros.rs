@@ -1,5 +1,3 @@
-#![no_std]
-
 /// Requires that the caller is authenticated and matches the admin check.
 ///
 /// Expands to: `caller.require_auth(); Self::require_admin(&env, &caller)?;`
