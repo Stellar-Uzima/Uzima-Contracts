@@ -17,6 +17,44 @@ help: ## Show this help message
 ##@ Setup
 
 install-deps: ## Install Rust toolchain, Soroban CLI, and shellcheck
+# Default target
+help:
+	@echo "Available commands:"
+	@echo "  build          - Build all contracts"
+	@echo "  build-opt      - Build optimized contracts for deployment"
+	@echo "  test           - Run all tests"
+	@echo "  test-unit      - Run unit tests only"
+	@echo "  test-integration - Run integration tests only"
+	@echo "  clean          - Clean build artifacts"
+	@echo "  fmt            - Format code"
+	@echo "  lint           - Run clippy linter"
+	@echo "  shellcheck     - Lint shell scripts with shellcheck"
+	@echo "  check          - Run all checks (fmt, lint, test)"
+	@echo "  install-deps   - Install required dependencies"
+	@echo "  check-deps     - Check if dependencies are installed"
+	@echo "  start-local    - Start local Stellar network"
+	@echo "  stop-local     - Stop local Stellar network"
+	@echo "  deploy-local   - Deploy contracts to local network"
+	@echo "  dist           - Build .wasm files into dist/ folder"
+	@echo "  dev-deploy     - Full dev workflow: clean, build-opt, dist, start-local, deploy-local"
+	@echo "  monitor-wasm   - Monitor WASM contract sizes and trends"
+	@echo "  check-wasm-size- Quick WASM size check without trend analysis"
+	@echo "  optimize       - Run contract optimization analysis"
+	@echo "  analyze-optimizations - Analyze and display optimization recommendations"
+	@echo "  setup          - Complete setup for new developers"
+	@echo "  estimate-gas        - Estimate gas for a single function"
+	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
+	@echo "  estimate-storage    - Measure storage budget for all built contracts"
+	@echo "  measure-storage     - Alias for estimate-storage"
+	@echo "  estimate-cross-chain- Estimate cross-chain fees"
+	@echo "  release VERSION=X.Y.Z - Automated release process"
+	@echo "  bump-version VERSION=X.Y.Z - Bump version in all files"
+	@echo "  generate-changelog VERSION=X.Y.Z - Generate changelog entry"
+	@echo "  validate-release VERSION=X.Y.Z - Validate release prerequisites"
+	@echo "  check-versions      - Check version consistency"
+
+# Install required dependencies
+install-deps:
 	@echo "Installing Rust toolchain..."
 	rustup target add wasm32-unknown-unknown
 	rustup component add rustfmt clippy
@@ -271,6 +309,11 @@ estimate-gas-batch: ## Estimate gas for multiple function calls
 estimate-storage: ## Calculate storage costs for a given number of entries
 	@echo "Storage Entries: $(ENTRIES)"
 	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
+estimate-storage: dist
+	@echo "Running storage budget measurement..."
+	@bash scripts/measure_storage.sh
+
+measure-storage: estimate-storage
 
 estimate-cross-chain: ## Estimate cross-chain transaction fees
 	@echo "Source Chain Fee:      0.00045678 XLM"

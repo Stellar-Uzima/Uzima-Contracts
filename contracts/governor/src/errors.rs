@@ -49,6 +49,7 @@ impl core::fmt::Display for Error {
             Error::NoVotingPower => write!(f, "no voting power"),
             Error::Overflow => write!(f, "overflow"),
             Error::InvalidVoteType => write!(f, "invalid vote type"),
+            Error::CleanupEmpty => write!(f, "cleanup empty"),
         }
     }
 }

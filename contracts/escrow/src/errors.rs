@@ -44,6 +44,7 @@ impl core::fmt::Display for Error {
             Error::EscrowExists => write!(f, "escrow exists"),
             Error::EscrowNotFound => write!(f, "escrow not found"),
             Error::AlreadySettled => write!(f, "already settled"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
             Error::NoBasisToRefund => write!(f, "no basis to refund"),
             Error::NoCredit => write!(f, "no credit"),
             Error::Overflow => write!(f, "overflow"),

@@ -1,7 +1,5 @@
-#![cfg(test)]
-
 use super::{
-    Claim, ClaimStatus, Config, DataKey, Error, HealthcarePayment, HealthcarePaymentClient,
+    Claim, ClaimStatus, DataKey, Error, HealthcarePayment, HealthcarePaymentClient,
 };
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, testutils::Address as _, token, Address,
@@ -29,12 +27,12 @@ struct MockRbac;
 
 #[contractimpl]
 impl MockRbac {
-    fn has_role(env: Env, address: Address, role: MockRole) -> Result<bool, MockRoleError> {
+    pub fn has_role(env: Env, address: Address, role: MockRole) -> Result<bool, MockRoleError> {
         let key = (address, role as u32);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
-    fn assign_role(
+    pub fn assign_role(
         env: Env,
         address: Address,
         role: MockRole,
@@ -44,7 +42,7 @@ impl MockRbac {
         Ok(true)
     }
 
-    fn remove_role(
+    pub fn remove_role(
         env: Env,
         address: Address,
         role: MockRole,
@@ -60,6 +58,7 @@ struct MockPaymentRouter;
 
 #[contractimpl]
 impl MockPaymentRouter {
+    #[allow(dead_code)]
     fn compute_split(_env: Env, amount: i128) -> (i128, i128) {
         let fee = amount / 10;
         (amount - fee, fee)
@@ -71,6 +70,7 @@ struct MockEscrow;
 
 #[contractimpl]
 impl MockEscrow {
+    #[allow(dead_code)]
     fn create_escrow(_env: Env, _claim_id: u64, _sender: Address, _provider: Address, _amount: i128, _token: Address) -> bool {
         true
     }
@@ -124,9 +124,8 @@ fn submit_approved_claim(
 ) -> u64 {
     let service_id = String::from_str(env, "X-22");
     let policy_id = String::from_str(env, "BC001");
-    let claim_id = client
-        .submit_claim(patient, provider, &service_id, &1000i128, &policy_id, &None)
-        .unwrap();
+        let claim_id = client
+            .submit_claim(patient, provider, &service_id, &1000i128, &policy_id, &None);
 
     // Mint tokens to contract for payment
     let token_admin = token::StellarAssetClient::new(env, pay_token);
@@ -148,8 +147,7 @@ fn test_concurrent_escrow_submissions() {
         let service_id = String::from_str(&env, "X-22");
         let policy_id = String::from_str(&env, "BC001");
         let claim_id = client
-            .submit_claim(&patient, &provider, &service_id, &(1000i128 + i as i128), &policy_id, &None)
-            .unwrap();
+            .submit_claim(&patient, &provider, &service_id, &(1000i128 + i as i128), &policy_id, &None);
 
         let token_admin = token::StellarAssetClient::new(&env, &pay_token);
         token_admin.mint(&env.current_contract_address(), &10000);
@@ -161,7 +159,7 @@ fn test_concurrent_escrow_submissions() {
 
     // Process escrow for all claims
     for i in 0..5 {
-        let claim_id = claim_ids.get(i).unwrap();
+        let claim_id = claim_ids.get(i as u32).unwrap();
         client.escrow_claim(&claim_id);
     }
 }
@@ -172,13 +170,13 @@ fn test_concurrent_batch_payments() {
     let count = 5;
     let mut claim_ids: Vec<u64> = Vec::new(&env);
 
-    for i in 0..count {
+    for _i in 0..count {
         let c_id = submit_approved_claim(&env, &client, &admin, &provider, &patient, &pay_token);
         claim_ids.push_back(c_id);
     }
 
     // Process all payments via batch
-    let paid = client.batch_process_payments(&claim_ids).unwrap();
+    let paid = client.batch_process_payments(&claim_ids);
     assert_eq!(paid.len(), count as u32);
 }
 
@@ -192,8 +190,7 @@ fn test_concurrent_claim_status_transitions() {
         let service_id = String::from_str(&env, "X-22");
         let policy_id = String::from_str(&env, "BC001");
         let claim_id = client
-            .submit_claim(&patient, &provider, &service_id, &(500i128 + i as i128), &policy_id, &None)
-            .unwrap();
+            .submit_claim(&patient, &provider, &service_id, &(500i128 + i as i128), &policy_id, &None);
 
         let token_admin = token::StellarAssetClient::new(&env, &pay_token);
         token_admin.mint(&env.current_contract_address(), &10000);
@@ -202,19 +199,19 @@ fn test_concurrent_claim_status_transitions() {
     }
 
     // Interleave verify/approve across claims
-    client.verify_claim(&claim_ids.get(0).unwrap(), &provider);
-    client.verify_claim(&claim_ids.get(1).unwrap(), &provider);
-    client.approve_claim(&claim_ids.get(0).unwrap(), &admin);
-    client.verify_claim(&claim_ids.get(2).unwrap(), &provider);
-    client.approve_claim(&claim_ids.get(1).unwrap(), &admin);
-    client.approve_claim(&claim_ids.get(2).unwrap(), &admin);
+    client.verify_claim(&claim_ids.get(0u32).unwrap(), &provider);
+    client.verify_claim(&claim_ids.get(1u32).unwrap(), &provider);
+    client.approve_claim(&claim_ids.get(0u32).unwrap(), &admin);
+    client.verify_claim(&claim_ids.get(2u32).unwrap(), &provider);
+    client.approve_claim(&claim_ids.get(1u32).unwrap(), &admin);
+    client.approve_claim(&claim_ids.get(2u32).unwrap(), &admin);
 
     // All should now be approved
     for i in 0..3 {
         let claim: Claim = env
             .as_contract(&env.current_contract_address(), || {
                 env.storage().persistent().get(&DataKey::Claim(
-                    claim_ids.get(i).unwrap(),
+                    claim_ids.get(i as u32).unwrap(),
                 )).unwrap()
             });
         assert_eq!(claim.status, ClaimStatus::Approved);
@@ -227,8 +224,7 @@ fn test_escrow_rejects_unapproved_claim() {
     let service_id = String::from_str(&env, "X-22");
     let policy_id = String::from_str(&env, "BC001");
     let claim_id = client
-        .submit_claim(&patient, &provider, &service_id, &1000i128, &policy_id, &None)
-        .unwrap();
+        .submit_claim(&patient, &provider, &service_id, &1000i128, &policy_id, &None);
 
     // Should fail because claim is Submitted, not Approved
     let result = client.try_escrow_claim(&claim_id);
@@ -273,8 +269,7 @@ fn test_reentrancy_lock_prevents_concurrent_processing() {
     let provider = Address::generate(&env);
 
     let claim_id = client
-        .submit_claim(&patient, &provider, &service_id, &1000i128, &policy_id, &None)
-        .unwrap();
+        .submit_claim(&patient, &provider, &service_id, &1000i128, &policy_id, &None);
 
     // Lock is acquired, but claim is not Approved
     let result = client.try_process_payment(&claim_id);

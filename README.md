@@ -50,6 +50,36 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 - Patients seeking control over their medical data
 - Traditional medicine practitioners
 
+## Storage Budget Tracking
+
+The project includes automated **storage budget measurement** for all Soroban contracts. After each wasm32 build, the CI pipeline runs `scripts/measure_storage.sh` to compute:
+
+- **WASM binary size** — contract bytecode size (must be ≤ 64 KB)
+- **Estimated storage entries** — number of ledger entries a typical deployment uses
+- **Estimated ledger cost** — approximate XLM cost for 2 years of storage rent
+- **CPU instruction cost** — from storage benchmark tests (where available)
+
+### Current Storage Leaderboard
+
+_Top 5 contracts by estimated storage cost (from latest CI run):_
+
+| # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) |
+|---|----------|----------|-------------|-----------------|
+| 1 | — | — | — | — |
+
+> Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release` to regenerate.
+> Full Pareto report (top 10) is uploaded as a CI artifact (`reports/storage_pareto_top10.txt`).
+
+### Thresholds
+
+Thresholds are defined in [`docs/CONTRACT_RESOURCE_LIMITS.md`](docs/CONTRACT_RESOURCE_LIMITS.md) and enforced in CI:
+
+| Metric | Warning | Critical |
+|--------|---------|----------|
+| Contract size | > 51.2 KB (80%) | > 62.3 KB (95%) |
+| Storage entries | > 100 | > 500 |
+| CPU instructions | > 5,000,000 | > 10,000,000 |
+
 ## 🔧 Contract Optimization Engine
 
 The project includes an advanced **Contract Optimization Recommendations Engine** that analyzes smart contracts and provides actionable recommendations for:

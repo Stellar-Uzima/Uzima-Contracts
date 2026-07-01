@@ -254,7 +254,7 @@ fn test_arithmetic_overflow() {
     // A better approach would be a test-only function to update the policy.
     // For now, we'll just test the eligibility check which is where the overflow would occur.
 
-    let result = client.try_verify_insurance_eligibility(
+    let _result = client.try_verify_insurance_eligibility(
         &provider,
         &coverage_policy_id,
         &String::from_str(&env, "SERVICE-OVERFLOW"),
@@ -267,7 +267,7 @@ fn test_arithmetic_overflow() {
     // Since we can't easily manipulate the policy state for the test,
     // we will add a test that checks for overflow on the counter.
 
-    let result = client.try_submit_claim(
+    let _result = client.try_submit_claim(
         &patient,
         &provider,
         &String::from_str(&env, "SERVICE-MAX-CLAIMS"),
