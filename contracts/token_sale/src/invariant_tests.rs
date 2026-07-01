@@ -1,10 +1,10 @@
 #![cfg(test)]
 #![allow(clippy::unwrap_used)]
 
-use crate::{contract::TokenSaleContractClient, types::*};
+use crate::contract::TokenSaleContractClient;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, Env, Vec,
+    token, Address, Env,
 };
 
 fn create_token_contract<'a>(
@@ -102,7 +102,7 @@ fn test_invariant_each_phase_sold_does_not_exceed_max() {
 #[test]
 fn test_invariant_hard_cap_not_exceeded() {
     let env = Env::default();
-    let (client, _owner, pay_token, _cid) = setup_basic_sale(&env);
+    let (client, _owner, _pay_token, _cid) = setup_basic_sale(&env);
 
     let config = client.get_config();
     let hard_cap = config.hard_cap;
@@ -197,7 +197,7 @@ fn test_invariant_total_sold_equals_sum_phase_sold() {
 #[test]
 fn test_invariant_claim_releases_correct_tokens() {
     let env = Env::default();
-    let (client, _owner, pay_token, cid) = setup_basic_sale(&env);
+    let (client, _owner, pay_token, _cid) = setup_basic_sale(&env);
 
     let c1 = Address::generate(&env);
     let c2 = Address::generate(&env);

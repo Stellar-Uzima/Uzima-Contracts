@@ -804,7 +804,7 @@ impl HealthcarePayment {
             return Err(Error::UnsupportedTransaction);
         }
 
-        let enrollment_id = Self::next_counter(&env, &DataKey::CoverageEnrollmentCount);
+        let enrollment_id = Self::next_counter(&env, &DataKey::CoverageEnrollmentCount)?;
         let enrollment = CoverageEnrollment {
             id: enrollment_id,
             policy_id: coverage_policy_id,

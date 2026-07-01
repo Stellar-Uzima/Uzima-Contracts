@@ -1,3 +1,22 @@
+# =============================================================================
+# Clippy Configuration for Uzima Contracts
+#
+# This file configures clippy thresholds and documents all allowed
+# clippy::pedantic / clippy::nursery exceptions enforced in CI.
+# The CI command (`.github/workflows/ci.yml`) runs:
+#
+#   cargo clippy --workspace --all-targets -- \
+#       -D warnings \
+#       -W clippy::pedantic \
+#       -W clippy::nursery \
+#       -A <allowlisted-lints>
+#
+# When adding a new exception, add the corresponding `-A clippy::<lint>` to
+# the CI command AND document it below with a rationale.
+# =============================================================================
+
+# --- Thresholds & limits ------------------------------------------------
+
 # Complexity thresholds
 too-many-arguments-threshold = 6
 cognitive-complexity-threshold = 25
@@ -20,3 +39,216 @@ doc-valid-idents = [
 allow-expect-in-tests = true
 allow-unwrap-in-tests = true
 allow-panic-in-tests = true
+
+# =============================================================================
+# CI-allowlisted clippy lints
+#
+# These lints are allowed project-wide in CI.  Each entry includes the
+# rationale so reviewers can evaluate whether a new exception is warranted.
+# =============================================================================
+
+#
+# clippy::bool_to_int_with_if
+#   Suggests replacing `if c { 1 } else { 0 }` with `c as i32`.  Stylistic;
+#   the explicit form is clearer in contract business logic.
+#
+# clippy::cast_lossless
+#   Suggests widening casts (e.g. u32 -> u64) use From/Into instead of `as`.
+#   50+ instances across the workspace; addressed in a follow-up (issue #835).
+#
+# clippy::cast_possible_truncation
+#   Warns when a cast may truncate (e.g. u64 -> u32).  Deliberate in
+#   sanitization crate and other domain-specific truncation.
+#
+# clippy::cast_possible_wrap
+#   Warns on signed-to-unsigned casts that could wrap.  Deliberate use of
+#   two's-complement wrapping in cryptographic operations.
+#
+# clippy::cast_precision_loss
+#   Warns on integer-to-float casts that lose precision.  Acceptable in
+#   analytics/ML contracts where approximate values are sufficient.
+#
+# clippy::cast_sign_loss
+#   Warns on signed-to-unsigned casts that could lose sign.  Deliberate in
+#   contract storage where negative values are impossible.
+#
+# clippy::dead_code (rustc lint)
+#   Flags unused code.  Many dead-code items in the existing workspace;
+#   too noisy to gate CI.  Addressed via separate cleanup passes.
+#
+# clippy::derive_partial_eq_without_eq
+#   Suggests deriving `Eq` when `PartialEq` is derived.  Many instances;
+#   mechanical churn best left to a dedicated pass.
+#
+# clippy::doc_markdown
+#   Requires backticks around doc-comment code/identifier spans.  Noisy;
+#   many un-backticked references without meaningful correctness benefit.
+#
+# clippy::double_must_use
+#   Warns when `#[must_use]` is applied but the return type is already
+#   must_use (e.g. Result).  Common in generated code; suppressed project-wide.
+#
+# clippy::duplicated_attributes
+#   Flags duplicated attributes.  A few instances in macro-generated code.
+#
+# clippy::explicit_iter_loop
+#   Suggests implicit iteration instead of `.iter()` calls.  Stylistic.
+#
+# clippy::fn_params_excessive_bools
+#   Warns when a function has too many bool parameters.  Several contract
+#   initialization functions use many bools intentionally.
+#
+# clippy::format_push_string
+#   Suggests `write!` instead of `format!` + `push_str`.  Minor perf;
+#   not worth churning 6+ instances.
+#
+# clippy::ignored_unit_patterns
+#   Flags `_ => ()` in match arms where the arm body is a no-op.  A few
+#   intentional no-op arms in error dispatch.
+#
+# clippy::inconsistent_struct_constructor
+#   Suggests field-init shorthand.  Stylistic; 12+ instances.
+#
+# clippy::items_after_statements
+#   Requires items (fn, struct, etc.) before statements.  Several test
+#   modules mix items and statements; not worth rearranging.
+#
+# clippy::let_and_return
+#   Suggests returning a value directly instead of binding then returning.
+#   A few instances where the binding improves readability.
+#
+# clippy::manual_assert
+#   Suggests `assert!` instead of `if !cond { panic!() }`.  Intentional
+#   in governance_commons where explicit panic improves audit clarity.
+#
+# clippy::manual_let_else
+#   Suggests `let-else` instead of `let ... = ... else { return }`.
+#   Several pre-existing patterns that predate stable let-else; deferred.
+#
+# clippy::map_unwrap_or
+#   Suggests `map_or` / `map_or_else` instead of `map().unwrap_or()`.
+#   8+ instances; stylistic preference.
+#
+# clippy::match_same_arms
+#   Flags match arms with identical bodies.  Pre-existing in error dispatch
+#   where variants may diverge later.
+#
+# clippy::match_wildcard_for_single_variants
+#   Suggests naming the remaining variant instead of `_`.  Intentional
+#   wildcard used for forward-compatibility with new error variants.
+#
+# clippy::mismatched_lifetime_syntaxes (rustc lint)
+#   Flags redundant or confusing lifetime annotations.  Pre-existing in
+#   macro-generated code; deferred.
+#
+# clippy::missing_const_for_fn
+#   Suggests adding `const` to pure functions.  Useful but too noisy to
+#   gate CI; addressed opportunistically during refactoring.
+#
+# clippy::missing_errors_doc
+#   Requires `# Errors` section in doc comments for Result-returning
+#   functions.  38+ instances; tracked as a follow-up documentation drive.
+#
+# clippy::missing_panics_doc
+#   Requires `# Panics` section in doc comments for panicking functions.
+#   Single instance (upgradeability); tracked in issue #835.
+#
+# clippy::must_use_candidate
+#   Suggests adding `#[must_use]` to pure functions.  21+ instances;
+#   too noisy to enforce project-wide.
+#
+# clippy::needless_pass_by_value
+#   Suggests references instead of owned values when not consumed.
+#   Changing signatures cascades across contract APIs; deferred.
+#
+# clippy::needless_raw_string_hashes
+#   Suggests removing unnecessary raw-string delimiters.  Stylistic.
+#
+# clippy::option_if_let_else
+#   Suggests `Option::map_or` / `map_or_else`.  Stylistic; 5+ instances.
+#
+# clippy::or_fun_call
+#   Suggests `unwrap_or_default()` / `get_or_insert()` instead of
+#   `unwrap_or(T::default())`.  Several instances in upgradeability.
+#
+# clippy::redundant_closure_for_method_calls
+#   Suggests passing the method directly instead of a closure.  Stylistic.
+#
+# clippy::redundant_clone
+#   Flags unnecessary `.clone()` calls.  Many instances; best addressed
+#   by a dedicated cleanup (issue #835 tracks clone audit).
+#
+# clippy::result_unit_err
+#   Flags `Result<_, ()>` in favor of a dedicated error type.  The
+#   `common_auth` crate uses `()` intentionally as a lightweight error
+#   sentinel.
+#
+# clippy::similar_names
+#   Flags variable names that differ only by suffix (e.g. x and x2).
+#   15+ instances; too noisy for CI gating.
+#
+# clippy::single_match
+#   Suggests `if let` instead of a single-arm `match`.  Stylistic.
+#
+# clippy::struct_excessive_bools
+#   Warns on structs with too many bool fields.  Design-level; existing
+#   structs are deliberate (e.g. config flags).
+#
+# clippy::struct_field_names
+#   Suggests field names that repeat the type name.  Stylistic.
+#
+# clippy::suboptimal_flops
+#   Suggests more efficient floating-point operations.  Acceptable in
+#   analytics contracts where readability > micro-optimization.
+#
+# clippy::too_long_first_doc_paragraph
+#   Warns when the first doc paragraph exceeds a threshold.  Several
+#   contracts have long first paragraphs; deferred to doc cleanup.
+#
+# clippy::too_many_lines
+#   Flags functions over 100 lines.  Many contract functions legitimately
+#   exceed this threshold due to Soroban boilerplate.
+#
+# clippy::trivially_copy_pass_by_ref
+#   Suggests passing small types by value.  Several instances in
+#   public contract APIs where changing signatures is breaking.
+#
+# clippy::uninlined_format_args
+#   Suggests inlining variables in format strings.  Requires MSRV bump;
+#   deferred to a follow-up (issue #843).
+#
+# clippy::unnecessary_cast
+#   Flags casts that are unnecessary.  A few in macro-generated code.
+#
+# clippy::unnecessary_semicolon
+#   Flags trailing semicolons after expression statements.  Stylistic.
+#
+# clippy::unnecessary_wraps
+#   Flags `Ok(x)` / `Err(e)` wrapped values that could be returned
+#   directly.  Several instances; stylistic.
+#
+# clippy::unnested_or_patterns
+#   Suggests nesting `|` patterns.  Stylistic; readability preference.
+#
+# clippy::unreadable_literal
+#   Suggests digit separators in long numeric literals.  Minor style.
+#
+# clippy::unused_async
+#   Flags async functions that contain no await.  A few pre-existing
+#   async fns marked for future use.
+#
+# clippy::use_self
+#   Suggests replacing type-name repetitions with `Self`.  33+ instances;
+#   best left to a dedicated formatting pass.
+#
+# clippy::used_underscore_binding
+#   Flags bindings starting with `_` that are used.  Single instance in
+#   upgradeability; deferred.
+#
+# clippy::useless_let_if_seq
+#   Suggests a single `let` with an `if` expression instead of a sequence
+#   of `let mut` + `if` assignments.  Stylistic; a few instances.
+#
+# clippy::wildcard_imports
+#   Flags `use module::*` imports.  The macros module in governance_commons
+#   intentionally re-exports everything.

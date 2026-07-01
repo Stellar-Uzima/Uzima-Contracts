@@ -145,9 +145,146 @@ pub fn GetRecord(env: Env, recordId: u64) -> Result<medical_record, Err> {  // M
 ```
 
 ## Enforcement
-- Use clippy with strict naming lints
-- Run `cargo clippy -- -D warnings` in CI/CD
-- Review code against this guide during PR reviews
+
+### Clippy Lint Configuration
+
+Clippy is enforced in CI with both `clippy::pedantic` and `clippy::nursery` lint groups enabled. The CI command (`.github/workflows/ci.yml`) runs:
+
+```shell
+cargo clippy --workspace --all-targets -- \
+    -D warnings \
+    -W clippy::pedantic \
+    -W clippy::nursery \
+    -A clippy::bool_to_int_with_if \
+    -A clippy::cast_lossless \
+    -A clippy::cast_possible_truncation \
+    -A clippy::cast_possible_wrap \
+    -A clippy::cast_precision_loss \
+    -A clippy::cast_sign_loss \
+    -A dead_code \
+    -A clippy::derive_partial_eq_without_eq \
+    -A clippy::doc_markdown \
+    -A clippy::double_must_use \
+    -A clippy::duplicated_attributes \
+    -A clippy::explicit_iter_loop \
+    -A clippy::fn_params_excessive_bools \
+    -A clippy::format_push_string \
+    -A clippy::ignored_unit_patterns \
+    -A clippy::inconsistent_struct_constructor \
+    -A clippy::items_after_statements \
+    -A clippy::let_and_return \
+    -A clippy::manual_assert \
+    -A clippy::manual_let_else \
+    -A clippy::map_unwrap_or \
+    -A clippy::match_same_arms \
+    -A clippy::match_wildcard_for_single_variants \
+    -A mismatched_lifetime_syntaxes \
+    -A clippy::missing_const_for_fn \
+    -A clippy::missing_errors_doc \
+    -A clippy::missing_panics_doc \
+    -A clippy::must_use_candidate \
+    -A clippy::needless_pass_by_value \
+    -A clippy::needless_raw_string_hashes \
+    -A clippy::option_if_let_else \
+    -A clippy::or_fun_call \
+    -A clippy::redundant_closure_for_method_calls \
+    -A clippy::redundant_clone \
+    -A clippy::result_unit_err \
+    -A clippy::similar_names \
+    -A clippy::single_match \
+    -A clippy::struct_excessive_bools \
+    -A clippy::struct_field_names \
+    -A clippy::suboptimal_flops \
+    -A clippy::too_long_first_doc_paragraph \
+    -A clippy::too_many_lines \
+    -A clippy::trivially_copy_pass_by_ref \
+    -A clippy::uninlined_format_args \
+    -A clippy::unnecessary_cast \
+    -A clippy::unnecessary_semicolon \
+    -A clippy::unnecessary_wraps \
+    -A clippy::unnested_or_patterns \
+    -A clippy::unreadable_literal \
+    -A clippy::unused_async \
+    -A clippy::use_self \
+    -A clippy::used_underscore_binding \
+    -A clippy::useless_let_if_seq \
+    -A clippy::wildcard_imports
+```
+
+A PR **fails** if it introduces any new `clippy::pedantic` or `clippy::nursery`
+warning that is not in the explicit allowlist above. The allowed exceptions are
+documented with rationale in `clippy.toml`.
+
+### Adding or removing allowlisted lints
+
+1. Update the `-A <lint>` list in `.github/workflows/ci.yml`.
+2. Add or update the corresponding rationale comment in `clippy.toml`.
+3. Update this section to reflect the change.
+
+### Local development
+
+Run the exact CI command locally before pushing:
+
+```shell
+cargo clippy --workspace --all-targets -- \
+    -D warnings \
+    -W clippy::pedantic \
+    -W clippy::nursery \
+    -A clippy::bool_to_int_with_if \
+    -A clippy::cast_lossless \
+    -A clippy::cast_possible_truncation \
+    -A clippy::cast_possible_wrap \
+    -A clippy::cast_precision_loss \
+    -A clippy::cast_sign_loss \
+    -A dead_code \
+    -A clippy::derive_partial_eq_without_eq \
+    -A clippy::doc_markdown \
+    -A clippy::double_must_use \
+    -A clippy::duplicated_attributes \
+    -A clippy::explicit_iter_loop \
+    -A clippy::fn_params_excessive_bools \
+    -A clippy::format_push_string \
+    -A clippy::ignored_unit_patterns \
+    -A clippy::inconsistent_struct_constructor \
+    -A clippy::items_after_statements \
+    -A clippy::let_and_return \
+    -A clippy::manual_assert \
+    -A clippy::manual_let_else \
+    -A clippy::map_unwrap_or \
+    -A clippy::match_same_arms \
+    -A clippy::match_wildcard_for_single_variants \
+    -A mismatched_lifetime_syntaxes \
+    -A clippy::missing_const_for_fn \
+    -A clippy::missing_errors_doc \
+    -A clippy::missing_panics_doc \
+    -A clippy::must_use_candidate \
+    -A clippy::needless_pass_by_value \
+    -A clippy::needless_raw_string_hashes \
+    -A clippy::option_if_let_else \
+    -A clippy::or_fun_call \
+    -A clippy::redundant_closure_for_method_calls \
+    -A clippy::redundant_clone \
+    -A clippy::result_unit_err \
+    -A clippy::similar_names \
+    -A clippy::single_match \
+    -A clippy::struct_excessive_bools \
+    -A clippy::struct_field_names \
+    -A clippy::suboptimal_flops \
+    -A clippy::too_long_first_doc_paragraph \
+    -A clippy::too_many_lines \
+    -A clippy::trivially_copy_pass_by_ref \
+    -A clippy::uninlined_format_args \
+    -A clippy::unnecessary_cast \
+    -A clippy::unnecessary_semicolon \
+    -A clippy::unnecessary_wraps \
+    -A clippy::unnested_or_patterns \
+    -A clippy::unreadable_literal \
+    -A clippy::unused_async \
+    -A clippy::use_self \
+    -A clippy::used_underscore_binding \
+    -A clippy::useless_let_if_seq \
+    -A clippy::wildcard_imports
+```
 
 ## Updates
 This document should be updated as patterns evolve. Major changes require team consensus.

@@ -337,7 +337,7 @@ impl ZkVerifierContract {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::Unauthorized)
     }
 
     #[must_use]

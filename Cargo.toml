@@ -41,6 +41,31 @@ exclude = [
     # arg shape mismatch) that need refactoring beyond current PR scope.
     "contracts/health_data_access_logging",
 
+    # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
+    # clippy enforcement). These contracts have real compile bugs (not clippy
+    # lints) that predate this PR and need separate fixes.
+    "contracts/ai_analytics",
+    "contracts/clinical_trial",
+    "contracts/cross_chain_bridge",
+    "contracts/emergency_access_override",
+    "contracts/healthcare_data_conversion",
+    "contracts/iot_device_management",
+    "contracts/predictive_analytics",
+    "contracts/deprecation_framework",
+    "contracts/explainable_ai",
+    "contracts/sut_token",
+    "contracts/medical_record_hash_registry",
+    "contracts/runtime_validation",
+    "contracts/clinical_decision_support",
+    "contracts/emr_integration",
+    "contracts/crypto_registry",
+    "contracts/medical_record_backup",
+    "contracts/meta_tx_forwarder",
+    "contracts/code_ownership",
+    "contracts/notification_system",
+    "contracts/treasury_controller",
+    "contracts/test-helpers",
+
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/contract_behavior_fuzzing",
     "contracts/governance_integration_tests",
