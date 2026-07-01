@@ -1080,3 +1080,232 @@ If you have questions about postmortems or how to conduct one:
 **Last Updated**: 2025-03-17  
 **Next Review**: 2025-06-17 (quarterly)  
 **Questions/Feedback**: Platform Team Slack (#incidents)
+
+---
+
+## Blockchain-Specific Postmortem Guidance
+
+The sections below extend the general postmortem process for incidents that are unique to on-chain systems running on Stellar/Soroban. Traditional web-service postmortems assume mutable state and rollback capability; blockchain incidents require different investigation and remediation techniques.
+
+---
+
+### Stuck Transaction Postmortem Template
+
+**When to use**: A transaction was submitted but not included in a ledger, or is pending indefinitely, causing user-visible failures or state inconsistencies.
+
+#### Investigation Checklist
+
+- [ ] Record the full transaction hash and the envelope XDR
+- [ ] Query Stellar Horizon: `GET /transactions/<hash>` — note `result_code` and `fee_charged`
+- [ ] Check ledger sequence numbers: was the sequence number consumed even if the tx failed?
+- [ ] Identify whether the issue was: insufficient fee, sequence conflict, operation error, or network congestion
+- [ ] Determine if downstream contracts or off-chain systems assumed the tx succeeded
+
+#### Postmortem Sections (add to standard template)
+
+```markdown
+## Stuck Transaction Analysis
+
+**Transaction Hash**: `<hash>`
+**Submitted At (UTC)**: YYYY-MM-DDTHH:MM:SSZ
+**Ledger Sequence Expected**: <seq>
+**Actual Result Code**: `tx_fee_bump_inner_failed` / `op_bad_auth` / etc.
+
+### State at Time of Stuck Transaction
+- On-chain contract state: [describe]
+- Off-chain indexer/cache state: [describe]
+- Divergence detected: [yes/no — how detected]
+
+### Why the Transaction Got Stuck
+- Fee too low vs. base fee surge: [yes/no]
+- Sequence number conflict (concurrent submissions): [yes/no]
+- Operation-level error (auth, logic): [yes/no]
+- Network timeout / ledger close delay: [yes/no]
+
+### Recovery Actions Taken
+1. [e.g., Resubmitted with fee bump]
+2. [e.g., Manually reconciled indexer state]
+3. [e.g., Issued compensating transaction]
+
+### State Reconciliation
+- Was on-chain state consistent after recovery? [yes/no]
+- Were off-chain consumers resynchronized? [yes/no]
+- Any permanent data loss or double-spend risk? [describe]
+```
+
+#### Prevention Action Items
+
+| Action | Owner | Priority |
+|--------|-------|----------|
+| Implement fee-bump retry in submission layer | Engineering | High |
+| Add idempotency keys to all contract invocations | Engineering | High |
+| Monitor ledger base fee surge in alerting | DevOps | Medium |
+| Add integration test for sequence-number conflict recovery | QA | Medium |
+
+---
+
+### Failed Contract Upgrade Postmortem Template
+
+**When to use**: A `contract.upload_wasm` or `contract.update` operation failed mid-upgrade, leaving the contract in a potentially inconsistent or inaccessible state.
+
+#### Investigation Checklist
+
+- [ ] Record the WASM hash of the attempted new version and the last known-good version
+- [ ] Check if `set_contract_data` for the upgrade was committed before the failure
+- [ ] Verify the `upgrade_manager` contract state — is the pending upgrade flag still set?
+- [ ] Check if the timelock execution completed or was only partially applied
+- [ ] Confirm which ledger the partial upgrade (if any) was applied
+
+#### Postmortem Sections (add to standard template)
+
+```markdown
+## Failed Contract Upgrade Analysis
+
+**Attempted New WASM Hash**: `<hash>`
+**Previous WASM Hash (fallback)**: `<hash>`
+**Upgrade Initiated At (UTC)**: YYYY-MM-DDTHH:MM:SSZ
+**Failure Detected At (UTC)**: YYYY-MM-DDTHH:MM:SSZ
+
+### Upgrade State at Failure
+- Was the new WASM uploaded to the network? [yes/no]
+- Was `contract.update()` called? [yes/no]
+- Did the timelock execution complete? [yes/no]
+- Is the contract currently callable? [yes/no — result of smoke test]
+
+### Failure Mode
+- [ ] WASM upload rejected (size/validation error)
+- [ ] `contract.update()` auth failure (admin key mismatch)
+- [ ] Timelock not yet elapsed (premature execution attempt)
+- [ ] New contract logic panicked on first invocation post-upgrade
+- [ ] Storage schema mismatch (migration not applied)
+
+### Rollback / Recovery Actions
+1. [e.g., Re-invoked upgrade with correct WASM hash]
+2. [e.g., Ran storage migration script]
+3. [e.g., Cleared pending upgrade flag in upgrade_manager]
+
+### Validation After Recovery
+- Smoke test result (core functions callable): [pass/fail]
+- Off-chain indexer re-indexed from affected ledger: [yes/no]
+- Governance proposal marked resolved: [yes/no]
+```
+
+#### Prevention Action Items
+
+| Action | Owner | Priority |
+|--------|-------|----------|
+| Add pre-upgrade smoke test in upgrade_manager | Engineering | Critical |
+| Require WASM hash verification before timelock execution | Engineering | High |
+| Document rollback playbook in `EMERGENCY_PLAYBOOKS.md` | Docs | High |
+| Add canary invocation after every upgrade in CI | DevOps | Medium |
+
+---
+
+### Data Access Breach Postmortem Template
+
+**When to use**: Unauthorized access to patient medical records occurred — either on-chain (invalid consent bypassed) or off-chain (indexer/API exposed data without proper auth).
+
+#### Investigation Checklist
+
+- [ ] Pull on-chain audit contract logs for the affected patient address and time window
+- [ ] Compare access events against active consent records in `patient_consent_management`
+- [ ] Identify all provider addresses that read records during the breach window
+- [ ] Check off-chain API access logs for the same window
+- [ ] Determine if the breach was on-chain (RBAC/consent bypass) or off-chain (API misconfiguration)
+- [ ] Assess PHI scope: record types exposed, number of patients affected
+- [ ] Evaluate HIPAA breach notification obligations (>500 records → HHS notification required)
+
+#### Postmortem Sections (add to standard template)
+
+```markdown
+## Data Access Breach Analysis
+
+**Breach Window Start (UTC)**: YYYY-MM-DDTHH:MM:SSZ
+**Breach Window End (UTC)**: YYYY-MM-DDTHH:MM:SSZ
+**Patients Affected**: <count>
+**Record Types Exposed**: [e.g., diagnosis, prescriptions, lab results]
+**Unauthorized Accessors**: [provider addresses or API consumers]
+
+### Access Vector
+- [ ] On-chain: RBAC role granted incorrectly
+- [ ] On-chain: Consent check bypassed by contract logic bug
+- [ ] Off-chain: API returned records without verifying on-chain consent
+- [ ] Off-chain: Indexer misconfiguration exposed records
+- [ ] Off-chain: Compromised admin credentials
+
+### Evidence
+- Audit contract query: `[link or excerpt]`
+- Consent contract state at breach time: `[link or excerpt]`
+- API access log excerpt: `[link or excerpt]`
+
+### Immediate Containment Actions
+1. [e.g., Revoked all access grants for affected patient addresses]
+2. [e.g., Rotated API credentials / invalidated session tokens]
+3. [e.g., Paused the affected contract function]
+
+### Regulatory Assessment
+- HIPAA breach notification required (>500 records or PHI): [yes/no/TBD]
+- HHS notification deadline: [date — 60 days from discovery]
+- Individual patient notification: [yes/no — required if PHI exposed]
+- Notification drafted: [yes/no]
+
+### Remediation
+- Root cause fixed: [describe fix]
+- Audit of all similar access patterns: [complete/pending]
+- Additional monitoring added: [describe]
+```
+
+#### Prevention Action Items
+
+| Action | Owner | Priority |
+|--------|-------|----------|
+| Add integration test: verify consent gate blocks unconsented reads | QA | Critical |
+| Enable real-time alerting on audit contract events for off-hours reads | DevOps | Critical |
+| Periodic automated reconciliation: API access vs. on-chain consent | Engineering | High |
+| Add HIPAA breach notification SOP to `EMERGENCY_PLAYBOOKS.md` | Compliance | High |
+
+---
+
+### Example Blockchain Postmortem: Stuck Transaction During Patient Consent Revocation
+
+**Incident ID**: PM-2025-06-01-001  
+**Severity**: High  
+**Status**: Resolved
+
+#### Summary
+
+On 2025-06-01, a patient's consent revocation transaction for a specialist provider was submitted but not included in any ledger for 47 minutes due to a fee surge on the Stellar testnet. During this window, the provider's off-chain portal continued to show the patient as consented, and 2 read operations were performed against the stale cache.
+
+#### Timeline
+
+| Time (UTC) | Event |
+|------------|-------|
+| 14:03 | Patient P-1042 initiates consent revocation via patient portal |
+| 14:03 | Transaction submitted to Horizon with base fee (100 stroops) |
+| 14:05 | Stellar testnet fee surge begins; base fee jumps to 1000 stroops |
+| 14:05 | Transaction enters fee queue, not picked up by network |
+| 14:08 | Provider portal cache still shows consent active; Dr. A reads record |
+| 14:31 | Dr. A reads record again (second unauthorized read) |
+| 14:50 | On-call engineer notices delayed revocation in monitoring dashboard |
+| 14:51 | Fee-bump transaction submitted with 2000 stroops fee |
+| 14:52 | Revocation confirmed on ledger #5312088 |
+| 14:53 | Off-chain indexer receives event; portal cache invalidated |
+| 14:55 | Incident declared resolved; postmortem scheduled |
+
+#### Root Cause
+
+The transaction submission layer used a static fee (100 stroops) with no retry or fee-bump logic. When the network fee floor rose above the submitted fee, the transaction sat in the queue indefinitely. The off-chain portal had no mechanism to detect delayed on-chain confirmation and treated submitted-but-unconfirmed transactions as complete.
+
+#### Impact
+
+- 1 patient affected
+- 2 unauthorized record reads by a provider the patient intended to remove
+- 47-minute window of stale consent state
+- No PHI transmitted off-chain; HIPAA notification not required (breach contained on-chain)
+
+#### Prevention
+
+1. **Fee-bump retry**: Implemented automatic fee escalation after 30-second submission timeout
+2. **Pending state indicator**: Portal now shows "revocation pending" until ledger confirmation received
+3. **Consent freshness check**: Off-chain read operations now verify consent against on-chain state if cache entry is >60 seconds old
+4. **Alert added**: PagerDuty alert fires if any submitted transaction is unconfirmed after 2 minutes

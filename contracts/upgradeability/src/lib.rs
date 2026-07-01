@@ -101,7 +101,7 @@ pub mod storage {
             .storage()
             .persistent()
             .get(&HISTORY)
-            .unwrap_or(Vec::new(env));
+            .unwrap_or_else(|| Vec::new(env));
         list.push_back(history);
         env.storage().persistent().set(&HISTORY, &list);
     }
@@ -110,7 +110,7 @@ pub mod storage {
         env.storage()
             .persistent()
             .get(&HISTORY)
-            .unwrap_or(Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env))
     }
 
     pub fn set_deprecated_functions(env: &Env, deprecations: &Vec<DeprecatedFunction>) {
@@ -123,11 +123,10 @@ pub mod storage {
         env.storage()
             .instance()
             .get(&DEPRECATED_FUNCTIONS)
-            .unwrap_or(Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env))
     }
 }
 
-#[must_use]
 pub fn authorize_upgrade(env: &Env) -> Result<Address, UpgradeError> {
     if storage::is_frozen(env) {
         return Err(UpgradeError::ContractPaused);
@@ -217,7 +216,6 @@ pub fn validate_upgrade<T: migration::Migratable>(
     Ok(validation)
 }
 
-#[must_use]
 pub fn rollback(env: &Env) -> Result<(), UpgradeError> {
     authorize_upgrade(env)?;
 
@@ -279,7 +277,6 @@ pub fn get_deprecated_function(env: &Env, function: Symbol) -> Option<Deprecated
     None
 }
 
-#[must_use]
 pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), UpgradeError> {
     let deprecation = get_deprecated_function(env, function.clone())
         .ok_or(UpgradeError::DeprecatedFunctionNotTracked)?;

@@ -41,8 +41,10 @@ mod errors;
 mod events;
 mod storage;
 mod types;
+pub mod fhir;
 
 pub use errors::Error;
+pub use fhir::to_fhir_json;
 
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
@@ -108,6 +110,17 @@ pub struct PatientConsentManagement;
 
 #[contractimpl]
 impl PatientConsentManagement {
+    /// Initialize the contract with an admin address.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- initialize \
+    ///   --admin <ADMIN_ADDRESS>
+    /// ```
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         if env.storage().instance().has(&DataKey::Initialized) {
@@ -120,6 +133,18 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    /// Grant consent to a provider.  Revocable by the patient at any time.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- grant_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn grant_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
@@ -147,6 +172,19 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    /// Grant consent with an expiration timestamp (0 = no expiry).
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- grant_consent_with_expiry \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS> \
+    ///   --expires_at <UNIX_TIMESTAMP>
+    /// ```
     pub fn grant_consent_with_expiry(
         env: Env,
         patient: Address,
@@ -233,6 +271,18 @@ impl PatientConsentManagement {
         Ok(granted)
     }
 
+    /// Revoke a previously granted consent.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- revoke_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
@@ -279,6 +329,18 @@ impl PatientConsentManagement {
         record.active && !Self::is_consent_expired(env, record)
     }
 
+    /// Check whether an active consent exists between patient and provider.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- check_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn check_consent(env: Env, patient: Address, provider: Address) -> Result<bool, Error> {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
@@ -444,6 +506,15 @@ impl PatientConsentManagement {
 
     /// On-chain health check endpoint.
     /// Returns true if the contract is initialized and operational.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- health_check
+    /// ```
     pub fn health_check(env: Env) -> bool {
         env.storage().instance().has(&DataKey::Initialized)
     }
@@ -519,6 +590,32 @@ impl PatientConsentManagement {
             return Ok(false);
         }
         Ok(record.jurisdictions_allowed.contains(&jurisdiction))
+    /// Returns the FHIR R4 Consent resource JSON for a consent record.
+    ///
+    /// Maps the internal `ConsentRecord` to a valid FHIR R4 `Consent`
+    /// resource (https://hl7.org/fhir/R4/consent.html).
+    ///
+    /// # Arguments
+    /// * `patient` - The patient who granted the consent.
+    /// * `provider` - The provider the consent was granted to.
+    ///
+    /// # Returns
+    /// A FHIR R4 JSON `String` if the consent exists, `None` otherwise.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- get_consent_fhir \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
+    pub fn get_consent_fhir(env: Env, patient: Address, provider: Address) -> Option<String> {
+        let key = DataKey::ProviderIndex(patient, provider);
+        let record: ConsentRecord = env.storage().persistent().get(&key)?;
+        Some(fhir::to_fhir_json(&env, &record))
     }
 }
 

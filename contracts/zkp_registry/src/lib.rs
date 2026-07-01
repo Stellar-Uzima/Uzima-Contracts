@@ -1584,9 +1584,6 @@ impl ZKPRegistry {
         Ok(verification_cost <= MAX_VERIFICATION_GAS)
     }
 
-        Ok(true)
-    }
-
     /// Validate the byte-level proof format for the declared `ZKPType`.
     /// Returns `MalformedProof` for empty/short data, `InvalidProofFormat` for
     /// a wrong version byte or unsupported ZKPType.
