@@ -101,3 +101,9 @@ deployments/*.tmp
 
 CLAUDE.md
 plan.md
+
+# WASM size monitor runtime output (Issue #846) — baseline JSON is committed,
+# generated report and local trend/tips files are not.
+wasm_size_report.md
+.wasm_size_trends.json
+.wasm_optimization_tips.json
