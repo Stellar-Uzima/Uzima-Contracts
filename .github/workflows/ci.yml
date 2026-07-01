@@ -370,6 +370,55 @@ jobs:
             });
 
   # ============================================================================
+  # Contract Complexity Scoring (issue #852)
+  # Runs complexity scoring on all contracts, checks against warn/fail
+  # thresholds defined in docs/CONTRACT_COMPLEXITY_SCORING.md, uploads the
+  # report, and posts a PR comment with any threshold breaches.
+  #
+  # Enforcement strategy:
+  #   Warn threshold exceeded -> PR comment warning (non-blocking).
+  #   Fail threshold crossed   -> pipeline fails.
+  # ============================================================================
+  complexity-scoring:
+    name: Contract Complexity
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check contract complexity thresholds
+        run: bash ./scripts/check_complexity.sh
+      - name: Upload complexity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: |
+            dashboard/data/complexity_report.json
+            reports/complexity_pr_comment.txt
+      - name: Comment PR with complexity summary
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/complexity_pr_comment.txt';
+            if (!fs.existsSync(path)) {
+              core.warning('Complexity PR comment not found at ' + path);
+              return;
+            }
+            const comment = fs.readFileSync(path, 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ============================================================================
   # Event Emission Audit (SECURITY_CHECKLIST §5)
   # Enforces that every state-changing pub fn in contracts/*/src/lib.rs emits
   # an event via env.events().publish(...).  Legacy functions that predate
