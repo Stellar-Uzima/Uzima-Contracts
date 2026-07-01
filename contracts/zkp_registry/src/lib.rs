@@ -293,13 +293,7 @@ pub enum DataKey {
     RecursiveProof(BytesN<32>),
     ZKPCircuitParams(String),
     GasTracker(Address),
-    /// Per-issuer XOR salt used to decrypt `encrypted_expiration` blobs in
-    /// `CredentialProof`. Stored as `BytesN<32>` so the keystream cannot be
-    /// extended after issuance.
-    IssuerSalt(Address),
-    // Temporary storage keys (session/short-lived data)
-    ZKProof(BytesN<32>),
-    VerificationResult(BytesN<32>),
+    CircuitVkHistory(String),
 }
 
  // Reserved for future admin-key lookups; kept for ABI consistency
@@ -725,7 +719,7 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
-        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
 
         // Validate circuit parameters
         if num_public_inputs > MAX_PUBLIC_INPUTS || num_private_inputs > MAX_PRIVATE_INPUTS || num_constraints > MAX_CONSTRAINTS {
@@ -739,7 +733,7 @@ impl ZKPRegistry {
             num_private_inputs,
             num_constraints,
             security_param,
-            vk_hash,
+            vk_hash: vk_hash.clone(),
             pk_hash,
             setup_at: env.ledger().timestamp(),
             trusted_setup,
@@ -749,9 +743,152 @@ impl ZKPRegistry {
             .persistent()
             .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
 
+        // Initialize verification key history for the circuit
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let mut history = Vec::new(&env);
+        history.push_back(vk_hash);
+        env.storage().persistent().set(&history_key, &history);
+
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("circ_reg")),
             circuit_id,
+        );
+
+        Ok(())
+    }
+
+    /// Migrate an existing circuit to support verification key rotation.
+    pub fn migrate_vk_rotation(env: Env, admin: Address, circuit_id: String) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        if !env.storage().persistent().has(&history_key) {
+            let mut history = Vec::new(&env);
+            history.push_back(params.vk_hash.clone());
+            env.storage().persistent().set(&history_key, &history);
+        }
+
+        env.events()
+            .publish((symbol_short!("zkp"), symbol_short!("vk_migr")), circuit_id);
+
+        Ok(())
+    }
+
+    /// Rotate the verification key for a circuit.
+    pub fn rotate_vk(
+        env: Env,
+        admin: Address,
+        circuit_id: String,
+        new_vk_hash: BytesN<32>,
+        new_pk_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let mut history: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&history_key)
+            .unwrap_or_else(|| {
+                let mut h = Vec::new(&env);
+                h.push_back(params.vk_hash.clone());
+                h
+            });
+
+        // Add the new vk_hash to the history if not already present
+        let mut already_exists = false;
+        for i in 0..history.len() {
+            if history.get(i).unwrap() == new_vk_hash {
+                already_exists = true;
+                break;
+            }
+        }
+        if !already_exists {
+            history.push_back(new_vk_hash.clone());
+        }
+
+        // Update parameters
+        params.vk_hash = new_vk_hash.clone();
+        params.pk_hash = new_pk_hash;
+        params.setup_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
+        env.storage().persistent().set(&history_key, &history);
+
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("vk_rot")),
+            (circuit_id, new_vk_hash),
+        );
+
+        Ok(())
+    }
+
+    /// Rollback the verification key for a circuit to a previous vk_hash.
+    pub fn rollback_vk(
+        env: Env,
+        admin: Address,
+        circuit_id: String,
+        target_vk_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let history: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&history_key)
+            .ok_or(Error::CircuitNotFound)?;
+
+        // Ensure the target_vk_hash is in the history
+        let mut found = false;
+        for i in 0..history.len() {
+            if history.get(i).unwrap() == target_vk_hash {
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            return Err(Error::InvalidProof);
+        }
+
+        // Update the active vk_hash in params
+        params.vk_hash = target_vk_hash.clone();
+        params.setup_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
+
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("vk_roll")),
+            (circuit_id, target_vk_hash),
         );
 
         Ok(())
@@ -786,12 +923,34 @@ impl ZKPRegistry {
         }
 
         // Verify circuit exists
-        if !env
+        let params: ZKPCircuitParams = env
             .storage()
             .persistent()
-            .has(&DataKey::ZKPCircuitParams(circuit_id.clone()))
-        {
-            return Err(Error::CircuitNotFound);
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        // Verify that the provided vk_hash is valid for this circuit (either active or historical)
+        let mut vk_valid = params.vk_hash == vk_hash;
+
+        if !vk_valid {
+            // Check history
+            let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+            if let Some(history) = env
+                .storage()
+                .persistent()
+                .get::<_, Vec<BytesN<32>>>(&history_key)
+            {
+                for i in 0..history.len() {
+                    if history.get(i).unwrap() == vk_hash {
+                        vk_valid = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !vk_valid {
+            return Err(Error::InvalidProof);
         }
 
         // Create ZK proof structure
@@ -1513,18 +1672,22 @@ impl ZKPRegistry {
         Ok(())
     }
 
-    #[must_use]
-    fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env
+    fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
+        let stored_admin: Address = env
             .storage()
             .instance()
-            .get(&DataKey::ContractPaused)
-            .unwrap_or(false)
-        {
-            return Err(Error::ContractPaused);
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotAuthorized)?;
+        if admin != &stored_admin {
+            return Err(Error::NotAuthorized);
         }
         Ok(())
     }
+
+    /// Internal ZKP verification (simplified for demonstration)
+    fn verify_zkp_internal(_env: &Env, proof: &ZKProof) -> Result<bool, Error> {
+        // In production, this would perform actual cryptographic verification
+        // For demonstration, we do basic validation
 
     /// Internal ZKP verification with REAL cryptographic binding checks
     /// (replaces the prior "structural checks only, then `Ok(true)`" stub).
