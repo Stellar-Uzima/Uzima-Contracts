@@ -78,6 +78,8 @@ mod test_permissions;
 mod errors;
 mod events;
 mod validation;
+mod storage;
+mod types;
 
 pub use errors::Error;
 
@@ -934,7 +936,50 @@ pub struct StructuredLog {
     pub message: String,
 }
 
-// ==================== Contract ====================
+// ==================== HIPAA Data Categories (Issue #997) ====================
+
+/// HIPAA data categories for field-level access control.
+/// Implements the "minimum necessary" standard: a caller requesting only
+/// Diagnosis data must not receive Billing or Insurance fields.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum DataCategory {
+    /// Patient identification: patient_id, doctor_id
+    Identification = 0,
+    /// Clinical diagnosis information
+    Diagnosis = 1,
+    /// Treatment plan and prescriptions
+    Treatment = 2,
+    /// Billing codes, payment information
+    Billing = 3,
+    /// Insurance provider and policy details
+    Insurance = 4,
+    /// Personal demographics (DID, tags, custom fields)
+    Demographics = 5,
+    /// Administrative metadata (timestamp, category, confidentiality)
+    Administration = 6,
+}
+
+/// A filtered view of a MedicalRecord, respecting HIPAA minimum-necessary access.
+/// Fields set to None have been masked because the caller's requested
+/// DataCategory set did not authorize access to those fields.
+#[derive(Clone)]
+#[contracttype]
+pub struct FilteredRecord {
+    pub record_id: u64,
+    pub patient_id: Option<Address>,
+    pub doctor_id: Option<Address>,
+    pub timestamp: Option<u64>,
+    pub diagnosis: Option<String>,
+    pub treatment: Option<String>,
+    pub is_confidential: Option<bool>,
+    pub tags: Option<Vec<String>>,
+    pub category: Option<String>,
+    pub treatment_type: Option<String>,
+    pub data_ref: Option<String>,
+    pub doctor_did: Option<String>,
+}
 
 #[contract]
 pub struct MedicalRecordsContract;
@@ -2334,6 +2379,103 @@ impl MedicalRecordsContract {
         env.storage()
             .persistent()
             .get(&DataKey::PatientRecord(patient, index))
+    }
+
+    // ─── HIPAA Minimum-Necessary Access (Issue #997) ─────────────────────────
+
+    /// Retrieve a medical record with field-level access masks enforcing
+    /// the HIPAA "minimum necessary" standard.
+    ///
+    /// Only the fields belonging to the requested `DataCategory` set are
+    /// returned; all other fields are set to `None`. This ensures that a
+    /// doctor requesting only Diagnosis data cannot retrieve Billing or
+    /// Insurance fields.
+    ///
+    /// # Category → Field Mapping
+    /// | Category         | Fields visible                             |
+    /// |------------------|--------------------------------------------|
+    /// | Identification   | patient_id, doctor_id                     |
+    /// | Diagnosis        | diagnosis                                  |
+    /// | Treatment        | treatment, treatment_type                  |
+    /// | Billing          | data_ref (billing reference)               |
+    /// | Insurance        | data_ref (insurance reference)             |
+    /// | Demographics     | tags, doctor_did                          |
+    /// | Administration   | timestamp, is_confidential, category       |
+    pub fn get_record_filtered(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        requested_categories: Vec<DataCategory>,
+    ) -> Result<FilteredRecord, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(record) => record,
+                None => {
+                    return Err(Error::RecordNotFound);
+                },
+            };
+
+        if !Self::can_view_record(&env, &caller, &record, record_id) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Build the filtered record based on requested categories
+        let mut filtered = FilteredRecord {
+            record_id,
+            patient_id: None,
+            doctor_id: None,
+            timestamp: None,
+            diagnosis: None,
+            treatment: None,
+            is_confidential: None,
+            tags: None,
+            category: None,
+            treatment_type: None,
+            data_ref: None,
+            doctor_did: None,
+        };
+
+        for cat in requested_categories.iter() {
+            match cat {
+                DataCategory::Identification => {
+                    filtered.patient_id = Some(record.patient_id.clone());
+                    filtered.doctor_id = Some(record.doctor_id.clone());
+                }
+                DataCategory::Diagnosis => {
+                    filtered.diagnosis = Some(record.diagnosis.clone());
+                }
+                DataCategory::Treatment => {
+                    filtered.treatment = Some(record.treatment.clone());
+                    filtered.treatment_type = Some(record.treatment_type.clone());
+                }
+                DataCategory::Billing | DataCategory::Insurance => {
+                    filtered.data_ref = Some(record.data_ref.clone());
+                }
+                DataCategory::Demographics => {
+                    filtered.tags = Some(record.tags.clone());
+                    filtered.doctor_did = record.doctor_did.clone();
+                }
+                DataCategory::Administration => {
+                    filtered.timestamp = Some(record.timestamp);
+                    filtered.is_confidential = Some(record.is_confidential);
+                    filtered.category = Some(record.category.clone());
+                }
+            }
+        }
+
+        Self::log_info(
+            &env,
+            "get_record_filtered",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Filtered record accessed per HIPAA minimum-necessary standard",
+        );
+
+        Ok(filtered)
     }
 
     /// List medical records using cursor-based pagination.

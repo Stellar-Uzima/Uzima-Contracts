@@ -1,0 +1,124 @@
+version: "3.9"
+
+services:
+  # ── Stellar / Soroban Local Network ──────────────────────────────────────
+  stellar-node:
+    image: stellar/quickstart:testing
+    container_name: uzima-stellar-node
+    ports:
+      - "8000:8000"
+    environment:
+      - NETWORK=local
+      - ENABLE_SOROBAN_RPC=true
+      - ENABLE_LOGS=true
+      - STELLAR_NETWORK_PASSPHRASE=Standalone Network ; February 2017
+    volumes:
+      - stellar-data:/opt/stellar
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - uzima-net
+
+  # ── Contract Builder ─────────────────────────────────────────────────────
+  contracts-builder:
+    build:
+      context: .
+      dockerfile: dockerfile
+      target: development
+    container_name: uzima-contracts-builder
+    depends_on:
+      stellar-node:
+        condition: service_healthy
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    command: >
+      bash -c "
+        echo '=== Configuring Soroban Network ===' &&
+        soroban config network add local
+          --rpc-url http://stellar-node:8000/soroban/rpc
+          --network-passphrase 'Standalone Network ; February 2017' || true &&
+        echo '=== Generating Test Identities ===' &&
+        soroban config identity generate dev-admin 2>/dev/null || true &&
+        soroban config identity generate dev-doctor 2>/dev/null || true &&
+        soroban config identity generate dev-patient 2>/dev/null || true &&
+        echo '=== Building Contracts ===' &&
+        cargo build --release --target wasm32-unknown-unknown &&
+        echo '=== Copying WASM Artifacts ===' &&
+        mkdir -p dist/ &&
+        find target/wasm32-unknown-unknown/release -name '*.wasm' -exec cp {} dist/ \; &&
+        echo '=== Build Complete ==='
+      "
+    environment:
+      RUST_BACKTRACE: "1"
+      CARGO_TERM_COLOR: "always"
+    networks:
+      - uzima-net
+
+  # ── Contract Deployer & Seeder ───────────────────────────────────────────
+  quickstart:
+    build:
+      context: .
+      dockerfile: dockerfile
+      target: development
+    container_name: uzima-quickstart
+    depends_on:
+      contracts-builder:
+        condition: service_completed_successfully
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    command: >
+      bash -c "
+        echo '=== Running Quickstart ===' &&
+        sleep 3 &&
+        soroban config network add local
+          --rpc-url http://stellar-node:8000/soroban/rpc
+          --network-passphrase 'Standalone Network ; February 2017' 2>/dev/null || true &&
+        soroban config identity generate dev-admin 2>/dev/null || true &&
+        soroban config identity generate dev-doctor 2>/dev/null || true &&
+        soroban config identity generate dev-patient 2>/dev/null || true &&
+        export SOROBAN_RPC_URL=http://stellar-node:8000/soroban/rpc &&
+        chmod +x scripts/quickstart_dev.sh &&
+        bash scripts/quickstart_dev.sh --skip-build || echo 'Quickstart completed with warnings'
+      "
+    environment:
+      RUST_BACKTRACE: "1"
+    networks:
+      - uzima-net
+
+  # ── Optional: Health Monitor ─────────────────────────────────────────────
+  health-monitor:
+    image: curlimages/curl:latest
+    container_name: uzima-health-monitor
+    depends_on:
+      - stellar-node
+    command: >
+      sh -c "
+        while true; do
+          curl -s http://stellar-node:8000/ > /dev/null && echo 'Stellar node: UP' || echo 'Stellar node: DOWN';
+          sleep 30;
+        done
+      "
+    networks:
+      - uzima-net
+    profiles:
+      - monitoring
+
+volumes:
+  stellar-data:
+  cargo-cache:
+  target-cache:
+
+networks:
+  uzima-net:
+    driver: bridge
