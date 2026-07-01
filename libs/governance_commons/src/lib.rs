@@ -51,6 +51,5 @@ pub mod types;
 
 pub use errors::*;
 pub use init_guard::*;
-pub use macros::*;
 pub use multi_sig::*;
 pub use types::*;
