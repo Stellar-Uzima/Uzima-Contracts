@@ -89,6 +89,21 @@ jobs:
             echo "FAILED: $FAILED contract(s) missing #![no_std]"
             exit 1
           fi
+      - name: Measure storage budget
+        run: |
+          bash ./scripts/measure_storage.sh
+      - name: Upload storage measurement report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-measurement-report
+          path: |
+            reports/storage_measurement_report.txt
+            reports/storage_pareto_top10.txt
+            reports/storage_pr_comment.txt
+            reports/storage_summary.json
+      - name: Comment PR with storage measurement
+        if: github.event_name == 'pull_request' && always()
       - name: WASM size regression gate (Issue #846)
         # Compares each built contract against scripts/wasm_size_baselines.json
         # and fails the build on a >10% regression or a contract newly crossing
@@ -109,6 +124,12 @@ jobs:
         with:
           script: |
             const fs = require('fs');
+            const path = 'reports/storage_pr_comment.txt';
+            if (!fs.existsSync(path)) {
+              core.warning('Storage PR comment not found at ' + path);
+              return;
+            }
+            const comment = fs.readFileSync(path, 'utf8');
             const path = 'wasm_size_report.md';
             if (!fs.existsSync(path)) {
               core.warning('WASM size report not found; an earlier step likely failed.');
@@ -119,6 +140,7 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
+              body: comment
               body
             });
 
