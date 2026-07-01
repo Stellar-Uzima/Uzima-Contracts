@@ -1,6 +1,10 @@
 #![no_std]
 //! audit_forensics - Healthcare smart contract on Stellar blockchain.
 
+mod errors;
+mod events;
+mod types;
+
 #[cfg(test)]
 mod test;
 

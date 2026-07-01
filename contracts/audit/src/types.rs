@@ -64,6 +64,11 @@ pub enum AuditType {
 
 /// Comprehensive audit log entry satisfying HIPAA/GDPR requirements.
 /// Matches the schema specified in issue #399.
+///
+/// # Tamper-Evidence (Issue #999)
+/// Each entry includes the hash of the previous entry (`prev_hash`),
+/// forming a cryptographically verifiable hash chain. Use `verify_chain`
+/// to validate the integrity of the full audit log.
 #[derive(Clone)]
 #[contracttype]
 pub struct AuditLog {
@@ -76,6 +81,9 @@ pub struct AuditLog {
     pub result: OperationResult,
     /// Flexible key-value metadata (e.g. ip_address, session_id, resource_type).
     pub metadata: Map<String, String>,
+    /// Hash of the previous AuditLog entry, forming a tamper-evident chain.
+    /// The first entry (id=1) has a zeroed prev_hash.
+    pub prev_hash: BytesN<32>,
 }
 
 // ─── Legacy AuditRecord (kept for reference) ─────────────────────────────────
