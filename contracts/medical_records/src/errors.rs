@@ -5,14 +5,11 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    // --- Common Errors (0–99) ---
-    Unauthorized = CommonError::Unauthorized as u32,
-    InvalidInput = CommonError::InvalidInput as u32,
-    NotInitialized = CommonError::NotInitialized as u32,
-    ContractPaused = CommonError::ContractPaused as u32,
-    DeadlineExceeded = CommonError::DeadlineExceeded as u32,
-    RateLimitExceeded = CommonError::RateLimitExceeded as u32,
-    InsufficientFunds = CommonError::InsufficientFunds as u32,
+    // --- Access Control & Authorization (100–199) ---
+    Unauthorized = 100,
+    NotAICoordinator = 150,
+    EmergencyAccessExpired = 160,
+    RecordRetentionExpired = 170,
 
     // --- Access Control & Authorization (1000–1099) ---
     NotAICoordinator = 1150,
@@ -153,6 +150,7 @@ pub fn get_suggestion(error: Error) -> Symbol {
         Error::Unauthorized | Error::NotAICoordinator => symbol_short!("CHK_AUTH"),
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),
+        Error::RecordRetentionExpired => symbol_short!("ADM_OVR"),
         Error::InvalidCategory => symbol_short!("FIX_CAT"),
         Error::InvalidBatch => symbol_short!("CHK_DATA"),
         Error::NotInitialized => symbol_short!("INIT_CTR"),
