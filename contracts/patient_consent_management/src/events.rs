@@ -40,16 +40,15 @@ pub fn publish_consent_expired(env: &Env, patient: &Address, provider: &Address,
     );
 }
 
-pub fn publish_erasure_requested(env: &Env, patient: &Address) {
+/// Emitted when a patient updates the jurisdictions_allowed for a consent record.
+pub fn publish_jurisdictions_updated(
+    env: &Env,
+    patient: &Address,
+    provider: &Address,
+    timestamp: u64,
+) {
     env.events().publish(
-        (symbol_short!("ERASURE"), symbol_short!("REQUEST")),
-        patient,
-    );
-}
-
-pub fn publish_erasure_executed(env: &Env, patient: &Address) {
-    env.events().publish(
-        (symbol_short!("ERASURE"), symbol_short!("EXECUTE")),
-        patient,
+        (symbol_short!("CONSENT"), symbol_short!("JURISDICT")),
+        (patient, provider, timestamp),
     );
 }
