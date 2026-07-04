@@ -13,6 +13,12 @@ Please provide a clear and concise description of the feature or bug fix. Explai
 
 Link to any relevant issues. For example, `Closes #123`.
 
+## Architecture Decision Records
+
+- [ ] I checked `docs/adr/README.md` for relevant existing ADRs.
+- [ ] This PR does not require a new ADR.
+- [ ] This PR adds or updates an ADR because it changes a durable architecture decision.
+
 ---
 
 ## 🛡️ Security Checklist
