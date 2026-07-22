@@ -1,0 +1,245 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contract Resource Budgets",
+  "description": "Per-contract resource budgets for the Uzima contracts. Each entry defines maximum allowed values for WASM size, storage entries, and CPU instructions.",
+  "version": "1.0.0",
+  "defaults": {
+    "max_wasm_bytes": 65536,
+    "max_storage_entries": 500,
+    "max_cpu_instructions": 10000000,
+    "regression_tolerance_pct": 10
+  },
+  "contracts": {
+    "medical_records": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 500,
+      "max_cpu_instructions": 10000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Core medical records contract; most complex"
+    },
+    "contract_monitoring": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Monitoring dashboard; moderate complexity"
+    },
+    "patient_consent_management": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Consent tracking; moderate complexity"
+    },
+    "health_data_access_logging": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 400,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Access logging; high storage usage"
+    },
+    "identity_registry": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Identity management"
+    },
+    "cross_chain_bridge": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 400,
+      "max_cpu_instructions": 10000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Cross-chain bridge; high complexity"
+    },
+    "digital_twin": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Digital twin management"
+    },
+    "healthcare_compliance": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Compliance checking"
+    },
+    "medication_management": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Medication tracking"
+    },
+    "telemedicine": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Telemedicine sessions"
+    },
+    "dicomweb_services": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 400,
+      "max_cpu_instructions": 10000000,
+      "regression_tolerance_pct": 10,
+      "notes": "DICOM web services; high complexity"
+    },
+    "emr_integration": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 400,
+      "max_cpu_instructions": 10000000,
+      "regression_tolerance_pct": 10,
+      "notes": "EMR integration; high complexity"
+    },
+    "clinical_trial": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Clinical trial management"
+    },
+    "clinical_nlp": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Clinical NLP processing"
+    },
+    "clinical_decision_support": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Clinical decision support"
+    },
+    "medical_consent_nft": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Consent NFT management"
+    },
+    "medical_record_backup": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Record backup management"
+    },
+    "audit": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Audit trail management"
+    },
+    "audit_forensics": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Forensic audit analysis"
+    },
+    "aml": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Anti-money laundering"
+    },
+    "anomaly_detection": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Anomaly detection"
+    },
+    "anomaly_detector": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Anomaly detector"
+    },
+    "reputation_access_control": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Reputation-based access control"
+    },
+    "zkp_registry": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Zero-knowledge proof registry"
+    },
+    "zk_verifier": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "ZK proof verification"
+    },
+    "mpc_manager": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 8000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Multi-party computation management"
+    },
+    "crypto_registry": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Cryptographic key registry"
+    },
+    "credential_registry": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Credential registry"
+    },
+    "code_ownership": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Code ownership tracking"
+    },
+    "contract_verification": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Contract verification"
+    },
+    "contract_usage_analytics": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "Usage analytics"
+    },
+    "ai_analytics": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 200,
+      "max_cpu_instructions": 5000000,
+      "regression_tolerance_pct": 10,
+      "notes": "AI analytics"
+    },
+    "fhir_integration": {
+      "max_wasm_bytes": 65536,
+      "max_storage_entries": 300,
+      "max_cpu_instructions": 6000000,
+      "regression_tolerance_pct": 10,
+      "notes": "FHIR integration"
+    }
+  }
+}
