@@ -14,7 +14,13 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String,
+};
+
+pub mod telemetry;
+use telemetry::{
+    build_event, current_schema_version, emit_telemetry_event, EventClass, TelemetryEvent,
+    TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -189,6 +195,21 @@ impl ContractMonitoring {
         // Check alert thresholds.
         Self::check_alerts(&env, gas + gas_used);
 
+        // Emit telemetry event.
+        let caller_bytes: Bytes = caller.to_buffer().into();
+        let corr_id = telemetry::derive_correlation_id(&env, &caller_bytes);
+        let event = build_event(
+            &env,
+            "contract_monitoring",
+            "1.0.0",
+            TelemetryEventType::FunctionInvoked,
+            TelemetrySeverity::Info,
+            &function_name.to_string(),
+            &String::from_str(&env, "invoked"),
+            corr_id,
+        );
+        emit_telemetry_event(&env, &event);
+
         Ok(())
     }
 
@@ -205,6 +226,7 @@ impl ContractMonitoring {
             .instance()
             .set(&DataKey::TotalErrors, &(errors + 1));
 
+        let fn_name_for_telemetry = function_name.clone();
         let key = DataKey::FnStats(function_name);
         let mut stats: FunctionStats =
             env.storage().instance().get(&key).unwrap_or(FunctionStats {
@@ -216,9 +238,25 @@ impl ContractMonitoring {
         stats.error_count += 1;
         env.storage().instance().set(&key, &stats);
 
-        // Emit error event.
+        // Emit error event (legacy + structured telemetry).
         env.events()
             .publish((symbol_short!("MON"), symbol_short!("ERROR")), errors + 1);
+
+        let corr_id = telemetry::derive_correlation_id(
+            &env,
+            &soroban_sdk::Bytes::new(&env),
+        );
+        let event = build_event(
+            &env,
+            "contract_monitoring",
+            "1.0.0",
+            TelemetryEventType::FunctionCompleted,
+            TelemetrySeverity::Error,
+            &fn_name_for_telemetry.to_string(),
+            &String::from_str(&env, "error"),
+            corr_id,
+        );
+        emit_telemetry_event(&env, &event);
 
         Ok(())
     }
@@ -324,6 +362,33 @@ impl ContractMonitoring {
             }))
     }
 
+    /// Return a telemetry snapshot summarising event counts by class and severity.
+    ///
+    /// The snapshot uses the versioned `TelemetrySnapshot` schema so off-chain
+    /// dashboards can safely interpret it regardless of future schema changes.
+    pub fn get_telemetry_snapshot(env: Env) -> Result<TelemetrySnapshot, MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let total_calls: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalCalls)
+            .unwrap_or(0);
+        let total_errors: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalErrors)
+            .unwrap_or(0);
+        Ok(TelemetrySnapshot {
+            schema_version: current_schema_version(),
+            total_events: total_calls + total_errors,
+            operational_count: total_calls,
+            security_count: total_errors,
+            error_count: total_errors,
+            critical_count: 0, // threshold breaches tracked via events, not persisted
+            snapshot_at: env.ledger().timestamp(),
+        })
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
     #[must_use]
@@ -371,6 +436,18 @@ impl ContractMonitoring {
                 (symbol_short!("MON"), symbol_short!("ALERT")),
                 symbol_short!("ERRRATE"),
             );
+            let corr_id = telemetry::derive_correlation_id(&env, &soroban_sdk::Bytes::new(&env));
+            let event = build_event(
+                &env,
+                "contract_monitoring",
+                "1.0.0",
+                TelemetryEventType::ThresholdBreached,
+                TelemetrySeverity::Critical,
+                "check_alerts",
+                "error_rate",
+                corr_id,
+            );
+            emit_telemetry_event(&env, &event);
         }
 
         if config.max_gas_per_window > 0 && total_gas > config.max_gas_per_window {
@@ -378,6 +455,18 @@ impl ContractMonitoring {
                 (symbol_short!("MON"), symbol_short!("ALERT")),
                 symbol_short!("GAS"),
             );
+            let corr_id = telemetry::derive_correlation_id(&env, &soroban_sdk::Bytes::new(&env));
+            let event = build_event(
+                &env,
+                "contract_monitoring",
+                "1.0.0",
+                TelemetryEventType::ThresholdBreached,
+                TelemetrySeverity::Critical,
+                "check_alerts",
+                "gas",
+                corr_id,
+            );
+            emit_telemetry_event(&env, &event);
         }
     }
 }
@@ -488,6 +577,25 @@ mod test {
             client.try_initialize(&admin2, &default_config()),
             Err(Ok(MonitoringError::AlreadyInitialized))
         );
+    }
+
+    #[test]
+    fn test_telemetry_snapshot() {
+        let env = Env::default();
+        let (client, _) = setup(&env);
+        let caller = Address::generate(&env);
+
+        for _ in 0..3 {
+            client.record_call(&caller, &String::from_str(&env, "fn"), &10);
+        }
+        client.record_error(&String::from_str(&env, "fn"));
+
+        let snapshot = client.get_telemetry_snapshot();
+        assert_eq!(snapshot.schema_version, 10_000);
+        assert_eq!(snapshot.total_events, 4);
+        assert_eq!(snapshot.operational_count, 3);
+        assert_eq!(snapshot.security_count, 1);
+        assert_eq!(snapshot.error_count, 1);
     }
 }
 

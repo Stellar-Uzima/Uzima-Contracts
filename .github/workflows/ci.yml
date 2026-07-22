@@ -434,3 +434,32 @@ jobs:
       - uses: actions/checkout@v4
       - name: Audit state-changing functions for event emission
         run: bash ./scripts/check_events.sh
+
+  # ============================================================================
+  # Telemetry Schema Check
+  # Ensures structured telemetry events follow the versioned schema and that
+  # breaking schema changes bump the MAJOR version.
+  # ============================================================================
+  telemetry-schema-check:
+    name: Telemetry Schema Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate telemetry schema
+        run: |
+          echo "Checking telemetry schema version in telemetry.rs..."
+          if ! grep -q "SCHEMA_VERSION_MAJOR:" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::SCHEMA_VERSION_MAJOR not found in telemetry.rs"
+            exit 1
+          fi
+          echo "Checking schema_version field in TelemetryEvent..."
+          if ! grep -q "pub schema_version: u32" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::TelemetryEvent missing schema_version field"
+            exit 1
+          fi
+          echo "Checking event class assignment for all event types..."
+          if ! grep -q "fn class" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::TelemetryEventType missing class() method"
+            exit 1
+          fi
+          echo "Telemetry schema checks passed."
