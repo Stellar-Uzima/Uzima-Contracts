@@ -114,6 +114,11 @@ fmt: ## Format all Rust code with cargo fmt
 	@echo "Formatting code..."
 	cargo fmt --all
 
+# Check code format
+fmt-check:
+	@echo "Checking code format..."
+	cargo fmt --all -- --check
+
 lint: check-deps ## Run clippy linter and error code checks
 	@echo "Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
@@ -128,6 +133,11 @@ shellcheck: check-deps ## Lint shell scripts with shellcheck
 check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
 	@echo "All checks passed!"
 
+# Run all checks without making changes
+check-all: fmt-check lint test check-wasm-size
+	@echo "All checks passed!"
+
+# Build .wasm into dist/
 dist: build-opt check-deps ## Copy compiled .wasm files into dist/ directory
 	@echo "Copying .wasm files to dist/..."
 	mkdir -p dist/
@@ -306,10 +316,9 @@ estimate-gas-batch: ## Estimate gas for multiple function calls
 		echo "Storage:       +$(ENTRIES) entries"; \
 	done
 
-estimate-storage: ## Calculate storage costs for a given number of entries
+estimate-storage: dist ## Calculate storage costs for a given number of entries
 	@echo "Storage Entries: $(ENTRIES)"
 	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
-estimate-storage: dist
 	@echo "Running storage budget measurement..."
 	@bash scripts/measure_storage.sh
 

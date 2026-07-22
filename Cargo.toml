@@ -39,7 +39,6 @@ exclude = [
     # Deferred (issue #828 triage): contract compiles against older soroban-sdk
     # 21 patterns (format! in #[no_std], Vec::with_capacity, BytesN::from_array
     # arg shape mismatch) that need refactoring beyond current PR scope.
-    "contracts/health_data_access_logging",
 
     # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
     # clippy enforcement). These contracts have real compile bugs (not clippy
