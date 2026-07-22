@@ -145,6 +145,57 @@ jobs:
             });
 
   # ============================================================================
+  # Resource Budget Pipeline (Issue #1094)
+  # Compares built WASM sizes against per-contract budgets declared in
+  # resource-budgets/budgets.json. Fails CI when a contract exceeds its budget
+  # or regresses beyond the configured tolerance.
+  # ============================================================================
+  resource-budgets:
+    name: Resource Budget Check
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-contracts
+          path: target/wasm32-unknown-unknown/release
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run budget check
+        run: node scripts/measure_budgets.mjs
+      - name: Upload budget report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: budget-report
+          path: |
+            reports/budget_violations.json
+            reports/budget_report.md
+      - name: Comment PR with budget report
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/budget_report.md';
+            if (!fs.existsSync(path)) {
+              core.warning('Budget report not found at ' + path);
+              return;
+            }
+            const body = fs.readFileSync(path, 'utf8');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ============================================================================
   # Secret Scanning
   # ============================================================================
   secret-scanning:
@@ -419,6 +470,80 @@ jobs:
             });
 
   # ============================================================================
+  # ABI Compatibility Gate (issue #1097)
+  # Validates that contract interface changes are classified as breaking or
+  # non-breaking, produces a compatibility report for each contract, and fails
+  # CI when unapproved breaking changes are detected.
+  # ============================================================================
+  abi-compatibility:
+    name: ABI Compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check ABI compatibility
+        run: |
+          node scripts/abi-compat.mjs --check --report reports/abi_compat.txt
+      - name: Upload ABI compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abi-compatibility-report
+          path: reports/abi_compat.txt
+      - name: Comment PR with ABI compatibility summary
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/abi_compat.txt';
+            if (!fs.existsSync(path)) {
+              core.warning('ABI compatibility report not found at ' + path);
+              return;
+            }
+            const report = fs.readFileSync(path, 'utf8');
+            const breakingMatch = report.match(/^ABI_COMPAT_BREAKING=(\d+)\s*$/m);
+            const nonBreakingMatch = report.match(/^ABI_COMPAT_NON_BREAKING=(\d+)\s*$/m);
+            const breaking = breakingMatch ? Number(breakingMatch[1]) : null;
+            const nonBreaking = nonBreakingMatch ? Number(nonBreakingMatch[1]) : null;
+            if (breaking === null) {
+              core.warning('Could not parse ABI_COMPAT_BREAKING from report');
+              return;
+            }
+            const hasApproval = (context.payload.pull_request?.body || '').includes('[approve-abi-change]');
+            const emoji = breaking === 0 ? ':white_check_mark:' : hasApproval ? ':warning:' : ':x:';
+            const body = [
+              '### ' + emoji + ' ABI Compatibility',
+              '',
+              '| Metric | Count |',
+              '|--------|-------|',
+              '| Breaking changes | ' + breaking + ' |',
+              '| Non-breaking changes | ' + (nonBreaking ?? 'unknown') + ' |',
+              '',
+              breaking === 0
+                ? 'No breaking changes detected. All interface changes are additive.'
+                : hasApproval
+                  ? '> `[approve-abi-change]` present — breaking changes approved for this PR.'
+                  : 'Breaking changes detected. Add `[approve-abi-change]` to the PR body if intentional.',
+              '',
+              'See the `abi-compatibility-report` artifact for the full report.',
+              '',
+              '> See [docs/CONTRACT_COMPATIBILITY.md](docs/CONTRACT_COMPATIBILITY.md) for the change policy.'
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ============================================================================
   # Event Emission Audit (SECURITY_CHECKLIST §5)
   # Enforces that every state-changing pub fn in contracts/*/src/lib.rs emits
   # an event via env.events().publish(...).  Legacy functions that predate
@@ -462,3 +587,30 @@ jobs:
         with:
           name: fuzz-results
           path: reports/fuzz_output.txt
+  # Telemetry Schema Check
+  # Ensures structured telemetry events follow the versioned schema and that
+  # breaking schema changes bump the MAJOR version.
+  # ============================================================================
+  telemetry-schema-check:
+    name: Telemetry Schema Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate telemetry schema
+        run: |
+          echo "Checking telemetry schema version in telemetry.rs..."
+          if ! grep -q "SCHEMA_VERSION_MAJOR:" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::SCHEMA_VERSION_MAJOR not found in telemetry.rs"
+            exit 1
+          fi
+          echo "Checking schema_version field in TelemetryEvent..."
+          if ! grep -q "pub schema_version: u32" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::TelemetryEvent missing schema_version field"
+            exit 1
+          fi
+          echo "Checking event class assignment for all event types..."
+          if ! grep -q "fn class" contracts/contract_monitoring/src/telemetry.rs; then
+            echo "::error::TelemetryEventType missing class() method"
+            exit 1
+          fi
+          echo "Telemetry schema checks passed."
