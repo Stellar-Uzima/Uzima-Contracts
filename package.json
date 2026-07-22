@@ -7,6 +7,10 @@
     "sdk:check": "node scripts/generate-sdk-types.mjs --check",
     "budget:check": "node scripts/measure_budgets.mjs",
     "budget:update": "node scripts/measure_budgets.mjs --update-baselines"
+    "abi:generate": "node scripts/abi-compat.mjs",
+    "abi:check": "node scripts/abi-compat.mjs --check",
+    "abi:check:allow-breaking": "node scripts/abi-compat.mjs --check --allow-breaking",
+    "compat:check": "node scripts/abi-compat.mjs --check && node scripts/generate-sdk-types.mjs --check"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
