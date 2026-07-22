@@ -419,6 +419,80 @@ jobs:
             });
 
   # ============================================================================
+  # ABI Compatibility Gate (issue #1097)
+  # Validates that contract interface changes are classified as breaking or
+  # non-breaking, produces a compatibility report for each contract, and fails
+  # CI when unapproved breaking changes are detected.
+  # ============================================================================
+  abi-compatibility:
+    name: ABI Compatibility
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check ABI compatibility
+        run: |
+          node scripts/abi-compat.mjs --check --report reports/abi_compat.txt
+      - name: Upload ABI compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abi-compatibility-report
+          path: reports/abi_compat.txt
+      - name: Comment PR with ABI compatibility summary
+        if: github.event_name == 'pull_request' && always()
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'reports/abi_compat.txt';
+            if (!fs.existsSync(path)) {
+              core.warning('ABI compatibility report not found at ' + path);
+              return;
+            }
+            const report = fs.readFileSync(path, 'utf8');
+            const breakingMatch = report.match(/^ABI_COMPAT_BREAKING=(\d+)\s*$/m);
+            const nonBreakingMatch = report.match(/^ABI_COMPAT_NON_BREAKING=(\d+)\s*$/m);
+            const breaking = breakingMatch ? Number(breakingMatch[1]) : null;
+            const nonBreaking = nonBreakingMatch ? Number(nonBreakingMatch[1]) : null;
+            if (breaking === null) {
+              core.warning('Could not parse ABI_COMPAT_BREAKING from report');
+              return;
+            }
+            const hasApproval = (context.payload.pull_request?.body || '').includes('[approve-abi-change]');
+            const emoji = breaking === 0 ? ':white_check_mark:' : hasApproval ? ':warning:' : ':x:';
+            const body = [
+              '### ' + emoji + ' ABI Compatibility',
+              '',
+              '| Metric | Count |',
+              '|--------|-------|',
+              '| Breaking changes | ' + breaking + ' |',
+              '| Non-breaking changes | ' + (nonBreaking ?? 'unknown') + ' |',
+              '',
+              breaking === 0
+                ? 'No breaking changes detected. All interface changes are additive.'
+                : hasApproval
+                  ? '> `[approve-abi-change]` present — breaking changes approved for this PR.'
+                  : 'Breaking changes detected. Add `[approve-abi-change]` to the PR body if intentional.',
+              '',
+              'See the `abi-compatibility-report` artifact for the full report.',
+              '',
+              '> See [docs/CONTRACT_COMPATIBILITY.md](docs/CONTRACT_COMPATIBILITY.md) for the change policy.'
+            ].join('\n');
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  # ============================================================================
   # Event Emission Audit (SECURITY_CHECKLIST §5)
   # Enforces that every state-changing pub fn in contracts/*/src/lib.rs emits
   # an event via env.events().publish(...).  Legacy functions that predate

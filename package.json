@@ -4,7 +4,11 @@
     "events:validate": "node scripts/events/validate.mjs",
     "test:pyramid:report": "node scripts/testing/pyramid-report.mjs",
     "sdk:generate": "node scripts/generate-sdk-types.mjs",
-    "sdk:check": "node scripts/generate-sdk-types.mjs --check"
+    "sdk:check": "node scripts/generate-sdk-types.mjs --check",
+    "abi:generate": "node scripts/abi-compat.mjs",
+    "abi:check": "node scripts/abi-compat.mjs --check",
+    "abi:check:allow-breaking": "node scripts/abi-compat.mjs --check --allow-breaking",
+    "compat:check": "node scripts/abi-compat.mjs --check && node scripts/generate-sdk-types.mjs --check"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
