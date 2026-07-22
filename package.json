@@ -8,7 +8,9 @@
     "abi:generate": "node scripts/abi-compat.mjs",
     "abi:check": "node scripts/abi-compat.mjs --check",
     "abi:check:allow-breaking": "node scripts/abi-compat.mjs --check --allow-breaking",
-    "compat:check": "node scripts/abi-compat.mjs --check && node scripts/generate-sdk-types.mjs --check"
+    "compat:check": "node scripts/abi-compat.mjs --check && node scripts/generate-sdk-types.mjs --check",
+    "interface:validate": "node scripts/validate-interfaces.mjs",
+    "interface:check": "node scripts/validate-interfaces.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
