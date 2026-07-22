@@ -1,0 +1,792 @@
+{
+  "registry_version": "1.0.0",
+  "generated_at": "2026-07-22T19:18:59.474Z",
+  "generator": {
+    "name": "scripts/abi-compat.mjs",
+    "version": "1.0.0"
+  },
+  "contracts": [
+    {
+      "name": "audit",
+      "version": "1.0.0",
+      "enums": [],
+      "interfaces": [
+        {
+          "name": "AuditEntry",
+          "contractName": "audit",
+          "description": "Audit log entry for compliance and forensics",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Unique audit entry identifier"
+            },
+            {
+              "name": "actor",
+              "type": "string",
+              "description": "Address of the actor performing the action"
+            },
+            {
+              "name": "action",
+              "type": "ActionType",
+              "description": "Type of action performed"
+            },
+            {
+              "name": "resource",
+              "type": "string",
+              "description": "Resource identifier being acted upon",
+              "optional": true
+            },
+            {
+              "name": "resourceType",
+              "type": "string",
+              "description": "Type of resource",
+              "optional": true
+            },
+            {
+              "name": "result",
+              "type": "string",
+              "description": "Operation result (success/failure)",
+              "optional": true
+            },
+            {
+              "name": "reason",
+              "type": "string",
+              "description": "Reason for the action",
+              "optional": true
+            },
+            {
+              "name": "timestamp",
+              "type": "number",
+              "description": "Action timestamp (Unix seconds)"
+            },
+            {
+              "name": "ipAddress",
+              "type": "string",
+              "description": "IP address of the actor",
+              "optional": true
+            },
+            {
+              "name": "metadata",
+              "type": "Record<string, string>",
+              "description": "Additional context",
+              "optional": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "healthcare_payment",
+      "version": "1.0.0",
+      "enums": [],
+      "interfaces": [
+        {
+          "name": "PaymentStatus",
+          "contractName": "healthcare_payment",
+          "description": "Payment status for healthcare claims and payments",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Unique payment identifier"
+            },
+            {
+              "name": "patientId",
+              "type": "string",
+              "description": "Patient's Stellar address"
+            },
+            {
+              "name": "providerId",
+              "type": "string",
+              "description": "Provider's Stellar address"
+            },
+            {
+              "name": "amount",
+              "type": "number",
+              "description": "Payment amount in smallest unit"
+            },
+            {
+              "name": "currency",
+              "type": "string",
+              "description": "Currency code (e.g., \"USDC\")"
+            },
+            {
+              "name": "status",
+              "type": "PaymentStatusEnum",
+              "description": "Current payment status"
+            },
+            {
+              "name": "serviceId",
+              "type": "string",
+              "description": "Service identifier",
+              "optional": true
+            },
+            {
+              "name": "policyId",
+              "type": "string",
+              "description": "Insurance policy ID",
+              "optional": true
+            },
+            {
+              "name": "createdAt",
+              "type": "number",
+              "description": "Creation timestamp (Unix seconds)"
+            },
+            {
+              "name": "updatedAt",
+              "type": "number",
+              "description": "Last update timestamp (Unix seconds)"
+            },
+            {
+              "name": "completedAt",
+              "type": "number",
+              "description": "Completion timestamp (Unix seconds)",
+              "optional": true
+            },
+            {
+              "name": "transactionHash",
+              "type": "string",
+              "description": "Blockchain transaction hash",
+              "optional": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "identity_registry",
+      "version": "1.0.0",
+      "enums": [],
+      "interfaces": [
+        {
+          "name": "IdentityDocument",
+          "contractName": "identity_registry",
+          "description": "Identity document (Decentralized Identifier) per W3C DID spec",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "The DID identifier"
+            },
+            {
+              "name": "context",
+              "type": "string[]",
+              "description": "JSON-LD context URLs"
+            },
+            {
+              "name": "verificationMethods",
+              "type": "VerificationMethod[]",
+              "description": "Public key information"
+            },
+            {
+              "name": "authenticationMethods",
+              "type": "VerificationRelationship[]",
+              "description": "Auth key relationships",
+              "optional": true
+            },
+            {
+              "name": "assertionMethods",
+              "type": "VerificationRelationship[]",
+              "description": "Assertion key relationships",
+              "optional": true
+            },
+            {
+              "name": "serviceEndpoints",
+              "type": "ServiceEndpoint[]",
+              "description": "Service URLs",
+              "optional": true
+            },
+            {
+              "name": "created",
+              "type": "number",
+              "description": "Creation timestamp (Unix seconds)"
+            },
+            {
+              "name": "updated",
+              "type": "number",
+              "description": "Last update timestamp (Unix seconds)",
+              "optional": true
+            },
+            {
+              "name": "proof",
+              "type": "string",
+              "description": "Cryptographic proof",
+              "optional": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "medical_records",
+      "version": "1.0.0",
+      "enums": [],
+      "interfaces": [
+        {
+          "name": "MedicalRecord",
+          "contractName": "medical_records",
+          "description": "Medical record structure matching contract schema",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Unique record identifier"
+            },
+            {
+              "name": "patientId",
+              "type": "string",
+              "description": "Patient's Stellar address"
+            },
+            {
+              "name": "providerId",
+              "type": "string",
+              "description": "Healthcare provider's Stellar address"
+            },
+            {
+              "name": "recordType",
+              "type": "RecordType",
+              "description": "Type of medical record"
+            },
+            {
+              "name": "data",
+              "type": "EncryptedData",
+              "description": "Encrypted record content"
+            },
+            {
+              "name": "metadata",
+              "type": "RecordMetadata",
+              "description": "Record metadata and access log"
+            },
+            {
+              "name": "timestamp",
+              "type": "number",
+              "description": "Record creation timestamp (Unix seconds)"
+            },
+            {
+              "name": "isEncrypted",
+              "type": "boolean",
+              "description": "Whether the data is encrypted"
+            },
+            {
+              "name": "signature",
+              "type": "string",
+              "description": "Optional cryptographic signature",
+              "optional": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "patient_consent_management",
+      "version": "1.0.0",
+      "enums": [],
+      "interfaces": [
+        {
+          "name": "ConsentGrant",
+          "contractName": "patient_consent_management",
+          "description": "Consent grant from patient to provider",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Unique consent identifier"
+            },
+            {
+              "name": "patientId",
+              "type": "string",
+              "description": "Patient's Stellar address"
+            },
+            {
+              "name": "providerId",
+              "type": "string",
+              "description": "Healthcare provider's Stellar address"
+            },
+            {
+              "name": "grantedAt",
+              "type": "number",
+              "description": "Timestamp when consent was granted (Unix seconds)"
+            },
+            {
+              "name": "revokedAt",
+              "type": "number",
+              "description": "Timestamp when consent was revoked (Unix seconds)",
+              "optional": true
+            },
+            {
+              "name": "status",
+              "type": "ConsentStatus",
+              "description": "Current consent status"
+            },
+            {
+              "name": "scope",
+              "type": "string[]",
+              "description": "Optional data access scope",
+              "optional": true
+            },
+            {
+              "name": "expiresAt",
+              "type": "number",
+              "description": "Optional consent expiration timestamp (Unix seconds)",
+              "optional": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "shared_types",
+      "version": "1.0.0",
+      "enums": [
+        {
+          "name": "RecordType",
+          "description": "Enumeration of medical record types",
+          "values": [
+            {
+              "member": "DIAGNOSIS",
+              "value": "diagnosis",
+              "description": "Diagnosis record"
+            },
+            {
+              "member": "PRESCRIPTION",
+              "value": "prescription",
+              "description": "Prescription record"
+            },
+            {
+              "member": "LAB_RESULT",
+              "value": "lab_result",
+              "description": "Laboratory test result"
+            },
+            {
+              "member": "IMAGING",
+              "value": "imaging",
+              "description": "Medical imaging record"
+            },
+            {
+              "member": "CONSULTATION",
+              "value": "consultation",
+              "description": "Consultation notes"
+            },
+            {
+              "member": "VITAL_SIGNS",
+              "value": "vital_signs",
+              "description": "Vital signs measurement"
+            },
+            {
+              "member": "IMMUNIZATION",
+              "value": "immunization",
+              "description": "Immunization record"
+            },
+            {
+              "member": "MEDICATION_HISTORY",
+              "value": "medication_history",
+              "description": "Medication history"
+            },
+            {
+              "member": "ALLERGY",
+              "value": "allergy",
+              "description": "Allergy information"
+            },
+            {
+              "member": "PROCEDURE",
+              "value": "procedure",
+              "description": "Medical procedure record"
+            }
+          ]
+        },
+        {
+          "name": "EncryptionAlgorithm",
+          "description": "Encryption algorithm used for medical data",
+          "values": [
+            {
+              "member": "NACL_BOX",
+              "value": "nacl-box",
+              "description": "NaCl box (public-key encryption)"
+            },
+            {
+              "member": "NACL_SECRETBOX",
+              "value": "nacl-secretbox",
+              "description": "NaCl secretbox (secret-key encryption)"
+            },
+            {
+              "member": "AES_256_GCM",
+              "value": "aes-256-gcm",
+              "description": "AES-256 GCM"
+            }
+          ]
+        },
+        {
+          "name": "ConsentStatus",
+          "description": "Consent grant status",
+          "values": [
+            {
+              "member": "ACTIVE",
+              "value": "active",
+              "description": "Consent is active and valid"
+            },
+            {
+              "member": "REVOKED",
+              "value": "revoked",
+              "description": "Consent has been revoked"
+            },
+            {
+              "member": "PENDING",
+              "value": "pending",
+              "description": "Consent is pending approval"
+            },
+            {
+              "member": "EXPIRED",
+              "value": "expired",
+              "description": "Consent has expired"
+            }
+          ]
+        },
+        {
+          "name": "VerificationMethodType",
+          "description": "Verification method types per W3C DID specification",
+          "values": [
+            {
+              "member": "ED25519_VERIFICATION_KEY_2020",
+              "value": "Ed25519VerificationKey2020",
+              "description": "Ed25519 Verification Key (2020)"
+            },
+            {
+              "member": "ECDSA_SECP256K1_VERIF_KEY_2019",
+              "value": "EcdsaSecp256k1VerifKey2019",
+              "description": "ECDSA Secp256k1 Verification Key (2019)"
+            },
+            {
+              "member": "X25519_KEY_AGREEMENT_KEY_2020",
+              "value": "X25519KeyAgreementKey2020",
+              "description": "X25519 Key Agreement Key (2020)"
+            },
+            {
+              "member": "JSON_WEB_KEY_2020",
+              "value": "JsonWebKey2020",
+              "description": "JSON Web Key (2020)"
+            },
+            {
+              "member": "FIDO2_ED_DSA_2024",
+              "value": "Fido2EdDsa2024",
+              "description": "FIDO2 EdDSA Key (2024)"
+            },
+            {
+              "member": "FIDO2_ES256_2024",
+              "value": "Fido2Es2562024",
+              "description": "FIDO2 ES256 Key (2024)"
+            }
+          ]
+        },
+        {
+          "name": "VerificationRelationship",
+          "description": "Verification relationship types per W3C DID specification",
+          "values": [
+            {
+              "member": "AUTHENTICATION",
+              "value": "Authentication",
+              "description": "Authentication relationship"
+            },
+            {
+              "member": "ASSERTION_METHOD",
+              "value": "AssertionMethod",
+              "description": "Assertion method relationship"
+            },
+            {
+              "member": "KEY_AGREEMENT",
+              "value": "KeyAgreement",
+              "description": "Key agreement relationship"
+            },
+            {
+              "member": "CAPABILITY_INVOCATION",
+              "value": "CapabilityInvocation",
+              "description": "Capability invocation relationship"
+            },
+            {
+              "member": "CAPABILITY_DELEGATION",
+              "value": "CapabilityDelegation",
+              "description": "Capability delegation relationship"
+            }
+          ]
+        },
+        {
+          "name": "PaymentStatusEnum",
+          "description": "Payment/claim status enumeration",
+          "values": [
+            {
+              "member": "SUBMITTED",
+              "value": "submitted",
+              "description": "Payment claim submitted"
+            },
+            {
+              "member": "VERIFIED",
+              "value": "verified",
+              "description": "Payment claim verified"
+            },
+            {
+              "member": "APPROVED",
+              "value": "approved",
+              "description": "Payment claim approved"
+            },
+            {
+              "member": "REJECTED",
+              "value": "rejected",
+              "description": "Payment claim rejected"
+            },
+            {
+              "member": "PAID",
+              "value": "paid",
+              "description": "Payment completed"
+            },
+            {
+              "member": "DISPUTED",
+              "value": "disputed",
+              "description": "Payment disputed"
+            }
+          ]
+        },
+        {
+          "name": "ActionType",
+          "description": "Audit action types",
+          "values": [
+            {
+              "member": "DATA_READ",
+              "value": "DataRead",
+              "description": "Data read operation"
+            },
+            {
+              "member": "DATA_WRITE",
+              "value": "DataWrite",
+              "description": "Data write operation"
+            },
+            {
+              "member": "DATA_DELETE",
+              "value": "DataDelete",
+              "description": "Data delete operation"
+            },
+            {
+              "member": "DATA_EXPORT",
+              "value": "DataExport",
+              "description": "Data export operation"
+            },
+            {
+              "member": "PERMISSION_GRANT",
+              "value": "PermissionGrant",
+              "description": "Permission grant"
+            },
+            {
+              "member": "PERMISSION_REVOKE",
+              "value": "PermissionRevoke",
+              "description": "Permission revoke"
+            },
+            {
+              "member": "ROLE_ASSIGN",
+              "value": "RoleAssign",
+              "description": "Role assignment"
+            },
+            {
+              "member": "ROLE_REVOKE",
+              "value": "RoleRevoke",
+              "description": "Role revocation"
+            },
+            {
+              "member": "RECORD_CREATE",
+              "value": "RecordCreate",
+              "description": "Record creation"
+            },
+            {
+              "member": "RECORD_UPDATE",
+              "value": "RecordUpdate",
+              "description": "Record update"
+            },
+            {
+              "member": "RECORD_ARCHIVE",
+              "value": "RecordArchive",
+              "description": "Record archive"
+            },
+            {
+              "member": "RECORD_RESTORE",
+              "value": "RecordRestore",
+              "description": "Record restore"
+            },
+            {
+              "member": "AUTH_SUCCESS",
+              "value": "AuthSuccess",
+              "description": "Authentication success"
+            },
+            {
+              "member": "AUTH_FAILURE",
+              "value": "AuthFailure",
+              "description": "Authentication failure"
+            },
+            {
+              "member": "AUTH_LOGOUT",
+              "value": "AuthLogout",
+              "description": "User logout"
+            },
+            {
+              "member": "TOKEN_REFRESH",
+              "value": "TokenRefresh",
+              "description": "Token refresh"
+            },
+            {
+              "member": "CROSS_CHAIN_TRANSFER_INIT",
+              "value": "CrossChainTransferInit",
+              "description": "Cross-chain transfer initiated"
+            },
+            {
+              "member": "CROSS_CHAIN_TRANSFER_COMPLETED",
+              "value": "CrossChainTransferCompleted",
+              "description": "Cross-chain transfer completed"
+            }
+          ]
+        }
+      ],
+      "interfaces": [
+        {
+          "name": "EncryptedData",
+          "description": "Encrypted data container",
+          "fields": [
+            {
+              "name": "ciphertext",
+              "type": "string",
+              "description": "Base64-encoded encrypted data"
+            },
+            {
+              "name": "nonce",
+              "type": "string",
+              "description": "Base64-encoded encryption nonce"
+            },
+            {
+              "name": "algorithm",
+              "type": "EncryptionAlgorithm",
+              "description": "The encryption algorithm used"
+            }
+          ]
+        },
+        {
+          "name": "AccessLog",
+          "description": "Access log entry for audit trail",
+          "fields": [
+            {
+              "name": "accessor",
+              "type": "string",
+              "description": "The address of who accessed the record"
+            },
+            {
+              "name": "accessTime",
+              "type": "number",
+              "description": "Timestamp of access (Unix seconds)"
+            },
+            {
+              "name": "accessType",
+              "type": "'read' | 'write' | 'share'",
+              "description": "Type of access"
+            },
+            {
+              "name": "ipAddress",
+              "type": "string",
+              "description": "Optional IP address of the accessor",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "name": "RecordMetadata",
+          "description": "Metadata for medical records",
+          "fields": [
+            {
+              "name": "createdAt",
+              "type": "number",
+              "description": "Creation timestamp (Unix seconds)"
+            },
+            {
+              "name": "updatedAt",
+              "type": "number",
+              "description": "Last update timestamp (Unix seconds)"
+            },
+            {
+              "name": "accessLog",
+              "type": "AccessLog[]",
+              "description": "Complete access history"
+            },
+            {
+              "name": "tags",
+              "type": "string[]",
+              "description": "Optional tags for categorization",
+              "optional": true
+            },
+            {
+              "name": "isTraditionalHealing",
+              "type": "boolean",
+              "description": "Whether this is traditional healing record",
+              "optional": true
+            }
+          ]
+        },
+        {
+          "name": "VerificationMethod",
+          "description": "Verification method (public key) for W3C DID",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Fragment identifier"
+            },
+            {
+              "name": "methodType",
+              "type": "VerificationMethodType",
+              "description": "Type of verification method"
+            },
+            {
+              "name": "controller",
+              "type": "string",
+              "description": "Controller address"
+            },
+            {
+              "name": "publicKey",
+              "type": "string",
+              "description": "Base64-encoded public key"
+            },
+            {
+              "name": "isActive",
+              "type": "boolean",
+              "description": "Whether this key is active"
+            },
+            {
+              "name": "created",
+              "type": "number",
+              "description": "Creation timestamp (Unix seconds)"
+            },
+            {
+              "name": "lastRotated",
+              "type": "number",
+              "description": "Last rotation timestamp (Unix seconds, 0 if never)"
+            }
+          ]
+        },
+        {
+          "name": "ServiceEndpoint",
+          "description": "Service endpoint for W3C DID",
+          "fields": [
+            {
+              "name": "id",
+              "type": "string",
+              "description": "Service identifier"
+            },
+            {
+              "name": "type",
+              "type": "string",
+              "description": "Service type"
+            },
+            {
+              "name": "url",
+              "type": "string",
+              "description": "Service endpoint URL"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
