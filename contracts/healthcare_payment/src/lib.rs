@@ -478,9 +478,7 @@ impl HealthcarePayment {
         aml_contract: Address,
         rbac_contract: Address,
     ) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         let config = Config {
             admin,
@@ -806,7 +804,7 @@ impl HealthcarePayment {
             return Err(Error::UnsupportedTransaction);
         }
 
-        let enrollment_id = Self::next_counter(&env, &DataKey::CoverageEnrollmentCount);
+        let enrollment_id = Self::next_counter(&env, &DataKey::CoverageEnrollmentCount)?;
         let enrollment = CoverageEnrollment {
             id: enrollment_id,
             policy_id: coverage_policy_id,

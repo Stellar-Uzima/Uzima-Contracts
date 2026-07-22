@@ -379,11 +379,8 @@ pub struct EMRIntegrationContract;
 #[contractimpl]
 impl EMRIntegrationContract {
     pub fn initialize(env: Env, admin: Address, fhir_contract: Address) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::EMRSystemAlreadyExists)?;
         admin.require_auth();
-
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::EMRSystemAlreadyExists);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage()

@@ -162,12 +162,8 @@ impl TreasuryController {
         emergency_threshold: u32,
         max_withdrawal_amount: i128,
     ) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        // Check if already initialized
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         // Validate parameters
         if (signers.len() as u32) < threshold {

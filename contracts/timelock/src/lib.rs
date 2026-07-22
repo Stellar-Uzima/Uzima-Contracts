@@ -35,9 +35,7 @@ pub struct Timelock;
 #[contractimpl]
 impl Timelock {
     pub fn initialize(env: Env, admin: Address, delay_seconds: u64) -> Result<(), Error> {
-        if env.storage().instance().has(&CFG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let cfg = TimelockConfig {
             admin,
             delay_seconds,

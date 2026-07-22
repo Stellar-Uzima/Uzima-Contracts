@@ -408,6 +408,212 @@ fn grade_from_score(score: u32) -> ComplexityGrade {
     }
 }
 
+// ============================================================================
+// Threshold enforcement (CI warn/fail)
+// ============================================================================
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "lowercase")]
+pub enum ThresholdLevel {
+    Pass,
+    Warn,
+    Fail,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetricThresholdViolation {
+    pub metric: String,
+    pub level: ThresholdLevel,
+    pub actual: u32,
+    pub threshold: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContractThresholdResult {
+    pub contract_name: String,
+    pub total_score: u32,
+    pub grade: ComplexityGrade,
+    pub level: ThresholdLevel,
+    pub violations: Vec<MetricThresholdViolation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThresholdSummary {
+    pub generated_at: String,
+    pub overall_level: ThresholdLevel,
+    pub contracts: Vec<ContractThresholdResult>,
+}
+
+// Thresholds matching docs/CONTRACT_COMPLEXITY_SCORING.md "CI Thresholds" table.
+const THRESHOLD_TOTAL_WARN: u32 = 40;
+const THRESHOLD_TOTAL_FAIL: u32 = 70;
+const THRESHOLD_CYCLOMATIC_WARN: u32 = 40;
+const THRESHOLD_CYCLOMATIC_FAIL: u32 = 60;
+const THRESHOLD_DATA_WARN: u32 = 60;
+const THRESHOLD_DATA_FAIL: u32 = 90;
+const THRESHOLD_EXTERNAL_WARN: u32 = 15;
+const THRESHOLD_EXTERNAL_FAIL: u32 = 25;
+const THRESHOLD_STATE_WARN: u32 = 15;
+const THRESHOLD_STATE_FAIL: u32 = 25;
+const THRESHOLD_PERMISSION_WARN: u32 = 15;
+const THRESHOLD_PERMISSION_FAIL: u32 = 25;
+
+fn check_metric(actual: u32, warn: u32, fail: u32) -> (ThresholdLevel, u32) {
+    if actual >= fail {
+        (ThresholdLevel::Fail, fail)
+    } else if actual >= warn {
+        (ThresholdLevel::Warn, warn)
+    } else {
+        (ThresholdLevel::Pass, warn)
+    }
+}
+
+pub fn check_contract_thresholds(
+    contract: &ContractComplexityScore,
+) -> ContractThresholdResult {
+    let mut violations: Vec<MetricThresholdViolation> = Vec::new();
+
+    // Total score
+    let (total_level, total_threshold) = if contract.total_score >= THRESHOLD_TOTAL_FAIL {
+        (ThresholdLevel::Fail, THRESHOLD_TOTAL_FAIL)
+    } else if contract.total_score >= THRESHOLD_TOTAL_WARN {
+        (ThresholdLevel::Warn, THRESHOLD_TOTAL_WARN)
+    } else {
+        (ThresholdLevel::Pass, THRESHOLD_TOTAL_WARN)
+    };
+    if total_level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "total_score".into(),
+            level: total_level.clone(),
+            actual: contract.total_score,
+            threshold: total_threshold,
+        });
+    }
+
+    // Cyclomatic
+    let (level, threshold) = check_metric(
+        contract.components.cyclomatic_complexity,
+        THRESHOLD_CYCLOMATIC_WARN,
+        THRESHOLD_CYCLOMATIC_FAIL,
+    );
+    if level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "cyclomatic_complexity".into(),
+            level,
+            actual: contract.components.cyclomatic_complexity,
+            threshold,
+        });
+    }
+
+    // Data structure
+    let (level, threshold) = check_metric(
+        contract.components.data_structure_complexity,
+        THRESHOLD_DATA_WARN,
+        THRESHOLD_DATA_FAIL,
+    );
+    if level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "data_structure_complexity".into(),
+            level,
+            actual: contract.components.data_structure_complexity,
+            threshold,
+        });
+    }
+
+    // External interactions
+    let (level, threshold) = check_metric(
+        contract.components.external_interaction_count,
+        THRESHOLD_EXTERNAL_WARN,
+        THRESHOLD_EXTERNAL_FAIL,
+    );
+    if level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "external_interaction_count".into(),
+            level,
+            actual: contract.components.external_interaction_count,
+            threshold,
+        });
+    }
+
+    // State transitions
+    let (level, threshold) = check_metric(
+        contract.components.state_transition_count,
+        THRESHOLD_STATE_WARN,
+        THRESHOLD_STATE_FAIL,
+    );
+    if level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "state_transition_count".into(),
+            level,
+            actual: contract.components.state_transition_count,
+            threshold,
+        });
+    }
+
+    // Permission model
+    let (level, threshold) = check_metric(
+        contract.components.permission_model_complexity,
+        THRESHOLD_PERMISSION_WARN,
+        THRESHOLD_PERMISSION_FAIL,
+    );
+    if level != ThresholdLevel::Pass {
+        violations.push(MetricThresholdViolation {
+            metric: "permission_model_complexity".into(),
+            level,
+            actual: contract.components.permission_model_complexity,
+            threshold,
+        });
+    }
+
+    let has_fail = violations.iter().any(|v| v.level == ThresholdLevel::Fail);
+    let has_warn = violations.iter().any(|v| v.level == ThresholdLevel::Warn);
+    let level = if has_fail {
+        ThresholdLevel::Fail
+    } else if has_warn {
+        ThresholdLevel::Warn
+    } else {
+        ThresholdLevel::Pass
+    };
+
+    ContractThresholdResult {
+        contract_name: contract.contract_name.clone(),
+        total_score: contract.total_score,
+        grade: contract.grade.clone(),
+        level,
+        violations,
+    }
+}
+
+pub fn check_report_thresholds(report: &ComplexityReport) -> ThresholdSummary {
+    let mut contracts: Vec<ContractThresholdResult> = report
+        .contracts
+        .iter()
+        .map(check_contract_thresholds)
+        .collect();
+
+    contracts.sort_by(|a, b| {
+        b.level
+            .cmp(&a.level)
+            .then_with(|| b.total_score.cmp(&a.total_score))
+    });
+
+    let has_fail = contracts.iter().any(|c| c.level == ThresholdLevel::Fail);
+    let has_warn = contracts.iter().any(|c| c.level == ThresholdLevel::Warn);
+    let overall_level = if has_fail {
+        ThresholdLevel::Fail
+    } else if has_warn {
+        ThresholdLevel::Warn
+    } else {
+        ThresholdLevel::Pass
+    };
+
+    ThresholdSummary {
+        generated_at: chrono_like_timestamp(),
+        overall_level,
+        contracts,
+    }
+}
+
 fn chrono_like_timestamp() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()

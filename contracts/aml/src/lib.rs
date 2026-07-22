@@ -44,9 +44,7 @@ pub struct AntiMoneyLaundering;
 impl AntiMoneyLaundering {
     /// Initialize AML with admin
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Self::ensure_upgrade_metadata(&env, &admin);

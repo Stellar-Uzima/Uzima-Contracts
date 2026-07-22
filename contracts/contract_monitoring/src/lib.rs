@@ -111,9 +111,8 @@ impl ContractMonitoring {
         admin: Address,
         alert_config: AlertConfig,
     ) -> Result<(), MonitoringError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(MonitoringError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env)
+            .map_err(|_| MonitoringError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()

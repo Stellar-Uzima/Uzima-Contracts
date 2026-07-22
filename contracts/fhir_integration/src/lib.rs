@@ -243,6 +243,7 @@ pub enum Error {
     OperationFailed = 18,
     InvalidBundleType = 19,
     DataMappingFailed = 20,
+    AlreadyInitialized = 21,
 }
 
 impl core::fmt::Display for Error {
@@ -268,6 +269,7 @@ impl core::fmt::Display for Error {
             Error::OperationFailed => write!(f, "operation failed"),
             Error::InvalidBundleType => write!(f, "invalid bundle type"),
             Error::DataMappingFailed => write!(f, "data mapping failed"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
         }
     }
 }
@@ -283,12 +285,8 @@ impl FHIRIntegrationContract {
         admin: Address,
         medical_records_contract: Address,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        // Check if already initialized
-        if env.storage().persistent().has(&ADMIN) {
-            return Err(Error::ProviderAlreadyExists);
-        }
 
         env.storage().persistent().set(&ADMIN, &admin);
         env.storage()

@@ -39,14 +39,25 @@ mod test;
 
 mod errors;
 mod events;
+mod storage;
+mod types;
+pub mod fhir;
 
 pub use errors::Error;
+pub use fhir::to_fhir_json;
 
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec,
 };
 
+/// Represents a patient's consent grant to a healthcare provider.
+///
+/// # Cross-Border Data Transfer Restrictions (Issue #1001)
+/// The `jurisdictions_allowed` field restricts which legal jurisdictions
+/// the patient's data may be transferred to. An empty list means no
+/// cross-border transfers are allowed. The cross-chain bridge MUST check
+/// this field before relaying data to a foreign chain.
 #[derive(Clone)]
 #[contracttype]
 pub struct ConsentRecord {
@@ -56,6 +67,9 @@ pub struct ConsentRecord {
     pub expires_at: u64, // 0 means no expiration
     pub revoked_at: u64,
     pub active: bool,
+    /// List of ISO 3166-1 alpha-2 country codes or jurisdiction identifiers
+    /// to which data transfer is permitted. Empty = no cross-border transfers.
+    pub jurisdictions_allowed: Vec<String>,
 }
 
 #[derive(Clone)]
@@ -96,6 +110,17 @@ pub struct PatientConsentManagement;
 
 #[contractimpl]
 impl PatientConsentManagement {
+    /// Initialize the contract with an admin address.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- initialize \
+    ///   --admin <ADMIN_ADDRESS>
+    /// ```
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
         if env.storage().instance().has(&DataKey::Initialized) {
@@ -108,6 +133,18 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    /// Grant consent to a provider.  Revocable by the patient at any time.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- grant_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn grant_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
@@ -122,22 +159,9 @@ impl PatientConsentManagement {
                 return Err(Error::ConsentAlreadyExists);
             }
         }
-        let record = ConsentRecord {
-            patient: patient.clone(),
-            provider: provider.clone(),
-            granted_at: ts,
-            expires_at: 0,
-            revoked_at: 0,
-            active: true,
-        };
-        let mut log: ConsentLog = env
-            .storage()
-            .persistent()
-            .get(&DataKey::ConsentStorage(patient.clone()))
-            .unwrap_or(ConsentLog {
-                records: Vec::new(&env),
-                record_count: 0,
-            });
+        let empty_jurisdictions = Vec::new(&env);
+        let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
+        let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
         log.records.push_back(record.clone());
         log.record_count += 1;
         env.storage()
@@ -148,6 +172,19 @@ impl PatientConsentManagement {
         Ok(())
     }
 
+    /// Grant consent with an expiration timestamp (0 = no expiry).
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- grant_consent_with_expiry \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS> \
+    ///   --expires_at <UNIX_TIMESTAMP>
+    /// ```
     pub fn grant_consent_with_expiry(
         env: Env,
         patient: Address,
@@ -170,6 +207,7 @@ impl PatientConsentManagement {
                 return Err(Error::ConsentAlreadyExists);
             }
         }
+        let empty_jurisdictions = Vec::new(&env);
         let record = ConsentRecord {
             patient: patient.clone(),
             provider: provider.clone(),
@@ -177,6 +215,7 @@ impl PatientConsentManagement {
             expires_at,
             revoked_at: 0,
             active: true,
+            jurisdictions_allowed: empty_jurisdictions,
         };
         let mut log: ConsentLog = env
             .storage()
@@ -217,22 +256,9 @@ impl PatientConsentManagement {
                     continue;
                 }
             }
-            let record = ConsentRecord {
-                patient: patient.clone(),
-                provider: provider.clone(),
-                granted_at: ts,
-                expires_at: 0,
-                revoked_at: 0,
-                active: true,
-            };
-            let mut log: ConsentLog = env
-                .storage()
-                .persistent()
-                .get(&DataKey::ConsentStorage(patient.clone()))
-                .unwrap_or(ConsentLog {
-                    records: Vec::new(&env),
-                    record_count: 0,
-                });
+            let empty_jurisdictions = Vec::new(&env);
+            let record = ConsentRecord { patient: patient.clone(), provider: provider.clone(), granted_at: ts, expires_at: 0, revoked_at: 0, active: true, jurisdictions_allowed: empty_jurisdictions };
+            let mut log: ConsentLog = env.storage().persistent().get(&DataKey::ConsentStorage(patient.clone())).unwrap_or(ConsentLog { records: Vec::new(&env), record_count: 0 });
             log.records.push_back(record.clone());
             log.record_count += 1;
             env.storage()
@@ -245,6 +271,18 @@ impl PatientConsentManagement {
         Ok(granted)
     }
 
+    /// Revoke a previously granted consent.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-patient \
+    ///   --network local \
+    ///   -- revoke_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn revoke_consent(env: Env, patient: Address, provider: Address) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
@@ -291,6 +329,18 @@ impl PatientConsentManagement {
         record.active && !Self::is_consent_expired(env, record)
     }
 
+    /// Check whether an active consent exists between patient and provider.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- check_consent \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
     pub fn check_consent(env: Env, patient: Address, provider: Address) -> Result<bool, Error> {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
@@ -456,83 +506,116 @@ impl PatientConsentManagement {
 
     /// On-chain health check endpoint.
     /// Returns true if the contract is initialized and operational.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- health_check
+    /// ```
     pub fn health_check(env: Env) -> bool {
         env.storage().instance().has(&DataKey::Initialized)
     }
 
-    // ============================================================
-    // Issue #888: GDPR Data Erasure
-    // ============================================================
+    // ─── Jurisdictions Management (Issue #1001) ──────────────────────────────
 
-    pub fn request_erasure(env: Env, patient: Address) -> Result<(), Error> {
+    /// Set the jurisdictions to which a patient's data may be transferred.
+    /// Only the patient may update their own jurisdictions list.
+    /// An empty list means no cross-border transfers are allowed.
+    pub fn set_jurisdictions_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+        jurisdictions: Vec<String>,
+    ) -> Result<(), Error> {
         patient.require_auth();
         Self::require_initialized(&env)?;
         Self::require_not_paused(&env)?;
-
-        let key = DataKey::ErasureRequest(patient.clone());
-        if let Some(existing_request) = env
-            .storage()
-            .persistent()
-            .get::<_, ErasureRequest>(&key)
-        {
-            if existing_request.status == ErasureStatus::Requested {
-                return Err(Error::ErasureRequestExists);
-            }
-        }
-
-        let request = ErasureRequest {
-            patient: patient.clone(),
-            requested_at: env.ledger().timestamp(),
-            status: ErasureStatus::Requested,
-        };
-        env.storage().persistent().set(&key, &request);
-        events::publish_erasure_requested(&env, &patient);
-        Ok(())
-    }
-
-    pub fn execute_erasure(env: Env, caller: Address, patient: Address) -> Result<(), Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
-        Self::require_initialized(&env)?;
-
-        let key = DataKey::ErasureRequest(patient.clone());
-        let mut request: ErasureRequest = env
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        let mut record: ConsentRecord = env
             .storage()
             .persistent()
             .get(&key)
-            .ok_or(Error::ErasureRequestNotFound)?;
-
-        if request.status != ErasureStatus::Requested {
-            return Err(Error::ErasureRequestNotPending);
-        }
-
-        // Nullify patient data
-        let consent_key = DataKey::ConsentStorage(patient.clone());
-        if let Some(log) = env
-            .storage()
-            .persistent()
-            .get::<_, ConsentLog>(&consent_key)
-        {
-            for record in log.records.iter() {
-                let provider_key = DataKey::ProviderIndex(patient.clone(), record.provider);
-                env.storage().persistent().remove(&provider_key);
-            }
-            env.storage().persistent().remove(&consent_key);
-        }
-
-        request.status = ErasureStatus::Executed;
-        env.storage().persistent().set(&key, &request);
-        events::publish_erasure_executed(&env, &patient);
+            .ok_or(Error::ConsentNotFound)?;
+        record.jurisdictions_allowed = jurisdictions;
+        env.storage().persistent().set(&key, &record);
+        events::publish_jurisdictions_updated(
+            &env,
+            &patient,
+            &provider,
+            env.ledger().timestamp(),
+        );
         Ok(())
     }
 
-    pub fn get_erasure_status(env: Env, patient: Address) -> ErasureStatus {
-        let key = DataKey::ErasureRequest(patient);
-        env.storage()
+    /// Get the jurisdictions allowed for a patient-provider consent relationship.
+    pub fn get_jurisdictions_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+    ) -> Result<Vec<String>, Error> {
+        Self::require_initialized(&env)?;
+        let key = DataKey::ProviderIndex(patient, provider);
+        let record: ConsentRecord = env
+            .storage()
             .persistent()
-            .get::<_, ErasureRequest>(&key)
-            .map(|r| r.status)
-            .unwrap_or(ErasureStatus::None)
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        Ok(record.jurisdictions_allowed)
+    }
+
+    /// Check whether a cross-border data transfer to a given jurisdiction
+    /// is permitted under the patient's consent. Returns false if consent
+    /// is not active or the jurisdiction is not in the allowed list.
+    pub fn check_jurisdiction_allowed(
+        env: Env,
+        patient: Address,
+        provider: Address,
+        jurisdiction: String,
+    ) -> Result<bool, Error> {
+        Self::require_initialized(&env)?;
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        let record: ConsentRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(Error::ConsentNotFound)?;
+        if !Self::is_consent_active(&env, &record) {
+            return Ok(false);
+        }
+        // Empty jurisdictions list means no cross-border transfers allowed
+        if record.jurisdictions_allowed.is_empty() {
+            return Ok(false);
+        }
+        Ok(record.jurisdictions_allowed.contains(&jurisdiction))
+    /// Returns the FHIR R4 Consent resource JSON for a consent record.
+    ///
+    /// Maps the internal `ConsentRecord` to a valid FHIR R4 `Consent`
+    /// resource (https://hl7.org/fhir/R4/consent.html).
+    ///
+    /// # Arguments
+    /// * `patient` - The patient who granted the consent.
+    /// * `provider` - The provider the consent was granted to.
+    ///
+    /// # Returns
+    /// A FHIR R4 JSON `String` if the consent exists, `None` otherwise.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- get_consent_fhir \
+    ///   --patient <PATIENT_ADDRESS> \
+    ///   --provider <PROVIDER_ADDRESS>
+    /// ```
+    pub fn get_consent_fhir(env: Env, patient: Address, provider: Address) -> Option<String> {
+        let key = DataKey::ProviderIndex(patient, provider);
+        let record: ConsentRecord = env.storage().persistent().get(&key)?;
+        Some(fhir::to_fhir_json(&env, &record))
     }
 }
 

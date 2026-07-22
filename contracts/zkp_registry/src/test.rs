@@ -606,6 +606,234 @@ fn test_security_parameter_validation() {
     );
 }
 
+#[test]
+fn test_vk_rotation_and_historical_validity() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let circuit_id = String::from_str(&env, "auth_circuit");
+    let vk_hash_1 = BytesN::from_array(&env, &[1u8; 32]);
+    let pk_hash_1 = BytesN::from_array(&env, &[10u8; 32]);
+
+    // 1. Register circuit
+    client.register_circuit(
+        &admin,
+        &circuit_id,
+        &ZKPType::SNARK,
+        &2u32,
+        &3u32,
+        &100u32,
+        &128u32,
+        &vk_hash_1,
+        &pk_hash_1,
+        &false,
+    );
+
+    let submitter = Address::generate(&env);
+    let proof_id_1 = BytesN::from_array(&env, &[3u8; 32]);
+    let public_inputs = vec![
+        &env,
+        Bytes::from_slice(&env, b"in1"),
+        Bytes::from_slice(&env, b"in2"),
+    ];
+    let proof_data = Bytes::from_slice(&env, b"proof_data");
+
+    // 2. Submit proof using initial VK -> should succeed
+    client.submit_zkp(
+        &submitter,
+        &proof_id_1,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_1,
+        &50000u64,
+    );
+
+    assert!(client.get_verification_result(&proof_id_1).is_valid);
+
+    // 3. Rotate VK to vk_hash_2
+    let vk_hash_2 = BytesN::from_array(&env, &[2u8; 32]);
+    let pk_hash_2 = BytesN::from_array(&env, &[20u8; 32]);
+    client.rotate_vk(&admin, &circuit_id, &vk_hash_2, &pk_hash_2);
+
+    // 4. Verify params show new VK
+    let params = client.get_circuit_params(&circuit_id);
+    assert_eq!(params.vk_hash, vk_hash_2);
+    assert_eq!(params.pk_hash, pk_hash_2);
+
+    // 5. Submit proof with new VK -> should succeed
+    let proof_id_2 = BytesN::from_array(&env, &[4u8; 32]);
+    client.submit_zkp(
+        &submitter,
+        &proof_id_2,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_2,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&proof_id_2).is_valid);
+
+    // 6. Submit proof with historical VK (vk_hash_1) -> should STILL succeed
+    let proof_id_3 = BytesN::from_array(&env, &[5u8; 32]);
+    client.submit_zkp(
+        &submitter,
+        &proof_id_3,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_1,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&proof_id_3).is_valid);
+
+    // 7. Submit proof with unregistered VK (vk_hash_3) -> should fail
+    let vk_hash_3 = BytesN::from_array(&env, &[9u8; 32]);
+    let proof_id_4 = BytesN::from_array(&env, &[6u8; 32]);
+    let result = client.try_submit_zkp(
+        &submitter,
+        &proof_id_4,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_3,
+        &50000u64,
+    );
+    assert_eq!(result, Err(Ok(Error::InvalidProof)));
+}
+
+#[test]
+fn test_vk_rollback_and_migration() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = setup(&env);
+    let admin = Address::generate(&env);
+    client.initialize(&admin);
+
+    let circuit_id = String::from_str(&env, "migr_circuit");
+    let vk_hash_1 = BytesN::from_array(&env, &[1u8; 32]);
+    let pk_hash_1 = BytesN::from_array(&env, &[10u8; 32]);
+
+    // Simulate pre-existing circuit params set directly in storage without history
+    let params = ZKPCircuitParams {
+        circuit_id: circuit_id.clone(),
+        circuit_type: ZKPType::SNARK,
+        num_public_inputs: 2,
+        num_private_inputs: 3,
+        num_constraints: 100,
+        security_param: 128,
+        vk_hash: vk_hash_1.clone(),
+        pk_hash: pk_hash_1.clone(),
+        setup_at: env.ledger().timestamp(),
+        trusted_setup: false,
+    };
+    env.as_contract(&_id, || {
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
+    });
+
+    // Verify submission succeeds before migration because vk matches active vk_hash
+    let submitter = Address::generate(&env);
+    let proof_id = BytesN::from_array(&env, &[3u8; 32]);
+    let public_inputs = vec![&env, Bytes::from_slice(&env, b"in")];
+    let proof_data = Bytes::from_slice(&env, b"proof");
+
+    client.submit_zkp(
+        &submitter,
+        &proof_id,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_1,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&proof_id).is_valid);
+
+    // Call migration to initialize history
+    client.migrate_vk_rotation(&admin, &circuit_id);
+
+    // Rotate to vk_hash_2
+    let vk_hash_2 = BytesN::from_array(&env, &[2u8; 32]);
+    let pk_hash_2 = BytesN::from_array(&env, &[20u8; 32]);
+    client.rotate_vk(&admin, &circuit_id, &vk_hash_2, &pk_hash_2);
+
+    // Rotate to vk_hash_3
+    let vk_hash_3 = BytesN::from_array(&env, &[3u8; 32]);
+    let pk_hash_3 = BytesN::from_array(&env, &[30u8; 32]);
+    client.rotate_vk(&admin, &circuit_id, &vk_hash_3, &pk_hash_3);
+
+    // Rollback to vk_hash_2
+    client.rollback_vk(&admin, &circuit_id, &vk_hash_2);
+
+    // Verify params show active VK is vk_hash_2
+    let params_after = client.get_circuit_params(&circuit_id);
+    assert_eq!(params_after.vk_hash, vk_hash_2);
+
+    // Verify historical validity of vk_hash_1, vk_hash_2, vk_hash_3
+    let p_id_1 = BytesN::from_array(&env, &[11u8; 32]);
+    client.submit_zkp(
+        &submitter,
+        &p_id_1,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_1,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&p_id_1).is_valid);
+
+    let p_id_2 = BytesN::from_array(&env, &[12u8; 32]);
+    client.submit_zkp(
+        &submitter,
+        &p_id_2,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_2,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&p_id_2).is_valid);
+
+    let p_id_3 = BytesN::from_array(&env, &[13u8; 32]);
+    client.submit_zkp(
+        &submitter,
+        &p_id_3,
+        &ZKPType::SNARK,
+        &ZKPHashFunction::Poseidon,
+        &circuit_id,
+        &public_inputs,
+        &proof_data,
+        &vk_hash_3,
+        &50000u64,
+    );
+    assert!(client.get_verification_result(&p_id_3).is_valid);
+
+    // Try to rollback to an unregistered VK (vk_hash_4) -> should fail
+    let vk_hash_4 = BytesN::from_array(&env, &[4u8; 32]);
+    let rollback_res = client.try_rollback_vk(&admin, &circuit_id, &vk_hash_4);
+    assert_eq!(rollback_res, Err(Ok(Error::InvalidProof)));
+}
+
 fn setup(env: &Env) -> (ZKPRegistryClient<'_>, Address) {
     let contract_id = env.register_contract(None, ZKPRegistry {});
     let client = ZKPRegistryClient::new(env, &contract_id);

@@ -63,10 +63,20 @@ pub struct RBAC;
 
 #[contractimpl]
 impl RBAC {
+    /// Initialize the RBAC contract with an admin and configuration.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- initialize \
+    ///   --admin <ADMIN_ADDRESS> \
+    ///   --config '{"max_roles_per_user":10,"enable_role_expiry":false}'
+    /// ```
     pub fn initialize(env: Env, admin: Address, config: RBACConfig) -> Result<(), Error> {
-        if Storage::is_initialized(&env) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         admin.require_auth();
 
@@ -78,6 +88,18 @@ impl RBAC {
         Ok(())
     }
 
+    /// Assign a role to an address.  Only callable by admin.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- assign_role \
+    ///   --address <USER_ADDRESS> \
+    ///   --role 'Doctor'
+    /// ```
     pub fn assign_role(env: Env, address: Address, role: Role) -> Result<bool, Error> {
         if !Storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -112,6 +134,18 @@ impl RBAC {
         Ok(success)
     }
 
+    /// Remove a role from an address.  Only callable by admin.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- remove_role \
+    ///   --address <USER_ADDRESS> \
+    ///   --role 'Doctor'
+    /// ```
     pub fn remove_role(env: Env, address: Address, role: Role) -> Result<bool, Error> {
         if !Storage::is_initialized(&env) {
             return Err(Error::NotInitialized);
@@ -139,6 +173,18 @@ impl RBAC {
         Ok(success)
     }
 
+    /// Check whether an address holds a specific role.
+    ///
+    /// # Example
+    /// ```bash
+    /// soroban contract invoke \
+    ///   --id <CONTRACT_ID> \
+    ///   --source dev-admin \
+    ///   --network local \
+    ///   -- has_role \
+    ///   --address <USER_ADDRESS> \
+    ///   --role 'Admin'
+    /// ```
     pub fn has_role(env: Env, address: Address, role: Role) -> Result<bool, Error> {
         if !Storage::is_initialized(&env) {
             return Err(Error::NotInitialized);

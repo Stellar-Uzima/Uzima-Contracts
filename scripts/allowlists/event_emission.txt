@@ -632,6 +632,10 @@ patient_consent_management::check_consent
 patient_consent_management::cleanup_expired_consents
 patient_consent_management::verify_consent_with_audit
 patient_consent_management::health_check
+# request_erasure and execute_erasure emit events via helper fns (events::publish_*)
+# which the script's .events() pattern-match does not detect
+patient_consent_management::request_erasure
+patient_consent_management::execute_erasure
 
 # ── patient_gamification ────────────────────────────────────────────────────
 patient_gamification::update_social_profile
@@ -753,6 +757,13 @@ storage_cleanup::cleanup_audit_logs
 storage_cleanup::cleanup_escrows
 storage_cleanup::cleanup_consents
 storage_cleanup::cleanup_schedules
+
+# ── storage_migration ───────────────────────────────────────────────────────
+# Added by feat(storage_migration) — event emission pending a follow-up refactor
+storage_migration::initialize
+storage_migration::set_paused
+storage_migration::store
+storage_migration::read
 
 # ── sut_token ───────────────────────────────────────────────────────────────
 sut_token::initialize

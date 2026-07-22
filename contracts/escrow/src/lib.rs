@@ -196,9 +196,7 @@ fn update_stats(
 #[contractimpl]
 impl EscrowContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::Unauthorized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&ADMIN, &admin);
         Ok(())
     }

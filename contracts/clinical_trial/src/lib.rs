@@ -183,10 +183,8 @@ pub struct ClinicalTrial;
 #[contractimpl]
 impl ClinicalTrial {
     pub fn initialize(env: Env, admin: Address) {
+        governance_commons::init_guard(&env);
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return;
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()

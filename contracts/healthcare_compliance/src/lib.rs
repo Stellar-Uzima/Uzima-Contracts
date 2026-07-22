@@ -360,12 +360,10 @@ pub struct HealthcareComplianceContract;
 impl HealthcareComplianceContract {
     /// Initialize the compliance contract
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::ConsentAlreadyExists)?;
+
         #[cfg(not(test))]
         admin.require_auth();
-
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::ConsentAlreadyExists);
-        }
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&PAUSED, &false);
