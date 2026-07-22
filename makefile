@@ -5,6 +5,7 @@
 
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
+.PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
 
 ##@ General
 
@@ -323,6 +324,20 @@ estimate-storage: dist ## Calculate storage costs for a given number of entries
 	@bash scripts/measure_storage.sh
 
 measure-storage: estimate-storage
+
+perf-budget: ## Check contracts against the performance budgets (Issue #1086)
+	@echo "Evaluating performance budgets..."
+	@bash scripts/performance_budget_gate.sh --check
+
+perf-budget-update: ## Re-record performance budgets from the current build
+	@echo "Recording performance budgets..."
+	@bash scripts/performance_budget_gate.sh --update
+
+perf-budget-trend: ## Show performance budget trend across retained samples
+	@bash scripts/performance_budget_gate.sh --trend
+
+test-perf-budget: ## Run the performance budget gate test suite
+	@bash tests/performance_budget_gate_test.sh
 
 estimate-cross-chain: ## Estimate cross-chain transaction fees
 	@echo "Source Chain Fee:      0.00045678 XLM"
