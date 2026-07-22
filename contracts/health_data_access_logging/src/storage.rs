@@ -120,10 +120,10 @@ impl Storage {
             .storage()
             .persistent()
             .get(&DataKey::RollingHash)
-            .unwrap_or_else(|| BytesN::from_array(env, &[0u8; 32]));
+            .unwrap_or_else(|| BytesN::from_array(env, &[0; 32]));
 
         // Combine current and new hash: SHA256(current_hash || entry_hash)
-        let mut combined = Vec::<u8>::with_capacity(env, 64);
+        let mut combined = Vec::new(env);
         combined.append_array(&BytesN::from_array(env, current_hash.as_ref()));
         combined.append_array(&BytesN::from_array(env, entry_hash.as_ref()));
 
@@ -138,7 +138,7 @@ impl Storage {
         env.storage()
             .persistent()
             .get(&DataKey::RollingHash)
-            .unwrap_or_else(|| BytesN::from_array(env, &[0u8; 32]))
+            .unwrap_or_else(|| BytesN::from_array(env, &[0; 32]))
     }
 
     /// Get admin address

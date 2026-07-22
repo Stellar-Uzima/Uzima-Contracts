@@ -9,7 +9,7 @@ impl Queries {
     /// Retrieve all access logs for a specific patient
     pub fn get_access_logs(env: &Env, patient_id: &Address) -> Vec<AccessLogEntry> {
         let log_ids = Storage::get_patient_access_log_ids(env, patient_id);
-        let mut logs = Vec::with_capacity(env, log_ids.len());
+        let mut logs = Vec::new(env);
 
         for log_id in log_ids.iter() {
             if let Some(log) = Storage::get_access_log(env, log_id) {
@@ -28,7 +28,7 @@ impl Queries {
         end_timestamp: u64,
     ) -> Vec<AccessLogEntry> {
         let logs = Self::get_access_logs(env, patient_id);
-        let mut filtered = Vec::with_capacity(env, logs.len());
+        let mut filtered = Vec::new(env);
 
         for log in logs.iter() {
             if log.timestamp >= start_timestamp && log.timestamp <= end_timestamp {
@@ -46,7 +46,7 @@ impl Queries {
         accessor: &Address,
     ) -> Vec<AccessLogEntry> {
         let logs = Self::get_access_logs(env, patient_id);
-        let mut filtered = Vec::with_capacity(env, logs.len());
+        let mut filtered = Vec::new(env);
 
         for log in logs.iter() {
             if log.accessor_address == *accessor {
@@ -64,7 +64,7 @@ impl Queries {
         limit: u32,
     ) -> Vec<AccessLogEntry> {
         let log_ids = Storage::get_patient_access_log_ids(env, patient_id);
-        let mut logs = Vec::with_capacity(env, limit as usize);
+        let mut logs = Vec::new(env);
 
         // Iterate from the end (most recent) up to limit
         let start_idx = if log_ids.len() > limit as usize {
@@ -97,15 +97,16 @@ impl Queries {
         };
 
         // Create summary hash
-        let summary_data = format!(
-            "{}:{}:{}:{}:{}",
-            patient_id.to_string(),
-            total_accesses,
-            first_timestamp,
-            last_timestamp,
-            unique_accessors_count
-        );
-        let summary_hash: BytesN<32> = env.crypto().sha256(summary_data.as_bytes()).into();
+        let mut summary_data = patient_id.to_string();
+        summary_data.append(&soroban_sdk::String::from_str(env, ":"));
+        summary_data.append(&soroban_sdk::String::from_str(env, &total_accesses.to_string()));
+        summary_data.append(&soroban_sdk::String::from_str(env, ":"));
+        summary_data.append(&soroban_sdk::String::from_str(env, &first_timestamp.to_string()));
+        summary_data.append(&soroban_sdk::String::from_str(env, ":"));
+        summary_data.append(&soroban_sdk::String::from_str(env, &last_timestamp.to_string()));
+        summary_data.append(&soroban_sdk::String::from_str(env, ":"));
+        summary_data.append(&soroban_sdk::String::from_str(env, &unique_accessors_count.to_string()));
+        let summary_hash: BytesN<32> = env.crypto().sha256(&summary_data.to_bytes()).into();
 
         AccessLogSummary {
             patient_id: patient_id.clone(),
