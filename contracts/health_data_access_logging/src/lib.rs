@@ -75,15 +75,16 @@ impl HealthDataAccessLogging {
         let log_id = Storage::get_next_log_id(&env);
 
         // Create hash of the log entry for integrity
-        let log_data = format!(
-            "{}:{}:{}:{}:{}",
-            log_id,
-            patient_id.to_string(),
-            accessor_address.to_string(),
-            env.ledger().timestamp(),
-            access_type.clone()
-        );
-        let entry_hash: soroban_sdk::BytesN<32> = env.crypto().sha256(log_data.as_bytes()).into();
+        let mut log_data = String::from_str(&env, &log_id.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&patient_id.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&accessor_address.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&String::from_str(&env, &env.ledger().timestamp().to_string()));
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&access_type.clone());
+        let entry_hash: soroban_sdk::BytesN<32> = env.crypto().sha256(&log_data.to_bytes()).into();
 
         // Create the access log entry
         let access_log = AccessLogEntry {
