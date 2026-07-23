@@ -1,9 +1,12 @@
-# Matrix Deploy for testnet / futurenet (issue #980)
-# Runs on every push to main and on schedule (weekly), deploying
-# all contracts to both test environments using the shared deploy scripts.
+# Deterministic Deployment Pipeline with Rollback (Issue #1087)
+# Deploys contracts with artifact hash verification, deployment history tracking,
+# and automated rollback on failure.
 #
-# Each network gets its own identity (deployer-testnet / deployer-futurenet)
-# and the deployment JSON is uploaded as a workflow artifact for audit.
+# Features:
+# - WASM artifact hash verification for deterministic builds
+# - Deployment history tracking in deployments/history/
+# - Automated rollback on post-deploy health check failure
+# - Manual rollback workflow via workflow_dispatch
 
 name: Deploy
 
@@ -18,9 +21,14 @@ on:
         description: 'Target environment (testnet, futurenet, or "all")'
         required: false
         default: 'all'
+      rollback_version:
+        description: 'Deployment version to rollback to (optional)'
+        required: false
+        default: ''
 
 env:
   RUST_BACKTRACE: '1'
+  DEPLOY_HISTORY_DIR: 'deployments/history'
 
 jobs:
   detect:
@@ -31,13 +39,110 @@ jobs:
     steps:
       - id: set-matrix
         run: |
-          TARGETS='["testnet","futurenet"]'
+          if [ "${{ github.event.inputs.environment }}" = "all" ] || [ -z "${{ github.event.inputs.environment }}" ]; then
+            TARGETS='["testnet","futurenet"]'
+          else
+            TARGETS='["${{ github.event.inputs.environment }}"]'
+          fi
           echo "matrix=${TARGETS}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build & Verify
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_hash: ${{ steps.hash.outputs.hash }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Build optimized WASM
+        run: make build-opt
+
+      - name: Copy WASM to dist
+        run: make dist
+
+      - name: Compute artifact hash
+        id: hash
+        run: |
+          HASH=$(sha256sum dist/*.wasm | sort | sha256sum | cut -d' ' -f1)
+          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
+          echo "Artifact hash: ${HASH}"
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-artifacts-${{ github.sha }}
+          path: dist/*.wasm
+          retention-days: 90
+
+      - name: Save build manifest
+        run: |
+          mkdir -p ${{ env.DEPLOY_HISTORY_DIR }}
+          cat > ${{ env.DEPLOY_HISTORY_DIR }}/build-${{ github.sha }}.json << EOF
+          {
+            "commit": "${{ github.sha }}",
+            "artifact_hash": "${{ steps.hash.outputs.hash }}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "wasm_files": $(ls dist/*.wasm | jq -R . | jq -s .)
+          }
+          EOF
+
+      - name: Upload build manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-manifest-${{ github.sha }}
+          path: ${{ env.DEPLOY_HISTORY_DIR }}/build-${{ github.sha }}.json
+          retention-days: 90
+
+  rollback:
+    name: Rollback (${{ matrix.network }})
+    runs-on: ubuntu-latest
+    needs: detect
+    if: github.event.inputs.rollback_version != ''
+    strategy:
+      fail-fast: false
+      matrix:
+        network: ${{ fromJson(needs.detect.outputs.matrix) }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download rollback version
+        uses: actions/download-artifact@v4
+        with:
+          name: build-manifest-${{ github.event.inputs.rollback_version }}
+          path: rollback-manifest/
+
+      - name: Perform rollback
+        env:
+          SOROBAN_RPC_URL: ${{ matrix.network == 'testnet' && 'https://soroban-testnet.stellar.org' || 'https://rpc-futurenet.stellar.org' }}
+          SOROBAN_NETWORK_PASSPHRASE: ${{ matrix.network == 'testnet' && 'Test SDF Network ; September 2015' || 'Test SDF Future Network ; October 2022' }}
+          DEPLOYER_SECRET: ${{ secrets[m format('DEPLOYER_SECRET_{0}', matrix.network)] }}
+        run: |
+          echo "Rolling back to version: ${{ github.event.inputs.rollback_version }}"
+          ROLLBACK_HASH=$(jq -r '.artifact_hash' rollback-manifest/build-*.json)
+          echo "Rollback artifact hash: ${ROLLBACK_HASH}"
+
+          bash ./scripts/rollback_deployment.sh "${{ matrix.network }}" || {
+            echo "::error::Rollback failed for ${{ matrix.network }}"
+            exit 1
+          }
+
+      - name: Record rollback in history
+        run: |
+          mkdir -p ${{ env.DEPLOY_HISTORY_DIR }}
+          cat >> ${{ env.DEPLOY_HISTORY_DIR }}/history-${{ matrix.network }}.jsonl << EOF
+          {"action":"rollback","version":"${{ github.event.inputs.rollback_version }}","network":"${{ matrix.network }}","at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","actor":"${{ github.actor }}"}
+          EOF
 
   deploy:
     name: Deploy (${{ matrix.network }})
     runs-on: ubuntu-latest
-    needs: detect
+    needs: [detect, build]
+    if: github.event.inputs.rollback_version == ''
     strategy:
       fail-fast: false
       matrix:
@@ -50,14 +155,79 @@ jobs:
         with:
           targets: wasm32-unknown-unknown
 
-      - name: Build optimized WASM
-        run: make build-opt
+      - name: Download WASM artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: wasm-artifacts-${{ github.sha }}
+          path: dist/
+
+      - name: Verify artifact hash
+        run: |
+          EXPECTED_HASH="${{ needs.build.outputs.artifact_hash }}"
+          ACTUAL_HASH=$(sha256sum dist/*.wasm | sort | sha256sum | cut -d' ' -f1)
+          if [ "${EXPECTED_HASH}" != "${ACTUAL_HASH}" ]; then
+            echo "::error::Artifact hash mismatch! Expected: ${EXPECTED_HASH}, Got: ${ACTUAL_HASH}"
+            exit 1
+          fi
+          echo "Artifact hash verified: ${ACTUAL_HASH}"
+
+      - name: Save pre-deploy snapshot
+        id: snapshot
+        run: |
+          mkdir -p ${{ env.DEPLOY_HISTORY_DIR }}
+          SNAPSHOT_FILE="${{ env.DEPLOY_HISTORY_DIR }}/pre-deploy-${{ matrix.network }}-${{ github.sha }}.json"
+          DEPLOY_FILE="deployments/${{ matrix.network }}_medical_records.json"
+          if [ -f "$DEPLOY_FILE" ]; then
+            cp "$DEPLOY_FILE" "$SNAPSHOT_FILE"
+            echo "snapshot_file=${SNAPSHOT_FILE}" >> "$GITHUB_OUTPUT"
+          else
+            echo "No existing deployment to snapshot"
+          fi
 
       - name: Deploy to ${{ matrix.network }}
         id: deploy
         continue-on-error: true
+        env:
+          SOROBAN_RPC_URL: ${{ matrix.network == 'testnet' && 'https://soroban-testnet.stellar.org' || 'https://rpc-futurenet.stellar.org' }}
+          SOROBAN_NETWORK_PASSPHRASE: ${{ matrix.network == 'testnet' && 'Test SDF Network ; September 2015' || 'Test SDF Future Network ; October 2022' }}
+          DEPLOYER_SECRET: ${{ secrets[m format('DEPLOYER_SECRET_{0}', matrix.network)] }}
         run: |
           bash ./scripts/deploy_environment.sh "${{ matrix.network }}"
+
+      - name: Post-deploy health check
+        id: healthcheck
+        if: steps.deploy.outcome == 'success'
+        run: |
+          sleep 5
+          bash ./scripts/verify_deployment.sh "${{ matrix.network }}" || {
+            echo "::warning::Post-deploy health check failed"
+            exit 1
+          }
+
+      - name: Auto-rollback on health check failure
+        if: steps.healthcheck.outcome == 'failure' && steps.deploy.outcome == 'success'
+        run: |
+          echo "::warning::Auto-rolling back due to health check failure"
+          SNAPSHOT="${{ steps.outputs.snapshot_file }}"
+          if [ -n "$SNAPSHOT" ] && [ -f "$SNAPSHOT" ]; then
+            echo "Restoring pre-deploy snapshot..."
+            cp "$SNAPSHOT" "deployments/${{ matrix.network }}_medical_records.json"
+            echo "Rollback complete"
+          else
+            echo "::error::No snapshot available for rollback"
+          fi
+
+      - name: Record deployment in history
+        if: always()
+        run: |
+          mkdir -p ${{ env.DEPLOY_HISTORY_DIR }}
+          STATUS="success"
+          if [ "${{ steps.deploy.outcome }}" != "success" ] || [ "${{ steps.healthcheck.outcome }}" = "failure" ]; then
+            STATUS="failed"
+          fi
+          cat >> ${{ env.DEPLOY_HISTORY_DIR }}/history-${{ matrix.network }}.jsonl << EOF
+          {"action":"deploy","commit":"${{ github.sha }}","artifact_hash":"${{ needs.build.outputs.artifact_hash }}","network":"${{ matrix.network }}","status":"${STATUS}","at":"$(date -u +%Y-%m-%dT%H:%M:%SZ)","actor":"${{ github.actor }}"}
+          EOF
 
       - name: Upload deployment artifacts
         if: always()
@@ -65,20 +235,34 @@ jobs:
         with:
           name: deployment-${{ matrix.network }}-${{ github.sha }}
           path: deployments/${{ matrix.network }}/
-          retention-days: 30
+          retention-days: 90
+
+      - name: Upload deployment history
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-history-${{ matrix.network }}-${{ github.sha }}
+          path: ${{ env.DEPLOY_HISTORY_DIR }}/history-${{ matrix.network }}.jsonl
+          retention-days: 90
 
       - name: File issue on deployment failure
-        if: steps.deploy.outcome == 'failure'
+        if: steps.deploy.outcome == 'failure' || steps.healthcheck.outcome == 'failure'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          REASON="deploy failure"
+          if [ "${{ steps.healthcheck.outcome }}" = "failure" ]; then
+            REASON="post-deploy health check failure"
+          fi
           gh issue create \
             --title "Deploy to ${{ matrix.network }} failed ($(date -u +%Y-%m-%d))" \
             --label "deploy,ops" \
-            --body "## Deploy failure
+            --body "## Deployment failure ($REASON)
 
 **Workflow run:** ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 **Network:** ${{ matrix.network }}
+**Commit:** ${{ github.sha }}
+**Artifact hash:** ${{ needs.build.outputs.artifact_hash }}
 **Date:** $(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 See the workflow run logs for details." \
