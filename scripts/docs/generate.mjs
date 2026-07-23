@@ -11,6 +11,108 @@ const OUTPUT_JSON = path.join(PROJECT_ROOT, 'schemas/docs/api.json');
 const OUTPUT_MD = path.join(PROJECT_ROOT, 'docs/API_REFERENCE.md');
 const OUTPUT_HTML = path.join(PROJECT_ROOT, 'docs/portal/index.html');
 
+function parseFields(body) {
+  const fields = [];
+  let currentField = '';
+  let angleDepth = 0;
+  let parenDepth = 0;
+  let braceDepth = 0;
+  
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    if (char === '<') angleDepth++;
+    else if (char === '>') angleDepth--;
+    else if (char === '(') parenDepth++;
+    else if (char === ')') parenDepth--;
+    else if (char === '{') braceDepth++;
+    else if (char === '}') braceDepth--;
+    
+    if (char === ',' && angleDepth === 0 && parenDepth === 0 && braceDepth === 0) {
+      processField(currentField);
+      currentField = '';
+    } else {
+      currentField += char;
+    }
+  }
+  if (currentField.trim()) {
+    processField(currentField);
+  }
+  
+  function processField(fieldStr) {
+    fieldStr = fieldStr.trim();
+    if (!fieldStr) return;
+    fieldStr = fieldStr.replace(/\/\/.*/g, '');
+    fieldStr = fieldStr.replace(/\/\*[\s\S]*?\*\//g, '');
+    fieldStr = fieldStr.replace(/#\[[\s\S]*?\]/g, '');
+    fieldStr = fieldStr.trim();
+    if (!fieldStr) return;
+    
+    const match = fieldStr.match(/(?:pub\s+)?(\w+)\s*:\s*([\s\S]+)/);
+    if (match) {
+      fields.push({
+        name: match[1],
+        type: match[2].trim().replace(/\s+/g, ' '),
+        description: '—'
+      });
+    }
+  }
+  return fields;
+}
+
+function parseEnumVariants(body) {
+  const variants = [];
+  let currentVariant = '';
+  let angleDepth = 0;
+  let parenDepth = 0;
+  let braceDepth = 0;
+  
+  for (let i = 0; i < body.length; i++) {
+    const char = body[i];
+    if (char === '<') angleDepth++;
+    else if (char === '>') angleDepth--;
+    else if (char === '(') parenDepth++;
+    else if (char === ')') parenDepth--;
+    else if (char === '{') braceDepth++;
+    else if (char === '}') braceDepth--;
+    
+    if (char === ',' && angleDepth === 0 && parenDepth === 0 && braceDepth === 0) {
+      processVariant(currentVariant);
+      currentVariant = '';
+    } else {
+      currentVariant += char;
+    }
+  }
+  if (currentVariant.trim()) {
+    processVariant(currentVariant);
+  }
+  
+  function processVariant(variantStr) {
+    variantStr = variantStr.trim();
+    if (!variantStr) return;
+    variantStr = variantStr.replace(/\/\/.*/g, '');
+    variantStr = variantStr.replace(/\/\*[\s\S]*?\*\//g, '');
+    variantStr = variantStr.replace(/#\[[\s\S]*?\]/g, '');
+    variantStr = variantStr.trim();
+    if (!variantStr) return;
+    
+    const valMatch = variantStr.match(/^(\w+)\s*=\s*(.+)$/);
+    if (valMatch) {
+      variants.push({
+        variant: valMatch[1],
+        value: valMatch[2].trim(),
+        description: '—'
+      });
+    } else {
+      variants.push({
+        variant: variantStr,
+        value: '—',
+        description: '—'
+      });
+    }
+  }
+  return variants;
+}
+
 function parseContract(contractPath) {
   const name = path.basename(contractPath);
   const libPath = path.join(contractPath, 'src/lib.rs');
@@ -36,39 +138,57 @@ function parseContract(contractPath) {
     if (line.startsWith('///')) {
       currentDocs.push(line.replace('///', '').trim());
     } else if (line.startsWith('pub fn ')) {
-      const match = line.match(/pub fn (\w+)\(([^)]*)\)(?: -> ([^{]+))?/);
+      let signatureLines = [];
+      let j = i;
+      let openParenCount = 0;
+      let closeParenCount = 0;
+      
+      while (j < lines.length) {
+        const sigLine = lines[j];
+        signatureLines.push(sigLine);
+        
+        openParenCount += (sigLine.match(/\(/g) || []).length;
+        closeParenCount += (sigLine.match(/\)/g) || []).length;
+        
+        const cleanLine = sigLine.replace(/\/\/.*/, '');
+        if ((cleanLine.includes('{') || cleanLine.includes(';')) && openParenCount > 0 && openParenCount <= closeParenCount) {
+          break;
+        }
+        j++;
+      }
+      
+      const fullSig = signatureLines.join(' ').replace(/\s+/g, ' ').trim();
+      const match = fullSig.match(/pub fn (\w+)(?:<[^>]+>)?\s*\(([\s\S]*?)\)(?:\s*->\s*([^{;]+))?/);
       if (match) {
+        const fnName = match[1];
+        const params = match[2].trim().replace(/\s+/g, ' ').replace(/,\s*$/, '');
+        const returns = (match[3] || '()').trim().replace(/\s+/g, ' ');
         contractData.functions.push({
-          name: match[1],
-          params: match[2].trim(),
-          returns: (match[3] || '()').trim(),
+          name: fnName,
+          params: params,
+          returns: returns,
           description: currentDocs.join(' ') || '—'
         });
       }
+      i = j;
       currentDocs = [];
-    } else if (line.length > 0 && !line.startsWith('#')) {
+    } else if (line.length > 0 && !line.startsWith('#') && !line.startsWith('//')) {
       currentDocs = [];
     }
   }
 
-  // Extract types (simplified)
+  // Extract types
   const typeMatches = libContent.matchAll(/pub (struct|enum) (\w+) \{([\s\S]*?)\}/g);
   for (const match of typeMatches) {
     const kind = match[1];
     const typeName = match[2];
     const body = match[3];
-    const fields = [];
+    let fields = [];
 
     if (kind === 'struct') {
-      const fieldMatches = body.matchAll(/pub (\w+): ([^,]+)/g);
-      for (const f of fieldMatches) {
-        fields.push({ name: f[1], type: f[2].trim(), description: '—' });
-      }
+      fields = parseFields(body);
     } else {
-      const variantMatches = body.matchAll(/(\w+)(?: = (\d+))?/g);
-      for (const v of variantMatches) {
-        fields.push({ variant: v[1], value: v[2] || '—', description: '—' });
-      }
+      fields = parseEnumVariants(body);
     }
 
     contractData.types.push({ kind, name: typeName, fields });
@@ -92,7 +212,7 @@ function parseContract(contractPath) {
     const testMatches = testContent.matchAll(/#\[test\]\s+fn (\w+)\(\) \{([\s\S]*?)\n\}/g);
     for (const match of testMatches) {
       const testName = match[1];
-      const testBody = match[2].split('\n').slice(0, 10).join('\n').trim(); // Take first 10 lines as example
+      const testBody = match[2].split('\n').slice(0, 10).join('\n').trim();
       contractData.examples.push({ name: testName, code: testBody });
     }
   }
@@ -266,6 +386,80 @@ async function main() {
   fs.mkdirSync(path.dirname(OUTPUT_HTML), { recursive: true });
   fs.writeFileSync(OUTPUT_HTML, generateHTML(data));
   console.log(`Saved HTML to ${OUTPUT_HTML}`);
+
+  // Mapping core contracts to their mdBook files
+  const coreContractsMap = {
+    'medical_records': 'medical-records.md',
+    'healthcare_payment': 'healthcare-payment.md',
+    'appointment_booking_escrow': 'appointment-booking-escrow.md',
+    'identity_registry': 'identity-registry.md',
+    'escrow': 'escrow.md'
+  };
+
+  const SITE_API_DIR = path.join(PROJECT_ROOT, 'docs/site/api-reference');
+  for (const contract of data) {
+    const siteFileName = coreContractsMap[contract.name];
+    if (siteFileName) {
+      const filePath = path.join(SITE_API_DIR, siteFileName);
+      if (fs.existsSync(filePath)) {
+        console.log(`Injecting API reference for ${contract.name} into ${filePath}...`);
+        let content = fs.readFileSync(filePath, 'utf8');
+        const startMarker = '<!-- API_START -->';
+        const endMarker = '<!-- API_END -->';
+        const startIndex = content.indexOf(startMarker);
+        const endIndex = content.indexOf(endMarker);
+        
+        if (startIndex !== -1 && endIndex !== -1) {
+          let contractMd = '\n\n## Key Functions\n\n';
+          if (contract.functions.length > 0) {
+            contractMd += '| Function | Parameters | Returns | Description |\n';
+            contractMd += '|---|---|---|---|\n';
+            contract.functions.forEach(f => {
+              contractMd += `| \`${f.name}\` | \`${f.params.replace(/\|/g, '\\|')}\` | \`${f.returns.replace(/\|/g, '\\|')}\` | ${f.description} |\n`;
+            });
+          } else {
+            contractMd += '_No public functions found._\n';
+          }
+          
+          if (contract.types.length > 0) {
+            contractMd += '\n## Types\n\n';
+            contract.types.forEach(t => {
+              contractMd += `### \`${t.kind} ${t.name}\`\n\n`;
+              if (t.kind === 'struct') {
+                contractMd += '| Field | Type | Description |\n';
+                contractMd += '|---|---|---|\n';
+                t.fields.forEach(f => {
+                  contractMd += `| \`${f.name}\` | \`${f.type}\` | ${f.description} |\n`;
+                });
+              } else {
+                contractMd += '| Variant | Value | Description |\n';
+                contractMd += '|---|---|---|\n';
+                t.fields.forEach(f => {
+                  contractMd += `| \`${f.variant}\` | ${f.value} | ${f.description} |\n`;
+                });
+              }
+              contractMd += '\n';
+            });
+          }
+          
+          if (contract.errorCodes.length > 0) {
+            contractMd += '\n## Error Codes\n\n';
+            contractMd += '| Variant | Code | Description |\n';
+            contractMd += '|---|---|---|\n';
+            contract.errorCodes.forEach(e => {
+              contractMd += `| \`${e.name}\` | ${e.code} | — |\n`;
+            });
+            contractMd += '\n';
+          }
+          
+          const newContent = content.substring(0, startIndex + startMarker.length) + contractMd + content.substring(endIndex);
+          fs.writeFileSync(filePath, newContent);
+        } else {
+          console.warn(`Markers not found in ${filePath}`);
+        }
+      }
+    }
+  }
 
   console.log('Documentation generation complete! 🚀');
 }

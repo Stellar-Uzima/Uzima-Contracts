@@ -10,43 +10,116 @@ General-purpose escrow with pull-payment pattern, reentrancy guard, and platform
 - Pull-payment pattern: funds are credited to balances, not pushed directly
 - State updated before any external interaction (CEI pattern)
 
+<!-- API_START -->
+
 ## Key Functions
 
-### `initialize(admin) → Result<(), Error>`
+| Function | Parameters | Returns | Description |
+|---|---|---|---|
+| `initialize` | `env: Env, admin: Address` | `Result<(), Error>` | — |
+| `set_fee_config` | `env: Env, caller: Address, fee_receiver: Address, platform_fee_bps: u32` | `Result<(), Error>` | — |
+| `get_fee_config` | `env: Env` | `Option<FeeConfig>` | — |
+| `create_escrow` | `env: Env, order_id: u64, payer: Address, payee: Address, amount: i128, token: Address` | `Result<bool, Error>` | — |
+| `mark_disputed` | `env: Env, caller: Address, order_id: u64` | `Result<(), Error>` | — |
+| `approve_release` | `env: Env, order_id: u64, approver: Address` | `Result<(), Error>` | — |
+| `release_escrow` | `env: Env, order_id: u64` | `Result<bool, Error>` | — |
+| `refund_escrow` | `env: Env, order_id: u64, reason: String` | `Result<bool, Error>` | — |
+| `get_escrow` | `env: Env, order_id: u64` | `Option<Escrow>` | — |
+| `get_credit` | `env: Env, addr: Address` | `i128` | — |
+| `withdraw` | `env: Env, caller: Address, token: Address, to: Address` | `Result<i128, Error>` | — |
+| `get_total_volume` | `env: Env` | `i128` | — |
+| `get_total_escrows` | `env: Env` | `u64` | — |
+| `get_settled_rate` | `env: Env` | `u32` | — |
+| `get_refund_rate` | `env: Env` | `u32` | — |
+| `get_dispute_rate` | `env: Env` | `u32` | — |
+| `get_active_escrows_count` | `env: Env` | `u64` | — |
+| `get_stats_summary` | `env: Env` | `PlatformStats` | — |
+| `get_platform_health_score` | `env: Env` | `u32` | — |
+| `get_token_volume` | `env: Env, _token: Address` | `i128` | — |
+| `get_donor_reputation` | `env: Env, _donor: Address` | `u32` | — |
+| `get_daily_stats` | `env: Env, day_id: u64` | `Option<DailyStats>` | — |
+| `export_summary` | `env: Env, format: String` | `ExportMetadata` | — |
 
-Initialize the contract.
+## Types
 
-### `set_fee_config(caller, fee_receiver, platform_fee_bps) → Result<(), Error>`
+### `enum EscrowStatus`
 
-Configure platform fee (in basis points, max 10000).
+| Variant | Value | Description |
+|---|---|---|
+| `Pending` | 0 | — |
+| `Active` | 1 | — |
+| `Settled` | 2 | — |
+| `Refunded` | 3 | — |
+| `Disputed` | 4 | — |
 
-### `create_escrow(order_id, payer, payee, amount, token) → Result<bool, Error>`
+### `struct Escrow`
 
-Create a new escrow. Transitions to `Pending`.
+| Field | Type | Description |
+|---|---|---|
+| `order_id` | `u64` | — |
+| `payer` | `Address` | — |
+| `payee` | `Address` | — |
+| `amount` | `i128` | — |
+| `token` | `Address` | — |
+| `status` | `EscrowStatus` | — |
+| `approvals` | `Vec<Address>` | — |
+| `reason` | `String` | — |
 
-### `approve_release(order_id, approver) → Result<(), Error>`
+### `struct PlatformStats`
 
-Approve release of funds. Transitions `Pending → Active` on first approval.
+| Field | Type | Description |
+|---|---|---|
+| `total_volume` | `i128` | — |
+| `total_escrows` | `u64` | — |
+| `settled_count` | `u64` | — |
+| `refunded_count` | `u64` | — |
+| `disputed_count` | `u64` | — |
+| `active_count` | `u64` | — |
 
-### `release_escrow(order_id) → Result<bool, Error>`
+### `struct DailyStats`
 
-Release funds to payee (requires ≥2 approvals). Credits balances via pull-payment.
+| Field | Type | Description |
+|---|---|---|
+| `day_id` | `u64` | — |
+| `volume` | `i128` | — |
+| `count` | `u32` | — |
 
-**State transition**: `Active/Disputed → Settled`
+### `struct ExportMetadata`
 
-### `refund_escrow(order_id, reason) → Result<bool, Error>`
+| Field | Type | Description |
+|---|---|---|
+| `format` | `String` | — |
+| `checksum` | `BytesN<32>` | — |
+| `timestamp` | `u64` | — |
 
-Refund funds to payer.
+### `struct FeeConfig`
 
-**State transition**: `Active/Disputed → Refunded`
+| Field | Type | Description |
+|---|---|---|
+| `platform_fee_bps` | `u32` | — |
+| `fee_receiver` | `Address` | — |
 
-### `withdraw(caller, token, to) → Result<i128, Error>`
 
-Withdraw credited balance. Caller must equal `to`.
+## Error Codes
 
-### `get_credit(addr) → i128`
+| Variant | Code | Description |
+|---|---|---|
+| `Unauthorized` | 100 | — |
+| `NotAdmin` | 102 | — |
+| `InsufficientApprovals` | 120 | — |
+| `InvalidAmount` | 205 | — |
+| `InvalidFeeBps` | 260 | — |
+| `FeeNotSet` | 380 | — |
+| `ReentrancyGuard` | 381 | — |
+| `InvalidStateTransition` | 382 | — |
+| `EscrowExists` | 480 | — |
+| `EscrowNotFound` | 481 | — |
+| `AlreadySettled` | 482 | — |
+| `NoBasisToRefund` | 560 | — |
+| `NoCredit` | 561 | — |
+| `Overflow` | 562 | — |
 
-Get pending withdrawal balance for an address.
+<!-- API_END -->
 
 ## Escrow Status Flow
 

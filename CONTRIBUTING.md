@@ -38,6 +38,7 @@ bash scripts/check-naming.sh
 - Document all public APIs with `///` doc comments
 - Include examples for complex functions
 - Update relevant documentation when changing functionality
+- **Regenerate reference docs**: If you modify any contract's public functions, types, or errors, run the shortcut `make docs` to update the API reference and mdBook site pages. The CI validates that generated documentation is up to date and will fail if there is any drift.
 
 ## Testing Requirements
 
@@ -94,6 +95,9 @@ cargo clippy -- -D warnings
 
 # Format code
 cargo fmt
+
+# Regenerate API and site documentation (run this if you modify any public contract interfaces)
+make docs
 ```
 
 ### CI/CD Pipeline
