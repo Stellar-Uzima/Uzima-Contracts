@@ -1,198 +1,11 @@
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Map, String, Vec};
-
-// ==================== Event Schema Definitions ====================
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[contracttype]
-pub enum EventType {
-    UserCreated,
-    UserRoleUpdated,
-    UserDeactivated,
-    UserActivated,
-    RecordCreated,
-    RecordAccessed,
-    RecordUpdated,
-    RecordDeleted,
-    AccessRequested,
-    AccessGranted,
-    AccessDenied,
-    AccessRevoked,
-    EmergencyAccessGranted,
-    EmergencyAccessRevoked,
-    EmergencyAccessExpired,
-    ContractPaused,
-    ContractUnpaused,
-    RecoveryProposed,
-    RecoveryApproved,
-    RecoveryExecuted,
-    RecoveryRejected,
-    AIConfigUpdated,
-    AnomalyScoreSubmitted,
-    RiskScoreSubmitted,
-    AIAnalysisTriggered,
-    CrossChainSyncInitiated,
-    CrossChainSyncCompleted,
-    CrossChainRecordReferenced,
-    HealthCheck,
-    MetricUpdate,
-    PermissionGranted,
-    PermissionRevoked,
-    MetadataUpdated,
-    DataQualityValidated,
-    /// Emitted when a traditional-medicine record is written; contains only
-    /// non-sensitive practice_type to preserve patient privacy.
-    TraditionalRecordAdded,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[contracttype]
-pub enum OperationCategory {
-    UserManagement,
-    RecordOperations,
-    AccessControl,
-    EmergencyAccess,
-    Administrative,
-    AIIntegration,
-    CrossChain,
-    System,
-    DataQuality,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct EventMetadata {
-    pub event_type: EventType,
-    pub category: OperationCategory,
-    pub timestamp: u64,
-    pub user_id: Address,
-    pub session_id: Option<String>, // Changed from BytesN to String for serialization
-    pub ipfs_ref: Option<String>,
-    pub gas_used: Option<u64>,
-    pub block_height: u64,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct UserEventData {
-    pub target_user: Address,
-    pub role: Option<String>,
-    pub previous_role: Option<String>,
-    pub did_reference: Option<String>,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct RecordEventData {
-    pub record_id: u64,
-    pub patient_id: Address,
-    pub doctor_id: Option<Address>,
-    pub is_confidential: bool,
-    pub category: String,
-    pub tags: Vec<String>,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct AccessEventData {
-    pub record_id: u64,
-    pub requester: Address,
-    pub patient: Address,
-    pub purpose: String,
-    pub granted: bool,
-    pub credential_hash: Option<String>, // Changed from BytesN for serialization
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct EmergencyEventData {
-    pub grantee: Address,
-    pub patient: Address,
-    pub record_scope: Vec<u64>,
-    pub expires_at: u64,
-    pub is_active: bool,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct RecoveryEventData {
-    pub proposal_id: u64,
-    pub token_contract: Address,
-    pub recipient: Address,
-    pub amount: i128,
-    pub executed: bool,
-    pub approver_count: u32,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct AIEventData {
-    pub record_id: Option<u64>,
-    pub patient_id: Option<Address>,
-    pub model_id: BytesN<32>,
-    pub score_bps: u32,
-    pub model_version: String,
-    pub analysis_type: String,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct CrossChainEventData {
-    pub local_record_id: u64,
-    pub external_chain: String,
-    pub external_record_hash: BytesN<32>,
-    pub sync_status: String,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct SystemEventData {
-    pub status: String,
-    pub metric_name: Option<String>,
-    pub metric_value: Option<u64>,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct PermissionEventData {
-    pub grantee: Address,
-    pub permission_bit: u32,
-    pub granter: Address,
-    pub expiration: u64,
-    pub is_delegatable: bool,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct MetadataEventData {
-    pub record_id: u64,
-    pub patient_id: Address,
-    pub version: u32,
-    pub tag_count: u32,
-    pub custom_field_count: u32,
-}
-
-#[derive(Clone)]
-#[allow(clippy::enum_variant_names)]
-#[contracttype]
-pub enum EventData {
-    UserEvent(UserEventData),
-    RecordEvent(RecordEventData),
-    AccessEvent(AccessEventData),
-    EmergencyEvent(EmergencyEventData),
-    RecoveryEvent(RecoveryEventData),
-    AIEvent(AIEventData),
-    CrossChainEvent(CrossChainEventData),
-    SystemEvent(SystemEventData),
-    PermissionEvent(PermissionEventData),
-    MetadataEvent(MetadataEventData),
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct BaseEvent {
-    pub metadata: EventMetadata,
-    pub data: EventData,
-}
+use super::event_schema::{
+    AccessGrantedEvent, AccessRequestedEvent, AiAnalysisTriggeredEvent, AiConfigUpdatedEvent,
+    AnomalyScoreSubmittedEvent, AuditContext, ContractPausedEvent, ContractUnpausedEvent,
+    EmergencyAccessGrantedEvent, EventEnvelope, HealthCheckEvent, RecordAccessedEvent,
+    RecordCreatedEvent, RecoveryApprovedEvent, RecoveryExecutedEvent, RecoveryProposedEvent,
+    RiskScoreSubmittedEvent, UserCreatedEvent, UserDeactivatedEvent, UserRoleUpdatedEvent,
+};
+use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
 // ==================== Event Publishing Functions ====================
 
@@ -201,25 +14,21 @@ pub fn emit_user_created(
     admin: Address,
     new_user: Address,
     role: &str,
-    did_ref: Option<String>,
+    _did_ref: Option<String>,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::UserCreated,
-            category: OperationCategory::UserManagement,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "user_created"),
+        version: 1,
+        body: UserCreatedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            user: new_user.clone(),
+            role: String::from_str(env, role),
         },
-        data: EventData::UserEvent(UserEventData {
-            target_user: new_user.clone(),
-            role: Some(String::from_str(env, role)),
-            previous_role: None,
-            did_reference: did_ref,
-        }),
     };
     env.events()
         .publish((symbol_short!("USER_ADD"), admin, new_user), event);
@@ -232,46 +41,38 @@ pub fn emit_user_role_updated(
     new_role: &str,
     previous_role: Option<&str>,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::UserRoleUpdated,
-            category: OperationCategory::UserManagement,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::UserEvent(UserEventData {
-            target_user: target_user.clone(),
-            role: Some(String::from_str(env, new_role)),
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "user_role_updated"),
+        version: 1,
+        body: UserRoleUpdatedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            user: target_user.clone(),
+            new_role: String::from_str(env, new_role),
             previous_role: previous_role.map(|r| String::from_str(env, r)),
-            did_reference: None,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("ROLE_UPD"), admin, target_user), event);
 }
 
 pub fn emit_user_deactivated(env: &Env, admin: Address, target_user: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::UserDeactivated,
-            category: OperationCategory::UserManagement,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "user_deactivated"),
+        version: 1,
+        body: UserDeactivatedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            user: target_user.clone(),
         },
-        data: EventData::UserEvent(UserEventData {
-            target_user: target_user.clone(),
-            role: None,
-            previous_role: None,
-            did_reference: None,
-        }),
     };
     env.events()
         .publish((symbol_short!("USR_DEACT"), admin, target_user), event);
@@ -286,55 +87,46 @@ pub fn emit_record_created(
     category: String,
     tags: Vec<String>,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RecordCreated,
-            category: OperationCategory::RecordOperations,
-            timestamp: env.ledger().timestamp(),
-            user_id: doctor.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecordEvent(RecordEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "record_created"),
+        version: 1,
+        body: RecordCreatedEvent {
+            audit: AuditContext {
+                actor: doctor.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             record_id,
-            patient_id: patient.clone(),
-            doctor_id: Some(doctor.clone()),
+            patient: patient.clone(),
+            doctor: doctor.clone(),
             is_confidential,
             category,
             tags,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("REC_NEW"), doctor, patient), event);
 }
 
 pub fn emit_record_accessed(env: &Env, accessor: Address, record_id: u64, patient: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RecordAccessed,
-            category: OperationCategory::RecordOperations,
-            timestamp: env.ledger().timestamp(),
-            user_id: accessor.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecordEvent(RecordEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "record_accessed"),
+        version: 1,
+        body: RecordAccessedEvent {
+            audit: AuditContext {
+                actor: accessor.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             record_id,
-            patient_id: patient.clone(),
-            doctor_id: None,
-            is_confidential: false,
-            category: String::from_str(env, ""),
-            tags: Vec::new(env),
-        }),
+            patient: patient.clone(),
+        },
     };
     env.events()
         .publish((symbol_short!("REC_ACC"), accessor, patient), event);
 }
-
 
 pub fn emit_access_requested(
     env: &Env,
@@ -344,30 +136,26 @@ pub fn emit_access_requested(
     purpose: String,
     credential_hash: Option<String>,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::AccessRequested,
-            category: OperationCategory::AccessControl,
-            timestamp: env.ledger().timestamp(),
-            user_id: requester.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::AccessEvent(AccessEventData {
-            record_id,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "access_requested"),
+        version: 1,
+        body: AccessRequestedEvent {
+            audit: AuditContext {
+                actor: requester.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             requester: requester.clone(),
             patient: patient.clone(),
+            record_id,
             purpose,
-            granted: false,
             credential_hash,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("ACC_REQ"), requester, patient), event);
 }
-
 
 pub fn emit_access_granted(
     env: &Env,
@@ -378,25 +166,23 @@ pub fn emit_access_granted(
     purpose: String,
     credential_hash: Option<String>,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::AccessGranted,
-            category: OperationCategory::AccessControl,
-            timestamp: env.ledger().timestamp(),
-            user_id: granter.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::AccessEvent(AccessEventData {
-            record_id,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "access_granted"),
+        version: 1,
+        body: AccessGrantedEvent {
+            audit: AuditContext {
+                actor: granter.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            granter: granter.clone(),
             requester: requester.clone(),
             patient: patient.clone(),
+            record_id,
             purpose,
-            granted: true,
             credential_hash,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("ACC_GRANT"), granter, requester), event);
@@ -410,68 +196,55 @@ pub fn emit_emergency_access_granted(
     record_scope: Vec<u64>,
     expires_at: u64,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::EmergencyAccessGranted,
-            category: OperationCategory::EmergencyAccess,
-            timestamp: env.ledger().timestamp(),
-            user_id: granter.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::EmergencyEvent(EmergencyEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "emergency_access_granted"),
+        version: 1,
+        body: EmergencyAccessGrantedEvent {
+            audit: AuditContext {
+                actor: granter.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            granter: granter.clone(),
             grantee: grantee.clone(),
             patient: patient.clone(),
             record_scope,
             expires_at,
-            is_active: true,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("EM_GRANT"), granter, grantee), event);
 }
 
 pub fn emit_contract_paused(env: &Env, admin: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::ContractPaused,
-            category: OperationCategory::Administrative,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "contract_paused"),
+        version: 1,
+        body: ContractPausedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
         },
-        data: EventData::SystemEvent(SystemEventData {
-            status: String::from_str(env, "paused"),
-            metric_name: None,
-            metric_value: None,
-        }),
     };
-    env.events()
-        .publish((symbol_short!("PAUSED"), admin), event);
+    env.events().publish((symbol_short!("PAUSED"), admin), event);
 }
 
 pub fn emit_contract_unpaused(env: &Env, admin: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::ContractUnpaused,
-            category: OperationCategory::Administrative,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "contract_unpaused"),
+        version: 1,
+        body: ContractUnpausedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
         },
-        data: EventData::SystemEvent(SystemEventData {
-            status: String::from_str(env, "active"),
-            metric_name: None,
-            metric_value: None,
-        }),
     };
     env.events()
         .publish((symbol_short!("UNPAUSED"), admin), event);
@@ -485,55 +258,39 @@ pub fn emit_recovery_proposed(
     recipient: Address,
     amount: i128,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RecoveryProposed,
-            category: OperationCategory::Administrative,
-            timestamp: env.ledger().timestamp(),
-            user_id: proposer.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "recovery_proposed"),
+        version: 1,
+        body: RecoveryProposedEvent {
+            audit: AuditContext {
+                actor: proposer.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             proposal_id,
-            token_contract: token_contract.clone(),
-            recipient: recipient.clone(),
+            token_contract,
+            recipient,
             amount,
-            executed: false,
-            approver_count: 1,
-        }),
+        },
     };
     env.events()
-        .publish((symbol_short!("REC_PROP"), proposer, recipient), event);
+        .publish((symbol_short!("REC_PROP"), proposer), event);
 }
 
 pub fn emit_recovery_approved(env: &Env, approver: Address, proposal_id: u64) {
-    // Generate placeholder addresses for required fields in event struct
-    // In a real system, we'd look up the proposal, but this is just an event emitter
-    // Optimized to avoid lookups
-    let placeholder = approver.clone();
-
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RecoveryApproved,
-            category: OperationCategory::Administrative,
-            timestamp: env.ledger().timestamp(),
-            user_id: approver.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "recovery_approved"),
+        version: 1,
+        body: RecoveryApprovedEvent {
+            audit: AuditContext {
+                actor: approver.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             proposal_id,
-            token_contract: placeholder.clone(),
-            recipient: placeholder,
-            amount: 0,
-            executed: false,
-            approver_count: 0,
-        }),
+        },
     };
     env.events()
         .publish((symbol_short!("REC_APPR"), approver), event);
@@ -547,53 +304,42 @@ pub fn emit_recovery_executed(
     recipient: Address,
     amount: i128,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RecoveryExecuted,
-            category: OperationCategory::Administrative,
-            timestamp: env.ledger().timestamp(),
-            user_id: executor.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecoveryEvent(RecoveryEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "recovery_executed"),
+        version: 1,
+        body: RecoveryExecutedEvent {
+            audit: AuditContext {
+                actor: executor.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             proposal_id,
-            token_contract: token_contract.clone(),
-            recipient: recipient.clone(),
+            token_contract,
+            recipient,
             amount,
-            executed: true,
-            approver_count: 0,
-        }),
+        },
     };
     env.events()
-        .publish((symbol_short!("REC_EXEC"), executor, recipient), event);
+        .publish((symbol_short!("REC_EXEC"), executor), event);
 }
 
-pub fn emit_ai_config_updated(env: &Env, admin: Address, _ai_coordinator: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::AIConfigUpdated,
-            category: OperationCategory::AIIntegration,
-            timestamp: env.ledger().timestamp(),
-            user_id: admin.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+pub fn emit_ai_config_updated(env: &Env, admin: Address, ai_coordinator: Address) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "ai_config_updated"),
+        version: 1,
+        body: AiConfigUpdatedEvent {
+            audit: AuditContext {
+                actor: admin.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            ai_coordinator,
         },
-        data: EventData::AIEvent(AIEventData {
-            record_id: None,
-            patient_id: None,
-            model_id: BytesN::from_array(env, &[0u8; 32]), // Placeholder
-            score_bps: 0,
-            model_version: String::from_str(env, ""),
-            analysis_type: String::from_str(env, "config_update"),
-        }),
     };
     env.events()
-        .publish((symbol_short!("AI_CFG"), admin, _ai_coordinator), event);
+        .publish((symbol_short!("AI_CFG"), admin), event);
 }
 
 pub fn emit_anomaly_score_submitted(
@@ -605,28 +351,25 @@ pub fn emit_anomaly_score_submitted(
     score_bps: u32,
     model_version: String,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::AnomalyScoreSubmitted,
-            category: OperationCategory::AIIntegration,
-            timestamp: env.ledger().timestamp(),
-            user_id: ai_coordinator.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::AIEvent(AIEventData {
-            record_id: Some(record_id),
-            patient_id: Some(patient.clone()),
-            model_id,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "anomaly_score_submitted"),
+        version: 1,
+        body: AnomalyScoreSubmittedEvent {
+            audit: AuditContext {
+                actor: ai_coordinator.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            record_id,
+            patient,
+            model_.id,
             score_bps,
             model_version,
-            analysis_type: String::from_str(env, "anomaly_detection"),
-        }),
+        },
     };
     env.events()
-        .publish((symbol_short!("ANOMALY"), ai_coordinator, patient), event);
+        .publish((symbol_short!("ANOMALY"), ai_coordinator), event);
 }
 
 pub fn emit_risk_score_submitted(
@@ -637,402 +380,60 @@ pub fn emit_risk_score_submitted(
     score_bps: u32,
     model_version: String,
 ) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::RiskScoreSubmitted,
-            category: OperationCategory::AIIntegration,
-            timestamp: env.ledger().timestamp(),
-            user_id: ai_coordinator.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::AIEvent(AIEventData {
-            record_id: None,
-            patient_id: Some(patient.clone()),
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "risk_score_submitted"),
+        version: 1,
+        body: RiskScoreSubmittedEvent {
+            audit: AuditContext {
+                actor: ai_coordinator.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            patient,
             model_id,
             score_bps,
             model_version,
-            analysis_type: String::from_str(env, "risk_assessment"),
-        }),
+        },
     };
     env.events()
-        .publish((symbol_short!("RISK_SCR"), ai_coordinator, patient), event);
+        .publish((symbol_short!("RISK_SCR"), ai_coordinator), event);
 }
 
-
 pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::AIAnalysisTriggered,
-            category: OperationCategory::AIIntegration,
-            timestamp: env.ledger().timestamp(),
-            user_id: patient.clone(), // Context user
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "ai_analysis_triggered"),
+        version: 1,
+        body: AiAnalysisTriggeredEvent {
+            audit: AuditContext {
+                actor: patient.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            record_id,
+            patient,
         },
-        data: EventData::AIEvent(AIEventData {
-            record_id: Some(record_id),
-            patient_id: Some(patient.clone()),
-            model_id: BytesN::from_array(env, &[0u8; 32]), // Placeholder
-            score_bps: 0,
-            model_version: String::from_str(env, ""),
-            analysis_type: String::from_str(env, "analysis_triggered"),
-        }),
     };
     env.events()
         .publish((symbol_short!("AI_TRIG"), patient), event);
 }
 
 pub fn emit_health_check(env: &Env, status: String, gas_used: u64) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::HealthCheck,
-            category: OperationCategory::System,
-            timestamp: env.ledger().timestamp(),
-            user_id: env.current_contract_address(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: Some(gas_used),
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::SystemEvent(SystemEventData {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "health_check"),
+        version: 1,
+        body: HealthCheckEvent {
+            audit: AuditContext {
+                actor: env.current_contract_address(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
             status,
-            metric_name: Some(String::from_str(env, "health_liveness")),
-            metric_value: Some(1),
-        }),
+            gas_used,
+        },
     };
     env.events()
-        .publish(("EVENT", symbol_short!("HEALTH")), event);
-}
-
-pub fn emit_permission_granted(
-    env: &Env,
-    granter: Address,
-    grantee: Address,
-    permission: u32,
-    expiration: u64,
-    is_delegatable: bool,
-) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::PermissionGranted,
-            category: OperationCategory::AccessControl,
-            timestamp: env.ledger().timestamp(),
-            user_id: granter.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::PermissionEvent(PermissionEventData {
-            grantee: grantee.clone(),
-            permission_bit: permission,
-            granter: granter.clone(),
-            expiration,
-            is_delegatable,
-        }),
-    };
-    env.events()
-        .publish((symbol_short!("PERM_GRNT"), granter, grantee), event);
-}
-
-pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, permission: u32) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::PermissionRevoked,
-            category: OperationCategory::AccessControl,
-            timestamp: env.ledger().timestamp(),
-            user_id: revoker.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::PermissionEvent(PermissionEventData {
-            grantee: grantee.clone(),
-            permission_bit: permission,
-            granter: revoker.clone(),
-            expiration: 0,
-            is_delegatable: false,
-        }),
-    };
-    env.events()
-        .publish((symbol_short!("PERM_REV"), revoker, grantee), event);
-}
-
-pub fn emit_metadata_updated(
-    env: &Env,
-    caller: Address,
-    record_id: u64,
-    patient_id: Address,
-    version: u32,
-    tag_count: u32,
-    custom_field_count: u32,
-) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::MetadataUpdated,
-            category: OperationCategory::RecordOperations,
-            timestamp: env.ledger().timestamp(),
-            user_id: caller.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::MetadataEvent(MetadataEventData {
-            record_id,
-            patient_id: patient_id.clone(),
-            version,
-            tag_count,
-            custom_field_count,
-        }),
-    };
-    env.events()
-        .publish((symbol_short!("META_UPD"), caller, patient_id), event);
-}
-
-pub fn emit_data_quality_validated(
-    env: &Env,
-    caller: Address,
-    record_id: u64,
-    overall_score: u32,
-    is_fhir_compliant: bool,
-    issue_count: u32,
-) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::DataQualityValidated,
-            category: OperationCategory::DataQuality,
-            timestamp: env.ledger().timestamp(),
-            user_id: caller.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::SystemEvent(SystemEventData {
-            status: if is_fhir_compliant {
-                String::from_str(env, "fhir_compliant")
-            } else {
-                String::from_str(env, "non_compliant")
-            },
-            metric_name: Some(String::from_str(env, "quality_score")),
-            metric_value: Some(overall_score as u64),
-        }),
-    };
-    env.events().publish(
-        (symbol_short!("DQ_VALID"), caller),
-        (event, record_id, issue_count),
-    );
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct EventFilter {
-    pub event_types: Option<Vec<EventType>>,
-    pub categories: Option<Vec<OperationCategory>>,
-    pub user_id: Option<Address>,
-    pub start_time: Option<u64>,
-    pub end_time: Option<u64>,
-    pub limit: Option<u32>,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct EventQueryResult {
-    pub events: Vec<BaseEvent>,
-    pub total_count: u64,
-    pub has_more: bool,
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct EventStats {
-    pub total_events: u64,
-    pub events_by_type: Map<EventType, u64>,
-    pub events_by_category: Map<OperationCategory, u64>,
-    pub events_by_user: Map<Address, u64>,
-    pub time_range: (u64, u64), // (start, end)
-}
-
-#[derive(Clone)]
-#[contracttype]
-pub struct MonitoringDashboard {
-    pub stats: EventStats,
-    pub recent_events: Vec<BaseEvent>,
-    pub alerts: Vec<String>,
-    pub health_status: String,
-}
-
-
-pub fn filter_events(events: &Vec<BaseEvent>, filter: &EventFilter) -> Vec<BaseEvent> {
-    let mut filtered = Vec::new(events.env());
-
-    for event in events.iter() {
-        let metadata = &event.metadata;
-
-        // Filter by event types
-        if let Some(ref types) = filter.event_types {
-            let mut found = false;
-            for event_type in types.iter() {
-                if metadata.event_type == event_type {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                continue;
-            }
-        }
-
-        // Filter by categories
-        if let Some(ref categories) = filter.categories {
-            let mut found = false;
-            for category in categories.iter() {
-                if metadata.category == category {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                continue;
-            }
-        }
-
-        // Filter by user
-        if let Some(ref user_filter) = filter.user_id {
-            if metadata.user_id != *user_filter {
-                continue;
-            }
-        }
-
-        // Filter by time range
-        if let Some(start_time) = filter.start_time {
-            if metadata.timestamp < start_time {
-                continue;
-            }
-        }
-        if let Some(end_time) = filter.end_time {
-            if metadata.timestamp > end_time {
-                continue;
-            }
-        }
-
-        filtered.push_back(event.clone());
-    }
-
-    // Apply limit
-    if let Some(limit) = filter.limit {
-        let mut limited = Vec::new(events.env());
-        // Fix: Cast u32 to usize safely
-        let len = filtered.len().min(limit);
-        for i in 0..len {
-            if let Some(event) = filtered.get(i) {
-                limited.push_back(event);
-            }
-        }
-        limited
-    } else {
-        filtered
-    }
-}
-
-
-pub fn aggregate_events(events: &Vec<BaseEvent>) -> EventStats {
-    let env = &events.env();
-    let mut events_by_type: Map<EventType, u64> = Map::new(env);
-    let mut events_by_category: Map<OperationCategory, u64> = Map::new(env);
-    let mut events_by_user: Map<Address, u64> = Map::new(env);
-
-    let mut min_time = u64::MAX;
-    let mut max_time = 0u64;
-
-    for event in events.iter() {
-        let metadata = &event.metadata;
-
-        // Track time range
-        if metadata.timestamp < min_time {
-            min_time = metadata.timestamp;
-        }
-        if metadata.timestamp > max_time {
-            max_time = metadata.timestamp;
-        }
-
-        // Count by type
-        let curr_type = metadata.event_type;
-        let type_count = events_by_type.get(curr_type).unwrap_or(0).saturating_add(1);
-        events_by_type.set(curr_type, type_count);
-
-        // Count by category
-        let curr_cat = metadata.category;
-        let category_count = events_by_category
-            .get(curr_cat)
-            .unwrap_or(0)
-            .saturating_add(1);
-        events_by_category.set(curr_cat, category_count);
-
-        // Count by user
-        let user = metadata.user_id.clone();
-        let user_count = events_by_user
-            .get(user.clone())
-            .unwrap_or(0)
-            .saturating_add(1);
-        events_by_user.set(user.clone(), user_count);
-    }
-
-    // Handle empty case
-    if min_time == u64::MAX {
-        min_time = 0;
-    }
-
-    EventStats {
-        total_events: events.len() as u64,
-        events_by_type,
-        events_by_category,
-        events_by_user,
-        time_range: (min_time, max_time),
-    }
-}
-
-/// Emit `TraditionalRecordAdded` – exposes only the non-sensitive `practice_type`.
-/// Fields like `remedies_used` or `cultural_context` must NEVER appear in events.
-pub fn emit_traditional_record_added(
-    env: &Env,
-    doctor: Address,
-    record_id: u64,
-    patient: Address,
-    practice_type: String,
-) {
-    let event = BaseEvent {
-        metadata: EventMetadata {
-            event_type: EventType::TraditionalRecordAdded,
-            category: OperationCategory::RecordOperations,
-            timestamp: env.ledger().timestamp(),
-            user_id: doctor.clone(),
-            session_id: None,
-            ipfs_ref: None,
-            gas_used: None,
-            block_height: env.ledger().sequence() as u64,
-        },
-        data: EventData::RecordEvent(RecordEventData {
-            record_id,
-            patient_id: patient.clone(),
-            doctor_id: Some(doctor.clone()),
-            is_confidential: true, // traditional records are always treated as confidential
-            category: String::from_str(env, "Traditional"),
-            // practice_type is safe to surface; all other fields remain off-chain.
-            tags: {
-                let mut t = soroban_sdk::Vec::new(env);
-                t.push_back(practice_type);
-                t
-            },
-        }),
-    };
-    env.events()
-        .publish((symbol_short!("TRAD_NEW"), doctor, patient), event);
+        .publish((symbol_short!("HEALTH"),), event);
 }
