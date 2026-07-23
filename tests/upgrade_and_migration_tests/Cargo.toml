@@ -1,0 +1,13 @@
+[package]
+name = "upgrade-and-migration-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { workspace = true }
+upgradeability = { path = "../../contracts/upgradeability" }
+integration_framework = { path = "../integration_framework" }
+
+[[bin]]
+name = "upgrade-and-migration-tests"
+path = "src/main.rs"
