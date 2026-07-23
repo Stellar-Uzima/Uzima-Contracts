@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-  # ── Stellar / Soroban Local Network ──────────────────────────────────────
   stellar-node:
     image: stellar/quickstart:testing
     container_name: uzima-stellar-node
@@ -24,7 +23,6 @@ services:
     networks:
       - uzima-net
 
-  # ── Contract Builder ─────────────────────────────────────────────────────
   contracts-builder:
     build:
       context: .
@@ -59,10 +57,15 @@ services:
     environment:
       RUST_BACKTRACE: "1"
       CARGO_TERM_COLOR: "always"
+    healthcheck:
+      test: ["CMD", "test", "-f", "dist/medical_records.wasm"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     networks:
       - uzima-net
 
-  # ── Contract Deployer & Seeder ───────────────────────────────────────────
   quickstart:
     build:
       context: .
@@ -72,6 +75,8 @@ services:
     depends_on:
       contracts-builder:
         condition: service_completed_successfully
+      stellar-node:
+        condition: service_healthy
     working_dir: /workspace
     volumes:
       - .:/workspace:cached
@@ -80,7 +85,6 @@ services:
     command: >
       bash -c "
         echo '=== Running Quickstart ===' &&
-        sleep 3 &&
         soroban config network add local
           --rpc-url http://stellar-node:8000/soroban/rpc
           --network-passphrase 'Standalone Network ; February 2017' 2>/dev/null || true &&
@@ -89,23 +93,34 @@ services:
         soroban config identity generate dev-patient 2>/dev/null || true &&
         export SOROBAN_RPC_URL=http://stellar-node:8000/soroban/rpc &&
         chmod +x scripts/quickstart_dev.sh &&
-        bash scripts/quickstart_dev.sh --skip-build || echo 'Quickstart completed with warnings'
+        bash scripts/quickstart_dev.sh --skip-build &&
+        echo '=== Quickstart Complete ===' &&
+        touch /tmp/quickstart-done
       "
     environment:
       RUST_BACKTRACE: "1"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/quickstart-done"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
     networks:
       - uzima-net
 
-  # ── Optional: Health Monitor ─────────────────────────────────────────────
   health-monitor:
     image: curlimages/curl:latest
     container_name: uzima-health-monitor
     depends_on:
-      - stellar-node
+      stellar-node:
+        condition: service_healthy
     command: >
       sh -c "
         while true; do
-          curl -s http://stellar-node:8000/ > /dev/null && echo 'Stellar node: UP' || echo 'Stellar node: DOWN';
+          echo -n 'Stellar RPC: ';
+          curl -sf http://stellar-node:8000/ && echo 'UP' || echo 'DOWN';
+          echo -n 'Soroban RPC: ';
+          curl -sf http://stellar-node:8000/soroban/rpc && echo 'UP' || echo 'DOWN';
           sleep 30;
         done
       "
@@ -113,6 +128,25 @@ services:
       - uzima-net
     profiles:
       - monitoring
+
+  smoke-test:
+    image: curlimages/curl:latest
+    container_name: uzima-smoke-test
+    depends_on:
+      quickstart:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '=== Smoke Test: Stellar Node ===' &&
+        curl -sf http://stellar-node:8000/ > /dev/null && echo 'Stellar Node: PASS' || { echo 'Stellar Node: FAIL'; exit 1; } &&
+        echo '=== Smoke Test: Soroban RPC ===' &&
+        curl -sf http://stellar-node:8000/soroban/rpc > /dev/null && echo 'Soroban RPC: PASS' || { echo 'Soroban RPC: FAIL'; exit 1; } &&
+        echo '=== All smoke tests passed ==='
+      "
+    networks:
+      - uzima-net
+    profiles:
+      - test
 
 volumes:
   stellar-data:
