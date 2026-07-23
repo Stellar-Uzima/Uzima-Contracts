@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AccessGrantedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "granter": {
+      "type": "string"
+    },
+    "requester": {
+      "type": "string"
+    },
+    "patient": {
+      "type": "string"
+    },
+    "recordId": {
+      "type": "integer"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "credentialHash": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "audit",
+    "granter",
+    "requester",
+    "patient",
+    "recordId",
+    "purpose"
+  ]
+}

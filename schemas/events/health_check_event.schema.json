@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "HealthCheckEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string"
+    },
+    "gasUsed": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "audit",
+    "status",
+    "gasUsed"
+  ]
+}

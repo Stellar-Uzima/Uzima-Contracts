@@ -77,6 +77,7 @@ mod test_permissions;
 
 mod errors;
 mod events;
+mod event_schema;
 pub mod policy;
 mod validation;
 mod storage;
