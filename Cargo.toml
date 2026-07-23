@@ -6,6 +6,7 @@ members = [
     "contract_optimizer",
     "tests/interoperability_suite",
     "tests/integration_framework",
+    "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
 ]
 
