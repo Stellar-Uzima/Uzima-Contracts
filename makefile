@@ -3,7 +3,7 @@
 # Auto-generated help: grep ##@ and ## comments from this Makefile
 # Usage  : make help
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations bootstrap-test health-check smoke-test-docker
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 .PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
 
@@ -487,3 +487,19 @@ release-metrics: check-deps
 	fi
 	@echo "📊 Generating release metrics for v$(VERSION)..."
 	./scripts/release_metrics.sh $(VERSION)
+##@ Dev Environment Health
+
+bootstrap-test: check-deps ## Run local dev environment smoke test
+	@echo "Running bootstrap smoke test..."
+	bash scripts/test-bootstrap.sh
+
+health-check: ## Run container health checks for local dev services
+	@echo "Running container health checks..."
+	bash scripts/health-check.sh
+
+smoke-test-docker: ## Run Docker-based smoke test (requires docker-compose up)
+	@echo "Running Docker smoke test..."
+	docker compose --profile test run --rm smoke-test
+
+dev-health: bootstrap-test health-check ## Run both bootstrap and container health checks
+	@echo "Dev environment health check complete"
