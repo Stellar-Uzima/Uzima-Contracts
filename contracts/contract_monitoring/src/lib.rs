@@ -18,6 +18,7 @@ use soroban_sdk::{
 };
 
 pub mod telemetry;
+pub mod security_telemetry;
 use telemetry::{
     build_event, current_schema_version, emit_telemetry_event, EventClass, TelemetryEvent,
     TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,
@@ -384,9 +385,79 @@ impl ContractMonitoring {
             operational_count: total_calls,
             security_count: total_errors,
             error_count: total_errors,
-            critical_count: 0, // threshold breaches tracked via events, not persisted
+            critical_count: 0,
             snapshot_at: env.ledger().timestamp(),
         })
+    }
+
+    /// Initialize security alerting configuration (admin only).
+    pub fn initialize_security_alerting(
+        env: Env,
+        config: security_telemetry::SecurityAlertConfig,
+    ) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::initialize_security_config(&env, &config);
+        Ok(())
+    }
+
+    /// Record a security event for tracking and alerting.
+    pub fn record_security_event(
+        env: Env,
+        event_type: security_telemetry::SecurityEventType,
+        source: Address,
+        function_name: soroban_sdk::String,
+    ) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        security_telemetry::record_security_event(&env, event_type, &source, &function_name)
+    }
+
+    /// Check if an address is currently locked.
+    pub fn is_address_locked(env: Env, address: Address) -> bool {
+        security_telemetry::is_address_locked(&env, &address)
+    }
+
+    /// Lock a suspicious address (admin only).
+    pub fn lock_address(env: Env, address: Address) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::lock_address(&env, &address);
+        Ok(())
+    }
+
+    /// Unlock an address (admin only).
+    pub fn unlock_address(env: Env, address: Address) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::unlock_address(&env, &admin, &address)
+    }
+
+    /// Get a snapshot of all security telemetry data.
+    pub fn get_security_snapshot(
+        env: Env,
+    ) -> Result<security_telemetry::SecuritySnapshot, MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        security_telemetry::get_security_snapshot(&env)
+    }
+
+    /// Get a specific security alert by ID.
+    pub fn get_security_alert(
+        env: Env,
+        alert_id: u32,
+    ) -> Option<security_telemetry::SecurityAlert> {
+        security_telemetry::get_security_alert(&env, alert_id)
+    }
+
+    /// Get the failure count for a specific address and event type.
+    pub fn get_address_failure_count(
+        env: Env,
+        address: Address,
+        event_type: security_telemetry::SecurityEventType,
+    ) -> u64 {
+        security_telemetry::get_address_failure_count(&env, &address, event_type)
     }
 
     // ── Internal ──────────────────────────────────────────────────────────────
