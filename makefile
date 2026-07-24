@@ -58,9 +58,9 @@ help:
 install-deps:
 	@echo "Installing Rust toolchain..."
 	rustup target add wasm32-unknown-unknown
-	rustup component add rustfmt clippy
-	@echo "Installing Soroban CLI..."
-	cargo install --locked soroban-cli
+	rustup component add rustfmt clippy rust-src
+	@echo "Installing Soroban CLI v21.7.7..."
+	cargo install --locked --version 21.7.7 soroban-cli
 	@echo "Installing shellcheck (if not present)..."
 	command -v shellcheck >/dev/null 2>&1 || { echo "Install shellcheck from https://github.com/koalaman/shellcheck"; }
 	@echo "Dependencies installed successfully!"
