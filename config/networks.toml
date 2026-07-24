@@ -84,3 +84,43 @@ network = "mainnet"
 identity = "prod"
 dry-run = true
 simulation = true
+
+# ─── Secrets & Identity Management (Issue #1185) ─────────────────────────────
+
+[secrets.defaults]
+encryption_enabled = false
+rotation_policy_days = 30
+max_secret_age_days = 90
+vault_backend = "local"                        # local | vault | aws-sm
+
+[secrets.identity]
+default_key_type = "ed25519"
+default_identity_names = ["admin", "deployer", "approver"]
+address_derivation = "soroban-cli"             # soroban-cli | manual
+
+[secrets.rate_limit]
+max_requests_per_window = 5
+window_seconds = 3600
+cooldown_seconds = 86400
+
+[secrets.session]
+ttl_seconds = 3600
+mfa_threshold = 2
+
+[secrets.networks.local]
+secrets_dir = ".secrets/local"
+encryption_enabled = false
+
+[secrets.networks.testnet]
+secrets_dir = ".secrets/testnet"
+encryption_enabled = false
+
+[secrets.networks.futurenet]
+secrets_dir = ".secrets/futurenet"
+encryption_enabled = false
+
+[secrets.networks.mainnet]
+secrets_dir = ".secrets/mainnet"
+encryption_enabled = true
+rotation_policy_days = 14
+vault_backend = "vault"
