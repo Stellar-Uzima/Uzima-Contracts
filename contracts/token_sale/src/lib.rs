@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! token_sale - Healthcare smart contract on Stellar blockchain.
 
 mod contract;

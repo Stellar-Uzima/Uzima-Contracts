@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! homomorphic_registry - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 

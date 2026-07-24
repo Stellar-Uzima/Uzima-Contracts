@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! pharma_supply_chain - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{

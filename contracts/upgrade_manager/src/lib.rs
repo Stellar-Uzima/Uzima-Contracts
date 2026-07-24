@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! upgrade_manager - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;

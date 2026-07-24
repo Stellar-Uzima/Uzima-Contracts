@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! audit_forensics - Healthcare smart contract on Stellar blockchain.
 
 mod errors;

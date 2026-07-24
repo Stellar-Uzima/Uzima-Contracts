@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! health_data_access_logging - Healthcare smart contract on Stellar blockchain.
 
 pub mod queries;

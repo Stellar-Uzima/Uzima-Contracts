@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! fhir_integration - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 // #[cfg(test)]

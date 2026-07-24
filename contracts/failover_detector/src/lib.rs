@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! failover_detector - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{

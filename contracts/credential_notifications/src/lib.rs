@@ -7,6 +7,7 @@
 //!   Only notifiers (or the admin) may call `send_notification`.
 //! - **Unauthorized callers**: All other callers are rejected with `Error::Unauthorized`.
 #![no_std]
+#![forbid(alloc)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol,
