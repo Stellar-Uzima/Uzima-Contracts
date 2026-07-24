@@ -1865,3 +1865,144 @@ fn proptest_record_attributes_persistence() {
             "Timestamp must be set");
     });
 }
+
+// ==================== Compartmentalized Data Access Tests ====================
+
+#[test]
+fn test_create_data_compartment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let compartment_id = Symbol::new(&env, "CARDIOLOGY");
+    let description = String::from_str(&env, "Cardiology records compartment");
+
+    let result = client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Clinical,
+        &description,
+        &Role::Doctor,
+        &false,
+    );
+
+    assert!(result.is_ok());
+
+    let compartment = client.get_data_compartment(&compartment_id);
+    assert!(compartment.is_ok());
+    let c = compartment.unwrap();
+    assert_eq!(c.tier, DataAccessTier::Clinical);
+    assert_eq!(c.required_role, Role::Doctor);
+}
+
+#[test]
+fn test_create_data_compartment_not_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let user = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "CARDIOLOGY");
+    let description = String::from_str(&env, "Cardiology records");
+
+    let result = client.create_data_compartment(
+        &user,
+        &compartment_id,
+        &DataAccessTier::Clinical,
+        &description,
+        &Role::Doctor,
+        &false,
+    );
+
+    assert_eq!(result, Err(Error::NotAuthorized));
+}
+
+#[test]
+fn test_grant_and_revoke_compartment_access() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let patient = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "GENERAL");
+    let description = String::from_str(&env, "General records");
+
+    // Create compartment first
+    client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Basic,
+        &description,
+        &Role::Patient,
+        &false,
+    );
+
+    // Grant access
+    let result = client.grant_compartment_access(
+        &admin,
+        &patient,
+        &compartment_id,
+        &None,
+    );
+    assert!(result.is_ok());
+
+    // Check access
+    let user = Address::generate(&env);
+    client.manage_user(&admin, &user, &Role::Doctor);
+
+    assert!(client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+
+    // Revoke access
+    let result = client.revoke_compartment_access(&admin, &patient, &compartment_id);
+    assert!(result.is_ok());
+
+    assert!(!client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+}
+
+#[test]
+fn test_compartment_access_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let patient = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "TEMP");
+    let description = String::from_str(&env, "Temporary access");
+
+    // Create compartment
+    client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Sensitive,
+        &description,
+        &Role::Doctor,
+        &true,
+    );
+
+    // Grant with expiry in the past
+    let past_expiry = env.ledger().timestamp().saturating_sub(1000);
+    client.grant_compartment_access(
+        &admin,
+        &patient,
+        &compartment_id,
+        &Some(past_expiry),
+    );
+
+    let user = Address::generate(&env);
+    client.manage_user(&admin, &user, &Role::Doctor);
+
+    // Access should be denied (expired)
+    assert!(!client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+}
