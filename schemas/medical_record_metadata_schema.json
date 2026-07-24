@@ -1,0 +1,128 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Medical Record Metadata Schema",
+  "description": "Schema for typed schema evolution of medical record metadata in the Uzima healthcare platform",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "type": "object",
+      "description": "Version identifier for the schema",
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Major version number (incremented for breaking changes)"
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Minor version number (incremented for backward-compatible additions)"
+        },
+        "patch": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Patch version number (incremented for bug fixes)"
+        }
+      },
+      "required": ["major", "minor", "patch"],
+      "additionalProperties": false
+    },
+    "schema_evolution": {
+      "type": "object",
+      "description": "Describes a schema evolution step",
+      "properties": {
+        "from_version": { "$ref": "#/properties/schema_version" },
+        "to_version": { "$ref": "#/properties/schema_version" },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the schema change"
+        },
+        "field_additions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of new fields added in this evolution"
+        },
+        "field_removals": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of fields removed in this evolution"
+        },
+        "field_renames": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Mapping of old field names to new field names"
+        },
+        "breaking_changes": {
+          "type": "boolean",
+          "description": "Whether this evolution includes breaking changes"
+        }
+      },
+      "required": [
+        "from_version",
+        "to_version",
+        "description",
+        "field_additions",
+        "field_removals",
+        "field_renames",
+        "breaking_changes"
+      ],
+      "additionalProperties": false
+    },
+    "migration_plan": {
+      "type": "object",
+      "description": "Migration plan for upgrading records between schema versions",
+      "properties": {
+        "plan_id": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Unique identifier for the migration plan"
+        },
+        "from_version": { "$ref": "#/properties/schema_version" },
+        "to_version": { "$ref": "#/properties/schema_version" },
+        "affected_records": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of records affected by this migration"
+        },
+        "migrated_count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of records successfully migrated so far"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["planned", "in_progress", "completed", "failed", "rolled_back"],
+          "description": "Current status of the migration"
+        },
+        "created_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Timestamp when the migration plan was created"
+        },
+        "completed_at": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Timestamp when the migration was completed (0 if not yet)"
+        }
+      },
+      "required": [
+        "plan_id",
+        "from_version",
+        "to_version",
+        "affected_records",
+        "migrated_count",
+        "status",
+        "created_at",
+        "completed_at"
+      ],
+      "additionalProperties": false
+    },
+    "migration_status": {
+      "type": "string",
+      "enum": ["planned", "in_progress", "completed", "failed", "rolled_back"],
+      "description": "Status of a schema migration"
+    }
+  },
+  "required": ["schema_version"],
+  "additionalProperties": false
+}
