@@ -52,3 +52,25 @@ pub fn publish_jurisdictions_updated(
         (patient, provider, timestamp),
     );
 }
+
+/// Emitted when the default consent policy is updated by admin.
+pub fn publish_policy_updated(env: &Env, admin: &Address, timestamp: u64) {
+    env.events().publish(
+        (symbol_short!("CONSENT"), symbol_short!("POLICY")),
+        (admin, timestamp),
+    );
+}
+
+/// Emitted when a consent is approaching expiration (within notification window).
+pub fn publish_consent_expiring_soon(
+    env: &Env,
+    patient: &Address,
+    provider: &Address,
+    expires_at: u64,
+    remaining_secs: u64,
+) {
+    env.events().publish(
+        (symbol_short!("CONSENT"), symbol_short!("EXP_SOON")),
+        (patient, provider, expires_at, remaining_secs),
+    );
+}

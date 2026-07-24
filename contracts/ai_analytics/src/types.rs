@@ -138,6 +138,9 @@ pub enum Error {
     CollectionTooLarge = 9,
     StringTooLong = 10,
     NestingTooDeep = 11,
+    CapabilityExpired = 12,
+    CapabilityNotFound = 13,
+    InvalidInput = 14,
 }
 
 impl core::fmt::Display for Error {
@@ -154,6 +157,9 @@ impl core::fmt::Display for Error {
             Error::CollectionTooLarge => write!(f, "collection too large"),
             Error::StringTooLong => write!(f, "string too long"),
             Error::NestingTooDeep => write!(f, "nesting too deep"),
+            Error::CapabilityExpired => write!(f, "capability expired"),
+            Error::CapabilityNotFound => write!(f, "capability not found"),
+            Error::InvalidInput => write!(f, "invalid input"),
         }
     }
 }

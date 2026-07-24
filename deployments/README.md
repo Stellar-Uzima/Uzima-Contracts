@@ -35,7 +35,16 @@ Signed-by: <auditor ed25519 pubkey>
 
 1. **Build** the release artifacts from the pinned toolchain
    (`rust-toolchain.toml`): `make dist`.
-2. **Record** the hashes for the network/release and attach the auditor's
+2. **Sign** release artifacts and record checksums:
+
+   ```sh
+   ./scripts/sign_release_artifacts.sh v1.0.0
+   ```
+
+   This generates SHA256SUMS.txt, creates a GPG signature, and builds a
+   release manifest at `artifacts/release-v1.0.0/`.
+
+3. **Record** the hashes for the network/release and attach the auditor's
    signing pubkey:
 
    ```sh
@@ -43,16 +52,17 @@ Signed-by: <auditor ed25519 pubkey>
    git add deployments/mainnet/v1.0.0/hashes.txt && git commit
    ```
 
-3. **Verify** at any later point (and in CI) that a fresh build still matches
+4. **Verify** at any later point (and in CI) that a fresh build still matches
    the audited record:
 
    ```sh
    make dist
-   ./scripts/verify_deployment.sh compare mainnet v1.0.0
+   ./scripts/verify_release_artifacts.sh v1.0.0 mainnet
    ```
 
-   `compare` exits non-zero on any mismatch, failing CI. If no record exists
-   for the target yet, it is a no-op (so CI passes until a release is recorded).
+   `verify_release_artifacts.sh` checks WASM checksums, deployment hashes,
+   release manifest integrity, and build provenance. It exits non-zero on
+   any mismatch, failing CI.
 
 See [`docs/SECURITY_BEST_PRACTICES.md`](../docs/SECURITY_BEST_PRACTICES.md)
 ("Deterministic Build Verification") and

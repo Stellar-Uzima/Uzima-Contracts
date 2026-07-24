@@ -1,6 +1,7 @@
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String};
 
 use crate::{
+    capability::{self, AnalyticsCapability},
     serialization_utils::SafeSerialize,
     types::{DataKey, Error, FederatedRound, ModelMetadata, ParticipantUpdateMeta},
     utils,
@@ -14,7 +15,14 @@ pub fn start_round(
     dp_epsilon: u32,
 ) -> Result<u64, Error> {
     caller.require_auth();
-    utils::ensure_admin(&env, &caller)?;
+    let admin_check = utils::ensure_admin(&env, &caller);
+    if admin_check.is_err() {
+        capability::require_capability(
+            &env,
+            &caller,
+            AnalyticsCapability::StartRound as u32,
+        )?;
+    }
 
     if min_participants == 0 {
         return Err(Error::NotEnoughParticipants);
@@ -50,6 +58,14 @@ pub fn submit_update(
     num_samples: u32,
 ) -> Result<bool, Error> {
     participant.require_auth();
+    let admin_check = utils::ensure_admin(&env, &participant);
+    if admin_check.is_err() {
+        capability::require_capability(
+            &env,
+            &participant,
+            AnalyticsCapability::SubmitUpdate as u32,
+        )?;
+    }
 
     let mut round: FederatedRound = env
         .storage()
@@ -104,7 +120,14 @@ pub fn finalize_round(
     fairness_report_ref: String,
 ) -> Result<bool, Error> {
     caller.require_auth();
-    utils::ensure_admin(&env, &caller)?;
+    let admin_check = utils::ensure_admin(&env, &caller);
+    if admin_check.is_err() {
+        capability::require_capability(
+            &env,
+            &caller,
+            AnalyticsCapability::FinalizeRound as u32,
+        )?;
+    }
 
     let mut round: FederatedRound = env
         .storage()
