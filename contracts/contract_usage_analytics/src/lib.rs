@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! contract_usage_analytics - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{

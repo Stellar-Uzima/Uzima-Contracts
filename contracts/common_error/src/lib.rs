@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! # Common Error
 //!
 //! Shared `CommonError` enum and remediation hints for the Uzima Contracts

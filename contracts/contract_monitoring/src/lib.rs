@@ -12,6 +12,7 @@
 //! * Alert thresholds are configurable; when breached an `ALERT` event is emitted.
 
 #![no_std]
+#![forbid(alloc)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String,

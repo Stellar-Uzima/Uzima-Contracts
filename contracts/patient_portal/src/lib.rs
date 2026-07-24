@@ -8,6 +8,7 @@
 //! [`identity_registry`]: ../../identity_registry/src/lib.rs
 
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]

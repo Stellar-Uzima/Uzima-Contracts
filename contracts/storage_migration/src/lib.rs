@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! storage_migration - Storage migration helper for the Uzima Contracts
 //! platform. Enables safe, audited migration of contract data between
 //! storage key formats during contract upgrades (issue #968).

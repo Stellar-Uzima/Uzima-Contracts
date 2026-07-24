@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! provider_directory - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};

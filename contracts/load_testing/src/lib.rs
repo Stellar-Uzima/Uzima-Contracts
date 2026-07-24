@@ -13,6 +13,7 @@
 //!   Soroban test environment.
 
 #![no_std]
+#![forbid(alloc)]
 
 pub mod scenarios;
 
