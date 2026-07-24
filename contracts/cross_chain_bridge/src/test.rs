@@ -1488,6 +1488,53 @@ fn test_chaos_relayer_offline_recovery() {
 }
 
 #[test]
+fn test_offline_reconciliation_for_pending_sync_events() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let (validator, sk) = setup_validator(&env, &client, &admin);
+    env.mock_all_auths();
+
+    let event_id = client.sync_cross_chain_event(
+        &validator,
+        &ChainId::Ethereum,
+        &ChainId::Stellar,
+        &CrossChainEventType::RecordUpdated,
+        &BytesN::from_array(&env, &[0x11; 32]),
+        &10,
+        &dummy_sig(&env),
+        &1,
+    );
+
+    let reconciliation_id = client.schedule_reconciliation(
+        &validator,
+        &event_id,
+        &String::from_str(&env, "offline relayer backlog"),
+        &1,
+    );
+
+    let reconciliation = client.get_reconciliation(&reconciliation_id).unwrap();
+    assert_eq!(reconciliation.event_id, event_id);
+    assert_eq!(reconciliation.status, crate::ReconciliationStatus::Pending);
+
+    let confirmed = client.complete_reconciliation(
+        &validator,
+        &reconciliation_id,
+        &EventSyncStatus::Synced,
+        &dummy_sig(&env),
+        &2,
+    );
+    assert!(confirmed);
+
+    let updated = client.get_reconciliation(&reconciliation_id).unwrap();
+    assert_eq!(updated.status, crate::ReconciliationStatus::Reconciled);
+
+    let synced_event = client.get_sync_event(&event_id).unwrap();
+    assert_eq!(synced_event.sync_status, EventSyncStatus::Synced);
+}
+
+#[test]
 fn test_error_codes_are_stable() {
     assert_eq!(Error::Unauthorized as u32, 100);
     assert_eq!(Error::InsufficientConfirmations as u32, 120);
