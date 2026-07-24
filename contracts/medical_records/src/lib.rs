@@ -7277,4 +7277,235 @@ impl MedicalRecordsContract {
 
         Ok(redacted)
     }
+
+    // ==================== Schema Evolution Functions ====================
+
+    /// Register a new schema version for medical record metadata.
+    pub fn register_schema_version(
+        env: Env,
+        caller: Address,
+        major: u32,
+        minor: u32,
+        patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let version = SchemaVersion {
+            major,
+            minor,
+            patch,
+        };
+
+        // Check if version already exists
+        let key = DataKey::SchemaVersion(major, minor, patch);
+        if env.storage().persistent().has(&key) {
+            return Err(Error::SchemaVersionAlreadyExists);
+        }
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version: version.clone(),
+            to_version: version.clone(),
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage().persistent().set(&key, &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &version);
+
+        env.events().publish(
+            (symbol_short!("SCH_REG"),),
+            (evolution_id, major, minor, patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Evolve the schema to a new version with field changes.
+    pub fn evolve_schema(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        // Verify source version exists
+        let from_key = DataKey::SchemaVersion(from_major, from_minor, from_patch);
+        if !env.storage().persistent().has(&from_key) {
+            return Err(Error::SchemaVersionNotFound);
+        }
+
+        // Prevent breaking changes without explicit acknowledgment
+        if breaking_changes {
+            env.events().publish(
+                (symbol_short!("SCH_BREAK"),),
+                (from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+            );
+        }
+
+        let from_version = SchemaVersion {
+            major: from_major,
+            minor: from_minor,
+            patch: from_patch,
+        };
+        let to_version = SchemaVersion {
+            major: to_major,
+            minor: to_minor,
+            patch: to_patch,
+        };
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version,
+            to_version,
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::SchemaEvolution(evolution_id), &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+
+        // Update current schema version
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &to_version);
+
+        env.events().publish(
+            (symbol_short!("SCH_EVO"),),
+            (evolution_id, from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Get the migration plan for upgrading records between schema versions.
+    pub fn get_migration_plan(
+        env: Env,
+        plan_id: u64,
+    ) -> Option<MigrationPlan> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MigrationPlan(plan_id))
+    }
+
+    /// Create a migration plan for upgrading records.
+    pub fn create_migration_plan(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        affected_records: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let plan_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MigrationPlanCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        let plan = MigrationPlan {
+            plan_id,
+            from_version: SchemaVersion {
+                major: from_major,
+                minor: from_minor,
+                patch: from_patch,
+            },
+            to_version: SchemaVersion {
+                major: to_major,
+                minor: to_minor,
+                patch: to_patch,
+            },
+            affected_records,
+            migrated_count: 0,
+            status: MigrationStatus::Planned,
+            created_at: env.ledger().timestamp(),
+            completed_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::MigrationPlan(plan_id), &plan);
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationPlanCount, &plan_id);
+
+        env.events()
+            .publish((symbol_short!("MIG_PLN"),), plan_id);
+
+        Ok(plan_id)
+    }
+
+    /// Get the current active schema version.
+    pub fn get_current_schema_version(env: Env) -> Option<SchemaVersion> {
+        env.storage()
+            .instance()
+            .get(&DataKey::CurrentSchemaVersion)
+    }
+
+    /// Get a schema evolution record by ID.
+    pub fn get_schema_evolution(env: Env, evolution_id: u64) -> Option<SchemaEvolution> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SchemaEvolution(evolution_id))
+    }
 }
