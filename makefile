@@ -188,7 +188,16 @@ deploy-local: build-opt start-local ## Deploy all contracts to local network
 	@echo "All contracts deployed reliably!"
 
 dev-deploy: clean dist start-local deploy-local ## Full dev workflow: clean, build-opt, dist, start-local, deploy-local
-	@echo "Dev deployment complete! All contracts built/deployed reliably. 🚀"
+	@echo "Dev deployment complete! All contracts built/deployed reliably."
+
+deploy-testnet: ## One-command deploy all contracts to testnet
+	@./scripts/deploy-all.sh testnet
+
+deploy-futurenet: ## One-command deploy all contracts to futurenet
+	@./scripts/deploy-all.sh futurenet
+
+deploy: ## One-command deploy (set NETWORK=testnet for testnet, default: local)
+	@./scripts/deploy-all.sh $${NETWORK:-local}
 
 setup: install-deps ## Complete one-time setup for new developers
 	@echo "Running initial setup..."
