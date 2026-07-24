@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Uzima Contracts — API Registry Reference</title>
+  <style>
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+      --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff; --code-bg: #1f2937;
+      --sidebar-w: 260px; --header-h: 56px;
+    }
+    body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; }
+    header { position: fixed; top: 0; left: 0; right: 0; height: var(--header-h); background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 24px; z-index: 100; justify-content: space-between; }
+    nav { position: fixed; top: var(--header-h); left: 0; bottom: 0; width: var(--sidebar-w); background: var(--bg2); border-right: 1px solid var(--border); overflow-y: auto; padding: 12px 0; }
+    nav a { display: block; padding: 8px 20px; color: var(--text2); text-decoration: none; font-size: 13px; }
+    nav a:hover { background: var(--bg3); color: var(--text); }
+    main { margin-left: var(--sidebar-w); margin-top: var(--header-h); padding: 40px; }
+    .hero { margin-bottom: 40px; }
+    .badge { display: inline-block; background: var(--bg3); padding: 4px 12px; border-radius: 12px; font-size: 12px; margin-right: 8px; }
+    article { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 24px; margin-bottom: 32px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); }
+    code { background: var(--code-bg); padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <header>
+    <div style="font-weight:bold;color:var(--accent)">Uzima Contracts — API Registry</div>
+    <div style="font-size:12px;color:var(--text2)">Registry v1.0.0 | Generated: 2026-07-24T06:26:41.436Z</div>
+  </header>
+  <nav>
+    <div style="padding:10px 20px;font-size:11px;color:var(--text2);text-transform:uppercase">Contracts</div>
+    <a href="#contract_monitoring">contract_monitoring</a>
+    <a href="#identity_registry">identity_registry</a>
+    <a href="#medical_records">medical_records</a>
+    <a href="#patient_consent_management">patient_consent_management</a>
+  </nav>
+  <main>
+    <div class="hero">
+      <h1>API Registry Reference</h1>
+      <p>Auto-generated from the contract interface registry.</p>
+      <div>
+        <span class="badge">4 Contracts</span>
+        <span class="badge">19 Functions</span>
+      </div>
+    </div>
+    
+      <article id="contract_monitoring">
+        <h2 style="color:var(--accent)">contract_monitoring</h2>
+        <p style="color:var(--text2)">Contract monitoring and metrics dashboard</p>
+        <p><span class="badge">v1.0.0</span> <span class="badge">4 functions</span></p>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Parameters</th><th>Returns</th><th>Mutates</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr>
+            <td><code>get_dashboard</code></td>
+            <td><code>—</code></td>
+            <td><code>DashboardSnapshot</code></td>
+            <td>No</td>
+            <td>Get dashboard snapshot</td>
+          </tr>
+              <tr>
+            <td><code>initialize</code></td>
+            <td><code>admin: Address, alert_config: AlertConfig</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Initialize the monitoring contract</td>
+          </tr>
+              <tr>
+            <td><code>record_call</code></td>
+            <td><code>caller: Address, function_name: String, gas_used: u64</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Record a successful function call</td>
+          </tr>
+              <tr>
+            <td><code>record_error</code></td>
+            <td><code>function_name: String</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Record a failed function call</td>
+          </tr>
+            </tbody>
+          </table>
+        </section>
+      </article>
+
+      <article id="identity_registry">
+        <h2 style="color:var(--accent)">identity_registry</h2>
+        <p style="color:var(--text2)">Identity registry for healthcare providers and patients</p>
+        <p><span class="badge">v1.0.0</span> <span class="badge">4 functions</span></p>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Parameters</th><th>Returns</th><th>Mutates</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr>
+            <td><code>initialize</code></td>
+            <td><code>admin: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Initialize the identity registry</td>
+          </tr>
+              <tr>
+            <td><code>register_identity</code></td>
+            <td><code>identity: Address, role: Symbol, metadata: String</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Register a new identity</td>
+          </tr>
+              <tr>
+            <td><code>revoke_identity</code></td>
+            <td><code>identity: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Revoke an identity</td>
+          </tr>
+              <tr>
+            <td><code>verify_identity</code></td>
+            <td><code>identity: Address, role: Symbol</code></td>
+            <td><code>bool</code></td>
+            <td>No</td>
+            <td>Verify an identity exists and has role</td>
+          </tr>
+            </tbody>
+          </table>
+        </section>
+      </article>
+
+      <article id="medical_records">
+        <h2 style="color:var(--accent)">medical_records</h2>
+        <p style="color:var(--text2)">Core medical records management contract</p>
+        <p><span class="badge">v1.0.0</span> <span class="badge">7 functions</span></p>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Parameters</th><th>Returns</th><th>Mutates</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr>
+            <td><code>create_record</code></td>
+            <td><code>patient: Address, data: String, record_type: String</code></td>
+            <td><code>u64</code></td>
+            <td>Yes</td>
+            <td>Create a new medical record</td>
+          </tr>
+              <tr>
+            <td><code>delete_record</code></td>
+            <td><code>patient: Address, record_id: u64</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Soft-delete a medical record</td>
+          </tr>
+              <tr>
+            <td><code>grant_access</code></td>
+            <td><code>patient: Address, provider: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Grant a provider access to patient records</td>
+          </tr>
+              <tr>
+            <td><code>initialize</code></td>
+            <td><code>admin: Address, rbac_id: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Initialize the contract with admin and RBAC</td>
+          </tr>
+              <tr>
+            <td><code>read_record</code></td>
+            <td><code>patient: Address, record_id: u64</code></td>
+            <td><code>MedicalRecord</code></td>
+            <td>No</td>
+            <td>Read a medical record by ID</td>
+          </tr>
+              <tr>
+            <td><code>revoke_access</code></td>
+            <td><code>patient: Address, provider: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Revoke provider access to patient records</td>
+          </tr>
+              <tr>
+            <td><code>update_record</code></td>
+            <td><code>patient: Address, record_id: u64, data: String</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Update an existing medical record</td>
+          </tr>
+            </tbody>
+          </table>
+        </section>
+      </article>
+
+      <article id="patient_consent_management">
+        <h2 style="color:var(--accent)">patient_consent_management</h2>
+        <p style="color:var(--text2)">Patient consent management contract</p>
+        <p><span class="badge">v1.0.0</span> <span class="badge">4 functions</span></p>
+        <section>
+          <h3>Functions</h3>
+          <table>
+            <thead><tr><th>Function</th><th>Parameters</th><th>Returns</th><th>Mutates</th><th>Description</th></tr></thead>
+            <tbody>
+              <tr>
+            <td><code>check_consent</code></td>
+            <td><code>patient: Address, provider: Address, data_type: String</code></td>
+            <td><code>bool</code></td>
+            <td>No</td>
+            <td>Check if consent is active</td>
+          </tr>
+              <tr>
+            <td><code>grant_consent</code></td>
+            <td><code>patient: Address, provider: Address, data_type: String, expiry_ledger: u32</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Grant consent for data access</td>
+          </tr>
+              <tr>
+            <td><code>initialize</code></td>
+            <td><code>admin: Address</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Initialize the consent contract</td>
+          </tr>
+              <tr>
+            <td><code>revoke_consent</code></td>
+            <td><code>patient: Address, provider: Address, data_type: String</code></td>
+            <td><code>void</code></td>
+            <td>Yes</td>
+            <td>Revoke previously granted consent</td>
+          </tr>
+            </tbody>
+          </table>
+        </section>
+      </article>
+  </main>
+</body>
+</html>

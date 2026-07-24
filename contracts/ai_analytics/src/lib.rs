@@ -6,6 +6,7 @@
 #![allow(clippy::too_many_arguments)]
 
 mod admin;
+pub mod capability;
 mod rounds;
 mod serialization_edge_cases;
 mod serialization_utils;
@@ -113,5 +114,45 @@ impl AiAnalyticsContract {
 
     pub fn get_model(env: Env, model_id: BytesN<32>) -> Option<ModelMetadata> {
         rounds::get_model(env, model_id)
+    }
+
+    pub fn grant_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+        ttl_ledgers: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let analytics_cap =
+            capability::AnalyticsCapability::try_from(capability).map_err(|_| Error::InvalidInput)?;
+
+        capability::grant_analytics_capability(&env, &caller, &target, analytics_cap, ttl_ledgers)
+    }
+
+    pub fn revoke_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        capability::revoke_capability(&env, &caller, &target, capability)
+    }
+
+    pub fn has_capability(env: Env, address: Address, capability: u32) -> bool {
+        capability::has_capability(&env, &address, capability)
+    }
+
+    pub fn get_capability_grant(
+        env: Env,
+        address: Address,
+        capability: u32,
+    ) -> Option<capability::CapabilityGrant> {
+        capability::get_capability_grant(&env, &address, capability)
     }
 }

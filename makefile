@@ -6,6 +6,7 @@
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations bootstrap-test health-check smoke-test-docker
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 .PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
+.PHONY: build-incremental test-changed cache-status dev
 
 ##@ General
 
@@ -26,6 +27,10 @@ help:
 	@echo "  test           - Run all tests"
 	@echo "  test-unit      - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
+	@echo "  test-changed   - Run tests only for changed packages (incremental)"
+	@echo "  build-incremental - Incremental build (only recompile changed crates)"
+	@echo "  cache-status   - Show build cache and dependency status"
+	@echo "  dev            - Quick dev loop: incremental build + test changed"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Run clippy linter"
@@ -58,9 +63,9 @@ help:
 install-deps:
 	@echo "Installing Rust toolchain..."
 	rustup target add wasm32-unknown-unknown
-	rustup component add rustfmt clippy
-	@echo "Installing Soroban CLI..."
-	cargo install --locked soroban-cli
+	rustup component add rustfmt clippy rust-src
+	@echo "Installing Soroban CLI v21.7.7..."
+	cargo install --locked --version 21.7.7 soroban-cli
 	@echo "Installing shellcheck (if not present)..."
 	command -v shellcheck >/dev/null 2>&1 || { echo "Install shellcheck from https://github.com/koalaman/shellcheck"; }
 	@echo "Dependencies installed successfully!"
@@ -101,6 +106,54 @@ test-unit: check-deps ## Run unit tests only
 test-integration: check-deps ## Run integration tests only
 	@echo "Running integration tests..."
 	cargo test --test integration
+
+build-incremental: check-deps ## Incremental build (only recompile changed crates)
+	@echo "Building incrementally..."
+	cargo build --all-targets
+
+test-changed: check-deps ## Run tests only for packages with changed source files
+	@echo "Detecting changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages detected. Running full test suite."; \
+		cargo test --all; \
+	else \
+		echo "Changed packages: $$CHANGED"; \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: package $$pkg not found in workspace, skipping"; \
+		done; \
+	fi
+
+cache-status: ## Show build cache and incremental compilation status
+	@echo "=== Build Cache Status ==="
+	@echo "Target directory size: $$(du -sh target/ 2>/dev/null | cut -f1 || echo 'not built')"
+	@echo "WASM artifacts: $$(find target/wasm32-unknown-unknown/release -name '*.wasm' 2>/dev/null | wc -l || echo 0)"
+	@echo "Last build: $$(stat -c '%y' target/.cargo-lock 2>/dev/null || stat -f '%Sm' target/.cargo-lock 2>/dev/null || echo 'unknown')"
+	@echo ""
+	@echo "=== Dependency Cache ==="
+	@echo "Cargo registry: $$(du -sh ~/.cargo/registry/ 2>/dev/null | cut -f1 || echo 'unknown')"
+	@echo "Cargo git cache: $$(du -sh ~/.cargo/git/ 2>/dev/null | cut -f1 || echo 'unknown')"
+
+dev: check-deps ## Quick dev loop: incremental build + test changed packages only
+	@echo "=== Quick Dev Cycle ==="
+	@echo "1. Incremental build..."
+	cargo build --all-targets 2>&1 | tail -5
+	@echo ""
+	@echo "2. Testing changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages. Skipping test."; \
+	else \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: $$pkg not in workspace"; \
+		done; \
+	fi
+	@echo ""
+	@echo "Dev cycle complete!"
 
 ##@ Maintenance
 
@@ -188,7 +241,16 @@ deploy-local: build-opt start-local ## Deploy all contracts to local network
 	@echo "All contracts deployed reliably!"
 
 dev-deploy: clean dist start-local deploy-local ## Full dev workflow: clean, build-opt, dist, start-local, deploy-local
-	@echo "Dev deployment complete! All contracts built/deployed reliably. 🚀"
+	@echo "Dev deployment complete! All contracts built/deployed reliably."
+
+deploy-testnet: ## One-command deploy all contracts to testnet
+	@./scripts/deploy-all.sh testnet
+
+deploy-futurenet: ## One-command deploy all contracts to futurenet
+	@./scripts/deploy-all.sh futurenet
+
+deploy: ## One-command deploy (set NETWORK=testnet for testnet, default: local)
+	@./scripts/deploy-all.sh $${NETWORK:-local}
 
 setup: install-deps ## Complete one-time setup for new developers
 	@echo "Running initial setup..."

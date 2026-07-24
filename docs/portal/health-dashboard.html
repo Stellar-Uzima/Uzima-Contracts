@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Uzima Contracts — Health Dashboard</title>
+  <style>
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+      --text: #e6edf3; --text2: #8b949e; --accent: #58a6ff;
+    }
+    body { font-family: -apple-system, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 24px; }
+    h1 { color: var(--accent); }
+    .summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px 24px; min-width: 120px; }
+    .card .value { font-size: 28px; font-weight: bold; }
+    .card .label { font-size: 12px; color: var(--text2); margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; }
+    th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+    th { background: var(--bg3); font-weight: 600; }
+    code { background: var(--bg3); padding: 2px 6px; border-radius: 4px; }
+    .timestamp { color: var(--text2); font-size: 12px; margin-bottom: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Contract Health Dashboard</h1>
+  <p class="timestamp">Generated: 2026-07-24T06:47:07.303Z</p>
+
+  <div class="summary">
+    <div class="card"><div class="value">107</div><div class="label">Total Contracts</div></div>
+    <div class="card"><div class="value" style="color:#3fb950">0</div><div class="label">Healthy</div></div>
+    <div class="card"><div class="value" style="color:#d29922">0</div><div class="label">Warning</div></div>
+    <div class="card"><div class="value" style="color:#f85149">0</div><div class="label">Critical</div></div>
+    <div class="card"><div class="value">928</div><div class="label">Total Tests</div></div>
+    <div class="card"><div class="value">1752</div><div class="label">Public Functions</div></div>
+    <div class="card"><div class="value">0.0 KB</div><div class="label">Total WASM</div></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Contract</th>
+        <th>Status</th>
+        <th>WASM Size</th>
+        <th>Tests</th>
+        <th>Functions</th>
+        <th>Source Lines</th>
+        <th>Doc Comments</th>
+        <th>Error Types</th>
+      </tr>
+    </thead>
+    <tbody>
+      
+    <tr>
+      <td><code>access_control</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>12</td>
+      <td>346</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>ai_analytics</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>14</td>
+      <td>6</td>
+      <td>118</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>aml</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>3</td>
+      <td>11</td>
+      <td>388</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>anomaly_detection</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>18</td>
+      <td>909</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>anomaly_detector</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>43</td>
+      <td>28</td>
+      <td>1292</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>appointment_booking_escrow</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>32</td>
+      <td>15</td>
+      <td>705</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>audit</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>22</td>
+      <td>24</td>
+      <td>639</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>audit_forensics</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>3</td>
+      <td>18</td>
+      <td>647</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>clinical_decision_support</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>7</td>
+      <td>318</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>clinical_nlp</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>11</td>
+      <td>10</td>
+      <td>343</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>clinical_trial</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>576</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>code_ownership</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>7</td>
+      <td>9</td>
+      <td>248</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>common_auth</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>2</td>
+      <td>83</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>common_error</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>2</td>
+      <td>109</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>contract_behavior_fuzzing</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>2</td>
+      <td>110</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>contract_monitoring</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>631</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>contract_template</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>4</td>
+      <td>5</td>
+      <td>131</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>contract_usage_analytics</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>7</td>
+      <td>286</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>contract_verification</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>9</td>
+      <td>381</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>credential_notifications</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>6</td>
+      <td>265</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>credential_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>13</td>
+      <td>539</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>cross_chain_access</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>41</td>
+      <td>25</td>
+      <td>1295</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>cross_chain_bridge</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>54</td>
+      <td>56</td>
+      <td>2385</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>cross_chain_enhancements</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>9</td>
+      <td>548</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>cross_chain_identity</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>22</td>
+      <td>19</td>
+      <td>784</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>crypto_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>4</td>
+      <td>8</td>
+      <td>516</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>deprecation_framework</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>10</td>
+      <td>12</td>
+      <td>340</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>dicomweb_services</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>19</td>
+      <td>42</td>
+      <td>2019</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>differential_privacy</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>16</td>
+      <td>7</td>
+      <td>373</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>digital_twin</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>22</td>
+      <td>1187</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>dispute_resolution</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>4</td>
+      <td>98</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>drug_discovery</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>3</td>
+      <td>13</td>
+      <td>663</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>emergency_access_override</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>13</td>
+      <td>14</td>
+      <td>742</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>emr_integration</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>8</td>
+      <td>25</td>
+      <td>1668</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>escrow</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>23</td>
+      <td>820</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>explainable_ai</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>13</td>
+      <td>710</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>failover_detector</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>11</td>
+      <td>625</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>federated_learning</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>15</td>
+      <td>1054</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>fhir_integration</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>17</td>
+      <td>22</td>
+      <td>881</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>fido2_authenticator</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>15</td>
+      <td>1675</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>forensics</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>2</td>
+      <td>7</td>
+      <td>256</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>fp_math</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>3</td>
+      <td>110</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>genomic_data</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>5</td>
+      <td>18</td>
+      <td>1115</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>governor</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>496</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>health_check</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>10</td>
+      <td>13</td>
+      <td>435</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>health_data_access_logging</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>13</td>
+      <td>12</td>
+      <td>322</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_analytics_dashboard</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>30</td>
+      <td>1464</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_compliance</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>5</td>
+      <td>21</td>
+      <td>1244</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_compliance_automation</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>3</td>
+      <td>55</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_data_conversion</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>18</td>
+      <td>15</td>
+      <td>601</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_data_marketplace</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>10</td>
+      <td>15</td>
+      <td>757</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_oracle_network</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>7</td>
+      <td>19</td>
+      <td>265</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_payment</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>22</td>
+      <td>38</td>
+      <td>1798</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>healthcare_reputation</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>13</td>
+      <td>959</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>homomorphic_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>4</td>
+      <td>19</td>
+      <td>908</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>identity_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>50</td>
+      <td>3110</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>ihe_integration</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>26</td>
+      <td>35</td>
+      <td>1783</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>iot_device_management</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>30</td>
+      <td>35</td>
+      <td>1258</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>load_testing</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>3</td>
+      <td>286</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_consent_nft</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>18</td>
+      <td>36</td>
+      <td>1674</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_imaging</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>16</td>
+      <td>49</td>
+      <td>1747</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_imaging_ai</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>25</td>
+      <td>17</td>
+      <td>831</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_record_backup</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>5</td>
+      <td>27</td>
+      <td>1419</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_record_hash_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>12</td>
+      <td>7</td>
+      <td>238</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>medical_record_search</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>4</td>
+      <td>13</td>
+      <td>824</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>medical_records</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>44</td>
+      <td>127</td>
+      <td>6961</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>medication_management</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>19</td>
+      <td>1408</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>mental_health_support</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>2</td>
+      <td>19</td>
+      <td>575</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>meta_tx_forwarder</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>23</td>
+      <td>12</td>
+      <td>549</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>mfa</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>1</td>
+      <td>7</td>
+      <td>230</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>mpc_manager</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>8</td>
+      <td>14</td>
+      <td>832</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>multi_region_orchestrator</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>17</td>
+      <td>742</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>notification_system</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>52</td>
+      <td>23</td>
+      <td>1280</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>patient_consent_management</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>43</td>
+      <td>24</td>
+      <td>887</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>patient_gamification</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>12</td>
+      <td>32</td>
+      <td>1516</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>patient_portal</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>2</td>
+      <td>17</td>
+      <td>524</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>patient_risk_stratification</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>616</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>payment_router</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>3</td>
+      <td>110</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>pharma_supply_chain</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>13</td>
+      <td>733</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>predictive_analytics</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>4</td>
+      <td>11</td>
+      <td>149</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>provider_directory</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>9</td>
+      <td>4</td>
+      <td>181</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>public_health_surveillance</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>11</td>
+      <td>20</td>
+      <td>1253</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>rbac</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>23</td>
+      <td>16</td>
+      <td>307</td>
+      <td>Yes</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>regional_node_manager</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>14</td>
+      <td>604</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>regulatory_compliance</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>180</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>remote_patient_monitoring</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>10</td>
+      <td>513</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>reputation</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>4</td>
+      <td>107</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>reputation_access_control</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>11</td>
+      <td>571</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>reputation_integration</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>11</td>
+      <td>512</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>runtime_validation</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>13</td>
+      <td>12</td>
+      <td>392</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>sanitization</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>5</td>
+      <td>498</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>secure_enclave</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>2</td>
+      <td>7</td>
+      <td>217</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>shared_types</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>0</td>
+      <td>7</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>storage-snapshot</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>1</td>
+      <td>19</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>storage_cleanup</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>17</td>
+      <td>910</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>storage_migration</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>8</td>
+      <td>440</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>sut_token</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>20</td>
+      <td>19</td>
+      <td>727</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>sync_manager</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>15</td>
+      <td>669</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>telemedicine</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>21</td>
+      <td>33</td>
+      <td>1914</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>test-helpers</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>4</td>
+      <td>28</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>timelock</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>4</td>
+      <td>207</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>token_sale</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>8</td>
+      <td>0</td>
+      <td>19</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>treasury_controller</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>25</td>
+      <td>14</td>
+      <td>699</td>
+      <td>Yes</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>upgrade_manager</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>5</td>
+      <td>6</td>
+      <td>281</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>upgradeability</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>2</td>
+      <td>32</td>
+      <td>570</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td><code>zk_verifier</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>0</td>
+      <td>13</td>
+      <td>449</td>
+      <td>No</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td><code>zkp_registry</code></td>
+      <td><span style="color:#8b949e;font-weight:bold">excluded</span></td>
+      <td>—</td>
+      <td>20</td>
+      <td>27</td>
+      <td>2091</td>
+      <td>No</td>
+      <td>No</td>
+    </tr>
+    </tbody>
+  </table>
+</body>
+</html>
