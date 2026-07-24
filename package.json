@@ -14,6 +14,9 @@
     "interface:validate": "node scripts/validate-interfaces.mjs",
     "interface:check": "node scripts/validate-interfaces.mjs",
     "api-docs:generate": "node scripts/docs/generate-from-registry.mjs",
+    "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
+    "changelog:generate": "node scripts/generate-changelog-entries.mjs",
+    "changelog:append": "node scripts/generate-changelog-entries.mjs --append"
     "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check"
     "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
