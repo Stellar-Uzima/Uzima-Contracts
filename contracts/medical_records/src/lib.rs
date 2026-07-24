@@ -92,6 +92,60 @@ use soroban_sdk::{
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
+// ==================== Compartmentalized Data Access Types ====================
+
+/// Data tiers for role-based access control.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum DataAccessTier {
+    /// Basic demographic data - all roles
+    Basic = 0,
+    /// Clinical data - doctors, specialists, admins
+    Clinical = 1,
+    /// Sensitive data - patient consent required
+    Sensitive = 2,
+    /// Restricted data - admin and specialist only
+    Restricted = 3,
+    /// Research data - anonymized for research use
+    Research = 4,
+}
+
+/// A data compartment with associated metadata.
+#[derive(Clone)]
+#[contracttype]
+pub struct DataCompartment {
+    pub compartment_id: Symbol,
+    pub tier: DataAccessTier,
+    pub description: String,
+    pub required_role: Role,
+    pub requires_consent: bool,
+}
+
+/// Record of access grant to a compartment.
+#[derive(Clone)]
+#[contracttype]
+pub struct CompartmentAccess {
+    pub patient_id: Address,
+    pub compartment_id: Symbol,
+    pub granted_by: Address,
+    pub granted_at: u64,
+    pub expires_at: Option<u64>,
+}
+
+/// Role types in the system.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum Role {
+    Admin,
+    Doctor,
+    Nurse,
+    Specialist,
+    Patient,
+    Researcher,
+    Auditor,
+}
+
 // ==================== Cross-Chain Types ====================
 
 #[derive(Clone, PartialEq, Eq)]
@@ -654,6 +708,11 @@ pub enum DataKey {
 
     // Redaction
     RedactionPolicy(u64),
+
+    // Compartmentalized Data Access
+    Compartment(Symbol),
+    CompartmentAccess(Address, Symbol),
+    UserRole(Address),
 }
 
 // ==================== Errors ====================
@@ -7276,5 +7335,155 @@ impl MedicalRecordsContract {
         }
 
         Ok(redacted)
+    }
+
+    // ─── Compartmentalized Data Access (Issue #1165) ─────────────────────────
+
+    /// Create a new data compartment for role-based tiered access.
+    pub fn create_data_compartment(
+        env: Env,
+        caller: Address,
+        compartment_id: Symbol,
+        tier: DataAccessTier,
+        description: String,
+        required_role: Role,
+        requires_consent: bool,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let compartment = DataCompartment {
+            compartment_id: compartment_id.clone(),
+            tier,
+            description,
+            required_role,
+            requires_consent,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::Compartment(compartment_id.clone()),
+            &compartment,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("CREATE")),
+            (compartment_id, tier as u32),
+        );
+
+        Ok(())
+    }
+
+    /// Get a data compartment by ID.
+    pub fn get_data_compartment(
+        env: Env,
+        compartment_id: Symbol,
+    ) -> Result<DataCompartment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .ok_or(Error::NotFound)
+    }
+
+    /// Grant access to a patient's data compartment.
+    pub fn grant_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+        expires_at: Option<u64>,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let access = CompartmentAccess {
+            patient_id: patient_id.clone(),
+            compartment_id: compartment_id.clone(),
+            granted_by: caller.clone(),
+            granted_at: env.ledger().timestamp(),
+            expires_at,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::CompartmentAccess(patient_id.clone(), compartment_id.clone()),
+            &access,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("GRANT")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
+    }
+
+    /// Check if a user has access to a patient's data compartment.
+    pub fn has_compartment_access(
+        env: Env,
+        user: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> bool {
+        let access: CompartmentAccess = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::CompartmentAccess(
+                patient_id,
+                compartment_id,
+            )) {
+            Some(a) => a,
+            None => return false,
+        };
+
+        // Check expiry
+        if let Some(exp) = access.expires_at {
+            if env.ledger().timestamp() > exp {
+                return false;
+            }
+        }
+
+        // Check role
+        let role: Role = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRole(user))
+            .unwrap_or(Role::Patient);
+
+        let compartment: DataCompartment = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .unwrap();
+
+        matches!(
+            (compartment.required_role, role),
+            (Role::Admin, Role::Admin)
+                | (Role::Doctor, Role::Doctor)
+                | (Role::Nurse, Role::Nurse)
+                | (Role::Specialist, Role::Specialist)
+                | (Role::Researcher, Role::Researcher)
+                | (Role::Auditor, Role::Auditor)
+                | (Role::Patient, Role::Patient)
+                | (Role::Admin, _)
+        )
+    }
+
+    /// Revoke access to a patient's data compartment.
+    pub fn revoke_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        env.storage().persistent().remove(&DataKey::CompartmentAccess(
+            patient_id.clone(),
+            compartment_id.clone(),
+        ));
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("REVOKE")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
     }
 }
