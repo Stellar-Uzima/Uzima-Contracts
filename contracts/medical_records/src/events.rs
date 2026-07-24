@@ -1,9 +1,10 @@
 use super::event_schema::{
     AccessGrantedEvent, AccessRequestedEvent, AiAnalysisTriggeredEvent, AiConfigUpdatedEvent,
     AnomalyScoreSubmittedEvent, AuditContext, ContractPausedEvent, ContractUnpausedEvent,
-    EmergencyAccessGrantedEvent, EventEnvelope, HealthCheckEvent, RecordAccessedEvent,
-    RecordCreatedEvent, RecoveryApprovedEvent, RecoveryExecutedEvent, RecoveryProposedEvent,
-    RiskScoreSubmittedEvent, UserCreatedEvent, UserDeactivatedEvent, UserRoleUpdatedEvent,
+    EmergencyAccessGrantedEvent, EventEnvelope, HealthCheckEvent, MetadataUpdatedEvent,
+    RecordAccessedEvent, RecordCreatedEvent, RecordRolledBackEvent, RecoveryApprovedEvent,
+    RecoveryExecutedEvent, RecoveryProposedEvent, RiskScoreSubmittedEvent,
+    TraditionalRecordAddedEvent, UserCreatedEvent, UserDeactivatedEvent, UserRoleUpdatedEvent,
 };
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
@@ -363,7 +364,7 @@ pub fn emit_anomaly_score_submitted(
             },
             record_id,
             patient,
-            model_.id,
+            model_id,
             score_bps,
             model_version,
         },
@@ -436,4 +437,88 @@ pub fn emit_health_check(env: &Env, status: String, gas_used: u64) {
     };
     env.events()
         .publish((symbol_short!("HEALTH"),), event);
+}
+
+pub fn emit_metadata_updated(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    patient: Address,
+    new_version: u32,
+    tag_count: u32,
+    custom_field_count: u32,
+) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "metadata_updated"),
+        version: 1,
+        body: MetadataUpdatedEvent {
+            audit: AuditContext {
+                actor: caller.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            record_id,
+            patient: patient.clone(),
+            new_version,
+            tag_count,
+            custom_field_count,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("META_UPD"), caller, patient), event);
+}
+
+pub fn emit_record_rolled_back(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    patient: Address,
+    from_version: u32,
+    to_version: u32,
+) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "record_rolled_back"),
+        version: 1,
+        body: RecordRolledBackEvent {
+            audit: AuditContext {
+                actor: caller.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            record_id,
+            patient: patient.clone(),
+            from_version,
+            to_version,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("REC_RBACK"), caller, patient), event);
+}
+
+pub fn emit_traditional_record_added(
+    env: &Env,
+    caller: Address,
+    record_id: u64,
+    patient: Address,
+    practice_type: String,
+) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "traditional_record_added"),
+        version: 1,
+        body: TraditionalRecordAddedEvent {
+            audit: AuditContext {
+                actor: caller.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            record_id,
+            patient: patient.clone(),
+            practice_type,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("TRAD_REC"), caller, patient), event);
 }

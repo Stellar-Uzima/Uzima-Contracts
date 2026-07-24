@@ -11,10 +11,6 @@ pub enum Error {
     EmergencyAccessExpired = 160,
     RecordRetentionExpired = 170,
 
-    // --- Access Control & Authorization (1000–1099) ---
-    NotAICoordinator = 1150,
-    EmergencyAccessExpired = 1160,
-
     // --- Input Validation (1100–1199) ---
     InvalidPagination = 1202,
     InputTooLong = 1201,
@@ -46,6 +42,8 @@ pub enum Error {
     CryptoRegistryNotSet = 1340,
     EncryptionRequired = 1341,
     IdentityRegistryNotSet = 1342,
+    InvalidVersion = 1350,
+    VersionNotFound = 1351,
 
     // --- Entity Existence (1300–1399) ---
     RecordNotFound = 1403,
@@ -137,6 +135,8 @@ impl core::fmt::Display for Error {
             Error::InvalidAIScore => write!(f, "invalid a i score"),
             Error::InvalidScore => write!(f, "invalid score"),
             Error::InvalidDPEpsilon => write!(f, "invalid d p epsilon"),
+            Error::InvalidVersion => write!(f, "invalid version"),
+            Error::VersionNotFound => write!(f, "version not found"),
             Error::InvalidParticipantCount => write!(f, "invalid participant count"),
         }
     }
