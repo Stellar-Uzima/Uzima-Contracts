@@ -21,7 +21,10 @@
     "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
     "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
-    "health:dashboard": "node scripts/generate-health-dashboard.mjs"
+    "health:dashboard": "node scripts/generate-health-dashboard.mjs",
+    "deadcode:scan": "bash scripts/deadcode_scan.sh",
+    "deadcode:scan:rust": "bash scripts/deadcode_scan.sh --rust-only",
+    "deadcode:scan:js": "bash scripts/deadcode_scan.sh --js-only"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
