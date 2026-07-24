@@ -100,6 +100,28 @@ pub struct FormalVerificationSummary {
     pub checked_at: u64,
 }
 
+/// A provenance link tracking data lineage with hash chain integrity.
+#[derive(Clone)]
+#[contracttype]
+pub struct ProvenanceLink {
+    pub entry_id: u64,
+    pub data_hash: BytesN<32>,
+    pub parent_hash: Option<BytesN<32>>,
+    pub created_at: u64,
+}
+
+/// An evidence record with content hash for tamper detection.
+#[derive(Clone)]
+#[contracttype]
+pub struct EvidenceRecord {
+    pub entry_id: u64,
+    pub case_id: u64,
+    pub evidence_type: String,
+    pub content_hash: BytesN<32>,
+    pub submitted_by: Address,
+    pub submitted_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -117,6 +139,10 @@ pub enum DataKey {
     Finding(u64),
     FindingsByExecution(u64),
     FormalSummary(u64),
+    // Provenance & Evidence
+    ProvenanceLink(u64),
+    EvidenceRecord(u64),
+    CaseEvidence(u64),
 }
 
 #[contract]
@@ -642,5 +668,227 @@ impl AuditForensicsContract {
         let next = current.saturating_add(1);
         env.storage().instance().set(key, &next);
         next
+    }
+
+    // ─── Provenance & Evidence Hash Chains (Issue #1162) ─────────────────────
+
+    /// Record a provenance entry tracking data lineage and chain of custody.
+    pub fn record_provenance(
+        env: Env,
+        actor: Address,
+        source_system: String,
+        data_hash: BytesN<32>,
+        parent_hash: Option<BytesN<32>>,
+        description: String,
+    ) -> u64 {
+        actor.require_auth();
+
+        let id = Self::next_counter(&env, &DataKey::NextAuditId);
+        let entry = AuditEntry {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            action: AuditAction::RecordCreated,
+            record_id: None,
+            details_hash: data_hash.clone(),
+            metadata: Map::from_array(
+                &env,
+                [
+                    (
+                        String::from_str(&env, "provenance"),
+                        String::from_str(&env, "true"),
+                    ),
+                    (
+                        String::from_str(&env, "source_system"),
+                        source_system,
+                    ),
+                    (
+                        String::from_str(&env, "description"),
+                        description,
+                    ),
+                ],
+            ),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditEntry(id), &entry);
+
+        // Store provenance chain link
+        let link = ProvenanceLink {
+            entry_id: id,
+            data_hash,
+            parent_hash,
+            created_at: env.ledger().timestamp(),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ProvenanceLink(id), &link);
+
+        // Index by actor
+        let mut user_audits: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserAudits(actor.clone()))
+            .unwrap_or(Vec::new(&env));
+        user_audits.push_back(id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAudits(actor), &user_audits);
+
+        env.events().publish(
+            (symbol_short!("PROV"), symbol_short!("NEW")),
+            (id, data_hash),
+        );
+
+        id
+    }
+
+    /// Verify a provenance chain by walking parent hashes from a given entry.
+    /// Returns true if the chain is valid (every parent_hash matches the previous entry's data_hash).
+    pub fn verify_provenance_chain(
+        env: Env,
+        start_entry_id: u64,
+        expected_root_hash: BytesN<32>,
+    ) -> bool {
+        let mut current_id = start_entry_id;
+        let max_depth = 100u32; // prevent infinite loops
+
+        for _ in 0..max_depth {
+            let link: ProvenanceLink = match env
+                .storage()
+                .persistent()
+                .get(&DataKey::ProvenanceLink(current_id))
+            {
+                Some(l) => l,
+                None => return false,
+            };
+
+            if link.parent_hash.is_none() {
+                // Root of the chain — compare with expected root
+                return link.data_hash == expected_root_hash;
+            }
+
+            if let Some(parent) = link.parent_hash {
+                // Walk to parent
+                // The parent_hash should match the data_hash of the previous entry
+                current_id = current_id.saturating_sub(1);
+                if let Some(prev_link) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, ProvenanceLink>(&DataKey::ProvenanceLink(current_id))
+                {
+                    if prev_link.data_hash != parent {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
+    /// Record an evidence submission with a content hash for tamper detection.
+    pub fn record_evidence(
+        env: Env,
+        actor: Address,
+        case_id: u64,
+        evidence_type: String,
+        content_hash: BytesN<32>,
+        metadata: Map<String, String>,
+    ) -> u64 {
+        actor.require_auth();
+
+        let id = Self::next_counter(&env, &DataKey::NextAuditId);
+        let entry = AuditEntry {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            action: AuditAction::RecordCreated,
+            record_id: Some(case_id),
+            details_hash: content_hash,
+            metadata,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditEntry(id), &entry);
+
+        // Store evidence record
+        let evidence = EvidenceRecord {
+            entry_id: id,
+            case_id,
+            evidence_type,
+            content_hash,
+            submitted_by: actor.clone(),
+            submitted_at: env.ledger().timestamp(),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::EvidenceRecord(id), &evidence);
+
+        // Index evidence by case
+        let mut case_evidence: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CaseEvidence(case_id))
+            .unwrap_or(Vec::new(&env));
+        case_evidence.push_back(id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CaseEvidence(case_id), &case_evidence);
+
+        env.events().publish(
+            (symbol_short!("EVID"), symbol_short!("NEW")),
+            (id, case_id, content_hash),
+        );
+
+        id
+    }
+
+    /// Verify that evidence content matches the stored hash.
+    pub fn verify_evidence_integrity(
+        env: Env,
+        evidence_entry_id: u64,
+        claimed_hash: BytesN<32>,
+    ) -> bool {
+        let evidence: EvidenceRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EvidenceRecord(evidence_entry_id))
+        {
+            Some(e) => e,
+            None => return false,
+        };
+        evidence.content_hash == claimed_hash
+    }
+
+    /// Get all evidence entries for a case.
+    pub fn get_case_evidence(env: Env, case_id: u64) -> Vec<EvidenceRecord> {
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CaseEvidence(case_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut evidence = Vec::new(&env);
+        for id in ids.iter() {
+            if let Some(e) = env
+                .storage()
+                .persistent()
+                .get::<_, EvidenceRecord>(&DataKey::EvidenceRecord(id))
+            {
+                evidence.push_back(e);
+            }
+        }
+        evidence
+    }
+
+    /// Get a provenance link by entry ID.
+    pub fn get_provenance_link(env: Env, entry_id: u64) -> Option<ProvenanceLink> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ProvenanceLink(entry_id))
     }
 }
