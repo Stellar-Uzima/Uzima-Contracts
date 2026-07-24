@@ -1,0 +1,65 @@
+{
+  "version": "1.0.0",
+  "description": "Deterministic contract IDs and network manifests for local, testnet, and mainnet",
+  "networks": {
+    "local": {
+      "network_passphrase": "Standalone Network ; February 2017",
+      "rpc_url": "http://localhost:8000/soroban/rpc",
+      "deployer_account": "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
+      "contract_ids": {
+        "common_error": null,
+        "common_auth": null,
+        "rbac": null,
+        "audit": null,
+        "identity_registry": null,
+        "upgradeability": null,
+        "patient_consent_management": null,
+        "escrow": null,
+        "healthcare_payment": null,
+        "governor": null,
+        "timelock": null
+      }
+    },
+    "testnet": {
+      "network_passphrase": "Test SDF Network ; September 2015",
+      "rpc_url": "https://soroban-testnet.stellar.org",
+      "deployer_account": null,
+      "contract_ids": {
+        "common_error": null,
+        "common_auth": null,
+        "rbac": null,
+        "audit": null,
+        "identity_registry": null,
+        "upgradeability": null,
+        "patient_consent_management": null,
+        "escrow": null,
+        "healthcare_payment": null,
+        "governor": null,
+        "timelock": null
+      }
+    },
+    "mainnet": {
+      "network_passphrase": "Public Global Stellar Network ; September 2015",
+      "rpc_url": "https://soroban-mainnet.stellar.org",
+      "deployer_account": null,
+      "contract_ids": {
+        "common_error": null,
+        "common_auth": null,
+        "rbac": null,
+        "audit": null,
+        "identity_registry": null,
+        "upgradeability": null,
+        "patient_consent_management": null,
+        "escrow": null,
+        "healthcare_payment": null,
+        "governor": null,
+        "timelock": null
+      }
+    }
+  },
+  "determinism": {
+    "wasm_hash_pinning": true,
+    "salt_strategy": "contract_name_sha256",
+    "deployer_must_match": true
+  }
+}
