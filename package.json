@@ -21,7 +21,9 @@
     "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
     "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
-    "health:dashboard": "node scripts/generate-health-dashboard.mjs"
+    "health:dashboard": "node scripts/generate-health-dashboard.mjs",
+    "template:check": "bash scripts/check_template_compat.sh --all",
+    "template:check:strict": "bash scripts/check_template_compat.sh --all --strict"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
