@@ -35,6 +35,7 @@ pub enum Error {
     RollbackNotFound = 490,
     RollbackAlreadyProcessed = 491,
     EventNotFound = 492,
+    ReconciliationNotFound = 493,
     ValidatorNotFound = 483,
     ValidatorNotActive = 484,
     DuplicateConfirmation = 485,
@@ -84,6 +85,7 @@ impl core::fmt::Display for Error {
             Error::RollbackNotFound => write!(f, "rollback not found"),
             Error::RollbackAlreadyProcessed => write!(f, "rollback already processed"),
             Error::EventNotFound => write!(f, "event not found"),
+            Error::ReconciliationNotFound => write!(f, "reconciliation not found"),
             Error::ValidatorNotFound => write!(f, "validator not found"),
             Error::ValidatorNotActive => write!(f, "validator not active"),
             Error::DuplicateConfirmation => write!(f, "duplicate confirmation"),
@@ -122,7 +124,8 @@ pub fn get_suggestion(error: Error) -> Symbol {
         | Error::ValidatorNotFound
         | Error::RecordRefNotFound
         | Error::RollbackNotFound
-        | Error::EventNotFound => symbol_short!("CHK_ID"),
+        | Error::EventNotFound
+        | Error::ReconciliationNotFound => symbol_short!("CHK_ID"),
         _ => symbol_short!("CONTACT"),
     }
 }

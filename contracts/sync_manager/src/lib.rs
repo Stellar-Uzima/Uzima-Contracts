@@ -2,8 +2,8 @@
 //! sync_manager - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    Symbol, Vec,
 };
 
 // ============================================================================
@@ -48,6 +48,25 @@ pub struct SyncOperation {
     pub retry_count: u32,
     pub success_count: u32,
     pub failure_count: u32,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum SyncReconciliationStatus {
+    Pending = 0,
+    Reconciled = 1,
+    Failed = 2,
+}
+
+#[derive(Clone)]
+#[contracttype]
+pub struct SyncReconciliation {
+    pub reconciliation_id: u64,
+    pub operation_id: u64,
+    pub reason: String,
+    pub created_at: u64,
+    pub completed_at: u64,
+    pub status: SyncReconciliationStatus,
 }
 
 #[derive(Clone)]
@@ -139,7 +158,9 @@ const OPERATIONS: Symbol = symbol_short!("OPS");
 const LAGS: Symbol = symbol_short!("LAGS");
 const CONFLICTS: Symbol = symbol_short!("CONF");
 const SYNC_POLICY: Symbol = symbol_short!("SPOL");
+const RECONCILIATIONS: Symbol = symbol_short!("RECN");
 const NEXT_OPERATION_ID: Symbol = symbol_short!("NOID");
+const NEXT_RECONCILIATION_ID: Symbol = symbol_short!("NRID");
 
 // TTL constants for persistent storage management
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
@@ -167,6 +188,7 @@ impl SyncManager {
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&INITIALIZED, &true);
         env.storage().instance().set(&NEXT_OPERATION_ID, &1u64);
+        env.storage().instance().set(&NEXT_RECONCILIATION_ID, &1u64);
         env.storage().instance().set(&NEXT_WINDOW_ID, &1u64);
         env.storage().instance().set(&NEXT_LAG_ID, &1u64);
         env.storage().instance().set(&NEXT_CONFLICT_ID, &1u64);
@@ -361,6 +383,121 @@ impl SyncManager {
         for i in 0..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 return Some(operations.get_unchecked(i).clone());
+            }
+        }
+        None
+    }
+
+    pub fn queue_reconciliation(
+        env: Env,
+        caller: Address,
+        operation_id: u64,
+        reason: String,
+    ) -> Result<u64, Error> {
+        Self::require_operator(&env, &caller)?;
+        Self::get_sync_operation(env.clone(), operation_id).ok_or(Error::SyncOperationNotFound)?;
+
+        let reconciliation_id: u64 = env.storage().instance().get(&NEXT_RECONCILIATION_ID).unwrap();
+        let reconciliation = SyncReconciliation {
+            reconciliation_id,
+            operation_id,
+            reason: reason.clone(),
+            created_at: env.ledger().timestamp(),
+            completed_at: 0,
+            status: SyncReconciliationStatus::Pending,
+        };
+
+        let mut reconciliations: Vec<SyncReconciliation> = env
+            .storage()
+            .persistent()
+            .get(&RECONCILIATIONS)
+            .unwrap_or_else(|| Vec::new(&env));
+        reconciliations.push_back(reconciliation);
+        env.storage().persistent().set(&RECONCILIATIONS, &reconciliations);
+        env.storage().persistent().extend_ttl(
+            &RECONCILIATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.storage()
+            .instance()
+            .set(&NEXT_RECONCILIATION_ID, &(reconciliation_id + 1));
+
+        env.events()
+            .publish((symbol_short!("SM_QREC"),), reconciliation_id);
+        Ok(reconciliation_id)
+    }
+
+    pub fn complete_reconciliation(
+        env: Env,
+        caller: Address,
+        reconciliation_id: u64,
+        final_status: SyncStatus,
+    ) -> Result<bool, Error> {
+        Self::require_operator(&env, &caller)?;
+
+        let mut reconciliations: Vec<SyncReconciliation> = env
+            .storage()
+            .persistent()
+            .get(&RECONCILIATIONS)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..reconciliations.len() {
+            if reconciliations.get_unchecked(i).reconciliation_id == reconciliation_id {
+                found_index = Some(i);
+                break;
+            }
+        }
+
+        let idx = found_index.ok_or(Error::SyncOperationNotFound)?;
+        let mut reconciliation = reconciliations.get_unchecked(idx).clone();
+        reconciliation.status = SyncReconciliationStatus::Reconciled;
+        reconciliation.completed_at = env.ledger().timestamp();
+        reconciliations.set(idx, reconciliation.clone());
+        env.storage().persistent().set(&RECONCILIATIONS, &reconciliations);
+
+        let mut operations: Vec<SyncOperation> = env
+            .storage()
+            .persistent()
+            .get(&OPERATIONS)
+            .unwrap_or_else(|| Vec::new(&env));
+        let mut op_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
+            if operations.get_unchecked(i).operation_id == reconciliation.operation_id {
+                op_index = Some(i);
+                break;
+            }
+        }
+
+        if let Some(index) = op_index {
+            let mut operation = operations.get_unchecked(index).clone();
+            operation.status = final_status;
+            operation.completed_at = env.ledger().timestamp();
+            operations.set(index, operation);
+            env.storage().persistent().set(&OPERATIONS, &operations);
+            env.storage().persistent().extend_ttl(
+                &OPERATIONS,
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND_TO,
+            );
+        }
+
+        env.events()
+            .publish((symbol_short!("SM_CREC"),), reconciliation_id);
+        Ok(true)
+    }
+
+    pub fn get_reconciliation(env: Env, reconciliation_id: u64) -> Option<SyncReconciliation> {
+        let reconciliations: Vec<SyncReconciliation> = env
+            .storage()
+            .persistent()
+            .get(&RECONCILIATIONS)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for i in 0..reconciliations.len() {
+            if reconciliations.get_unchecked(i).reconciliation_id == reconciliation_id {
+                return Some(reconciliations.get_unchecked(i).clone());
             }
         }
         None
@@ -664,5 +801,69 @@ mod test {
             )
         });
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_async_reconciliation_moves_pending_operation_to_completed() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        let operation_id = env
+            .as_contract(&contract, || {
+                SyncManager::initiate_sync(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    targets,
+                    54321u64,
+                    ConsistencyLevel::Strong,
+                )
+            })
+            .unwrap();
+
+        let reconciliation_id = env
+            .as_contract(&contract, || {
+                SyncManager::queue_reconciliation(
+                    env.clone(),
+                    operator.clone(),
+                    operation_id,
+                    String::from_str(&env, "offline target backlog"),
+                )
+            })
+            .unwrap();
+
+        let reconciliation = env
+            .as_contract(&contract, || SyncManager::get_reconciliation(&env, reconciliation_id))
+            .unwrap();
+        assert_eq!(reconciliation.operation_id, operation_id);
+        assert_eq!(reconciliation.status, SyncReconciliationStatus::Pending);
+
+        let completed = env.as_contract(&contract, || {
+            SyncManager::complete_reconciliation(
+                env.clone(),
+                operator,
+                reconciliation_id,
+                SyncStatus::Completed,
+            )
+        });
+        assert!(completed.is_ok());
+
+        let operation = env
+            .as_contract(&contract, || SyncManager::get_sync_operation(env.clone(), operation_id))
+            .unwrap();
+        assert_eq!(operation.status, SyncStatus::Completed);
     }
 }

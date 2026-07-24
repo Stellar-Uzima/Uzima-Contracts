@@ -328,6 +328,26 @@ pub enum EventSyncStatus {
     Failed,
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum ReconciliationStatus {
+    Pending,
+    Reconciled,
+    Failed,
+}
+
+/// Deferred reconciliation entry for sync events that need offline follow-up.
+#[derive(Clone)]
+#[contracttype]
+pub struct CrossChainReconciliation {
+    pub reconciliation_id: u64,
+    pub event_id: u64,
+    pub reason: String,
+    pub created_at: u64,
+    pub completed_at: u64,
+    pub status: ReconciliationStatus,
+}
+
 // ==================== Storage Keys (DataKey Enum) ====================
 // BUG FIX: Replaces static Symbol constants with typed DataKey enum,
 // ensuring each item gets a unique, collision-free storage slot.
@@ -348,6 +368,7 @@ pub enum DataKey {
     RollbackCount,
     EventCount,
     OpCount,
+    ReconciliationCount,
     // Persistent storage keys (critical long-lived data)
     Nonce(String),
     Validator(Address),
@@ -360,6 +381,7 @@ pub enum DataKey {
     Proof(BytesN<32>),
     Rollback(BytesN<32>),
     Event(u64),
+    Reconciliation(u64),
     CrossChainOp(BytesN<32>),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
@@ -436,6 +458,7 @@ impl CrossChainBridgeContract {
         env.storage().instance().set(&DataKey::RollbackCount, &0u64);
         env.storage().instance().set(&DataKey::EventCount, &0u64);
         env.storage().instance().set(&DataKey::OpCount, &0u64);
+        env.storage().instance().set(&DataKey::ReconciliationCount, &0u64);
 
         env.events()
             .publish((Symbol::new(&env, "bridge_initialized"),), (admin.clone(),));
@@ -592,7 +615,7 @@ impl CrossChainBridgeContract {
         // Issue #1001: Enforce cross-border data transfer jurisdiction restrictions.
         // For record-related messages, verify the destination chain's jurisdiction
         // is allowed by the patient's consent record.
-        Self::enforce_jurisdiction_check(&env, &payload_type, &dest_chain)?;
+        Self::enforce_jurisdiction_check(&env, &request.payload_type, &request.dest_chain)?;
 
         let timestamp = env.ledger().timestamp();
 
@@ -1616,6 +1639,106 @@ impl CrossChainBridgeContract {
         Ok(true)
     }
 
+    /// Schedule deferred reconciliation for a pending cross-chain sync event.
+    pub fn schedule_reconciliation(
+        env: Env,
+        validator: Address,
+        event_id: u64,
+        reason: String,
+        nonce: u64,
+    ) -> Result<u64, Error> {
+        validator.require_auth();
+        Self::require_not_paused(&env)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+
+        let evt_key = DataKey::Event(event_id);
+        env.storage()
+            .persistent()
+            .get::<DataKey, CrossChainEvent>(&evt_key)
+            .ok_or(Error::EventNotFound)?;
+
+        let reconciliation_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReconciliationCount)
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(Error::Overflow)?;
+
+        let reconciliation = CrossChainReconciliation {
+            reconciliation_id,
+            event_id,
+            reason: reason.clone(),
+            created_at: env.ledger().timestamp(),
+            completed_at: 0,
+            status: ReconciliationStatus::Pending,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::Reconciliation(reconciliation_id),
+            &reconciliation,
+        );
+        env.storage().instance().set(&DataKey::ReconciliationCount, &reconciliation_id);
+
+        env.events().publish(
+            (Symbol::new(&env, "reconciliation_scheduled"),),
+            (reconciliation_id, event_id, reason),
+        );
+
+        Ok(reconciliation_id)
+    }
+
+    /// Complete deferred reconciliation and update the linked sync event state.
+    pub fn complete_reconciliation(
+        env: Env,
+        validator: Address,
+        reconciliation_id: u64,
+        status: EventSyncStatus,
+        _signature: BytesN<64>,
+        nonce: u64,
+    ) -> Result<bool, Error> {
+        validator.require_auth();
+        Self::require_not_paused(&env)?;
+        let v_info = Self::get_active_validator_info(&env, &validator)?;
+        Self::verify_validator_nonce(&env, &v_info.public_key, nonce)?;
+
+        let reconciliation_key = DataKey::Reconciliation(reconciliation_id);
+        let mut reconciliation = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainReconciliation>(&reconciliation_key)
+            .ok_or(Error::ReconciliationNotFound)?;
+
+        if reconciliation.status != ReconciliationStatus::Pending {
+            return Err(Error::MessageAlreadyProcessed);
+        }
+
+        reconciliation.completed_at = env.ledger().timestamp();
+        reconciliation.status = match status {
+            EventSyncStatus::Synced => ReconciliationStatus::Reconciled,
+            EventSyncStatus::Failed => ReconciliationStatus::Failed,
+            EventSyncStatus::Pending => ReconciliationStatus::Pending,
+        };
+        env.storage().persistent().set(&reconciliation_key, &reconciliation);
+
+        let evt_key = DataKey::Event(reconciliation.event_id);
+        let mut event = env
+            .storage()
+            .persistent()
+            .get::<DataKey, CrossChainEvent>(&evt_key)
+            .ok_or(Error::EventNotFound)?;
+        event.sync_status = status.clone();
+        env.storage().persistent().set(&evt_key, &event);
+
+        env.events().publish(
+            (Symbol::new(&env, "reconciliation_completed"),),
+            (reconciliation_id, status),
+        );
+
+        Ok(true)
+    }
+
     // ==================== Timeout Management Functions ====================
 
     /// Create a new cross-chain operation with timeout
@@ -2049,6 +2172,19 @@ impl CrossChainBridgeContract {
     pub fn get_sync_event(env: Env, event_id: u64) -> Option<CrossChainEvent> {
         let key = DataKey::Event(event_id);
         let val: Option<CrossChainEvent> = env.storage().persistent().get(&key);
+        if val.is_some() {
+            env.storage().persistent().extend_ttl(
+                &key,
+                PERSISTENT_TTL_THRESHOLD,
+                PERSISTENT_TTL_EXTEND_TO,
+            );
+        }
+        val
+    }
+
+    pub fn get_reconciliation(env: Env, reconciliation_id: u64) -> Option<CrossChainReconciliation> {
+        let key = DataKey::Reconciliation(reconciliation_id);
+        let val: Option<CrossChainReconciliation> = env.storage().persistent().get(&key);
         if val.is_some() {
             env.storage().persistent().extend_ttl(
                 &key,

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Workspace-wide soroban-sdk pin:** All active member crates now inherit `soroban-sdk` from the workspace root via `workspace = true`. The `contracts/upgradeability` crate was the only non-excluded member with a hardcoded version — corrected in this PR.
+- Offline and asynchronous reconciliation hooks for cross-chain sync in the bridge and sync-manager contracts, including deferred reconciliation records that can be completed after relayer outages or interim connectivity loss.
 - `scripts/check_sdk_version.sh` — CI guard that fails the build if any member crate overrides the workspace soroban-sdk pin. Scans all Cargo.toml files including excluded/deferred contracts.
 - `docs/VERSIONING_STRATEGY.md` — Documents SDK bump cadence (patch/minor/major), compatibility matrix, deprecation policy, and the CI enforcement mechanism.
 - Added note in changelog about `healthcare_compliance` contract's former `22.0.0` drift (issue #828 deferred).
