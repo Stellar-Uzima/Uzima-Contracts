@@ -582,3 +582,121 @@ fn test_all_required_event_categories() {
     let recomputed = client.verify_log_integrity();
     assert_eq!(stored, recomputed);
 }
+
+// ─── Contract-level Observability (Issue #1166) ─────────────────────────────
+
+#[test]
+fn test_log_auth_denial() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+    let mut meta = Map::new(&env);
+    meta.set(
+        String::from_str(&env, "role"),
+        String::from_str(&env, "admin"),
+    );
+
+    let id = client.log_auth_denial(
+        &admin,
+        &caller,
+        &symbol_short!("CREATE"),
+        &symbol_short!("NOT_AUTH"),
+        &meta,
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthFailure);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "denial_reason")),
+        Some(String::from_str(&env, "NOT_AUTH"))
+    );
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "target_function")),
+        Some(String::from_str(&env, "CREATE"))
+    );
+}
+
+#[test]
+fn test_log_policy_evaluation_allow() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+
+    let id = client.log_policy_evaluation(
+        &caller,
+        &symbol_short!("RBAC"),
+        &symbol_short!("ALLOW"),
+        &symbol_short!("READ"),
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthSuccess);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "decision")),
+        Some(String::from_str(&env, "ALLOW"))
+    );
+}
+
+#[test]
+fn test_log_policy_evaluation_deny() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+
+    let id = client.log_policy_evaluation(
+        &caller,
+        &symbol_short!("HIPAA"),
+        &symbol_short!("DENY"),
+        &symbol_short!("EXPORT"),
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthFailure);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "decision")),
+        Some(String::from_str(&env, "DENY"))
+    );
+}
+
+#[test]
+fn test_get_denial_summary() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let caller1 = Address::generate(&env);
+    let caller2 = Address::generate(&env);
+
+    let meta = Map::new(&env);
+
+    client.log_auth_denial(
+        &admin,
+        &caller1,
+        &symbol_short!("WRITE"),
+        &symbol_short!("NO_ROLE"),
+        &meta,
+    );
+    client.log_auth_denial(
+        &admin,
+        &caller2,
+        &symbol_short!("DELETE"),
+        &symbol_short!("NO_ROLE"),
+        &meta,
+    );
+    client.log_auth_denial(
+        &admin,
+        &caller1,
+        &symbol_short!("EXPORT"),
+        &symbol_short!("DENIED"),
+        &meta,
+    );
+
+    let summary = client.get_denial_summary();
+    assert_eq!(summary.get(String::from_str(&env, "NO_ROLE")), Some(2));
+    assert_eq!(summary.get(String::from_str(&env, "DENIED")), Some(1));
+}
