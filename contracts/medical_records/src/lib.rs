@@ -634,6 +634,13 @@ pub enum DataKey {
     RateLimitBypass(Address), // bool - admin-granted bypass flag
     QuantumThreatLevel,       // 0-100 (percentage)
 
+    // Traditional medicine
+    TraditionalMeta(u64),
+    PatientTraditionalRecords(Address),
+
+    // Data export
+    LastExportTime(Address),
+
     // Retention policy
     RecordRetention(u64),        // record_id -> RetentionPolicy
     RetentionDefault,            // global default retention_secs (u64)
@@ -6969,6 +6976,15 @@ impl MedicalRecordsContract {
         Ok(traditional_ids)
     }
 
+    /// Rolls back record metadata to a specific previous version.
+    /// Only the record's doctor or an admin may call this.
+    /// The target version's tags and custom_fields are restored.
+    /// History entries after the target version are removed.
+    pub fn rollback_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        target_version: u32,
     // ─── Selective Export & Redaction (Issue #1163) ───────────────────────────
 
     /// Redaction policy for a record — defines which fields are visible to non-owner viewers.
@@ -7061,6 +7077,65 @@ impl MedicalRecordsContract {
             .get(&DataKey::Record(record_id))
             .ok_or(Error::RecordNotFound)?;
 
+        if caller != record.doctor_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if target_version == 0 || target_version >= meta.version {
+            return Err(Error::InvalidVersion);
+        }
+
+        // Find the history entry for the target version and truncate history
+        let mut found = false;
+        let mut new_tags = Vec::new(&env);
+        let mut new_custom_fields = Map::new(&env);
+        let mut keep_history: Vec<RecordMetadataHistoryEntry> = Vec::new(&env);
+
+        for i in 0..meta.history.len() {
+            if let Some(entry) = meta.history.get(i) {
+                if entry.version == target_version {
+                    found = true;
+                    new_tags = entry.tags.clone();
+                    new_custom_fields = entry.custom_fields.clone();
+                } else if !found {
+                    keep_history.push_back(entry);
+                }
+                // Entries after found are dropped
+            }
+        }
+
+        if !found {
+            return Err(Error::VersionNotFound);
+        }
+
+        let from_version = meta.version;
+
+        // Update tag index: remove old tags, add restored tags
+        Self::update_tag_index(&env, record_id, &meta.tags, &new_tags);
+
+        meta.tags = new_tags;
+        meta.custom_fields = new_custom_fields;
+        meta.version = target_version;
+        meta.history = keep_history;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_record_rolled_back(
+            &env,
+            caller.clone(),
+            record_id,
+            record.patient_id.clone(),
+            from_version,
+            target_version,
+        );
         if caller != record.patient_id && !Self::is_admin(&env, &caller) {
             return Err(Error::Unauthorized);
         }
@@ -7122,6 +7197,13 @@ impl MedicalRecordsContract {
         Ok(())
     }
 
+    /// Returns the version history for a record's metadata.
+    /// The caller must be the record's doctor, the patient, or an admin.
+    pub fn get_record_version_history(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<RecordMetadata, Error> {
     /// Export a record with redaction applied — returns the record with
     /// redacted fields set to empty strings.
     pub fn export_record_redacted(
@@ -7138,6 +7220,20 @@ impl MedicalRecordsContract {
             .get(&DataKey::Record(record_id))
             .ok_or(Error::RecordNotFound)?;
 
+        if caller != record.doctor_id
+            && caller != record.patient_id
+            && !Self::is_admin(&env, &caller)
+        {
+            return Err(Error::Unauthorized);
+        }
+
+        let meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        Ok(meta)
         // If caller is the patient or admin, return full record
         if caller == record.patient_id || Self::is_admin(&env, &caller) {
             return Ok(record);

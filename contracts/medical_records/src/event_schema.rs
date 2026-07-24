@@ -157,3 +157,30 @@ pub struct HealthCheckEvent {
     pub status: String,
     pub gas_used: u64,
 }
+
+#[contracttype]
+pub struct MetadataUpdatedEvent {
+    pub audit: AuditContext,
+    pub record_id: u64,
+    pub patient: Address,
+    pub new_version: u32,
+    pub tag_count: u32,
+    pub custom_field_count: u32,
+}
+
+#[contracttype]
+pub struct RecordRolledBackEvent {
+    pub audit: AuditContext,
+    pub record_id: u64,
+    pub patient: Address,
+    pub from_version: u32,
+    pub to_version: u32,
+}
+
+#[contracttype]
+pub struct TraditionalRecordAddedEvent {
+    pub audit: AuditContext,
+    pub record_id: u64,
+    pub patient: Address,
+    pub practice_type: String,
+}
