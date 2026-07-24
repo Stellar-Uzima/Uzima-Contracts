@@ -103,6 +103,18 @@ pub enum DataKey {
     ConsentStorage(Address),
     ProviderIndex(Address, Address),
     ErasureRequest(Address),
+    DefaultConsentPolicy,
+}
+
+/// Policy-driven consent configuration.
+/// Admin can set a default TTL and notification window.
+#[derive(Clone)]
+#[contracttype]
+pub struct ConsentPolicy {
+    /// Default time-to-live in seconds for new consents (0 = no expiry).
+    pub default_ttl_secs: u64,
+    /// Window in seconds before expiry to emit a notification event.
+    pub notification_window_secs: u64,
 }
 
 #[contract]
@@ -345,14 +357,56 @@ impl PatientConsentManagement {
         Self::require_initialized(&env)?;
         let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
         let mut result = false;
-        if let Some(record) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
+        if let Some(mut record) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
             if Self::is_consent_expired(&env, &record) {
+                // Auto-expire: set active=false and revoked_at on first check after expiry
+                if record.active {
+                    record.active = false;
+                    record.revoked_at = env.ledger().timestamp();
+                    env.storage().persistent().set(&key, &record);
+                    // Also update the consent log
+                    if let Some(mut log) = env.storage().persistent().get::<_, ConsentLog>(
+                        &DataKey::ConsentStorage(patient.clone()),
+                    ) {
+                        let mut updated = Vec::new(&env);
+                        for mut r in log.records.iter() {
+                            if r.provider == provider && r.patient == patient {
+                                r.active = false;
+                                r.revoked_at = record.revoked_at;
+                            }
+                            updated.push_back(r);
+                        }
+                        log.records = updated;
+                        env.storage()
+                            .persistent()
+                            .set(&DataKey::ConsentStorage(patient.clone()), &log);
+                    }
+                }
                 events::publish_consent_expired(
                     &env,
                     &patient,
                     &provider,
                     env.ledger().timestamp(),
                 );
+            } else if record.active && record.expires_at != 0 {
+                // Check if within notification window
+                let now = env.ledger().timestamp();
+                let remaining = record.expires_at.saturating_sub(now);
+                let policy: Option<ConsentPolicy> = env
+                    .storage()
+                    .instance()
+                    .get(&DataKey::DefaultConsentPolicy);
+                if let Some(p) = policy {
+                    if p.notification_window_secs > 0 && remaining <= p.notification_window_secs {
+                        events::publish_consent_expiring_soon(
+                            &env,
+                            &patient,
+                            &provider,
+                            record.expires_at,
+                            remaining,
+                        );
+                    }
+                }
             }
             result = Self::is_consent_active(&env, &record);
         }
@@ -590,6 +644,8 @@ impl PatientConsentManagement {
             return Ok(false);
         }
         Ok(record.jurisdictions_allowed.contains(&jurisdiction))
+    }
+
     /// Returns the FHIR R4 Consent resource JSON for a consent record.
     ///
     /// Maps the internal `ConsentRecord` to a valid FHIR R4 `Consent`
@@ -616,6 +672,104 @@ impl PatientConsentManagement {
         let key = DataKey::ProviderIndex(patient, provider);
         let record: ConsentRecord = env.storage().persistent().get(&key)?;
         Some(fhir::to_fhir_json(&env, &record))
+    }
+
+    // ─── Policy-driven Consent Expiration (Issue #1160) ──────────────────────
+
+    /// Set the default consent policy (admin only).
+    /// Controls TTL and notification window for new consents.
+    pub fn set_consent_policy(
+        env: Env,
+        caller: Address,
+        default_ttl_secs: u64,
+        notification_window_secs: u64,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        if notification_window_secs > 0 && default_ttl_secs > 0 && notification_window_secs >= default_ttl_secs {
+            return Err(Error::InvalidNotificationWindow);
+        }
+
+        let policy = ConsentPolicy {
+            default_ttl_secs,
+            notification_window_secs,
+        };
+        env.storage()
+            .instance()
+            .set(&DataKey::DefaultConsentPolicy, &policy);
+        events::publish_policy_updated(&env, &caller, env.ledger().timestamp());
+        Ok(())
+    }
+
+    /// Get the current default consent policy.
+    pub fn get_consent_policy(env: Env) -> Option<ConsentPolicy> {
+        env.storage()
+            .instance()
+            .get(&DataKey::DefaultConsentPolicy)
+    }
+
+    /// Grant consent using the default policy's TTL.
+    /// If no policy is set, consent has no expiration (equivalent to grant_consent).
+    pub fn grant_consent_with_policy(
+        env: Env,
+        patient: Address,
+        provider: Address,
+    ) -> Result<(), Error> {
+        patient.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        if patient == provider {
+            return Err(Error::InvalidProvider);
+        }
+        let ts = env.ledger().timestamp();
+        let key = DataKey::ProviderIndex(patient.clone(), provider.clone());
+        if let Some(r) = env.storage().persistent().get::<_, ConsentRecord>(&key) {
+            if r.active {
+                return Err(Error::ConsentAlreadyExists);
+            }
+        }
+
+        let expires_at: u64 = env
+            .storage()
+            .instance()
+            .get::<_, ConsentPolicy>(&DataKey::DefaultConsentPolicy)
+            .map(|p| {
+                if p.default_ttl_secs == 0 {
+                    0
+                } else {
+                    ts.saturating_add(p.default_ttl_secs)
+                }
+            })
+            .unwrap_or(0);
+
+        let empty_jurisdictions = Vec::new(&env);
+        let record = ConsentRecord {
+            patient: patient.clone(),
+            provider: provider.clone(),
+            granted_at: ts,
+            expires_at,
+            revoked_at: 0,
+            active: true,
+            jurisdictions_allowed: empty_jurisdictions,
+        };
+        let mut log: ConsentLog = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ConsentStorage(patient.clone()))
+            .unwrap_or(ConsentLog {
+                records: Vec::new(&env),
+                record_count: 0,
+            });
+        log.records.push_back(record.clone());
+        log.record_count += 1;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ConsentStorage(patient.clone()), &log);
+        env.storage().persistent().set(&key, &record);
+        events::publish_consent_granted(&env, &patient, &provider, ts);
+        Ok(())
     }
 }
 
