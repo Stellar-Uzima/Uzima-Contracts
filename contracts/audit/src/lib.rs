@@ -635,4 +635,127 @@ impl AuditTrail {
         list.push_back(id);
         env.storage().persistent().set(&key, &list);
     }
+
+    // ─── Contract-level Observability (Issue #1166) ──────────────────────────
+
+    /// Log an authorization denial reason with full observability.
+    /// Stores denial details and emits a compliance event.
+    pub fn log_auth_denial(
+        env: Env,
+        admin: Address,
+        caller: Address,
+        target_function: Symbol,
+        denial_reason: Symbol,
+        metadata: Map<String, String>,
+    ) -> u64 {
+        let id = Self::next_log_id(&env);
+
+        let mut log_metadata = metadata;
+        log_metadata.set(
+            String::from_str(&env, "denial_reason"),
+            denial_reason.to_string(),
+        );
+        log_metadata.set(
+            String::from_str(&env, "target_function"),
+            target_function.to_string(),
+        );
+
+        let log = AuditLog {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: caller,
+            action: ActionType::AuthFailure,
+            target: BytesN::from_array(&env, &[0u8; 32]),
+            result: OperationResult::Failure,
+            metadata: log_metadata,
+            prev_hash: Self::get_log_rolling_hash(env.clone()),
+        };
+
+        crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("AUTH_DENY")),
+            (id, denial_reason),
+        );
+
+        id
+    }
+
+    /// Log a policy evaluation result for observability.
+    pub fn log_policy_evaluation(
+        env: Env,
+        caller: Address,
+        policy_name: Symbol,
+        decision: Symbol,
+        target_function: Symbol,
+    ) -> u64 {
+        let id = Self::next_log_id(&env);
+
+        let mut metadata = Map::new(&env);
+        metadata.set(
+            String::from_str(&env, "policy_name"),
+            policy_name.to_string(),
+        );
+        metadata.set(
+            String::from_str(&env, "decision"),
+            decision.to_string(),
+        );
+        metadata.set(
+            String::from_str(&env, "target_function"),
+            target_function.to_string(),
+        );
+
+        let action = if decision == symbol_short!("ALLOW") {
+            ActionType::AuthSuccess
+        } else {
+            ActionType::AuthFailure
+        };
+
+        let log = AuditLog {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: caller,
+            action,
+            target: BytesN::from_array(&env, &[0u8; 32]),
+            result: OperationResult::Success,
+            metadata,
+            prev_hash: Self::get_log_rolling_hash(env.clone()),
+        };
+
+        crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("POLICY")),
+            (id, decision),
+        );
+
+        id
+    }
+
+    /// Get observability summary: count of denials by reason.
+    pub fn get_denial_summary(env: Env) -> Map<String, u64> {
+        let mut summary = Map::new(&env);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        for i in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+            {
+                if log.action == ActionType::AuthFailure {
+                    let reason = log
+                        .metadata
+                        .get(String::from_str(&env, "denial_reason"))
+                        .unwrap_or(String::from_str(&env, "UNKNOWN"));
+                    let current = summary.get(reason.clone()).unwrap_or(0u64);
+                    summary.set(reason, current.saturating_add(1));
+                }
+            }
+        }
+
+        summary
+    }
 }
