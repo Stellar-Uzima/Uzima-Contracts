@@ -1,0 +1,386 @@
+{
+  "generated_at": "2026-07-24T06:26:41.433Z",
+  "source": "interface-registry",
+  "registry_version": "1.0.0",
+  "contracts": [
+    {
+      "name": "contract_monitoring",
+      "version": "1.0.0",
+      "description": "Contract monitoring and metrics dashboard",
+      "functions": [
+        {
+          "name": "get_dashboard",
+          "description": "Get dashboard snapshot",
+          "args": [],
+          "returns": "DashboardSnapshot",
+          "state_mutation": false
+        },
+        {
+          "name": "initialize",
+          "description": "Initialize the monitoring contract",
+          "args": [
+            {
+              "name": "admin",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "alert_config",
+              "type": "AlertConfig",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "record_call",
+          "description": "Record a successful function call",
+          "args": [
+            {
+              "name": "caller",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "function_name",
+              "type": "String",
+              "required": true
+            },
+            {
+              "name": "gas_used",
+              "type": "u64",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "record_error",
+          "description": "Record a failed function call",
+          "args": [
+            {
+              "name": "function_name",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        }
+      ]
+    },
+    {
+      "name": "identity_registry",
+      "version": "1.0.0",
+      "description": "Identity registry for healthcare providers and patients",
+      "functions": [
+        {
+          "name": "initialize",
+          "description": "Initialize the identity registry",
+          "args": [
+            {
+              "name": "admin",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "register_identity",
+          "description": "Register a new identity",
+          "args": [
+            {
+              "name": "identity",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "role",
+              "type": "Symbol",
+              "required": true
+            },
+            {
+              "name": "metadata",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "revoke_identity",
+          "description": "Revoke an identity",
+          "args": [
+            {
+              "name": "identity",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "verify_identity",
+          "description": "Verify an identity exists and has role",
+          "args": [
+            {
+              "name": "identity",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "role",
+              "type": "Symbol",
+              "required": true
+            }
+          ],
+          "returns": "bool",
+          "state_mutation": false
+        }
+      ]
+    },
+    {
+      "name": "medical_records",
+      "version": "1.0.0",
+      "description": "Core medical records management contract",
+      "functions": [
+        {
+          "name": "create_record",
+          "description": "Create a new medical record",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "data",
+              "type": "String",
+              "required": true
+            },
+            {
+              "name": "record_type",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "u64",
+          "state_mutation": true
+        },
+        {
+          "name": "delete_record",
+          "description": "Soft-delete a medical record",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "record_id",
+              "type": "u64",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "grant_access",
+          "description": "Grant a provider access to patient records",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "provider",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "initialize",
+          "description": "Initialize the contract with admin and RBAC",
+          "args": [
+            {
+              "name": "admin",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "rbac_id",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "read_record",
+          "description": "Read a medical record by ID",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "record_id",
+              "type": "u64",
+              "required": true
+            }
+          ],
+          "returns": "MedicalRecord",
+          "state_mutation": false
+        },
+        {
+          "name": "revoke_access",
+          "description": "Revoke provider access to patient records",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "provider",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "update_record",
+          "description": "Update an existing medical record",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "record_id",
+              "type": "u64",
+              "required": true
+            },
+            {
+              "name": "data",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        }
+      ]
+    },
+    {
+      "name": "patient_consent_management",
+      "version": "1.0.0",
+      "description": "Patient consent management contract",
+      "functions": [
+        {
+          "name": "check_consent",
+          "description": "Check if consent is active",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "provider",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "data_type",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "bool",
+          "state_mutation": false
+        },
+        {
+          "name": "grant_consent",
+          "description": "Grant consent for data access",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "provider",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "data_type",
+              "type": "String",
+              "required": true
+            },
+            {
+              "name": "expiry_ledger",
+              "type": "u32",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "initialize",
+          "description": "Initialize the consent contract",
+          "args": [
+            {
+              "name": "admin",
+              "type": "Address",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        },
+        {
+          "name": "revoke_consent",
+          "description": "Revoke previously granted consent",
+          "args": [
+            {
+              "name": "patient",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "provider",
+              "type": "Address",
+              "required": true
+            },
+            {
+              "name": "data_type",
+              "type": "String",
+              "required": true
+            }
+          ],
+          "returns": "void",
+          "state_mutation": true
+        }
+      ]
+    }
+  ]
+}

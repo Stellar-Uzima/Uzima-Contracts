@@ -1,12 +1,20 @@
 //! # Contract Template
 //!
 //! Boilerplate for new Soroban contracts. Demonstrates:
-//! - Proper `require_auth()` pattern (Issue #439)
+//! - Proper `require_auth()` pattern
 //! - Standard initialization guard
 //! - Typed errors and events
 //! - Storage key namespacing
 //!
-//! Copy this directory and rename `contract-template` / `ContractTemplate` throughout.
+//! To create a new contract, run:
+//! ```bash
+//! ./scripts/scaffold-contract.sh <your_contract_name>
+//! ```
+//!
+//! Then verify it with:
+//! ```bash
+//! ./scripts/smoke-test-scaffold.sh <your_contract_name>
+//! ```
 
 #![no_std]
 

@@ -644,6 +644,16 @@ pub enum DataKey {
     // Retention policy
     RecordRetention(u64),        // record_id -> RetentionPolicy
     RetentionDefault,            // global default retention_secs (u64)
+
+    // Traditional medicine
+    TraditionalMeta(u64),
+    PatientTraditionalRecords(Address),
+
+    // Data export
+    LastExportTime(Address),
+
+    // Redaction
+    RedactionPolicy(u64),
 }
 
 // ==================== Errors ====================
@@ -6975,6 +6985,87 @@ impl MedicalRecordsContract {
         caller: Address,
         record_id: u64,
         target_version: u32,
+    // ─── Selective Export & Redaction (Issue #1163) ───────────────────────────
+
+    /// Redaction policy for a record — defines which fields are visible to non-owner viewers.
+    #[derive(Clone)]
+    #[contracttype]
+    pub struct RedactionPolicy {
+        pub record_id: u64,
+        pub redacted_fields: Vec<String>,
+        pub reason: String,
+        pub set_by: Address,
+        pub set_at: u64,
+    }
+
+    /// Export a specific subset of records for a patient.
+    /// If record_ids is empty, exports all records.
+    /// If record_ids is non-empty, only those records are included.
+    pub fn export_records_selective(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        record_ids: Vec<u64>,
+    ) -> Result<Vec<MedicalRecord>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if caller != patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut results: Vec<MedicalRecord> = Vec::new(&env);
+
+        if record_ids.is_empty() {
+            // Export all
+            let total: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::PatientRecordCount(patient_id.clone()))
+                .unwrap_or(0);
+            for i in 0..total {
+                if let Some(rid) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::PatientRecord(patient_id.clone(), i))
+                {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(rid))
+                    {
+                        results.push_back(r);
+                    }
+                }
+            }
+        } else {
+            // Export specific records
+            for i in 0..record_ids.len() {
+                if let Some(rid) = record_ids.get(i) {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(rid))
+                    {
+                        if r.patient_id == patient_id || Self::is_admin(&env, &caller) {
+                            results.push_back(r);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Set a redaction policy for a record — marks fields as redacted.
+    /// Only the patient or admin can set redaction policies.
+    pub fn set_redaction_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        redacted_fields: Vec<String>,
+        reason: String,
     ) -> Result<(), Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
@@ -7045,6 +7136,63 @@ impl MedicalRecordsContract {
             from_version,
             target_version,
         );
+        if caller != record.patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let policy = RedactionPolicy {
+            record_id,
+            redacted_fields,
+            reason,
+            set_by: caller.clone(),
+            set_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RedactionPolicy(record_id), &policy);
+
+        Self::log_info(
+            &env,
+            "set_redaction_policy",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Redaction policy updated",
+        );
+
+        Ok(())
+    }
+
+    /// Get the redaction policy for a record.
+    pub fn get_redaction_policy(env: Env, record_id: u64) -> Option<RedactionPolicy> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RedactionPolicy(record_id))
+    }
+
+    /// Remove a redaction policy (restore full visibility).
+    pub fn remove_redaction_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RedactionPolicy(record_id));
 
         Ok(())
     }
@@ -7056,6 +7204,13 @@ impl MedicalRecordsContract {
         caller: Address,
         record_id: u64,
     ) -> Result<RecordMetadata, Error> {
+    /// Export a record with redaction applied — returns the record with
+    /// redacted fields set to empty strings.
+    pub fn export_record_redacted(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<MedicalRecord, Error> {
         caller.require_auth();
         Self::require_initialized(&env)?;
 
@@ -7079,5 +7234,47 @@ impl MedicalRecordsContract {
             .ok_or(Error::RecordNotFound)?;
 
         Ok(meta)
+        // If caller is the patient or admin, return full record
+        if caller == record.patient_id || Self::is_admin(&env, &caller) {
+            return Ok(record);
+        }
+
+        // Apply redaction policy
+        let mut redacted = record.clone();
+        if let Some(policy) = env
+            .storage()
+            .persistent()
+            .get::<_, RedactionPolicy>(&DataKey::RedactionPolicy(record_id))
+        {
+            for i in 0..policy.redacted_fields.len() {
+                if let Some(field) = policy.redacted_fields.get(i) {
+                    let field_str = field.to_buffer().iter().collect::<Vec<u8>>();
+                    let field_name = core::str::from_utf8(&field_str).unwrap_or("");
+                    match field_name {
+                        "diagnosis" => {
+                            redacted.diagnosis = String::from_str(&env, "[REDACTED]");
+                        }
+                        "treatment" => {
+                            redacted.treatment = String::from_str(&env, "[REDACTED]");
+                        }
+                        "data_ref" => {
+                            redacted.data_ref = String::from_str(&env, "[REDACTED]");
+                        }
+                        "category" => {
+                            redacted.category = String::from_str(&env, "[REDACTED]");
+                        }
+                        "treatment_type" => {
+                            redacted.treatment_type = String::from_str(&env, "[REDACTED]");
+                        }
+                        "tags" => {
+                            redacted.tags = Vec::new(&env);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(redacted)
     }
 }

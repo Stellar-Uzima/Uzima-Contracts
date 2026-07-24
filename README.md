@@ -111,49 +111,58 @@ Get up and running in under 5 minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/Uzima-Contracts.git
+git clone https://github.com/Stellar-Uzima/Uzima-Contracts.git
 cd Uzima-Contracts
 
-# Run the automated setup script
+# Run the automated setup (installs pinned Rust + Soroban versions, builds, tests)
 chmod +x setup.sh
 ./setup.sh
 
-# Or use the Makefile for step-by-step setup
-make setup
+# Or use the Makefile for individual steps
+make install-deps   # Install Rust toolchain + Soroban CLI
+make build          # Build all contracts
+make test           # Run all tests
 ```
 
 ### 🔧 Environment Setup
 
 #### Option 1: Automated Setup (Recommended)
 
-The `setup.sh` script handles everything automatically:
+The `setup.sh` script handles everything automatically. It reads the pinned
+versions from `rust-toolchain.toml` and `Cargo.toml` so you get exactly the
+right toolchain:
 
 ```bash
 ./setup.sh
 ```
 
 This script will:
-- Install Rust 1.78.0 and required targets
+- Install the Rust version pinned in `rust-toolchain.toml` (currently 1.92.0)
+- Add the `wasm32-unknown-unknown` target, `rustfmt`, `clippy`, `rust-src`
 - Install Soroban CLI v21.7.7
-- Set up project structure
-- Configure Soroban networks (local, testnet, futurenet)
+- Configure Soroban identity and networks (local, testnet, futurenet)
 - Build the project and run tests
-- Generate default identity
+
+Use `./setup.sh --skip-build` to install tools without building.
 
 #### Option 2: Manual Setup
 
 ```bash
-# Install Rust targets and components
-rustup target add wasm32-unknown-unknown
-rustup component add rustfmt clippy rust-src
+# Rust 1.92.0 is pinned in rust-toolchain.toml — just install rustup
+# and it will auto-install the correct version:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
 
-# Install Soroban CLI
+# Verify Rust version (should be 1.92.0)
+rustc --version
+
+# Install Soroban CLI (version pinned in Cargo.toml)
 cargo install --locked --version 21.7.7 soroban-cli
 
 # Configure Soroban
 soroban config identity generate default
 soroban config network add local \
-  --rpc-url http://localhost:8000/soroban/rpc \
+  --rpc-url http://localhost:8000/soroban/r \
   --network-passphrase "Standalone Network ; February 2017"
 
 # Build the project
