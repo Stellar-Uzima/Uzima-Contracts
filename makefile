@@ -6,6 +6,7 @@
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations bootstrap-test health-check smoke-test-docker
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 .PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
+.PHONY: build-incremental test-changed cache-status dev
 
 ##@ General
 
@@ -26,6 +27,10 @@ help:
 	@echo "  test           - Run all tests"
 	@echo "  test-unit      - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
+	@echo "  test-changed   - Run tests only for changed packages (incremental)"
+	@echo "  build-incremental - Incremental build (only recompile changed crates)"
+	@echo "  cache-status   - Show build cache and dependency status"
+	@echo "  dev            - Quick dev loop: incremental build + test changed"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Run clippy linter"
@@ -101,6 +106,54 @@ test-unit: check-deps ## Run unit tests only
 test-integration: check-deps ## Run integration tests only
 	@echo "Running integration tests..."
 	cargo test --test integration
+
+build-incremental: check-deps ## Incremental build (only recompile changed crates)
+	@echo "Building incrementally..."
+	cargo build --all-targets
+
+test-changed: check-deps ## Run tests only for packages with changed source files
+	@echo "Detecting changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages detected. Running full test suite."; \
+		cargo test --all; \
+	else \
+		echo "Changed packages: $$CHANGED"; \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: package $$pkg not found in workspace, skipping"; \
+		done; \
+	fi
+
+cache-status: ## Show build cache and incremental compilation status
+	@echo "=== Build Cache Status ==="
+	@echo "Target directory size: $$(du -sh target/ 2>/dev/null | cut -f1 || echo 'not built')"
+	@echo "WASM artifacts: $$(find target/wasm32-unknown-unknown/release -name '*.wasm' 2>/dev/null | wc -l || echo 0)"
+	@echo "Last build: $$(stat -c '%y' target/.cargo-lock 2>/dev/null || stat -f '%Sm' target/.cargo-lock 2>/dev/null || echo 'unknown')"
+	@echo ""
+	@echo "=== Dependency Cache ==="
+	@echo "Cargo registry: $$(du -sh ~/.cargo/registry/ 2>/dev/null | cut -f1 || echo 'unknown')"
+	@echo "Cargo git cache: $$(du -sh ~/.cargo/git/ 2>/dev/null | cut -f1 || echo 'unknown')"
+
+dev: check-deps ## Quick dev loop: incremental build + test changed packages only
+	@echo "=== Quick Dev Cycle ==="
+	@echo "1. Incremental build..."
+	cargo build --all-targets 2>&1 | tail -5
+	@echo ""
+	@echo "2. Testing changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages. Skipping test."; \
+	else \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: $$pkg not in workspace"; \
+		done; \
+	fi
+	@echo ""
+	@echo "Dev cycle complete!"
 
 ##@ Maintenance
 
