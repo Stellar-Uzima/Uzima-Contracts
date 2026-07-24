@@ -242,6 +242,149 @@ impl AccessControlImpl {
             (address.clone(), role as u32),
         );
     }
+
+    // ── Batch Operations (Issue #1164) ───────────────────────────────────
+
+    /// Batch grant roles to multiple addresses.
+    /// Caller must be admin. Returns the count of successfully granted roles.
+    pub fn batch_grant_roles(
+        env: &Env,
+        assignments: Vec<(Address, Role)>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut granted: u32 = 0;
+        for i in 0..assignments.len() {
+            if let Some((address, role)) = assignments.get(i) {
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::Role(address.clone()), &role);
+                Self::emit_role_event(env, symbol_short!("GRANT"), &address, role);
+                granted = granted.saturating_add(1);
+            }
+        }
+        Ok(granted)
+    }
+
+    /// Batch revoke roles from multiple addresses.
+    /// Caller must be admin. Returns the count of successfully revoked roles.
+    pub fn batch_revoke_roles(
+        env: &Env,
+        addresses: Vec<Address>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut revoked: u32 = 0;
+        for i in 0..addresses.len() {
+            if let Some(address) = addresses.get(i) {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::Role(address.clone()));
+                env.events().publish(
+                    (symbol_short!("AC"), symbol_short!("REVOKE")),
+                    address.clone(),
+                );
+                revoked = revoked.saturating_add(1);
+            }
+        }
+        Ok(revoked)
+    }
+
+    /// Batch grant permissions to an address.
+    /// Caller must be admin. Returns the count of permissions granted.
+    pub fn batch_grant_permissions(
+        env: &Env,
+        address: Address,
+        permissions: Vec<Permission>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut granted: u32 = 0;
+        for i in 0..permissions.len() {
+            if let Some(permission) = permissions.get(i) {
+                env.storage().persistent().set(
+                    &DataKey::Permission(address.clone(), permission as u32),
+                    &true,
+                );
+                granted = granted.saturating_add(1);
+            }
+        }
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("BATCH_PERM")),
+            (address, granted),
+        );
+        Ok(granted)
+    }
+
+    /// Batch revoke permissions from an address.
+    /// Caller must be admin. Returns the count of permissions revoked.
+    pub fn batch_revoke_permissions(
+        env: &Env,
+        address: Address,
+        permissions: Vec<Permission>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut revoked: u32 = 0;
+        for i in 0..permissions.len() {
+            if let Some(permission) = permissions.get(i) {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::Permission(address.clone(), permission as u32));
+                revoked = revoked.saturating_add(1);
+            }
+        }
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("BATCH_REV")),
+            (address, revoked),
+        );
+        Ok(revoked)
+    }
+
+    /// Batch grant a single permission to multiple addresses.
+    /// Caller must be admin. Returns the count of addresses granted.
+    pub fn batch_grant_permission_to_many(
+        env: &Env,
+        permission: Permission,
+        addresses: Vec<Address>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut granted: u32 = 0;
+        for i in 0..addresses.len() {
+            if let Some(address) = addresses.get(i) {
+                env.storage().persistent().set(
+                    &DataKey::Permission(address.clone(), permission as u32),
+                    &true,
+                );
+                granted = granted.saturating_add(1);
+            }
+        }
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("BATCH_G")),
+            (permission as u32, granted),
+        );
+        Ok(granted)
+    }
+
+    /// Batch revoke a single permission from multiple addresses.
+    /// Caller must be admin. Returns the count of addresses revoked.
+    pub fn batch_revoke_permission_from_many(
+        env: &Env,
+        permission: Permission,
+        addresses: Vec<Address>,
+    ) -> Result<u32, AccessError> {
+        Self::require_admin(env)?;
+        let mut revoked: u32 = 0;
+        for i in 0..addresses.len() {
+            if let Some(address) = addresses.get(i) {
+                env.storage()
+                    .persistent()
+                    .remove(&DataKey::Permission(address.clone(), permission as u32));
+                revoked = revoked.saturating_add(1);
+            }
+        }
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("BATCH_R")),
+            (permission as u32, revoked),
+        );
+        Ok(revoked)
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
