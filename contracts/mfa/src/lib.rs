@@ -8,9 +8,13 @@ pub mod verification;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_token_expiration;
 
 use crate::types::{
-    AuthFactor, AuthSession, AuthStatus, DataKey, FactorType, MFAConfig, RecoveryVault,
+    AuthFactor, AuthSession, AuthStatus, DataKey, FactorType, IssuedToken, MFAConfig,
+    RecoveryVault, RefreshStrategy, TokenExpiration, TokenRefreshPolicy, TokenRefreshResult,
+    TokenType,
 };
 use soroban_sdk::{
     contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -225,5 +229,248 @@ impl MultiFactorAuth {
 
     fn log_auth_event(env: &Env, id: u64, topic: Symbol) {
         env.events().publish((symbol_short!("MFA"), topic), id);
+    }
+
+    // =========================================================================
+    // Token Expiration and Refresh Strategy
+    // =========================================================================
+
+    /// Issue a new token with the specified type and policy.
+    pub fn issue_token(
+        env: Env,
+        owner: Address,
+        token_type: TokenType,
+    ) -> IssuedToken {
+        owner.require_auth();
+
+        let now = env.ledger().timestamp();
+        let policy = Self::get_refresh_policy(&env, &token_type);
+        let expiration = &policy.expiration;
+
+        let max_lifetime_at = if expiration.max_lifetime_secs > 0 {
+            now.saturating_add(expiration.max_lifetime_secs)
+        } else {
+            u64::MAX
+        };
+
+        let token_id = Self::generate_token_id(&env, &owner, token_type, now);
+
+        let token = IssuedToken {
+            token_id: token_id.clone(),
+            owner: owner.clone(),
+            token_type,
+            issued_at: now,
+            expires_at: now.saturating_add(expiration.ttl_secs),
+            max_lifetime_at,
+            refresh_count: 0,
+            is_valid: true,
+            parent_token: None,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::TokenStore(owner), &token);
+
+        Self::log_auth_event(&env, 0, symbol_short!("TOK_ISSUE"));
+        token
+    }
+
+    /// Check if a token is currently valid (not expired, not revoked).
+    pub fn is_token_valid(env: Env, token_id: BytesN<32>, owner: Address) -> bool {
+        let token: Option<IssuedToken> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TokenStore(owner));
+
+        match token {
+            Some(t) if t.token_id == token_id && t.is_valid => {
+                let now = env.ledger().timestamp();
+                now <= t.expires_at || {
+                    // Check grace period
+                    let policy = Self::get_refresh_policy(&env, &t.token_type);
+                    now <= t.expires_at.saturating_add(policy.expiration.grace_period_secs)
+                }
+            }
+            _ => false,
+        }
+    }
+
+    /// Refresh a token according to the configured strategy.
+    pub fn refresh_token(
+        env: Env,
+        owner: Address,
+        token_id: BytesN<32>,
+    ) -> TokenRefreshResult {
+        owner.require_auth();
+
+        let token: IssuedToken = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TokenStore(owner.clone()))
+            .map(|t: IssuedToken| t)
+            .unwrap_or_else(|| panic!("Token not found"));
+
+        if token.token_id != token_id {
+            return TokenRefreshResult {
+                success: false,
+                new_token: None,
+                invalidated_token: None,
+                error: Some(String::from_str(&env, "token_id mismatch")),
+            };
+        }
+
+        if !token.is_valid {
+            return TokenRefreshResult {
+                success: false,
+                new_token: None,
+                invalidated_token: None,
+                error: Some(String::from_str(&env, "token revoked")),
+            };
+        }
+
+        let now = env.ledger().timestamp();
+        let policy = Self::get_refresh_policy(&env, &token.token_type);
+
+        // Check max lifetime
+        if token.max_lifetime_at < u64::MAX && now > token.max_lifetime_at {
+            return TokenRefreshResult {
+                success: false,
+                new_token: None,
+                invalidated_token: None,
+                error: Some(String::from_str(&env, "max lifetime exceeded")),
+            };
+        }
+
+        // Check refresh count
+        if policy.max_refresh_count > 0 && token.refresh_count >= policy.max_refresh_count {
+            return TokenRefreshResult {
+                success: false,
+                new_token: None,
+                invalidated_token: None,
+                error: Some(String::from_str(&env, "max refresh count exceeded")),
+            };
+        }
+
+        // Check if within grace period (for expired tokens)
+        if now > token.expires_at {
+            if policy.expiration.grace_period_secs == 0
+                || now > token.expires_at.saturating_add(policy.expiration.grace_period_secs)
+            {
+                return TokenRefreshResult {
+                    success: false,
+                    new_token: None,
+                    invalidated_token: None,
+                    error: Some(String::from_str(&env, "token expired beyond grace period")),
+                };
+            }
+        }
+
+        let new_expires_at = match policy.strategy {
+            RefreshStrategy::SlidingWindow | RefreshStrategy::Hybrid => {
+                now.saturating_add(policy.expiration.ttl_secs)
+            }
+            RefreshStrategy::FixedWindow => token.expires_at,
+            RefreshStrategy::Rotation => now.saturating_add(policy.expiration.ttl_secs),
+        };
+
+        match policy.strategy {
+            RefreshStrategy::Rotation => {
+                // Invalidate old token
+                let mut old_token = token.clone();
+                old_token.is_valid = false;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TokenStore(owner.clone()), &old_token);
+
+                // Issue new token
+                let new_token_id = Self::generate_token_id(&env, &owner, token.token_type, now);
+                let new_token = IssuedToken {
+                    token_id: new_token_id,
+                    owner: owner.clone(),
+                    token_type: token.token_type,
+                    issued_at: now,
+                    expires_at: new_expires_at,
+                    max_lifetime_at: token.max_lifetime_at,
+                    refresh_count: token.refresh_count.saturating_add(1),
+                    is_valid: true,
+                    parent_token: Some(token.token_id.clone()),
+                };
+
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TokenStore(owner), &new_token);
+
+                Self::log_auth_event(&env, 0, symbol_short!("TOK_REFRESH"));
+
+                TokenRefreshResult {
+                    success: true,
+                    new_token: Some(new_token),
+                    invalidated_token: Some(token.token_id),
+                    error: None,
+                }
+            }
+            _ => {
+                // Update TTL in place
+                let mut updated_token = token.clone();
+                updated_token.expires_at = new_expires_at;
+                updated_token.refresh_count = token.refresh_count.saturating_add(1);
+
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TokenStore(owner), &updated_token);
+
+                Self::log_auth_event(&env, 0, symbol_short!("TOK_REFRESH"));
+
+                TokenRefreshResult {
+                    success: true,
+                    new_token: Some(updated_token),
+                    invalidated_token: None,
+                    error: None,
+                }
+            }
+        }
+    }
+
+    /// Revoke a token immediately.
+    pub fn revoke_token(env: Env, owner: Address, token_id: BytesN<32>) -> bool {
+        owner.require_auth();
+
+        let token: Option<IssuedToken> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TokenStore(owner.clone()));
+
+        match token {
+            Some(mut t) if t.token_id == token_id => {
+                t.is_valid = false;
+                env.storage()
+                    .persistent()
+                    .set(&DataKey::TokenStore(owner), &t);
+                Self::log_auth_event(&env, 0, symbol_short!("TOK_REVOKE"));
+                true
+            }
+            _ => false,
+        }
+    }
+
+    /// Get the refresh policy for a token type (uses defaults).
+    fn get_refresh_policy(_env: &Env, token_type: &TokenType) -> TokenRefreshPolicy {
+        crate::types::default_refresh_policy(*token_type)
+    }
+
+    /// Generate a deterministic token ID.
+    fn generate_token_id(
+        env: &Env,
+        owner: &Address,
+        token_type: TokenType,
+        timestamp: u64,
+    ) -> BytesN<32> {
+        let mut payload = Bytes::new(env);
+        payload.append(&Bytes::from_slice(env, b"UZIMA_TOKEN_V1"));
+        payload.append(&Bytes::from_slice(env, &owner.to_array()));
+        let type_byte = token_type as u8;
+        payload.append(&Bytes::from_slice(env, &[type_byte]));
+        payload.append(&Bytes::from_slice(env, &timestamp.to_be_bytes()));
+        env.crypto().sha256(&payload).into()
     }
 }
