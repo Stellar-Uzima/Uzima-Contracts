@@ -1,0 +1,68 @@
+# CODEOWNERS
+#
+# Maps repository paths to responsible GitHub teams/users.
+# All listed owners must approve PRs that touch their paths.
+#
+# Ownership tiers: Core (2 approvals) > Domain (1 approval) > Support
+# See docs/CONTRACT_DEPENDENCY_GRAPH.md for the full model.
+
+# ── Core shared infrastructure ────────────────────────────────────────────────
+# These contracts have the highest blast radius. Any change requires 2
+# maintainer approvals and a security review before merging.
+contracts/common_error/       @Stellar-Uzima/maintainers
+contracts/common_auth/        @Stellar-Uzima/maintainers
+contracts/rbac/               @Stellar-Uzima/maintainers
+contracts/audit/              @Stellar-Uzima/maintainers
+contracts/identity_registry/  @Stellar-Uzima/maintainers
+contracts/upgradeability/     @Stellar-Uzima/maintainers
+libs/                         @Stellar-Uzima/maintainers
+schemas/                      @Stellar-Uzima/maintainers
+
+# ── Medical records domain ────────────────────────────────────────────────────
+contracts/medical_records/              @Stellar-Uzima/maintainers
+contracts/patient_consent_management/   @Stellar-Uzima/maintainers
+contracts/medical_record_search/        @Stellar-Uzima/maintainers
+contracts/medical_record_hash_registry/ @Stellar-Uzima/maintainers
+contracts/medical_record_backup/        @Stellar-Uzima/maintainers
+contracts/medical_consent_nft/          @Stellar-Uzima/maintainers
+contracts/patient_portal/               @Stellar-Uzima/maintainers
+
+# ── Identity & access domain ──────────────────────────────────────────────────
+contracts/access_control/       @Stellar-Uzima/maintainers
+contracts/credential_registry/  @Stellar-Uzima/maintainers
+contracts/mfa/                  @Stellar-Uzima/maintainers
+contracts/zkp_registry/         @Stellar-Uzima/maintainers
+contracts/zk_verifier/          @Stellar-Uzima/maintainers
+contracts/fido2_authenticator/  @Stellar-Uzima/maintainers
+
+# ── Payment & escrow domain ───────────────────────────────────────────────────
+contracts/escrow/                      @Stellar-Uzima/maintainers
+contracts/healthcare_payment/          @Stellar-Uzima/maintainers
+contracts/appointment_booking_escrow/  @Stellar-Uzima/maintainers
+contracts/payment_router/              @Stellar-Uzima/maintainers
+contracts/treasury_controller/         @Stellar-Uzima/maintainers
+
+# ── Governance domain ─────────────────────────────────────────────────────────
+contracts/governor/       @Stellar-Uzima/maintainers
+contracts/timelock/       @Stellar-Uzima/maintainers
+contracts/upgrade_manager/ @Stellar-Uzima/maintainers
+
+# ── Cross-chain domain ────────────────────────────────────────────────────────
+contracts/cross_chain_bridge/       @Stellar-Uzima/maintainers
+contracts/cross_chain_access/       @Stellar-Uzima/maintainers
+contracts/cross_chain_identity/     @Stellar-Uzima/maintainers
+contracts/cross_chain_enhancements/ @Stellar-Uzima/maintainers
+contracts/sync_manager/             @Stellar-Uzima/maintainers
+
+# ── Compliance & audit domain ─────────────────────────────────────────────────
+contracts/health_data_access_logging/       @Stellar-Uzima/maintainers
+contracts/healthcare_compliance/            @Stellar-Uzima/maintainers
+contracts/healthcare_compliance_automation/ @Stellar-Uzima/maintainers
+contracts/regulatory_compliance/            @Stellar-Uzima/maintainers
+contracts/emergency_access_override/        @Stellar-Uzima/maintainers
+
+# ── Documentation & CI ────────────────────────────────────────────────────────
+docs/                  @Stellar-Uzima/maintainers
+scripts/               @Stellar-Uzima/maintainers
+.github/               @Stellar-Uzima/maintainers
+Cargo.toml             @Stellar-Uzima/maintainers
