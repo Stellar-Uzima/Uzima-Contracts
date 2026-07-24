@@ -6,13 +6,18 @@
     "sdk:generate": "node scripts/generate-sdk-types.mjs",
     "sdk:check": "node scripts/generate-sdk-types.mjs --check",
     "budget:check": "node scripts/measure_budgets.mjs",
-    "budget:update": "node scripts/measure_budgets.mjs --update-baselines"
+    "budget:update": "node scripts/measure_budgets.mjs --update-baselines",
     "abi:generate": "node scripts/abi-compat.mjs",
     "abi:check": "node scripts/abi-compat.mjs --check",
     "abi:check:allow-breaking": "node scripts/abi-compat.mjs --check --allow-breaking",
     "compat:check": "node scripts/abi-compat.mjs --check && node scripts/generate-sdk-types.mjs --check",
     "interface:validate": "node scripts/validate-interfaces.mjs",
-    "interface:check": "node scripts/validate-interfaces.mjs"
+    "interface:check": "node scripts/validate-interfaces.mjs",
+    "api-docs:generate": "node scripts/docs/generate-from-registry.mjs",
+    "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
+    "changelog:generate": "node scripts/generate-changelog-entries.mjs",
+    "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
+    "health:dashboard": "node scripts/generate-health-dashboard.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
