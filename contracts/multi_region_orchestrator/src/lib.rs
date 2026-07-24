@@ -1,6 +1,8 @@
 #![no_std]
 //! multi_region_orchestrator - Healthcare smart contract on Stellar blockchain.
 
+pub mod simulation;
+
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map};
 
 // ============================================================================

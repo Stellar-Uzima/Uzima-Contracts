@@ -1,6 +1,8 @@
 #![no_std]
 //! regional_node_manager - Healthcare smart contract on Stellar blockchain.
 
+pub mod simulation;
+
 use soroban_sdk::{contract, contractimpl, contracterror, contracttype, symbol_short, Address, Env, Symbol, Vec, Map, String};
 
 // ============================================================================
