@@ -1928,3 +1928,119 @@ fn test_submit_message_batch_rejects_invalid_chain() {
     let result = client.try_submit_message_batch(&validator, &soroban_sdk::vec![&env, request]);
     assert_eq!(result, Err(Ok(Error::ChainNotSupported)));
 }
+
+// ==================== Offline Reconciliation Tests ====================
+
+#[test]
+fn test_reconcile_offline_creates_request() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let caller = Address::generate(&env);
+    let record_id = BytesN::from_array(&env, &[2u8; 32]);
+    let state_hash = BytesN::from_array(&env, &[3u8; 32]);
+    let mut record_ids = soroban_sdk::Vec::new(&env);
+    record_ids.push_back(record_id);
+
+    env.mock_all_auths();
+    let request_id = client.reconcile_offline(
+        &caller,
+        &ChainId::Stellar,
+        &ChainId::Ethereum,
+        &record_ids,
+        &state_hash,
+        &86400u64,
+    );
+
+    assert!(!request_id.to_array().is_empty());
+}
+
+#[test]
+fn test_reconcile_offline_rejects_empty_records() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let caller = Address::generate(&env);
+    let state_hash = BytesN::from_array(&env, &[3u8; 32]);
+    let empty_ids: soroban_sdk::Vec<BytesN<32>> = soroban_sdk::Vec::new(&env);
+
+    env.mock_all_auths();
+    let result = client.try_reconcile_offline(
+        &caller,
+        &ChainId::Stellar,
+        &ChainId::Ethereum,
+        &empty_ids,
+        &state_hash,
+        &86400u64,
+    );
+    assert_eq!(result, Err(Ok(Error::InvalidPayload)));
+}
+
+#[test]
+fn test_queue_async_reconciliation() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let caller = Address::generate(&env);
+    let record_id = BytesN::from_array(&env, &[4u8; 32]);
+    let state_hash = BytesN::from_array(&env, &[5u8; 32]);
+    let mut record_ids = soroban_sdk::Vec::new(&env);
+    record_ids.push_back(record_id);
+
+    env.mock_all_auths();
+    let job_id = client.queue_async_reconciliation(
+        &caller,
+        &ChainId::Stellar,
+        &ChainId::Ethereum,
+        &record_ids,
+        &state_hash,
+        &3u32,
+    );
+
+    assert_eq!(job_id, 1);
+}
+
+#[test]
+fn test_complete_reconciliation() {
+    let env = Env::default();
+    let (client, admin, medical, identity, access) = create_contract(&env);
+    initialize_contract(&env, &client, &admin, &medical, &identity, &access);
+
+    let caller = Address::generate(&env);
+    let record_id = BytesN::from_array(&env, &[6u8; 32]);
+    let state_hash = BytesN::from_array(&env, &[7u8; 32]);
+    let mut record_ids = soroban_sdk::Vec::new(&env);
+    record_ids.push_back(record_id);
+
+    env.mock_all_auths();
+    let request_id = client.reconcile_offline(
+        &caller,
+        &ChainId::Stellar,
+        &ChainId::Ethereum,
+        &record_ids,
+        &state_hash,
+        &86400u64,
+    );
+
+    env.mock_all_auths();
+    let result = client.complete_reconciliation(
+        &caller,
+        &request_id,
+        &1u32,
+        &0u32,
+        &0u32,
+        &true,
+        &String::from_str(&env, "All records reconciled"),
+    );
+    assert!(result);
+
+    let status = client.get_reconciliation_status(&request_id);
+    assert!(status.is_some());
+    let res = status.unwrap();
+    assert_eq!(res.reconciled_records, 1);
+    assert_eq!(res.failed_records, 0);
+    assert!(res.state_hash_matched);
+}
