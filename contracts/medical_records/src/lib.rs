@@ -92,6 +92,57 @@ use soroban_sdk::{
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
+// ==================== Schema Evolution Types ====================
+
+/// Version identifier for medical record metadata schemas.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub struct SchemaVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+
+/// Describes a schema evolution step from one version to another.
+#[derive(Clone)]
+#[contracttype]
+pub struct SchemaEvolution {
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub description: String,
+    pub created_at: u64,
+    pub created_by: Address,
+    pub field_additions: Vec<String>,
+    pub field_removals: Vec<String>,
+    pub field_renames: Map<String, String>,
+    pub breaking_changes: bool,
+}
+
+/// Migration plan for upgrading records between schema versions.
+#[derive(Clone)]
+#[contracttype]
+pub struct MigrationPlan {
+    pub plan_id: u64,
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub affected_records: u64,
+    pub migrated_count: u64,
+    pub status: MigrationStatus,
+    pub created_at: u64,
+    pub completed_at: u64,
+}
+
+/// Status of a schema migration.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum MigrationStatus {
+    Planned = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3,
+    RolledBack = 4,
+}
+
 // ==================== Cross-Chain Types ====================
 
 #[derive(Clone, PartialEq, Eq)]
@@ -654,6 +705,15 @@ pub enum DataKey {
 
     // Redaction
     RedactionPolicy(u64),
+
+    // Schema evolution
+    SchemaVersionCount,
+    SchemaVersion(u32, u32, u32), // (major, minor, patch)
+    SchemaEvolutionCount,
+    SchemaEvolution(u64),
+    MigrationPlanCount,
+    MigrationPlan(u64),
+    CurrentSchemaVersion,
 }
 
 // ==================== Errors ====================
