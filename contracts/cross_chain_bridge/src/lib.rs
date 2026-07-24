@@ -328,6 +328,60 @@ pub enum EventSyncStatus {
     Failed,
 }
 
+// ==================== Offline Reconciliation Types ====================
+
+/// Request for offline reconciliation when connectivity is unavailable.
+#[derive(Clone)]
+#[contracttype]
+pub struct OfflineReconciliationRequest {
+    pub request_id: BytesN<32>,
+    pub source_chain: ChainId,
+    pub dest_chain: ChainId,
+    pub record_ids: Vec<BytesN<32>>,
+    pub expected_state_hash: BytesN<32>,
+    pub created_at: u64,
+    pub expires_at: u64,
+    pub requester: Address,
+}
+
+/// Result of an offline reconciliation attempt.
+#[derive(Clone)]
+#[contracttype]
+pub struct OfflineReconciliationResult {
+    pub request_id: BytesN<32>,
+    pub reconciled_records: u32,
+    pub failed_records: u32,
+    pub conflict_count: u32,
+    pub state_hash_matched: bool,
+    pub completed_at: u64,
+    pub details: String,
+}
+
+/// Status of a reconciliation operation.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum ReconciliationStatus {
+    Pending = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3,
+    PartialSuccess = 4,
+}
+
+/// Queued asynchronous reconciliation job.
+#[derive(Clone)]
+#[contracttype]
+pub struct AsyncReconciliationJob {
+    pub job_id: u64,
+    pub request: OfflineReconciliationRequest,
+    pub status: ReconciliationStatus,
+    pub queued_at: u64,
+    pub started_at: u64,
+    pub completed_at: u64,
+    pub retry_count: u32,
+    pub max_retries: u32,
+}
+
 // ==================== Storage Keys (DataKey Enum) ====================
 // BUG FIX: Replaces static Symbol constants with typed DataKey enum,
 // ensuring each item gets a unique, collision-free storage slot.
