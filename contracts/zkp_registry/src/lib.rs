@@ -1124,6 +1124,18 @@ impl ZKPRegistry {
         }
 
         Self::track_gas_usage(&env, &submitter, total_gas_used);
+
+        // Emit batch verification telemetry
+        let batch_proof_id = soroban_sdk::BytesN::<32>::from_array(&env, &[0u8; 32]);
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::BatchVerificationCompleted,
+            &submitter,
+            &batch_proof_id,
+            &soroban_sdk::String::from_str(&env, "batch"),
+            total_gas_used,
+        );
+
         Ok(results)
     }
 
@@ -1304,7 +1316,17 @@ impl ZKPRegistry {
 
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("cred_prf")),
-            (holder, credential_type),
+            (holder.clone(), credential_type.clone()),
+        );
+
+        // Emit credential proof telemetry
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::CredentialProofVerified,
+            &holder,
+            &Self::generate_telemetry_proof_id(&env, &holder, &credential_type),
+            &credential_type,
+            0,
         );
 
         Ok(())
@@ -2072,6 +2094,13 @@ impl ZKPRegistry {
         } else {
             DEFAULT_ISSUER_SALT
         }
+    }
+
+    fn generate_telemetry_proof_id(env: &Env, holder: &Address, credential_type: &soroban_sdk::String) -> BytesN<32> {
+        let mut payload = soroban_sdk::Bytes::new(env);
+        payload.append(&soroban_sdk::Bytes::from_slice(env, b"TELEM_CRED_V1"));
+        payload.append(&soroban_sdk::Bytes::from_slice(env, &holder.to_array()));
+        env.crypto().sha256(&payload).into()
     }
 }
 
