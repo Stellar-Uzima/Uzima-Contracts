@@ -319,3 +319,276 @@ mod tests {
         assert!(!client.check_emergency_access(&patient, &provider));
     }
 }
+
+// ─── Issue #1173: Rate-Limited Emergency Access & Audit Trail Tests ─────────
+
+#[cfg(test)]
+mod rate_limit_tests {
+    use crate::{
+        EmergencyAccessOverride, EmergencyAccessOverrideClient, Error, RateLimitConfig,
+    };
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        symbol_short, Address, Env, Vec,
+    };
+
+    fn setup() -> (Env, EmergencyAccessOverrideClient<'static>, Address, Vec<Address>) {
+        let env = Env::default();
+        env.mock_all_auths();
+        env.ledger().with_mut(|li| {
+            li.timestamp = 1_000_000;
+        });
+
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, EmergencyAccessOverride);
+        let client = EmergencyAccessOverrideClient::new(&env, &contract_id);
+
+        let a1 = Address::generate(&env);
+        let a2 = Address::generate(&env);
+        let a3 = Address::generate(&env);
+        let mut approvers = Vec::new(&env);
+        approvers.push_back(a1.clone());
+        approvers.push_back(a2.clone());
+        approvers.push_back(a3.clone());
+
+        client.initialize(&admin, &approvers, &2);
+
+        (env, client, admin, approvers)
+    }
+
+    #[test]
+    fn test_rate_limit_config_default() {
+        let config = RateLimitConfig::default();
+        assert_eq!(config.max_requests_per_window, 5);
+        assert_eq!(config.window_seconds, 3_600);
+        assert_eq!(config.cooldown_seconds, 86_400);
+        assert_eq!(config.max_grants_per_window, 10);
+    }
+
+    #[test]
+    fn test_submit_access_request() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("CARDIAC"),
+            &600,
+        );
+
+        assert_eq!(request_id, 1);
+
+        let request = client.get_access_request(&request_id).unwrap();
+        assert_eq!(request.request_id, 1);
+        assert_eq!(request.patient, patient);
+        assert_eq!(request.provider, provider);
+        assert!(!request.granted);
+    }
+
+    #[test]
+    fn test_rate_limit_enforced() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // Set aggressive rate limit: max 2 per window
+        let config = RateLimitConfig {
+            max_requests_per_window: 2,
+            window_seconds: 3_600,
+            cooldown_seconds: 0,
+            max_grants_per_window: 10,
+        };
+        client.update_rate_limit_config(&_admin, &config);
+
+        // Submit 2 requests - should succeed
+        client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("TEST"),
+            &600,
+        );
+        client.submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("TEST2"),
+            &600,
+        );
+
+        // 3rd request should fail with rate limit
+        let result = client.try_submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("TEST3"),
+            &600,
+        );
+        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+    }
+
+    #[test]
+    fn test_approve_request_with_audit_trail() {
+        let (env, client, _admin, approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("STROKE"),
+            &600,
+        );
+
+        let a1 = approvers.get(0).unwrap();
+        let a2 = approvers.get(1).unwrap();
+
+        // First approval
+        let granted = client.approve_access_request(&a1, &request_id);
+        assert!(!granted);
+
+        // Second approval - should grant access
+        let granted = client.approve_access_request(&a2, &request_id);
+        assert!(granted);
+
+        // Verify audit trail
+        let trail = client.get_approval_audit_trail(&request_id);
+        assert_eq!(trail.len(), 2);
+
+        let entry1 = trail.get(0).unwrap();
+        assert_eq!(entry1.request_id, request_id);
+        assert_eq!(entry1.approver, a1);
+        assert!(!entry1.final_approval);
+
+        let entry2 = trail.get(1).unwrap();
+        assert!(entry2.final_approval);
+
+        // Verify global audit trail count
+        assert_eq!(client.get_audit_trail_count(), 2);
+    }
+
+    #[test]
+    fn test_audit_trail_entry_retrievable() {
+        let (env, client, _admin, approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("BURN"),
+            &300,
+        );
+
+        let a1 = approvers.get(0).unwrap();
+        client.approve_access_request(&a1, &request_id);
+
+        let entry = client.get_audit_trail_entry(&1).unwrap();
+        assert_eq!(entry.request_id, request_id);
+        assert_eq!(entry.approver, a1);
+        assert!(entry.ledger_sequence > 0);
+    }
+
+    #[test]
+    fn test_request_window_resets_after_window_seconds() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let config = RateLimitConfig {
+            max_requests_per_window: 1,
+            window_seconds: 60,
+            cooldown_seconds: 0,
+            max_grants_per_window: 10,
+        };
+        client.update_rate_limit_config(&_admin, &config);
+
+        // First request succeeds
+        client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("T1"),
+            &600,
+        );
+
+        // Second request fails (rate limited)
+        let result = client.try_submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("T2"),
+            &600,
+        );
+        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+
+        // Advance time past window
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(61);
+        });
+
+        // Should succeed now
+        client.submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("T3"),
+            &600,
+        );
+    }
+
+    #[test]
+    fn test_only_trusted_can_approve_rate_limited_request() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let outsider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("TEST"),
+            &600,
+        );
+
+        let result = client.try_approve_access_request(&outsider, &request_id);
+        assert_eq!(result, Err(Ok(Error::Unauthorized)));
+    }
+
+    #[test]
+    fn test_get_rate_limit_config() {
+        let (env, client, admin, _approvers) = setup();
+
+        let config = RateLimitConfig {
+            max_requests_per_window: 10,
+            window_seconds: 7_200,
+            cooldown_seconds: 43_200,
+            max_grants_per_window: 20,
+        };
+        client.update_rate_limit_config(&admin, &config);
+
+        let stored = client.get_rate_limit_config();
+        assert_eq!(stored.max_requests_per_window, 10);
+        assert_eq!(stored.window_seconds, 7_200);
+        assert_eq!(stored.cooldown_seconds, 43_200);
+        assert_eq!(stored.max_grants_per_window, 20);
+    }
+}
