@@ -44,6 +44,8 @@ exclude = [
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/contract_behavior_fuzzing",
     "contracts/governance_integration_tests",
+    # Stray source directory — not a crate root (no Cargo.toml):
+    "contracts/src",
 ] 
 
 [workspace.dependencies]

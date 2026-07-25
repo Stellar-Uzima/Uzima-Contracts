@@ -55,6 +55,22 @@ pub enum Error {
     OperationAlreadyCompleted = 802,
     MaxExtensionsReached = 803,
     RefundFailed = 804,
+
+    // --- Dispute Mediation (900–999) ---
+    /// A dispute for the given operation ID was not found.
+    DisputeNotFound = 900,
+    /// A dispute already exists for this operation.
+    DisputeAlreadyExists = 901,
+    /// The requested state transition is not allowed from the current state.
+    DisputeInvalidTransition = 902,
+    /// The caller is not a registered mediator for this dispute.
+    DisputeNotMediator = 903,
+    /// The mediator has already cast a vote on this dispute.
+    DisputeAlreadyVoted = 904,
+    /// Not enough mediator votes have been cast to reach a resolution.
+    DisputeQuorumNotReached = 905,
+    /// The dispute has already been resolved or withdrawn.
+    DisputeAlreadyClosed = 906,
 }
 
 pub fn get_suggestion(error: Error) -> Symbol {
@@ -78,6 +94,13 @@ pub fn get_suggestion(error: Error) -> Symbol {
         | Error::RecordRefNotFound
         | Error::RollbackNotFound
         | Error::EventNotFound => symbol_short!("CHK_ID"),
+        Error::DisputeNotFound => symbol_short!("CHK_ID"),
+        Error::DisputeAlreadyExists
+        | Error::DisputeAlreadyVoted
+        | Error::DisputeAlreadyClosed => symbol_short!("ALREADY"),
+        Error::DisputeInvalidTransition => symbol_short!("BAD_STATE"),
+        Error::DisputeNotMediator => symbol_short!("CHK_AUTH"),
+        Error::DisputeQuorumNotReached => symbol_short!("WAIT_VTE"),
         _ => symbol_short!("CONTACT"),
     }
 }
