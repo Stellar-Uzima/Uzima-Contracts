@@ -168,3 +168,59 @@ The following contracts are excluded from the workspace because they require `st
 - `health_check`
 
 These contracts should be migrated to `no_std` before workspace inclusion.
+
+## Enforcement Script
+
+The `scripts/enforce_no_std.sh` script checks all `contracts/*/src/lib.rs`
+and `libs/*/src/lib.rs` files for the `#![no_std]` attribute and reports any
+violations.
+
+```bash
+# Check compliance (exit 1 if any violations):
+./scripts/enforce_no_std.sh
+
+# Show all results including passing files:
+./scripts/enforce_no_std.sh --verbose
+
+# Auto-add #![no_std] to files that only use core/soroban-sdk (no std::):
+./scripts/enforce_no_std.sh --fix
+```
+
+This script is intended to be run in CI on every pull request to prevent
+regressions.  Add a step like the following to your CI workflow:
+
+```yaml
+- name: Enforce no_std compliance
+  run: ./scripts/enforce_no_std.sh
+```
+
+### Opting Out (Native / Fuzz Harnesses)
+
+Crates that intentionally use `std` (e.g. native test harnesses, fuzz
+runners) can opt out by placing the following comment anywhere in their
+`lib.rs`:
+
+```rust
+// no_std-exempt: <reason explaining why std is needed>
+```
+
+The enforcement script will skip these files and count them as exempt rather
+than failing.
+
+## Template Compatibility Checker
+
+The `scripts/check_template_compat.sh` script verifies that contracts follow
+the conventions defined in `contracts/contract_template`.  It checks for
+`#![no_std]`, required macros, event emission, Cargo.toml structure, and
+more.
+
+```bash
+# Check all workspace contracts:
+./scripts/check_template_compat.sh
+
+# List every check performed:
+./scripts/check_template_compat.sh --list-checks
+
+# Check specific contracts:
+./scripts/check_template_compat.sh medical_records identity_registry
+```
