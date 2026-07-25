@@ -74,11 +74,14 @@ mod test_input_validation;
 mod test_migration;
 #[cfg(test)]
 mod test_permissions;
+#[cfg(test)]
+mod test_timestamp_normalization;
 
 mod errors;
 mod events;
 mod event_schema;
 pub mod policy;
+pub mod timestamp_normalization;
 mod validation;
 mod storage;
 mod types;
