@@ -1,0 +1,113 @@
+{
+  "$schema": "./schema.json",
+  "description": "Multi-tenant configuration for shared infrastructure components",
+  "version": "1.0.0",
+  "tenants": {
+    "_default": {
+      "description": "Default tenant configuration applied to all tenants unless overridden",
+      "networks": ["testnet", "futurenet"],
+      "contracts": {
+        "enabled": [
+          "identity_registry",
+          "medical_records",
+          "patient_consent_management",
+          "audit",
+          "governor",
+          "common_auth",
+          "common_error",
+          "rbac",
+          "health_check"
+        ],
+        "disabled": []
+      },
+      "limits": {
+        "max_records_per_patient": 10000,
+        "max_consent_providers": 50,
+        "max_audit_retention_days": 2555,
+        "max_attachment_size_bytes": 104857600,
+        "rate_limit_ops_per_minute": 60
+      },
+      "features": {
+        "cross_chain_enabled": false,
+        "zk_proofs_enabled": false,
+        "ai_integration_enabled": false,
+        "fido2_enabled": false,
+        "traditional_medicine_enabled": true
+      },
+      "security": {
+        "encryption_required": true,
+        "pq_envelopes_required": false,
+        "require_consent_for_read": true,
+        "audit_log_immutable": true
+      }
+    },
+    "hospital_alpha": {
+      "description": "Hospital Alpha — primary care facility",
+      "extends": "_default",
+      "networks": ["testnet"],
+      "limits": {
+        "max_records_per_patient": 50000,
+        "max_consent_providers": 100,
+        "rate_limit_ops_per_minute": 120
+      },
+      "features": {
+        "ai_integration_enabled": true,
+        "fido2_enabled": true
+      }
+    },
+    "research_consortium": {
+      "description": "Research consortium — federated learning and analytics",
+      "extends": "_default",
+      "networks": ["futurenet"],
+      "contracts": {
+        "enabled": [
+          "identity_registry",
+          "medical_records",
+          "audit",
+          "ai_analytics",
+          "federated_learning",
+          "differential_privacy",
+          "clinical_trial"
+        ],
+        "disabled": ["governor"]
+      },
+      "limits": {
+        "max_records_per_patient": 100000,
+        "max_consent_providers": 200,
+        "rate_limit_ops_per_minute": 300
+      },
+      "features": {
+        "ai_integration_enabled": true,
+        "zk_proofs_enabled": true
+      },
+      "security": {
+        "encryption_required": true,
+        "pq_envelopes_required": true,
+        "require_consent_for_read": true
+      }
+    },
+    "mainnet_prod": {
+      "description": "Mainnet production tenant",
+      "extends": "_default",
+      "networks": ["mainnet"],
+      "limits": {
+        "max_records_per_patient": 100000,
+        "max_consent_providers": 200,
+        "max_audit_retention_days": 2555,
+        "rate_limit_ops_per_minute": 60
+      },
+      "features": {
+        "cross_chain_enabled": true,
+        "zk_proofs_enabled": false,
+        "ai_integration_enabled": false,
+        "fido2_enabled": true
+      },
+      "security": {
+        "encryption_required": true,
+        "pq_envelopes_required": true,
+        "require_consent_for_read": true,
+        "audit_log_immutable": true
+      }
+    }
+  }
+}
