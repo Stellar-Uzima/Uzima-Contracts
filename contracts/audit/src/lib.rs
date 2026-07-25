@@ -29,6 +29,8 @@ pub enum Error {
     NotInitialized = 2,
     NotAuthorized = 3,
     ChainBroken = 4,
+    RetentionPolicyNotFound = 5,
+    RetentionWindowTooShort = 6,
 }
 
 #[contract]
@@ -56,10 +58,20 @@ impl AuditTrail {
         let default_retention = RetentionPolicy {
             min_retention_seconds: 220_752_000,
             max_retention_seconds: 0,
+            export_window_days: 365,
+            auto_purge: false,
         };
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &default_retention);
+
+        // Seed default retention period and export window
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &220_752_000u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &365u64);
 
         // Seed the log reader list
         let empty: Vec<Address> = Vec::new(&env);
@@ -286,11 +298,36 @@ impl AuditTrail {
     // ─── Retention Policy ────────────────────────────────────────────────────
 
     /// Update the retention policy (admin only).
+    /// Emits a retention_policy_updated event.
     pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) -> Result<(), Error> {
         require_admin!(env, admin);
+
+        // Validate: export_window_days must be at least 1 day
+        if policy.export_window_days == 0 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+        // Validate: min_retention_seconds must be at least 1 day
+        if policy.min_retention_seconds < 86_400 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
+
+        // Also update the dedicated storage keys
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &policy.min_retention_seconds);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &policy.export_window_days);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("RETPOL")),
+            (policy.min_retention_seconds, policy.export_window_days, policy.auto_purge),
+        );
+
         Ok(())
     }
 
@@ -321,6 +358,48 @@ impl AuditTrail {
             return false;
         }
         true
+    }
+
+    /// Enforce the retention policy across all logs.
+    /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
+    /// Returns the number of logs purged.
+    pub fn enforce_retention_policy(env: Env, admin: Address) -> Result<u64, Error> {
+        require_admin!(env, admin);
+
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .ok_or(Error::RetentionPolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let log_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut purged = 0u64;
+
+        if policy.auto_purge && policy.max_retention_seconds > 0 {
+            for i in 1..=log_count {
+                if let Some(log) =
+                    crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+                {
+                    let age = now.saturating_sub(log.timestamp);
+                    if age > policy.max_retention_seconds {
+                        purged = purged.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
+            (purged, policy.auto_purge),
+        );
+
+        Ok(purged)
     }
 
     // ─── Export Capability ───────────────────────────────────────────────────
