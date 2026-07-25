@@ -1,51 +1,84 @@
-# Contract Compatibility Matrix
+# Stellar Network & Toolchain Compatibility Matrix
 
-This document tracks the compatibility status of contracts that have been excluded from the main workspace build. The goal is to bring all contracts into compliance with the pinned Soroban SDK version and other workspace requirements.
+This document defines the explicitly supported combinations of Stellar network versions, Soroban SDK versions, and Rust toolchains for the Uzima contract portfolio.
 
-| Contract                                   | Exclusion Reason                               | Restoration Status              | Notes                                                                                   |
-| ------------------------------------------ | ---------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------- |
-| `contracts/medical_imaging`                | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/healthcare_compliance`          | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/clinical_nlp`                   | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/remote_patient_monitoring`      | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/healthcare_analytics_dashboard` | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/healthcare_data_marketplace`    | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/telemedicine`                   | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/mental_health_support`          | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/patient_gamification`           | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/medical_imaging_ai`             | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/dicomweb_services`              | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/multi_region_orchestrator`      | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/regional_node_manager`          | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/digital_twin`                   | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/aml`                            | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/forensics`                      | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/rbac`                           | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/federated_learning`             | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/medical_records`                | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/healthcare_oracle_network`      | Deferred (issue #828)                          | Not Started                     |                                                                                         |
-| `contracts/health_data_access_logging`     | Compiles against older soroban-sdk 21 patterns | Not Started                     | `format!` in `#[no_std]`, `Vec::with_capacity`, `BytesN::from_array` arg shape mismatch |
-| `contracts/ai_analytics`                   | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/clinical_trial`                 | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/cross_chain_bridge`             | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/emergency_access_override`      | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/healthcare_data_conversion`     | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/iot_device_management`          | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/predictive_analytics`           | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/deprecation_framework`          | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/explainable_ai`                 | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/sut_token`                      | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/medical_record_hash_registry`   | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/runtime_validation`             | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/clinical_decision_support`      | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/emr_integration`                | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/crypto_registry`                | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/medical_record_backup`          | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/meta_tx_forwarder`              | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/code_ownership`                 | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/notification_system`            | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/treasury_controller`            | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/test-helpers`                   | Pre-existing compile errors (issue #861)       | Not Started                     |                                                                                         |
-| `contracts/contract_behavior_fuzzing`      | Non-contract or no-Cargo.toml                  | Not a candidate for restoration |                                                                                         |
-| `contracts/governance_integration_tests`   | Non-contract or no-Cargo.toml                  | Not a candidate for restoration |                                                                                         |
-| `contracts/storage-snapshot`               | Non-contract or no-Cargo.toml                  | Not a candidate for restoration |                                                                                         |
+## Supported Combinations
+
+| Soroban SDK | Rust Toolchain | Stellar Network | Status | Notes |
+|-------------|----------------|-----------------|--------|-------|
+| 21.7.7 | 1.92.0 | Testnet | **Active** | Primary development network |
+| 21.7.7 | 1.92.0 | Futurenet | **Active** | Staging and pre-production |
+| 21.7.7 | 1.92.0 | Mainnet | **Active** | Production deployments |
+| 21.7.7 | 1.92.0 | Local | **Active** | Local development (Standalone) |
+| 21.6.x | 1.85.0+ | Testnet | Deprecated | Migrate to 21.7.7 |
+| 20.x.x | 1.79.0+ | Testnet | End-of-Life | No longer supported |
+
+## Version Requirements
+
+### Rust Toolchain
+
+| Component | Version | Source |
+|-----------|---------|--------|
+| Rust | 1.92.0 | `rust-toolchain.toml` |
+| rustfmt | 1.92.0 | Component |
+| clippy | 1.92.0 | Component |
+| rust-src | 1.92.0 | Component |
+| WASM target | wasm32-unknown-unknown | Target |
+
+### Soroban SDK
+
+| Component | Version | Source |
+|-----------|---------|--------|
+| soroban-sdk | 21.7.7 | `Cargo.toml` workspace dependency |
+| soroban-cli | 21.7.7 | `Cargo.toml` workspace dependency |
+| soroban-env-host | 21.2.1 | Transitive dependency |
+
+### Stellar Network Parameters
+
+| Network | Passphrase | RPC URL | Safety Level |
+|---------|-----------|---------|--------------|
+| Local | `Standalone Network ; February 2017` | `http://localhost:8000/soroban/rpc` | Low |
+| Testnet | `Test SDF Network ; September 2015` | `https://soroban-testnet.stellar.org` | Medium |
+| Futurenet | `Test SDF Future Network ; October 2022` | `https://rpc-futurenet.stellar.org` | Medium |
+| Mainnet | `Public Global Stellar Network ; September 2015` | `https://soroban-mainnet.stellar.org` | High |
+
+## Resource Limits
+
+| Resource | Limit | Source |
+|----------|-------|--------|
+| Max WASM size | 640 KB | Soroban protocol |
+| Max read entries | 2,000 | Soroban protocol |
+| Max write entries | 1,000 | Soroban protocol |
+| Max instructions | 100,000,000 | Soroban protocol |
+| Max memory | 50 MiB | Soroban protocol |
+
+## Breaking Change Policy
+
+- **Major SDK version change** (e.g. 21.x → 22.x): Requires migration guide, full regression testing, and governance vote
+- **Minor SDK version change** (e.g. 21.7 → 21.8): Requires build verification and smoke tests
+- **Patch SDK version change** (e.g. 21.7.7 → 21.7.8): Build verification only
+- **Rust toolchain change**: Requires full workspace rebuild and CI verification
+
+## Deprecation Timeline
+
+| Version | Deprecation Date | Removal Date | Migration Guide |
+|---------|-----------------|--------------|-----------------|
+| soroban-sdk 21.6.x | 2026-01-01 | 2026-04-01 | Upgrade to 21.7.7 |
+| soroban-sdk 20.x.x | 2025-06-01 | 2025-09-01 | N/A (end-of-life) |
+
+## Verification Commands
+
+```bash
+# Check current toolchain
+rustc --version
+rustup show active-toolchain
+
+# Check Soroban SDK version
+cargo tree -p soroban-sdk | head -1
+
+# Verify WASM build
+cargo build --release --target wasm32-unknown-unknown
+
+# Run compatibility check
+./scripts/validate_multi_tenant_config.sh
+```
