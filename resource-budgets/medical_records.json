@@ -1,0 +1,24 @@
+{
+  "contract": "medical_records",
+  "wasm_size_bytes": 0,
+  "wasm_size_human": "N/A",
+  "note": "Placeholder — regenerate after building with: cargo build --release --target wasm32-unknown-unknown && ./scripts/generate_budgets.sh",
+  "soroban_limits": {
+    "max_read_entries": 2000,
+    "max_write_entries": 1000,
+    "max_instructions": 100000000,
+    "max_memory_bytes": 52428800
+  },
+  "estimated_per_call": {
+    "instructions": 0,
+    "read_entries": 200,
+    "write_entries": 50,
+    "memory_bytes": 0
+  },
+  "budget_utilization_pct": {
+    "instructions": 0,
+    "read_entries": 10,
+    "write_entries": 5
+  },
+  "generated_at": "2026-07-25T00:00:00Z"
+}
