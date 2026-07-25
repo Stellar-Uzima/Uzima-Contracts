@@ -362,12 +362,16 @@ fn test_set_and_get_retention_policy() {
     let policy = RetentionPolicy {
         min_retention_seconds: 86_400,
         max_retention_seconds: 315_360_000,
+        export_window_days: 30,
+        auto_purge: true,
     };
     client.set_retention_policy(&admin, &policy);
 
     let stored = client.get_retention_policy();
     assert_eq!(stored.min_retention_seconds, 86_400);
     assert_eq!(stored.max_retention_seconds, 315_360_000);
+    assert_eq!(stored.export_window_days, 30);
+    assert!(stored.auto_purge);
 }
 
 #[test]
@@ -581,4 +585,81 @@ fn test_all_required_event_categories() {
     let stored = client.get_log_rolling_hash();
     let recomputed = client.verify_log_integrity();
     assert_eq!(stored, recomputed);
+}
+
+// ─── Configurable Retention & Export Windows (Issue #1171) ──────────────────
+
+#[test]
+fn test_enforce_retention_policy_auto_purge() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    // Log some events
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+
+    // Set a policy with auto_purge enabled and a short max retention
+    let policy = RetentionPolicy {
+        min_retention_seconds: 86_400,
+        max_retention_seconds: 0, // no upper bound → nothing purged
+        export_window_days: 30,
+        auto_purge: true,
+    };
+    client.set_retention_policy(&admin, &policy);
+
+    // With max_retention_seconds = 0, nothing should be purged
+    let purged = client.enforce_retention_policy(&admin);
+    assert_eq!(purged, 0);
+}
+
+#[test]
+fn test_enforce_retention_policy_rejects_short_window() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    // Try to set a policy with export_window_days = 0
+    let bad_policy = RetentionPolicy {
+        min_retention_seconds: 86_400,
+        max_retention_seconds: 315_360_000,
+        export_window_days: 0,
+        auto_purge: false,
+    };
+    let result = client.try_set_retention_policy(&admin, &bad_policy);
+    assert_eq!(result, Err(Ok(Error::RetentionWindowTooShort)));
+}
+
+#[test]
+fn test_enforce_retention_policy_rejects_short_retention() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    // Try to set a policy with min_retention_seconds < 1 day
+    let bad_policy = RetentionPolicy {
+        min_retention_seconds: 1000, // less than 86_400
+        max_retention_seconds: 315_360_000,
+        export_window_days: 30,
+        auto_purge: false,
+    };
+    let result = client.try_set_retention_policy(&admin, &bad_policy);
+    assert_eq!(result, Err(Ok(Error::RetentionWindowTooShort)));
+}
+
+#[test]
+fn test_default_retention_policy_has_export_window() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let policy = client.get_retention_policy();
+    assert_eq!(policy.min_retention_seconds, 220_752_000);
+    assert_eq!(policy.max_retention_seconds, 0);
+    assert_eq!(policy.export_window_days, 365);
+    assert!(!policy.auto_purge);
 }

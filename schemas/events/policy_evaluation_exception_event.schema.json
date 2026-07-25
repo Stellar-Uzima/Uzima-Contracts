@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PolicyEvaluationExceptionEvent",
+  "description": "Emitted when a policy fails to evaluate correctly.",
+  "type": "object",
+  "required": ["policy_id", "subject", "evaluation_context", "exception_type", "error_message", "severity", "timestamp"],
+  "properties": {
+    "policy_id": { "type": "string", "description": "The policy that failed to evaluate" },
+    "subject": { "type": "string", "description": "The address being evaluated", "pattern": "^G[A-Z0-9]{55}$" },
+    "evaluation_context": { "type": "string", "description": "What was being evaluated" },
+    "exception_type": { "type": "string", "enum": ["timeout", "invalid_config", "missing_dependency", "circular_reference", "resource_exhaustion", "internal_error"] },
+    "error_message": { "type": "string", "description": "Detailed error description" },
+    "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "timestamp": { "type": "integer", "description": "Unix timestamp" }
+  }
+}

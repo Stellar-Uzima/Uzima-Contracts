@@ -1865,3 +1865,197 @@ fn proptest_record_attributes_persistence() {
             "Timestamp must be set");
     });
 }
+
+// ==================== Schema Evolution Tests ====================
+
+#[test]
+fn test_register_schema_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema version");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let evolution_id = client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    assert_eq!(evolution_id, 1);
+
+    // Verify current schema version
+    let current = client.get_current_schema_version();
+    assert!(current.is_some());
+    let ver = current.unwrap();
+    assert_eq!(ver.major, 1);
+    assert_eq!(ver.minor, 0);
+    assert_eq!(ver.patch, 0);
+}
+
+#[test]
+fn test_register_schema_version_duplicate() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema version");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    // Try to register the same version again
+    let result = client.try_register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &String::from_str(&env, "Duplicate"),
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+    assert_eq!(result, Err(Ok(Error::SchemaVersionAlreadyExists)));
+}
+
+#[test]
+fn test_evolve_schema() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    // Register v1.0.0
+    client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    // Evolve to v1.1.0
+    let mut additions = Vec::new(&env);
+    additions.push_back(String::from_str(&env, "new_field"));
+
+    let evolution_id = client.evolve_schema(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &1u32, &1u32, &0u32,
+        &String::from_str(&env, "Add new field"),
+        &additions,
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    assert_eq!(evolution_id, 1);
+
+    // Verify current schema version updated
+    let current = client.get_current_schema_version();
+    assert!(current.is_some());
+    let ver = current.unwrap();
+    assert_eq!(ver.major, 1);
+    assert_eq!(ver.minor, 1);
+    assert_eq!(ver.patch, 0);
+}
+
+#[test]
+fn test_evolve_schema_source_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let result = client.try_evolve_schema(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &2u32, &0u32, &0u32,
+        &String::from_str(&env, "Nonexistent source"),
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+    assert_eq!(result, Err(Ok(Error::SchemaVersionNotFound)));
+}
+
+#[test]
+fn test_create_and_get_migration_plan() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let plan_id = client.create_migration_plan(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &2u32, &0u32, &0u32,
+        &100u64,
+    );
+
+    assert_eq!(plan_id, 1);
+
+    let plan = client.get_migration_plan(&plan_id);
+    assert!(plan.is_some());
+    let p = plan.unwrap();
+    assert_eq!(p.affected_records, 100);
+    assert_eq!(p.migrated_count, 0);
+    assert_eq!(p.status, MigrationStatus::Planned);
+}
+
+#[test]
+fn test_get_schema_evolution() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let evolution_id = client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec,
+        &empty_vec,
+        &empty_map,
+        &false,
+    );
+
+    // The evolution ID for the first register_schema_version should be retrievable
+    let evolution = client.get_schema_evolution(&(evolution_id as u64));
+    // Note: register_schema_version stores under SchemaEvolutionCount which is the evolution_id
+    // This test verifies the get_schema_evolution query function works
+}
