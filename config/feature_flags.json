@@ -1,0 +1,92 @@
+{
+  "$schema": "./feature_flags_schema.json",
+  "version": 1,
+  "updated_at": "2026-07-25T00:00:00Z",
+  "environment_overrides": {
+    "testnet": {
+      "all_flags_enabled": true,
+      "notes": "All flags forced enabled on testnet for integration testing"
+    },
+    "mainnet": {
+      "all_flags_enabled": false,
+      "notes": "Mainnet uses per-flag rollout settings"
+    }
+  },
+  "flags": {
+    "medical_records": {
+      "partial_updates": {
+        "enabled": true,
+        "rollout_percentage": 25,
+        "stage": "canary",
+        "description": "Allow partial field updates on medical records without full rewrite",
+        "created_at": "2026-07-25T00:00:00Z"
+      },
+      "legacy_migration_mode": {
+        "enabled": false,
+        "rollout_percentage": 0,
+        "stage": "disabled",
+        "description": "Enable legacy medical record format auto-migration on read",
+        "created_at": "2026-07-25T00:00:00Z"
+      },
+      "async_record_indexing": {
+        "enabled": false,
+        "rollout_percentage": 0,
+        "stage": "disabled",
+        "description": "Defer record indexing to background processing",
+        "created_at": "2026-07-25T00:00:00Z"
+      }
+    },
+    "audit": {
+      "detailed_change_tracking": {
+        "enabled": true,
+        "rollout_percentage": 50,
+        "stage": "beta",
+        "description": "Log individual field changes in audit trail instead of full record snapshots",
+        "created_at": "2026-07-25T00:00:00Z"
+      },
+      "async_audit_writes": {
+        "enabled": false,
+        "rollout_percentage": 0,
+        "stage": "disabled",
+        "description": "Batch audit log writes for throughput improvement",
+        "created_at": "2026-07-25T00:00:00Z"
+      }
+    },
+    "access_control": {
+      "hierarchical_roles": {
+        "enabled": false,
+        "rollout_percentage": 0,
+        "stage": "disabled",
+        "description": "Enable hierarchical role inheritance for RBAC",
+        "created_at": "2026-07-25T00:00:00Z"
+      }
+    },
+    "upgradeability": {
+      "auto_migration_hooks": {
+        "enabled": true,
+        "rollout_percentage": 10,
+        "stage": "canary",
+        "description": "Automatically invoke migration hooks during contract upgrades",
+        "created_at": "2026-07-25T00:00:00Z"
+      }
+    }
+  },
+  "stages": {
+    "disabled": {
+      "description": "Feature is off, no traffic",
+      "allowed_rollout": [0]
+    },
+    "canary": {
+      "description": "Initial rollout to limited subset of contracts/callers",
+      "allowed_rollout": [1, 5, 10, 25]
+    },
+    "beta": {
+      "description": "Broader rollout, monitoring for regressions",
+      "allowed_rollout": [25, 50, 75]
+    },
+    "ga": {
+      "description": "General availability — full rollout",
+      "allowed_rollout": [100]
+    }
+  }
+}
