@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "version": "1.0",
+  "limits": {
+    "sync_manager": {
+      "cpu_instructions_max": 5000000,
+      "mem_bytes_max": 1048576,
+      "min_throughput_ops_sec": 100
+    },
+    "cross_chain_bridge": {
+      "cpu_instructions_max": 8000000,
+      "mem_bytes_max": 2097152,
+      "min_throughput_ops_sec": 50
+    },
+    "patient_identity": {
+      "cpu_instructions_max": 3000000,
+      "mem_bytes_max": 524288,
+      "min_throughput_ops_sec": 150
+    }
+  }
+}

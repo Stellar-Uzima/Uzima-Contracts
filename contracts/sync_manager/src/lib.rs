@@ -666,3 +666,83 @@ mod test {
         assert!(result.is_ok());
     }
 }
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol};
+
+mod types;
+use types::{DataKey, ReconciliationJob, ReconciliationStatus};
+
+#[contract]
+pub struct SyncManagerContract;
+
+#[contractimpl]
+impl SyncManagerContract {
+    /// Initializes administrative control for sync operations.
+    pub fn initialize(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("Already initialized");
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+    }
+
+    /// Enqueues an asynchronous reconciliation job for off-chain indexers.
+    pub fn enqueue_reconciliation(
+        env: Env,
+        source_contract: Address,
+        payload_hash: BytesN<32>,
+    ) -> u64 {
+        source_contract.require_auth();
+
+        let mut count: u64 = env.storage().instance().get(&DataKey::JobCount).unwrap_or(0);
+        count += 1;
+
+        let job = ReconciliationJob {
+            id: count,
+            source_contract: source_contract.clone(),
+            payload_hash: payload_hash.clone(),
+            status: ReconciliationStatus::Pending,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&DataKey::Job(count), &job);
+        env.storage().instance().set(&DataKey::JobCount, &count);
+
+        // Emit Soroban event for off-chain indexing services
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("enqueue")),
+            (count, source_contract, payload_hash),
+        );
+
+        count
+    }
+
+    /// Process/reconcile an enqueued job batch from an authorized off-chain worker.
+    pub fn process_reconciliation(env: Env, job_id: u64, success: bool) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        let mut job: ReconciliationJob = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Job(job_id))
+            .expect("Job not found");
+
+        if job.status != ReconciliationStatus::Pending {
+            panic!("Job is not pending");
+        }
+
+        job.status = if success {
+            ReconciliationStatus::Processed
+        } else {
+            ReconciliationStatus::Failed
+        };
+
+        env.storage().persistent().set(&DataKey::Job(job_id), &job);
+
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("resolve")),
+            (job_id, job.status),
+        );
+    }
+}
