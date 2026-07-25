@@ -377,6 +377,46 @@ pub struct AIConfig {
     pub min_participants: u32,
 }
 
+// ==================== Binary Attachments (Issue #1216) ====================
+
+/// Metadata for a large binary attachment stored off-chain.
+///
+/// On-chain we store only the reference (URI/CID) and metadata; the actual
+/// binary payload lives in IPFS, Arweave, or an off-chain object store.
+/// This avoids bloating Soroban contract storage while still providing
+/// a verifiable link between a medical record and its attachments.
+#[derive(Clone)]
+#[contracttype]
+pub struct Attachment {
+    /// Unique attachment identifier (stable across versions).
+    pub id: BytesN<32>,
+    /// The medical record this attachment belongs to.
+    pub record_id: u64,
+    /// Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL).
+    pub uri: String,
+    /// MIME type of the binary (e.g. "application/pdf", "image/dicom").
+    pub content_type: String,
+    /// Original file size in bytes.
+    pub size_bytes: u64,
+    /// SHA-256 hash of the original binary for integrity verification.
+    pub checksum: BytesN<32>,
+    /// Free-form metadata (e.g. "DICOM series", "lab result page 1").
+    pub description: String,
+    /// Address that uploaded this attachment.
+    pub uploaded_by: Address,
+    /// Timestamp when the attachment was registered on-chain.
+    pub uploaded_at: u64,
+}
+
+/// Summary of attachments for a record, returned by list queries.
+#[derive(Clone)]
+#[contracttype]
+pub struct AttachmentSummary {
+    pub record_id: u64,
+    pub attachment_count: u32,
+    pub total_size_bytes: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct RecoveryProposal {
@@ -654,6 +694,12 @@ pub enum DataKey {
 
     // Redaction
     RedactionPolicy(u64),
+
+    // Binary Attachments (Issue #1216)
+    Attachment(BytesN<32>),                // attachment_id -> Attachment
+    RecordAttachments(u64),                // record_id -> Vec<BytesN<32>>
+    RecordAttachmentCount(u64),            // record_id -> u32
+    PatientAttachmentCount(Address),       // patient -> u32
 }
 
 // ==================== Errors ====================
@@ -7276,5 +7322,172 @@ impl MedicalRecordsContract {
         }
 
         Ok(redacted)
+    }
+
+    // ─── Binary Attachments (Issue #1216) ────────────────────────────────────
+
+    /// Register a large binary attachment reference for a medical record.
+    ///
+    /// The actual binary payload is stored off-chain (IPFS, Arweave, etc.).
+    /// This function registers the on-chain reference with content hash for
+    /// integrity verification. Only the record's doctor or an admin can add
+    /// attachments.
+    ///
+    /// # Arguments
+    /// * `caller` - Doctor or admin adding the attachment
+    /// * `record_id` - The medical record this attachment belongs to
+    /// * `uri` - Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL)
+    /// * `content_type` - MIME type (e.g. "application/pdf", "image/dicom")
+    /// * `size_bytes` - Original file size in bytes
+    /// * `checksum` - SHA-256 hash of the binary payload
+    /// * `description` - Free-form description
+    ///
+    /// # Returns
+    /// The attachment ID (BytesN<32>)
+    pub fn add_attachment(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        uri: String,
+        content_type: String,
+        size_bytes: u64,
+        checksum: BytesN<32>,
+        description: String,
+    ) -> Result<BytesN<32>, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let record: MedicalRecord = Self::get_record_internal(&env, record_id)?;
+        let caller_role = Self::get_user_role(&env, &caller);
+        let is_admin = matches!(caller_role, Some(Role::Admin));
+        let is_doctor = caller == record.doctor_id;
+        if !is_admin && !is_doctor {
+            return Err(Error::Unauthorized);
+        }
+
+        // Generate deterministic attachment ID
+        let timestamp = env.ledger().timestamp();
+        let mut id_data = soroban_sdk::Bytes::new(&env);
+        id_data.extend_from_slice(&record_id.to_be_bytes());
+        id_data.extend_from_slice(&timestamp.to_be_bytes());
+        id_data.extend_from_slice(checksum.as_ref());
+        let attachment_id: BytesN<32> = env.crypto().sha256(&id_data).into();
+
+        let attachment = Attachment {
+            id: attachment_id.clone(),
+            record_id,
+            uri,
+            content_type,
+            size_bytes,
+            checksum,
+            description,
+            uploaded_by: caller.clone(),
+            uploaded_at: timestamp,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Attachment(attachment_id.clone()), &attachment);
+
+        // Add to record's attachment list
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+        ids.push_back(attachment_id.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachments(record_id), &ids);
+
+        // Increment counts
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachmentCount(record_id))
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachmentCount(record_id), &(count + 1));
+
+        env.events().publish(
+            (symbol_short!("RECORD"), symbol_short!("ATTACH")),
+            (record_id, attachment_id.clone(), caller),
+        );
+
+        Ok(attachment_id)
+    }
+
+    /// Retrieve an attachment by ID.
+    pub fn get_attachment(env: Env, attachment_id: BytesN<32>) -> Result<Attachment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    /// List all attachments for a medical record.
+    pub fn list_attachments(env: Env, record_id: u64) -> Vec<Attachment> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut attachments = Vec::new(&env);
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                attachments.push_back(att);
+            }
+        }
+        attachments
+    }
+
+    /// Get a summary of attachments for a record.
+    pub fn get_attachment_summary(env: Env, record_id: u64) -> AttachmentSummary {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut total_size: u64 = 0;
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                total_size += att.size_bytes;
+            }
+        }
+
+        AttachmentSummary {
+            record_id,
+            attachment_count: ids.len() as u32,
+            total_size_bytes: total_size,
+        }
+    }
+
+    /// Verify the integrity of an attachment by comparing its stored checksum
+    /// against a provided hash. Returns true if they match.
+    pub fn verify_attachment_integrity(
+        env: Env,
+        attachment_id: BytesN<32>,
+        expected_checksum: BytesN<32>,
+    ) -> bool {
+        let att: Attachment = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+        {
+            Some(a) => a,
+            None => return false,
+        };
+        att.checksum == expected_checksum
     }
 }
