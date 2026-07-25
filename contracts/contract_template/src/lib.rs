@@ -1,12 +1,18 @@
 //! # Contract Template
 //!
-//! Boilerplate for new Soroban contracts. Demonstrates:
-//! - Proper `require_auth()` pattern
-//! - Standard initialization guard
-//! - Typed errors and events
-//! - Storage key namespacing
+//! Standard Uzima contract structure. Demonstrates:
+//! - Init function with idempotency guard
+//! - Standard entry points (admin, CRUD, read-only queries)
+//! - Error types following Uzima conventions (`contracterror`)
+//! - Event emission patterns for auditability
+//! - Storage layout patterns with namespaced `DataKey` enum
 //!
-//! To create a new contract, run:
+//! To scaffold a new contract from this template, run:
+//! ```bash
+//! ./scripts/generate_contract.sh <name> <category>
+//! ```
+//!
+//! For a simpler copy-based scaffold:
 //! ```bash
 //! ./scripts/scaffold-contract.sh <your_contract_name>
 //! ```
