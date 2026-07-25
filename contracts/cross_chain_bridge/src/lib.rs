@@ -2382,3 +2382,34 @@ impl CrossChainBridgeContract {
         }
     }
 }
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
+
+#[contract]
+pub struct CrossChainBridgeContract;
+
+#[contractimpl]
+impl CrossChainBridgeContract {
+    /// Emits bridge state sync event to be consumed asynchronously by SyncManager.
+    pub fn trigger_bridge_sync(
+        env: Env,
+        sender: Address,
+        sync_manager: Address,
+        payload_hash: BytesN<32>,
+    ) -> u64 {
+        sender.require_auth();
+
+        // Invoke SyncManager contract asynchronously via cross-contract call
+        let client = sync_manager_client::Client::new(&env, &sync_manager);
+        client.enqueue_reconciliation(&env.current_contract_address(), &payload_hash)
+    }
+}
+
+mod sync_manager_client {
+    use soroban_sdk::{Address, BytesN, Env};
+    soroban_sdk::contractclient!(
+        name = "Client",
+        wasm = "../../target/wasm32-unknown-unknown/release/sync_manager.wasm"
+    );
+}
