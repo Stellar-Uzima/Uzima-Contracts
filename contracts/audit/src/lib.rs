@@ -360,6 +360,16 @@ impl AuditTrail {
         true
     }
 
+    // ─── Data Purging (Issue #1218) ─────────────────────────────────────────
+
+    /// Purge expired audit logs that exceed the max_retention_seconds window.
+    ///
+    /// Only admin can trigger purging. The function iterates from log_id 1
+    /// upward and removes entries whose age exceeds max_retention_seconds.
+    /// Returns the number of logs purged.
+    ///
+    /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
+    pub fn purge_expired_logs(env: Env, admin: Address) -> u64 {
     /// Enforce the retention policy across all logs.
     /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
     /// Returns the number of logs purged.
@@ -370,6 +380,15 @@ impl AuditTrail {
             .storage()
             .instance()
             .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        // Infinite retention: nothing to purge
+        if policy.max_retention_seconds == 0 {
+            return 0;
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
             .ok_or(Error::RetentionPolicyNotFound)?;
 
         let now = env.ledger().timestamp();
@@ -379,6 +398,22 @@ impl AuditTrail {
             .get(&DataKey::LogCount)
             .unwrap_or(0u64);
 
+        let mut purged: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    // Remove from persistent storage
+                    env.storage()
+                        .persistent()
+                        .remove(&DataKey::Log(id));
+                    purged += 1;
+                } else {
+                    // Logs are ordered by time; once we hit a non-expired log, stop
+                    break;
         let mut purged = 0u64;
 
         if policy.auto_purge && policy.max_retention_seconds > 0 {
@@ -395,6 +430,68 @@ impl AuditTrail {
         }
 
         env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("PURGE")),
+            (purged, admin),
+        );
+
+        purged
+    }
+
+    /// Return summary of logs eligible for purging without actually purging.
+    /// Useful for auditing and dry-run previews.
+    pub fn preview_purge(env: Env) -> (u64, u64) {
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        if policy.max_retention_seconds == 0 {
+            return (0, 0);
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut expired: u64 = 0;
+        let mut total_size_bytes: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    expired += 1;
+                    // Rough estimate: each log ~256 bytes
+                    total_size_bytes += 256;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        (expired, total_size_bytes)
+    }
+
+    /// Update the max retention window (admin only).
+    /// After setting, call `purge_expired_logs` to enforce.
+    pub fn set_max_retention(env: Env, admin: Address, max_seconds: u64) -> Result<(), Error> {
+        require_admin!(env, admin);
+        let mut policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+        policy.max_retention_seconds = max_seconds;
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPolicy, &policy);
+        Ok(())
             (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
             (purged, policy.auto_purge),
         );

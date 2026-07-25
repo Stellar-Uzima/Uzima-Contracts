@@ -178,4 +178,25 @@ impl Storage {
             .persistent()
             .set(&DataKey::IsInitialized, &true);
     }
+
+    // ─── Data Purging Support (Issue #1218) ──────────────────────────────────
+
+    /// Remove an access log entry from persistent storage
+    pub fn remove_access_log(env: &Env, log_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AccessLog(log_id));
+    }
+
+    /// Replace the full list of log IDs for a patient
+    pub fn set_patient_log_ids(env: &Env, patient_id: &Address, ids: &Vec<u64>) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientAccessLogs(patient_id.clone()), ids);
+    }
+
+    /// Get log IDs for a patient (alias for get_patient_access_log_ids)
+    pub fn get_patient_log_ids(env: &Env, patient_id: &Address) -> Vec<u64> {
+        Self::get_patient_access_log_ids(env, patient_id)
+    }
 }
