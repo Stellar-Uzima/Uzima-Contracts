@@ -812,3 +812,45 @@ impl AuditTrail {
         env.storage().persistent().set(&key, &list);
     }
 }
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, BytesN, Env, Symbol};
+use contract_monitoring::telemetry::{ExecutionStatus, TelemetryLogger};
+
+#[contract]
+pub struct AuditMonitoringContract;
+
+#[contractimpl]
+impl AuditMonitoringContract {
+    /// Records execution metrics and audit events for operational telemetry
+    pub fn record_execution(
+        env: Env,
+        target_contract: BytesN<32>,
+        function_name: Symbol,
+        cpu_instructions: u64,
+        memory_bytes: u64,
+        retry_count: u32,
+        error_code: u32,
+    ) {
+        let status = if error_code == 0 {
+            if retry_count > 0 {
+                ExecutionStatus::Retried
+            } else {
+                ExecutionStatus::Success
+            }
+        } else {
+            ExecutionStatus::Failed
+        };
+
+        TelemetryLogger::emit_execution_telemetry(
+            &env,
+            target_contract,
+            function_name,
+            cpu_instructions,
+            memory_bytes,
+            status,
+            retry_count,
+            error_code,
+        );
+    }
+}
