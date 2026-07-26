@@ -70,3 +70,40 @@ fn test_deprecation_warning_emits_event() {
         .count();
     assert_eq!(deprecated_events, 1);
 }
+
+#![cfg(test)]
+
+use super::*;
+use soroban_sdk::{testutils::Address as _, Env};
+
+#[test]
+fn test_pause_and_unpause_lifecycle() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register_contract(None, UpgradeableContract);
+    let client = UpgradeableContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+
+    // Initial state: Not paused
+    assert_eq!(client.is_contract_paused(), false);
+    assert_eq!(client.execute_maintenance_action(), Ok(()));
+
+    // Admin triggers pause
+    assert_eq!(client.pause_contract(&admin), Ok(()));
+    assert_eq!(client.is_contract_paused(), true);
+
+    // Protected actions fail while contract is paused
+    assert_eq!(
+        client.execute_maintenance_action(),
+        Err(PauseError::ContractIsPaused)
+    );
+
+    // Admin unpauses contract
+    assert_eq!(client.resume_contract(&admin), Ok(()));
+    assert_eq!(client.is_contract_paused(), false);
+
+    // Operations resume normally
+    assert_eq!(client.execute_maintenance_action(), Ok(()));
+}
+
