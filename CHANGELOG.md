@@ -1,13 +1,17 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the Stellar Uzima Contracts repository will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
+- Canonical address normalization layer for identity and access flows (`identity_registry`)
+- Release note generation script (`scripts/generate_release_notes.sh`)
+- Semantic versioning discipline for contract interfaces and SDK compatibility
+- Memory and CPU budget dashboards per contract
 - **Workspace-wide soroban-sdk pin:** All active member crates now inherit `soroban-sdk` from the workspace root via `workspace = true`. The `contracts/upgradeability` crate was the only non-excluded member with a hardcoded version — corrected in this PR.
 - `scripts/check_sdk_version.sh` — CI guard that fails the build if any member crate overrides the workspace soroban-sdk pin. Scans all Cargo.toml files including excluded/deferred contracts.
 - `docs/VERSIONING_STRATEGY.md` — Documents SDK bump cadence (patch/minor/major), compatibility matrix, deprecation policy, and the CI enforcement mechanism.
