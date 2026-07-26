@@ -1,0 +1,14 @@
+[package]
+name = "auth-events"
+version = "0.1.0"
+edition = "2021"
+description = "Observability events for failed authorization decisions and policy evaluation exceptions"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+soroban-sdk = "21.7.7"
+
+[dev-dependencies]
+soroban-sdk = { version = "21.7.7", features = ["testutils"] }

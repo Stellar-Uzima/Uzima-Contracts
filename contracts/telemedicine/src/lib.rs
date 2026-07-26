@@ -1,4 +1,5 @@
 #![no_std]
+//! telemedicine - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::fn_params_excessive_bools)]
 #![allow(clippy::needless_pass_by_value)]
@@ -54,6 +55,41 @@ pub enum TelemedicineError {
     KnowledgeEntryNotFound = 28,
 }
 
+impl core::fmt::Display for TelemedicineError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            TelemedicineError::ContractPaused => write!(f, "contract paused"),
+            TelemedicineError::NotPaused => write!(f, "not paused"),
+            TelemedicineError::NotAdmin => write!(f, "not admin"),
+            TelemedicineError::ProviderAlreadyRegistered => write!(f, "provider already registered"),
+            TelemedicineError::ProviderNotFound => write!(f, "provider not found"),
+            TelemedicineError::ProviderNotActive => write!(f, "provider not active"),
+            TelemedicineError::LicenseExpired => write!(f, "license expired"),
+            TelemedicineError::PatientAlreadyRegistered => write!(f, "patient already registered"),
+            TelemedicineError::PatientNotFound => write!(f, "patient not found"),
+            TelemedicineError::ConsentNotGiven => write!(f, "consent not given"),
+            TelemedicineError::ConsultationNotFound => write!(f, "consultation not found"),
+            TelemedicineError::ConsultationNotScheduled => write!(f, "consultation not scheduled"),
+            TelemedicineError::ConsultationNotActive => write!(f, "consultation not active"),
+            TelemedicineError::ConsultationAlreadyCompleted => write!(f, "consultation already completed"),
+            TelemedicineError::PrescriptionNotFound => write!(f, "prescription not found"),
+            TelemedicineError::MonitoringSessionNotFound => write!(f, "monitoring session not found"),
+            TelemedicineError::AppointmentNotFound => write!(f, "appointment not found"),
+            TelemedicineError::DigitalTherapeuticNotFound => write!(f, "digital therapeutic not found"),
+            TelemedicineError::QualityAssessmentNotFound => write!(f, "quality assessment not found"),
+            TelemedicineError::EmergencyNotFound => write!(f, "emergency not found"),
+            TelemedicineError::EmergencyAlreadyResolved => write!(f, "emergency already resolved"),
+            TelemedicineError::InvalidJurisdiction => write!(f, "invalid jurisdiction"),
+            TelemedicineError::DataTransferNotApproved => write!(f, "data transfer not approved"),
+            TelemedicineError::UnsupportedLanguage => write!(f, "unsupported language"),
+            TelemedicineError::ChatbotInquiryNotFound => write!(f, "chatbot inquiry not found"),
+            TelemedicineError::InvalidChatMessage => write!(f, "invalid chat message"),
+            TelemedicineError::KnowledgeEntryAlreadyExists => write!(f, "knowledge entry already exists"),
+            TelemedicineError::KnowledgeEntryNotFound => write!(f, "knowledge entry not found"),
+        }
+    }
+}
+
 // ============================================================
 // DATA STRUCTURES
 // ============================================================
@@ -66,6 +102,7 @@ pub enum ConsentType {
     DigitalTherapeutic = 2,
     EmergencyContact = 3,
     DataSharing = 4,
+    SessionRecording = 5,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -159,6 +196,8 @@ pub struct Consultation {
     pub appointment_id: BytesN<32>,
     pub consultation_type: String,
     pub quality_score: u32,
+    pub recording_consent_granted_at: u64,
+    pub recording_consent_expiry: u64,
 }
 
 #[derive(Clone, Debug)]
@@ -331,16 +370,30 @@ pub struct ChatbotInquiry {
 }
 
 // ============================================================
+// STORAGE TIER CONSTANTS
+// ============================================================
+
+/// TTL threshold: extend persistent data if remaining TTL falls below this
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+/// Extend persistent data to this many ledgers (~4 days at 5s/ledger)
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+/// TTL for temporary/session storage (~4 hours)
+const TEMP_SESSION_TTL: u32 = 1000;
+
+// ============================================================
 // STORAGE KEYS
 // ============================================================
 
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
-    // Fix: store admin as a simple key (not keyed by address)
-    // so require_admin can retrieve it without knowing the address
+    // Instance storage keys (contract config/metadata)
     Admin,
     Paused,
+    EmergencyProtocol,
+    KnowledgeIndex,
+    PlatformStats,
+    // Persistent storage keys (critical long-lived data)
     Provider(BytesN<32>),
     Patient(BytesN<32>),
     Consent(BytesN<32>),
@@ -355,13 +408,11 @@ pub enum DataKey {
     QualityAssessment(BytesN<32>),
     Emergency(BytesN<32>),
     KnowledgeEntry(BytesN<32>),
-    KnowledgeIndex,
-    EmergencyProtocol,
+    ActiveEmergencies,
     ChatbotInquiry(BytesN<32>),
+    // Temporary storage keys (session/short-lived data)
     LatestPatientInquiry(BytesN<32>),
     ProviderSchedule(BytesN<32>),
-    ActiveEmergencies,
-    PlatformStats,
 }
 
 // ============================================================
@@ -378,17 +429,15 @@ impl TelemedicineContract {
     // ============================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), TelemedicineError> {
-        if env.storage().persistent().has(&DataKey::Paused) {
-            return Err(TelemedicineError::NotPaused);
-        }
-        // Store admin address under a simple key
-        env.storage().persistent().set(&DataKey::Admin, &admin);
-        env.storage().persistent().set(&DataKey::Paused, &false);
-        env.storage().persistent().set(
+        governance_commons::try_init_guard(&env).map_err(|_| TelemedicineError::NotPaused)?;
+        // Store admin and config in instance storage (contract metadata)
+        env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::Paused, &false);
+        env.storage().instance().set(
             &DataKey::PlatformStats,
             &(0u64, 0u64, 0u64, 0u64, 0u64, 0u64),
         );
-        env.storage().persistent().set(
+        env.storage().instance().set(
             &DataKey::EmergencyProtocol,
             &EmergencyProtocol {
                 protocol_id: BytesN::from_array(&env, &[0u8; 32]),
@@ -410,25 +459,27 @@ impl TelemedicineContract {
             },
         );
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::KnowledgeIndex, &Vec::<BytesN<32>>::new(&env));
+        // Active emergencies list is persistent (critical operational data)
         env.storage()
             .persistent()
             .set(&DataKey::ActiveEmergencies, &Vec::<BytesN<32>>::new(&env));
+        env.storage().persistent().extend_ttl(&DataKey::ActiveEmergencies, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Telemedicine contract initialized");
         Ok(())
     }
 
     pub fn pause(env: Env) -> Result<(), TelemedicineError> {
         Self::require_admin(&env)?;
-        env.storage().persistent().set(&DataKey::Paused, &true);
+        env.storage().instance().set(&DataKey::Paused, &true);
         log!(&env, "Contract paused");
         Ok(())
     }
 
     pub fn unpause(env: Env) -> Result<(), TelemedicineError> {
         Self::require_admin(&env)?;
-        env.storage().persistent().set(&DataKey::Paused, &false);
+        env.storage().instance().set(&DataKey::Paused, &false);
         log!(&env, "Contract unpaused");
         Ok(())
     }
@@ -472,17 +523,22 @@ impl TelemedicineContract {
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Provider(provider_id), &provider);
+            .set(&DataKey::Provider(provider_id.clone()), &provider);
+        env.storage().persistent().extend_ttl(&DataKey::Provider(provider_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         Self::increment_platform_stat(env, 0);
         log!(&env, "Provider registered");
         Ok(())
     }
 
     pub fn get_provider(env: &Env, provider_id: BytesN<32>) -> Result<Provider, TelemedicineError> {
-        env.storage()
+        let key = DataKey::Provider(provider_id);
+        let provider: Provider = env
+            .storage()
             .persistent()
-            .get(&DataKey::Provider(provider_id))
-            .ok_or(TelemedicineError::ProviderNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::ProviderNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(provider)
     }
 
     pub fn deactivate_provider(
@@ -498,7 +554,8 @@ impl TelemedicineContract {
         provider.is_active = false;
         env.storage()
             .persistent()
-            .set(&DataKey::Provider(provider_id), &provider);
+            .set(&DataKey::Provider(provider_id.clone()), &provider);
+        env.storage().persistent().extend_ttl(&DataKey::Provider(provider_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Provider deactivated");
         Ok(())
     }
@@ -536,17 +593,22 @@ impl TelemedicineContract {
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Patient(patient_id), &patient);
+            .set(&DataKey::Patient(patient_id.clone()), &patient);
+        env.storage().persistent().extend_ttl(&DataKey::Patient(patient_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         Self::increment_platform_stat(env, 1);
         log!(&env, "Patient registered");
         Ok(())
     }
 
     pub fn get_patient(env: &Env, patient_id: BytesN<32>) -> Result<Patient, TelemedicineError> {
-        env.storage()
+        let key = DataKey::Patient(patient_id);
+        let patient: Patient = env
+            .storage()
             .persistent()
-            .get(&DataKey::Patient(patient_id))
-            .ok_or(TelemedicineError::PatientNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::PatientNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(patient)
     }
 
     // ============================================================
@@ -574,6 +636,7 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::Consent(consent_id.clone()), &consent);
+        env.storage().persistent().extend_ttl(&DataKey::Consent(consent_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         // Maintain a per-patient index of consent IDs
         let mut ids: Vec<BytesN<32>> = env
@@ -584,7 +647,8 @@ impl TelemedicineContract {
         ids.push_back(consent_id);
         env.storage()
             .persistent()
-            .set(&DataKey::PatientConsents(patient_id), &ids);
+            .set(&DataKey::PatientConsents(patient_id.clone()), &ids);
+        env.storage().persistent().extend_ttl(&DataKey::PatientConsents(patient_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         log!(&env, "Consent granted");
         Ok(())
@@ -600,7 +664,8 @@ impl TelemedicineContract {
         consent.granted = false;
         env.storage()
             .persistent()
-            .set(&DataKey::Consent(consent_id), &consent);
+            .set(&DataKey::Consent(consent_id.clone()), &consent);
+        env.storage().persistent().extend_ttl(&DataKey::Consent(consent_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Consent revoked");
         Ok(())
     }
@@ -615,22 +680,55 @@ impl TelemedicineContract {
         let ids: Vec<BytesN<32>> = env
             .storage()
             .persistent()
-            .get(&DataKey::PatientConsents(patient_id))
+            .get(&DataKey::PatientConsents(patient_id.clone()))
             .unwrap_or_else(|| Vec::new(env));
+        env.storage().persistent().extend_ttl(&DataKey::PatientConsents(patient_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         let now = env.ledger().timestamp();
         for id in ids.iter() {
+            let consent_key = DataKey::Consent(id.clone());
             if let Some(record) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, ConsentRecord>(&DataKey::Consent(id.clone()))
+                .get::<DataKey, ConsentRecord>(&consent_key)
             {
+                env.storage().persistent().extend_ttl(&consent_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
                 if record.granted && record.consent_type == consent_type && record.expiry >= now {
                     return Ok(true);
                 }
             }
         }
         Ok(false)
+    }
+
+    /// Check whether a patient has granted session recording consent.
+    /// Returns (has_consent, expiry) where expiry is 0 if no consent exists.
+    pub fn has_recording_consent(
+        env: &Env,
+        patient_id: BytesN<32>,
+    ) -> Result<(bool, u64), TelemedicineError> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::PatientConsents(patient_id.clone()))
+            .unwrap_or_else(|| Vec::new(env));
+        env.storage().persistent().extend_ttl(&DataKey::PatientConsents(patient_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+
+        let now = env.ledger().timestamp();
+        for id in ids.iter() {
+            let consent_key = DataKey::Consent(id.clone());
+            if let Some(record) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, ConsentRecord>(&consent_key)
+            {
+                env.storage().persistent().extend_ttl(&consent_key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+                if record.granted && record.consent_type == ConsentType::SessionRecording && record.expiry >= now {
+                    return Ok((true, record.expiry));
+                }
+            }
+        }
+        Ok((false, 0))
     }
 
     // ============================================================
@@ -663,6 +761,10 @@ impl TelemedicineContract {
         if !Self::has_valid_consent(env, patient_id.clone(), ConsentType::VideoConsultation)? {
             return Err(TelemedicineError::ConsentNotGiven);
         }
+        // Determine recording consent for audit trail
+        let (recording_consent, recording_expiry) =
+            Self::has_recording_consent(env, patient_id.clone()).unwrap_or((false, 0));
+
         let consultation = Consultation {
             session_id: session_id.clone(),
             patient_id: patient_id.clone(),
@@ -675,10 +777,13 @@ impl TelemedicineContract {
             appointment_id: _appointment_id.clone(),
             consultation_type,
             quality_score: 0,
+            recording_consent_granted_at: if recording_consent { scheduled_time } else { 0 },
+            recording_consent_expiry: recording_expiry,
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Consultation(session_id), &consultation);
+            .set(&DataKey::Consultation(session_id.clone()), &consultation);
+        env.storage().persistent().extend_ttl(&DataKey::Consultation(session_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         Self::increment_platform_stat(env, 2);
         log!(&env, "Consultation scheduled");
         Ok(())
@@ -703,7 +808,8 @@ impl TelemedicineContract {
         consultation.start_time = env.ledger().timestamp();
         env.storage()
             .persistent()
-            .set(&DataKey::Consultation(session_id), &consultation);
+            .set(&DataKey::Consultation(session_id.clone()), &consultation);
+        env.storage().persistent().extend_ttl(&DataKey::Consultation(session_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Consultation started");
         Ok(())
     }
@@ -732,7 +838,8 @@ impl TelemedicineContract {
         consultation.quality_score = quality_score;
         env.storage()
             .persistent()
-            .set(&DataKey::Consultation(session_id), &consultation);
+            .set(&DataKey::Consultation(session_id.clone()), &consultation);
+        env.storage().persistent().extend_ttl(&DataKey::Consultation(session_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Consultation completed");
         Ok(())
     }
@@ -741,10 +848,14 @@ impl TelemedicineContract {
         env: &Env,
         session_id: BytesN<32>,
     ) -> Result<Consultation, TelemedicineError> {
-        env.storage()
+        let key = DataKey::Consultation(session_id);
+        let consultation: Consultation = env
+            .storage()
             .persistent()
-            .get(&DataKey::Consultation(session_id))
-            .ok_or(TelemedicineError::ConsultationNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::ConsultationNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(consultation)
     }
 
     // ============================================================
@@ -787,7 +898,8 @@ impl TelemedicineContract {
         };
         env.storage()
             .persistent()
-            .set(&DataKey::Prescription(prescription_id), &prescription);
+            .set(&DataKey::Prescription(prescription_id.clone()), &prescription);
+        env.storage().persistent().extend_ttl(&DataKey::Prescription(prescription_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         Self::increment_platform_stat(env, 3);
         log!(&env, "Prescription issued");
         Ok(())
@@ -797,10 +909,14 @@ impl TelemedicineContract {
         env: &Env,
         prescription_id: BytesN<32>,
     ) -> Result<Prescription, TelemedicineError> {
-        env.storage()
+        let key = DataKey::Prescription(prescription_id);
+        let prescription: Prescription = env
+            .storage()
             .persistent()
-            .get(&DataKey::Prescription(prescription_id))
-            .ok_or(TelemedicineError::PrescriptionNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::PrescriptionNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(prescription)
     }
 
     // ============================================================
@@ -837,7 +953,8 @@ impl TelemedicineContract {
         };
         env.storage()
             .persistent()
-            .set(&DataKey::MonitoringSession(session_id), &session);
+            .set(&DataKey::MonitoringSession(session_id.clone()), &session);
+        env.storage().persistent().extend_ttl(&DataKey::MonitoringSession(session_id), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Monitoring session started");
         Ok(())
     }
@@ -856,7 +973,8 @@ impl TelemedicineContract {
         session.end_time = env.ledger().timestamp();
         env.storage()
             .persistent()
-            .set(&DataKey::MonitoringSession(session_id), &session.clone());
+            .set(&DataKey::MonitoringSession(session_id.clone()), &session.clone());
+        env.storage().persistent().extend_ttl(&DataKey::MonitoringSession(session_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         log!(&env, "Monitoring session ended");
         Ok(session)
     }
@@ -894,15 +1012,16 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::KnowledgeEntry(entry_id.clone()), &entry);
+        env.storage().persistent().extend_ttl(&DataKey::KnowledgeEntry(entry_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         let mut index: Vec<BytesN<32>> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::KnowledgeIndex)
             .unwrap_or_else(|| Vec::new(env));
         if !Self::vec_contains_bytes32(&index, &entry_id) {
             index.push_back(entry_id);
-            env.storage().persistent().set(&DataKey::KnowledgeIndex, &index);
+            env.storage().instance().set(&DataKey::KnowledgeIndex, &index);
         }
 
         Ok(())
@@ -912,10 +1031,14 @@ impl TelemedicineContract {
         env: &Env,
         entry_id: BytesN<32>,
     ) -> Result<MedicalKnowledgeEntry, TelemedicineError> {
-        env.storage()
+        let key = DataKey::KnowledgeEntry(entry_id);
+        let entry: MedicalKnowledgeEntry = env
+            .storage()
             .persistent()
-            .get(&DataKey::KnowledgeEntry(entry_id))
-            .ok_or(TelemedicineError::KnowledgeEntryNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::KnowledgeEntryNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(entry)
     }
 
     pub fn configure_emergency_protocol(
@@ -928,7 +1051,7 @@ impl TelemedicineContract {
         ambulance_ref: String,
     ) -> Result<(), TelemedicineError> {
         Self::require_admin(env)?;
-        env.storage().persistent().set(
+        env.storage().instance().set(
             &DataKey::EmergencyProtocol,
             &EmergencyProtocol {
                 protocol_id,
@@ -945,7 +1068,7 @@ impl TelemedicineContract {
 
     pub fn get_emergency_protocol(env: &Env) -> EmergencyProtocol {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::EmergencyProtocol)
             .unwrap_or_else(|| EmergencyProtocol {
                 protocol_id: BytesN::from_array(env, &[0u8; 32]),
@@ -1061,9 +1184,12 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::ChatbotInquiry(inquiry_id.clone()), &inquiry);
+        env.storage().persistent().extend_ttl(&DataKey::ChatbotInquiry(inquiry_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        // LatestPatientInquiry is session data → temporary storage with TTL
         env.storage()
-            .persistent()
-            .set(&DataKey::LatestPatientInquiry(patient_id), &inquiry_id);
+            .temporary()
+            .set(&DataKey::LatestPatientInquiry(patient_id.clone()), &inquiry_id);
+        env.storage().temporary().extend_ttl(&DataKey::LatestPatientInquiry(patient_id), 0, TEMP_SESSION_TTL);
 
         Ok(inquiry)
     }
@@ -1072,10 +1198,14 @@ impl TelemedicineContract {
         env: &Env,
         inquiry_id: BytesN<32>,
     ) -> Result<ChatbotInquiry, TelemedicineError> {
-        env.storage()
+        let key = DataKey::ChatbotInquiry(inquiry_id);
+        let inquiry: ChatbotInquiry = env
+            .storage()
             .persistent()
-            .get(&DataKey::ChatbotInquiry(inquiry_id))
-            .ok_or(TelemedicineError::ChatbotInquiryNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::ChatbotInquiryNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(inquiry)
     }
 
     pub fn get_latest_patient_inquiry(
@@ -1084,7 +1214,7 @@ impl TelemedicineContract {
     ) -> Result<ChatbotInquiry, TelemedicineError> {
         let inquiry_id: BytesN<32> = env
             .storage()
-            .persistent()
+            .temporary()
             .get(&DataKey::LatestPatientInquiry(patient_id))
             .ok_or(TelemedicineError::ChatbotInquiryNotFound)?;
         Self::get_chatbot_inquiry(env, inquiry_id)
@@ -1114,17 +1244,25 @@ impl TelemedicineContract {
         env: &Env,
         emergency_id: BytesN<32>,
     ) -> Result<EmergencyCase, TelemedicineError> {
-        env.storage()
+        let key = DataKey::Emergency(emergency_id);
+        let case: EmergencyCase = env
+            .storage()
             .persistent()
-            .get(&DataKey::Emergency(emergency_id))
-            .ok_or(TelemedicineError::EmergencyNotFound)
+            .get(&key)
+            .ok_or(TelemedicineError::EmergencyNotFound)?;
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        Ok(case)
     }
 
     pub fn get_active_emergencies(env: &Env) -> Vec<BytesN<32>> {
-        env.storage()
+        let key = DataKey::ActiveEmergencies;
+        let result: Vec<BytesN<32>> = env
+            .storage()
             .persistent()
-            .get(&DataKey::ActiveEmergencies)
-            .unwrap_or_else(|| Vec::new(env))
+            .get(&key)
+            .unwrap_or_else(|| Vec::new(env));
+        env.storage().persistent().extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
+        result
     }
 
     pub fn resolve_emergency_case(
@@ -1147,6 +1285,7 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::Emergency(emergency_id.clone()), &emergency);
+        env.storage().persistent().extend_ttl(&DataKey::Emergency(emergency_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         let mut active: Vec<BytesN<32>> = env
             .storage()
@@ -1157,6 +1296,7 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::ActiveEmergencies, &active);
+        env.storage().persistent().extend_ttl(&DataKey::ActiveEmergencies, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         Ok(emergency)
     }
@@ -1165,21 +1305,23 @@ impl TelemedicineContract {
     // UTILITY FUNCTIONS
     // ============================================================
 
+    #[must_use]
     fn require_admin(env: &Env) -> Result<(), TelemedicineError> {
-        // Retrieve the stored admin address and require their auth
+        // Retrieve the stored admin address from instance storage
         let admin: Address = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::Admin)
             .ok_or(TelemedicineError::NotAdmin)?;
         admin.require_auth();
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), TelemedicineError> {
         if env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::Paused)
             .unwrap_or(false)
         {
@@ -1188,6 +1330,7 @@ impl TelemedicineContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_supported_language(language: &String) -> Result<(), TelemedicineError> {
         let lang = Self::normalize_string(language);
         if matches!(lang.as_str(), "english" | "swahili" | "french" | "en" | "sw" | "fr") {
@@ -1434,7 +1577,7 @@ impl TelemedicineContract {
         let normalized_language = Self::normalize_string(language);
         let index: Vec<BytesN<32>> = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::KnowledgeIndex)
             .unwrap_or_else(|| Vec::new(env));
 
@@ -1444,6 +1587,7 @@ impl TelemedicineContract {
                 .persistent()
                 .get::<DataKey, MedicalKnowledgeEntry>(&DataKey::KnowledgeEntry(entry_id.clone()))
             {
+                env.storage().persistent().extend_ttl(&DataKey::KnowledgeEntry(entry_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
                 if !entry.is_active {
                     continue;
                 }
@@ -1675,6 +1819,7 @@ impl TelemedicineContract {
         env.storage()
             .persistent()
             .set(&DataKey::Emergency(emergency_id.clone()), &emergency);
+        env.storage().persistent().extend_ttl(&DataKey::Emergency(emergency_id.clone()), PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
 
         let mut active: Vec<BytesN<32>> = env
             .storage()
@@ -1686,6 +1831,7 @@ impl TelemedicineContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::ActiveEmergencies, &active);
+            env.storage().persistent().extend_ttl(&DataKey::ActiveEmergencies, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL_EXTEND_TO);
         }
         Self::increment_platform_stat(env, 5);
 
@@ -1730,7 +1876,7 @@ impl TelemedicineContract {
         filtered
     }
 
-    #[allow(dead_code)]
+    
     fn is_valid_jurisdiction(jurisdiction: &str) -> bool {
         matches!(
             jurisdiction,
@@ -1741,7 +1887,7 @@ impl TelemedicineContract {
     fn increment_platform_stat(env: &Env, stat_index: usize) {
         let mut stats: (u64, u64, u64, u64, u64, u64) = env
             .storage()
-            .persistent()
+            .instance()
             .get(&DataKey::PlatformStats)
             .unwrap_or((0, 0, 0, 0, 0, 0));
         match stat_index {
@@ -1754,13 +1900,13 @@ impl TelemedicineContract {
             _ => {}
         }
         env.storage()
-            .persistent()
+            .instance()
             .set(&DataKey::PlatformStats, &stats);
     }
 
     pub fn get_platform_stats(env: Env) -> (u64, u64, u64, u64, u64, u64) {
         env.storage()
-            .persistent()
+            .instance()
             .get(&DataKey::PlatformStats)
             .unwrap_or((0, 0, 0, 0, 0, 0))
     }

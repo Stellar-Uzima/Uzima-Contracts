@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AccessRequestedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "requester": {
+      "type": "string"
+    },
+    "patient": {
+      "type": "string"
+    },
+    "recordId": {
+      "type": "integer"
+    },
+    "purpose": {
+      "type": "string"
+    },
+    "credentialHash": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "audit",
+    "requester",
+    "patient",
+    "recordId",
+    "purpose"
+  ]
+}

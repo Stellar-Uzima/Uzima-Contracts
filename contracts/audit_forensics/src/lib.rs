@@ -1,4 +1,9 @@
 #![no_std]
+//! audit_forensics - Healthcare smart contract on Stellar blockchain.
+
+mod errors;
+mod events;
+mod types;
 
 #[cfg(test)]
 mod test;
@@ -7,6 +12,8 @@ use soroban_sdk::{
     contract, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map, String, Symbol,
     Vec,
 };
+
+use crate::errors::AuditForensicsError;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -95,6 +102,50 @@ pub struct FormalVerificationSummary {
     pub checked_at: u64,
 }
 
+/// A provenance link tracking data lineage with hash chain integrity.
+#[derive(Clone)]
+#[contracttype]
+pub struct ProvenanceLink {
+    pub entry_id: u64,
+    pub data_hash: BytesN<32>,
+    pub parent_hash: Option<BytesN<32>>,
+    pub created_at: u64,
+}
+
+/// An evidence record with content hash for tamper detection.
+#[derive(Clone)]
+#[contracttype]
+pub struct EvidenceRecord {
+    pub entry_id: u64,
+    pub case_id: u64,
+    pub evidence_type: String,
+    pub content_hash: BytesN<32>,
+    pub submitted_by: Address,
+    pub submitted_at: u64,
+}
+
+/// Configuration for audit log export windows.
+#[derive(Clone)]
+#[contracttype]
+pub struct ExportConfig {
+    /// Number of days the export window remains open after creation.
+    pub window_days: u64,
+    /// Maximum number of logs per export batch.
+    pub max_batch_size: u32,
+    /// Whether export is currently enabled.
+    pub enabled: bool,
+}
+
+/// Status of an export operation.
+#[derive(Clone)]
+#[contracttype]
+pub struct ExportStatus {
+    pub entry_count: u64,
+    pub exported_at: u64,
+    pub exported_by: Address,
+    pub window_open: bool,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -112,18 +163,25 @@ pub enum DataKey {
     Finding(u64),
     FindingsByExecution(u64),
     FormalSummary(u64),
+    // Provenance & Evidence
+    ProvenanceLink(u64),
+    EvidenceRecord(u64),
+    CaseEvidence(u64),
+    // Export Configuration (Issue #1171)
+    ExportConfig,
+    ExportStatus(u64),
+    NextExportId,
 }
 
 #[contract]
 pub struct AuditForensicsContract;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl AuditForensicsContract {
     #[allow(clippy::panic)]
     pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::NextAuditId, &0u64);
         env.storage().instance().set(&DataKey::NextRuleId, &0u64);
@@ -133,6 +191,7 @@ impl AuditForensicsContract {
         env.storage().instance().set(&DataKey::NextFindingId, &0u64);
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn configure_audit_rule(
         env: Env,
         admin: Address,
@@ -160,7 +219,7 @@ impl AuditForensicsContract {
             .persistent()
             .set(&DataKey::Rule(rule_id), &rule);
         env.events()
-            .publish((symbol_short!("AUDIT"), symbol_short!("RULE")), rule_id);
+            .publish((symbol_short!("audit"), symbol_short!("RULE")), rule_id);
 
         rule_id
     }
@@ -217,13 +276,14 @@ impl AuditForensicsContract {
             .set(&DataKey::NextAuditId, &id.saturating_add(1));
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("LOG")),
+            (symbol_short!("audit"), symbol_short!("log")),
             (id, entry.timestamp, entry.action),
         );
 
         id
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn run_automated_audit(
         env: Env,
         caller: Address,
@@ -297,7 +357,7 @@ impl AuditForensicsContract {
 
         Self::log_internal(&env, caller, AuditAction::AnomalyDetected, None);
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("RUN")),
+            (symbol_short!("audit"), symbol_short!("run")),
             (execution_id, execution.duration_minutes, execution.passed),
         );
 
@@ -502,7 +562,7 @@ impl AuditForensicsContract {
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("COMPRESS")),
+            (symbol_short!("audit"), symbol_short!("compress")),
             (before_timestamp, count, last_hash.clone()),
         );
 
@@ -514,7 +574,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("ARCHIVE")),
+            (symbol_short!("audit"), symbol_short!("archive")),
             archive_ref,
         );
     }
@@ -529,7 +589,7 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("XCSYNC")),
+            (symbol_short!("audit"), symbol_short!("xcsync")),
             (target_chain, audit_root),
         );
     }
@@ -546,14 +606,14 @@ impl AuditForensicsContract {
         Self::require_admin(&env, &admin);
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("SHARE")),
+            (symbol_short!("audit"), symbol_short!("share")),
             (regulator, filter_start, filter_end, proof_ref),
         );
 
         Self::log_internal(&env, admin, AuditAction::AlertTriggered, None);
     }
 
-    #[allow(dead_code)]
+    
     fn check_alerts(env: &Env, action: AuditAction) {
         let key = match action {
             AuditAction::RecordAccess => Some(symbol_short!("THR_ACC")),
@@ -636,5 +696,325 @@ impl AuditForensicsContract {
         let next = current.saturating_add(1);
         env.storage().instance().set(key, &next);
         next
+    }
+
+    // ─── Provenance & Evidence Hash Chains (Issue #1162) ─────────────────────
+
+    /// Record a provenance entry tracking data lineage and chain of custody.
+    pub fn record_provenance(
+        env: Env,
+        actor: Address,
+        source_system: String,
+        data_hash: BytesN<32>,
+        parent_hash: Option<BytesN<32>>,
+        description: String,
+    ) -> u64 {
+        actor.require_auth();
+
+        let id = Self::next_counter(&env, &DataKey::NextAuditId);
+        let entry = AuditEntry {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            action: AuditAction::RecordCreated,
+            record_id: None,
+            details_hash: data_hash.clone(),
+            metadata: Map::from_array(
+                &env,
+                [
+                    (
+                        String::from_str(&env, "provenance"),
+                        String::from_str(&env, "true"),
+                    ),
+                    (
+                        String::from_str(&env, "source_system"),
+                        source_system,
+                    ),
+                    (
+                        String::from_str(&env, "description"),
+                        description,
+                    ),
+                ],
+            ),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditEntry(id), &entry);
+
+        // Store provenance chain link
+        let link = ProvenanceLink {
+            entry_id: id,
+            data_hash,
+            parent_hash,
+            created_at: env.ledger().timestamp(),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ProvenanceLink(id), &link);
+
+        // Index by actor
+        let mut user_audits: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserAudits(actor.clone()))
+            .unwrap_or(Vec::new(&env));
+        user_audits.push_back(id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserAudits(actor), &user_audits);
+
+        env.events().publish(
+            (symbol_short!("PROV"), symbol_short!("NEW")),
+            (id, data_hash),
+        );
+
+        id
+    }
+
+    /// Verify a provenance chain by walking parent hashes from a given entry.
+    /// Returns true if the chain is valid (every parent_hash matches the previous entry's data_hash).
+    pub fn verify_provenance_chain(
+        env: Env,
+        start_entry_id: u64,
+        expected_root_hash: BytesN<32>,
+    ) -> bool {
+        let mut current_id = start_entry_id;
+        let max_depth = 100u32; // prevent infinite loops
+
+        for _ in 0..max_depth {
+            let link: ProvenanceLink = match env
+                .storage()
+                .persistent()
+                .get(&DataKey::ProvenanceLink(current_id))
+            {
+                Some(l) => l,
+                None => return false,
+            };
+
+            if link.parent_hash.is_none() {
+                // Root of the chain — compare with expected root
+                return link.data_hash == expected_root_hash;
+            }
+
+            if let Some(parent) = link.parent_hash {
+                // Walk to parent
+                // The parent_hash should match the data_hash of the previous entry
+                current_id = current_id.saturating_sub(1);
+                if let Some(prev_link) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, ProvenanceLink>(&DataKey::ProvenanceLink(current_id))
+                {
+                    if prev_link.data_hash != parent {
+                        return false;
+                    }
+                } else {
+                    return false;
+                }
+            }
+        }
+        false
+    }
+
+    /// Record an evidence submission with a content hash for tamper detection.
+    pub fn record_evidence(
+        env: Env,
+        actor: Address,
+        case_id: u64,
+        evidence_type: String,
+        content_hash: BytesN<32>,
+        metadata: Map<String, String>,
+    ) -> u64 {
+        actor.require_auth();
+
+        let id = Self::next_counter(&env, &DataKey::NextAuditId);
+        let entry = AuditEntry {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: actor.clone(),
+            action: AuditAction::RecordCreated,
+            record_id: Some(case_id),
+            details_hash: content_hash,
+            metadata,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditEntry(id), &entry);
+
+        // Store evidence record
+        let evidence = EvidenceRecord {
+            entry_id: id,
+            case_id,
+            evidence_type,
+            content_hash,
+            submitted_by: actor.clone(),
+            submitted_at: env.ledger().timestamp(),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::EvidenceRecord(id), &evidence);
+
+        // Index evidence by case
+        let mut case_evidence: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CaseEvidence(case_id))
+            .unwrap_or(Vec::new(&env));
+        case_evidence.push_back(id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::CaseEvidence(case_id), &case_evidence);
+
+        env.events().publish(
+            (symbol_short!("EVID"), symbol_short!("NEW")),
+            (id, case_id, content_hash),
+        );
+
+        id
+    }
+
+    /// Verify that evidence content matches the stored hash.
+    pub fn verify_evidence_integrity(
+        env: Env,
+        evidence_entry_id: u64,
+        claimed_hash: BytesN<32>,
+    ) -> bool {
+        let evidence: EvidenceRecord = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::EvidenceRecord(evidence_entry_id))
+        {
+            Some(e) => e,
+            None => return false,
+        };
+        evidence.content_hash == claimed_hash
+    }
+
+    /// Get all evidence entries for a case.
+    pub fn get_case_evidence(env: Env, case_id: u64) -> Vec<EvidenceRecord> {
+        let ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::CaseEvidence(case_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut evidence = Vec::new(&env);
+        for id in ids.iter() {
+            if let Some(e) = env
+                .storage()
+                .persistent()
+                .get::<_, EvidenceRecord>(&DataKey::EvidenceRecord(id))
+            {
+                evidence.push_back(e);
+            }
+        }
+        evidence
+    }
+
+    /// Get a provenance link by entry ID.
+    pub fn get_provenance_link(env: Env, entry_id: u64) -> Option<ProvenanceLink> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ProvenanceLink(entry_id))
+    }
+
+    // ─── Configurable Export Windows (Issue #1171) ───────────────────────────
+
+    /// Set the export configuration for audit logs (admin only).
+    pub fn set_export_config(
+        env: Env,
+        admin: Address,
+        config: ExportConfig,
+    ) -> Result<(), AuditForensicsError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin);
+
+        if config.window_days == 0 {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportConfig, &config);
+        env.storage().instance().set(&DataKey::NextExportId, &0u64);
+
+        env.events().publish(
+            (symbol_short!("EXPORT"), symbol_short!("CFG_SET")),
+            (config.window_days, config.max_batch_size, config.enabled),
+        );
+
+        Ok(())
+    }
+
+    /// Get the current export configuration.
+    pub fn get_export_config(env: Env) -> Option<ExportConfig> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ExportConfig)
+    }
+
+    /// Export audit logs within a given ID range (requires admin).
+    /// Respects the configured export window and batch size.
+    pub fn export_audit_logs(
+        env: Env,
+        admin: Address,
+        start_id: u64,
+        end_id: u64,
+    ) -> Result<Vec<AuditEntry>, AuditForensicsError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin);
+
+        let config: ExportConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::ExportConfig)
+            .ok_or(AuditForensicsError::ExportConfigNotFound)?;
+
+        if !config.enabled {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        let batch_size = end_id.saturating_sub(start_id).saturating_add(1);
+        if batch_size > config.max_batch_size as u64 {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        let mut results = Vec::new(&env);
+        for i in start_id..=end_id {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, AuditEntry>(&DataKey::AuditEntry(i))
+            {
+                results.push_back(entry);
+            }
+        }
+
+        let export_id = Self::next_counter(&env, &DataKey::NextExportId);
+        let status = ExportStatus {
+            entry_count: results.len(),
+            exported_at: env.ledger().timestamp(),
+            exported_by: admin.clone(),
+            window_open: true,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExportStatus(export_id), &status);
+
+        env.events().publish(
+            (symbol_short!("EXPORT"), symbol_short!("LOGS")),
+            (export_id, results.len(), start_id, end_id),
+        );
+
+        Ok(results)
+    }
+
+    /// Get the status of a previous export operation.
+    pub fn get_export_status(env: Env, export_id: u64) -> Option<ExportStatus> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExportStatus(export_id))
     }
 }

@@ -4,10 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = { workspace = true }
+soroban-sdk = { version = "=21.7.7" }
+governance_commons = { path = "../../libs/governance_commons" }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

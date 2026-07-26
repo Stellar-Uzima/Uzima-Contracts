@@ -7,6 +7,7 @@ pub const MAX_BPS: u32 = 10_000;
 pub const HIGH_RISK_THRESHOLD_BPS: u32 = 7_500;
 pub const SECONDS_PER_DAY: u64 = 24 * 3600;
 
+#[must_use]
 pub fn load_config(env: &Env) -> Result<PredictionConfig, Error> {
     env.storage()
         .instance()
@@ -14,6 +15,7 @@ pub fn load_config(env: &Env) -> Result<PredictionConfig, Error> {
         .ok_or(Error::ConfigNotSet)
 }
 
+#[must_use]
 pub fn ensure_admin(env: &Env, caller: &Address) -> Result<PredictionConfig, Error> {
     let config = load_config(env)?;
     if config.admin != *caller {
@@ -22,6 +24,7 @@ pub fn ensure_admin(env: &Env, caller: &Address) -> Result<PredictionConfig, Err
     Ok(config)
 }
 
+#[must_use]
 pub fn ensure_predictor(env: &Env, caller: &Address) -> Result<PredictionConfig, Error> {
     let config = load_config(env)?;
     if config.predictor != *caller {
@@ -44,6 +47,7 @@ pub fn next_prediction_id(env: &Env) -> u64 {
     next
 }
 
+#[must_use]
 pub fn validate_bps(value: u32, error: Error) -> Result<(), Error> {
     if value > MAX_BPS {
         return Err(error);

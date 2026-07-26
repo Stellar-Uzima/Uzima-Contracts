@@ -1,3 +1,4 @@
+//! predictive_analytics - Healthcare smart contract on Stellar blockchain.
 // Predictive Analytics Contract - Health predictions with proper validation
 #![no_std]
 #![allow(clippy::too_many_arguments)]
@@ -47,14 +48,35 @@ impl PredictiveAnalyticsContract {
         new_min_confidence: Option<u32>,
         enabled: Option<bool>,
     ) -> Result<bool, Error> {
-        config::update_config(
-            env,
-            caller,
-            new_predictor,
-            new_horizon,
-            new_min_confidence,
-            enabled,
-        )
+        caller.require_auth();
+        let mut config = Self::ensure_admin(&env, &caller)?;
+
+        if let Some(predictor) = new_predictor {
+            config.predictor = predictor;
+        }
+
+        if let Some(horizon) = new_horizon {
+            if horizon == 0 {
+                return Err(Error::InvalidHorizon);
+            }
+            config.prediction_horizon_days = horizon;
+        }
+
+        if let Some(min_conf) = new_min_confidence {
+            if min_conf > 10_000 {
+                return Err(Error::InvalidConfidence);
+            }
+            config.min_confidence_bps = min_conf;
+        }
+
+        if let Some(enable_flag) = enabled {
+            config.enabled = enable_flag;
+        }
+
+        env.storage().instance().set(&DataKey::Config, &config);
+        env.events().publish((Symbol::new(&env, "cfg_update"),), true);
+
+        Ok(true)
     }
 
     pub fn make_prediction(

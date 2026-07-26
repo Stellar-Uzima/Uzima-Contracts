@@ -1,0 +1,24 @@
+[package]
+name = "contract_behavior_fuzzing"
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/soroban-project"
+
+[lib]
+doctest = false
+
+[dependencies]
+
+[dev-dependencies]
+identity_registry = { path = "../identity_registry" }
+medical_records = { path = "../medical_records" }
+proptest = "1.6.0"
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+sut_token = { path = "../sut_token" }
+token_sale = { path = "../token_sale" }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "description": "Repository-wide performance budgets for Soroban contracts. Ties code changes to WASM size, storage growth and instruction cost. Regenerate with `bash scripts/performance_budget_gate.sh --update` after an intended, reviewed change.",
+  "docs": "docs/PERFORMANCE_BUDGETS.md",
+  "limits": {
+    "max_wasm_size_bytes": 65536,
+    "warn_wasm_size_bytes": 61440,
+    "max_storage_entries": 500,
+    "warn_storage_entries": 100,
+    "max_cpu_instructions": 10000000,
+    "warn_cpu_instructions": 5000000
+  },
+  "regression": {
+    "wasm_size_pct": 10,
+    "storage_entries_pct": 15,
+    "cpu_instructions_pct": 15,
+    "min_wasm_delta_bytes": 512,
+    "min_cpu_delta_instructions": 50000
+  },
+  "excluded": [
+    "load_testing"
+  ],
+  "tiers": {
+    "critical": "Tracked contract at or near a hard Soroban limit. Any regression is gated.",
+    "standard": "Tracked contract with headroom. Gated on relative regression only."
+  },
+  "contracts": {
+    "ihe_integration": {
+      "tier": "critical",
+      "wasm_size": 92975,
+      "grandfathered_over_size_limit": true
+    },
+    "identity_registry": {
+      "tier": "critical",
+      "wasm_size": 92141,
+      "grandfathered_over_size_limit": true
+    },
+    "zkp_registry": {
+      "tier": "critical",
+      "wasm_size": 76333,
+      "grandfathered_over_size_limit": true
+    },
+    "medical_record_backup": {
+      "tier": "critical",
+      "wasm_size": 73628,
+      "grandfathered_over_size_limit": true
+    },
+    "cross_chain_bridge": {
+      "tier": "critical",
+      "wasm_size": 71722,
+      "grandfathered_over_size_limit": true
+    },
+    "emr_integration": {
+      "tier": "critical",
+      "wasm_size": 69343,
+      "grandfathered_over_size_limit": true
+    },
+    "public_health_surveillance": {
+      "tier": "critical",
+      "wasm_size": 63828,
+      "grandfathered_over_size_limit": false
+    },
+    "notification_system": {
+      "tier": "critical",
+      "wasm_size": 61909,
+      "grandfathered_over_size_limit": false
+    },
+    "genomic_data": {
+      "tier": "critical",
+      "wasm_size": 61216,
+      "grandfathered_over_size_limit": false
+    },
+    "healthcare_payment": {
+      "tier": "critical",
+      "wasm_size": 54365,
+      "grandfathered_over_size_limit": false
+    },
+    "homomorphic_registry": {
+      "tier": "standard",
+      "wasm_size": 48876,
+      "grandfathered_over_size_limit": false
+    },
+    "explainable_ai": {
+      "tier": "standard",
+      "wasm_size": 44708,
+      "grandfathered_over_size_limit": false
+    },
+    "cross_chain_access": {
+      "tier": "standard",
+      "wasm_size": 43934,
+      "grandfathered_over_size_limit": false
+    },
+    "audit_forensics": {
+      "tier": "standard",
+      "wasm_size": 43684,
+      "grandfathered_over_size_limit": false
+    }
+  }
+}

@@ -26,7 +26,7 @@ impl Queries {
     /// Get role information for an address
     pub fn get_address_role_info(env: &Env, address: &Address) -> AddressRoles {
         let roles = Storage::get_address_roles(env, address);
-        let role_count = roles.len() as u32;
+        let role_count = roles.len();
 
         AddressRoles {
             address: address.clone(),

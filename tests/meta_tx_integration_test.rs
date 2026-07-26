@@ -1,356 +1,187 @@
-#![cfg(test)]
+//! Meta-Transaction Integration Tests — refactored onto `TestWorld`
+//!
+//! Meta-transactions allow a *relayer* to submit a signed user transaction on
+//! the user's behalf, paying the fee while the user's intent is verified
+//! on-chain.  These tests exercise the `meta_tx_relay` contract in combination
+//! with `did_registry` (for signer identity) and `medical_records_stub` (as a
+//! target contract whose functions get invoked via the relayer).
 
-//! # Meta-Transaction Integration Tests
-//! 
-//! This test suite demonstrates the complete flow of meta-transactions
-//! from user signing to contract execution.
+use integration_framework::prelude::*;
 
-use soroban_sdk::{
-    testutils::{Address as _, Ledger},
-    Address, Bytes, BytesN, Env, String, Vec,
-};
-
-// Note: In a real implementation, you would import the actual contract clients
-// For this example, we'll use mock structures
-
-/// Test the complete meta-transaction flow
-#[test]
-fn test_meta_transaction_flow() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    // Setup: Create addresses
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let patient = Address::generate(&env);
-    let doctor = Address::generate(&env);
-    
-    // Step 1: Deploy and initialize forwarder
-    // let forwarder = deploy_forwarder(&env);
-    // forwarder.initialize(&owner, &fee_collector, &1000000i128);
-    
-    // Step 2: Register relayer
-    // forwarder.register_relayer(&owner, &relayer, &100u32);
-    
-    // Step 3: Deploy and initialize medical records contract
-    // let medical_records = deploy_medical_records(&env);
-    // medical_records.initialize(&owner, Some(forwarder.address));
-    
-    // Step 4: Setup roles
-    // medical_records.manage_user(&owner, &doctor, Role::Doctor);
-    // medical_records.manage_user(&owner, &patient, Role::Patient);
-    
-    // Step 5: Patient creates a meta-transaction request
-    let nonce = 0u64;
-    let deadline = env.ledger().timestamp() + 3600;
-    
-    // Create forward request (patient wants to grant access)
-    // let request = ForwardRequest {
-    //     from: patient.clone(),
-    //     to: medical_records.address.clone(),
-    //     value: 0,
-    //     gas: 100000,
-    //     nonce,
-    //     deadline,
-    //     data: encode_grant_access_call(doctor.clone()),
-    // };
-    
-    // Step 6: Patient signs the request (off-chain)
-    // let signature = sign_request(&patient_private_key, &request);
-    
-    // Step 7: Relayer submits to forwarder
-    // let result = forwarder.execute(&relayer, &request, &signature);
-    // assert!(result.is_ok());
-    
-    // Step 8: Verify the action was executed with correct sender
-    // let has_access = medical_records.check_access(&patient, &doctor);
-    // assert!(has_access);
-    
-    // Verify nonce was incremented
-    // let new_nonce = forwarder.get_nonce(&patient);
-    // assert_eq!(new_nonce, 1);
+mod meta_tx_relay {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32-unknown-unknown/release/meta_tx_relay.wasm"
+    );
 }
 
-/// Test batch meta-transaction execution
-#[test]
-fn test_batch_meta_transactions() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let patient = Address::generate(&env);
-    let doctor1 = Address::generate(&env);
-    let doctor2 = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // Create multiple requests
-    // let requests = vec![
-    //     create_grant_access_request(patient, doctor1, 0),
-    //     create_grant_access_request(patient, doctor2, 1),
-    // ];
-    
-    // Sign all requests
-    // let signatures = requests.iter().map(|r| sign_request(&patient_key, r)).collect();
-    
-    // Execute batch
-    // let results = forwarder.execute_batch(&relayer, &requests, &signatures);
-    // assert_eq!(results.len(), 2);
-    
-    // Verify both actions were executed
-    // assert!(medical_records.check_access(&patient, &doctor1));
-    // assert!(medical_records.check_access(&patient, &doctor2));
+mod did_registry {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32-unknown-unknown/release/did_registry.wasm"
+    );
 }
 
-/// Test meta-transaction with expired deadline
-#[test]
-fn test_expired_meta_transaction() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let patient = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // Create request with past deadline
-    // let request = ForwardRequest {
-    //     from: patient.clone(),
-    //     to: medical_records.address.clone(),
-    //     value: 0,
-    //     gas: 100000,
-    //     nonce: 0,
-    //     deadline: env.ledger().timestamp() - 1, // Already expired
-    //     data: Bytes::new(&env),
-    // };
-    
-    // let signature = sign_request(&patient_key, &request);
-    
-    // Try to execute - should fail
-    // let result = forwarder.try_execute(&relayer, &request, &signature);
-    // assert!(result.is_err());
+mod medical_records_stub {
+    soroban_sdk::contractimport!(
+        file = "../../target/wasm32-unknown-unknown/release/medical_records.wasm"
+    );
 }
 
-/// Test meta-transaction with invalid nonce
-#[test]
-fn test_invalid_nonce_meta_transaction() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let patient = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // Create request with wrong nonce
-    // let request = ForwardRequest {
-    //     from: patient.clone(),
-    //     to: medical_records.address.clone(),
-    //     value: 0,
-    //     gas: 100000,
-    //     nonce: 999, // Wrong nonce
-    //     deadline: env.ledger().timestamp() + 3600,
-    //     data: Bytes::new(&env),
-    // };
-    
-    // let signature = sign_request(&patient_key, &request);
-    
-    // Try to execute - should fail
-    // let result = forwarder.try_execute(&relayer, &request, &signature);
-    // assert!(result.is_err());
+// ─── helpers ────────────────────────────────────────────────────────────────
+
+struct MetaTxContext<'e> {
+    world:   TestWorld,
+    relay:   meta_tx_relay::Client<'e>,
+    did:     did_registry::Client<'e>,
+    records: medical_records_stub::Client<'e>,
+    admin:   Address,
+    user:    Address,
+    relayer: Address,
 }
 
-/// Test meta-transaction with unauthorized relayer
-#[test]
-fn test_unauthorized_relayer() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let unauthorized_relayer = Address::generate(&env);
-    let patient = Address::generate(&env);
-    
-    // Setup contracts (but don't register unauthorized_relayer)
-    // ...
-    
-    // Create valid request
-    // let request = ForwardRequest {
-    //     from: patient.clone(),
-    //     to: medical_records.address.clone(),
-    //     value: 0,
-    //     gas: 100000,
-    //     nonce: 0,
-    //     deadline: env.ledger().timestamp() + 3600,
-    //     data: Bytes::new(&env),
-    // };
-    
-    // let signature = sign_request(&patient_key, &request);
-    
-    // Try to execute with unauthorized relayer - should fail
-    // let result = forwarder.try_execute(&unauthorized_relayer, &request, &signature);
-    // assert!(result.is_err());
+fn setup<'e>() -> MetaTxContext<'e> {
+    let mut world = TestWorld::new();
+
+    let did_addr     = world.register_contract("did_registry",     did_registry::WASM);
+    let relay_addr   = world.register_contract("meta_tx_relay",    meta_tx_relay::WASM);
+    let records_addr = world.register_contract("medical_records",  medical_records_stub::WASM);
+
+    let env = unsafe { &*(world.env() as *const Env) };
+
+    let relay   = meta_tx_relay::Client::new(env, &relay_addr);
+    let did     = did_registry::Client::new(env, &did_addr);
+    let records = medical_records_stub::Client::new(env, &records_addr);
+
+    let admin   = world.new_account();
+    let user    = world.new_account();
+    let relayer = world.new_account();
+
+    did.initialize(&admin);
+    relay.initialize(&admin, &did_addr);
+    records.initialize(&admin);
+
+    // Register the user's DID so the relay can verify their identity.
+    let did_doc = soroban_sdk::String::from_str(
+        env,
+        r#"{"id":"did:uzima:meta-user","controller":"did:uzima:meta-user"}"#,
+    );
+    did.register(&user, &did_doc);
+
+    MetaTxContext { world, relay, did, records, admin, user, relayer }
 }
 
-/// Test meta-transaction for medical record creation
+// ─── tests ──────────────────────────────────────────────────────────────────
+
 #[test]
-fn test_gasless_medical_record_creation() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let doctor = Address::generate(&env);
-    let patient = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // Doctor creates a medical record via meta-transaction
-    // let diagnosis = String::from_str(&env, "Common cold");
-    // let treatment = String::from_str(&env, "Rest and fluids");
-    
-    // let request = ForwardRequest {
-    //     from: doctor.clone(),
-    //     to: medical_records.address.clone(),
-    //     value: 0,
-    //     gas: 200000,
-    //     nonce: 0,
-    //     deadline: env.ledger().timestamp() + 3600,
-    //     data: encode_add_record_call(patient, diagnosis, treatment, ...),
-    // };
-    
-    // let signature = sign_request(&doctor_key, &request);
-    
-    // Execute via forwarder
-    // let result = forwarder.execute(&relayer, &request, &signature);
-    // assert!(result.is_ok());
-    
-    // Verify record was created with correct doctor
-    // let record = medical_records.read_record(&patient, 1);
-    // assert_eq!(record.doctor_id, doctor);
+fn test_relayer_submits_valid_meta_tx_on_behalf_of_user() {
+    let ctx = setup();
+    let _ = &ctx.world;
+
+    let nonce     = 1u64;
+    let target    = ctx.world.address_of("medical_records");
+    let fn_name   = soroban_sdk::Symbol::new(ctx.world.env(), "add_record");
+    let payload   = soroban_sdk::Bytes::from_slice(ctx.world.env(), b"encrypted-health-data");
+
+    // The relay contract validates the DID, checks nonce, then dispatches.
+    ctx.relay.relay(
+        &ctx.relayer,
+        &ctx.user,
+        &nonce,
+        &target,
+        &fn_name,
+        &payload,
+    );
+
+    // Verify the record was actually written.
+    let stored = ctx.records.get_latest_record(&ctx.user);
+    assert_eq!(stored, payload, "Medical record should be stored after relay dispatch");
 }
 
-/// Test meta-transaction for identity registration
 #[test]
-fn test_gasless_identity_registration() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let user = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // User registers identity via meta-transaction
-    // let hash = BytesN::from_array(&env, &[1u8; 32]);
-    // let meta = String::from_str(&env, "Patient identity");
-    
-    // let request = ForwardRequest {
-    //     from: user.clone(),
-    //     to: identity_registry.address.clone(),
-    //     value: 0,
-    //     gas: 100000,
-    //     nonce: 0,
-    //     deadline: env.ledger().timestamp() + 3600,
-    //     data: encode_register_identity_call(hash, meta),
-    // };
-    
-    // let signature = sign_request(&user_key, &request);
-    
-    // Execute via forwarder
-    // let result = forwarder.execute(&relayer, &request, &signature);
-    // assert!(result.is_ok());
-    
-    // Verify identity was registered
-    // let identity = identity_registry.get_identity(&user);
-    // assert!(identity.is_some());
+fn test_replay_attack_is_rejected() {
+    let ctx = setup();
+    let _ = &ctx.world;
+
+    let nonce   = 1u64;
+    let target  = ctx.world.address_of("medical_records");
+    let fn_name = soroban_sdk::Symbol::new(ctx.world.env(), "add_record");
+    let payload = soroban_sdk::Bytes::from_slice(ctx.world.env(), b"replay-payload");
+
+    // First submission succeeds.
+    ctx.relay.relay(&ctx.relayer, &ctx.user, &nonce, &target, &fn_name, &payload);
+
+    // Resubmitting the same nonce must fail.
+    let replay = ctx.relay.try_relay(
+        &ctx.relayer,
+        &ctx.user,
+        &nonce,   // same nonce
+        &target,
+        &fn_name,
+        &payload,
+    );
+    assert!(replay.is_err(), "Relay should reject a replayed nonce");
 }
 
-/// Test relayer fee calculation
 #[test]
-fn test_relayer_fee_calculation() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let user = Address::generate(&env);
-    
-    // Setup forwarder with 1% fee (100 basis points)
-    // forwarder.initialize(&owner, &fee_collector, &1000000i128);
-    // forwarder.register_relayer(&owner, &relayer, &100u32);
-    
-    // Get relayer config
-    // let config = forwarder.get_relayer_config(&relayer);
-    // assert_eq!(config.unwrap().fee_percentage, 100);
-    
-    // Calculate fee for a transaction
-    // let transaction_value = 1000i128;
-    // let fee = (transaction_value * config.unwrap().fee_percentage as i128) / 10000;
-    // assert_eq!(fee, 10); // 1% of 1000 = 10
+fn test_relay_rejects_unregistered_did() {
+    let ctx = setup();
+    let _ = &ctx.world;
+
+    let unknown = ctx.world.new_account(); // no DID registered
+    let nonce   = 1u64;
+    let target  = ctx.world.address_of("medical_records");
+    let fn_name = soroban_sdk::Symbol::new(ctx.world.env(), "add_record");
+    let payload = soroban_sdk::Bytes::from_slice(ctx.world.env(), b"bad-actor-data");
+
+    let result = ctx.relay.try_relay(
+        &ctx.relayer,
+        &unknown,
+        &nonce,
+        &target,
+        &fn_name,
+        &payload,
+    );
+    assert!(
+        result.is_err(),
+        "Relay should reject meta-tx from a user without a registered DID"
+    );
 }
 
-/// Test nonce management across multiple transactions
 #[test]
-fn test_nonce_management() {
-    let env = Env::default();
-    env.mock_all_auths();
-    
-    let owner = Address::generate(&env);
-    let fee_collector = Address::generate(&env);
-    let relayer = Address::generate(&env);
-    let user = Address::generate(&env);
-    
-    // Setup contracts
-    // ...
-    
-    // Execute multiple transactions and verify nonce increments
-    // for i in 0..5 {
-    //     let request = create_test_request(user.clone(), i);
-    //     let signature = sign_request(&user_key, &request);
-    //     
-    //     let result = forwarder.execute(&relayer, &request, &signature);
-    //     assert!(result.is_ok());
-    //     
-    //     let nonce = forwarder.get_nonce(&user);
-    //     assert_eq!(nonce, i + 1);
-    // }
+fn test_nonce_increments_correctly_across_multiple_relays() {
+    let ctx = setup();
+    let _ = &ctx.world;
+
+    let target  = ctx.world.address_of("medical_records");
+    let fn_name = soroban_sdk::Symbol::new(ctx.world.env(), "add_record");
+
+    for nonce in 1u64..=5 {
+        let payload = soroban_sdk::Bytes::from_slice(
+            ctx.world.env(),
+            alloc::format!("record-{}", nonce).as_bytes(),
+        );
+        ctx.relay.relay(&ctx.relayer, &ctx.user, &nonce, &target, &fn_name, &payload);
+    }
+
+    let current_nonce = ctx.relay.get_nonce(&ctx.user);
+    assert_eq!(current_nonce, 5u64, "Nonce should reflect the number of successful relays");
 }
 
-// Helper functions (would be implemented in actual test)
+#[test]
+fn test_relay_respects_out_of_order_nonce_rejection() {
+    let ctx = setup();
+    let _ = &ctx.world;
 
-// fn deploy_forwarder(env: &Env) -> MetaTxForwarderClient {
-//     // Deploy forwarder contract
-//     unimplemented!()
-// }
+    let target  = ctx.world.address_of("medical_records");
+    let fn_name = soroban_sdk::Symbol::new(ctx.world.env(), "add_record");
+    let payload = soroban_sdk::Bytes::from_slice(ctx.world.env(), b"ooo");
 
-// fn deploy_medical_records(env: &Env) -> MedicalRecordsClient {
-//     // Deploy medical records contract
-//     unimplemented!()
-// }
+    // Submit nonce 1 first.
+    ctx.relay.relay(&ctx.relayer, &ctx.user, &1u64, &target, &fn_name, &payload);
 
-// fn sign_request(private_key: &PrivateKey, request: &ForwardRequest) -> BytesN<64> {
-//     // Sign the request using Ed25519
-//     unimplemented!()
-// }
+    // Attempt to submit nonce 3 (skipping 2) should be rejected.
+    let result = ctx.relay.try_relay(&ctx.relayer, &ctx.user, &3u64, &target, &fn_name, &payload);
+    assert!(result.is_err(), "Relay should reject out-of-order nonces");
+}
 
-// fn encode_add_record_call(...) -> Bytes {
-//     // Encode function call data
-//     unimplemented!()
-// }
+// ─── allow alloc in no_std context ──────────────────────────────────────────
+extern crate alloc;

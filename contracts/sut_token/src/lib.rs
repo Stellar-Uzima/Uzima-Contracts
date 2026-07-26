@@ -1,3 +1,4 @@
+//! sut_token - Healthcare smart contract on Stellar blockchain.
 // SUT Token - Stellar Utility Token with checked arithmetic throughout
 #![no_std]
 #![allow(clippy::arithmetic_side_effects)]
@@ -27,6 +28,24 @@ pub enum Error {
     SnapshotNotFound = 9,
     Overflow = 10,
     IndexOutOfBounds = 11,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::InsufficientBalance => write!(f, "insufficient balance"),
+            Error::InsufficientAllowance => write!(f, "insufficient allowance"),
+            Error::ExceedsSupplyCap => write!(f, "exceeds supply cap"),
+            Error::InvalidAmount => write!(f, "invalid amount"),
+            Error::InvalidAddress => write!(f, "invalid address"),
+            Error::SnapshotNotFound => write!(f, "snapshot not found"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::IndexOutOfBounds => write!(f, "index out of bounds"),
+        }
+    }
 }
 
 // Data structures
@@ -127,10 +146,8 @@ impl SutToken {
         decimals: u32,
         supply_cap: i128,
     ) -> Result<(), Error> {
-        // Check if already initialized
-        if env.storage().instance().has(&DataKey::Metadata) {
-            return Err(Error::AlreadyInitialized);
-        }
+        // Re-initialization guard (uses governance_commons' dedicated key)
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         // Validate inputs
         if supply_cap <= 0 {

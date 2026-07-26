@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Stellar-Uzima/Uzima-Contracts/schemas/interface-registry/registry.schema.json",
+  "title": "Uzima Contract Interface Registry",
+  "description": "Versioned registry of contract ABI snapshots and SDK compatibility metadata.",
+  "type": "object",
+  "required": ["registry_version", "generated_at", "generator", "contracts"],
+  "properties": {
+    "registry_version": {
+      "type": "string",
+      "description": "Semver version of the registry format itself."
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of when this registry snapshot was produced."
+    },
+    "generator": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+    "contracts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ContractEntry"
+      }
+    }
+  },
+  "$defs": {
+    "ContractEntry": {
+      "type": "object",
+      "required": ["name", "version", "enums", "interfaces"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Contract identifier (directory name under contracts/)."
+        },
+        "version": {
+          "type": "string",
+          "description": "User-facing version string for the contract's public API surface."
+        },
+        "enums": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/EnumEntry" }
+        },
+        "interfaces": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/InterfaceEntry" }
+        }
+      }
+    },
+    "EnumEntry": {
+      "type": "object",
+      "required": ["name", "values"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["member", "value"],
+            "properties": {
+              "member": { "type": "string" },
+              "value": { "type": "string" },
+              "description": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "InterfaceEntry": {
+      "type": "object",
+      "required": ["name", "fields"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "contractName": { "type": "string" },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FieldEntry" }
+        }
+      }
+    },
+    "FieldEntry": {
+      "type": "object",
+      "required": ["name", "type"],
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "optional": { "type": "boolean" }
+      }
+    }
+  }
+}

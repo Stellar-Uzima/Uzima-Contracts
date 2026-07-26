@@ -6,7 +6,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 
 ---
 
-## � Table of Contents
+## 📋 Table of Contents
 
 - [Project Overview](#project-overview)
 - [Setup Instructions](#setup-instructions)
@@ -25,6 +25,10 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Architecture Decision Records](#architecture-decision-records)
+- [Contract Review Checklist](#contract-review-checklist)
+- [Troubleshooting](#troubleshooting)
+- [FAQ](#frequently-asked-questions-faq)
 - [License](#license)
 
 ---
@@ -47,6 +51,48 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 - Patients seeking control over their medical data
 - Traditional medicine practitioners
 
+## Storage Budget Tracking
+
+The project includes automated **storage budget measurement** for all Soroban contracts. After each wasm32 build, the CI pipeline runs `scripts/measure_storage.sh` to compute:
+
+- **WASM binary size** — contract bytecode size (must be ≤ 64 KB)
+- **Estimated storage entries** — number of ledger entries a typical deployment uses
+- **Estimated ledger cost** — approximate XLM cost for 2 years of storage rent
+- **CPU instruction cost** — from storage benchmark tests (where available)
+
+### Current Storage Leaderboard
+
+_Top 5 contracts by estimated storage cost (from latest CI run):_
+
+| # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) |
+|---|----------|----------|-------------|-----------------|
+| 1 | — | — | — | — |
+
+> Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release` to regenerate.
+> Full Pareto report (top 10) is uploaded as a CI artifact (`reports/storage_pareto_top10.txt`).
+
+### Thresholds
+
+Thresholds are defined in [`docs/CONTRACT_RESOURCE_LIMITS.md`](docs/CONTRACT_RESOURCE_LIMITS.md) and enforced in CI:
+
+| Metric | Warning | Critical |
+|--------|---------|----------|
+| Contract size | > 51.2 KB (80%) | > 62.3 KB (95%) |
+| Storage entries | > 100 | > 500 |
+| CPU instructions | > 5,000,000 | > 10,000,000 |
+
+## 🔧 Contract Optimization Engine
+
+The project includes an advanced **Contract Optimization Recommendations Engine** that analyzes smart contracts and provides actionable recommendations for:
+
+- **Gas Optimization**: Reduce transaction costs through efficient code patterns
+- **Storage Efficiency**: Optimize data storage and access patterns
+- **Algorithm Optimization**: Improve computational efficiency
+- **Batching Opportunities**: Group operations to minimize overhead
+- **Parallelization Possibilities**: Identify opportunities for concurrent execution
+
+The engine integrates with CI/CD pipelines to automatically review pull requests and track recommendation accuracy over time.
+
 ---
 
 ## 🚀 Setup Instructions
@@ -66,49 +112,58 @@ Get up and running in under 5 minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/Uzima-Contracts.git
+git clone https://github.com/Stellar-Uzima/Uzima-Contracts.git
 cd Uzima-Contracts
 
-# Run the automated setup script
+# Run the automated setup (installs pinned Rust + Soroban versions, builds, tests)
 chmod +x setup.sh
 ./setup.sh
 
-# Or use the Makefile for step-by-step setup
-make setup
+# Or use the Makefile for individual steps
+make install-deps   # Install Rust toolchain + Soroban CLI
+make build          # Build all contracts
+make test           # Run all tests
 ```
 
 ### 🔧 Environment Setup
 
 #### Option 1: Automated Setup (Recommended)
 
-The `setup.sh` script handles everything automatically:
+The `setup.sh` script handles everything automatically. It reads the pinned
+versions from `rust-toolchain.toml` and `Cargo.toml` so you get exactly the
+right toolchain:
 
 ```bash
 ./setup.sh
 ```
 
 This script will:
-- Install Rust 1.78.0 and required targets
+- Install the Rust version pinned in `rust-toolchain.toml` (currently 1.92.0)
+- Add the `wasm32-unknown-unknown` target, `rustfmt`, `clippy`, `rust-src`
 - Install Soroban CLI v21.7.7
-- Set up project structure
-- Configure Soroban networks (local, testnet, futurenet)
+- Configure Soroban identity and networks (local, testnet, futurenet)
 - Build the project and run tests
-- Generate default identity
+
+Use `./setup.sh --skip-build` to install tools without building.
 
 #### Option 2: Manual Setup
 
 ```bash
-# Install Rust targets and components
-rustup target add wasm32-unknown-unknown
-rustup component add rustfmt clippy rust-src
+# Rust 1.92.0 is pinned in rust-toolchain.toml — just install rustup
+# and it will auto-install the correct version:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
 
-# Install Soroban CLI
+# Verify Rust version (should be 1.92.0)
+rustc --version
+
+# Install Soroban CLI (version pinned in Cargo.toml)
 cargo install --locked --version 21.7.7 soroban-cli
 
 # Configure Soroban
 soroban config identity generate default
 soroban config network add local \
-  --rpc-url http://localhost:8000/soroban/rpc \
+  --rpc-url http://localhost:8000/soroban/r \
   --network-passphrase "Standalone Network ; February 2017"
 
 # Build the project
@@ -132,6 +187,18 @@ cargo test --all
 # Run specific test types
 make test-unit          # Unit tests only
 make test-integration   # Integration tests only
+
+# Test the optimization engine
+./scripts/test_optimizer.sh
+
+# Run optimization analysis
+make optimize
+
+# Generate optimization report
+make analyze-optimizations
+
+# View optimization metrics
+make optimization-metrics
 ```
 
 ### 🌐 Network Configuration
@@ -207,6 +274,7 @@ These diagrams provide essential context for understanding:
 - Fully testable, modular, and CI-enabled
 - Gas-efficient contract design
 - Decentralized governance with Governor + Timelock (proposals, voting, queued execution)
+- Upgrade-safe deprecation tracking for legacy contract entrypoints with warning events and migration guides
 
 ---
 
@@ -619,6 +687,7 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 ### Documentation
 - [API Reference](./docs/api.md) - Complete contract API documentation and stability guarantees
 - [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Type Safety Guidelines](./docs/TYPE_SAFETY_GUIDELINES.md) - Best practices for Soroban type safety
 - [Contract Resource Limits](./docs/CONTRACT_RESOURCE_LIMITS.md) - Storage, execution, and batch constraints for all contracts
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
 - [Stellar Developer Portal](https://developers.stellar.org/) - Stellar ecosystem
@@ -665,7 +734,9 @@ We welcome contributions from the community! Please follow these guidelines to e
    - Run `cargo clippy` for linting
    - Ensure all tests pass: `cargo test`
 
-3. **Test thoroughly**:
+3. **Review the contract review checklist** in [docs/contract-review-checklist.md](docs/contract-review-checklist.md)
+
+4. **Test thoroughly**:
    ```bash
    make test          # Run all tests
    make check         # Run formatting, linting, and tests
@@ -702,6 +773,19 @@ All PRs undergo:
 3. **Integration testing** on testnet
 4. **Security audit** for significant changes
 
+## Contract Review Checklist
+Review contract submissions using the shared checklist at [docs/contract-review-checklist.md](docs/contract-review-checklist.md).
+
+## Architecture Decision Records
+
+Significant architectural decisions are documented as Architecture Decision Records (ADRs) in [`docs/adr/`](docs/adr/).
+
+- **Process**: See [ADR-PROCESS.md](docs/adr/ADR-PROCESS.md) for the full lifecycle
+- **Template**: Use [`ADR-TEMPLATE.md`](docs/adr/ADR-TEMPLATE.md) when proposing new ADRs
+- **Existing ADRs**: ADR-001 through ADR-007 cover platform choice, consent models, governance parameters, and more
+
+When to write an ADR: choosing a new technology, changing contract interfaces, modifying governance, introducing cross-contract patterns, or any decision affecting long-term architecture.
+
 ### Definition of Done
 
 A contribution is complete when:
@@ -719,6 +803,147 @@ A contribution is complete when:
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 **Copyright © 2025 Stellar Uzima Contributors**
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues and Solutions
+
+#### Setup Issues
+
+**Problem**: Rust installation fails
+```bash
+# Solution: Use rustup installer
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
+```
+
+**Problem**: Soroban CLI not found
+```bash
+# Solution: Install with specific version
+cargo install --locked --version 21.7.7 soroban-cli
+```
+
+**Problem**: Permission denied on setup.sh
+```bash
+# Solution: Make script executable
+chmod +x setup.sh
+./setup.sh
+```
+
+#### Build Issues
+
+**Problem**: WASM target not found
+```bash
+# Solution: Add WASM target
+rustup target add wasm32-unknown-unknown
+```
+
+**Problem**: Contract compilation fails
+```bash
+# Solution: Clean and rebuild
+make clean
+make build
+```
+
+#### Network Issues
+
+**Problem**: Local network won't start
+```bash
+# Solution: Check if port is in use
+netstat -tulpn | grep :8000
+# Kill existing process if needed
+sudo kill -9 <PID>
+# Restart network
+make start-local
+```
+
+**Problem**: Testnet deployment fails
+```bash
+# Solution: Check account balance
+soroban config account show
+# Fund account if needed
+# (Use Stellar Laboratory or friendbot on testnet)
+```
+
+#### Contract Issues
+
+**Problem**: Contract not found after deployment
+```bash
+# Solution: Verify contract exists
+soroban contract invoke --id <CONTRACT_ID> --network testnet \
+  --wasm target/wasm32-unknown-unknown/release/<CONTRACT_NAME>.wasm \
+  -- function_name="get_version"
+```
+
+**Problem**: Transaction timeout
+```bash
+# Solution: Increase timeout or use local network
+soroban contract invoke --id <CONTRACT_ID> --network local \
+  --timeout 300 \
+  -- function_name="your_function"
+```
+
+### Getting Help
+
+If you encounter issues not covered here:
+
+1. **Check the logs**: Look at the full error output
+2. **Search existing issues**: Check [GitHub Issues](https://github.com/Stellar-Uzima/Uzima-Contracts/issues)
+3. **Ask for help**: Start a [GitHub Discussion](https://github.com/Stellar-Uzima/Uzima-Contracts/discussions)
+4. **Join our community**: Connect with other developers
+
+---
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### General Questions
+
+**Q: What is Stellar Uzima?**
+A: Stellar Uzima is a decentralized medical records system built on the Stellar blockchain that enables secure, patient-controlled healthcare data management.
+
+**Q: Why use blockchain for medical records?**
+A: Blockchain provides immutability, security, audit trails, and patient control over data access - all critical for healthcare data.
+
+**Q: Is this HIPAA compliant?**
+A: The system is designed with privacy and security principles that align with HIPAA requirements, but compliance depends on implementation and usage.
+
+### Technical Questions
+
+**Q: What programming languages are used?**
+A: Smart contracts are written in Rust using the Soroban framework. The project also includes shell scripts for deployment and automation.
+
+**Q: Can I run this on my own infrastructure?**
+A: Yes, you can deploy to your own Stellar node or use the public testnet/mainnet networks.
+
+**Q: How are medical records encrypted?**
+A: Records are encrypted using public key cryptography before being stored on-chain. Only authorized parties with the correct keys can decrypt the data.
+
+**Q: What about traditional medicine?**
+A: The system includes metadata fields specifically designed to support traditional healing practices and indigenous medical knowledge.
+
+### Development Questions
+
+**Q: How do I contribute?**
+A: See the [Contribution Guidelines](#contribution-guidelines) section. We welcome bug reports, feature requests, and code contributions.
+
+**Q: What's the best way to test changes?**
+A: Use the local development network for testing: `make start-local && make deploy-local`
+
+**Q: Are there any gas fees?**
+A: Yes, Stellar transactions require small fees in XLM, but they are significantly lower than other blockchain platforms.
+
+### Deployment Questions
+
+**Q: Can I deploy to mainnet?**
+A: Yes, but ensure thorough testing on testnet first. Mainnet deployment involves real costs and should be done carefully.
+
+**Q: How do I handle contract upgrades?**
+A: The system includes upgrade-safe deprecation tracking and migration guides for legacy contracts.
+
+**Q: What about data privacy?**
+A: All sensitive medical data is encrypted before storage, and access is controlled through patient consent mechanisms.
 
 ---
 

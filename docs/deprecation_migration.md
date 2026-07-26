@@ -69,3 +69,16 @@ Calling `upgradeability::emit_deprecation_warning` emits a `Deprecated` event wi
 2. Keep the old and new functions available during the migration window.
 3. Monitor deprecation events to identify remaining callers.
 4. Remove the old entrypoint in the announced removal version.
+
+## AML Example
+
+The AML contract follows this pattern for administrative blacklist updates:
+
+- Deprecated entrypoint: `set_user_status`
+- Replacement entrypoint: `update_user_status`
+- Deprecation since: `v2.0.0`
+- Planned removal: `v3.0.0`
+
+Existing AML deployments that predate the upgradeability registry should call
+`register_deprecated_functions` before the next contract upgrade so the warning
+events and stored metadata are available immediately.

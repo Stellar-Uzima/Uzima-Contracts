@@ -1,0 +1,15 @@
+[package]
+name = "fuzz-zk-verifier"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone crate — intentionally excluded from the workspace wasm32 build.
+# Run with: cd tests/fuzz/zk_verifier && cargo test
+# Long-duration fuzzing: PROPTEST_CASES=5000 cargo test
+[workspace]
+
+[dev-dependencies]
+zk_verifier = { path = "../../../contracts/zk_verifier", features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+proptest = "1.6.0"

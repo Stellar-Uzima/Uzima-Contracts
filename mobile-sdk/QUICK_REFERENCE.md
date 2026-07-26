@@ -31,7 +31,12 @@ echo "" && echo "=== Key Files Check ===" && \
 [ -f src/client/UzimaClient.ts ] && echo "✅ Main client found" && \
 [ -f src/crypto/EncryptionManager.ts ] && echo "✅ Encryption found" && \
 [ -f src/sync/OfflineManager.ts ] && echo "✅ Offline sync found" && \
-[ -f src/notifications/NotificationManager.ts ] && echo "✅ Notifications found"
+[ -f src/notifications/NotificationManager.ts ] && echo "✅ Notifications found" && \
+[ -f src/generated/contract-bindings.ts ] && echo "✅ Generated contract bindings found"
+
+# 6. Verify SDK bindings are in sync (CI parity)
+echo "" && echo "=== SDK Binding Sync Check ===" && \
+cd ../.. && ./scripts/check-sdk-bindings.sh && echo "✅ Bindings in sync" || echo "❌ Bindings out of sync — run: node scripts/generate-sdk-types.mjs"
 ```
 
 ---
@@ -92,6 +97,12 @@ Create and run [TESTING_AND_VERIFICATION.md](./TESTING_AND_VERIFICATION.md) for 
   - Secure storage (Flutter Secure Storage)
   - Firebase Messaging support
   - Method channels for native code
+
+### ✅ 6. Python SDK Bindings
+- **Location**: `mobile-sdk/python/uzima_sdk/`
+- **Generator**: `scripts/generate-sdk-types.mjs` (stellar-py style dataclasses)
+- **CI**: `sdk-bindings` job enforces sync on every PR
+- **Bypass**: add `[skip-sdk-gen]` to PR body when intentionally deferring regen
 
 ---
 
@@ -344,7 +355,7 @@ npm test -- acceptance.test.ts
 
 ```bash
 # 1. Navigate to SDK
-cd /home/student/Downloads/Uzima-Contracts/mobile-sdk
+cd mobile-sdk
 
 # 2. Install & Build
 cd core && npm install && npm run build
@@ -355,9 +366,13 @@ npm test
 # 4. Verify Size
 du -sh dist/
 
+# 5. Verify contract bindings match on-chain types (CI parity)
+cd ../.. && ./scripts/check-sdk-bindings.sh
+
 # Expected Results:
 # ✅ All tests pass
 # ✅ Size ~2.0MB
+# ✅ SDK bindings in sync
 # ✅ No errors
 ```
 

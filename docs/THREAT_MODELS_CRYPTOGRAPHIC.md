@@ -351,6 +351,8 @@
 7. **Post-Quantum Algorithm Maturation**: As PQ algorithms become more standardized
 8. **Multi-Party Computation Enhancements**: More robust MPC protocols
 9. **Zero-Knowledge Proof Integration**: More extensive ZK proof usage
+
+   *Range proof verification* in `contracts/zkp_registry` uses SHA-256 commitment binding (`UZIMA_RANGE_V1` domain tag) instead of simulated verification (TD-003, resolved in PR #848). Each `RangeProof.proof_data` embeds a SHA-256 digest computed over the prover, vk_hash, min/max bounds, and encrypted value; the verifier recomputes and compares this digest on-chain, ensuring that any tampering with bound values or encrypted payload is detected as `InconsistentCommitment`. This scheme is documented in `contracts/zkp_registry/src/lib.rs` and tested via property-based tests under `contracts/zkp_registry/tests/`.
 10. **Hardware Security Integration**: TPM/HSM integration for key operations
 
 The cryptographic threat model requires continuous monitoring and adaptation as new threats emerge and cryptographic research advances. The hybrid approach and governance integration provide flexibility, but require active management and expertise.

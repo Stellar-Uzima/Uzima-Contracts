@@ -1,11 +1,10 @@
+//! explainable_ai - Healthcare smart contract on Stellar blockchain.
 // Explainable AI Contract - Enhanced with SHAP Integration and Counterfactual Explanations
 #![no_std]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]
 #![allow(clippy::unwrap_used)]
-#![allow(dead_code)]
-
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
     String, Symbol, Vec,
@@ -128,7 +127,6 @@ pub enum DataKey {
     CfCounter,
 }
 
-const ADMIN: Symbol = symbol_short!("ADMIN");
 const REQUEST_COUNTER: Symbol = symbol_short!("REQ_CNT");
 const EXPLANATION_COUNTER: Symbol = symbol_short!("EXP_CNT");
 const AUDIT_COUNTER: Symbol = symbol_short!("AUD_CNT");
@@ -145,17 +143,27 @@ pub enum Error {
     InvalidBPSValue = 6,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::RequestNotFound => write!(f, "request not found"),
+            Error::ExplanationNotFound => write!(f, "explanation not found"),
+            Error::InvalidImportance => write!(f, "invalid importance"),
+            Error::AuditNotFound => write!(f, "audit not found"),
+            Error::InvalidBPSValue => write!(f, "invalid b p s value"),
+        }
+    }
+}
+
 #[contract]
 pub struct ExplainableAiContract;
 
 #[contractimpl]
 impl ExplainableAiContract {
     pub fn initialize(env: Env, admin: Address) -> bool {
+        governance_commons::init_guard(&env);
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("Already initialized");
-        }
 
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&REQUEST_COUNTER, &0u64);

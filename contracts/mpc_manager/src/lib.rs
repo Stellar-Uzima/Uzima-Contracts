@@ -1,4 +1,5 @@
 #![no_std]
+//! mpc_manager - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]
 mod test;
@@ -7,6 +8,13 @@ use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
     String, Symbol, Vec,
 };
+
+/// Estimated gas cost for creating secret shares
+const GAS_CREATE_SHARES: u64 = 15000;
+/// Estimated gas cost for statistical analysis
+const GAS_STATISTICAL_ANALYSIS: u64 = 35000;
+/// Estimated gas cost for ML training
+const GAS_ML_TRAINING: u64 = 45000;
 
 // =============================================================================
 // Types
@@ -164,6 +172,28 @@ pub enum Error {
     InsufficientParticipants = 15,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::SessionNotFound => write!(f, "session not found"),
+            Error::SessionExpired => write!(f, "session expired"),
+            Error::InvalidState => write!(f, "invalid state"),
+            Error::DuplicateCommit => write!(f, "duplicate commit"),
+            Error::DuplicateReveal => write!(f, "duplicate reveal"),
+            Error::ThresholdNotMet => write!(f, "threshold not met"),
+            Error::InvalidShare => write!(f, "invalid share"),
+            Error::ComputationFailed => write!(f, "computation failed"),
+            Error::ProofVerificationFailed => write!(f, "proof verification failed"),
+            Error::GasLimitExceeded => write!(f, "gas limit exceeded"),
+            Error::InsufficientParticipants => write!(f, "insufficient participants"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -174,10 +204,8 @@ pub struct MPCManager;
 #[contractimpl]
 impl MPCManager {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().persistent().set(&ADMIN, &admin);
@@ -347,6 +375,7 @@ impl MPCManager {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn finalize_session(
         env: Env,
         initiator: Address,
@@ -491,7 +520,7 @@ impl MPCManager {
         }
 
         // Track gas usage
-        Self::track_gas_usage(&env, &session_id, &participant, 15000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_CREATE_SHARES);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -499,7 +528,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "create_shares"),
             &session_id,
-            15000,
+            GAS_CREATE_SHARES,
             Bytes::from_slice(&env, &num_shares.to_be_bytes()),
         );
 
@@ -595,7 +624,7 @@ impl MPCManager {
         let result_hash = env.crypto().sha256(&encrypted_data);
 
         // Track gas usage (target: < 50,000 gas)
-        Self::track_gas_usage(&env, &session_id, &participant, 35000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_STATISTICAL_ANALYSIS);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -603,7 +632,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "statistical_analysis"),
             &session_id,
-            35000,
+            GAS_STATISTICAL_ANALYSIS,
             encrypted_data,
         );
 
@@ -652,7 +681,7 @@ impl MPCManager {
         let model_hash = env.crypto().sha256(&combined_data);
 
         // Track gas usage
-        Self::track_gas_usage(&env, &session_id, &participant, 45000);
+        Self::track_gas_usage(&env, &session_id, &participant, GAS_ML_TRAINING);
 
         // Create audit entry
         Self::create_audit_entry(
@@ -660,7 +689,7 @@ impl MPCManager {
             &participant,
             String::from_str(&env, "ml_training"),
             &session_id,
-            45000,
+            GAS_ML_TRAINING,
             combined_data,
         );
 
@@ -725,6 +754,7 @@ impl MPCManager {
     // Helpers
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -733,6 +763,7 @@ impl MPCManager {
         }
     }
 
+    #[must_use]
     fn require_not_expired(env: &Env, session: &MPCSession) -> Result<(), Error> {
         let now = env.ledger().timestamp();
         if now > session.expires_at {

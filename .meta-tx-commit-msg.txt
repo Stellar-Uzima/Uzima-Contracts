@@ -1,0 +1,37 @@
+chore(fmt): cargo fmt --all catch-up for CI Code Quality
+
+Follow-up to b4099fd. Even after the meta-tx-forwarder-specific
+clippy/rustfmt fixes landed, the Code Quality job on the PR was
+still failing because `cargo fmt --all -- --check` returned exit 1
+with formatting diffs in **other contracts**, not the meta-tx code:
+
+  contracts/reputation_access_control/src/lib.rs
+  contracts/reputation_integration/src/lib.rs
+  contracts/timelock/src/errors.rs
+  contracts/zkp_registry/src/lib.rs
+  contracts/complexity.rs (or similar generic files)
+  contracts/.../main.rs (a few)
+
+These were latent rustfmt drift in the wider workspace — likely
+surfaced now that my rustfmt.toml cleanup removed a couple of
+nightly-only stub options that were previously masking the
+differences. The cargo fmt --all-diffs were straightforward
+(trailing comma / whitespace / import-ordering normalisations) and
+do not change contract behaviour.
+
+This commit applies `cargo fmt --all` so every Rust file in the
+workspace matches rustfmt's current rules.
+
+Scope note: this technically widens the PR to non-meta-tx contracts.
+A cleaner shape would be to split this into a dedicated
+`chore(fmt): cargo fmt --all drift catch-up` PR. If the maintainer
+asks, the hunks in this commit can be lifted into a separate PR by
+cherry-reverting just the non-meta-tx files.
+
+Verification locally:
+  cargo fmt --all -- --check                  -> FMT_EXIT=0
+  cargo clippy --workspace --all-targets -- -D warnings -> CLIPPY_EXIT=0
+  cargo test --lib -p meta_tx_forwarder       -> 17/17 passed
+
+Refs #834 (Closes: needs maintainer to add the keyword to the PR body,
+since my fork's integration token cannot PATCH the upstream PR body).

@@ -1,0 +1,21 @@
+use soroban_sdk::Env;
+
+pub fn check_s_value(env: &Env, signature_bytes: &[u8; 64]) -> Result<(), ()> {
+    let s_start = 32;
+    let s = &signature_bytes[s_start..];
+    let half_order: [u8; 32] = [
+        0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        0x5d, 0x57, 0x6e, 0x73, 0x57, 0xa4, 0x50, 0x1d,
+        0xdf, 0xe9, 0x2f, 0x46, 0x68, 0x1b, 0x20, 0xa0,
+    ];
+    for i in 0..32 {
+        if s[i] > half_order[i] {
+            return Err(());
+        }
+        if s[i] < half_order[i] {
+            break;
+        }
+    }
+    Ok(())
+}

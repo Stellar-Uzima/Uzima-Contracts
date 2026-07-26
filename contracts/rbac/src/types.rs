@@ -60,7 +60,7 @@ pub struct RBACConfig {
 }
 
 /// Storage keys for the contract
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum DataKey {
     /// Admin address

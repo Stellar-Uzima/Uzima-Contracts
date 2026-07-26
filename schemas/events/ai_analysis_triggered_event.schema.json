@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AiAnalysisTriggeredEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "recordId": {
+      "type": "integer"
+    },
+    "patient": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "audit",
+    "recordId",
+    "patient"
+  ]
+}

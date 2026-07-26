@@ -1,4 +1,5 @@
-use soroban_sdk::{contracterror, contracttype, Address, BytesN, String};
+use crate::serialization_utils::{SafeSerialize, SerializationError, SerializationUtils};
+use soroban_sdk::{contracterror, contracttype, Address, BytesN, Env, String, Symbol};
 
 #[derive(Clone)]
 #[contracttype]
@@ -13,6 +14,31 @@ pub struct FederatedRound {
     pub is_finalized: bool,
 }
 
+impl SafeSerialize for FederatedRound {
+    #[must_use]
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
+        // Validate individual fields
+        SerializationUtils::validate_bytes_n(env, &self.base_model_id)?;
+
+        // Validate edge cases
+        if self.min_participants == 0 {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_MIN")),
+                (),
+            );
+        }
+
+        if self.total_updates == 0 && !self.is_finalized {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_UPDATES")),
+                (),
+            );
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct ParticipantUpdateMeta {
@@ -20,6 +46,25 @@ pub struct ParticipantUpdateMeta {
     pub participant: Address,
     pub update_hash: BytesN<32>,
     pub num_samples: u32,
+}
+
+impl SafeSerialize for ParticipantUpdateMeta {
+    #[must_use]
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
+        // Validate individual fields
+        SerializationUtils::validate_address(env, &self.participant)?;
+        SerializationUtils::validate_bytes_n(env, &self.update_hash)?;
+
+        // Validate edge cases
+        if self.num_samples == 0 {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_SAMP")),
+                (),
+            );
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -31,6 +76,41 @@ pub struct ModelMetadata {
     pub metrics_ref: String,
     pub fairness_report_ref: String,
     pub created_at: u64,
+}
+
+impl SafeSerialize for ModelMetadata {
+    #[must_use]
+    fn safe_serialize(&self, env: &Env) -> Result<(), SerializationError> {
+        // Validate individual fields
+        SerializationUtils::validate_bytes_n(env, &self.model_id)?;
+        SerializationUtils::safe_serialize_string(env, &self.description)?;
+        SerializationUtils::safe_serialize_string(env, &self.metrics_ref)?;
+        SerializationUtils::safe_serialize_string(env, &self.fairness_report_ref)?;
+
+        // Validate edge cases
+        if self.description.is_empty() {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "EMPTY_DESC")),
+                (),
+            );
+        }
+
+        if self.metrics_ref.is_empty() && self.fairness_report_ref.is_empty() {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "NO_REFS")),
+                (),
+            );
+        }
+
+        if self.created_at == 0 {
+            env.events().publish(
+                (Symbol::new(env, "SER_WARN"), Symbol::new(env, "ZERO_TS")),
+                (),
+            );
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Clone)]
@@ -54,4 +134,32 @@ pub enum Error {
     DuplicateUpdate = 5,
     AlreadyInitialized = 6,
     AdminNotSet = 7,
+    SerializationError = 8,
+    CollectionTooLarge = 9,
+    StringTooLong = 10,
+    NestingTooDeep = 11,
+    CapabilityExpired = 12,
+    CapabilityNotFound = 13,
+    InvalidInput = 14,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::RoundNotFound => write!(f, "round not found"),
+            Error::RoundFinalized => write!(f, "round finalized"),
+            Error::NotEnoughParticipants => write!(f, "not enough participants"),
+            Error::DuplicateUpdate => write!(f, "duplicate update"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::AdminNotSet => write!(f, "admin not set"),
+            Error::SerializationError => write!(f, "serialization error"),
+            Error::CollectionTooLarge => write!(f, "collection too large"),
+            Error::StringTooLong => write!(f, "string too long"),
+            Error::NestingTooDeep => write!(f, "nesting too deep"),
+            Error::CapabilityExpired => write!(f, "capability expired"),
+            Error::CapabilityNotFound => write!(f, "capability not found"),
+            Error::InvalidInput => write!(f, "invalid input"),
+        }
+    }
 }

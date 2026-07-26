@@ -123,3 +123,27 @@ Applies to all contracts in `contracts/*` and all deployments built using the St
 
 - These limits are based on current Stellar/Soroban runtime constraints and the repository's deployment practices.
 - Always verify network-specific limits before production deployment, since network policies may evolve.
+
+## 9. Automated Enforcement
+
+The limits above are enforced automatically in CI by the performance budget
+framework, so a change that pushes a contract toward one of these limits is
+caught in review rather than at deployment time.
+
+| Tool | Enforces |
+|---|---|
+| `scripts/performance_budget_gate.sh` | Unified gate over WASM size, storage entries and CPU instructions, against both absolute limits and relative regressions |
+| `scripts/wasm_size_monitor.sh` | Size-only baseline regression gate |
+| `scripts/measure_storage.sh` | Measures storage entries and instruction counts |
+
+Budgets are versioned in `scripts/performance_budgets.json` and reviewed with the
+code that changes them. Run the gate locally with:
+
+```bash
+make perf-budget          # evaluate the current build
+make perf-budget-trend    # see movement over retained samples
+make perf-budget-update   # re-record after an intended change
+```
+
+See [`PERFORMANCE_BUDGETS.md`](./PERFORMANCE_BUDGETS.md) for the full framework,
+including how grandfathering and the regression noise floor work.

@@ -1,8 +1,7 @@
-/// Custom assertions for contract testing
-use soroban_sdk::Address;
+//! Custom assertions for contract testing
+#![allow(clippy::unwrap_used, clippy::panic)]
 
-#[allow(clippy::unwrap_used)]
-#[allow(clippy::panic)]
+use soroban_sdk::Address;
 
 /// Assert two addresses are equal
 #[macro_export]
@@ -170,8 +169,7 @@ pub fn assert_state_transition(from: &str, to: &str, allowed: &[(&str, &str)]) {
     assert!(
         transition_allowed,
         "Invalid state transition from '{}' to '{}'",
-        from,
-        to
+        from, to
     );
 }
 

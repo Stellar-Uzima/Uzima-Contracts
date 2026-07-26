@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_imaging_ai - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -189,6 +190,31 @@ pub enum Error {
     InsufficientSamples = 18,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::ModelNotActive => write!(f, "model not active"),
+            Error::ModelAlreadyExists => write!(f, "model already exists"),
+            Error::ResultNotFound => write!(f, "result not found"),
+            Error::SegmentationNotFound => write!(f, "segmentation not found"),
+            Error::TooManyFindings => write!(f, "too many findings"),
+            Error::TooManyRegions => write!(f, "too many regions"),
+            Error::InvalidConfidence => write!(f, "invalid confidence"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::AttestationInvalid => write!(f, "attestation invalid"),
+            Error::DuplicateResult => write!(f, "duplicate result"),
+            Error::InsufficientSamples => write!(f, "insufficient samples"),
+        }
+    }
+}
+
 #[contract]
 pub struct MedicalImagingAiContract;
 
@@ -203,10 +229,8 @@ impl MedicalImagingAiContract {
         default_critical_bps: u32,
         default_min_samples: u64,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
         if default_warning_bps <= default_critical_bps || default_warning_bps > 10_000 {
             return Err(Error::InvalidThreshold);
         }
@@ -749,6 +773,7 @@ impl MedicalImagingAiContract {
 
     // ── Private helpers ─────────────────────────────────────────────────
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -761,6 +786,7 @@ impl MedicalImagingAiContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
@@ -769,6 +795,7 @@ impl MedicalImagingAiContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_evaluator(env: &Env, caller: &Address) -> Result<(), Error> {
         let is_eval: bool = env
             .storage()

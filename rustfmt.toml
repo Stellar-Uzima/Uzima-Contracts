@@ -1,0 +1,70 @@
+# Rustfmt configuration for Uzima Contracts
+# Ensures consistent code formatting across the project.
+#
+# Only options that are stable across the entire rustfmt 1.7x -> 1.9x
+# toolchain range used by CI (dtolnay/rust-toolchain@stable) are kept here.
+# Several historical options (fn_args_layout / fn_return_indent /
+# match_expression_indent / where_layout / imports_layout / format_strings /
+# format_macro_matchers / format_macro_bodies) are nightly-only or
+# deprecated on recent stable and were removed on 2026-06 to keep CI from
+# turning the warnings into errors.
+
+# Indent & style
+hard_tabs = false
+tab_spaces = 4
+newline_style = "Auto"
+use_small_heuristics = "Default"
+
+# Imports
+imports_granularity = "Crate"
+group_imports = "StdExternalCrate"
+# Note: imports_granularity, imports_layout and group_imports are
+# nightly-only on current stable rustfmt and consistently trigger
+# CI's `cargo fmt --all -- --check` exit 1 with no real diff.
+# Re-evaluate when the workspace pins a nightly toolchain.
+# imports_granularity = "Crate"
+# imports_layout = "Mixed"
+# group_imports = "StdExternalCrate"
+reorder_imports = true
+
+# Code organisation
+reorder_modules = true
+reorder_impl_items = false
+
+# Function formatting
+fn_params_layout = "Tall"
+# Note: fn_args_layout / fn_return_indent / where_layout are
+# deprecated/removed in current rustfmt. Use fn_params_layout and
+# where_clause_layout when nightly options are reintroduced.
+# fn_args_layout = "Tall"
+# fn_return_indent = "WithArgs"
+# where_layout = "Tall"
+
+# Control flow
+# Note: control_brace_style is nightly-only.
+# control_brace_style = "AlwaysSameLine"
+match_arm_blocks = true
+match_block_trailing_comma = true
+# match_expression_indent - removed; not a recognised rustfmt option.
+
+# Comments
+# Note: wrap_comments is nightly-only.
+# wrap_comments = false
+comment_width = 100
+normalize_comments = true
+
+# Maximum widths
+max_width = 100
+
+# Edition
+error_on_line_overflow = false
+
+# Special cases
+# Note: format_strings / format_macro_matchers / format_macro_bodies
+# are nightly-only.
+# format_strings = true
+# format_macro_matchers = true
+# format_macro_bodies = true
+
+# Edition-specific
+edition = "2021"

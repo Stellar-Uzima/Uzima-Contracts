@@ -1,6 +1,8 @@
 #![no_std]
+//! patient_risk_stratification - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
+use common_error::{get_suggestion as common_suggestion, CommonError};
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, Map,
     String, Symbol, Vec,
@@ -109,6 +111,23 @@ pub enum Error {
     AssessmentNotFound = 6,
     InvalidModel = 7,
     DuplicateModel = 8,
+    AlreadyInitialized = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ConfigNotSet => write!(f, "config not set"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::LowConfidence => write!(f, "low confidence"),
+            Error::AssessmentNotFound => write!(f, "assessment not found"),
+            Error::InvalidModel => write!(f, "invalid model"),
+            Error::DuplicateModel => write!(f, "duplicate model"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
 }
 
 #[contract]
@@ -116,18 +135,19 @@ pub struct PatientRiskStratificationContract;
 
 #[contractimpl]
 impl PatientRiskStratificationContract {
-    pub fn initialize(env: Env, admin: Address) -> bool {
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         admin.require_auth();
 
         if env.storage().instance().has(&DataKey::Config) {
-            return false;
+            return Err(Error::AlreadyInitialized);
         }
 
         env.storage().instance().set(&DataKey::Config, &admin);
         env.storage().instance().set(&ASSESSMENT_COUNTER, &0u64);
-        true
+        Ok(())
     }
 
+    #[must_use]
     fn load_admin(env: &Env) -> Result<Address, Error> {
         env.storage()
             .instance()
@@ -135,6 +155,7 @@ impl PatientRiskStratificationContract {
             .ok_or(Error::ConfigNotSet)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin = Self::load_admin(env)?;
         if admin != *caller {
@@ -163,7 +184,7 @@ impl PatientRiskStratificationContract {
         version: String,
         min_confidence_bps: u32,
         description: String,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         Self::ensure_admin(&env, &caller)?;
 
         if env
@@ -194,7 +215,7 @@ impl PatientRiskStratificationContract {
 
         env.events().publish((symbol_short!("ModelReg"),), model_id);
 
-        Ok(true)
+        Ok(())
     }
 
     pub fn perform_risk_assessment(
@@ -431,6 +452,20 @@ impl PatientRiskStratificationContract {
             .publish((symbol_short!("ModelUpd"),), (model_id, enabled));
 
         Ok(true)
+    }
+}
+
+pub fn get_suggestion(error: Error) -> Symbol {
+    match error {
+        Error::NotAuthorized => common_suggestion(CommonError::Unauthorized),
+        Error::ConfigNotSet => common_suggestion(CommonError::NotInitialized),
+        Error::AlreadyInitialized => common_suggestion(CommonError::AlreadyInitialized),
+        Error::ModelNotFound | Error::AssessmentNotFound => {
+            common_suggestion(CommonError::NotFound)
+        },
+        Error::InvalidScore | Error::InvalidModel => common_suggestion(CommonError::InvalidInput),
+        Error::LowConfidence => common_suggestion(CommonError::InvalidState),
+        Error::DuplicateModel => common_suggestion(CommonError::InvalidState),
     }
 }
 

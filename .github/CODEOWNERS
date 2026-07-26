@@ -1,0 +1,103 @@
+# CODEOWNERS
+#
+# Maps repository paths to responsible GitHub teams/users.
+# All listed owners must approve PRs that touch their paths.
+#
+# Ownership tiers:
+#   Core     — 2 maintainer approvals + security review required
+#   Domain   — 1 maintainer approval required
+#   Support  — 1 review from any maintainer
+#
+# Review routing:
+#   PRs touching ONLY support-owned paths can be auto-merged after 1 approval.
+#   PRs touching ANY core-owned path require 2 approvals and security review.
+#   PRs touching multiple domains require 1 approval from each domain owner.
+#
+# See docs/CONTRACT_DEPENDENCY_GRAPH.md for the full dependency model.
+# See docs/COMPATIBILITY_MATRIX.md for version compatibility requirements.
+
+# ── Core shared infrastructure (CRITICAL — 2 approvals + security review) ─────
+# These contracts have the highest blast radius. Any change requires 2
+# maintainer approvals and a security review before merging.
+# SECURITY: Changes here affect ALL tenants and downstream contracts.
+contracts/common_error/       @Stellar-Uzima/maintainers
+contracts/common_auth/        @Stellar-Uzima/maintainers
+contracts/rbac/               @Stellar-Uzima/maintainers
+contracts/audit/              @Stellar-Uzima/maintainers
+contracts/identity_registry/  @Stellar-Uzima/maintainers
+contracts/upgradeability/     @Stellar-Uzima/maintainers
+libs/                         @Stellar-Uzima/maintainers
+schemas/                      @Stellar-Uzima/maintainers
+
+# ── Multi-tenant configuration (HIGH — security-sensitive) ────────────────────
+# Tenant config changes affect contract behavior per-organization.
+config/multi_tenant.json      @Stellar-Uzima/maintainers
+config/networks.toml          @Stellar-Uzima/maintainers
+config/schema.json            @Stellar-Uzima/maintainers
+
+# ── Medical records domain (HIGH — PHI handling) ──────────────────────────────
+# These contracts handle protected health information. Changes require
+# domain expertise and compliance awareness.
+contracts/medical_records/              @Stellar-Uzima/maintainers
+contracts/patient_consent_management/   @Stellar-Uzima/maintainers
+contracts/medical_record_search/        @Stellar-Uzima/maintainers
+contracts/medical_record_hash_registry/ @Stellar-Uzima/maintainers
+contracts/medical_record_backup/        @Stellar-Uzima/maintainers
+contracts/medical_consent_nft/          @Stellar-Uzima/maintainers
+contracts/patient_portal/               @Stellar-Uzima/maintainers
+
+# ── Identity & access domain (HIGH — authentication boundary) ─────────────────
+# Changes to auth/identity contracts can lock out users or grant
+# unauthorized access. Review with extreme care.
+contracts/access_control/       @Stellar-Uzima/maintainers
+contracts/credential_registry/  @Stellar-Uzima/maintainers
+contracts/mfa/                  @Stellar-Uzima/maintainers
+contracts/zkp_registry/         @Stellar-Uzima/maintainers
+contracts/zk_verifier/          @Stellar-Uzima/maintainers
+contracts/fido2_authenticator/  @Stellar-Uzima/maintainers
+
+# ── Payment & escrow domain (HIGH — fund handling) ────────────────────────────
+# These contracts handle real financial value. Bugs can cause fund loss.
+contracts/escrow/                      @Stellar-Uzima/maintainers
+contracts/healthcare_payment/          @Stellar-Uzima/maintainers
+contracts/appointment_booking_escrow/  @Stellar-Uzima/maintainers
+contracts/payment_router/              @Stellar-Uzima/maintainers
+contracts/treasury_controller/         @Stellar-Uzima/maintainers
+
+# ── Governance domain (CRITICAL — protocol control) ───────────────────────────
+# Governor/timelock changes control the upgrade path for ALL contracts.
+contracts/governor/       @Stellar-Uzima/maintainers
+contracts/timelock/       @Stellar-Uzima/maintainers
+contracts/upgrade_manager/ @Stellar-Uzima/maintainers
+
+# ── Cross-chain domain (MEDIUM — bridge security) ─────────────────────────────
+contracts/cross_chain_bridge/       @Stellar-Uzima/maintainers
+contracts/cross_chain_access/       @Stellar-Uzima/maintainers
+contracts/cross_chain_identity/     @Stellar-Uzima/maintainers
+contracts/cross_chain_enhancements/ @Stellar-Uzima/maintainers
+contracts/sync_manager/             @Stellar-Uzima/maintainers
+
+# ── Compliance & audit domain (MEDIUM — regulatory) ───────────────────────────
+contracts/health_data_access_logging/       @Stellar-Uzima/maintainers
+contracts/healthcare_compliance/            @Stellar-Uzima/maintainers
+contracts/healthcare_compliance_automation/ @Stellar-Uzima/maintainers
+contracts/regulatory_compliance/            @Stellar-Uzima/maintainers
+contracts/emergency_access_override/        @Stellar-Uzima/maintainers
+
+# ── AI & analytics domain (MEDIUM — data privacy) ────────────────────────────
+contracts/ai_analytics/              @Stellar-Uzima/maintainers
+contracts/anomaly_detection/         @Stellar-Uzima/maintainers
+contracts/federated_learning/        @Stellar-Uzima/maintainers
+contracts/differential_privacy/      @Stellar-Uzima/maintainers
+contracts/clinical_trial/            @Stellar-Uzima/maintainers
+
+# ── Infrastructure & CI (SUPPORT — 1 approval) ───────────────────────────────
+docs/                  @Stellar-Uzima/maintainers
+scripts/               @Stellar-Uzima/maintainers
+.github/               @Stellar-Uzima/maintainers
+Cargo.toml             @Stellar-Uzima/maintainers
+rust-toolchain.toml    @Stellar-Uzima/maintainers
+
+# ── Fallback — anything else not listed above ─────────────────────────────────
+# Default to maintainers for safety; change to a more specific team as needed.
+*                       @Stellar-Uzima/maintainers

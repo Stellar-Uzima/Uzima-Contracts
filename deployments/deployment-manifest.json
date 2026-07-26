@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Registry-driven deployment manifest for all Uzima contracts across supported networks",
+  "generated_at": "2026-07-23T00:00:00Z",
+  "networks": {
+    "local": {
+      "network_passphrase": "Standalone Network ; February 2017",
+      "rpc_url": "http://localhost:8000/soroban/rpc",
+      "environment": "development"
+    },
+    "testnet": {
+      "network_passphrase": "Test SDF Network ; September 2015",
+      "rpc_url": "https://soroban-testnet.stellar.org",
+      "environment": "testing"
+    },
+    "futurenet": {
+      "network_passphrase": "Test SDF Future Network ; October 2022",
+      "rpc_url": "https://rpc-futurenet.stellar.org",
+      "environment": "staging"
+    },
+    "mainnet": {
+      "network_passphrase": "Public Global Stellar Network ; September 2015",
+      "rpc_url": "https://soroban-mainnet.stellar.org",
+      "environment": "production"
+    }
+  },
+  "contracts": [
+    {
+      "name": "common_error",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/common_error.wasm",
+      "deploy_order": 1,
+      "networks": {
+        "local": { "contract_id": null, "init_required": false },
+        "testnet": { "contract_id": null, "init_required": false },
+        "mainnet": { "contract_id": null, "init_required": false }
+      },
+      "dependencies": []
+    },
+    {
+      "name": "common_auth",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/common_auth.wasm",
+      "deploy_order": 2,
+      "networks": {
+        "local": { "contract_id": null, "init_required": false },
+        "testnet": { "contract_id": null, "init_required": false },
+        "mainnet": { "contract_id": null, "init_required": false }
+      },
+      "dependencies": ["common_error"]
+    },
+    {
+      "name": "rbac",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/rbac.wasm",
+      "deploy_order": 3,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address"],
+      "dependencies": ["common_error", "common_auth"]
+    },
+    {
+      "name": "audit",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/audit.wasm",
+      "deploy_order": 4,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address"],
+      "dependencies": ["common_error"]
+    },
+    {
+      "name": "identity_registry",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/identity_registry.wasm",
+      "deploy_order": 5,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address"],
+      "dependencies": ["common_error", "common_auth"]
+    },
+    {
+      "name": "upgradeability",
+      "tier": "core",
+      "wasm_path": "target/wasm32-unknown-unknown/release/upgradeability.wasm",
+      "deploy_order": 6,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address"],
+      "dependencies": ["common_error"]
+    },
+    {
+      "name": "patient_consent_management",
+      "tier": "domain",
+      "wasm_path": "target/wasm32-unknown-unknown/release/patient_consent_management.wasm",
+      "deploy_order": 10,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address", "rbac_contract_id"],
+      "dependencies": ["rbac", "identity_registry", "common_error"]
+    },
+    {
+      "name": "escrow",
+      "tier": "domain",
+      "wasm_path": "target/wasm32-unknown-unknown/release/escrow.wasm",
+      "deploy_order": 11,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address", "rbac_contract_id"],
+      "dependencies": ["rbac", "common_error"]
+    },
+    {
+      "name": "healthcare_payment",
+      "tier": "domain",
+      "wasm_path": "target/wasm32-unknown-unknown/release/healthcare_payment.wasm",
+      "deploy_order": 12,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address", "escrow_contract_id", "rbac_contract_id"],
+      "dependencies": ["escrow", "rbac", "identity_registry"]
+    },
+    {
+      "name": "governor",
+      "tier": "domain",
+      "wasm_path": "target/wasm32-unknown-unknown/release/governor.wasm",
+      "deploy_order": 20,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address", "timelock_contract_id"],
+      "dependencies": ["timelock", "rbac"]
+    },
+    {
+      "name": "timelock",
+      "tier": "domain",
+      "wasm_path": "target/wasm32-unknown-unknown/release/timelock.wasm",
+      "deploy_order": 19,
+      "networks": {
+        "local": { "contract_id": null, "init_required": true },
+        "testnet": { "contract_id": null, "init_required": true },
+        "mainnet": { "contract_id": null, "init_required": true }
+      },
+      "init_args": ["admin_address", "min_delay"],
+      "dependencies": ["common_error"]
+    }
+  ],
+  "deploy_groups": {
+    "core": {
+      "description": "Core shared infrastructure — deploy first",
+      "contracts": ["common_error", "common_auth", "rbac", "audit", "identity_registry", "upgradeability"],
+      "parallel": false
+    },
+    "domain": {
+      "description": "Domain business-logic contracts — deploy after core",
+      "contracts": ["patient_consent_management", "escrow", "timelock", "healthcare_payment", "governor"],
+      "parallel": true
+    }
+  }
+}

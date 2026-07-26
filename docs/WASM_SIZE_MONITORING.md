@@ -11,6 +11,59 @@ This document describes the WASM size monitoring system implemented for Stellar 
 - **Warning threshold**: 80% (51.2KB)
 - **Critical threshold**: 95% (61.4KB)
 
+## Baseline Regression Gate (CI) — Issue #846
+
+Separate from the trend view below, the CI `build` job enforces a size
+**regression gate** on every PR. After building all contracts for
+`wasm32-unknown-unknown --release`, it runs:
+
+```bash
+bash scripts/wasm_size_monitor.sh --check-baseline
+```
+
+This compares each `.wasm` against the committed baseline
+`scripts/wasm_size_baselines.json` and **fails the build** when a contract:
+
+- grows **more than 10%** over its baseline size, or
+- **newly crosses the 60 KB** threshold (`SECURITY_CHECKLIST.md` section 8).
+
+On failure, a per-contract size report (with deltas) is posted as a PR comment.
+
+### Grandfathering
+
+Contracts already above 60 KB are captured in the baseline and **grandfathered**
+— reported with a ⚠️ but not failed — as long as they do not grow more than 10%.
+This blocks *new* growth without requiring an unrelated optimization pass to turn
+CI green. `load_testing` is excluded from the gate entirely.
+
+### Updating the baseline
+
+When a size change is intentional, regenerate and commit the baseline:
+
+```bash
+make build-opt                                # build all contracts to wasm32
+bash scripts/wasm_size_monitor.sh --update    # rewrite scripts/wasm_size_baselines.json
+git add scripts/wasm_size_baselines.json
+```
+
+Review the diff so an unintended jump is not baked in. Sizes are reproducible:
+the release profile is fixed (`opt-level = "z"`, `lto = true`,
+`codegen-units = 1`, `strip = "symbols"`) and the toolchain is pinned by
+`rust-toolchain.toml`, so a CI build matches a local build of the same commit.
+The 10% budget absorbs normal build-to-build noise; regenerate after a deliberate
+toolchain or dependency bump.
+
+### Baseline format
+
+```json
+{
+  "warning_threshold_bytes": 61440,
+  "regression_pct": 10,
+  "excluded": ["load_testing"],
+  "contracts": { "token_sale": 45056, "cross_chain_bridge": 71722 }
+}
+```
+
 ## Features
 
 ### 1. Real-time Size Monitoring

@@ -1,7 +1,114 @@
 #![no_std]
-#![allow(dead_code)]
+//! clinical_trial - Healthcare smart contract on Stellar blockchain.
+#![allow(clippy::manual_range_contains)]
+#![allow(clippy::absurd_extreme_comparisons)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol, Vec,
+};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    ProtocolNotFound = 1,
+    TrialFull = 2,
+    InvalidTitle = 3,
+    InvalidMetadataRef = 4,
+    InvalidName = 5,
+    InvalidConsentRef = 6,
+    InvalidMaxParticipants = 7,
+    InvalidDescriptionRef = 8,
+    InvalidSeverity = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::ProtocolNotFound => write!(f, "protocol not found"),
+            Error::TrialFull => write!(f, "trial full"),
+            Error::InvalidTitle => write!(f, "invalid title"),
+            Error::InvalidMetadataRef => write!(f, "invalid metadata ref"),
+            Error::InvalidName => write!(f, "invalid name"),
+            Error::InvalidConsentRef => write!(f, "invalid consent ref"),
+            Error::InvalidMaxParticipants => write!(f, "invalid max participants"),
+            Error::InvalidDescriptionRef => write!(f, "invalid description ref"),
+            Error::InvalidSeverity => write!(f, "invalid severity"),
+        }
+    }
+}
+
+// ==================== VALIDATION CONSTANTS ====================
+
+/// Minimum length for protocol title
+const MIN_TITLE_LENGTH: u32 = 3;
+/// Maximum length for protocol title
+const MAX_TITLE_LENGTH: u32 = 256;
+
+/// Minimum length for site name
+const MIN_NAME_LENGTH: u32 = 2;
+/// Maximum length for site name
+const MAX_NAME_LENGTH: u32 = 128;
+
+/// Minimum length for reference strings (IPFS CID or similar)
+const MIN_REF_LENGTH: u32 = 10;
+/// Maximum length for reference strings
+const MAX_REF_LENGTH: u32 = 256;
+
+/// Minimum severity level (0)
+const MIN_SEVERITY: u32 = 0;
+/// Maximum severity level (10)
+const MAX_SEVERITY: u32 = 10;
+
+// ==================== VALIDATION FUNCTIONS ====================
+
+/// Validates that a title string has appropriate length
+#[must_use]
+fn validate_title(title: &String) -> Result<(), Error> {
+    let len = title.len();
+    if len == 0 || len < MIN_TITLE_LENGTH || len > MAX_TITLE_LENGTH {
+        return Err(Error::InvalidTitle);
+    }
+    Ok(())
+}
+
+/// Validates that a name string has appropriate length
+#[must_use]
+fn validate_name(name: &String) -> Result<(), Error> {
+    let len = name.len();
+    if len == 0 || len < MIN_NAME_LENGTH || len > MAX_NAME_LENGTH {
+        return Err(Error::InvalidName);
+    }
+    Ok(())
+}
+
+/// Validates that a reference string (IPFS CID, etc.) has appropriate length
+#[must_use]
+fn validate_reference(reference: &String, error_type: Error) -> Result<(), Error> {
+    let len = reference.len();
+    if len == 0 || len < MIN_REF_LENGTH || len > MAX_REF_LENGTH {
+        return Err(error_type);
+    }
+    Ok(())
+}
+
+/// Validates that max_participants is positive
+#[must_use]
+fn validate_max_participants(max_participants: u64) -> Result<(), Error> {
+    if max_participants == 0 {
+        return Err(Error::InvalidMaxParticipants);
+    }
+    Ok(())
+}
+
+/// Validates severity level is within acceptable range
+#[must_use]
+fn validate_severity(severity: u32) -> Result<(), Error> {
+    if severity < MIN_SEVERITY || severity > MAX_SEVERITY {
+        return Err(Error::InvalidSeverity);
+    }
+    Ok(())
+}
 
 // ------------------ Types ------------------
 
@@ -15,6 +122,8 @@ pub struct Protocol {
     pub created_at: u64,
     pub active: bool,
     pub metadata_ref: String,
+    pub max_participants: u64,
+    pub current_participants: u64,
 }
 
 #[contracttype]
@@ -62,6 +171,7 @@ pub enum DataKey {
     AdverseEventNextId,
     AdverseEvent(u64),
     ParticipantRecords(Address),
+    ProtocolEnrollmentCount(u64),
 }
 
 // ------------------ Contract ------------------
@@ -69,13 +179,12 @@ pub enum DataKey {
 #[contract]
 pub struct ClinicalTrial;
 
+#[allow(clippy::too_many_arguments)] // Contract API functions require all parameters individually per Soroban ABI
 #[contractimpl]
 impl ClinicalTrial {
     pub fn initialize(env: Env, admin: Address) {
+        governance_commons::init_guard(&env);
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return;
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage()
             .instance()
@@ -85,7 +194,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &1u64);
         env.events()
-            .publish((Symbol::new(&env, "Initialized"),), (admin,));
+            .publish((Symbol::new(&env, "initialized"),), (admin,));
     }
 
     // Create or version a trial protocol
@@ -94,8 +203,15 @@ impl ClinicalTrial {
         proposer: Address,
         title: String,
         metadata_ref: String,
-    ) -> u64 {
+        max_participants: u64,
+    ) -> Result<u64, Error> {
         proposer.require_auth();
+
+        // Validate inputs
+        validate_title(&title)?;
+        validate_reference(&metadata_ref, Error::InvalidMetadataRef)?;
+        validate_max_participants(max_participants)?;
+
         let next: u64 = env
             .storage()
             .instance()
@@ -110,6 +226,8 @@ impl ClinicalTrial {
             created_at: env.ledger().timestamp(),
             active: true,
             metadata_ref,
+            max_participants,
+            current_participants: 0,
         };
         env.storage()
             .persistent()
@@ -118,7 +236,7 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::ProtocolNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "ProtocolCreated"),), (id, proposer));
+            .publish((Symbol::new(&env, "protocol_created"),), (id, proposer));
         id
     }
 
@@ -126,8 +244,12 @@ impl ClinicalTrial {
         env.storage().persistent().get(&DataKey::Protocol(id))
     }
 
-    pub fn register_site(env: Env, registrar: Address, name: String) -> u64 {
+    pub fn register_site(env: Env, registrar: Address, name: String) -> Result<u64, Error> {
         registrar.require_auth();
+
+        // Validate inputs
+        validate_name(&name)?;
+
         let next: u64 = env
             .storage()
             .instance()
@@ -145,14 +267,33 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::SiteNextId, &next.saturating_add(1));
         env.events()
-            .publish((Symbol::new(&env, "SiteRegistered"),), (id, registrar));
+            .publish((Symbol::new(&env, "site_registered"),), (id, registrar));
         id
     }
 
-    // Patient recruitment / eligibility (simple verifier placeholder)
-    pub fn recruit_patient(env: Env, site: Address, patient: Address, protocol_id: u64) {
+    // Patient recruitment / eligibility with enrollment cap enforcement
+    pub fn recruit_patient(
+        env: Env,
+        site: Address,
+        patient: Address,
+        protocol_id: u64,
+    ) -> Result<(), Error> {
         site.require_auth();
-        // a real implementation would run eligibility checks and store recruitment state
+
+        // Check protocol exists and has capacity
+        let mut protocol: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            return Err(Error::TrialFull);
+        }
+
+        // Store recruitment state
         let key = DataKey::ParticipantRecords(patient.clone());
         let mut v: Vec<u64> = env
             .storage()
@@ -161,10 +302,29 @@ impl ClinicalTrial {
             .unwrap_or(Vec::new(&env));
         v.push_back(protocol_id);
         env.storage().persistent().set(&key, &v);
+
+        // Update enrollment count
+        protocol.current_participants = protocol.current_participants.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Protocol(protocol_id), &protocol);
+
+        // Check if trial is now full and emit event
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            env.events().publish(
+                (Symbol::new(&env, "TrialCapacityReached"),),
+                (protocol_id, protocol.max_participants),
+            );
+        }
+
         env.events().publish(
-            (Symbol::new(&env, "PatientRecruited"),),
+            (Symbol::new(&env, "patient_recruited"),),
             (patient, protocol_id, site),
         );
+
+        Ok(())
     }
 
     pub fn record_consent(
@@ -172,8 +332,12 @@ impl ClinicalTrial {
         patient: Address,
         protocol_id: u64,
         consent_ref: String,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         patient.require_auth();
+
+        // Validate inputs
+        validate_reference(&consent_ref, Error::InvalidConsentRef)?;
+
         let count: u64 = env
             .storage()
             .instance()
@@ -190,12 +354,13 @@ impl ClinicalTrial {
         env.storage().persistent().set(&DataKey::Consent(id), &c);
         env.storage().instance().set(&DataKey::ConsentCount, &id);
         env.events().publish(
-            (Symbol::new(&env, "ConsentRecorded"),),
+            (Symbol::new(&env, "consent_recorded"),),
             (id, patient, protocol_id),
         );
-        id
+        Ok(id)
     }
 
+    #[allow(clippy::too_many_arguments)] // All parameters are individually required by the Soroban contract ABI
     pub fn report_adverse_event(
         env: Env,
         reporter: Address,
@@ -204,8 +369,13 @@ impl ClinicalTrial {
         site_id: u64,
         severity: u32,
         description_ref: String,
-    ) -> u64 {
+    ) -> Result<u64, Error> {
         reporter.require_auth();
+
+        // Validate inputs
+        validate_severity(severity)?;
+        validate_reference(&description_ref, Error::InvalidDescriptionRef)?;
+
         let next: u64 = env
             .storage()
             .instance()
@@ -228,10 +398,81 @@ impl ClinicalTrial {
             .instance()
             .set(&DataKey::AdverseEventNextId, &next.saturating_add(1));
         env.events().publish(
-            (Symbol::new(&env, "AdverseEvent"),),
+            (Symbol::new(&env, "adverse_event"),),
             (id, patient, protocol_id, site_id, severity),
         );
-        id
+        Ok(id)
+    }
+
+    pub fn get_trial_status(env: Env, protocol_id: u64) -> Result<(u64, u64, u64), Error> {
+        let proto: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+        Ok((proto.id, proto.current_participants, proto.max_participants))
+    }
+
+    /// Enroll a participant in a clinical trial.
+    ///
+    /// Enforces the `max_participants` cap: if the trial is already at capacity
+    /// this returns `Err(Error::TrialFull)`.  When the last available slot is
+    /// filled a `TrialCapacityReached` event is emitted in addition to the
+    /// standard `ParticipantEnrolled` event.
+    pub fn enroll_participant(
+        env: Env,
+        site: Address,
+        participant: Address,
+        protocol_id: u64,
+    ) -> Result<(), Error> {
+        site.require_auth();
+
+        // Load the protocol; fail if it doesn't exist.
+        let mut protocol: Protocol = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Protocol(protocol_id))
+            .ok_or(Error::ProtocolNotFound)?;
+
+        // Enforce enrollment cap (max_participants == 0 means unlimited).
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            return Err(Error::TrialFull);
+        }
+
+        // Record participant enrollment.
+        let key = DataKey::ParticipantRecords(participant.clone());
+        let mut enrolled: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(Vec::new(&env));
+        enrolled.push_back(protocol_id);
+        env.storage().persistent().set(&key, &enrolled);
+
+        // Increment the protocol's enrollment counter.
+        protocol.current_participants = protocol.current_participants.saturating_add(1);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Protocol(protocol_id), &protocol);
+
+        // Emit TrialCapacityReached when the last slot is now filled.
+        if protocol.max_participants > 0
+            && protocol.current_participants >= protocol.max_participants
+        {
+            env.events().publish(
+                (Symbol::new(&env, "TrialCapacityReached"),),
+                (protocol_id, protocol.max_participants),
+            );
+        }
+
+        env.events().publish(
+            (Symbol::new(&env, "ParticipantEnrolled"),),
+            (participant, protocol_id, site),
+        );
+
+        Ok(())
     }
 
     // Simple audit: return whether a consent exists for a patient/protocol
@@ -255,5 +496,80 @@ impl ClinicalTrial {
             i = i.saturating_add(1);
         }
         false
+    }
+}
+
+// ==================== Tests ====================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::{Env, String};
+
+    fn setup(env: &Env) -> (ClinicalTrialClient<'_>, Address, Address) {
+        let admin = Address::generate(env);
+        let contract_id = env.register_contract(None, ClinicalTrial);
+        let client = ClinicalTrialClient::new(env, &contract_id);
+        client.initialize(&admin);
+        (client, contract_id, admin)
+    }
+
+    #[test]
+    fn test_enroll_up_to_max_succeeds() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _contract_id, admin) = setup(&env);
+
+        let protocol_id = client.create_protocol(
+            &admin,
+            &String::from_str(&env, "Phase I Trial"),
+            &String::from_str(&env, "QmMetadataRef1234567890ABCDEF"),
+            &3u64, // max 3 participants
+        );
+
+        let site = Address::generate(&env);
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let p3 = Address::generate(&env);
+
+        // Enrolling up to capacity should all succeed
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
+        client.enroll_participant(&site, &p3, &protocol_id);
+
+        let (_, enrolled, max) = client.get_trial_status(&protocol_id);
+        assert_eq!(enrolled, 3);
+        assert_eq!(max, 3);
+    }
+
+    #[test]
+    fn test_enroll_beyond_max_fails() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (client, _contract_id, admin) = setup(&env);
+
+        let protocol_id = client.create_protocol(
+            &admin,
+            &String::from_str(&env, "Phase II Trial"),
+            &String::from_str(&env, "QmMetadataRef1234567890ABCDEF"),
+            &2u64, // max 2 participants
+        );
+
+        let site = Address::generate(&env);
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let p3 = Address::generate(&env); // would exceed cap
+
+        client.enroll_participant(&site, &p1, &protocol_id);
+        client.enroll_participant(&site, &p2, &protocol_id);
+
+        // Third enrollment must return TrialFull
+        let result = client.try_enroll_participant(&site, &p3, &protocol_id);
+        assert_eq!(result, Err(Ok(Error::TrialFull)));
+
+        // Enrollment count must remain at 2
+        let (_, enrolled, _) = client.get_trial_status(&protocol_id);
+        assert_eq!(enrolled, 2);
     }
 }

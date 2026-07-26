@@ -1,4 +1,5 @@
 #![no_std]
+//! homomorphic_registry - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -144,6 +145,27 @@ pub enum Error {
     NoiseBudgetExhausted = 12,
     ArithmeticOverflow = 13,
     KeyNotFound = 14,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContextNotFound => write!(f, "context not found"),
+            Error::ContextInactive => write!(f, "context inactive"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::ComputationAlreadyExists => write!(f, "computation already exists"),
+            Error::CiphertextNotFound => write!(f, "ciphertext not found"),
+            Error::CiphertextAlreadyExists => write!(f, "ciphertext already exists"),
+            Error::SchemeMismatch => write!(f, "scheme mismatch"),
+            Error::IncompatibleDimensions => write!(f, "incompatible dimensions"),
+            Error::NoiseBudgetExhausted => write!(f, "noise budget exhausted"),
+            Error::ArithmeticOverflow => write!(f, "arithmetic overflow"),
+            Error::KeyNotFound => write!(f, "key not found"),
+        }
+    }
 }
 
 // =============================================================================
@@ -763,6 +785,7 @@ impl HomomorphicRegistry {
     // Internal helpers
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -771,18 +794,17 @@ impl HomomorphicRegistry {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if &admin != caller {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_active_context(env: &Env, context_id: &BytesN<32>) -> Result<HEContext, Error> {
         let ctx: HEContext = env
             .storage()
@@ -840,6 +862,7 @@ impl HomomorphicRegistry {
         Ok(())
     }
 
+    #[must_use]
     fn load_ciphertext(env: &Env, ciphertext_id: &BytesN<32>) -> Result<EncryptedVector, Error> {
         env.storage()
             .persistent()
@@ -860,6 +883,7 @@ impl HomomorphicRegistry {
         Ok(())
     }
 
+    #[must_use]
     fn add_vectors(env: &Env, left: &Vec<i128>, right: &Vec<i128>) -> Result<Vec<i128>, Error> {
         let mut out = Vec::new(env);
         for i in 0..left.len() {
@@ -870,6 +894,7 @@ impl HomomorphicRegistry {
         Ok(out)
     }
 
+    #[must_use]
     fn mul_vectors(env: &Env, left: &Vec<i128>, right: &Vec<i128>) -> Result<Vec<i128>, Error> {
         let mut out = Vec::new(env);
         for i in 0..left.len() {

@@ -120,10 +120,10 @@ impl Storage {
             .storage()
             .persistent()
             .get(&DataKey::RollingHash)
-            .unwrap_or_else(|| BytesN::from_array(env, &[0u8; 32]));
+            .unwrap_or_else(|| BytesN::from_array(env, &[0; 32]));
 
         // Combine current and new hash: SHA256(current_hash || entry_hash)
-        let mut combined = Vec::<u8>::with_capacity(env, 64);
+        let mut combined = Vec::new(env);
         combined.append_array(&BytesN::from_array(env, current_hash.as_ref()));
         combined.append_array(&BytesN::from_array(env, entry_hash.as_ref()));
 
@@ -138,7 +138,7 @@ impl Storage {
         env.storage()
             .persistent()
             .get(&DataKey::RollingHash)
-            .unwrap_or_else(|| BytesN::from_array(env, &[0u8; 32]))
+            .unwrap_or_else(|| BytesN::from_array(env, &[0; 32]))
     }
 
     /// Get admin address
@@ -177,5 +177,26 @@ impl Storage {
         env.storage()
             .persistent()
             .set(&DataKey::IsInitialized, &true);
+    }
+
+    // ─── Data Purging Support (Issue #1218) ──────────────────────────────────
+
+    /// Remove an access log entry from persistent storage
+    pub fn remove_access_log(env: &Env, log_id: u64) {
+        env.storage()
+            .persistent()
+            .remove(&DataKey::AccessLog(log_id));
+    }
+
+    /// Replace the full list of log IDs for a patient
+    pub fn set_patient_log_ids(env: &Env, patient_id: &Address, ids: &Vec<u64>) {
+        env.storage()
+            .persistent()
+            .set(&DataKey::PatientAccessLogs(patient_id.clone()), ids);
+    }
+
+    /// Get log IDs for a patient (alias for get_patient_access_log_ids)
+    pub fn get_patient_log_ids(env: &Env, patient_id: &Address) -> Vec<u64> {
+        Self::get_patient_access_log_ids(env, patient_id)
     }
 }

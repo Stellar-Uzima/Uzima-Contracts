@@ -1,0 +1,46 @@
+{
+  "contract": "escrow",
+  "events": [
+    {
+      "name": "EscNew",
+      "topics": ["EscNew"],
+      "data": {
+        "order_id": "u64",
+        "payer": "Address",
+        "payee": "Address",
+        "amount": "i128",
+        "token": "Address"
+      }
+    },
+    {
+      "name": "EscRel",
+      "topics": ["EscRel"],
+      "data": {
+        "order_id": "u64",
+        "payee": "Address",
+        "provider_amount": "i128",
+        "fee_receiver": "Address",
+        "fee": "i128",
+        "token": "Address"
+      }
+    },
+    {
+      "name": "EscDisput",
+      "topics": ["EscDisput"],
+      "data": {
+        "order_id": "u64"
+      }
+    },
+    {
+      "name": "Refunded",
+      "topics": ["Refunded"],
+      "data": {
+        "order_id": "u64",
+        "payer": "Address",
+        "amount": "i128",
+        "token": "Address",
+        "reason": "String"
+      }
+    }
+  ]
+}

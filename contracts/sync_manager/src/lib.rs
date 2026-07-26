@@ -1,6 +1,10 @@
 #![no_std]
+//! sync_manager - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec, map, Map};
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
+    Vec,
+};
 
 // ============================================================================
 // Data Types & Constants
@@ -8,13 +12,11 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 
 const ROLE_ADMIN: u32 = 1;
 const ROLE_OPERATOR: u32 = 2;
-const ROLE_AUDITOR: u32 = 4;
-const ALL_ROLES: u32 = 7;
+const ALL_ROLES: u32 = 3;
 
 const MAX_RETRIES: u32 = 3;
-const SYNC_TIMEOUT_MS: u64 = 60000; // 60 seconds
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum SyncStatus {
     Pending = 0,
@@ -24,7 +26,7 @@ pub enum SyncStatus {
     PartialSuccess = 4,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 #[contracttype]
 pub enum ConsistencyLevel {
     Eventual = 0,
@@ -107,6 +109,29 @@ pub enum Error {
     MaxRetriesExceeded = 8,
     InconsistentState = 9,
     TargetUnavailable = 10,
+    ReconciliationNotFound = 11,
+    ReconciliationConflict = 12,
+    AsyncJobNotFound = 13,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::SyncOperationNotFound => write!(f, "sync operation not found"),
+            Error::SyncFailed => write!(f, "sync failed"),
+            Error::ConflictDetected => write!(f, "conflict detected"),
+            Error::MaxRetriesExceeded => write!(f, "max retries exceeded"),
+            Error::InconsistentState => write!(f, "inconsistent state"),
+            Error::TargetUnavailable => write!(f, "target unavailable"),
+            Error::ReconciliationNotFound => write!(f, "reconciliation not found"),
+            Error::ReconciliationConflict => write!(f, "reconciliation conflict"),
+            Error::AsyncJobNotFound => write!(f, "async job not found"),
+        }
+    }
 }
 
 // ============================================================================
@@ -117,14 +142,21 @@ const ADMIN: Symbol = symbol_short!("ADMIN");
 const INITIALIZED: Symbol = symbol_short!("INIT");
 const ROLES: Symbol = symbol_short!("ROLES");
 const OPERATIONS: Symbol = symbol_short!("OPS");
-const WINDOWS: Symbol = symbol_short!("WINS");
 const LAGS: Symbol = symbol_short!("LAGS");
 const CONFLICTS: Symbol = symbol_short!("CONF");
 const SYNC_POLICY: Symbol = symbol_short!("SPOL");
 const NEXT_OPERATION_ID: Symbol = symbol_short!("NOID");
+
+// TTL constants for persistent storage management
+const PERSISTENT_TTL_THRESHOLD: u32 = 100;
+const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 const NEXT_WINDOW_ID: Symbol = symbol_short!("NWID");
 const NEXT_LAG_ID: Symbol = symbol_short!("NLID");
 const NEXT_CONFLICT_ID: Symbol = symbol_short!("NCID");
+const RECON_CHECKS: Symbol = symbol_short!("RCCK");
+const ASYNC_RECON: Symbol = symbol_short!("AREC");
+const NEXT_CHECK_ID: Symbol = symbol_short!("NCID2");
+const NEXT_ASYNC_JOB: Symbol = symbol_short!("NAJB");
 
 // ============================================================================
 // Contract Implementation
@@ -140,9 +172,7 @@ impl SyncManager {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&INITIALIZED, &true);
@@ -166,7 +196,12 @@ impl SyncManager {
         Ok(())
     }
 
-    pub fn assign_role(env: Env, caller: Address, user: Address, role_mask: u32) -> Result<(), Error> {
+    pub fn assign_role(
+        env: Env,
+        caller: Address,
+        user: Address,
+        role_mask: u32,
+    ) -> Result<(), Error> {
         Self::require_admin(&env, &caller)?;
         if role_mask > ALL_ROLES {
             return Err(Error::InvalidInput);
@@ -176,7 +211,7 @@ impl SyncManager {
             .storage()
             .instance()
             .get(&ROLES)
-            .unwrap_or_else(|| map![(&env, (user.clone(), 0))]);
+            .unwrap_or_else(|| Map::new(&env));
         roles.set(user, role_mask);
         env.storage().instance().set(&ROLES, &roles);
         Ok(())
@@ -196,7 +231,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if target_region_ids.len() == 0 {
+        if target_region_ids.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -224,19 +259,21 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         operations.push_back(operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage()
             .instance()
             .set(&NEXT_OPERATION_ID, &(operation_id + 1));
 
-        env.events().publish((symbol_short!("SM_INIT_S"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_INIT_S"),), operation_id);
         Ok(operation_id)
     }
 
-    pub fn execute_sync(
-        env: Env,
-        caller: Address,
-        operation_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn execute_sync(env: Env, caller: Address, operation_id: u64) -> Result<bool, Error> {
         Self::require_operator(&env, &caller)?;
 
         let mut operations: Vec<SyncOperation> = env
@@ -245,8 +282,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;
@@ -261,23 +298,25 @@ impl SyncManager {
 
         // Simulate sync execution
         let current_time = env.ledger().timestamp();
-        operation.success_count = targets as u32;
+        operation.success_count = targets;
         operation.failure_count = 0;
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
 
         operations.set(idx, operation.clone());
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
-        env.events().publish((symbol_short!("SM_EXEC"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_EXEC"),), operation_id);
         Ok(true)
     }
 
-    pub fn retry_sync(
-        env: Env,
-        caller: Address,
-        operation_id: u64,
-    ) -> Result<bool, Error> {
+    pub fn retry_sync(env: Env, caller: Address, operation_id: u64) -> Result<bool, Error> {
         Self::require_operator(&env, &caller)?;
 
         let mut operations: Vec<SyncOperation> = env
@@ -286,8 +325,8 @@ impl SyncManager {
             .get(&OPERATIONS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        let mut found_index: Option<usize> = None;
-        for i in 0..operations.len() {
+        let mut found_index: Option<u32> = None;
+        for i in 0u32..operations.len() {
             if operations.get_unchecked(i).operation_id == operation_id {
                 found_index = Some(i);
                 break;
@@ -305,14 +344,20 @@ impl SyncManager {
         operation.status = SyncStatus::InProgress;
 
         let current_time = env.ledger().timestamp();
-        operation.success_count = operation.target_region_ids.len() as u32;
+        operation.success_count = operation.target_region_ids.len();
         operation.completed_at = current_time;
         operation.status = SyncStatus::Completed;
 
         operations.set(idx, operation);
         env.storage().persistent().set(&OPERATIONS, &operations);
+        env.storage().persistent().extend_ttl(
+            &OPERATIONS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
 
-        env.events().publish((symbol_short!("SM_RETR"),), operation_id);
+        env.events()
+            .publish((symbol_short!("SM_RETR"),), operation_id);
         Ok(true)
     }
 
@@ -372,6 +417,11 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         lags.push_back(lag_record);
         env.storage().persistent().set(&LAGS, &lags);
+        env.storage().persistent().extend_ttl(
+            &LAGS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage().instance().set(&NEXT_LAG_ID, &(lag_id + 1));
 
         env.events().publish((symbol_short!("SM_LAG"),), lag_id);
@@ -385,20 +435,25 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env))
     }
 
-    pub fn get_region_lag(env: Env, source_region_id: u32, target_region_id: u32) -> Option<ReplicationLag> {
+    pub fn get_region_lag(
+        env: Env,
+        source_region_id: u32,
+        target_region_id: u32,
+    ) -> Option<ReplicationLag> {
         let lags: Vec<ReplicationLag> = env
             .storage()
             .persistent()
             .get(&LAGS)
             .unwrap_or_else(|| Vec::new(&env));
 
-        if lags.len() == 0 {
+        if lags.is_empty() {
             return None;
         }
 
         for i in (0..lags.len()).rev() {
             let lag = lags.get_unchecked(i);
-            if lag.source_region_id == source_region_id && lag.target_region_id == target_region_id {
+            if lag.source_region_id == source_region_id && lag.target_region_id == target_region_id
+            {
                 return Some(lag.clone());
             }
         }
@@ -417,7 +472,7 @@ impl SyncManager {
     ) -> Result<u64, Error> {
         Self::require_operator(&env, &caller)?;
 
-        if conflicting_regions.len() == 0 {
+        if conflicting_regions.is_empty() {
             return Err(Error::InvalidInput);
         }
 
@@ -443,11 +498,17 @@ impl SyncManager {
             .unwrap_or_else(|| Vec::new(&env));
         conflicts.push_back(conflict);
         env.storage().persistent().set(&CONFLICTS, &conflicts);
+        env.storage().persistent().extend_ttl(
+            &CONFLICTS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
         env.storage()
             .instance()
             .set(&NEXT_CONFLICT_ID, &(conflict_id + 1));
 
-        env.events().publish((symbol_short!("SM_CONF"),), conflict_id);
+        env.events()
+            .publish((symbol_short!("SM_CONF"),), conflict_id);
         Ok(conflict_id)
     }
 
@@ -482,7 +543,13 @@ impl SyncManager {
         }
 
         env.storage().persistent().set(&CONFLICTS, &conflicts);
-        env.events().publish((symbol_short!("SM_RESO"),), conflict_id);
+        env.storage().persistent().extend_ttl(
+            &CONFLICTS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.events()
+            .publish((symbol_short!("SM_RESO"),), conflict_id);
         Ok(())
     }
 
@@ -490,6 +557,152 @@ impl SyncManager {
         env.storage()
             .persistent()
             .get(&CONFLICTS)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    // ========================================================================
+    // Offline Reconciliation Support
+    // ========================================================================
+
+    /// Perform an offline reconciliation check between source and target regions.
+    pub fn reconcile_offline(
+        env: Env,
+        caller: Address,
+        source_region_id: u32,
+        target_region_id: u32,
+        data_version_source: u64,
+        data_version_target: u64,
+        notes: soroban_sdk::String,
+    ) -> Result<u64, Error> {
+        Self::require_operator(&env, &caller)?;
+
+        let status = if data_version_source == data_version_target {
+            ReconciliationCheckStatus::Verified
+        } else {
+            ReconciliationCheckStatus::Mismatch
+        };
+
+        let check_id: u64 = env
+            .storage()
+            .instance()
+            .get(&NEXT_CHECK_ID)
+            .unwrap_or(1u64);
+
+        let check = ReconciliationCheck {
+            check_id,
+            source_region_id,
+            target_region_id,
+            data_version_source,
+            data_version_target,
+            status,
+            checked_at: env.ledger().timestamp(),
+            notes,
+        };
+
+        let mut checks: Vec<ReconciliationCheck> = env
+            .storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env));
+        checks.push_back(check);
+        env.storage().persistent().set(&RECON_CHECKS, &checks);
+        env.storage().persistent().extend_ttl(
+            &RECON_CHECKS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.storage()
+            .instance()
+            .set(&NEXT_CHECK_ID, &(check_id + 1));
+
+        env.events()
+            .publish((symbol_short!("SM_RECON"),), check_id);
+        Ok(check_id)
+    }
+
+    /// Queue an asynchronous reconciliation job for deferred processing.
+    pub fn queue_async_reconciliation(
+        env: Env,
+        caller: Address,
+        source_region_id: u32,
+        target_region_ids: soroban_sdk::Vec<u32>,
+    ) -> Result<u64, Error> {
+        Self::require_operator(&env, &caller)?;
+
+        if target_region_ids.is_empty() {
+            return Err(Error::InvalidInput);
+        }
+
+        let job_id: u64 = env
+            .storage()
+            .instance()
+            .get(&NEXT_ASYNC_JOB)
+            .unwrap_or(1u64);
+
+        let job = AsyncReconciliation {
+            job_id,
+            source_region_id,
+            target_region_ids,
+            queued_at: env.ledger().timestamp(),
+            started_at: 0,
+            completed_at: 0,
+            status: ReconciliationCheckStatus::Pending,
+            retry_count: 0,
+        };
+
+        let mut jobs: Vec<AsyncReconciliation> = env
+            .storage()
+            .persistent()
+            .get(&ASYNC_RECON)
+            .unwrap_or_else(|| Vec::new(&env));
+        jobs.push_back(job);
+        env.storage().persistent().set(&ASYNC_RECON, &jobs);
+        env.storage().persistent().extend_ttl(
+            &ASYNC_RECON,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.storage()
+            .instance()
+            .set(&NEXT_ASYNC_JOB, &(job_id + 1));
+
+        env.events()
+            .publish((symbol_short!("SM_AQRE"),), job_id);
+        Ok(job_id)
+    }
+
+    /// Get the status of a reconciliation check by ID.
+    pub fn get_reconciliation_status(
+        env: Env,
+        check_id: u64,
+    ) -> Option<ReconciliationCheck> {
+        let checks: Vec<ReconciliationCheck> = env
+            .storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for i in 0..checks.len() {
+            if checks.get_unchecked(i).check_id == check_id {
+                return Some(checks.get_unchecked(i).clone());
+            }
+        }
+        None
+    }
+
+    /// List all reconciliation checks.
+    pub fn list_reconciliation_checks(env: Env) -> Vec<ReconciliationCheck> {
+        env.storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// List all async reconciliation jobs.
+    pub fn list_async_reconciliations(env: Env) -> Vec<AsyncReconciliation> {
+        env.storage()
+            .persistent()
+            .get(&ASYNC_RECON)
             .unwrap_or_else(|| Vec::new(&env))
     }
 
@@ -513,7 +726,7 @@ impl SyncManager {
         env.storage()
             .instance()
             .get(&SYNC_POLICY)
-            .unwrap_or_else(|| SyncPolicy {
+            .unwrap_or(SyncPolicy {
                 sync_interval_ms: 60000,
                 max_lag_ms: 5000,
                 consistency_mode: ConsistencyLevel::Eventual,
@@ -527,14 +740,20 @@ impl SyncManager {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
-        let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&ADMIN)
+            .ok_or(Error::NotInitialized)?;
         if admin != *caller {
             return Err(Error::NotAuthorized);
         }
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -553,42 +772,231 @@ impl SyncManager {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::{Address as _, Env};
+    use soroban_sdk::{testutils::Address as _, Env};
 
     #[test]
     fn test_initialize() {
         let env = Env::default();
-        let admin = Address::random(&env);
+        let admin = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        let result = SyncManager::initialize(env.clone(), admin.clone());
+        let result = env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        });
         assert!(result.is_ok());
 
-        let result = SyncManager::initialize(env, admin);
+        let result = env.as_contract(&contract, || SyncManager::initialize(env.clone(), admin));
         assert!(matches!(result, Err(Error::AlreadyInitialized)));
     }
 
     #[test]
     fn test_initiate_sync() {
         let env = Env::default();
-        let admin = Address::random(&env);
-        let operator = Address::random(&env);
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
 
-        SyncManager::initialize(env.clone(), admin.clone()).unwrap();
-        SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR).unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
 
         let mut targets = Vec::new(&env);
         targets.push_back(2u32);
         targets.push_back(3u32);
 
-        let result = SyncManager::initiate_sync(
-            env,
-            operator,
-            1,
-            targets,
-            12345u64,
-            ConsistencyLevel::Eventual,
+        let result = env.as_contract(&contract, || {
+            SyncManager::initiate_sync(
+                env.clone(),
+                operator,
+                1,
+                targets,
+                12345u64,
+                ConsistencyLevel::Eventual,
+            )
+        });
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reconcile_offline() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let notes = soroban_sdk::String::from_str(&env, "test reconciliation");
+
+        let result = env.as_contract(&contract, || {
+            SyncManager::reconcile_offline(
+                env.clone(),
+                operator.clone(),
+                1,
+                2,
+                100,
+                100,
+                notes,
+            )
+        });
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_queue_async_reconciliation() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        targets.push_back(3u32);
+
+        let result = env.as_contract(&contract, || {
+            SyncManager::queue_async_reconciliation(env.clone(), operator.clone(), 1, targets)
+        });
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_get_reconciliation_status() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let notes = soroban_sdk::String::from_str(&env, "test");
+
+        let check_id = env.as_contract(&contract, || {
+            SyncManager::reconcile_offline(
+                env.clone(),
+                operator,
+                1,
+                2,
+                100,
+                100,
+                notes,
+            )
+        })
+        .unwrap();
+
+        let check = env.as_contract(&contract, || {
+            SyncManager::get_reconciliation_status(env.clone(), check_id)
+        });
+        assert!(check.is_some());
+        assert_eq!(check.unwrap().status, ReconciliationCheckStatus::Verified);
+    }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol};
+
+mod types;
+use types::{DataKey, ReconciliationJob, ReconciliationStatus};
+
+#[contract]
+pub struct SyncManagerContract;
+
+#[contractimpl]
+impl SyncManagerContract {
+    /// Initializes administrative control for sync operations.
+    pub fn initialize(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("Already initialized");
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+    }
+
+    /// Enqueues an asynchronous reconciliation job for off-chain indexers.
+    pub fn enqueue_reconciliation(
+        env: Env,
+        source_contract: Address,
+        payload_hash: BytesN<32>,
+    ) -> u64 {
+        source_contract.require_auth();
+
+        let mut count: u64 = env.storage().instance().get(&DataKey::JobCount).unwrap_or(0);
+        count += 1;
+
+        let job = ReconciliationJob {
+            id: count,
+            source_contract: source_contract.clone(),
+            payload_hash: payload_hash.clone(),
+            status: ReconciliationStatus::Pending,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&DataKey::Job(count), &job);
+        env.storage().instance().set(&DataKey::JobCount, &count);
+
+        // Emit Soroban event for off-chain indexing services
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("enqueue")),
+            (count, source_contract, payload_hash),
         );
 
-        assert!(result.is_ok());
+        count
+    }
+
+    /// Process/reconcile an enqueued job batch from an authorized off-chain worker.
+    pub fn process_reconciliation(env: Env, job_id: u64, success: bool) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        let mut job: ReconciliationJob = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Job(job_id))
+            .expect("Job not found");
+
+        if job.status != ReconciliationStatus::Pending {
+            panic!("Job is not pending");
+        }
+
+        job.status = if success {
+            ReconciliationStatus::Processed
+        } else {
+            ReconciliationStatus::Failed
+        };
+
+        env.storage().persistent().set(&DataKey::Job(job_id), &job);
+
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("resolve")),
+            (job_id, job.status),
+        );
     }
 }

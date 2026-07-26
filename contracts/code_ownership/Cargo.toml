@@ -1,0 +1,20 @@
+[package]
+name = "code_ownership"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+soroban-sdk = { workspace = true, features = ["alloc"] }
+governance_commons = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["alloc", "testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]
+
+[lib]
+crate-type = ["cdylib"]
+

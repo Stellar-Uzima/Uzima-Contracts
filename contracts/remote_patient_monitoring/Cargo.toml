@@ -12,6 +12,11 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 soroban-sdk = { workspace = true }
 upgradeability = { path = "../upgradeability" }
+governance_commons = { path = "../../libs/governance_commons" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

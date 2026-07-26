@@ -26,15 +26,63 @@ To prevent data corruption during upgrades, the system enforces:
 
 1. **Development**: Build the new contract WASM.
 2. **Installation**: Deploy (install) the new WASM hash to the network.
-3. **Proposal**: Call `propose_upgrade` on the `UpgradeManager`.
-4. **Observation**: Wait for the timelock to expire.
-5. **Approval**: Obtain necessary validator signatures.
-6. **Execution**: Trigger `execute` on the `UpgradeManager`.
-7. **Migration (Optional)**: If the data layout changed, the new version's `initialize` or a dedicated `migrate` function should be called.
-8. **Deprecation Registration (Optional)**: If old entrypoints remain temporarily supported, register them with the shared upgradeability deprecation registry.
+3. **Plan**: Record the intended migration in `deployments/<network>/<contract>/plan.json`.
+4. **Dry Run**: Execute `./scripts/migrate_contract.sh <contract> --network <network> --dry-run` locally and review the projected storage diff, gas, and emitted events before any live transaction.
+5. **Proposal**: Call `propose_upgrade` on the `UpgradeManager`.
+6. **Observation**: Wait for the timelock to expire.
+7. **Approval**: Obtain necessary validator signatures.
+8. **Execution**: Trigger `execute` on the `UpgradeManager`, or run `./scripts/migrate_contract.sh <contract> --network <network> --i-understand-this-is-live` for direct admin-managed upgrades after the dry-run has been approved internally.
+9. **Migration (Optional)**: If the data layout changed, the new version's `initialize` or a dedicated `migrate` function should be called.
+10. **Deprecation Registration (Optional)**: If old entrypoints remain temporarily supported, register them with the shared upgradeability deprecation registry.
+
+## Planned Migration Dry Runs
+
+Operators should keep each planned migration beside other deployment artifacts:
+
+```text
+deployments/<network>/<contract>/plan.json
+```
+
+The migration plan is the source of truth for both dry-run review and live execution. At minimum it must include:
+
+- `new_wasm_hash`
+- `version_bump`
+- `expected_storage_migration_steps`
+- `expected_gas`
+- `expected_event_emissions`
+
+The checked-in template at `deployments/testnet/medical_records/plan.json` shows the full shape used by `scripts/migrate_contract.sh`, including optional operator metadata such as `contract_id`, `admin_identity`, `upgrade_entrypoint`, and `caller_arg_name`.
+
+### Dry-Run Workflow
+
+```bash
+./scripts/migrate_contract.sh medical_records --network testnet --dry-run
+```
+
+Dry-run mode performs no network submission. Instead it reads the plan file and prints:
+
+- the projected storage state diff derived from `expected_storage_migration_steps`
+- the projected gas budget from `expected_gas`
+- the projected event emissions from `expected_event_emissions`
+
+### Live Execution Guardrails
+
+Live mode is intentionally harder to trigger:
+
+```bash
+./scripts/migrate_contract.sh medical_records \
+  --network testnet \
+  --identity testnet-admin \
+  --i-understand-this-is-live
+```
+
+The script refuses to submit unless:
+
+- `--i-understand-this-is-live` is present
+- the operator types `LIVE` at the interactive prompt
+- the plan includes the contract ID and upgrade metadata needed for the `upgrade` invocation
 
 ## Deprecation Warnings
-
 The shared `upgradeability` crate now supports:
 
 - tracking deprecated functions in contract storage

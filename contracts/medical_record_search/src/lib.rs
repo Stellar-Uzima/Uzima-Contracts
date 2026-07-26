@@ -1,4 +1,5 @@
 #![no_std]
+//! medical_record_search - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 
 #[cfg(test)]
@@ -128,6 +129,26 @@ pub struct SearchAuditEntry {
     pub granted: bool,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct EncryptedIndexEntry {
+    pub record_id: u64,
+    pub encrypted_hash: BytesN<32>,
+    pub patient: Address,
+    pub metadata_keys: Vec<BytesN<32>>,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[contracttype]
+pub struct SearchMetadata {
+    pub patient_id: Address,
+    pub record_type: Symbol,
+    pub tags: Vec<BytesN<32>>,
+    pub created_at: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -142,6 +163,8 @@ pub enum DataKey {
     CachePolicy,
     Ranking,
     Audit(u64),
+    EncryptedIndex(u64),
+    SearchMetadataKey(u64),
 }
 
 #[contracterror]
@@ -156,6 +179,29 @@ pub enum Error {
     RecordNotIndexed = 6,
     QueryTooLarge = 7,
     CacheMiss = 8,
+    IndexNotFound = 9,
+    IndexAlreadyExists = 10,
+    SearchFailed = 11,
+    InvalidEncryptedHash = 12,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::RecordNotIndexed => write!(f, "record not indexed"),
+            Error::QueryTooLarge => write!(f, "query too large"),
+            Error::CacheMiss => write!(f, "cache miss"),
+            Error::IndexNotFound => write!(f, "encrypted index not found"),
+            Error::IndexAlreadyExists => write!(f, "encrypted index already exists"),
+            Error::SearchFailed => write!(f, "encrypted search failed"),
+            Error::InvalidEncryptedHash => write!(f, "invalid encrypted hash"),
+        }
+    }
 }
 
 #[contract]
@@ -164,10 +210,8 @@ pub struct MedicalRecordSearchContract;
 #[contractimpl]
 impl MedicalRecordSearchContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&ADMIN) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&PAUSED, &false);
@@ -439,6 +483,155 @@ impl MedicalRecordSearchContract {
             .persistent()
             .get(&DataKey::Index(record_id))
             .ok_or(Error::RecordNotIndexed)
+    }
+
+    pub fn create_encrypted_index(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        encrypted_hash: BytesN<32>,
+        patient: Address,
+        metadata_keys: Vec<BytesN<32>>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, ROLE_INDEXER)?;
+        Self::require_not_paused(&env)?;
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::EncryptedIndex(record_id))
+        {
+            return Err(Error::IndexAlreadyExists);
+        }
+
+        let now = env.ledger().timestamp();
+        let entry = EncryptedIndexEntry {
+            record_id,
+            encrypted_hash,
+            patient,
+            metadata_keys,
+            created_at: now,
+            updated_at: now,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::EncryptedIndex(record_id), &entry);
+
+        env.events().publish(
+            (symbol_short!("ENC_IDX_CR"),),
+            (record_id, caller),
+        );
+        Ok(())
+    }
+
+    pub fn search_by_encrypted_index(
+        env: Env,
+        caller: Address,
+        patient: Address,
+        metadata_key: BytesN<32>,
+    ) -> Result<Vec<EncryptedIndexEntry>, Error> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, ROLE_SEARCHER)?;
+
+        let indexed_ids: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::IndexedIds)
+            .unwrap_or(Vec::new(&env));
+
+        let mut results = Vec::new(&env);
+        for id in indexed_ids.iter() {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, EncryptedIndexEntry>(&DataKey::EncryptedIndex(id))
+            {
+                if entry.patient == patient
+                    && entry
+                        .metadata_keys
+                        .iter()
+                        .any(|k| k == metadata_key)
+                {
+                    results.push_back(entry);
+                }
+            }
+        }
+
+        if results.is_empty() {
+            return Err(Error::SearchFailed);
+        }
+
+        Ok(results)
+    }
+
+    pub fn update_encrypted_index(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        encrypted_hash: BytesN<32>,
+        metadata_keys: Vec<BytesN<32>>,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, ROLE_INDEXER)?;
+
+        let mut entry: EncryptedIndexEntry = env
+            .storage()
+            .persistent()
+            .get(&DataKey::EncryptedIndex(record_id))
+            .ok_or(Error::IndexNotFound)?;
+
+        entry.encrypted_hash = encrypted_hash;
+        entry.metadata_keys = metadata_keys;
+        entry.updated_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::EncryptedIndex(record_id), &entry);
+
+        env.events().publish(
+            (symbol_short!("ENC_IDX_UP"),),
+            (record_id, caller),
+        );
+        Ok(())
+    }
+
+    pub fn remove_encrypted_index(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_role(&env, &caller, ROLE_INDEXER)?;
+
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::EncryptedIndex(record_id))
+        {
+            return Err(Error::IndexNotFound);
+        }
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::EncryptedIndex(record_id));
+
+        env.events().publish(
+            (symbol_short!("ENC_IDX_RM"),),
+            (record_id, caller),
+        );
+        Ok(())
+    }
+
+    pub fn get_encrypted_index_entry(
+        env: Env,
+        record_id: u64,
+    ) -> Result<EncryptedIndexEntry, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::EncryptedIndex(record_id))
+            .ok_or(Error::IndexNotFound)
     }
 }
 
@@ -755,6 +948,7 @@ impl MedicalRecordSearchContract {
         current
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&ADMIN) {
             return Err(Error::NotInitialized);
@@ -762,6 +956,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -775,6 +970,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_role(env: &Env, caller: &Address, role: u32) -> Result<(), Error> {
         Self::require_initialized(env)?;
         let admin: Address = env
@@ -796,6 +992,7 @@ impl MedicalRecordSearchContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env.storage().instance().get(&PAUSED).unwrap_or(false) {
             return Err(Error::ContractPaused);

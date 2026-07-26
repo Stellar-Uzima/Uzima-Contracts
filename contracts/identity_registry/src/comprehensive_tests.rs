@@ -7,11 +7,14 @@ fn create_test_contract() -> (Env, IdentityRegistryContractClient<'static>, Addr
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().set_timestamp(10_000);
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
     let contract_id = env.register_contract(None, IdentityRegistryContract);
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
     let owner = Address::generate(&env);
+    let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
     let network_id = String::from_str(&env, "testnet");
-    client.initialize(&owner, &network_id);
+    client.initialize(&owner, &network_id, &rbac_id);
     (env, client, owner)
 }
 
@@ -34,18 +37,21 @@ fn create_test_did(
 fn test_initialize_with_different_networks() {
     let env = Env::default();
     env.mock_all_auths();
+    let rbac_id = env.register_contract(None, MockRbac);
+    let rbac_client = MockRbacClient::new(&env, &rbac_id);
     let contract_id = env.register_contract(None, IdentityRegistryContract);
     let client = IdentityRegistryContractClient::new(&env, &contract_id);
     let owner = Address::generate(&env);
+    let _ = rbac_client.assign_role(&owner, &RbacRole::Admin);
 
     let network_id = String::from_str(&env, "mainnet");
-    client.initialize(&owner, &network_id);
+    client.initialize(&owner, &network_id, &rbac_id);
 
     assert!(client.is_verifier(&owner));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #2)")]
+#[should_panic(expected = "Error(Contract, #300)")]
 fn test_get_owner_not_initialized() {
     let env = Env::default();
     env.mock_all_auths();
@@ -60,7 +66,7 @@ fn test_get_owner_not_initialized() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #6)")]
+#[should_panic(expected = "Error(Contract, #470)")]
 fn test_resolve_nonexistent_did() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -69,7 +75,7 @@ fn test_resolve_nonexistent_did() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #6)")]
+#[should_panic(expected = "Error(Contract, #470)")]
 fn test_resolve_did_by_invalid_string() {
     let (env, client, _owner) = create_test_contract();
     let invalid_did = String::from_str(&env, "did:stellar:uzima:testnet:invalid");
@@ -78,7 +84,7 @@ fn test_resolve_did_by_invalid_string() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #8)")]
+#[should_panic(expected = "Error(Contract, #472)")]
 fn test_update_deactivated_did() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -125,7 +131,7 @@ fn test_resolve_did_by_string() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
+#[should_panic(expected = "Error(Contract, #450)")]
 fn test_rotate_nonexistent_key() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -139,7 +145,7 @@ fn test_rotate_nonexistent_key() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #23)")]
+#[should_panic(expected = "Error(Contract, #603)")]
 fn test_rotate_key_cooldown() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -182,7 +188,7 @@ fn test_rotate_key_after_cooldown() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #9)")]
+#[should_panic(expected = "Error(Contract, #250)")]
 fn test_revoke_last_verification_method() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -250,7 +256,7 @@ fn test_add_multiple_verification_methods() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #4)")]
+#[should_panic(expected = "Error(Contract, #110)")]
 fn test_issue_credential_not_verifier() {
     let (env, client, _owner) = create_test_contract();
     let non_verifier = Address::generate(&env);
@@ -270,7 +276,7 @@ fn test_issue_credential_not_verifier() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #11)")]
+#[should_panic(expected = "Error(Contract, #460)")]
 fn test_get_nonexistent_credential() {
     let (_env, client, _owner) = create_test_contract();
     let fake_id = BytesN::from_array(&_env, &[99u8; 32]);
@@ -279,7 +285,7 @@ fn test_get_nonexistent_credential() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #3)")]
+#[should_panic(expected = "Error(Contract, #100)")]
 fn test_revoke_credential_not_issuer() {
     let (env, client, owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -302,7 +308,7 @@ fn test_revoke_credential_not_issuer() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #12)")]
+#[should_panic(expected = "Error(Contract, #606)")]
 fn test_revoke_already_revoked_credential() {
     let (env, client, owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -417,7 +423,7 @@ fn test_has_valid_credential_with_revoked() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #19)")]
+#[should_panic(expected = "Error(Contract, #120)")]
 fn test_initiate_recovery_invalid_guardian() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -432,7 +438,7 @@ fn test_initiate_recovery_invalid_guardian() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #17)")]
+#[should_panic(expected = "Error(Contract, #361)")]
 fn test_initiate_recovery_already_pending() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -501,7 +507,7 @@ fn test_set_recovery_threshold() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #18)")]
+#[should_panic(expected = "Error(Contract, #362)")]
 fn test_execute_recovery_before_timelock() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -570,7 +576,7 @@ fn test_approve_recovery_duplicate() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #16)")]
+#[should_panic(expected = "Error(Contract, #360)")]
 fn test_cancel_recovery_not_initiated() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -585,7 +591,7 @@ fn test_cancel_recovery_not_initiated() {
 // ============================================================================
 
 #[test]
-#[should_panic(expected = "Error(Contract, #21)")]
+#[should_panic(expected = "Error(Contract, #462)")]
 fn test_remove_nonexistent_service() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);
@@ -623,7 +629,7 @@ fn test_add_multiple_services() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #8)")]
+#[should_panic(expected = "Error(Contract, #472)")]
 fn test_add_service_to_deactivated_did() {
     let (env, client, _owner) = create_test_contract();
     let subject = Address::generate(&env);

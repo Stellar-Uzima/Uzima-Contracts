@@ -15,3 +15,8 @@ upgradeability = { path = "../upgradeability" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+proptest = "1.6.0"
+
+[features]
+default = []
+testutils = ["soroban-sdk/testutils"]

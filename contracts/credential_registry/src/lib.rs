@@ -1,4 +1,38 @@
 #![no_std]
+//! # Credential Registry
+//!
+//! Tracks per-issuer credential roots (one root per issuer per version) and
+//! the active root that verifiers should use when checking issued
+//! verifiable credentials.
+//!
+//! ## Operations
+//!
+//! * `set_credential_root` / `batch_set_credential_roots` — issuer managers
+//!   publish a new Merkle root keyed by `(issuer, version)`. Each new version
+//!   supersedes the previous active root for that issuer.
+//! * `revoke_root` — flag a previously-published root as revoked. If the
+//!   revoked root was active, the issuer's `ActiveRoot` is cleared so
+//!   verifiers must obtain the next valid version.
+//! * `is_root_revoked`, `get_root`, `get_revocation_root` — read paths used
+//!   by off-chain verifiers.
+//!
+//! ## Authentication
+//!
+//! * The contract has a single global admin set at `initialize`.
+//! * Each issuer has an optional [`DataKey::IssuerAdmin`] delegate who is
+//!   permitted to publish or revoke that issuer's roots.
+//!
+//! ## Examples
+//!
+//! A typical call flow (off-chain pseudocode):
+//!
+//! ```ignore
+//! client.initialize(&admin);
+//! client.set_issuer_admin(&admin, &issuer, &issuer_admin);
+//! let v = client.set_credential_root(&iadm, &issuer, &root, &meta, &expiry, &sig);
+//! let proofs = offchain::verify_against_root(root, vc_proof);
+//! ```
+#![allow(clippy::too_many_arguments)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
@@ -27,6 +61,7 @@ pub enum DataKey {
     ActiveRoot(Address),
     RootRecord(Address, u32),
     RevocationRoot(Address),
+    RootToVersion(Address, BytesN<32>), // index: root bytes → version number
 }
 
 #[contracterror]
@@ -44,16 +79,30 @@ pub enum Error {
     InvalidSignature = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::IssuerNotFound => write!(f, "issuer not found"),
+            Error::RootVersionNotFound => write!(f, "root version not found"),
+            Error::InvalidCredentialId => write!(f, "invalid credential id"),
+            Error::InvalidExpiry => write!(f, "invalid expiry"),
+            Error::InvalidMetadata => write!(f, "invalid metadata"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+        }
+    }
+}
+
 #[contract]
 pub struct CredentialRegistryContract;
 
 #[contractimpl]
 impl CredentialRegistryContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
 
@@ -130,7 +179,10 @@ impl CredentialRegistryContract {
             .set(&DataKey::ActiveVersion(issuer.clone()), &next);
         env.storage()
             .persistent()
-            .set(&DataKey::ActiveRoot(issuer.clone()), &root);
+            .set(&DataKey::ActiveRoot(issuer.clone()), &root.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RootToVersion(issuer.clone(), root.clone()), &next);
 
         env.events().publish(
             (symbol_short!("CREDREG"), symbol_short!("ROOT")),
@@ -219,35 +271,101 @@ impl CredentialRegistryContract {
     }
 
     pub fn is_root_revoked(env: Env, issuer: Address, root: BytesN<32>) -> bool {
-        let active_version: u32 = env
+        let version: Option<u32> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RootToVersion(issuer.clone(), root.clone()));
+        let Some(v) = version else {
+            return false;
+        };
+        env.storage()
+            .persistent()
+            .get::<_, CredentialRootRecord>(&DataKey::RootRecord(issuer, v))
+            .map(|rec| rec.revoked)
+            .unwrap_or(false)
+    }
+
+    pub fn batch_set_credential_roots(
+        env: Env,
+        caller: Address,
+        issuer: Address,
+        roots: soroban_sdk::Vec<BytesN<32>>,
+        metadata_hashes: soroban_sdk::Vec<BytesN<32>>,
+        expiries: soroban_sdk::Vec<u64>,
+        signatures: soroban_sdk::Vec<BytesN<64>>,
+    ) -> Result<soroban_sdk::Vec<u32>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_issuer_manager(&env, &caller, &issuer)?;
+
+        let len = roots.len();
+        if len != metadata_hashes.len() || len != expiries.len() || len != signatures.len() {
+            return Err(Error::InvalidCredentialId);
+        }
+
+        let now = env.ledger().timestamp();
+        let mut current: u32 = env
             .storage()
             .persistent()
             .get(&DataKey::ActiveVersion(issuer.clone()))
             .unwrap_or(0);
-        if active_version == 0 {
-            return false;
+
+        let mut versions = soroban_sdk::Vec::new(&env);
+
+        for i in 0..len {
+            let root = roots.get(i).unwrap();
+            let metadata_hash = metadata_hashes.get(i).unwrap();
+            let expiry = expiries.get(i).unwrap();
+            let signature = signatures.get(i).unwrap();
+
+            Self::validate_credential_id(&root)?;
+            if expiry <= now {
+                return Err(Error::InvalidExpiry);
+            }
+            Self::validate_metadata_hash(&metadata_hash)?;
+            Self::validate_signature(&signature)?;
+
+            current = current.saturating_add(1);
+            let rec = CredentialRootRecord {
+                version: current,
+                root: root.clone(),
+                metadata_hash,
+                updated_at: now,
+                expiry,
+                signature,
+                revoked: false,
+            };
+            env.storage()
+                .persistent()
+                .set(&DataKey::RootRecord(issuer.clone(), current), &rec);
+            env.storage().persistent().set(
+                &DataKey::RootToVersion(issuer.clone(), root.clone()),
+                &current,
+            );
+            versions.push_back(current);
         }
 
-        let mut v = 1u32;
-        while v <= active_version {
-            if let Some(rec) = env
-                .storage()
+        env.storage()
+            .persistent()
+            .set(&DataKey::ActiveVersion(issuer.clone()), &current);
+        if let Some(last_root) = roots.get(len - 1) {
+            env.storage()
                 .persistent()
-                .get::<_, CredentialRootRecord>(&DataKey::RootRecord(issuer.clone(), v))
-            {
-                if rec.root == root {
-                    return rec.revoked;
-                }
-            }
-            v = v.saturating_add(1);
+                .set(&DataKey::ActiveRoot(issuer.clone()), &last_root);
         }
-        false
+
+        env.events().publish(
+            (symbol_short!("CREDREG"), symbol_short!("BROOT")),
+            (issuer, current),
+        );
+        Ok(versions)
     }
 
     pub fn has_active_root(env: Env, issuer: Address) -> bool {
         env.storage().persistent().has(&DataKey::ActiveRoot(issuer))
     }
 
+    #[must_use]
     fn validate_credential_id(root: &BytesN<32>) -> Result<(), Error> {
         if root.to_array() == [0u8; 32] {
             return Err(Error::InvalidCredentialId);
@@ -255,6 +373,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_expiry(env: &Env, expiry: u64) -> Result<(), Error> {
         if expiry <= env.ledger().timestamp() {
             return Err(Error::InvalidExpiry);
@@ -262,6 +381,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_metadata_hash(metadata_hash: &BytesN<32>) -> Result<(), Error> {
         if metadata_hash.to_array() == [0u8; MAX_METADATA_HASH_SIZE as usize] {
             return Err(Error::InvalidMetadata);
@@ -269,6 +389,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_signature(signature: &BytesN<64>) -> Result<(), Error> {
         if signature.to_array() == [0u8; 64] {
             return Err(Error::InvalidSignature);
@@ -276,6 +397,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -284,6 +406,7 @@ impl CredentialRegistryContract {
         }
     }
 
+    #[must_use]
     fn require_global_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -297,6 +420,7 @@ impl CredentialRegistryContract {
         }
     }
 
+    #[must_use]
     fn require_issuer_manager(env: &Env, caller: &Address, issuer: &Address) -> Result<(), Error> {
         if Self::is_global_admin(env, caller) {
             return Ok(());

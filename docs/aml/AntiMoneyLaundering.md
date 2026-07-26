@@ -24,6 +24,8 @@ A modular rule engine allows administrators to define AML criteria.
 A robust on-chain blacklist prevents sanctioned or non-compliant actors from participating in the ecosystem.
 - Changes require admin authorization.
 - Integrates with the Forensics contract for evidence-backed sanctions.
+- `update_user_status` is the supported admin entrypoint for blacklist changes.
+- `set_user_status` is deprecated as of `v2.0.0` and now emits a `Deprecated` warning event on use.
 
 ### 4. Regulatory Integration
 Provides analytical reports and historical transaction summaries for regulatory auditing.
@@ -40,3 +42,19 @@ Provides analytical reports and historical transaction summaries for regulatory 
 
 ## Integration
 Contracts handling fund movements or identity registration must integrate with `monitor_transaction` and `is_compliant` to ensure full AML coverage.
+
+## Deprecation And Migration
+
+The AML contract now participates in the shared upgradeability deprecation registry.
+
+- Deprecated function tracking is stored on-chain through `get_deprecated_functions`.
+- Legacy calls to `set_user_status` emit a `Deprecated` event with migration guidance.
+- Fresh deployments register AML deprecations during `initialize`.
+- Existing deployments can bootstrap the registry with `register_deprecated_functions` before or during the next upgrade cycle.
+
+### Maintainer Migration Path
+
+1. Move integrations from `set_user_status` to `update_user_status`.
+2. Call `register_deprecated_functions` on older deployments that were initialized before `v2.0.0`.
+3. Use `upgrade` so deprecations are registered atomically with future WASM upgrades.
+4. Monitor `Deprecated` events and remove the legacy entrypoint in `v3.0.0`.

@@ -1,0 +1,158 @@
+version: "3.9"
+
+services:
+  stellar-node:
+    image: stellar/quickstart:testing
+    container_name: uzima-stellar-node
+    ports:
+      - "8000:8000"
+    environment:
+      - NETWORK=local
+      - ENABLE_SOROBAN_RPC=true
+      - ENABLE_LOGS=true
+      - STELLAR_NETWORK_PASSPHRASE=Standalone Network ; February 2017
+    volumes:
+      - stellar-data:/opt/stellar
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8000/"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    networks:
+      - uzima-net
+
+  contracts-builder:
+    build:
+      context: .
+      dockerfile: dockerfile
+      target: development
+    container_name: uzima-contracts-builder
+    depends_on:
+      stellar-node:
+        condition: service_healthy
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    command: >
+      bash -c "
+        echo '=== Configuring Soroban Network ===' &&
+        soroban config network add local
+          --rpc-url http://stellar-node:8000/soroban/rpc
+          --network-passphrase 'Standalone Network ; February 2017' || true &&
+        echo '=== Generating Test Identities ===' &&
+        soroban config identity generate dev-admin 2>/dev/null || true &&
+        soroban config identity generate dev-doctor 2>/dev/null || true &&
+        soroban config identity generate dev-patient 2>/dev/null || true &&
+        echo '=== Building Contracts ===' &&
+        cargo build --release --target wasm32-unknown-unknown &&
+        echo '=== Copying WASM Artifacts ===' &&
+        mkdir -p dist/ &&
+        find target/wasm32-unknown-unknown/release -name '*.wasm' -exec cp {} dist/ \; &&
+        echo '=== Build Complete ==='
+      "
+    environment:
+      RUST_BACKTRACE: "1"
+      CARGO_TERM_COLOR: "always"
+    healthcheck:
+      test: ["CMD", "test", "-f", "dist/medical_records.wasm"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
+    networks:
+      - uzima-net
+
+  quickstart:
+    build:
+      context: .
+      dockerfile: dockerfile
+      target: development
+    container_name: uzima-quickstart
+    depends_on:
+      contracts-builder:
+        condition: service_completed_successfully
+      stellar-node:
+        condition: service_healthy
+    working_dir: /workspace
+    volumes:
+      - .:/workspace:cached
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    command: >
+      bash -c "
+        echo '=== Running Quickstart ===' &&
+        soroban config network add local
+          --rpc-url http://stellar-node:8000/soroban/rpc
+          --network-passphrase 'Standalone Network ; February 2017' 2>/dev/null || true &&
+        soroban config identity generate dev-admin 2>/dev/null || true &&
+        soroban config identity generate dev-doctor 2>/dev/null || true &&
+        soroban config identity generate dev-patient 2>/dev/null || true &&
+        export SOROBAN_RPC_URL=http://stellar-node:8000/soroban/rpc &&
+        chmod +x scripts/quickstart_dev.sh &&
+        bash scripts/quickstart_dev.sh --skip-build &&
+        echo '=== Quickstart Complete ===' &&
+        touch /tmp/quickstart-done
+      "
+    environment:
+      RUST_BACKTRACE: "1"
+    healthcheck:
+      test: ["CMD", "test", "-f", "/tmp/quickstart-done"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    networks:
+      - uzima-net
+
+  health-monitor:
+    image: curlimages/curl:latest
+    container_name: uzima-health-monitor
+    depends_on:
+      stellar-node:
+        condition: service_healthy
+    command: >
+      sh -c "
+        while true; do
+          echo -n 'Stellar RPC: ';
+          curl -sf http://stellar-node:8000/ && echo 'UP' || echo 'DOWN';
+          echo -n 'Soroban RPC: ';
+          curl -sf http://stellar-node:8000/soroban/rpc && echo 'UP' || echo 'DOWN';
+          sleep 30;
+        done
+      "
+    networks:
+      - uzima-net
+    profiles:
+      - monitoring
+
+  smoke-test:
+    image: curlimages/curl:latest
+    container_name: uzima-smoke-test
+    depends_on:
+      quickstart:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '=== Smoke Test: Stellar Node ===' &&
+        curl -sf http://stellar-node:8000/ > /dev/null && echo 'Stellar Node: PASS' || { echo 'Stellar Node: FAIL'; exit 1; } &&
+        echo '=== Smoke Test: Soroban RPC ===' &&
+        curl -sf http://stellar-node:8000/soroban/rpc > /dev/null && echo 'Soroban RPC: PASS' || { echo 'Soroban RPC: FAIL'; exit 1; } &&
+        echo '=== All smoke tests passed ==='
+      "
+    networks:
+      - uzima-net
+    profiles:
+      - test
+
+volumes:
+  stellar-data:
+  cargo-cache:
+  target-cache:
+
+networks:
+  uzima-net:
+    driver: bridge

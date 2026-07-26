@@ -28,7 +28,7 @@ fn test_error_info_exposes_code_and_message() {
 
     let info = client.get_error_info(&Error::RecordNotFound);
     assert_eq!(info.code, Error::RecordNotFound as u32);
-    assert!(info.message.len() > 0);
+    assert!(!info.message.is_empty());
 }
 
 #[test]

@@ -1,0 +1,16 @@
+[package]
+name = "fuzz-meta-tx-forwarder"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Standalone crate — intentionally excluded from the workspace wasm32 build.
+# Run with: cd tests/fuzz/meta_tx_forwarder && cargo test
+[workspace]
+
+[dev-dependencies]
+meta_tx_forwarder = { path = "../../../contracts/meta_tx_forwarder", features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+proptest = "1.6.0"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"

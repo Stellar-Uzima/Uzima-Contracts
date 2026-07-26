@@ -1,0 +1,100 @@
+name: Testnet Smoke Tests
+
+on:
+  workflow_run:
+    workflows: ["Deploy to Testnet"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      contract_ids:
+        description: "Comma-separated contract IDs to smoke test (leave empty to use deployment registry)"
+        required: false
+        default: ""
+
+jobs:
+  smoke-test:
+    name: Smoke Test Deployed Contracts
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.92.0"
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Soroban CLI
+        run: cargo install --locked --version 21.7.7 soroban-cli
+
+      - name: Configure testnet identity
+        env:
+          TESTNET_SECRET_KEY: ${{ secrets.TESTNET_DEPLOYER_SECRET_KEY }}
+        run: |
+          soroban config identity add smoke-tester --secret-key "$TESTNET_SECRET_KEY"
+          soroban config network add testnet \
+            --rpc-url https://soroban-testnet.stellar.org:443 \
+            --network-passphrase "Test SDF Network ; September 2015"
+
+      - name: Run smoke tests
+        run: |
+          set -euo pipefail
+
+          PASS=0
+          FAIL=0
+
+          smoke_test() {
+            local name="$1"
+            local contract_id="$2"
+            local fn="$3"
+            shift 3
+            echo -n "  [$name] $fn ... "
+            if soroban contract invoke \
+              --id "$contract_id" \
+              --source smoke-tester \
+              --network testnet \
+              -- "$fn" "$@" >/dev/null 2>&1; then
+              echo "PASS"
+              PASS=$((PASS + 1))
+            else
+              echo "FAIL"
+              FAIL=$((FAIL + 1))
+            fi
+          }
+
+          # Load deployment registry if available
+          if [[ -f deployments/testnet_medical_records.json ]]; then
+            MR_ID=$(python3 -c "import json; print(json.load(open('deployments/testnet_medical_records.json'))['contract_id'])")
+            smoke_test "medical_records" "$MR_ID" "version"
+          fi
+
+          if [[ -f deployments/testnet_patient_consent_management.json ]]; then
+            PCM_ID=$(python3 -c "import json; print(json.load(open('deployments/testnet_patient_consent_management.json'))['contract_id'])")
+            smoke_test "patient_consent_management" "$PCM_ID" "version"
+          fi
+
+          if [[ -f deployments/testnet_fhir_integration.json ]]; then
+            FHIR_ID=$(python3 -c "import json; print(json.load(open('deployments/testnet_fhir_integration.json'))['contract_id'])")
+            smoke_test "fhir_integration" "$FHIR_ID" "version"
+          fi
+
+          echo ""
+          echo "Smoke test results: $PASS passed, $FAIL failed"
+
+          if [[ $FAIL -gt 0 ]]; then
+            echo "::error::$FAIL smoke test(s) failed"
+            exit 1
+          fi
+
+          if [[ $PASS -eq 0 ]]; then
+            echo "::warning::No deployment files found — skipping smoke tests"
+          fi
+
+      - name: Post smoke test summary
+        if: always()
+        run: |
+          echo "## Testnet Smoke Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "Smoke tests completed. See logs above for details." >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "RecoveryApprovedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "proposalId": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "audit",
+    "proposalId"
+  ]
+}
