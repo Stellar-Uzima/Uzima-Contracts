@@ -141,3 +141,60 @@ fn test_data_minimization_rejects_excessive_fields() {
     let result = client.try_grant_consent(&patient, &consent);
     assert!(result.is_err(), "should reject excessive data");
 }
+
+#![cfg(test)]
+
+use super::*;
+use soroban_sdk::{Env, Symbol, Map};
+use crate::policy_engine::{PolicyEngine, RegionalRule, TransferRequest, PolicyError};
+
+#[test]
+fn test_cross_border_policy_evaluation() {
+    let env = Env::default();
+    let mut rules = Map::new(&env);
+
+    let eu_code = Symbol::new(&env, "EU");
+    let ke_code = Symbol::new(&env, "KE");
+
+    rules.set(
+        eu_code.clone(),
+        RegionalRule {
+            region_code: eu_code.clone(),
+            export_allowed: false, // Strict GDPR export rule
+            retention_period_sec: 31536000,
+            requires_patient_consent: true,
+        },
+    );
+
+    rules.set(
+        ke_code.clone(),
+        RegionalRule {
+            region_code: ke_code.clone(),
+            export_allowed: true,
+            retention_period_sec: 15768000,
+            requires_patient_consent: true,
+        },
+    );
+
+    // Attempt restricted export from EU to KE -> Fails
+    let req = TransferRequest {
+        source_region: eu_code.clone(),
+        target_region: ke_code.clone(),
+        data_type: Symbol::new(&env, "EHR"),
+        patient_consent_given: true,
+    };
+
+    let result = PolicyEngine::evaluate_transfer(&env, &rules, &req);
+    assert_eq!(result, Err(PolicyError::DataExportRestricted));
+
+    // Attempt valid export from KE to EU -> Succeeds
+    let valid_req = TransferRequest {
+        source_region: ke_code.clone(),
+        target_region: eu_code.clone(),
+        data_type: Symbol::new(&env, "EHR"),
+        patient_consent_given: true,
+    };
+
+    let result = PolicyEngine::evaluate_transfer(&env, &rules, &valid_req);
+    assert_eq!(result, Ok(true));
+}
