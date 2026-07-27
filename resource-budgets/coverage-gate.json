@@ -1,0 +1,15 @@
+{
+  "description": "Coverage gate configuration for high-risk contracts (Issue #1196)",
+  "thresholds": {
+    "standard": {
+      "test_pass_rate": 80,
+      "max_missing_docs": 10
+    },
+    "high_risk": {
+      "test_pass_rate": 95,
+      "max_missing_docs": 0
+    }
+  },
+  "high_risk_contracts": ["identity_registry","access_control","rbac","audit","governor","healthcare_payment","escrow","patient_consent_management","common_auth","upgradeability"],
+  "updated_at": "2026-07-27T13:49:58Z"
+}
