@@ -1,13 +1,17 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the Stellar Uzima Contracts repository will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
 ### Added
+- Canonical address normalization layer for identity and access flows (`identity_registry`)
+- Release note generation script (`scripts/generate_release_notes.sh`)
+- Semantic versioning discipline for contract interfaces and SDK compatibility
+- Memory and CPU budget dashboards per contract
 - **Workspace-wide soroban-sdk pin:** All active member crates now inherit `soroban-sdk` from the workspace root via `workspace = true`. The `contracts/upgradeability` crate was the only non-excluded member with a hardcoded version — corrected in this PR.
 - `scripts/check_sdk_version.sh` — CI guard that fails the build if any member crate overrides the workspace soroban-sdk pin. Scans all Cargo.toml files including excluded/deferred contracts.
 - `docs/VERSIONING_STRATEGY.md` — Documents SDK bump cadence (patch/minor/major), compatibility matrix, deprecation policy, and the CI enforcement mechanism.
@@ -34,6 +38,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Security audit integration in release process
 - WASM contract size validation
 - Contract deployment monitoring and health checks
+- `docs/MIGRATION_GUIDE.md` — Documented upgrade procedures for storage layout changes and schema migrations (#1203).
+- `scripts/check_changelog.sh` — CI validation that changelog entries exist for any modified contracts (#1203).
+- `libs/partial_update/` — Reusable `PartialUpdate<T>` generic type with builder pattern for selective field updates, reducing storage costs and race conditions on medical records (#1212).
+- `scripts/legacy_migrator.sh` — Offline migration tool for legacy medical record formats with format detection, field mapping, validation, and dry-run mode (#1215).
+- `config/feature_flags.json` — Per-contract feature flag configuration with rollout percentages and stage gates (#1222).
+- `libs/feature_flags/` — Soroban-compatible feature flag evaluation library with percentage-based rollout and environment overrides (#1222).
 
 ### Changed
 - Audited all contracts and migrated their `initialize`/`init` entry points to
@@ -63,6 +73,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Improved access control validation
 - Added security-focused clippy checks
 - Enhanced encryption key management validation
+
+### Storage & Schema Changes
+
+| Version | Date | Contract | Change Type | Migration Required |
+|---------|------|----------|-------------|--------------------|
+| 1.1.0 | 2026-07-25 | medical_records | Storage layout expansion (partial update support) | Yes — see [MIGRATION_GUIDE.md](docs/MIGRATION_GUIDE.md) |
+| 1.1.0 | 2026-07-25 | audit | Schema addition (partial update audit events) | No — additive only |
+| 1.0.0 | 2026-02-01 | All | Initial storage layout | N/A — first deploy |
+
+#### Legend
+
+- **Storage layout expansion** — New persistent storage keys or changed key encoding.
+- **Schema addition** — New fields added to existing contract type definitions.
+- **Breaking change** — Storage key or encoding incompatible with previous version.
+
+> When adding storage or schema changes, add a row above **and** update
+> `docs/MIGRATION_GUIDE.md` with the specific upgrade procedure.
 
 ---
 

@@ -1,4 +1,4 @@
-#![no_std]
+﻿#![no_std]
 //! # Common Error
 //!
 //! Shared `CommonError` enum and remediation hints for the Uzima Contracts
@@ -22,6 +22,8 @@
 //! here instead of reusing one of the existing partitions.
 
 use soroban_sdk::{contracterror, symbol_short, Symbol};
+
+pub mod schema_versioning;
 
 /// Upper bound (inclusive) of the [`CommonError`] discriminant range.
 ///

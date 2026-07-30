@@ -25,6 +25,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Architecture Decision Records](#architecture-decision-records)
 - [Contract Review Checklist](#contract-review-checklist)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#frequently-asked-questions-faq)
@@ -774,6 +775,16 @@ All PRs undergo:
 
 ## Contract Review Checklist
 Review contract submissions using the shared checklist at [docs/contract-review-checklist.md](docs/contract-review-checklist.md).
+
+## Architecture Decision Records
+
+Significant architectural decisions are documented as Architecture Decision Records (ADRs) in [`docs/adr/`](docs/adr/).
+
+- **Process**: See [ADR-PROCESS.md](docs/adr/ADR-PROCESS.md) for the full lifecycle
+- **Template**: Use [`ADR-TEMPLATE.md`](docs/adr/ADR-TEMPLATE.md) when proposing new ADRs
+- **Existing ADRs**: ADR-001 through ADR-007 cover platform choice, consent models, governance parameters, and more
+
+When to write an ADR: choosing a new technology, changing contract interfaces, modifying governance, introducing cross-contract patterns, or any decision affecting long-term architecture.
 
 ### Definition of Done
 

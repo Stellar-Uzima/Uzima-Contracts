@@ -567,3 +567,40 @@ pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), Upgra
 
     Ok(())
 }
+
+#![no_std]
+pub mod pausable;
+
+use soroban_sdk::{contract, contractimpl, Address, Env};
+use pausable::{PausableControl, PauseError};
+
+#[contract]
+pub struct UpgradeableContract;
+
+#[contractimpl]
+impl UpgradeableContract {
+    /// Emergency pause trigger for contract admins
+    pub fn pause_contract(env: Env, admin: Address) -> Result<(), PauseError> {
+        PausableControl::pause(&env, admin)
+    }
+
+    /// Resumes contract operations following maintenance or risk mitigation
+    pub fn resume_contract(env: Env, admin: Address) -> Result<(), PauseError> {
+        PausableControl::unpause(&env, admin)
+    }
+
+    /// Query current pause status
+    pub fn is_contract_paused(env: Env) -> bool {
+        PausableControl::is_paused(&env)
+    }
+
+    /// High-risk state-changing execution guard example
+    pub fn execute_maintenance_action(env: Env) -> Result<(), PauseError> {
+        // Enforce pause check prior to state modifications
+        PausableControl::require_not_paused(&env)?;
+
+        // Execute core contract logic here safely...
+        Ok(())
+    }
+}
+

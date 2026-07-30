@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Audit trail retention policy configuration for Uzima compliance exports",
+  "version": "1.0.0",
+  "default_retention_days": 2555,
+  "retention_policies": {
+    "medical_records_access": {
+      "retention_days": 2555,
+      "description": "HIPAA requires 6-year retention for access logs. Uzima extends to 7 years.",
+      "regulation": "HIPAA §164.312(b)"
+    },
+    "consent_events": {
+      "retention_days": 2555,
+      "description": "Consent records must be retained for the full duration of data processing plus 6 years.",
+      "regulation": "GDPR Art. 7(1)"
+    },
+    "emergency_access": {
+      "retention_days": 3650,
+      "description": "Emergency access events retained for 10 years for legal and compliance review.",
+      "regulation": "HIPAA §164.308(a)(6)"
+    },
+    "role_changes": {
+      "retention_days": 1825,
+      "description": "User role and permission changes retained for 5 years.",
+      "regulation": "SOC 2 CC6.1"
+    },
+    "contract_lifecycle": {
+      "retention_days": 2555,
+      "description": "Contract deployment, upgrade, and pause events retained for 7 years.",
+      "regulation": "Internal Policy"
+    },
+    "payment_transactions": {
+      "retention_days": 2555,
+      "description": "Financial transaction records for healthcare payments.",
+      "regulation": "PCI-DSS 3.2.1, HIPAA §164.312"
+    }
+  },
+  "export_settings": {
+    "supported_formats": ["json", "csv"],
+    "default_format": "both",
+    "include_metadata": true,
+    "include_schema_version": true,
+    "max_records_per_file": 10000,
+    "compression": "gzip",
+    "encryption_at_rest": true
+  },
+  "compliance_frameworks": [
+    {
+      "name": "HIPAA",
+      "sections": ["§164.312(b)", "§164.308(a)(1)(ii)(D)"],
+      "description": "Health Insurance Portability and Accountability Act"
+    },
+    {
+      "name": "SOC 2",
+      "sections": ["CC6.1", "CC7.2"],
+      "description": "Service Organization Control 2"
+    },
+    {
+      "name": "GDPR",
+      "sections": ["Art. 5(1)(e)", "Art. 7(1)"],
+      "description": "General Data Protection Regulation"
+    }
+  ]
+}

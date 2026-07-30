@@ -1,0 +1,85 @@
+{
+  "version": "0.1.0",
+  "contracts": {
+    "identity_registry": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "governor": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "medical_records": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "fido2_authenticator": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "credential_registry": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "reputation": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "token_sale": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "treasury_controller": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "rbac": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    },
+    "meta_tx_forwarder": {
+      "major": 0,
+      "minor": 1,
+      "patch": 0,
+      "sdk_compatibility": ["soroban-sdk 21.7.7"],
+      "breaking_changes": [],
+      "deprecated_functions": []
+    }
+  }
+}
