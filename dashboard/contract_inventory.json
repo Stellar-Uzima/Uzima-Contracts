@@ -1,0 +1,78 @@
+{
+  "generated_at": "2026-07-25T00:00:00Z",
+  "project": "Uzima-Contracts",
+  "note": "This is a sample/template inventory file showing the expected output format. Run ./scripts/contract_inventory.sh to generate a live inventory.",
+  "contracts": [
+    {
+      "name": "contract-template",
+      "path": "contracts/contract_template",
+      "version": "0.1.0",
+      "dependencies": [
+        "soroban-sdk",
+        "governance_commons"
+      ],
+      "wasm_target": true,
+      "health": {
+        "can_build": true,
+        "has_tests": true,
+        "has_docs": true
+      }
+    },
+    {
+      "name": "medical-records",
+      "path": "contracts/medical_records",
+      "version": "0.1.0",
+      "dependencies": [
+        "soroban-sdk"
+      ],
+      "wasm_target": true,
+      "health": {
+        "can_build": true,
+        "has_tests": true,
+        "has_docs": false
+      }
+    },
+    {
+      "name": "patient-consent-management",
+      "path": "contracts/patient_consent_management",
+      "version": "0.1.0",
+      "dependencies": [
+        "soroban-sdk"
+      ],
+      "wasm_target": true,
+      "health": {
+        "can_build": true,
+        "has_tests": true,
+        "has_docs": true
+      }
+    },
+    {
+      "name": "provider-directory",
+      "path": "contracts/provider_directory",
+      "version": "0.1.0",
+      "dependencies": [
+        "soroban-sdk"
+      ],
+      "wasm_target": true,
+      "health": {
+        "can_build": true,
+        "has_tests": true,
+        "has_docs": true
+      }
+    },
+    {
+      "name": "medical-record-search",
+      "path": "contracts/medical_record_search",
+      "version": "0.1.0",
+      "dependencies": [
+        "soroban-sdk"
+      ],
+      "wasm_target": true,
+      "health": {
+        "can_build": true,
+        "has_tests": true,
+        "has_docs": false
+      }
+    }
+  ]
+}

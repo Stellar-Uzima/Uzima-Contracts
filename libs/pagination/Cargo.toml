@@ -1,0 +1,8 @@
+[package]
+name = "pagination"
+version = "0.1.0"
+edition = "2021"
+description = "Shared pagination and filtering primitives for Soroban contract queries"
+
+[dependencies]
+soroban-sdk = { version = "=21.7.7" }

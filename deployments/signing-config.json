@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Artifact signing configuration for Uzima contract releases",
+  "signing": {
+    "algorithm": "ed25519",
+    "key_rotation_days": 90,
+    "key_storage": "deployments/signing/",
+    "require_signatures": true,
+    "allow_self_signed": true,
+    "min_signers_for_production": 1
+  },
+  "checksums": {
+    "algorithm": "sha256",
+    "include_metadata": true,
+    "format": "{hash}  {filename}"
+  },
+  "verification": {
+    "require_signature": false,
+    "require_checksum": true,
+    "require_manifest": true,
+    "fail_on_mismatch": true,
+    "check_build_provenance": true
+  },
+  "artifacts": {
+    "wasm_directories": [
+      "target/wasm32-unknown-unknown/release/",
+      "dist/"
+    ],
+    "file_pattern": "*.wasm",
+    "exclude_patterns": [
+      "*_test.wasm"
+    ]
+  },
+  "manifest": {
+    "schema_version": "1.0.0",
+    "include_git_commit": true,
+    "include_toolchain": true,
+    "include_network": true
+  },
+  "ci": {
+    "run_on_pr": true,
+    "run_on_release": true,
+    "block_on_failure": true,
+    "comment_on_pr": true
+  }
+}

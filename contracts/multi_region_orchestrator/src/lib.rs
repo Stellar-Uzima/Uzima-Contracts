@@ -741,3 +741,65 @@ mod test {
         assert_eq!(updated_policy.min_replicas_per_region, 5);
     }
 }
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, Symbol, Address, Env, Map};
+use healthcare_compliance::policy_engine::{PolicyEngine, RegionalRule, TransferRequest, PolicyError};
+
+#[contract]
+pub struct MultiRegionOrchestrator;
+
+#[contractimpl]
+impl MultiRegionOrchestrator {
+    /// Configures regional data compliance rule
+    pub fn set_regional_rule(
+        env: Env,
+        admin: Address,
+        region_code: Symbol,
+        export_allowed: bool,
+        retention_period_sec: u64,
+        requires_patient_consent: bool,
+    ) {
+        admin.require_auth();
+
+        let mut rules: Map<Symbol, RegionalRule> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "RULES"))
+            .unwrap_or_else(|| Map::new(&env));
+
+        let rule = RegionalRule {
+            region_code: region_code.clone(),
+            export_allowed,
+            retention_period_sec,
+            requires_patient_consent,
+        };
+
+        rules.set(region_code, rule);
+        env.storage().instance().set(&Symbol::new(&env, "RULES"), &rules);
+    }
+
+    /// Validates cross-border transfers prior to cross-region routing
+    pub fn validate_cross_border_transfer(
+        env: Env,
+        source_region: Symbol,
+        target_region: Symbol,
+        data_type: Symbol,
+        patient_consent_given: bool,
+    ) -> Result<bool, PolicyError> {
+        let rules: Map<Symbol, RegionalRule> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "RULES"))
+            .unwrap_or_else(|| Map::new(&env));
+
+        let request = TransferRequest {
+            source_region,
+            target_region,
+            data_type,
+            patient_consent_given,
+        };
+
+        PolicyEngine::evaluate_transfer(&env, &rules, &request)
+    }
+}

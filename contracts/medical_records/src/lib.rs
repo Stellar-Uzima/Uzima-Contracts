@@ -74,11 +74,14 @@ mod test_input_validation;
 mod test_migration;
 #[cfg(test)]
 mod test_permissions;
+#[cfg(test)]
+mod test_timestamp_normalization;
 
 mod errors;
 mod events;
 mod event_schema;
 pub mod policy;
+pub mod timestamp_normalization;
 mod validation;
 mod storage;
 mod types;
@@ -92,8 +95,110 @@ use soroban_sdk::{
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
-// ==================== Cross-Chain Types ====================
+// ==================== Compartmentalized Data Access Types =============
+/// Data tiers for role-based access control.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum DataAccessTier {
+    /// Basic demographic data - all roles
+    Basic = 0,
+    /// Clinical data - doctors, specialists, admins
+    Clinical = 1,
+    /// Sensitive data - patient consent required
+    Sensitive = 2,
+    /// Restricted data - admin and specialist only
+    Restricted = 3,
+    /// Research data - anonymized for research use
+    Research = 4,
+}
 
+/// A data compartment with associated metadata.
+#[derive(Clone)]
+#[contracttype]
+pub struct DataCompartment {
+    pub compartment_id: Symbol,
+    pub tier: DataAccessTier,
+    pub description: String,
+    pub required_role: Role,
+    pub requires_consent: bool,
+}
+
+/// Record of access grant to a compartment.
+#[derive(Clone)]
+#[contracttype]
+pub struct CompartmentAccess {
+    pub patient_id: Address,
+    pub compartment_id: Symbol,
+    pub granted_by: Address,
+    pub granted_at: u64,
+    pub expires_at: Option<u64>,
+}
+
+/// Role types in the system.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum Role {
+    Admin,
+    Doctor,
+    Nurse,
+    Specialist,
+    Patient,
+    Researcher,
+    Auditor,
+}
+
+// ==================== Schema Evolution Types =============
+/// Version identifier for medical record metadata schemas.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub struct SchemaVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+
+/// Describes a schema evolution step from one version to another.
+#[derive(Clone)]
+#[contracttype]
+pub struct SchemaEvolution {
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub description: String,
+    pub created_at: u64,
+    pub created_by: Address,
+    pub field_additions: Vec<String>,
+    pub field_removals: Vec<String>,
+    pub field_renames: Map<String, String>,
+    pub breaking_changes: bool,
+}
+
+/// Migration plan for upgrading records between schema versions.
+#[derive(Clone)]
+#[contracttype]
+pub struct MigrationPlan {
+    pub plan_id: u64,
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub affected_records: u64,
+    pub migrated_count: u64,
+    pub status: MigrationStatus,
+    pub created_at: u64,
+    pub completed_at: u64,
+}
+
+/// Status of a schema migration.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum MigrationStatus {
+    Planned = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3,
+    RolledBack = 4,
+}
+
+// ==================== Cross-Chain Types =============
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum ChainId {
@@ -141,8 +246,7 @@ pub struct RecordMetadataHistoryEntry {
     pub custom_fields: Map<String, String>,
 }
 
-// ==================== Users / DID ====================
-
+// ==================== Users / DID =============
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum Role {
@@ -243,8 +347,7 @@ pub enum DIDAuthLevel {
     Full,
 }
 
-// ==================== Access / Emergency ====================
-
+// ==================== Access / Emergency =============
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessRequest {
@@ -266,8 +369,7 @@ pub struct EmergencyAccess {
     pub is_active: bool,
 }
 
-// ==================== ZK / Credential Types ====================
-
+// ==================== ZK / Credential Types =============
 #[derive(Clone)]
 #[contracttype]
 pub struct ZkPublicInputs {
@@ -307,8 +409,7 @@ pub struct ZkAuditRecord {
     pub nullifier: BytesN<32>,
 }
 
-// ==================== Medical Record ====================
-
+// ==================== Medical Record =============
 #[derive(Clone)]
 #[contracttype]
 pub struct MedicalRecord {
@@ -325,8 +426,7 @@ pub struct MedicalRecord {
     pub doctor_did: Option<String>,
 }
 
-// ==================== Traditional Medicine ====================
-
+// ==================== Traditional Medicine =============
 /// Structured metadata for records involving traditional / indigenous healing practices.
 /// Sensitive remedy details should be stored encrypted off-chain; only the
 /// non-sensitive `practice_type` is surfaced in on-chain events.
@@ -346,8 +446,7 @@ pub struct TraditionalMedicineMetadata {
     pub language: String,
 }
 
-// ==================== AI & Recovery Types ====================
-
+// ==================== AI & Recovery Types =============
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AIInsightType {
@@ -377,6 +476,45 @@ pub struct AIConfig {
     pub min_participants: u32,
 }
 
+// ==================== Binary Attachments (Issue #1216) =============
+/// Metadata for a large binary attachment stored off-chain.
+///
+/// On-chain we store only the reference (URI/CID) and metadata; the actual
+/// binary payload lives in IPFS, Arweave, or an off-chain object store.
+/// This avoids bloating Soroban contract storage while still providing
+/// a verifiable link between a medical record and its attachments.
+#[derive(Clone)]
+#[contracttype]
+pub struct Attachment {
+    /// Unique attachment identifier (stable across versions).
+    pub id: BytesN<32>,
+    /// The medical record this attachment belongs to.
+    pub record_id: u64,
+    /// Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL).
+    pub uri: String,
+    /// MIME type of the binary (e.g. "application/pdf", "image/dicom").
+    pub content_type: String,
+    /// Original file size in bytes.
+    pub size_bytes: u64,
+    /// SHA-256 hash of the original binary for integrity verification.
+    pub checksum: BytesN<32>,
+    /// Free-form metadata (e.g. "DICOM series", "lab result page 1").
+    pub description: String,
+    /// Address that uploaded this attachment.
+    pub uploaded_by: Address,
+    /// Timestamp when the attachment was registered on-chain.
+    pub uploaded_at: u64,
+}
+
+/// Summary of attachments for a record, returned by list queries.
+#[derive(Clone)]
+#[contracttype]
+pub struct AttachmentSummary {
+    pub record_id: u64,
+    pub attachment_count: u32,
+    pub total_size_bytes: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct RecoveryProposal {
@@ -389,8 +527,7 @@ pub struct RecoveryProposal {
     pub approvals: Vec<Address>,
 }
 
-// ==================== Cryptographic (E2E / PQ) Types ====================
-
+// ==================== Cryptographic (E2E / PQ) Types =============
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum EnvelopeAlgorithm {
@@ -548,8 +685,7 @@ pub struct CryptoConfigProposal {
     pub require_pq_envelopes: Option<bool>,
 }
 
-// ==================== Storage Keys ====================
-
+// ==================== Storage Keys =============
 #[contracttype(export = false)]
 pub enum DataKey {
     // Lifecycle
@@ -654,13 +790,29 @@ pub enum DataKey {
 
     // Redaction
     RedactionPolicy(u64),
+
+    // Compartmentalized Data Access
+    Compartment(Symbol),
+    CompartmentAccess(Address, Symbol),
+    UserRole(Address),
+    // Binary Attachments (Issue #1216)
+    Attachment(BytesN<32>),                // attachment_id -> Attachment
+    RecordAttachments(u64),                // record_id -> Vec<BytesN<32>>
+    RecordAttachmentCount(u64),            // record_id -> u32
+    PatientAttachmentCount(Address),       // patient -> u32
+    // Schema evolution
+    SchemaVersionCount,
+    SchemaVersion(u32, u32, u32), // (major, minor, patch)
+    SchemaEvolutionCount,
+    SchemaEvolution(u64),
+    MigrationPlanCount,
+    MigrationPlan(u64),
+    CurrentSchemaVersion,
 }
 
-// ==================== Errors ====================
-// NOTE: `Error` lives in `errors.rs` and is re-exported above.
+// ==================== Errors =============// NOTE: `Error` lives in `errors.rs` and is re-exported above.
 
-// ==================== Batch Types ====================
-
+// ==================== Batch Types =============
 /// Per-record input for batched record creation.
 /// Same fields as `write_record` minus `caller` (passed at batch level).
 #[derive(Clone)]
@@ -699,8 +851,7 @@ pub struct ListRecordsResult {
     pub next_cursor: Option<u64>,
 }
 
-// ==================== Rate Limiting Types ====================
-
+// ==================== Rate Limiting Types =============
 /// Configures operation-specific rate limits per role.
 #[derive(Clone)]
 #[contracttype]
@@ -723,8 +874,7 @@ pub struct RateLimitEntry {
     pub window_start: u64,
 }
 
-// ==================== Data Quality & Validation Types ====================
-
+// ==================== Data Quality & Validation Types =============
 /// Medical record types for type-specific validation rules.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
@@ -801,8 +951,7 @@ pub struct FieldCompleteness {
     pub completed_fields: u32,
 }
 
-// ==================== Correction Workflow Types ====================
-
+// ==================== Correction Workflow Types =============
 /// Priority level for a correction item, derived from issue severity.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
@@ -902,8 +1051,7 @@ pub struct CleanseResult {
     pub was_modified: bool,
 }
 
-// ==================== Constants ====================
-
+// ==================== Constants =============
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
@@ -947,8 +1095,7 @@ const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
 const DEFAULT_ADMIN_MAX_CALLS: u32 = 0; // 0 = unlimited
 const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 
-// ==================== Structured Logging Types ====================
-
+// ==================== Structured Logging Types =============
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum LogLevel {
@@ -969,8 +1116,7 @@ pub struct StructuredLog {
     pub message: String,
 }
 
-// ==================== HIPAA Data Categories (Issue #997) ====================
-
+// ==================== HIPAA Data Categories (Issue #997) =============
 /// HIPAA data categories for field-level access control.
 /// Implements the "minimum necessary" standard: a caller requesting only
 /// Diagnosis data must not receive Billing or Insurance fields.
@@ -5183,10 +5329,8 @@ impl MedicalRecordsContract {
         Ok(env.storage().persistent().get(&DataKey::Record(record_id)))
     }
 
-    // =================================================================
-    // MIGRATION & UPGRADE SYSTEM
-    // =================================================================
-
+    // ==========================================================    // MIGRATION & UPGRADE SYSTEM
+    // ==========================================================
     
     fn get_contract_version(env: &Env) -> u32 {
         env.storage()
@@ -6456,10 +6600,8 @@ impl MedicalRecordsContract {
             .set(&DataKey::CryptoAudit(next), &entry);
     }
 
-    // =========================================================================
-    // Rate Limiting
-    // =========================================================================
-
+    // ==================================================================    // Rate Limiting
+    // ==================================================================
     /// Internal guard – called at the start of rate-limited operations.
     /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
     /// all allowed calls in the current window.
@@ -6584,10 +6726,8 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    // =========================================================================
-    // Data Quality & Validation
-    // =========================================================================
-
+    // ==================================================================    // Data Quality & Validation
+    // ==================================================================
     /// Validates a stored medical record and returns a comprehensive quality report.
     ///
     /// Performs completeness checks, format validation, consistency verification,
@@ -6882,8 +7022,7 @@ impl MockRbac {
     }
 }
 
-// ==================== Traditional Medicine Support ====================
-
+// ==================== Traditional Medicine Support =============
 impl MedicalRecordsContract {
     /// Store a medical record with optional traditional medicine metadata.
     /// When `traditional_metadata` is provided, the record is also indexed
@@ -7276,5 +7415,550 @@ impl MedicalRecordsContract {
         }
 
         Ok(redacted)
+    }
+
+    // ─── Compartmentalized Data Access (Issue #1165) ─────────────────────────
+
+    /// Create a new data compartment for role-based tiered access.
+    pub fn create_data_compartment(
+        env: Env,
+        caller: Address,
+        compartment_id: Symbol,
+        tier: DataAccessTier,
+        description: String,
+        required_role: Role,
+        requires_consent: bool,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let compartment = DataCompartment {
+            compartment_id: compartment_id.clone(),
+            tier,
+            description,
+            required_role,
+            requires_consent,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::Compartment(compartment_id.clone()),
+            &compartment,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("CREATE")),
+            (compartment_id, tier as u32),
+        );
+
+        Ok(())
+    }
+
+    /// Get a data compartment by ID.
+    pub fn get_data_compartment(
+        env: Env,
+        compartment_id: Symbol,
+    ) -> Result<DataCompartment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .ok_or(Error::NotFound)
+    }
+
+    /// Grant access to a patient's data compartment.
+    pub fn grant_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+        expires_at: Option<u64>,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let access = CompartmentAccess {
+            patient_id: patient_id.clone(),
+            compartment_id: compartment_id.clone(),
+            granted_by: caller.clone(),
+            granted_at: env.ledger().timestamp(),
+            expires_at,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::CompartmentAccess(patient_id.clone(), compartment_id.clone()),
+            &access,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("GRANT")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
+    }
+
+    /// Check if a user has access to a patient's data compartment.
+    pub fn has_compartment_access(
+        env: Env,
+        user: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> bool {
+        let access: CompartmentAccess = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::CompartmentAccess(
+                patient_id,
+                compartment_id,
+            )) {
+            Some(a) => a,
+            None => return false,
+        };
+
+        // Check expiry
+        if let Some(exp) = access.expires_at {
+            if env.ledger().timestamp() > exp {
+                return false;
+            }
+        }
+
+        // Check role
+        let role: Role = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRole(user))
+            .unwrap_or(Role::Patient);
+
+        let compartment: DataCompartment = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .unwrap();
+
+        matches!(
+            (compartment.required_role, role),
+            (Role::Admin, Role::Admin)
+                | (Role::Doctor, Role::Doctor)
+                | (Role::Nurse, Role::Nurse)
+                | (Role::Specialist, Role::Specialist)
+                | (Role::Researcher, Role::Researcher)
+                | (Role::Auditor, Role::Auditor)
+                | (Role::Patient, Role::Patient)
+                | (Role::Admin, _)
+        )
+    }
+
+    /// Revoke access to a patient's data compartment.
+    pub fn revoke_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        env.storage().persistent().remove(&DataKey::CompartmentAccess(
+            patient_id.clone(),
+            compartment_id.clone(),
+        ));
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("REVOKE")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
+    // ─── Binary Attachments (Issue #1216) ────────────────────────────────────
+
+    /// Register a large binary attachment reference for a medical record.
+    ///
+    /// The actual binary payload is stored off-chain (IPFS, Arweave, etc.).
+    /// This function registers the on-chain reference with content hash for
+    /// integrity verification. Only the record's doctor or an admin can add
+    /// attachments.
+    ///
+    /// # Arguments
+    /// * `caller` - Doctor or admin adding the attachment
+    /// * `record_id` - The medical record this attachment belongs to
+    /// * `uri` - Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL)
+    /// * `content_type` - MIME type (e.g. "application/pdf", "image/dicom")
+    /// * `size_bytes` - Original file size in bytes
+    /// * `checksum` - SHA-256 hash of the binary payload
+    /// * `description` - Free-form description
+    ///
+    /// # Returns
+    /// The attachment ID (BytesN<32>)
+    pub fn add_attachment(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        uri: String,
+        content_type: String,
+        size_bytes: u64,
+        checksum: BytesN<32>,
+        description: String,
+    ) -> Result<BytesN<32>, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let record: MedicalRecord = Self::get_record_internal(&env, record_id)?;
+        let caller_role = Self::get_user_role(&env, &caller);
+        let is_admin = matches!(caller_role, Some(Role::Admin));
+        let is_doctor = caller == record.doctor_id;
+        if !is_admin && !is_doctor {
+            return Err(Error::Unauthorized);
+        }
+
+        // Generate deterministic attachment ID
+        let timestamp = env.ledger().timestamp();
+        let mut id_data = soroban_sdk::Bytes::new(&env);
+        id_data.extend_from_slice(&record_id.to_be_bytes());
+        id_data.extend_from_slice(&timestamp.to_be_bytes());
+        id_data.extend_from_slice(checksum.as_ref());
+        let attachment_id: BytesN<32> = env.crypto().sha256(&id_data).into();
+
+        let attachment = Attachment {
+            id: attachment_id.clone(),
+            record_id,
+            uri,
+            content_type,
+            size_bytes,
+            checksum,
+            description,
+            uploaded_by: caller.clone(),
+            uploaded_at: timestamp,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Attachment(attachment_id.clone()), &attachment);
+
+        // Add to record's attachment list
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+        ids.push_back(attachment_id.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachments(record_id), &ids);
+
+        // Increment counts
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachmentCount(record_id))
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachmentCount(record_id), &(count + 1));
+
+        env.events().publish(
+            (symbol_short!("RECORD"), symbol_short!("ATTACH")),
+            (record_id, attachment_id.clone(), caller),
+        );
+
+        Ok(attachment_id)
+    }
+
+    /// Retrieve an attachment by ID.
+    pub fn get_attachment(env: Env, attachment_id: BytesN<32>) -> Result<Attachment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    /// List all attachments for a medical record.
+    pub fn list_attachments(env: Env, record_id: u64) -> Vec<Attachment> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut attachments = Vec::new(&env);
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                attachments.push_back(att);
+            }
+        }
+        attachments
+    }
+
+    /// Get a summary of attachments for a record.
+    pub fn get_attachment_summary(env: Env, record_id: u64) -> AttachmentSummary {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut total_size: u64 = 0;
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                total_size += att.size_bytes;
+            }
+        }
+
+        AttachmentSummary {
+            record_id,
+            attachment_count: ids.len() as u32,
+            total_size_bytes: total_size,
+        }
+    }
+
+    /// Verify the integrity of an attachment by comparing its stored checksum
+    /// against a provided hash. Returns true if they match.
+    pub fn verify_attachment_integrity(
+        env: Env,
+        attachment_id: BytesN<32>,
+        expected_checksum: BytesN<32>,
+    ) -> bool {
+        let att: Attachment = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+        {
+            Some(a) => a,
+            None => return false,
+        };
+        att.checksum == expected_checksum
+    }
+
+    // ==================== Schema Evolution Functions =============
+    /// Register a new schema version for medical record metadata.
+    pub fn register_schema_version(
+        env: Env,
+        caller: Address,
+        major: u32,
+        minor: u32,
+        patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let version = SchemaVersion {
+            major,
+            minor,
+            patch,
+        };
+
+        // Check if version already exists
+        let key = DataKey::SchemaVersion(major, minor, patch);
+        if env.storage().persistent().has(&key) {
+            return Err(Error::SchemaVersionAlreadyExists);
+        }
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version: version.clone(),
+            to_version: version.clone(),
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage().persistent().set(&key, &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &version);
+
+        env.events().publish(
+            (symbol_short!("SCH_REG"),),
+            (evolution_id, major, minor, patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Evolve the schema to a new version with field changes.
+    pub fn evolve_schema(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        // Verify source version exists
+        let from_key = DataKey::SchemaVersion(from_major, from_minor, from_patch);
+        if !env.storage().persistent().has(&from_key) {
+            return Err(Error::SchemaVersionNotFound);
+        }
+
+        // Prevent breaking changes without explicit acknowledgment
+        if breaking_changes {
+            env.events().publish(
+                (symbol_short!("SCH_BREAK"),),
+                (from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+            );
+        }
+
+        let from_version = SchemaVersion {
+            major: from_major,
+            minor: from_minor,
+            patch: from_patch,
+        };
+        let to_version = SchemaVersion {
+            major: to_major,
+            minor: to_minor,
+            patch: to_patch,
+        };
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version,
+            to_version,
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::SchemaEvolution(evolution_id), &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+
+        // Update current schema version
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &to_version);
+
+        env.events().publish(
+            (symbol_short!("SCH_EVO"),),
+            (evolution_id, from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Get the migration plan for upgrading records between schema versions.
+    pub fn get_migration_plan(
+        env: Env,
+        plan_id: u64,
+    ) -> Option<MigrationPlan> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MigrationPlan(plan_id))
+    }
+
+    /// Create a migration plan for upgrading records.
+    pub fn create_migration_plan(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        affected_records: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let plan_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MigrationPlanCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        let plan = MigrationPlan {
+            plan_id,
+            from_version: SchemaVersion {
+                major: from_major,
+                minor: from_minor,
+                patch: from_patch,
+            },
+            to_version: SchemaVersion {
+                major: to_major,
+                minor: to_minor,
+                patch: to_patch,
+            },
+            affected_records,
+            migrated_count: 0,
+            status: MigrationStatus::Planned,
+            created_at: env.ledger().timestamp(),
+            completed_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::MigrationPlan(plan_id), &plan);
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationPlanCount, &plan_id);
+
+        env.events()
+            .publish((symbol_short!("MIG_PLN"),), plan_id);
+
+        Ok(plan_id)
+    }
+
+    /// Get the current active schema version.
+    pub fn get_current_schema_version(env: Env) -> Option<SchemaVersion> {
+        env.storage()
+            .instance()
+            .get(&DataKey::CurrentSchemaVersion)
+    }
+
+    /// Get a schema evolution record by ID.
+    pub fn get_schema_evolution(env: Env, evolution_id: u64) -> Option<SchemaEvolution> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SchemaEvolution(evolution_id))
     }
 }

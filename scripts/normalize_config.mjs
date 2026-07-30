@@ -13,6 +13,8 @@
  *   node scripts/normalize_config.mjs --check-identities    # validate identity configs
  */
 
+ * normalize_config.mjs - Validates and normalizes config files for network profiles and identities.
+ */
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -33,6 +35,12 @@ const NETWORK_REQUIRED_FIELDS = [
 ];
 
 const GAS_CONFIG_FIELDS = ['max-instructions', 'tx-resource-fee'];
+const NETWORK_REQUIRED_FIELDS = [
+  'name', 'description', 'rpc-url', 'network-passphrase', 'horizon-url',
+  'environment', 'requires-funding', 'gas-configuration', 'safety-level', 'confirmation-required',
+];
+const GAS_CONFIG_FIELDS = ['max-instructions', 'tx-resource-fee'];
+const VALID_NETWORK_PROFILES = ['local', 'testnet', 'futurenet', 'mainnet'];
 
 const DEFAULT_IDENTITY_OVERRIDES = {
   development: { 'dry-run': false, simulation: false },
@@ -48,6 +56,8 @@ function deepClone(obj) {
   return JSON.parse(JSON.stringify(obj));
 }
 
+function isObject(item) { return item !== null && typeof item === 'object' && !Array.isArray(item); }
+function deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
 function deepMerge(target, source) {
   let output = { ...target };
   if (isObject(target) && isObject(source)) {
@@ -58,6 +68,7 @@ function deepMerge(target, source) {
       } else {
         Object.assign(output, { [key]: source[key] });
       }
+      } else Object.assign(output, { [key]: source[key] });
     });
   }
   return output;
@@ -71,6 +82,10 @@ function canonicalSort(obj) {
     .forEach((key) => {
       sorted[key] = canonicalSort(obj[key]);
     });
+function canonicalSort(obj) {
+  if (!isObject(obj)) return obj;
+  const sorted = {};
+  Object.keys(obj).sort().forEach((key) => { sorted[key] = canonicalSort(obj[key]); });
   return sorted;
 }
 
@@ -83,6 +98,9 @@ function parseToml(content) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
 
+  for (const line of content.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
     const sectionMatch = trimmed.match(/^\[([^\]]+)\]$/);
     if (sectionMatch) {
       currentSection = sectionMatch[1];
@@ -110,6 +128,15 @@ function parseToml(content) {
         const inner = value.slice(1, -1).trim();
         const obj = {};
         inner.split(',').forEach((pair) => {
+      if (value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1);
+      else if (value === 'true') value = true;
+      else if (value === 'false') value = false;
+      else if (/^\d+$/.test(value)) value = parseInt(value, 10);
+      else if (value.startsWith('[') && value.endsWith(']')) {
+        value = value.slice(1, -1).trim().split(',').map((s) => s.trim().replace(/^"|"$/g, ''));
+      } else if (value.startsWith('{') && value.endsWith('}')) {
+        const obj = {};
+        value.slice(1, -1).trim().split(',').forEach((pair) => {
           const [k, v] = pair.split('=').map((s) => s.trim());
           if (k && v) obj[k] = parseInt(v.replace(/_/g, ''), 10);
         });
@@ -147,6 +174,30 @@ function validateNetworkProfile(profileName, profile) {
     }
   }
   if (profileName === 'mainnet') {
+      result[currentSection][key] = value;
+    }
+  }
+  return result;
+}
+
+function validateNetworkProfile(name, profile) {
+  const errors = [];
+  for (const field of NETWORK_REQUIRED_FIELDS) {
+    if (!(field in profile)) errors.push(`Network "${name}": missing "${field}"`);
+  }
+  if (profile.environment && !VALID_ENVIRONMENTS.includes(profile.environment))
+    errors.push(`Network "${name}": invalid environment`);
+  if (profile['safety-level'] && !VALID_SAFETY_LEVELS.includes(profile['safety-level']))
+    errors.push(`Network "${name}": invalid safety-level`);
+  if (profile['rpc-url'] && !profile['rpc-url'].startsWith('http'))
+    errors.push(`Network "${name}": rpc-url must start with http(s)`);
+  if (profile['gas-configuration']) {
+    for (const f of GAS_CONFIG_FIELDS) {
+      if (!(f in profile['gas-configuration']))
+        errors.push(`Network "${name}": gas-configuration missing "${f}"`);
+    }
+  }
+  if (name === 'mainnet') {
     if (profile['requires-funding'] !== false) errors.push('Network "mainnet": requires-funding must be false');
     if (profile['confirmation-required'] !== true) errors.push('Network "mainnet": confirmation-required must be true');
     if (profile['safety-level'] !== 'high') errors.push('Network "mainnet": safety-level must be "high"');
@@ -180,6 +231,22 @@ function validateIdentityConfig(identityName, identity) {
   if (identity.simulation !== undefined && typeof identity.simulation !== 'boolean') {
     errors.push(`Identity "${identityName}": simulation must be boolean`);
   }
+  const n = { ...defaults };
+  if (!n.network) n.network = 'testnet';
+  if (!n.identity) n.identity = 'default';
+  if (typeof n['dry-run'] !== 'boolean')
+    n['dry-run'] = DEFAULT_IDENTITY_OVERRIDES[n.identity]?.['dry-run'] ?? false;
+  if (typeof n.simulation !== 'boolean')
+    n.simulation = DEFAULT_IDENTITY_OVERRIDES[n.identity]?.simulation ?? true;
+  return n;
+}
+
+function validateIdentityConfig(name, identity) {
+  const errors = [];
+  if (!identity.network) errors.push(`Identity "${name}": missing "network"`);
+  else if (!VALID_NETWORK_PROFILES.includes(identity.network))
+    errors.push(`Identity "${name}": invalid network`);
+  if (!identity.identity) errors.push(`Identity "${name}": missing "identity"`);
   return errors;
 }
 
@@ -194,6 +261,11 @@ function validateNetworkGroups(groups, knownNetworks) {
       if (!knownNetworks.includes(net)) {
         errors.push(`Network group "${groupName}": references unknown network "${net}"`);
       }
+      errors.push(`Group "${groupName}": "networks" must be an array`);
+      continue;
+    }
+    for (const net of group.networks) {
+      if (!knownNetworks.includes(net)) errors.push(`Group "${groupName}": unknown network "${net}"`);
     }
   }
   return errors;
@@ -210,6 +282,14 @@ function normalizeConfig(config) {
     }
   }
   return normalized;
+  const n = deepClone(config);
+  delete n.extends;
+  if (n.contracts && isObject(n.contracts)) {
+    for (const [name, contract] of Object.entries(n.contracts)) {
+      if (typeof contract.enabled !== 'boolean') n.contracts[name].enabled = true;
+    }
+  }
+  return n;
 }
 
 const args = process.argv.slice(2);
@@ -252,6 +332,16 @@ for (const file of jsonFiles) {
   } catch (err) {
     allErrors.push(`${file}: ${err.message}`);
   }
+        deepMerge(JSON.parse(fs.readFileSync(parentPath, 'utf8')), config);
+        console.log(`  ${file}: valid (extends ${config.extends})`);
+      } else allErrors.push(`${file}: extends non-existent "${config.extends}"`);
+    } else console.log(`  ${file}: valid`);
+    if (fixMode) {
+      const normalized = canonicalSort(normalizeConfig(config));
+      const newContent = JSON.stringify(normalized, null, 2) + '\n';
+      if (newContent !== raw) { fs.writeFileSync(filePath, newContent, 'utf8'); filesModified++; }
+    }
+  } catch (err) { allErrors.push(`${file}: ${err.message}`); }
 }
 
 const networksTomlPath = path.join(CONFIG_DIR, 'networks.toml');
@@ -263,6 +353,8 @@ if (fs.existsSync(networksTomlPath)) {
   const networkGroups = {};
   const networkDefaults = {};
 
+  const parsed = parseToml(fs.readFileSync(networksTomlPath, 'utf8'));
+  const networkProfiles = {}, networkGroups = {}, networkDefaults = {};
   for (const [key, value] of Object.entries(parsed)) {
     if (key.startsWith('networks.')) {
       const name = key.slice('networks.'.length);
@@ -274,6 +366,9 @@ if (fs.existsSync(networksTomlPath)) {
     }
   }
 
+    } else if (key.startsWith('groups.')) networkGroups[key.slice('groups.'.length)] = value;
+    else if (key.startsWith('defaults.')) networkDefaults[key.slice('defaults.'.length)] = value;
+  }
   console.log('\nNetwork profiles:');
   for (const [name, profile] of Object.entries(networkProfiles)) {
     const errors = validateNetworkProfile(name, profile);
@@ -292,6 +387,14 @@ if (fs.existsSync(networksTomlPath)) {
   for (const [name, identity] of Object.entries(networkDefaults)) {
     const identityErrors = validateIdentityConfig(name, identity);
     if (identityErrors.length > 0) allErrors.push(...identityErrors);
+  console.log('\nNetwork groups:');
+  const groupErrors = validateNetworkGroups(networkGroups, Object.keys(networkProfiles));
+  if (groupErrors.length > 0) allErrors.push(...groupErrors);
+  else for (const name of Object.keys(networkGroups)) console.log(`  ${name}: valid`);
+  console.log('\nIdentity defaults:');
+  for (const [name, identity] of Object.entries(networkDefaults)) {
+    const errors = validateIdentityConfig(name, identity);
+    if (errors.length > 0) allErrors.push(...errors);
     else console.log(`  ${name}: valid`);
   }
 }
