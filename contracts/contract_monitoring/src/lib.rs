@@ -1,4 +1,4 @@
-//! # Contract Monitoring Dashboard
+﻿//! # Contract Monitoring Dashboard
 //!
 //! Resolves issue #432: provides a centralised on-chain metrics store that
 //! aggregates transaction volume, gas usage, error rates, storage utilisation,
@@ -19,6 +19,7 @@ use soroban_sdk::{
 
 pub mod telemetry;
 pub mod security_telemetry;
+pub mod payload_compression;
 use telemetry::{
     build_event, current_schema_version, emit_telemetry_event, EventClass, TelemetryEvent,
     TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,

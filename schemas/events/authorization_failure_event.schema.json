@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AuthorizationFailureEvent",
+  "description": "Emitted when an authorization attempt is denied.",
+  "type": "object",
+  "required": ["subject", "resource", "attempted_action", "failure_reason", "policy_id", "severity", "timestamp"],
+  "properties": {
+    "subject": { "type": "string", "description": "The address that was denied access", "pattern": "^G[A-Z0-9]{55}$" },
+    "resource": { "type": "string", "description": "The resource being accessed" },
+    "attempted_action": { "type": "string", "description": "What the subject tried to do", "enum": ["read", "write", "delete", "grant_access", "revoke_access", "admin_action"] },
+    "failure_reason": { "type": "string", "description": "Why authorization failed", "enum": ["insufficient_role", "policy_violation", "session_expired", "token_revoked", "rate_limit_exceeded", "temporary_suspension", "unauthorized_root_access", "privilege_escalation", "resource_not_found", "consent_required"] },
+    "policy_id": { "type": "string", "description": "The policy that was evaluated" },
+    "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "timestamp": { "type": "integer", "description": "Unix timestamp" }
+  }
+}

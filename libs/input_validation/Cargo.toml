@@ -1,0 +1,8 @@
+[package]
+name = "input_validation"
+version = "0.1.0"
+edition = "2021"
+description = "Structured input validation for Soroban healthcare contracts"
+
+[dependencies]
+soroban-sdk = { version = "=21.7.7" }

@@ -1,4 +1,4 @@
-"""Uzima Python SDK — contract bindings (auto-generated exports)."""
+﻿"""Uzima Python SDK — contract bindings and client (auto-generated exports)."""
 
 from .contract_bindings import (
     RecordType,
@@ -20,6 +20,20 @@ from .contract_bindings import (
     AuditEntry,
 )
 
+from .client import (
+    UzimaClient,
+    UzimaConfig,
+    SDKStatus,
+    SyncResult,
+    RecordsManager,
+    ConsentManager,
+    IdentityManager,
+    PaymentManager,
+    AuditManager,
+    OfflineManager,
+    NotificationManager,
+)
+
 __all__ = [
     "RecordType",
     "EncryptionAlgorithm",
@@ -38,4 +52,15 @@ __all__ = [
     "IdentityDocument",
     "PaymentStatus",
     "AuditEntry",
+    "UzimaClient",
+    "UzimaConfig",
+    "SDKStatus",
+    "SyncResult",
+    "RecordsManager",
+    "ConsentManager",
+    "IdentityManager",
+    "PaymentManager",
+    "AuditManager",
+    "OfflineManager",
+    "NotificationManager",
 ]

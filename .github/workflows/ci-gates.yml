@@ -1,0 +1,141 @@
+name: CI Quality Gates
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_TOOLCHAIN: "1.92.0"
+
+jobs:
+  # ─── Issue #1187: Typed Orchestration Validation ────────────────────────────
+  orchestration-validation:
+    name: Orchestration Layer Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate orchestration manifest
+        run: node scripts/orchestrate.mjs plan testnet --output /tmp/plan.json
+      - name: Verify plan output
+        run: |
+          node -e "
+            const plan = require('/tmp/plan.json');
+            console.log('Plan version:', plan.plan_version);
+            console.log('Contracts:', plan.summary.total);
+            console.log('Network:', plan.network.name);
+            if (plan.summary.total === 0) process.exit(1);
+          "
+
+  # ─── Issue #1196: Coverage Gates ────────────────────────────────────────────
+  coverage-gate:
+    name: Coverage Gate (High-Risk Contracts)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - name: Run coverage gate tests
+        run: bash tests/coverage_gate_test.sh
+      - name: Run coverage gate check (warn-only)
+        run: WARN_ONLY=1 bash scripts/coverage_gate.sh --check
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-gate-report
+          path: reports/coverage-gate-*
+
+  # ─── Issue #1190: Release Promotion Gate ─────────────────────────────────────
+  promotion-gate:
+    name: Release Promotion Gate
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-audit
+        run: cargo install cargo-audit || true
+      - name: Run promotion gate (testnet→futurenet, dry-run)
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+          bash scripts/release_promotion_gate.sh \
+            --version "$VERSION" \
+            --from testnet \
+            --to futurenet
+      - name: Upload promotion report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-gate-report
+          path: reports/promotion-gates/*
+
+  # ─── Issue #1191: Canary Deploy Dry-Run ──────────────────────────────────────
+  canary-dry-run:
+    name: Canary Deploy (Dry-Run)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run canary deploy dry-run
+        run: |
+          VERSION=$(grep '^version = ' Cargo.toml | head -1 | cut -d'"' -f2)
+          bash scripts/canary_deploy.sh \
+            --network local \
+            --version "$VERSION" \
+            --stage canary \
+            --dry-run
+      - name: Upload canary report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canary-deploy-report
+          path: reports/canary-deploy-*
+
+  # ─── Performance Budget Gate ─────────────────────────────────────────────────
+  performance-gate:
+    name: Performance Budget Gate
+    runs-on: ubuntu-latest
+    needs: [orchestration-validation]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Build contracts for WASM
+        run: |
+          cargo build --release --target wasm32-unknown-unknown \
+            --workspace \
+            --exclude contract_optimizer \
+            --exclude uzima-tests \
+            --exclude interoperability_suite || true
+      - name: Run performance budget gate
+        run: WARN_ONLY=1 bash scripts/performance_budget_gate.sh --check
+      - name: Upload performance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-budget-report
+          path: reports/performance_budget_*
+
+  # ─── Deployment Manifest Validation ─────────────────────────────────────────
+  manifest-validation:
+    name: Deployment Manifest Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment manifest
+        run: bash scripts/generate_deployment_manifest.sh --validate

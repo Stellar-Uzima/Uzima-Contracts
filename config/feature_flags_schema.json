@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Feature Flags Configuration",
+  "description": "Schema for the Uzima per-contract feature flag configuration file.",
+  "type": "object",
+  "required": ["version", "flags", "stages"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Schema version for backward compatibility",
+      "minimum": 1
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last modification"
+    },
+    "environment_overrides": {
+      "type": "object",
+      "description": "Per-environment overrides that supersede individual flag settings",
+      "properties": {
+        "testnet": {
+          "$ref": "#/definitions/environment_override"
+        },
+        "mainnet": {
+          "$ref": "#/definitions/environment_override"
+        },
+        "standalone": {
+          "$ref": "#/definitions/environment_override"
+        }
+      },
+      "additionalProperties": false
+    },
+    "flags": {
+      "type": "object",
+      "description": "Map of contract name to its feature flags",
+      "additionalProperties": {
+        "type": "object",
+        "description": "Map of flag name to flag definition",
+        "additionalProperties": {
+          "$ref": "#/definitions/flag"
+        }
+      }
+    },
+    "stages": {
+      "type": "object",
+      "description": "Definitions of rollout stages and their allowed percentages",
+      "additionalProperties": {
+        "$ref": "#/definitions/stage"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "environment_override": {
+      "type": "object",
+      "properties": {
+        "all_flags_enabled": {
+          "type": "boolean",
+          "description": "If true, all flags are forced enabled regardless of per-flag settings"
+        },
+        "notes": {
+          "type": "string"
+        }
+      },
+      "required": ["all_flags_enabled"],
+      "additionalProperties": false
+    },
+    "flag": {
+      "type": "object",
+      "required": ["enabled", "rollout_percentage", "stage"],
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Master toggle for the flag"
+        },
+        "rollout_percentage": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of callers/contracts that see this flag enabled (0-100)"
+        },
+        "stage": {
+          "type": "string",
+          "enum": ["disabled", "canary", "beta", "ga"],
+          "description": "Current rollout stage"
+        },
+        "description": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "owner": {
+          "type": "string",
+          "description": "GitHub handle of the feature owner"
+        }
+      },
+      "additionalProperties": false
+    },
+    "stage": {
+      "type": "object",
+      "required": ["description", "allowed_rollout"],
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "allowed_rollout": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "description": "Permitted rollout percentages for this stage"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

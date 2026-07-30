@@ -105,6 +105,10 @@ pub struct RetentionPolicy {
     pub min_retention_seconds: u64,
     /// Maximum seconds before a log must be purged (0 = no upper bound).
     pub max_retention_seconds: u64,
+    /// Number of days after which logs are eligible for export/retention review.
+    pub export_window_days: u64,
+    /// Whether expired logs should be automatically purged.
+    pub auto_purge: bool,
 }
 
 /// Access control entry for log readers.
@@ -150,6 +154,8 @@ pub enum DataKey {
     Config,
     RollingHash,
     RetentionPolicy,
+    RetentionPeriod,
+    ExportWindow,
     // Legacy AuditRecord index
     Record(u64),
     ContractAudits(Address),

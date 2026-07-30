@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Alerting configuration for resource budget breaches",
+  "alerting": {
+    "enabled": true,
+    "channels": {
+      "console": { "enabled": true, "verbose": false },
+      "github_issue": { "enabled": false, "repo": "Stellar-Uzima/Uzima-Contracts", "labels": ["resource-budget", "alert"], "assignees": [] },
+      "slack": { "enabled": false, "webhook_url": "", "channel": "#contracts-alerts" }
+    },
+    "thresholds": { "warning_pct": 80, "critical_pct": 95, "regression_pct": 10 },
+    "rules": [
+      { "name": "wasm_size_critical", "metric": "wasm_bytes", "condition": "exceeds", "threshold_type": "budget", "severity": "critical", "action": "block_merge" },
+      { "name": "wasm_size_warning", "metric": "wasm_bytes", "condition": "exceeds_pct", "threshold": 80, "threshold_type": "budget", "severity": "warning", "action": "notify" },
+      { "name": "wasm_regression", "metric": "wasm_regression", "condition": "exceeds_pct", "threshold": 10, "threshold_type": "baseline", "severity": "warning", "action": "notify" },
+      { "name": "wasm_regression_critical", "metric": "wasm_regression", "condition": "exceeds_pct", "threshold": 25, "threshold_type": "baseline", "severity": "critical", "action": "block_merge" }
+    ]
+  }
+}
