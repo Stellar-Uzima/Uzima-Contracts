@@ -1,0 +1,25 @@
+{
+  "dashboard_version": "1.0.0",
+  "description": "Memory and CPU budget overview per contract for Stellar Uzima Soroban contracts",
+  "soroban_network_limits": {
+    "max_read_entries": 2000,
+    "max_write_entries": 1000,
+    "max_instructions": 100000000,
+    "max_memory_bytes": 52428800,
+    "max_contract_size_bytes": 655360
+  },
+  "contracts_monitored": [
+    "identity_registry",
+    "governor",
+    "medical_records",
+    "fido2_authenticator",
+    "credential_registry",
+    "reputation",
+    "token_sale",
+    "treasury_controller",
+    "rbac",
+    "meta_tx_forwarder"
+  ],
+  "regeneration_command": "./scripts/generate_budgets.sh",
+  "generated_at": "2026-07-25T00:00:00Z"
+}

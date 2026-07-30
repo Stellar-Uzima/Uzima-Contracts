@@ -1,0 +1,15 @@
+{
+  "version": "1.0.0",
+  "scoring_weights": {
+    "complexity": 0.30,
+    "history": 0.20,
+    "blast_radius": 0.50
+  },
+  "risk_thresholds": {
+    "CRITICAL": 70.0,
+    "HIGH": 40.0,
+    "MEDIUM": 20.0,
+    "LOW": 0.0
+  },
+  "contracts": []
+}

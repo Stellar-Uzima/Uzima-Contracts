@@ -4,6 +4,11 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_telemetry;
+
+pub mod telemetry;
+pub mod consent_zkp_tracking;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short,
@@ -1008,7 +1013,17 @@ impl ZKPRegistry {
         // Emit events
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("proof_sub")),
-            (submitter, proof_id, is_valid),
+            (submitter.clone(), proof_id.clone(), is_valid),
+        );
+
+        // Emit telemetry
+        telemetry::emit_telemetry_event(
+            &env,
+            if is_valid { telemetry::TelemetryEventType::VerificationPassed } else { telemetry::TelemetryEventType::VerificationFailed },
+            &submitter,
+            &proof_id,
+            &circuit_id,
+            verification_gas,
         );
 
         if is_valid {
@@ -1320,11 +1335,13 @@ impl ZKPRegistry {
         );
 
         // Emit credential proof telemetry
+        let cred_proof_id = Self::generate_telemetry_proof_id(&env, &holder, &credential_type);
         telemetry::emit_telemetry_event(
             &env,
             telemetry::TelemetryEventType::CredentialProofVerified,
             &holder,
             &Self::generate_telemetry_proof_id(&env, &holder, &credential_type),
+            &cred_proof_id,
             &credential_type,
             0,
         );
@@ -2095,8 +2112,7 @@ impl ZKPRegistry {
             DEFAULT_ISSUER_SALT
         }
     }
-
-    fn generate_telemetry_proof_id(env: &Env, holder: &Address, credential_type: &soroban_sdk::String) -> BytesN<32> {
+    fn generate_telemetry_proof_id(env: &Env, holder: &Address, _credential_type: &soroban_sdk::String) -> BytesN<32> {
         let mut payload = soroban_sdk::Bytes::new(env);
         payload.append(&soroban_sdk::Bytes::from_slice(env, b"TELEM_CRED_V1"));
         payload.append(&soroban_sdk::Bytes::from_slice(env, &holder.to_array()));

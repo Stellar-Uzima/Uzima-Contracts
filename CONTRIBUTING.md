@@ -514,6 +514,77 @@ Consistent `snake_case` event naming ensures that off-chain indexers and monitor
 
 ---
 
+## Contract Safety Triage Guide
+
+This section provides a structured process for maintainers to triage contract safety issues and regressions. Use this guide when a potential safety issue, regression, or vulnerability is reported.
+
+### Triage Severity Levels
+
+| Level | Label | Response Time | Description |
+|-------|-------|---------------|-------------|
+| **P0 — Critical** | `severity/critical` | 24 hours | Exploitable vulnerability, data loss risk, or active exploit on mainnet/testnet |
+| **P1 — High** | `severity/high` | 3 business days | Regression affecting core functionality, potential fund lock, or consent bypass |
+| **P2 — Medium** | `severity/medium` | 1 week | Non-critical regression, degraded performance, or documentation gaps in safety-critical flows |
+| **P3 — Low** | `severity/low` | Next release | Cosmetic issues in safety UI, minor documentation errors, or informational findings |
+
+### Triage Workflow
+
+1. **Initial Assessment** (within response time window)
+   - Confirm the issue is reproducible
+   - Identify affected contracts: `medical_records`, `audit`, `patient_consent_management`, `identity_registry`, `governor`, etc.
+   - Determine if the issue is exploitable on deployed networks
+   - Assign severity level
+
+2. **Containment**
+   - **P0/P1**: Immediately pause affected contract if possible (`set_paused(true)`)
+   - Notify upstream consumers via GitHub issue with `security advisory` label
+   - Create a private fork branch for the fix if the issue is sensitive
+
+3. **Root Cause Analysis**
+   - Identify the commit that introduced the regression (use `git bisect`)
+   - Document the root cause in the issue
+   - Check if the issue affects other contracts with similar patterns
+
+4. **Fix & Verification**
+   - Write a fix with comprehensive tests that reproduce the original issue
+   - Run full test suite: `cargo test --workspace`
+   - Run clippy: `cargo clippy --workspace -- -D warnings`
+   - For P0/P1: have at least 2 maintainers review the fix
+
+5. **Rollout**
+   - **P0/P1**: Coordinate upgrade via governance with timelock disclosure
+   - **P2/P3**: Include in next scheduled release
+   - Update `CHANGELOG.md` with the fix description
+   - Close the issue only after the fix is deployed to all target networks
+
+### Regression Detection Checklist
+
+When investigating a regression, check:
+
+- [ ] Soroban SDK version changes (`Cargo.toml` workspace version)
+- [ ] Storage layout changes (key renames, type changes)
+- [ ] Auth boundary changes (`require_auth()` placement)
+- [ ] Error code changes (error enum reordering)
+- [ ] Event signature changes (topic changes break indexers)
+- [ ] Cross-contract call interface changes
+- [ ] Retention policy changes (data purging behavior)
+- [ ] Rate limiting changes
+
+### Safety-Critical Contract Patterns
+
+These contracts require extra scrutiny during triage:
+
+| Contract | Risk Area | Key Concern |
+|----------|-----------|-------------|
+| `identity_registry` | DID management | Key rotation, recovery, unauthorized deactivation |
+| `patient_consent_management` | Consent lifecycle | Consent bypass, unauthorized revocation, expiry handling |
+| `medical_records` | Data access | RBAC bypass, encryption enforcement, consent checks |
+| `audit` | Audit trail | Log tampering, chain integrity, retention enforcement |
+| `governor` | Governance | Quorum bypass, timelock skip, vote manipulation |
+| `fido2_authenticator` | Authentication | Device registration bypass, key cloning |
+
+---
+
 ## Getting Help
 
 - **Issues**: [GitHub Issues](https://github.com/Stellar-Uzima/Uzima-Contracts/issues)

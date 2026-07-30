@@ -13,6 +13,8 @@ use soroban_sdk::{
     Vec,
 };
 
+use crate::errors::AuditForensicsError;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum AuditAction {
@@ -122,6 +124,28 @@ pub struct EvidenceRecord {
     pub submitted_at: u64,
 }
 
+/// Configuration for audit log export windows.
+#[derive(Clone)]
+#[contracttype]
+pub struct ExportConfig {
+    /// Number of days the export window remains open after creation.
+    pub window_days: u64,
+    /// Maximum number of logs per export batch.
+    pub max_batch_size: u32,
+    /// Whether export is currently enabled.
+    pub enabled: bool,
+}
+
+/// Status of an export operation.
+#[derive(Clone)]
+#[contracttype]
+pub struct ExportStatus {
+    pub entry_count: u64,
+    pub exported_at: u64,
+    pub exported_by: Address,
+    pub window_open: bool,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub enum DataKey {
@@ -143,6 +167,10 @@ pub enum DataKey {
     ProvenanceLink(u64),
     EvidenceRecord(u64),
     CaseEvidence(u64),
+    // Export Configuration (Issue #1171)
+    ExportConfig,
+    ExportStatus(u64),
+    NextExportId,
 }
 
 #[contract]
@@ -890,5 +918,103 @@ impl AuditForensicsContract {
         env.storage()
             .persistent()
             .get(&DataKey::ProvenanceLink(entry_id))
+    }
+
+    // ─── Configurable Export Windows (Issue #1171) ───────────────────────────
+
+    /// Set the export configuration for audit logs (admin only).
+    pub fn set_export_config(
+        env: Env,
+        admin: Address,
+        config: ExportConfig,
+    ) -> Result<(), AuditForensicsError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin);
+
+        if config.window_days == 0 {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportConfig, &config);
+        env.storage().instance().set(&DataKey::NextExportId, &0u64);
+
+        env.events().publish(
+            (symbol_short!("EXPORT"), symbol_short!("CFG_SET")),
+            (config.window_days, config.max_batch_size, config.enabled),
+        );
+
+        Ok(())
+    }
+
+    /// Get the current export configuration.
+    pub fn get_export_config(env: Env) -> Option<ExportConfig> {
+        env.storage()
+            .instance()
+            .get(&DataKey::ExportConfig)
+    }
+
+    /// Export audit logs within a given ID range (requires admin).
+    /// Respects the configured export window and batch size.
+    pub fn export_audit_logs(
+        env: Env,
+        admin: Address,
+        start_id: u64,
+        end_id: u64,
+    ) -> Result<Vec<AuditEntry>, AuditForensicsError> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin);
+
+        let config: ExportConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::ExportConfig)
+            .ok_or(AuditForensicsError::ExportConfigNotFound)?;
+
+        if !config.enabled {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        let batch_size = end_id.saturating_sub(start_id).saturating_add(1);
+        if batch_size > config.max_batch_size as u64 {
+            return Err(AuditForensicsError::ExportWindowExpired);
+        }
+
+        let mut results = Vec::new(&env);
+        for i in start_id..=end_id {
+            if let Some(entry) = env
+                .storage()
+                .persistent()
+                .get::<DataKey, AuditEntry>(&DataKey::AuditEntry(i))
+            {
+                results.push_back(entry);
+            }
+        }
+
+        let export_id = Self::next_counter(&env, &DataKey::NextExportId);
+        let status = ExportStatus {
+            entry_count: results.len(),
+            exported_at: env.ledger().timestamp(),
+            exported_by: admin.clone(),
+            window_open: true,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ExportStatus(export_id), &status);
+
+        env.events().publish(
+            (symbol_short!("EXPORT"), symbol_short!("LOGS")),
+            (export_id, results.len(), start_id, end_id),
+        );
+
+        Ok(results)
+    }
+
+    /// Get the status of a previous export operation.
+    pub fn get_export_status(env: Env, export_id: u64) -> Option<ExportStatus> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ExportStatus(export_id))
     }
 }

@@ -29,6 +29,8 @@ pub enum Error {
     NotInitialized = 2,
     NotAuthorized = 3,
     ChainBroken = 4,
+    RetentionPolicyNotFound = 5,
+    RetentionWindowTooShort = 6,
 }
 
 #[contract]
@@ -56,10 +58,20 @@ impl AuditTrail {
         let default_retention = RetentionPolicy {
             min_retention_seconds: 220_752_000,
             max_retention_seconds: 0,
+            export_window_days: 365,
+            auto_purge: false,
         };
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &default_retention);
+
+        // Seed default retention period and export window
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &220_752_000u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &365u64);
 
         // Seed the log reader list
         let empty: Vec<Address> = Vec::new(&env);
@@ -286,11 +298,36 @@ impl AuditTrail {
     // ─── Retention Policy ────────────────────────────────────────────────────
 
     /// Update the retention policy (admin only).
+    /// Emits a retention_policy_updated event.
     pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) -> Result<(), Error> {
         require_admin!(env, admin);
+
+        // Validate: export_window_days must be at least 1 day
+        if policy.export_window_days == 0 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+        // Validate: min_retention_seconds must be at least 1 day
+        if policy.min_retention_seconds < 86_400 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
+
+        // Also update the dedicated storage keys
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &policy.min_retention_seconds);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &policy.export_window_days);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("RETPOL")),
+            (policy.min_retention_seconds, policy.export_window_days, policy.auto_purge),
+        );
+
         Ok(())
     }
 
@@ -321,6 +358,145 @@ impl AuditTrail {
             return false;
         }
         true
+    }
+
+    // ─── Data Purging (Issue #1218) ─────────────────────────────────────────
+
+    /// Purge expired audit logs that exceed the max_retention_seconds window.
+    ///
+    /// Only admin can trigger purging. The function iterates from log_id 1
+    /// upward and removes entries whose age exceeds max_retention_seconds.
+    /// Returns the number of logs purged.
+    ///
+    /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
+    pub fn purge_expired_logs(env: Env, admin: Address) -> u64 {
+    /// Enforce the retention policy across all logs.
+    /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
+    /// Returns the number of logs purged.
+    pub fn enforce_retention_policy(env: Env, admin: Address) -> Result<u64, Error> {
+        require_admin!(env, admin);
+
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        // Infinite retention: nothing to purge
+        if policy.max_retention_seconds == 0 {
+            return 0;
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
+            .ok_or(Error::RetentionPolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let log_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut purged: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    // Remove from persistent storage
+                    env.storage()
+                        .persistent()
+                        .remove(&DataKey::Log(id));
+                    purged += 1;
+                } else {
+                    // Logs are ordered by time; once we hit a non-expired log, stop
+                    break;
+        let mut purged = 0u64;
+
+        if policy.auto_purge && policy.max_retention_seconds > 0 {
+            for i in 1..=log_count {
+                if let Some(log) =
+                    crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+                {
+                    let age = now.saturating_sub(log.timestamp);
+                    if age > policy.max_retention_seconds {
+                        purged = purged.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("PURGE")),
+            (purged, admin),
+        );
+
+        purged
+    }
+
+    /// Return summary of logs eligible for purging without actually purging.
+    /// Useful for auditing and dry-run previews.
+    pub fn preview_purge(env: Env) -> (u64, u64) {
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        if policy.max_retention_seconds == 0 {
+            return (0, 0);
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut expired: u64 = 0;
+        let mut total_size_bytes: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    expired += 1;
+                    // Rough estimate: each log ~256 bytes
+                    total_size_bytes += 256;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        (expired, total_size_bytes)
+    }
+
+    /// Update the max retention window (admin only).
+    /// After setting, call `purge_expired_logs` to enforce.
+    pub fn set_max_retention(env: Env, admin: Address, max_seconds: u64) -> Result<(), Error> {
+        require_admin!(env, admin);
+        let mut policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+        policy.max_retention_seconds = max_seconds;
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPolicy, &policy);
+        Ok(())
+            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
+            (purged, policy.auto_purge),
+        );
+
+        Ok(purged)
     }
 
     // ─── Export Capability ───────────────────────────────────────────────────
@@ -634,5 +810,170 @@ impl AuditTrail {
             .unwrap_or(Vec::new(env));
         list.push_back(id);
         env.storage().persistent().set(&key, &list);
+    }
+
+    // ─── Contract-level Observability (Issue #1166) ──────────────────────────
+
+    /// Log an authorization denial reason with full observability.
+    /// Stores denial details and emits a compliance event.
+    pub fn log_auth_denial(
+        env: Env,
+        admin: Address,
+        caller: Address,
+        target_function: Symbol,
+        denial_reason: Symbol,
+        metadata: Map<String, String>,
+    ) -> u64 {
+        let id = Self::next_log_id(&env);
+
+        let mut log_metadata = metadata;
+        log_metadata.set(
+            String::from_str(&env, "denial_reason"),
+            denial_reason.to_string(),
+        );
+        log_metadata.set(
+            String::from_str(&env, "target_function"),
+            target_function.to_string(),
+        );
+
+        let log = AuditLog {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: caller,
+            action: ActionType::AuthFailure,
+            target: BytesN::from_array(&env, &[0u8; 32]),
+            result: OperationResult::Failure,
+            metadata: log_metadata,
+            prev_hash: Self::get_log_rolling_hash(env.clone()),
+        };
+
+        crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("AUTH_DENY")),
+            (id, denial_reason),
+        );
+
+        id
+    }
+
+    /// Log a policy evaluation result for observability.
+    pub fn log_policy_evaluation(
+        env: Env,
+        caller: Address,
+        policy_name: Symbol,
+        decision: Symbol,
+        target_function: Symbol,
+    ) -> u64 {
+        let id = Self::next_log_id(&env);
+
+        let mut metadata = Map::new(&env);
+        metadata.set(
+            String::from_str(&env, "policy_name"),
+            policy_name.to_string(),
+        );
+        metadata.set(
+            String::from_str(&env, "decision"),
+            decision.to_string(),
+        );
+        metadata.set(
+            String::from_str(&env, "target_function"),
+            target_function.to_string(),
+        );
+
+        let action = if decision == symbol_short!("ALLOW") {
+            ActionType::AuthSuccess
+        } else {
+            ActionType::AuthFailure
+        };
+
+        let log = AuditLog {
+            id,
+            timestamp: env.ledger().timestamp(),
+            actor: caller,
+            action,
+            target: BytesN::from_array(&env, &[0u8; 32]),
+            result: OperationResult::Success,
+            metadata,
+            prev_hash: Self::get_log_rolling_hash(env.clone()),
+        };
+
+        crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("POLICY")),
+            (id, decision),
+        );
+
+        id
+    }
+
+    /// Get observability summary: count of denials by reason.
+    pub fn get_denial_summary(env: Env) -> Map<String, u64> {
+        let mut summary = Map::new(&env);
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        for i in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+            {
+                if log.action == ActionType::AuthFailure {
+                    let reason = log
+                        .metadata
+                        .get(String::from_str(&env, "denial_reason"))
+                        .unwrap_or(String::from_str(&env, "UNKNOWN"));
+                    let current = summary.get(reason.clone()).unwrap_or(0u64);
+                    summary.set(reason, current.saturating_add(1));
+                }
+            }
+        }
+
+        summary
+    }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, BytesN, Env, Symbol};
+use contract_monitoring::telemetry::{ExecutionStatus, TelemetryLogger};
+
+#[contract]
+pub struct AuditMonitoringContract;
+
+#[contractimpl]
+impl AuditMonitoringContract {
+    /// Records execution metrics and audit events for operational telemetry
+    pub fn record_execution(
+        env: Env,
+        target_contract: BytesN<32>,
+        function_name: Symbol,
+        cpu_instructions: u64,
+        memory_bytes: u64,
+        retry_count: u32,
+        error_code: u32,
+    ) {
+        let status = if error_code == 0 {
+            if retry_count > 0 {
+                ExecutionStatus::Retried
+            } else {
+                ExecutionStatus::Success
+            }
+        } else {
+            ExecutionStatus::Failed
+        };
+
+        TelemetryLogger::emit_execution_telemetry(
+            &env,
+            target_contract,
+            function_name,
+            cpu_instructions,
+            memory_bytes,
+            status,
+            retry_count,
+            error_code,
+        );
     }
 }

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Stellar-Uzima/Uzima-Contracts/schemas/interface-registry/versioning.json",
+  "title": "Contract Interface Semantic Versioning",
+  "description": "Schema defining semantic versioning discipline for Stellar Uzima Soroban contract interfaces and SDK compatibility.",
+  "type": "object",
+  "required": ["version", "contracts"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$",
+      "description": "SemVer 2.0.0 version of the interface registry itself."
+    },
+    "contracts": {
+      "type": "object",
+      "description": "Map of contract name → version metadata.",
+      "additionalProperties": {
+        "$ref": "#/$defs/ContractVersion"
+      }
+    }
+  },
+  "$defs": {
+    "ContractVersion": {
+      "type": "object",
+      "required": ["major", "minor", "patch"],
+      "properties": {
+        "major": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Breaking changes to public interface (function signatures, error variants, event topics)."
+        },
+        "minor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Backward-compatible new functionality (new public functions, new error codes)."
+        },
+        "patch": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Backward-compatible bug fixes."
+        },
+        "pre_release": {
+          "type": "string",
+          "description": "Optional pre-release identifier (e.g. alpha.1, beta.2)."
+        },
+        "sdk_compatibility": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of SDK versions confirmed compatible (e.g. soroban-sdk 21.x)."
+        },
+        "breaking_changes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Descriptions of breaking changes introduced at this major version."
+        },
+        "deprecated_functions": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Public functions marked as deprecated."
+        }
+      }
+    }
+  }
+}

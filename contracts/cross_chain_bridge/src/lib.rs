@@ -328,6 +328,60 @@ pub enum EventSyncStatus {
     Failed,
 }
 
+// ==================== Offline Reconciliation Types ====================
+
+/// Request for offline reconciliation when connectivity is unavailable.
+#[derive(Clone)]
+#[contracttype]
+pub struct OfflineReconciliationRequest {
+    pub request_id: BytesN<32>,
+    pub source_chain: ChainId,
+    pub dest_chain: ChainId,
+    pub record_ids: Vec<BytesN<32>>,
+    pub expected_state_hash: BytesN<32>,
+    pub created_at: u64,
+    pub expires_at: u64,
+    pub requester: Address,
+}
+
+/// Result of an offline reconciliation attempt.
+#[derive(Clone)]
+#[contracttype]
+pub struct OfflineReconciliationResult {
+    pub request_id: BytesN<32>,
+    pub reconciled_records: u32,
+    pub failed_records: u32,
+    pub conflict_count: u32,
+    pub state_hash_matched: bool,
+    pub completed_at: u64,
+    pub details: String,
+}
+
+/// Status of a reconciliation operation.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum ReconciliationStatus {
+    Pending = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3,
+    PartialSuccess = 4,
+}
+
+/// Queued asynchronous reconciliation job.
+#[derive(Clone)]
+#[contracttype]
+pub struct AsyncReconciliationJob {
+    pub job_id: u64,
+    pub request: OfflineReconciliationRequest,
+    pub status: ReconciliationStatus,
+    pub queued_at: u64,
+    pub started_at: u64,
+    pub completed_at: u64,
+    pub retry_count: u32,
+    pub max_retries: u32,
+}
+
 // ==================== Storage Keys (DataKey Enum) ====================
 // BUG FIX: Replaces static Symbol constants with typed DataKey enum,
 // ensuring each item gets a unique, collision-free storage slot.
@@ -2381,4 +2435,35 @@ impl CrossChainBridgeContract {
             _ => Ok(()),
         }
     }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
+
+#[contract]
+pub struct CrossChainBridgeContract;
+
+#[contractimpl]
+impl CrossChainBridgeContract {
+    /// Emits bridge state sync event to be consumed asynchronously by SyncManager.
+    pub fn trigger_bridge_sync(
+        env: Env,
+        sender: Address,
+        sync_manager: Address,
+        payload_hash: BytesN<32>,
+    ) -> u64 {
+        sender.require_auth();
+
+        // Invoke SyncManager contract asynchronously via cross-contract call
+        let client = sync_manager_client::Client::new(&env, &sync_manager);
+        client.enqueue_reconciliation(&env.current_contract_address(), &payload_hash)
+    }
+}
+
+mod sync_manager_client {
+    use soroban_sdk::{Address, BytesN, Env};
+    soroban_sdk::contractclient!(
+        name = "Client",
+        wasm = "../../target/wasm32-unknown-unknown/release/sync_manager.wasm"
+    );
 }
