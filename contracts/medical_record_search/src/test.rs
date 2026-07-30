@@ -285,3 +285,118 @@ fn complex_filters_apply_network_and_attribute_constraints() {
     assert_eq!(results.len(), 1);
     assert_eq!(results.get(0).unwrap().record_id, 51);
 }
+
+#[test]
+fn test_create_encrypted_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let indexer = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &indexer, &ROLE_INDEXER);
+
+    let mut keys = Vec::new(&env);
+    keys.push_back(token(&env, 1));
+    keys.push_back(token(&env, 2));
+
+    client.create_encrypted_index(
+        &indexer,
+        &100,
+        &token(&env, 42),
+        &patient,
+        &keys,
+    );
+
+    let entry = client.get_encrypted_index_entry(&100);
+    assert_eq!(entry.record_id, 100);
+    assert_eq!(entry.patient, patient);
+    assert_eq!(entry.metadata_keys.len(), 2);
+}
+
+#[test]
+fn test_create_encrypted_index_duplicate_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let indexer = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &indexer, &ROLE_INDEXER);
+
+    let keys = Vec::new(&env);
+    client.create_encrypted_index(&indexer, &200, &token(&env, 1), &patient, &keys);
+
+    let result = client.try_create_encrypted_index(&indexer, &200, &token(&env, 2), &patient, &keys);
+    assert_eq!(result, Err(Ok(Error::IndexAlreadyExists)));
+}
+
+#[test]
+fn test_update_encrypted_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let indexer = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &indexer, &ROLE_INDEXER);
+
+    let keys = Vec::new(&env);
+    client.create_encrypted_index(&indexer, &300, &token(&env, 1), &patient, &keys);
+
+    let mut new_keys = Vec::new(&env);
+    new_keys.push_back(token(&env, 5));
+    client.update_encrypted_index(&indexer, &300, &token(&env, 99), &new_keys);
+
+    let entry = client.get_encrypted_index_entry(&300);
+    assert_eq!(entry.encrypted_hash, token(&env, 99));
+    assert_eq!(entry.metadata_keys.len(), 1);
+}
+
+#[test]
+fn test_remove_encrypted_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let indexer = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &indexer, &ROLE_INDEXER);
+
+    let keys = Vec::new(&env);
+    client.create_encrypted_index(&indexer, &400, &token(&env, 1), &patient, &keys);
+    client.remove_encrypted_index(&indexer, &400);
+
+    let result = client.try_get_encrypted_index_entry(&400);
+    assert_eq!(result, Err(Ok(Error::IndexNotFound)));
+}
+
+#[test]
+fn test_search_by_encrypted_index() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let indexer = Address::generate(&env);
+    let searcher = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &indexer, &ROLE_INDEXER);
+    client.assign_role(&admin, &searcher, &ROLE_SEARCHER);
+
+    let mut keys = Vec::new(&env);
+    keys.push_back(token(&env, 10));
+    keys.push_back(token(&env, 20));
+    client.create_encrypted_index(&indexer, &500, &token(&env, 1), &patient, &keys);
+
+    let results = client.search_by_encrypted_index(&searcher, &patient, &token(&env, 10));
+    assert_eq!(results.len(), 1);
+    assert_eq!(results.get(0).unwrap().record_id, 500);
+}
+
+#[test]
+fn test_search_encrypted_index_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = setup(&env);
+    let searcher = Address::generate(&env);
+    let patient = Address::generate(&env);
+    client.assign_role(&admin, &searcher, &ROLE_SEARCHER);
+
+    let result = client.try_search_by_encrypted_index(&searcher, &patient, &token(&env, 99));
+    assert_eq!(result, Err(Ok(Error::SearchFailed)));
+}

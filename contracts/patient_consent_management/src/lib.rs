@@ -42,6 +42,7 @@ mod events;
 mod storage;
 mod types;
 pub mod fhir;
+pub mod consent_timestamp;
 
 pub use errors::Error;
 pub use fhir::to_fhir_json;

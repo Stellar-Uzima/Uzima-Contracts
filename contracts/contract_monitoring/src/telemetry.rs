@@ -292,3 +292,77 @@ mod tests {
         assert!(EventClass::Operational < EventClass::Security);
     }
 }
+
+#![no_std]
+use soroban_sdk::{contracterror, contracttype, Env, Symbol, Vec};
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
+#[repr(u32)]
+pub enum TelemetryError {
+    InvalidCPUInstructions = 1,
+    InvalidMemoryBytes = 2,
+    MaxRetryThresholdExceeded = 3,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ExecutionStatus {
+    Success,
+    Failed,
+    Retried,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ExecutionTelemetry {
+    pub contract_id: BytesN<32>,
+    pub function_name: Symbol,
+    pub cpu_instructions: u64,
+    pub memory_bytes: u64,
+    pub status: ExecutionStatus,
+    pub retry_count: u32,
+    pub error_code: u32,
+    pub timestamp: u64,
+}
+
+pub struct TelemetryLogger;
+
+impl TelemetryLogger {
+    /// Logs structured telemetry events to Soroban contract topics for off-chain ingestion
+    pub fn emit_execution_telemetry(
+        env: &Env,
+        contract_id: BytesN<32>,
+        function_name: Symbol,
+        cpu_instructions: u64,
+        memory_bytes: u64,
+        status: ExecutionStatus,
+        retry_count: u32,
+        error_code: u32,
+    ) {
+        let timestamp = env.ledger().timestamp();
+
+        let telemetry = ExecutionTelemetry {
+            contract_id: contract_id.clone(),
+            function_name: function_name.clone(),
+            cpu_instructions,
+            memory_bytes,
+            status: status.clone(),
+            retry_count,
+            error_code,
+            timestamp,
+        };
+
+        // Topic 1: Symbol "telemetry"
+        // Topic 2: Target Function Name
+        // Topic 3: Execution Status
+        env.events().publish(
+            (
+                Symbol::new(env, "telemetry"),
+                function_name,
+                status,
+            ),
+            telemetry,
+        );
+    }
+}

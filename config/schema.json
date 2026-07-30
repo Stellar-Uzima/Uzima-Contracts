@@ -1,11 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Project Configuration",
-  "description": "Schema for the project's configuration files.",
+  "description": "Schema for the project's configuration files, including network profiles and identity normalization.",
   "type": "object",
   "properties": {
     "extends": {
-      "type": "string"
+      "type": "string",
+      "description": "Relative path to a parent config file to inherit from."
     },
     "contracts": {
       "type": "object",
@@ -14,22 +15,157 @@
           "type": "object",
           "properties": {
             "enabled": {
-              "type": "boolean"
+              "type": "boolean",
+              "description": "Whether this contract is enabled for the profile."
             },
             "voting_period": {
               "type": "integer",
-              "minimum": 1
+              "minimum": 1,
+              "description": "Governor voting period in ledger close times."
             },
             "name": {
-              "type": "string"
+              "type": "string",
+              "description": "Human-readable contract name."
             },
             "symbol": {
-              "type": "string"
+              "type": "string",
+              "description": "Token symbol if applicable."
             }
           },
           "required": ["enabled"]
         }
       }
+    },
+    "network_profile": {
+      "$ref": "#/definitions/NetworkProfile",
+      "description": "Optional inline network profile override."
+    },
+    "identity": {
+      "$ref": "#/definitions/IdentityConfig",
+      "description": "Optional identity configuration for this profile."
+    }
+  },
+  "definitions": {
+    "NetworkProfile": {
+      "type": "object",
+      "description": "Normalized network profile with required fields enforced.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable network name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the network's purpose."
+        },
+        "rpc-url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Soroban RPC endpoint URL."
+        },
+        "network-passphrase": {
+          "type": "string",
+          "description": "Stellar network passphrase."
+        },
+        "horizon-url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Horizon server URL."
+        },
+        "friendbot-url": {
+          "type": "string",
+          "description": "Friendbot URL (empty for mainnet)."
+        },
+        "environment": {
+          "type": "string",
+          "enum": ["development", "testing", "staging", "production"],
+          "description": "Deployment environment classification."
+        },
+        "requires-funding": {
+          "type": "boolean",
+          "description": "Whether accounts on this network need friendbot funding."
+        },
+        "gas-configuration": {
+          "$ref": "#/definitions/GasConfiguration"
+        },
+        "safety-level": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Safety classification for the network."
+        },
+        "confirmation-required": {
+          "type": "boolean",
+          "description": "Whether transactions require explicit confirmation before execution."
+        }
+      },
+      "required": [
+        "name", "description", "rpc-url", "network-passphrase", "horizon-url",
+        "environment", "requires-funding", "gas-configuration", "safety-level",
+        "confirmation-required"
+      ],
+      "additionalProperties": false
+    },
+    "GasConfiguration": {
+      "type": "object",
+      "description": "Gas budget configuration for a network.",
+      "properties": {
+        "max-instructions": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum instructions per transaction."
+        },
+        "tx-resource-fee": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Base transaction resource fee in stroops."
+        }
+      },
+      "required": ["max-instructions", "tx-resource-fee"],
+      "additionalProperties": false
+    },
+    "IdentityConfig": {
+      "type": "object",
+      "description": "Normalized identity configuration for a deployment profile.",
+      "properties": {
+        "network": {
+          "type": "string",
+          "enum": ["local", "testnet", "futurenet", "mainnet"],
+          "description": "Target network for this identity."
+        },
+        "identity": {
+          "type": "string",
+          "description": "Soroban identity name (e.g., dev, test, prod)."
+        },
+        "dry-run": {
+          "type": "boolean",
+          "description": "Whether to simulate transactions instead of submitting."
+        },
+        "simulation": {
+          "type": "boolean",
+          "description": "Whether to enable transaction simulation."
+        }
+      },
+      "required": ["network", "identity"],
+      "additionalProperties": false
+    },
+    "NetworkGroup": {
+      "type": "object",
+      "description": "Logical grouping of networks for easier management.",
+      "properties": {
+        "networks": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["local", "testnet", "futurenet", "mainnet"]
+          },
+          "description": "List of network names in this group."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of this network group."
+        }
+      },
+      "required": ["networks", "description"]
     }
   }
 }

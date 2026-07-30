@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Contract Resource Budget Schema",
+  "description": "JSON Schema for validating resource-budgets/budgets.json",
+  "type": "object",
+  "required": ["title", "version", "defaults", "contracts"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "title": { "type": "string" },
+    "description": { "type": "string" },
+    "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+    "defaults": {
+      "$ref": "#/$defs/budget_entry"
+    },
+    "contracts": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/budget_entry" }
+    }
+  },
+  "$defs": {
+    "budget_entry": {
+      "type": "object",
+      "required": ["max_wasm_bytes", "max_storage_entries", "max_cpu_instructions", "regression_tolerance_pct"],
+      "properties": {
+        "max_wasm_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum allowed WASM binary size in bytes"
+        },
+        "max_storage_entries": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum number of persistent storage entries"
+        },
+        "max_cpu_instructions": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum CPU instructions per contract call"
+        },
+        "regression_tolerance_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Allowed regression percentage before budget gate fails"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Human-readable notes about this budget"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -362,12 +362,16 @@ fn test_set_and_get_retention_policy() {
     let policy = RetentionPolicy {
         min_retention_seconds: 86_400,
         max_retention_seconds: 315_360_000,
+        export_window_days: 30,
+        auto_purge: true,
     };
     client.set_retention_policy(&admin, &policy);
 
     let stored = client.get_retention_policy();
     assert_eq!(stored.min_retention_seconds, 86_400);
     assert_eq!(stored.max_retention_seconds, 315_360_000);
+    assert_eq!(stored.export_window_days, 30);
+    assert!(stored.auto_purge);
 }
 
 #[test]
@@ -581,4 +585,197 @@ fn test_all_required_event_categories() {
     let stored = client.get_log_rolling_hash();
     let recomputed = client.verify_log_integrity();
     assert_eq!(stored, recomputed);
+}
+
+// ─── Contract-level Observability (Issue #1166) ─────────────────────────────
+
+#[test]
+fn test_log_auth_denial() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+    let mut meta = Map::new(&env);
+    meta.set(
+        String::from_str(&env, "role"),
+        String::from_str(&env, "admin"),
+    );
+
+    let id = client.log_auth_denial(
+        &admin,
+        &caller,
+        &symbol_short!("CREATE"),
+        &symbol_short!("NOT_AUTH"),
+        &meta,
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthFailure);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "denial_reason")),
+        Some(String::from_str(&env, "NOT_AUTH"))
+    );
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "target_function")),
+        Some(String::from_str(&env, "CREATE"))
+    );
+}
+
+#[test]
+fn test_log_policy_evaluation_allow() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+
+    let id = client.log_policy_evaluation(
+        &caller,
+        &symbol_short!("RBAC"),
+        &symbol_short!("ALLOW"),
+        &symbol_short!("READ"),
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthSuccess);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "decision")),
+        Some(String::from_str(&env, "ALLOW"))
+    );
+}
+
+#[test]
+fn test_log_policy_evaluation_deny() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let caller = Address::generate(&env);
+
+    let id = client.log_policy_evaluation(
+        &caller,
+        &symbol_short!("HIPAA"),
+        &symbol_short!("DENY"),
+        &symbol_short!("EXPORT"),
+    );
+
+    assert_eq!(id, 1);
+    let log = client.get_log(&id);
+    assert_eq!(log.action, ActionType::AuthFailure);
+    assert_eq!(
+        log.metadata.get(String::from_str(&env, "decision")),
+        Some(String::from_str(&env, "DENY"))
+    );
+}
+
+#[test]
+fn test_get_denial_summary() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let caller1 = Address::generate(&env);
+    let caller2 = Address::generate(&env);
+
+    let meta = Map::new(&env);
+
+    client.log_auth_denial(
+        &admin,
+        &caller1,
+        &symbol_short!("WRITE"),
+        &symbol_short!("NO_ROLE"),
+        &meta,
+    );
+    client.log_auth_denial(
+        &admin,
+        &caller2,
+        &symbol_short!("DELETE"),
+        &symbol_short!("NO_ROLE"),
+        &meta,
+    );
+    client.log_auth_denial(
+        &admin,
+        &caller1,
+        &symbol_short!("EXPORT"),
+        &symbol_short!("DENIED"),
+        &meta,
+    );
+
+    let summary = client.get_denial_summary();
+    assert_eq!(summary.get(String::from_str(&env, "NO_ROLE")), Some(2));
+    assert_eq!(summary.get(String::from_str(&env, "DENIED")), Some(1));
+// ─── Configurable Retention & Export Windows (Issue #1171) ──────────────────
+
+#[test]
+fn test_enforce_retention_policy_auto_purge() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    // Log some events
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+
+    // Set a policy with auto_purge enabled and a short max retention
+    let policy = RetentionPolicy {
+        min_retention_seconds: 86_400,
+        max_retention_seconds: 0, // no upper bound → nothing purged
+        export_window_days: 30,
+        auto_purge: true,
+    };
+    client.set_retention_policy(&admin, &policy);
+
+    // With max_retention_seconds = 0, nothing should be purged
+    let purged = client.enforce_retention_policy(&admin);
+    assert_eq!(purged, 0);
+}
+
+#[test]
+fn test_enforce_retention_policy_rejects_short_window() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    // Try to set a policy with export_window_days = 0
+    let bad_policy = RetentionPolicy {
+        min_retention_seconds: 86_400,
+        max_retention_seconds: 315_360_000,
+        export_window_days: 0,
+        auto_purge: false,
+    };
+    let result = client.try_set_retention_policy(&admin, &bad_policy);
+    assert_eq!(result, Err(Ok(Error::RetentionWindowTooShort)));
+}
+
+#[test]
+fn test_enforce_retention_policy_rejects_short_retention() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    // Try to set a policy with min_retention_seconds < 1 day
+    let bad_policy = RetentionPolicy {
+        min_retention_seconds: 1000, // less than 86_400
+        max_retention_seconds: 315_360_000,
+        export_window_days: 30,
+        auto_purge: false,
+    };
+    let result = client.try_set_retention_policy(&admin, &bad_policy);
+    assert_eq!(result, Err(Ok(Error::RetentionWindowTooShort)));
+}
+
+#[test]
+fn test_default_retention_policy_has_export_window() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let policy = client.get_retention_policy();
+    assert_eq!(policy.min_retention_seconds, 220_752_000);
+    assert_eq!(policy.max_retention_seconds, 0);
+    assert_eq!(policy.export_window_days, 365);
+    assert!(!policy.auto_purge);
 }
