@@ -95,8 +95,60 @@ use soroban_sdk::{
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
-// ==================== Schema Evolution Types ====================
+// ==================== Compartmentalized Data Access Types =============
+/// Data tiers for role-based access control.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum DataAccessTier {
+    /// Basic demographic data - all roles
+    Basic = 0,
+    /// Clinical data - doctors, specialists, admins
+    Clinical = 1,
+    /// Sensitive data - patient consent required
+    Sensitive = 2,
+    /// Restricted data - admin and specialist only
+    Restricted = 3,
+    /// Research data - anonymized for research use
+    Research = 4,
+}
 
+/// A data compartment with associated metadata.
+#[derive(Clone)]
+#[contracttype]
+pub struct DataCompartment {
+    pub compartment_id: Symbol,
+    pub tier: DataAccessTier,
+    pub description: String,
+    pub required_role: Role,
+    pub requires_consent: bool,
+}
+
+/// Record of access grant to a compartment.
+#[derive(Clone)]
+#[contracttype]
+pub struct CompartmentAccess {
+    pub patient_id: Address,
+    pub compartment_id: Symbol,
+    pub granted_by: Address,
+    pub granted_at: u64,
+    pub expires_at: Option<u64>,
+}
+
+/// Role types in the system.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum Role {
+    Admin,
+    Doctor,
+    Nurse,
+    Specialist,
+    Patient,
+    Researcher,
+    Auditor,
+}
+
+// ==================== Schema Evolution Types =============
 /// Version identifier for medical record metadata schemas.
 #[derive(Clone, PartialEq, Eq, Debug)]
 #[contracttype]
@@ -146,8 +198,7 @@ pub enum MigrationStatus {
     RolledBack = 4,
 }
 
-// ==================== Cross-Chain Types ====================
-
+// ==================== Cross-Chain Types =============
 #[derive(Clone, PartialEq, Eq)]
 #[contracttype]
 pub enum ChainId {
@@ -195,8 +246,7 @@ pub struct RecordMetadataHistoryEntry {
     pub custom_fields: Map<String, String>,
 }
 
-// ==================== Users / DID ====================
-
+// ==================== Users / DID =============
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum Role {
@@ -297,8 +347,7 @@ pub enum DIDAuthLevel {
     Full,
 }
 
-// ==================== Access / Emergency ====================
-
+// ==================== Access / Emergency =============
 #[derive(Clone)]
 #[contracttype]
 pub struct AccessRequest {
@@ -320,8 +369,7 @@ pub struct EmergencyAccess {
     pub is_active: bool,
 }
 
-// ==================== ZK / Credential Types ====================
-
+// ==================== ZK / Credential Types =============
 #[derive(Clone)]
 #[contracttype]
 pub struct ZkPublicInputs {
@@ -361,8 +409,7 @@ pub struct ZkAuditRecord {
     pub nullifier: BytesN<32>,
 }
 
-// ==================== Medical Record ====================
-
+// ==================== Medical Record =============
 #[derive(Clone)]
 #[contracttype]
 pub struct MedicalRecord {
@@ -379,8 +426,7 @@ pub struct MedicalRecord {
     pub doctor_did: Option<String>,
 }
 
-// ==================== Traditional Medicine ====================
-
+// ==================== Traditional Medicine =============
 /// Structured metadata for records involving traditional / indigenous healing practices.
 /// Sensitive remedy details should be stored encrypted off-chain; only the
 /// non-sensitive `practice_type` is surfaced in on-chain events.
@@ -400,8 +446,7 @@ pub struct TraditionalMedicineMetadata {
     pub language: String,
 }
 
-// ==================== AI & Recovery Types ====================
-
+// ==================== AI & Recovery Types =============
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum AIInsightType {
@@ -431,8 +476,7 @@ pub struct AIConfig {
     pub min_participants: u32,
 }
 
-// ==================== Binary Attachments (Issue #1216) ====================
-
+// ==================== Binary Attachments (Issue #1216) =============
 /// Metadata for a large binary attachment stored off-chain.
 ///
 /// On-chain we store only the reference (URI/CID) and metadata; the actual
@@ -483,8 +527,7 @@ pub struct RecoveryProposal {
     pub approvals: Vec<Address>,
 }
 
-// ==================== Cryptographic (E2E / PQ) Types ====================
-
+// ==================== Cryptographic (E2E / PQ) Types =============
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum EnvelopeAlgorithm {
@@ -642,8 +685,7 @@ pub struct CryptoConfigProposal {
     pub require_pq_envelopes: Option<bool>,
 }
 
-// ==================== Storage Keys ====================
-
+// ==================== Storage Keys =============
 #[contracttype(export = false)]
 pub enum DataKey {
     // Lifecycle
@@ -749,6 +791,10 @@ pub enum DataKey {
     // Redaction
     RedactionPolicy(u64),
 
+    // Compartmentalized Data Access
+    Compartment(Symbol),
+    CompartmentAccess(Address, Symbol),
+    UserRole(Address),
     // Binary Attachments (Issue #1216)
     Attachment(BytesN<32>),                // attachment_id -> Attachment
     RecordAttachments(u64),                // record_id -> Vec<BytesN<32>>
@@ -764,11 +810,9 @@ pub enum DataKey {
     CurrentSchemaVersion,
 }
 
-// ==================== Errors ====================
-// NOTE: `Error` lives in `errors.rs` and is re-exported above.
+// ==================== Errors =============// NOTE: `Error` lives in `errors.rs` and is re-exported above.
 
-// ==================== Batch Types ====================
-
+// ==================== Batch Types =============
 /// Per-record input for batched record creation.
 /// Same fields as `write_record` minus `caller` (passed at batch level).
 #[derive(Clone)]
@@ -807,8 +851,7 @@ pub struct ListRecordsResult {
     pub next_cursor: Option<u64>,
 }
 
-// ==================== Rate Limiting Types ====================
-
+// ==================== Rate Limiting Types =============
 /// Configures operation-specific rate limits per role.
 #[derive(Clone)]
 #[contracttype]
@@ -831,8 +874,7 @@ pub struct RateLimitEntry {
     pub window_start: u64,
 }
 
-// ==================== Data Quality & Validation Types ====================
-
+// ==================== Data Quality & Validation Types =============
 /// Medical record types for type-specific validation rules.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
@@ -909,8 +951,7 @@ pub struct FieldCompleteness {
     pub completed_fields: u32,
 }
 
-// ==================== Correction Workflow Types ====================
-
+// ==================== Correction Workflow Types =============
 /// Priority level for a correction item, derived from issue severity.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
@@ -1010,8 +1051,7 @@ pub struct CleanseResult {
     pub was_modified: bool,
 }
 
-// ==================== Constants ====================
-
+// ==================== Constants =============
 const APPROVAL_THRESHOLD: u32 = 2;
 const TIMELOCK_SECS: u64 = 86_400;
 
@@ -1055,8 +1095,7 @@ const DEFAULT_PATIENT_MAX_CALLS: u32 = 10;
 const DEFAULT_ADMIN_MAX_CALLS: u32 = 0; // 0 = unlimited
 const DEFAULT_WINDOW_SECS: u64 = 3_600; // 1 hour
 
-// ==================== Structured Logging Types ====================
-
+// ==================== Structured Logging Types =============
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[contracttype]
 pub enum LogLevel {
@@ -1077,8 +1116,7 @@ pub struct StructuredLog {
     pub message: String,
 }
 
-// ==================== HIPAA Data Categories (Issue #997) ====================
-
+// ==================== HIPAA Data Categories (Issue #997) =============
 /// HIPAA data categories for field-level access control.
 /// Implements the "minimum necessary" standard: a caller requesting only
 /// Diagnosis data must not receive Billing or Insurance fields.
@@ -5291,10 +5329,8 @@ impl MedicalRecordsContract {
         Ok(env.storage().persistent().get(&DataKey::Record(record_id)))
     }
 
-    // =================================================================
-    // MIGRATION & UPGRADE SYSTEM
-    // =================================================================
-
+    // ==========================================================    // MIGRATION & UPGRADE SYSTEM
+    // ==========================================================
     
     fn get_contract_version(env: &Env) -> u32 {
         env.storage()
@@ -6564,10 +6600,8 @@ impl MedicalRecordsContract {
             .set(&DataKey::CryptoAudit(next), &entry);
     }
 
-    // =========================================================================
-    // Rate Limiting
-    // =========================================================================
-
+    // ==================================================================    // Rate Limiting
+    // ==================================================================
     /// Internal guard – called at the start of rate-limited operations.
     /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
     /// all allowed calls in the current window.
@@ -6692,10 +6726,8 @@ impl MedicalRecordsContract {
         Ok(true)
     }
 
-    // =========================================================================
-    // Data Quality & Validation
-    // =========================================================================
-
+    // ==================================================================    // Data Quality & Validation
+    // ==================================================================
     /// Validates a stored medical record and returns a comprehensive quality report.
     ///
     /// Performs completeness checks, format validation, consistency verification,
@@ -6990,8 +7022,7 @@ impl MockRbac {
     }
 }
 
-// ==================== Traditional Medicine Support ====================
-
+// ==================== Traditional Medicine Support =============
 impl MedicalRecordsContract {
     /// Store a medical record with optional traditional medicine metadata.
     /// When `traditional_metadata` is provided, the record is also indexed
@@ -7386,6 +7417,154 @@ impl MedicalRecordsContract {
         Ok(redacted)
     }
 
+    // ─── Compartmentalized Data Access (Issue #1165) ─────────────────────────
+
+    /// Create a new data compartment for role-based tiered access.
+    pub fn create_data_compartment(
+        env: Env,
+        caller: Address,
+        compartment_id: Symbol,
+        tier: DataAccessTier,
+        description: String,
+        required_role: Role,
+        requires_consent: bool,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let compartment = DataCompartment {
+            compartment_id: compartment_id.clone(),
+            tier,
+            description,
+            required_role,
+            requires_consent,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::Compartment(compartment_id.clone()),
+            &compartment,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("CREATE")),
+            (compartment_id, tier as u32),
+        );
+
+        Ok(())
+    }
+
+    /// Get a data compartment by ID.
+    pub fn get_data_compartment(
+        env: Env,
+        compartment_id: Symbol,
+    ) -> Result<DataCompartment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .ok_or(Error::NotFound)
+    }
+
+    /// Grant access to a patient's data compartment.
+    pub fn grant_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+        expires_at: Option<u64>,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        let access = CompartmentAccess {
+            patient_id: patient_id.clone(),
+            compartment_id: compartment_id.clone(),
+            granted_by: caller.clone(),
+            granted_at: env.ledger().timestamp(),
+            expires_at,
+        };
+
+        env.storage().persistent().set(
+            &DataKey::CompartmentAccess(patient_id.clone(), compartment_id.clone()),
+            &access,
+        );
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("GRANT")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
+    }
+
+    /// Check if a user has access to a patient's data compartment.
+    pub fn has_compartment_access(
+        env: Env,
+        user: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> bool {
+        let access: CompartmentAccess = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::CompartmentAccess(
+                patient_id,
+                compartment_id,
+            )) {
+            Some(a) => a,
+            None => return false,
+        };
+
+        // Check expiry
+        if let Some(exp) = access.expires_at {
+            if env.ledger().timestamp() > exp {
+                return false;
+            }
+        }
+
+        // Check role
+        let role: Role = env
+            .storage()
+            .persistent()
+            .get(&DataKey::UserRole(user))
+            .unwrap_or(Role::Patient);
+
+        let compartment: DataCompartment = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Compartment(compartment_id))
+            .unwrap();
+
+        matches!(
+            (compartment.required_role, role),
+            (Role::Admin, Role::Admin)
+                | (Role::Doctor, Role::Doctor)
+                | (Role::Nurse, Role::Nurse)
+                | (Role::Specialist, Role::Specialist)
+                | (Role::Researcher, Role::Researcher)
+                | (Role::Auditor, Role::Auditor)
+                | (Role::Patient, Role::Patient)
+                | (Role::Admin, _)
+        )
+    }
+
+    /// Revoke access to a patient's data compartment.
+    pub fn revoke_compartment_access(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        compartment_id: Symbol,
+    ) -> Result<(), Error> {
+        require_admin!(env, caller);
+
+        env.storage().persistent().remove(&DataKey::CompartmentAccess(
+            patient_id.clone(),
+            compartment_id.clone(),
+        ));
+
+        env.events().publish(
+            (symbol_short!("COMP"), symbol_short!("REVOKE")),
+            (patient_id, compartment_id),
+        );
+
+        Ok(())
     // ─── Binary Attachments (Issue #1216) ────────────────────────────────────
 
     /// Register a large binary attachment reference for a medical record.
@@ -7551,8 +7730,9 @@ impl MedicalRecordsContract {
             None => return false,
         };
         att.checksum == expected_checksum
-    // ==================== Schema Evolution Functions ====================
+    }
 
+    // ==================== Schema Evolution Functions =============
     /// Register a new schema version for medical record metadata.
     pub fn register_schema_version(
         env: Env,
