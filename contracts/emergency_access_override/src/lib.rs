@@ -12,6 +12,75 @@ use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, E
 // Shared multi-sig helpers (Phase 4 migration: see issue #830)
 use governance_commons::{multi_sig, ApprovalStatus};
 
+// ==================== Rate Limiting Types (Issue #1173) ====================
+
+/// Configurable rate-limit parameters for emergency access requests.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct RateLimitConfig {
+    /// Maximum requests a single requester can submit per time window.
+    pub max_requests_per_window: u32,
+    /// Duration of the rate-limit window in seconds.
+    pub window_seconds: u64,
+    /// Cooldown period in seconds between successive requests from the same requester.
+    pub cooldown_seconds: u64,
+    /// Maximum total grants across all requesters before circuit breaker trips.
+    pub max_grants_per_window: u32,
+}
+
+impl Default for RateLimitConfig {
+    fn default() -> Self {
+        Self {
+            max_requests_per_window: 5,
+            window_seconds: 3_600,
+            cooldown_seconds: 86_400,
+            max_grants_per_window: 10,
+        }
+    }
+}
+
+/// An emergency access request with full metadata for audit and rate-limiting.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct EmergencyAccessRequest {
+    /// Unique request identifier.
+    pub request_id: u64,
+    /// Patient whose data is being requested.
+    pub patient: Address,
+    /// Provider (doctor/hospital) requesting access.
+    pub provider: Address,
+    /// Reason code for the emergency access.
+    pub reason: Symbol,
+    /// Address that created the request.
+    pub requester: Address,
+    /// List of approvers who have signed off.
+    pub approvals: Vec<Address>,
+    /// Timestamp when the request was created.
+    pub created_at: u64,
+    /// Whether the request has been granted.
+    pub granted: bool,
+    /// Timestamp when the request was granted (0 if not yet granted).
+    pub granted_at: u64,
+    /// Timestamp when the access expires.
+    pub expires_at: u64,
+}
+
+/// A record of an access approval with full audit metadata.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct AccessApproval {
+    /// The request this approval is for.
+    pub request_id: u64,
+    /// Address that approved the request.
+    pub approver: Address,
+    /// Timestamp when the approval was given.
+    pub approved_at: u64,
+    /// Ledger sequence when the approval was recorded.
+    pub ledger_sequence: u32,
+    /// Whether this approval was the one that granted access (reached threshold).
+    pub final_approval: bool,
+}
+
 // ==================== Data Types ====================
 
 #[derive(Clone)]

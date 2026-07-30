@@ -7,6 +7,10 @@
 .PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
 .PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
 .PHONY: build-incremental test-changed cache-status dev
+.PHONY: orchestrate-plan orchestrate-deploy orchestrate-deploy-live orchestrate-verify orchestrate-status
+.PHONY: promotion-gate promotion-gate-strict
+.PHONY: canary-dry-run canary-deploy canary-full
+.PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 
 ##@ General
 
@@ -58,6 +62,22 @@ help:
 	@echo "  generate-changelog VERSION=X.Y.Z - Generate changelog entry"
 	@echo "  validate-release VERSION=X.Y.Z - Validate release prerequisites"
 	@echo "  check-versions      - Check version consistency"
+	@echo ""
+	@echo "  orchestrate-plan     - Generate typed deployment plan (NETWORK=... VERSION=...)"
+	@echo "  orchestrate-deploy   - Dry-run typed deployment (NETWORK=... VERSION=...)"
+	@echo "  orchestrate-verify   - Verify deployments (NETWORK=...)"
+	@echo "  orchestrate-status   - Show deployment status (NETWORK=...)"
+	@echo ""
+	@echo "  promotion-gate       - Run release promotion gate (VERSION=... FROM=... TO=...)"
+	@echo "  promotion-gate-strict - Strict promotion gate"
+	@echo ""
+	@echo "  canary-dry-run       - Canary deploy dry-run (NETWORK=... VERSION=...)"
+	@echo "  canary-deploy        - Canary deploy (NETWORK=... VERSION=...)"
+	@echo "  canary-full          - Full staged rollout (NETWORK=... VERSION=...)"
+	@echo ""
+	@echo "  coverage-gate        - Run coverage gate check"
+	@echo "  coverage-gate-report - Generate coverage gate report"
+	@echo "  test-coverage-gate   - Run coverage gate test suite"
 
 # Install required dependencies
 install-deps:
@@ -565,3 +585,71 @@ smoke-test-docker: ## Run Docker-based smoke test (requires docker-compose up)
 
 dev-health: bootstrap-test health-check ## Run both bootstrap and container health checks
 	@echo "Dev environment health check complete"
+
+##@ Typed Orchestration (Issue #1187)
+
+orchestrate-plan: ## Generate typed deployment plan (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-plan NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs plan $(NETWORK) --output reports/orchestrate-$(NETWORK)-$(VERSION)-plan.json
+
+orchestrate-deploy: ## Deploy via typed orchestration (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-deploy NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs deploy $(NETWORK) --dry-run
+
+orchestrate-deploy-live: ## Deploy live via typed orchestration (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-deploy-live NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs deploy $(NETWORK)
+
+orchestrate-verify: ## Verify deployments via typed orchestration (NETWORK=testnet)
+	@if [ -z "$(NETWORK)" ]; then echo "Usage: make orchestrate-verify NETWORK=testnet"; exit 1; fi
+	@node scripts/orchestrate.mjs verify $(NETWORK)
+
+orchestrate-status: ## Show deployment status (NETWORK=testnet)
+	@if [ -z "$(NETWORK)" ]; then echo "Usage: make orchestrate-status NETWORK=testnet"; exit 1; fi
+	@node scripts/orchestrate.mjs status $(NETWORK)
+
+##@ Release Promotion Gates (Issue #1190)
+
+promotion-gate: ## Run release promotion gate (VERSION=X.Y.Z FROM=testnet TO=mainnet)
+	@if [ -z "$(VERSION)" ] || [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
+		echo "Usage: make promotion-gate VERSION=X.Y.Z FROM=testnet TO=mainnet"; exit 1; fi
+	@bash scripts/release_promotion_gate.sh --version $(VERSION) --from $(FROM) --to $(TO)
+
+promotion-gate-strict: ## Run release promotion gate in strict mode
+	@if [ -z "$(VERSION)" ] || [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
+		echo "Usage: make promotion-gate-strict VERSION=X.Y.Z FROM=testnet TO=mainnet"; exit 1; fi
+	@bash scripts/release_promotion_gate.sh --version $(VERSION) --from $(FROM) --to $(TO) --strict
+
+##@ Canary / Staged Rollout (Issue #1191)
+
+canary-dry-run: ## Canary deploy dry-run (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-dry-run NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage canary --dry-run
+
+canary-deploy: ## Canary deploy (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-deploy NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage canary
+
+canary-full: ## Full staged rollout (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-full NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage all
+
+##@ Coverage Gates (Issue #1196)
+
+coverage-gate: ## Run coverage gate check
+	@bash scripts/coverage_gate.sh --check
+
+coverage-gate-report: ## Generate coverage gate report
+	@bash scripts/coverage_gate.sh --report
+
+coverage-gate-update: ## Update coverage gate baselines
+	@bash scripts/coverage_gate.sh --update
+
+test-coverage-gate: ## Run coverage gate test suite
+	@bash tests/coverage_gate_test.sh

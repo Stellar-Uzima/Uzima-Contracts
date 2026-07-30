@@ -24,6 +24,8 @@
 
 use soroban_sdk::{contracterror, symbol_short, Symbol};
 
+pub mod schema_versioning;
+
 /// Upper bound (inclusive) of the [`CommonError`] discriminant range.
 ///
 /// Every variant of [`CommonError`] must have a discriminant `<= COMMON_ERROR_MAX`.

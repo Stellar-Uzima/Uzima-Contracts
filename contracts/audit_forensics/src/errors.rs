@@ -16,4 +16,6 @@ pub enum AuditForensicsError {
     ExecutionNotFound = 5,
     FindingNotFound = 6,
     UnsupportedAction = 7,
+    ExportConfigNotFound = 8,
+    ExportWindowExpired = 9,
 }

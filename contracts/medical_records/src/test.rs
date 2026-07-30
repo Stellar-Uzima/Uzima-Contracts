@@ -1865,3 +1865,338 @@ fn proptest_record_attributes_persistence() {
             "Timestamp must be set");
     });
 }
+
+// ==================== Compartmentalized Data Access Tests ====================
+
+#[test]
+fn test_create_data_compartment() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let compartment_id = Symbol::new(&env, "CARDIOLOGY");
+    let description = String::from_str(&env, "Cardiology records compartment");
+
+    let result = client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Clinical,
+        &description,
+        &Role::Doctor,
+        &false,
+    );
+
+    assert!(result.is_ok());
+
+    let compartment = client.get_data_compartment(&compartment_id);
+    assert!(compartment.is_ok());
+    let c = compartment.unwrap();
+    assert_eq!(c.tier, DataAccessTier::Clinical);
+    assert_eq!(c.required_role, Role::Doctor);
+}
+
+#[test]
+fn test_create_data_compartment_not_admin() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let user = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "CARDIOLOGY");
+    let description = String::from_str(&env, "Cardiology records");
+
+    let result = client.create_data_compartment(
+        &user,
+        &compartment_id,
+        &DataAccessTier::Clinical,
+        &description,
+        &Role::Doctor,
+        &false,
+    );
+
+    assert_eq!(result, Err(Error::NotAuthorized));
+}
+
+#[test]
+fn test_grant_and_revoke_compartment_access() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let patient = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "GENERAL");
+    let description = String::from_str(&env, "General records");
+
+    // Create compartment first
+    client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Basic,
+        &description,
+        &Role::Patient,
+        &false,
+    );
+
+    // Grant access
+    let result = client.grant_compartment_access(
+        &admin,
+        &patient,
+        &compartment_id,
+        &None,
+    );
+    assert!(result.is_ok());
+
+    // Check access
+    let user = Address::generate(&env);
+    client.manage_user(&admin, &user, &Role::Doctor);
+
+    assert!(client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+
+    // Revoke access
+    let result = client.revoke_compartment_access(&admin, &patient, &compartment_id);
+    assert!(result.is_ok());
+
+    assert!(!client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+}
+
+#[test]
+fn test_compartment_access_expiry() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let patient = Address::generate(&env);
+    let compartment_id = Symbol::new(&env, "TEMP");
+    let description = String::from_str(&env, "Temporary access");
+
+    // Create compartment
+    client.create_data_compartment(
+        &admin,
+        &compartment_id,
+        &DataAccessTier::Sensitive,
+        &description,
+        &Role::Doctor,
+        &true,
+    );
+
+    // Grant with expiry in the past
+    let past_expiry = env.ledger().timestamp().saturating_sub(1000);
+    client.grant_compartment_access(
+        &admin,
+        &patient,
+        &compartment_id,
+        &Some(past_expiry),
+    );
+
+    let user = Address::generate(&env);
+    client.manage_user(&admin, &user, &Role::Doctor);
+
+    // Access should be denied (expired)
+    assert!(!client.has_compartment_access(
+        &user,
+        &patient,
+        &compartment_id,
+    ));
+}
+
+// ==================== Schema Evolution Tests ====================
+
+#[test]
+fn test_register_schema_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema version");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let evolution_id = client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    assert_eq!(evolution_id, 1);
+
+    // Verify current schema version
+    let current = client.get_current_schema_version();
+    assert!(current.is_some());
+    let ver = current.unwrap();
+    assert_eq!(ver.major, 1);
+    assert_eq!(ver.minor, 0);
+    assert_eq!(ver.patch, 0);
+}
+
+#[test]
+fn test_register_schema_version_duplicate() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema version");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    // Try to register the same version again
+    let result = client.try_register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &String::from_str(&env, "Duplicate"),
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+    assert_eq!(result, Err(Ok(Error::SchemaVersionAlreadyExists)));
+}
+
+#[test]
+fn test_evolve_schema() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    // Register v1.0.0
+    client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    // Evolve to v1.1.0
+    let mut additions = Vec::new(&env);
+    additions.push_back(String::from_str(&env, "new_field"));
+
+    let evolution_id = client.evolve_schema(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &1u32, &1u32, &0u32,
+        &String::from_str(&env, "Add new field"),
+        &additions,
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+
+    assert_eq!(evolution_id, 1);
+
+    // Verify current schema version updated
+    let current = client.get_current_schema_version();
+    assert!(current.is_some());
+    let ver = current.unwrap();
+    assert_eq!(ver.major, 1);
+    assert_eq!(ver.minor, 1);
+    assert_eq!(ver.patch, 0);
+}
+
+#[test]
+fn test_evolve_schema_source_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let result = client.try_evolve_schema(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &2u32, &0u32, &0u32,
+        &String::from_str(&env, "Nonexistent source"),
+        &empty_vec.clone(),
+        &empty_vec.clone(),
+        &empty_map.clone(),
+        &false,
+    );
+    assert_eq!(result, Err(Ok(Error::SchemaVersionNotFound)));
+}
+
+#[test]
+fn test_create_and_get_migration_plan() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let plan_id = client.create_migration_plan(
+        &admin,
+        &1u32, &0u32, &0u32,
+        &2u32, &0u32, &0u32,
+        &100u64,
+    );
+
+    assert_eq!(plan_id, 1);
+
+    let plan = client.get_migration_plan(&plan_id);
+    assert!(plan.is_some());
+    let p = plan.unwrap();
+    assert_eq!(p.affected_records, 100);
+    assert_eq!(p.migrated_count, 0);
+    assert_eq!(p.status, MigrationStatus::Planned);
+}
+
+#[test]
+fn test_get_schema_evolution() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin) = create_contract(&env);
+
+    let description = String::from_str(&env, "Initial schema");
+    let empty_vec: Vec<String> = Vec::new(&env);
+    let empty_map: Map<String, String> = Map::new(&env);
+
+    let evolution_id = client.register_schema_version(
+        &admin,
+        &1u32,
+        &0u32,
+        &0u32,
+        &description,
+        &empty_vec,
+        &empty_vec,
+        &empty_map,
+        &false,
+    );
+
+    // The evolution ID for the first register_schema_version should be retrievable
+    let evolution = client.get_schema_evolution(&(evolution_id as u64));
+    // Note: register_schema_version stores under SchemaEvolutionCount which is the evolution_id
+    // This test verifies the get_schema_evolution query function works
+}

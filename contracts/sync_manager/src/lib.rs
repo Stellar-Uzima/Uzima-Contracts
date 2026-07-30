@@ -110,6 +110,9 @@ pub enum Error {
     MaxRetriesExceeded = 8,
     InconsistentState = 9,
     TargetUnavailable = 10,
+    ReconciliationNotFound = 11,
+    ReconciliationConflict = 12,
+    AsyncJobNotFound = 13,
 }
 
 impl core::fmt::Display for Error {
@@ -125,6 +128,9 @@ impl core::fmt::Display for Error {
             Error::MaxRetriesExceeded => write!(f, "max retries exceeded"),
             Error::InconsistentState => write!(f, "inconsistent state"),
             Error::TargetUnavailable => write!(f, "target unavailable"),
+            Error::ReconciliationNotFound => write!(f, "reconciliation not found"),
+            Error::ReconciliationConflict => write!(f, "reconciliation conflict"),
+            Error::AsyncJobNotFound => write!(f, "async job not found"),
         }
     }
 }
@@ -148,6 +154,10 @@ const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 const NEXT_WINDOW_ID: Symbol = symbol_short!("NWID");
 const NEXT_LAG_ID: Symbol = symbol_short!("NLID");
 const NEXT_CONFLICT_ID: Symbol = symbol_short!("NCID");
+const RECON_CHECKS: Symbol = symbol_short!("RCCK");
+const ASYNC_RECON: Symbol = symbol_short!("AREC");
+const NEXT_CHECK_ID: Symbol = symbol_short!("NCID2");
+const NEXT_ASYNC_JOB: Symbol = symbol_short!("NAJB");
 
 // ============================================================================
 // Contract Implementation
@@ -552,6 +562,152 @@ impl SyncManager {
     }
 
     // ========================================================================
+    // Offline Reconciliation Support
+    // ========================================================================
+
+    /// Perform an offline reconciliation check between source and target regions.
+    pub fn reconcile_offline(
+        env: Env,
+        caller: Address,
+        source_region_id: u32,
+        target_region_id: u32,
+        data_version_source: u64,
+        data_version_target: u64,
+        notes: soroban_sdk::String,
+    ) -> Result<u64, Error> {
+        Self::require_operator(&env, &caller)?;
+
+        let status = if data_version_source == data_version_target {
+            ReconciliationCheckStatus::Verified
+        } else {
+            ReconciliationCheckStatus::Mismatch
+        };
+
+        let check_id: u64 = env
+            .storage()
+            .instance()
+            .get(&NEXT_CHECK_ID)
+            .unwrap_or(1u64);
+
+        let check = ReconciliationCheck {
+            check_id,
+            source_region_id,
+            target_region_id,
+            data_version_source,
+            data_version_target,
+            status,
+            checked_at: env.ledger().timestamp(),
+            notes,
+        };
+
+        let mut checks: Vec<ReconciliationCheck> = env
+            .storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env));
+        checks.push_back(check);
+        env.storage().persistent().set(&RECON_CHECKS, &checks);
+        env.storage().persistent().extend_ttl(
+            &RECON_CHECKS,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.storage()
+            .instance()
+            .set(&NEXT_CHECK_ID, &(check_id + 1));
+
+        env.events()
+            .publish((symbol_short!("SM_RECON"),), check_id);
+        Ok(check_id)
+    }
+
+    /// Queue an asynchronous reconciliation job for deferred processing.
+    pub fn queue_async_reconciliation(
+        env: Env,
+        caller: Address,
+        source_region_id: u32,
+        target_region_ids: soroban_sdk::Vec<u32>,
+    ) -> Result<u64, Error> {
+        Self::require_operator(&env, &caller)?;
+
+        if target_region_ids.is_empty() {
+            return Err(Error::InvalidInput);
+        }
+
+        let job_id: u64 = env
+            .storage()
+            .instance()
+            .get(&NEXT_ASYNC_JOB)
+            .unwrap_or(1u64);
+
+        let job = AsyncReconciliation {
+            job_id,
+            source_region_id,
+            target_region_ids,
+            queued_at: env.ledger().timestamp(),
+            started_at: 0,
+            completed_at: 0,
+            status: ReconciliationCheckStatus::Pending,
+            retry_count: 0,
+        };
+
+        let mut jobs: Vec<AsyncReconciliation> = env
+            .storage()
+            .persistent()
+            .get(&ASYNC_RECON)
+            .unwrap_or_else(|| Vec::new(&env));
+        jobs.push_back(job);
+        env.storage().persistent().set(&ASYNC_RECON, &jobs);
+        env.storage().persistent().extend_ttl(
+            &ASYNC_RECON,
+            PERSISTENT_TTL_THRESHOLD,
+            PERSISTENT_TTL_EXTEND_TO,
+        );
+        env.storage()
+            .instance()
+            .set(&NEXT_ASYNC_JOB, &(job_id + 1));
+
+        env.events()
+            .publish((symbol_short!("SM_AQRE"),), job_id);
+        Ok(job_id)
+    }
+
+    /// Get the status of a reconciliation check by ID.
+    pub fn get_reconciliation_status(
+        env: Env,
+        check_id: u64,
+    ) -> Option<ReconciliationCheck> {
+        let checks: Vec<ReconciliationCheck> = env
+            .storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env));
+
+        for i in 0..checks.len() {
+            if checks.get_unchecked(i).check_id == check_id {
+                return Some(checks.get_unchecked(i).clone());
+            }
+        }
+        None
+    }
+
+    /// List all reconciliation checks.
+    pub fn list_reconciliation_checks(env: Env) -> Vec<ReconciliationCheck> {
+        env.storage()
+            .persistent()
+            .get(&RECON_CHECKS)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// List all async reconciliation jobs.
+    pub fn list_async_reconciliations(env: Env) -> Vec<AsyncReconciliation> {
+        env.storage()
+            .persistent()
+            .get(&ASYNC_RECON)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    // ========================================================================
     // Policy Management
     // ========================================================================
 
@@ -665,5 +821,183 @@ mod test {
             )
         });
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_reconcile_offline() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let notes = soroban_sdk::String::from_str(&env, "test reconciliation");
+
+        let result = env.as_contract(&contract, || {
+            SyncManager::reconcile_offline(
+                env.clone(),
+                operator.clone(),
+                1,
+                2,
+                100,
+                100,
+                notes,
+            )
+        });
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_queue_async_reconciliation() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+        targets.push_back(3u32);
+
+        let result = env.as_contract(&contract, || {
+            SyncManager::queue_async_reconciliation(env.clone(), operator.clone(), 1, targets)
+        });
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), 1);
+    }
+
+    #[test]
+    fn test_get_reconciliation_status() {
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let operator = Address::generate(&env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin, operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        let notes = soroban_sdk::String::from_str(&env, "test");
+
+        let check_id = env.as_contract(&contract, || {
+            SyncManager::reconcile_offline(
+                env.clone(),
+                operator,
+                1,
+                2,
+                100,
+                100,
+                notes,
+            )
+        })
+        .unwrap();
+
+        let check = env.as_contract(&contract, || {
+            SyncManager::get_reconciliation_status(env.clone(), check_id)
+        });
+        assert!(check.is_some());
+        assert_eq!(check.unwrap().status, ReconciliationCheckStatus::Verified);
+    }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Symbol};
+
+mod types;
+use types::{DataKey, ReconciliationJob, ReconciliationStatus};
+
+#[contract]
+pub struct SyncManagerContract;
+
+#[contractimpl]
+impl SyncManagerContract {
+    /// Initializes administrative control for sync operations.
+    pub fn initialize(env: Env, admin: Address) {
+        if env.storage().instance().has(&DataKey::Admin) {
+            panic!("Already initialized");
+        }
+        env.storage().instance().set(&DataKey::Admin, &admin);
+    }
+
+    /// Enqueues an asynchronous reconciliation job for off-chain indexers.
+    pub fn enqueue_reconciliation(
+        env: Env,
+        source_contract: Address,
+        payload_hash: BytesN<32>,
+    ) -> u64 {
+        source_contract.require_auth();
+
+        let mut count: u64 = env.storage().instance().get(&DataKey::JobCount).unwrap_or(0);
+        count += 1;
+
+        let job = ReconciliationJob {
+            id: count,
+            source_contract: source_contract.clone(),
+            payload_hash: payload_hash.clone(),
+            status: ReconciliationStatus::Pending,
+            created_at: env.ledger().timestamp(),
+        };
+
+        env.storage().persistent().set(&DataKey::Job(count), &job);
+        env.storage().instance().set(&DataKey::JobCount, &count);
+
+        // Emit Soroban event for off-chain indexing services
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("enqueue")),
+            (count, source_contract, payload_hash),
+        );
+
+        count
+    }
+
+    /// Process/reconcile an enqueued job batch from an authorized off-chain worker.
+    pub fn process_reconciliation(env: Env, job_id: u64, success: bool) {
+        let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+        admin.require_auth();
+
+        let mut job: ReconciliationJob = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Job(job_id))
+            .expect("Job not found");
+
+        if job.status != ReconciliationStatus::Pending {
+            panic!("Job is not pending");
+        }
+
+        job.status = if success {
+            ReconciliationStatus::Processed
+        } else {
+            ReconciliationStatus::Failed
+        };
+
+        env.storage().persistent().set(&DataKey::Job(job_id), &job);
+
+        env.events().publish(
+            (symbol_short!("sync"), symbol_short!("resolve")),
+            (job_id, job.status),
+        );
     }
 }

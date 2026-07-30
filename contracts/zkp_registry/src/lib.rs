@@ -5,6 +5,11 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_telemetry;
+
+pub mod telemetry;
+pub mod consent_zkp_tracking;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short,
@@ -1009,7 +1014,17 @@ impl ZKPRegistry {
         // Emit events
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("proof_sub")),
-            (submitter, proof_id, is_valid),
+            (submitter.clone(), proof_id.clone(), is_valid),
+        );
+
+        // Emit telemetry
+        telemetry::emit_telemetry_event(
+            &env,
+            if is_valid { telemetry::TelemetryEventType::VerificationPassed } else { telemetry::TelemetryEventType::VerificationFailed },
+            &submitter,
+            &proof_id,
+            &circuit_id,
+            verification_gas,
         );
 
         if is_valid {
@@ -1125,6 +1140,18 @@ impl ZKPRegistry {
         }
 
         Self::track_gas_usage(&env, &submitter, total_gas_used);
+
+        // Emit batch verification telemetry
+        let batch_proof_id = soroban_sdk::BytesN::<32>::from_array(&env, &[0u8; 32]);
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::BatchVerificationCompleted,
+            &submitter,
+            &batch_proof_id,
+            &soroban_sdk::String::from_str(&env, "batch"),
+            total_gas_used,
+        );
+
         Ok(results)
     }
 
@@ -1305,7 +1332,18 @@ impl ZKPRegistry {
 
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("cred_prf")),
-            (holder, credential_type),
+            (holder.clone(), credential_type.clone()),
+        );
+
+        // Emit credential proof telemetry
+        let cred_proof_id = Self::generate_telemetry_proof_id(&env, &holder, &credential_type);
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::CredentialProofVerified,
+            &holder,
+            &cred_proof_id,
+            &credential_type,
+            0,
         );
 
         Ok(())
@@ -2073,6 +2111,13 @@ impl ZKPRegistry {
         } else {
             DEFAULT_ISSUER_SALT
         }
+    }
+
+    fn generate_telemetry_proof_id(env: &Env, holder: &Address, _credential_type: &soroban_sdk::String) -> BytesN<32> {
+        let mut payload = soroban_sdk::Bytes::new(env);
+        payload.append(&soroban_sdk::Bytes::from_slice(env, b"TELEM_CRED_V1"));
+        payload.append(&soroban_sdk::Bytes::from_slice(env, &holder.to_array()));
+        env.crypto().sha256(&payload).into()
     }
 }
 
