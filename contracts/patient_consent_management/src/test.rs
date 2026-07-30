@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{Error, PatientConsentManagement, PatientConsentManagementClient};
+    use proptest::prelude::*;
     use soroban_sdk::{
         symbol_short,
         testutils::{Address as _, Events, Ledger},
@@ -640,16 +641,12 @@ mod tests {
             client.initialize(&admin);
 
             let patient = Address::generate(&env);
-            let mut grant_count = 0u32;
             let mut total_attempts = 0u32;
             
             for op in operations {
                 if op == 0 {
                     let provider = Address::generate(&env);
-                    let res = client.try_grant_consent(&patient, &provider);
-                    if res.is_ok() {
-                        grant_count += 1;
-                    }
+                    let _res = client.try_grant_consent(&patient, &provider);
                     total_attempts += 1;
                 }
             }

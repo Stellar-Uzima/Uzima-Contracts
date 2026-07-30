@@ -1,0 +1,12 @@
+[package]
+name = "query_ordering"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+soroban-sdk = { version = "=21.7.7" }
+
+[lib]
+crate-type = ["rlib"]
+
+[workspace]

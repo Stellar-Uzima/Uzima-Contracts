@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Review routing configuration for contract safety and high-risk module changes",
+  "version": "1.0.0",
+  "review_tiers": {
+    "core": {
+      "min_approvals": 2,
+      "security_review_required": true,
+      "description": "Core shared infrastructure — highest blast radius",
+      "paths": [
+        "contracts/common_error/",
+        "contracts/common_auth/",
+        "contracts/rbac/",
+        "contracts/audit/",
+        "contracts/identity_registry/",
+        "contracts/upgradeability/",
+        "libs/",
+        "schemas/"
+      ]
+    },
+    "critical": {
+      "min_approvals": 2,
+      "security_review_required": true,
+      "description": "Critical domain contracts — fund handling, auth, governance",
+      "paths": [
+        "contracts/governor/",
+        "contracts/timelock/",
+        "contracts/upgrade_manager/",
+        "contracts/escrow/",
+        "contracts/healthcare_payment/",
+        "contracts/payment_router/",
+        "contracts/treasury_controller/",
+        "contracts/fido2_authenticator/",
+        "contracts/mfa/",
+        "contracts/access_control/"
+      ]
+    },
+    "domain": {
+      "min_approvals": 1,
+      "security_review_required": false,
+      "description": "Domain-specific contracts — 1 maintainer approval",
+      "paths": [
+        "contracts/medical_records/",
+        "contracts/patient_consent_management/",
+        "contracts/health_data_access_logging/",
+        "contracts/cross_chain_bridge/",
+        "contracts/ai_analytics/",
+        "contracts/federated_learning/"
+      ]
+    },
+    "support": {
+      "min_approvals": 1,
+      "security_review_required": false,
+      "description": "Documentation, CI, tooling — 1 approval",
+      "paths": [
+        "docs/",
+        "scripts/",
+        ".github/",
+        "config/",
+        "Cargo.toml",
+        "rust-toolchain.toml"
+      ]
+    }
+  },
+  "routing_rules": [
+    {
+      "name": "core_change",
+      "description": "PR touches any core infrastructure path",
+      "condition": "any_path_matches(core.paths)",
+      "required_reviews": 2,
+      "security_review": true,
+      "labels": ["core-infra", "needs-security-review"]
+    },
+    {
+      "name": "multi_domain",
+      "description": "PR touches contracts from multiple domains",
+      "condition": "touches_domains >= 2",
+      "required_reviews": 2,
+      "security_review": false,
+      "labels": ["multi-domain"]
+    },
+    {
+      "name": "single_domain",
+      "description": "PR touches only one domain",
+      "condition": "touches_domains == 1",
+      "required_reviews": 1,
+      "security_review": false,
+      "labels": []
+    },
+    {
+      "name": "security_sensitive",
+      "description": "PR modifies auth, consent, encryption, or audit contracts",
+      "condition": "path_matches(security_sensitive_paths)",
+      "required_reviews": 2,
+      "security_review": true,
+      "labels": ["security-sensitive", "needs-security-review"]
+    }
+  ],
+  "security_sensitive_paths": [
+    "contracts/identity_registry/",
+    "contracts/patient_consent_management/",
+    "contracts/fido2_authenticator/",
+    "contracts/audit/",
+    "contracts/rbac/",
+    "contracts/access_control/",
+    "contracts/health_data_access_logging/"
+  ],
+  "auto_merge_eligible": {
+    "description": "PRs that only touch support-tier paths with passing CI can be auto-merged",
+    "condition": "all_paths_in(support.paths) && ci_passing",
+    "required_approvals": 1
+  }
+}

@@ -15,3 +15,20 @@ pub enum Error {
     RefundsNotEnabled = 9,
     Paused = 10,
 }
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidArgument => write!(f, "invalid argument"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::PhaseNotFound => write!(f, "phase not found"),
+            Error::PhaseClosed => write!(f, "phase closed"),
+            Error::CapExceeded => write!(f, "cap exceeded"),
+            Error::NotFinalized => write!(f, "not finalized"),
+            Error::AlreadyClaimed => write!(f, "already claimed"),
+            Error::RefundsNotEnabled => write!(f, "refunds not enabled"),
+            Error::Paused => write!(f, "paused"),
+        }
+    }
+}

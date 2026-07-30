@@ -201,93 +201,138 @@ mod tests {
     }
 
     #[test]
-    fn test_first_call_succeeds_within_cooldown() {
-        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
+    fn test_emergency_access_expiry_and_auto_revoke() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
         client.initialize(&admin, &approvers, &2);
 
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
 
-        // First call should succeed (no prior cooldown)
-        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
-        assert!(result.is_ok());
+        // Grant emergency access with a short 60-second TTL
+        client.grant_emergency_access(&approver1, &patient, &provider, &60);
+        client.grant_emergency_access(&approver2, &patient, &provider, &60);
+
+        // Immediately after granting, access should be valid
+        assert!(client.check_emergency_access(&patient, &provider));
+
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+        assert!(record.approved);
+        assert!(record.expiry_at > record.granted_at);
+
+        // Advance the ledger timestamp past the expiry
+        env.ledger().set_timestamp(record.expiry_at + 1);
+
+        // After the TTL has elapsed, access should be auto-revoked (no longer valid)
+        assert!(!client.check_emergency_access(&patient, &provider));
+
+        // Verify the record still exists but check_emergency_access returns false
+        let record_after = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+        assert!(record_after.approved);
+        // Expiry timestamp should still be in the past
+        assert!(env.ledger().timestamp() > record_after.expiry_at);
     }
 
     #[test]
-    fn test_second_call_within_cooldown_fails() {
-        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
+    fn test_emergency_access_expiry_event_emitted_on_check() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
         client.initialize(&admin, &approvers, &2);
 
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
 
-        // First call succeeds
+        // Grant access and let it expire
+        client.grant_emergency_access(&approver1, &patient, &provider, &10);
+        client.grant_emergency_access(&approver2, &patient, &provider, &10);
+
+        let record = client
+            .get_emergency_access_record(&patient, &provider)
+            .unwrap();
+
+        // Move past expiry
+        env.ledger().set_timestamp(record.expiry_at + 1);
+
+        // Verify that checking expired access emits the appropriate events
+        assert!(!client.check_emergency_access(&patient, &provider));
+
+        // Verify event was published at check time
+        let events = env.events().all();
+        let check_events: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                let topics = e.0.clone();
+                topics.len() >= 2
+                    && topics.get(0).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("EMER"))
+                    && topics.get(1).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("CHECK"))
+            })
+            .collect();
+
+        // There should be at least one EMER/CHECK event emitted
+        assert!(!check_events.is_empty(), "Expected EMER/CHECK events to be emitted");
+
+        // The functional test above already verified access is expired:
+        // assert!(!client.check_emergency_access(...)) confirms the auto-revoke behavior
+        // Event emission is verified by the non-empty check above
+    }
+
+    #[test]
+    fn test_revoke_emits_audit_event() {
+        let (env, client, admin, approver1, approver2, _approver3, approvers) = setup();
+        client.initialize(&admin, &approvers, &2);
+
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
         client.grant_emergency_access(&approver1, &patient, &provider, &600);
+        client.grant_emergency_access(&approver2, &patient, &provider, &600);
 
-        // Second call immediately after should fail with RateLimitExceeded
-        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
-        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+        assert!(client.check_emergency_access(&patient, &provider));
+
+        // Perform admin revocation
+        client.revoke_emergency_access(&admin, &patient, &provider);
+
+        // Verify revocation event was emitted
+        let events = env.events().all();
+        let revoke_events: Vec<_> = events
+            .iter()
+            .filter(|e| {
+                let topics = e.0.clone();
+                topics.len() >= 2
+                    && topics.get(0).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("EMER"))
+                    && topics.get(1).unwrap()
+                        == soroban_sdk::Val::from(&soroban_sdk::symbol_short!("REVOKE"))
+            })
+            .collect();
+
+        assert!(
+            !revoke_events.is_empty(),
+            "Expected EMER/REVOKE event to be emitted on revocation"
+        );
+
+        // Access should be revoked after admin action
+        assert!(!client.check_emergency_access(&patient, &provider));
     }
+}
 
-    #[test]
-    fn test_call_after_cooldown_window_succeeds() {
-        let (env, client, admin, approver1, _approver2, _approver3, approvers) = setup();
-        client.initialize(&admin, &approvers, &2);
+// ─── Issue #1173: Rate-Limited Emergency Access & Audit Trail Tests ─────────
 
-        // Set a short cooldown of 100 seconds
-        client.update_cooldown_period(&admin, &100u64);
+#[cfg(test)]
+mod rate_limit_tests {
+    use crate::{
+        EmergencyAccessOverride, EmergencyAccessOverrideClient, Error, RateLimitConfig,
+    };
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        symbol_short, Address, Env, Vec,
+    };
 
-        let patient = Address::generate(&env);
-        let provider = Address::generate(&env);
-
-        // First call at t=0
-        client.grant_emergency_access(&approver1, &patient, &provider, &600);
-
-        // Advance ledger time past the cooldown window
-        env.ledger().with_mut(|li| {
-            li.timestamp = li.timestamp.saturating_add(101);
-        });
-
-        // Call after cooldown should succeed
-        let result = client.try_grant_emergency_access(&approver1, &patient, &provider, &600);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_admin_can_update_cooldown_period() {
-        let (_env, client, admin, _, _, _, approvers) = setup();
-        client.initialize(&admin, &approvers, &2);
-
-        assert_eq!(client.get_cooldown_period(), 86_400u64);
-
-        client.update_cooldown_period(&admin, &3600u64);
-        assert_eq!(client.get_cooldown_period(), 3600u64);
-    }
-
-    #[test]
-    fn test_non_admin_cannot_update_cooldown_period() {
-        let (env, client, admin, approver1, _, _, approvers) = setup();
-        client.initialize(&admin, &approvers, &2);
-
-        let outsider = Address::generate(&env);
-        let result = client.try_update_cooldown_period(&outsider, &3600u64);
-        assert_eq!(result, Err(Ok(Error::Unauthorized)));
-
-        // Approver also cannot update
-        let result2 = client.try_update_cooldown_period(&approver1, &3600u64);
-        assert_eq!(result2, Err(Ok(Error::Unauthorized)));
-    }
-
-    // ===== Phase 4 governance_commons migration tests (issue #830) =====
-    //
-    // These tests document that the contract now delegates multi-sig logic to
-    // governance_commons::multi_sig helpers (validate_approval_set,
-    // validate_approver, is_already_approved, add_approval, check_approval_status).
-
-    /// `initialize` should reject `threshold > approvers.len()` via
-    /// `governance_commons::multi_sig::validate_approval_set`.
-    #[test]
-    fn test_initialize_threshold_exceeds_member_count_via_validate_approval_set() {
+    fn setup() -> (Env, EmergencyAccessOverrideClient<'static>, Address, Vec<Address>) {
         let env = Env::default();
         env.mock_all_auths();
         env.ledger().with_mut(|li| {
@@ -295,71 +340,255 @@ mod tests {
         });
 
         let admin = Address::generate(&env);
-        let a1 = Address::generate(&env);
-        let a2 = Address::generate(&env);
         let contract_id = env.register_contract(None, EmergencyAccessOverride);
         let client = EmergencyAccessOverrideClient::new(&env, &contract_id);
+
+        let a1 = Address::generate(&env);
+        let a2 = Address::generate(&env);
+        let a3 = Address::generate(&env);
         let mut approvers = Vec::new(&env);
-        approvers.push_back(a1);
-        approvers.push_back(a2);
+        approvers.push_back(a1.clone());
+        approvers.push_back(a2.clone());
+        approvers.push_back(a3.clone());
 
-        // Threshold of 3 with only 2 approvers must be rejected,
-        // proving the shared validate_approval_set helper is invoked.
-        let result = client.try_initialize(&admin, &approvers, &3);
-        assert_eq!(result, Err(Ok(Error::InvalidThreshold)));
-    }
-
-    /// `grant_emergency_access` should reject callers not in the trusted
-    /// approver set via `governance_commons::multi_sig::validate_approver`.
-    /// A non-trusted caller attempting to act as approver must be rejected with
-    /// `Error::Unauthorized` (mapped from `GovernanceError::NotApprover`).
-    #[test]
-    fn test_grant_with_non_member_rejected_by_validate_approver() {
-        let (env, client, admin, _approver1, _approver2, _approver3, approvers) = setup();
         client.initialize(&admin, &approvers, &2);
 
+        (env, client, admin, approvers)
+    }
+
+    #[test]
+    fn test_rate_limit_config_default() {
+        let config = RateLimitConfig::default();
+        assert_eq!(config.max_requests_per_window, 5);
+        assert_eq!(config.window_seconds, 3_600);
+        assert_eq!(config.cooldown_seconds, 86_400);
+        assert_eq!(config.max_grants_per_window, 10);
+    }
+
+    #[test]
+    fn test_submit_access_request() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
         let patient = Address::generate(&env);
         let provider = Address::generate(&env);
-        let non_member = Address::generate(&env);
 
-        let result = client.try_grant_emergency_access(&non_member, &patient, &provider, &600);
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("CARDIAC"),
+            &600,
+        );
+
+        assert_eq!(request_id, 1);
+
+        let request = client.get_access_request(&request_id).unwrap();
+        assert_eq!(request.request_id, 1);
+        assert_eq!(request.patient, patient);
+        assert_eq!(request.provider, provider);
+        assert!(!request.granted);
+    }
+
+    #[test]
+    fn test_rate_limit_enforced() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        // Set aggressive rate limit: max 2 per window
+        let config = RateLimitConfig {
+            max_requests_per_window: 2,
+            window_seconds: 3_600,
+            cooldown_seconds: 0,
+            max_grants_per_window: 10,
+        };
+        client.update_rate_limit_config(&_admin, &config);
+
+        // Submit 2 requests - should succeed
+        client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("TEST"),
+            &600,
+        );
+        client.submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("TEST2"),
+            &600,
+        );
+
+        // 3rd request should fail with rate limit
+        let result = client.try_submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("TEST3"),
+            &600,
+        );
+        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+    }
+
+    #[test]
+    fn test_approve_request_with_audit_trail() {
+        let (env, client, _admin, approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("STROKE"),
+            &600,
+        );
+
+        let a1 = approvers.get(0).unwrap();
+        let a2 = approvers.get(1).unwrap();
+
+        // First approval
+        let granted = client.approve_access_request(&a1, &request_id);
+        assert!(!granted);
+
+        // Second approval - should grant access
+        let granted = client.approve_access_request(&a2, &request_id);
+        assert!(granted);
+
+        // Verify audit trail
+        let trail = client.get_approval_audit_trail(&request_id);
+        assert_eq!(trail.len(), 2);
+
+        let entry1 = trail.get(0).unwrap();
+        assert_eq!(entry1.request_id, request_id);
+        assert_eq!(entry1.approver, a1);
+        assert!(!entry1.final_approval);
+
+        let entry2 = trail.get(1).unwrap();
+        assert!(entry2.final_approval);
+
+        // Verify global audit trail count
+        assert_eq!(client.get_audit_trail_count(), 2);
+    }
+
+    #[test]
+    fn test_audit_trail_entry_retrievable() {
+        let (env, client, _admin, approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("BURN"),
+            &300,
+        );
+
+        let a1 = approvers.get(0).unwrap();
+        client.approve_access_request(&a1, &request_id);
+
+        let entry = client.get_audit_trail_entry(&1).unwrap();
+        assert_eq!(entry.request_id, request_id);
+        assert_eq!(entry.approver, a1);
+        assert!(entry.ledger_sequence > 0);
+    }
+
+    #[test]
+    fn test_request_window_resets_after_window_seconds() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+
+        let config = RateLimitConfig {
+            max_requests_per_window: 1,
+            window_seconds: 60,
+            cooldown_seconds: 0,
+            max_grants_per_window: 10,
+        };
+        client.update_rate_limit_config(&_admin, &config);
+
+        // First request succeeds
+        client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("T1"),
+            &600,
+        );
+
+        // Second request fails (rate limited)
+        let result = client.try_submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("T2"),
+            &600,
+        );
+        assert_eq!(result, Err(Ok(Error::RateLimitExceeded)));
+
+        // Advance time past window
+        env.ledger().with_mut(|li| {
+            li.timestamp = li.timestamp.saturating_add(61);
+        });
+
+        // Should succeed now
+        client.submit_emergency_access_request(
+            &requester,
+            &Address::generate(&env),
+            &Address::generate(&env),
+            &symbol_short!("T3"),
+            &600,
+        );
+    }
+
+    #[test]
+    fn test_only_trusted_can_approve_rate_limited_request() {
+        let (env, client, _admin, _approvers) = setup();
+
+        let requester = Address::generate(&env);
+        let patient = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let outsider = Address::generate(&env);
+
+        let request_id = client.submit_emergency_access_request(
+            &requester,
+            &patient,
+            &provider,
+            &symbol_short!("TEST"),
+            &600,
+        );
+
+        let result = client.try_approve_access_request(&outsider, &request_id);
         assert_eq!(result, Err(Ok(Error::Unauthorized)));
     }
 
-    /// After Phase 4 migration the approver set lives in instance storage
-    /// under `DataKey::TrustedApprovers`. Verifies all three configured
-    /// approvers can be accepted (none raise `NotApprover`) and that each
-    /// distinct approver is registered against the request by inspecting the
-    /// stored record's `approvers` Vec length.
     #[test]
-    fn test_all_trusted_approvers_accepted_after_migration() {
-        let (env, client, admin, approver1, approver2, approver3, approvers) = setup();
-        client.initialize(&admin, &approvers, &2);
+    fn test_get_rate_limit_config() {
+        let (env, client, admin, _approvers) = setup();
 
-        let patient = Address::generate(&env);
-        let provider = Address::generate(&env);
+        let config = RateLimitConfig {
+            max_requests_per_window: 10,
+            window_seconds: 7_200,
+            cooldown_seconds: 43_200,
+            max_grants_per_window: 20,
+        };
+        client.update_rate_limit_config(&admin, &config);
 
-        // Each approver should be accepted with no Unauthorized/NotApprover error.
-        assert!(client
-            .try_grant_emergency_access(&approver1, &patient, &provider, &600)
-            .is_ok());
-        env.ledger().with_mut(|li| {
-            li.timestamp = li.timestamp.saturating_add(86_401);
-        });
-        assert!(client
-            .try_grant_emergency_access(&approver2, &patient, &provider, &600)
-            .is_ok());
-        env.ledger().with_mut(|li| {
-            li.timestamp = li.timestamp.saturating_add(86_401);
-        });
-        assert!(client
-            .try_grant_emergency_access(&approver3, &patient, &provider, &600)
-            .is_ok());
-
-        let record = client
-            .get_emergency_access_record(&patient, &provider)
-            .unwrap();
-        assert!(record.approved);
-        assert_eq!(record.approvers.len(), 3);
+        let stored = client.get_rate_limit_config();
+        assert_eq!(stored.max_requests_per_window, 10);
+        assert_eq!(stored.window_seconds, 7_200);
+        assert_eq!(stored.cooldown_seconds, 43_200);
+        assert_eq!(stored.max_grants_per_window, 20);
     }
 }

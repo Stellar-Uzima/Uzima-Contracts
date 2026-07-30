@@ -49,6 +49,45 @@ pub enum Error {
     CodeMappingFailed = 813,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::InsufficientPermissions => write!(f, "insufficient permissions"),
+            Error::HIPAAComplianceViolation => write!(f, "h i p a a compliance violation"),
+            Error::RecordAccessDenied => write!(f, "record access denied"),
+            Error::InputTooLong => write!(f, "input too long"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+            Error::EmptyClinicalNote => write!(f, "empty clinical note"),
+            Error::InvalidLanguageCode => write!(f, "invalid language code"),
+            Error::InvalidEncoding => write!(f, "invalid encoding"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
+            Error::Timeout => write!(f, "timeout"),
+            Error::InvalidConfiguration => write!(f, "invalid configuration"),
+            Error::RecordNotFound => write!(f, "record not found"),
+            Error::IntegrationFailed => write!(f, "integration failed"),
+            Error::ExternalContractNotSet => write!(f, "external contract not set"),
+            Error::NLPEngineNotInitialized => write!(f, "n l p engine not initialized"),
+            Error::EntityExtractionFailed => write!(f, "entity extraction failed"),
+            Error::ConceptExtractionFailed => write!(f, "concept extraction failed"),
+            Error::SentimentAnalysisFailed => write!(f, "sentiment analysis failed"),
+            Error::CodingSuggestionFailed => write!(f, "coding suggestion failed"),
+            Error::TokenizationFailed => write!(f, "tokenization failed"),
+            Error::LanguageDetectionFailed => write!(f, "language detection failed"),
+            Error::MedicalTermNotFound => write!(f, "medical term not found"),
+            Error::InvalidMedicalTerm => write!(f, "invalid medical term"),
+            Error::TermDatabaseNotLoaded => write!(f, "term database not loaded"),
+            Error::ICD10CodeNotFound => write!(f, "i c d10 code not found"),
+            Error::CPTCodeNotFound => write!(f, "c p t code not found"),
+            Error::InvalidCodeFormat => write!(f, "invalid code format"),
+            Error::CodeMappingFailed => write!(f, "code mapping failed"),
+        }
+    }
+}
+
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::EmptyClinicalNote => symbol_short!("ADD_TEXT"),

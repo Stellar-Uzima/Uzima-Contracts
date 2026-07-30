@@ -67,9 +67,7 @@ pub struct SecureEnclaveContract;
 #[contractimpl]
 impl SecureEnclaveContract {
     pub fn initialize(env: Env, admin: Address) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic!("already initialized");
-        }
+        governance_commons::init_guard(&env);
         env.storage().instance().set(&DataKey::Admin, &admin);
     }
 

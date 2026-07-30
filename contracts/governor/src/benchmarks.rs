@@ -45,6 +45,7 @@ fn print_delta(name: &str, before: u64, after: u64) {
     );
 }
 
+#[must_use]
 fn old_state(env: &Env, proposal_id: u64) -> Result<u32, Error> {
     let cfg = get_cfg(env)?;
     let props: Map<u64, Proposal> = env
@@ -88,6 +89,7 @@ fn old_state(env: &Env, proposal_id: u64) -> Result<u32, Error> {
     Ok(2)
 }
 
+#[must_use]
 fn new_state(env: &Env, proposal_id: u64) -> Result<u32, Error> {
     let cfg = get_cfg(env)?;
     let props = get_props(env);
@@ -95,6 +97,7 @@ fn new_state(env: &Env, proposal_id: u64) -> Result<u32, Error> {
     Ok(proposal_state(env, &cfg, proposal_id, &p))
 }
 
+#[must_use]
 fn old_queue(env: &Env, proposal_id: u64) -> Result<(), Error> {
     let state = old_state(env, proposal_id)?;
     if state != 3 {
@@ -113,6 +116,7 @@ fn old_queue(env: &Env, proposal_id: u64) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 fn new_queue(env: &Env, proposal_id: u64) -> Result<(), Error> {
     let cfg = get_cfg(env)?;
     let mut props = get_props(env);
@@ -128,6 +132,7 @@ fn new_queue(env: &Env, proposal_id: u64) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 fn new_execute(env: &Env, proposal_id: u64) -> Result<(), Error> {
     let mut props = get_props(env);
     let mut p = props.get(proposal_id).ok_or(Error::ProposalNotFound)?;
@@ -155,6 +160,7 @@ fn new_execute(env: &Env, proposal_id: u64) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 fn old_execute(env: &Env, proposal_id: u64) -> Result<(), Error> {
     let mut props: Map<u64, Proposal> = env
         .storage()

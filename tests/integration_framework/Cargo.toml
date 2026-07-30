@@ -14,6 +14,10 @@ testutils = ["soroban-sdk/testutils"]
 
 [dependencies]
 soroban-sdk = { version = "=21.7.7" }
+medical_records = { path = "../../contracts/medical_records", optional = true }
+patient_consent_management = { path = "../../contracts/patient_consent_management", optional = true }
+audit = { path = "../../contracts/audit", optional = true }
+escrow = { path = "../../contracts/escrow", optional = true }
 
 [dev-dependencies]
 soroban-sdk = { version = "=21.7.7", features = ["testutils"] }

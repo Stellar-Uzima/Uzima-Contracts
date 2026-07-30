@@ -2,14 +2,13 @@
 //! anomaly_detector - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
+use governance_commons::require_admin;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
-    String, Vec,
+    String, Vec, Symbol
 };
 
 // ==================== Alert & Status Types ====================
@@ -199,6 +198,27 @@ pub enum Error {
     BatchTooLarge = 14,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::ModelNotFound => write!(f, "model not found"),
+            Error::AlertNotFound => write!(f, "alert not found"),
+            Error::FeatureCountMismatch => write!(f, "feature count mismatch"),
+            Error::InvalidWeight => write!(f, "invalid weight"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::AlertAlreadyResolved => write!(f, "alert already resolved"),
+            Error::DuplicateFederatedUpdate => write!(f, "duplicate federated update"),
+            Error::InvalidFeatureCount => write!(f, "invalid feature count"),
+            Error::InvalidScore => write!(f, "invalid score"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+        }
+    }
+}
+
 // ==================== Contract ====================
 
 #[contract]
@@ -217,13 +237,12 @@ impl AnomalyDetectorContract {
         env.storage().instance().set(&DataKey::Paused, &false);
         env.storage().instance().set(&DataKey::AlertCount, &0u64);
         env.storage().instance().set(&DataKey::FeedbackCount, &0u64);
-        env.events().publish((symbol_short!("Init"),), admin);
+        env.events().publish((symbol_short!("init"),), admin);
         Ok(true)
     }
 
     pub fn add_validator(env: Env, caller: Address, validator: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         env.storage()
             .instance()
             .set(&DataKey::Validator(validator.clone()), &true);
@@ -233,28 +252,25 @@ impl AnomalyDetectorContract {
     }
 
     pub fn remove_validator(env: Env, caller: Address, validator: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         env.storage()
             .instance()
             .remove(&DataKey::Validator(validator.clone()));
-        env.events().publish((symbol_short!("ValRmvd"),), validator);
+        env.events().publish((Symbol::new(&env, "val_rmvd"),), validator);
         Ok(true)
     }
 
     pub fn pause(env: Env, caller: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         env.storage().instance().set(&DataKey::Paused, &true);
-        env.events().publish((symbol_short!("Paused"),), caller);
+        env.events().publish((symbol_short!("paused"),), caller);
         Ok(true)
     }
 
     pub fn unpause(env: Env, caller: Address) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         env.storage().instance().set(&DataKey::Paused, &false);
-        env.events().publish((symbol_short!("Unpaused"),), caller);
+        env.events().publish((symbol_short!("unpaused"),), caller);
         Ok(true)
     }
 
@@ -266,8 +282,7 @@ impl AnomalyDetectorContract {
         model_id: BytesN<32>,
         threshold_bps: u32,
     ) -> Result<bool, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         if threshold_bps == 0 || threshold_bps >= 10_000 {
             return Err(Error::InvalidThreshold);
         }
@@ -289,8 +304,7 @@ impl AnomalyDetectorContract {
     /// Clear active alerts up to `count` (admin only). Pass 0 to clear all.
     /// Marks each active alert as Resolved and emits a ClearAlerts event.
     pub fn clear_alerts(env: Env, caller: Address, count: u64) -> Result<u64, Error> {
-        caller.require_auth();
-        Self::require_admin(&env, &caller)?;
+        require_admin!(env, caller);
         let total: u64 = env
             .storage()
             .instance()
@@ -373,7 +387,7 @@ impl AnomalyDetectorContract {
             .persistent()
             .set(&DataKey::ModelWeights(model_id.clone()), &weights);
 
-        env.events().publish((symbol_short!("MdlReg"),), model_id);
+        env.events().publish((Symbol::new(&env, "mdl_reg"),), model_id);
         Ok(true)
     }
 
@@ -1064,18 +1078,17 @@ impl AnomalyDetectorContract {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)?;
-        if admin != *caller {
-            return Err(Error::NotAuthorized);
-        }
-        Ok(())
+        common_auth::check_admin(caller, &admin).map_err(|_| Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_authorized(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
         if let Some(a) = admin {
@@ -1094,6 +1107,7 @@ impl AnomalyDetectorContract {
         Err(Error::NotAuthorized)
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()

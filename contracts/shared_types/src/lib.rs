@@ -26,3 +26,9 @@ pub enum CommonError {
     /// Contract is paused; no state-changing calls are allowed.
     ContractPaused = 6,
 }
+#![no_std]
+
+use soroban_sdk::contract;
+
+#[contract]
+pub struct SharedTypes;

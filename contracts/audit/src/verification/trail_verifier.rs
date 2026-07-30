@@ -5,6 +5,11 @@ pub struct TrailVerifier;
 
 impl TrailVerifier {
     /// Recomputes the rolling hash over all AuditLog entries and returns it.
+    ///
+    /// Uses the per-entry `prev_hash` field (see Issue #999) for a consistent
+    /// verification path with `verify_chain`. Each entry's `prev_hash` should
+    /// equal the hash of the previous entry's data.
+    ///
     /// Compare against the stored `RollingHash` to detect tampering.
     pub fn verify_log_integrity(env: &Env) -> BytesN<32> {
         let count: u64 = env
@@ -20,6 +25,13 @@ impl TrailVerifier {
                 .persistent()
                 .get::<DataKey, AuditLog>(&DataKey::Log(i))
             {
+                // Verify the stored prev_hash matches our computed expectation
+                if log.prev_hash != rolling {
+                    // Chain is broken at this entry
+                    return rolling;
+                }
+
+                // Compute the next expected hash from current log data
                 let mut buffer = soroban_sdk::Bytes::new(env);
                 buffer.append(&rolling.to_xdr(env));
                 buffer.append(&log.id.to_xdr(env));

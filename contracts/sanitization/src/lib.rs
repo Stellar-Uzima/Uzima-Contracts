@@ -24,6 +24,18 @@ pub enum SanitizationError {
     InvalidFormat = 5,
 }
 
+impl core::fmt::Display for SanitizationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            SanitizationError::InputTooLong => write!(f, "input too long"),
+            SanitizationError::EmptyInput => write!(f, "empty input"),
+            SanitizationError::NullByte => write!(f, "null byte"),
+            SanitizationError::InvalidCharacter => write!(f, "invalid character"),
+            SanitizationError::InvalidFormat => write!(f, "invalid format"),
+        }
+    }
+}
+
 /// Validates a general-purpose string: non-empty, within `max_len` bytes,
 /// no null bytes, no ASCII control characters (allows tab/LF/CR).
 pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), SanitizationError> {
@@ -33,7 +45,7 @@ pub fn sanitize_string(_env: &Env, input: &String, max_len: u32) -> Result<(), S
         return Err(SanitizationError::EmptyInput);
     }
     // Guard: reject inputs that would overflow the static buffer.
-    if len > BUFFER_SIZE as u32 || len > max_len {
+    if (len as usize) > BUFFER_SIZE || len > max_len {
         return Err(SanitizationError::InputTooLong);
     }
 
@@ -67,7 +79,7 @@ pub fn sanitize_name(_env: &Env, input: &String) -> Result<(), SanitizationError
     if len == 0 {
         return Err(SanitizationError::EmptyInput);
     }
-    if len > BUFFER_SIZE as u32 || len > MAX_NAME_LEN {
+    if (len as usize) > BUFFER_SIZE || len > MAX_NAME_LEN {
         return Err(SanitizationError::InputTooLong);
     }
 
@@ -102,7 +114,7 @@ pub fn sanitize_email(_env: &Env, input: &String) -> Result<(), SanitizationErro
     if len == 0 {
         return Err(SanitizationError::EmptyInput);
     }
-    if len > BUFFER_SIZE as u32 || len > MAX_EMAIL_LEN {
+    if (len as usize) > BUFFER_SIZE || len > MAX_EMAIL_LEN {
         return Err(SanitizationError::InputTooLong);
     }
 
@@ -162,7 +174,7 @@ pub fn sanitize_id(_env: &Env, input: &String) -> Result<(), SanitizationError> 
     if len == 0 {
         return Err(SanitizationError::EmptyInput);
     }
-    if len > BUFFER_SIZE as u32 || len > MAX_ID_LEN {
+    if (len as usize) > BUFFER_SIZE || len > MAX_ID_LEN {
         return Err(SanitizationError::InputTooLong);
     }
 
@@ -190,7 +202,7 @@ pub fn sanitize_url(_env: &Env, input: &String) -> Result<(), SanitizationError>
     if len == 0 {
         return Err(SanitizationError::EmptyInput);
     }
-    if len > BUFFER_SIZE as u32 || len > MAX_URL_LEN {
+    if (len as usize) > BUFFER_SIZE || len > MAX_URL_LEN {
         return Err(SanitizationError::InputTooLong);
     }
 

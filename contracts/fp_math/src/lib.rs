@@ -9,7 +9,7 @@
 ///
 /// Returns `None` if the intermediate `amount * bps` overflows `i128`.
 pub fn mul_bps(amount: i128, bps: u32) -> Option<i128> {
-    amount.checked_mul(bps as i128).map(|n| n / 10_000)
+    amount.checked_mul(i128::from(bps)).map(|n| n / 10_000)
 }
 
 /// Multiply `amount` by basis points with round-half-up rounding.
@@ -17,7 +17,7 @@ pub fn mul_bps(amount: i128, bps: u32) -> Option<i128> {
 /// Returns `None` on overflow.
 pub fn mul_bps_round_half_up(amount: i128, bps: u32) -> Option<i128> {
     amount
-        .checked_mul(bps as i128)
+        .checked_mul(i128::from(bps))
         .and_then(|n| n.checked_add(5_000))
         .map(|n| n / 10_000)
 }

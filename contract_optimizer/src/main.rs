@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use contract_optimizer::complexity::{
-    analyze_contract_complexity, load_trends, record_trend, save_report,
+    analyze_contract_complexity, check_report_thresholds, load_trends, record_trend, save_report,
+    ContractThresholdResult, ThresholdLevel,
 };
 use contract_optimizer::metrics::AccuracyMetrics;
 use contract_optimizer::{analyze_contracts, generate_report, integrate_pr_review};
@@ -54,6 +55,20 @@ enum Commands {
         /// Skip writing trend snapshot
         #[arg(long)]
         no_trend: bool,
+    },
+    /// Run complexity scoring and enforce CI thresholds (warn/fail).
+    /// Exits with code 0 (pass), 0+warnings (warn-only), or 1 (fail).
+    /// Writes a PR-comment-ready text file to --comment-output.
+    CheckComplexity {
+        /// Path to the contracts directory
+        #[arg(short, long, default_value = "contracts")]
+        contracts_path: PathBuf,
+        /// JSON report output path
+        #[arg(short, long, default_value = "dashboard/data/complexity_report.json")]
+        output: PathBuf,
+        /// PR comment output path
+        #[arg(long, default_value = "reports/complexity_pr_comment.txt")]
+        comment_output: PathBuf,
     },
     /// Integrate analysis into a GitHub PR review
     PrReview {
@@ -122,6 +137,119 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             if !no_trend {
                 let store = load_trends(&trends)?;
                 println!("Trend snapshots: {}", store.snapshots.len());
+            }
+        },
+        Commands::CheckComplexity {
+            contracts_path,
+            output,
+            comment_output,
+        } => {
+            let report = analyze_contract_complexity(&contracts_path)?;
+            save_report(&report, &output)?;
+
+            let summary = check_report_thresholds(&report);
+
+            // Build PR comment body
+            let priority_targets = ["medical_records", "cross_chain_bridge"];
+            let mut comment = String::new();
+
+            match summary.overall_level {
+                ThresholdLevel::Pass => {
+                    comment.push_str("### :white_check_mark: Contract Complexity\n\n");
+                    comment.push_str("All contracts pass complexity thresholds.\n");
+                },
+                ThresholdLevel::Warn => {
+                    comment.push_str("### :warning: Contract Complexity\n\n");
+                    comment.push_str("Some contracts exceed **warn** thresholds. Review recommended.\n");
+                },
+                ThresholdLevel::Fail => {
+                    comment.push_str("### :x: Contract Complexity\n\n");
+                    comment.push_str(
+                        "One or more contracts exceed **fail** thresholds. Pipeline blocked.\n",
+                    );
+                },
+            }
+
+            comment.push_str("\n| Contract | Total Score | Grade | Level |\n");
+            comment.push_str("|----------|------------:|-------|-------|\n");
+
+            for c in &summary.contracts {
+                let emoji = match c.level {
+                    ThresholdLevel::Pass => ":white_check_mark:",
+                    ThresholdLevel::Warn => ":warning:",
+                    ThresholdLevel::Fail => ":x:",
+                };
+                let grade_str = format!("{:?}", c.grade);
+                let level_str = format!("{:?}", c.level);
+                comment.push_str(&format!(
+                    "| {} {} | {} | {} | {} |\n",
+                    emoji, c.contract_name, c.total_score, grade_str, level_str,
+                ));
+            }
+
+            // Violations detail
+            let has_violations: Vec<&ContractThresholdResult> = summary
+                .contracts
+                .iter()
+                .filter(|c| !c.violations.is_empty())
+                .collect();
+            if !has_violations.is_empty() {
+                comment.push_str("\n**Threshold Breaches:**\n\n");
+                for c in &has_violations {
+                    comment.push_str(&format!("- **{}**\n", c.contract_name));
+                    for v in &c.violations {
+                        let lvl = format!("{:?}", v.level);
+                        comment.push_str(&format!(
+                            "  - `{}` = **{}** ({} threshold: {})\n",
+                            v.metric, v.actual, lvl, v.threshold,
+                        ));
+                    }
+                }
+            }
+
+            // Priority refactoring targets
+            let priority_hits: Vec<&str> = priority_targets
+                .iter()
+                .copied()
+                .filter(|t| report.contracts.iter().any(|c| &c.contract_name == t))
+                .collect();
+            if !priority_hits.is_empty() {
+                comment.push_str("\n** :rotating_light: Priority Refactoring Targets**\n\n");
+                comment.push_str(
+                    "The following contracts are flagged for priority refactoring due to their \
+                     size and complexity. Consider breaking them into smaller modules:\n\n",
+                );
+                for name in priority_hits {
+                    comment.push_str(&format!("- `contracts/{}`\n", name));
+                }
+            }
+
+            comment.push_str("\n> Run `./scripts/check_complexity.sh` locally to inspect.\n");
+            comment.push_str(
+                "> Download the `complexity-report` artifact for the full JSON breakdown.\n",
+            );
+
+            // Write PR comment file
+            if let Some(parent) = comment_output.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            std::fs::write(&comment_output, &comment)?;
+            println!("PR comment written to {}", comment_output.display());
+
+            // Print summary to stdout
+            println!(
+                "Overall: {:?} — {} contracts checked",
+                summary.overall_level,
+                summary.contracts.len()
+            );
+            for c in &summary.contracts {
+                println!("  {:?}: {} (score {})", c.level, c.contract_name, c.total_score);
+            }
+
+            // Exit code: 0 for pass/warn, 1 for fail
+            if summary.overall_level == ThresholdLevel::Fail {
+                eprintln!("FAIL: One or more contracts exceed the fail threshold.");
+                std::process::exit(1);
             }
         },
         Commands::PrReview {

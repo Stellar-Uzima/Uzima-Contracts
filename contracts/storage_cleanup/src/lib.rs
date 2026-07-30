@@ -70,6 +70,18 @@ pub enum Error {
     BatchTooLarge = 5,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::Paused => write!(f, "paused"),
+            Error::BatchTooLarge => write!(f, "batch too large"),
+        }
+    }
+}
+
 #[contract]
 pub struct StorageCleanup;
 
@@ -78,10 +90,8 @@ impl StorageCleanup {
     // ── Admin ─────────────────────────────────────────────────────────────────
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Paused, &false);
         Ok(())
@@ -563,6 +573,7 @@ impl StorageCleanup {
             })
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             Ok(())
@@ -571,6 +582,7 @@ impl StorageCleanup {
         }
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -584,6 +596,7 @@ impl StorageCleanup {
         }
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()

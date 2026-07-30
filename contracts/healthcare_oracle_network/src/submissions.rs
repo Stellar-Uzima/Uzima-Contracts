@@ -181,6 +181,7 @@ pub fn submit_treatment_outcome(
     )
 }
 
+#[must_use]
 pub fn finalize_feed(env: Env, kind: FeedKind, feed_id: String) -> Result<ConsensusRecord, Error> {
     utils::require_initialized(&env)?;
     if feed_id.len() == 0 {

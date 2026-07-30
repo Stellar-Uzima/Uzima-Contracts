@@ -35,6 +35,21 @@ cargo run -p contract_optimizer --features cli -- complexity \
   --trends dashboard/data/complexity_trends.json
 ```
 
+## CI Thresholds
+
+Thresholds are enforced by the `complexity-scoring` CI job on every PR.
+A contract that exceeds the **Warn** threshold produces a PR-comment warning.
+A contract that exceeds the **Fail** threshold fails the pipeline.
+
+| Metric | Warn | Fail |
+|--------|------|------|
+| Total score | ≥40 | ≥70 |
+| Cyclomatic complexity (raw) | ≥40 | ≥60 |
+| Data structure complexity (raw) | ≥60 | ≥90 |
+| External interaction count (raw) | ≥15 | ≥25 |
+| State transition count (raw) | ≥15 | ≥25 |
+| Permission model complexity (raw) | ≥15 | ≥25 |
+
 ## Dashboard
 
 Report files are **generated locally** (gitignored). See `dashboard/data/README.md`.

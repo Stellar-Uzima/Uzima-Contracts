@@ -65,6 +65,8 @@
 #[cfg(test)]
 mod benchmarks;
 #[cfg(test)]
+mod load_tests;
+#[cfg(test)]
 mod test;
 #[cfg(test)]
 mod test_input_validation;
@@ -72,10 +74,17 @@ mod test_input_validation;
 mod test_migration;
 #[cfg(test)]
 mod test_permissions;
+#[cfg(test)]
+mod test_timestamp_normalization;
 
 mod errors;
 mod events;
+mod event_schema;
+pub mod policy;
+pub mod timestamp_normalization;
 mod validation;
+mod storage;
+mod types;
 
 pub use errors::Error;
 
@@ -85,6 +94,57 @@ use soroban_sdk::{
     IntoVal, Map, String, Symbol, Vec,
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
+
+// ==================== Schema Evolution Types ====================
+
+/// Version identifier for medical record metadata schemas.
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[contracttype]
+pub struct SchemaVersion {
+    pub major: u32,
+    pub minor: u32,
+    pub patch: u32,
+}
+
+/// Describes a schema evolution step from one version to another.
+#[derive(Clone)]
+#[contracttype]
+pub struct SchemaEvolution {
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub description: String,
+    pub created_at: u64,
+    pub created_by: Address,
+    pub field_additions: Vec<String>,
+    pub field_removals: Vec<String>,
+    pub field_renames: Map<String, String>,
+    pub breaking_changes: bool,
+}
+
+/// Migration plan for upgrading records between schema versions.
+#[derive(Clone)]
+#[contracttype]
+pub struct MigrationPlan {
+    pub plan_id: u64,
+    pub from_version: SchemaVersion,
+    pub to_version: SchemaVersion,
+    pub affected_records: u64,
+    pub migrated_count: u64,
+    pub status: MigrationStatus,
+    pub created_at: u64,
+    pub completed_at: u64,
+}
+
+/// Status of a schema migration.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+pub enum MigrationStatus {
+    Planned = 0,
+    InProgress = 1,
+    Completed = 2,
+    Failed = 3,
+    RolledBack = 4,
+}
 
 // ==================== Cross-Chain Types ====================
 
@@ -169,10 +229,23 @@ pub enum RbacError {
     AlreadyInitialized = 301,
 }
 
+impl core::fmt::Display for RbacError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            RbacError::Unauthorized => write!(f, "unauthorized"),
+            RbacError::NotInitialized => write!(f, "not initialized"),
+            RbacError::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[soroban_sdk::contractclient(name = "RbacClient")]
 pub trait RbacContract {
+    #[must_use]
     fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
+    #[must_use]
     fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError>;
 }
 
@@ -358,6 +431,46 @@ pub struct AIConfig {
     pub min_participants: u32,
 }
 
+// ==================== Binary Attachments (Issue #1216) ====================
+
+/// Metadata for a large binary attachment stored off-chain.
+///
+/// On-chain we store only the reference (URI/CID) and metadata; the actual
+/// binary payload lives in IPFS, Arweave, or an off-chain object store.
+/// This avoids bloating Soroban contract storage while still providing
+/// a verifiable link between a medical record and its attachments.
+#[derive(Clone)]
+#[contracttype]
+pub struct Attachment {
+    /// Unique attachment identifier (stable across versions).
+    pub id: BytesN<32>,
+    /// The medical record this attachment belongs to.
+    pub record_id: u64,
+    /// Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL).
+    pub uri: String,
+    /// MIME type of the binary (e.g. "application/pdf", "image/dicom").
+    pub content_type: String,
+    /// Original file size in bytes.
+    pub size_bytes: u64,
+    /// SHA-256 hash of the original binary for integrity verification.
+    pub checksum: BytesN<32>,
+    /// Free-form metadata (e.g. "DICOM series", "lab result page 1").
+    pub description: String,
+    /// Address that uploaded this attachment.
+    pub uploaded_by: Address,
+    /// Timestamp when the attachment was registered on-chain.
+    pub uploaded_at: u64,
+}
+
+/// Summary of attachments for a record, returned by list queries.
+#[derive(Clone)]
+#[contracttype]
+pub struct AttachmentSummary {
+    pub record_id: u64,
+    pub attachment_count: u32,
+    pub total_size_bytes: u64,
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct RecoveryProposal {
@@ -500,6 +613,7 @@ pub enum CryptoAuditAction {
     QuantumThreatDetected,
     QuantumMigrationStarted,
     QuantumMigrationCompleted,
+    RetentionOverride,
 }
 
 #[derive(Clone)]
@@ -613,13 +727,41 @@ pub enum DataKey {
     RateLimit(Address, u32),  // (caller, operation_id) -> RateLimitEntry
     RateLimitBypass(Address), // bool - admin-granted bypass flag
     QuantumThreatLevel,       // 0-100 (percentage)
-    LastExportTime(Address),  // Timestamp of last data export per patient
 
     // Traditional medicine
-    /// Encrypted traditional metadata for a record (stored alongside the main record).
     TraditionalMeta(u64),
-    /// Per-patient index of record IDs that have traditional metadata attached.
     PatientTraditionalRecords(Address),
+
+    // Data export
+    LastExportTime(Address),
+
+    // Retention policy
+    RecordRetention(u64),        // record_id -> RetentionPolicy
+    RetentionDefault,            // global default retention_secs (u64)
+
+    // Traditional medicine
+    TraditionalMeta(u64),
+    PatientTraditionalRecords(Address),
+
+    // Data export
+    LastExportTime(Address),
+
+    // Redaction
+    RedactionPolicy(u64),
+
+    // Binary Attachments (Issue #1216)
+    Attachment(BytesN<32>),                // attachment_id -> Attachment
+    RecordAttachments(u64),                // record_id -> Vec<BytesN<32>>
+    RecordAttachmentCount(u64),            // record_id -> u32
+    PatientAttachmentCount(Address),       // patient -> u32
+    // Schema evolution
+    SchemaVersionCount,
+    SchemaVersion(u32, u32, u32), // (major, minor, patch)
+    SchemaEvolutionCount,
+    SchemaEvolution(u64),
+    MigrationPlanCount,
+    MigrationPlan(u64),
+    CurrentSchemaVersion,
 }
 
 // ==================== Errors ====================
@@ -840,6 +982,22 @@ pub struct CorrectionWorkflow {
     pub workflow_created_at: u64,
 }
 
+/// Configurable per-record retention policy.
+#[derive(Clone)]
+#[contracttype]
+pub struct RetentionPolicy {
+    /// Duration in seconds this record should be retained.
+    pub retention_secs: u64,
+    /// Timestamp when the retention period started (usually record creation time).
+    pub retention_start: u64,
+    /// True if retention has been overridden by admin (record is force-accessible).
+    pub overridden: bool,
+    /// Address of the admin who overrode retention, if applicable.
+    pub overridden_by: Option<Address>,
+    /// Timestamp when the override was applied.
+    pub overridden_at: u64,
+}
+
 /// Result returned by the on-chain record cleansing operation.
 #[derive(Clone)]
 #[contracttype]
@@ -919,7 +1077,50 @@ pub struct StructuredLog {
     pub message: String,
 }
 
-// ==================== Contract ====================
+// ==================== HIPAA Data Categories (Issue #997) ====================
+
+/// HIPAA data categories for field-level access control.
+/// Implements the "minimum necessary" standard: a caller requesting only
+/// Diagnosis data must not receive Billing or Insurance fields.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[contracttype]
+#[repr(u32)]
+pub enum DataCategory {
+    /// Patient identification: patient_id, doctor_id
+    Identification = 0,
+    /// Clinical diagnosis information
+    Diagnosis = 1,
+    /// Treatment plan and prescriptions
+    Treatment = 2,
+    /// Billing codes, payment information
+    Billing = 3,
+    /// Insurance provider and policy details
+    Insurance = 4,
+    /// Personal demographics (DID, tags, custom fields)
+    Demographics = 5,
+    /// Administrative metadata (timestamp, category, confidentiality)
+    Administration = 6,
+}
+
+/// A filtered view of a MedicalRecord, respecting HIPAA minimum-necessary access.
+/// Fields set to None have been masked because the caller's requested
+/// DataCategory set did not authorize access to those fields.
+#[derive(Clone)]
+#[contracttype]
+pub struct FilteredRecord {
+    pub record_id: u64,
+    pub patient_id: Option<Address>,
+    pub doctor_id: Option<Address>,
+    pub timestamp: Option<u64>,
+    pub diagnosis: Option<String>,
+    pub treatment: Option<String>,
+    pub is_confidential: Option<bool>,
+    pub tags: Option<Vec<String>>,
+    pub category: Option<String>,
+    pub treatment_type: Option<String>,
+    pub data_ref: Option<String>,
+    pub doctor_did: Option<String>,
+}
 
 #[contract]
 pub struct MedicalRecordsContract;
@@ -2321,6 +2522,103 @@ impl MedicalRecordsContract {
             .get(&DataKey::PatientRecord(patient, index))
     }
 
+    // ─── HIPAA Minimum-Necessary Access (Issue #997) ─────────────────────────
+
+    /// Retrieve a medical record with field-level access masks enforcing
+    /// the HIPAA "minimum necessary" standard.
+    ///
+    /// Only the fields belonging to the requested `DataCategory` set are
+    /// returned; all other fields are set to `None`. This ensures that a
+    /// doctor requesting only Diagnosis data cannot retrieve Billing or
+    /// Insurance fields.
+    ///
+    /// # Category → Field Mapping
+    /// | Category         | Fields visible                             |
+    /// |------------------|--------------------------------------------|
+    /// | Identification   | patient_id, doctor_id                     |
+    /// | Diagnosis        | diagnosis                                  |
+    /// | Treatment        | treatment, treatment_type                  |
+    /// | Billing          | data_ref (billing reference)               |
+    /// | Insurance        | data_ref (insurance reference)             |
+    /// | Demographics     | tags, doctor_did                          |
+    /// | Administration   | timestamp, is_confidential, category       |
+    pub fn get_record_filtered(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        requested_categories: Vec<DataCategory>,
+    ) -> Result<FilteredRecord, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord =
+            match env.storage().persistent().get(&DataKey::Record(record_id)) {
+                Some(record) => record,
+                None => {
+                    return Err(Error::RecordNotFound);
+                },
+            };
+
+        if !Self::can_view_record(&env, &caller, &record, record_id) {
+            return Err(Error::Unauthorized);
+        }
+
+        // Build the filtered record based on requested categories
+        let mut filtered = FilteredRecord {
+            record_id,
+            patient_id: None,
+            doctor_id: None,
+            timestamp: None,
+            diagnosis: None,
+            treatment: None,
+            is_confidential: None,
+            tags: None,
+            category: None,
+            treatment_type: None,
+            data_ref: None,
+            doctor_did: None,
+        };
+
+        for cat in requested_categories.iter() {
+            match cat {
+                DataCategory::Identification => {
+                    filtered.patient_id = Some(record.patient_id.clone());
+                    filtered.doctor_id = Some(record.doctor_id.clone());
+                }
+                DataCategory::Diagnosis => {
+                    filtered.diagnosis = Some(record.diagnosis.clone());
+                }
+                DataCategory::Treatment => {
+                    filtered.treatment = Some(record.treatment.clone());
+                    filtered.treatment_type = Some(record.treatment_type.clone());
+                }
+                DataCategory::Billing | DataCategory::Insurance => {
+                    filtered.data_ref = Some(record.data_ref.clone());
+                }
+                DataCategory::Demographics => {
+                    filtered.tags = Some(record.tags.clone());
+                    filtered.doctor_did = record.doctor_did.clone();
+                }
+                DataCategory::Administration => {
+                    filtered.timestamp = Some(record.timestamp);
+                    filtered.is_confidential = Some(record.is_confidential);
+                    filtered.category = Some(record.category.clone());
+                }
+            }
+        }
+
+        Self::log_info(
+            &env,
+            "get_record_filtered",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Filtered record accessed per HIPAA minimum-necessary standard",
+        );
+
+        Ok(filtered)
+    }
+
     /// List medical records using cursor-based pagination.
     /// Returns up to `limit` records starting after the given cursor.
     /// `cursor` is the last record_id from a previous page (None for first page).
@@ -3366,6 +3664,201 @@ impl MedicalRecordsContract {
             .persistent()
             .get(&DataKey::QuantumThreatLevel)
             .unwrap_or(0)
+    }
+
+    // ---------------------------------------------------------------------
+    // Data Retention Policy Enforcement (Issue #1000)
+    // ---------------------------------------------------------------------
+
+    /// Sets a per-record retention period. Records past retention are
+    /// flagged as expired and inaccessible except via admin override.
+    pub fn set_record_retention(
+        env: Env,
+        admin: Address,
+        record_id: u64,
+        retention_secs: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        if retention_secs == 0 {
+            return Err(Error::InvalidInput);
+        }
+
+        // Verify the record exists
+        env.storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let policy = RetentionPolicy {
+            retention_secs,
+            retention_start: now,
+            overridden: false,
+            overridden_by: None,
+            overridden_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordRetention(record_id), &policy);
+
+        Self::log_info(
+            &env,
+            "set_record_retention",
+            Some(&admin),
+            None,
+            Some(record_id),
+            "Per-record retention policy set",
+        );
+        Ok(true)
+    }
+
+    /// Returns the retention policy for a record, if one was set.
+    pub fn get_record_retention(env: Env, record_id: u64) -> Option<RetentionPolicy> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordRetention(record_id))
+    }
+
+    /// Sets the global default retention period applied when no per-record
+    /// policy exists. 0 disables global default retention.
+    pub fn set_retention_default(
+        env: Env,
+        admin: Address,
+        retention_secs: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RetentionDefault, &retention_secs);
+
+        Self::log_info(
+            &env,
+            "set_retention_default",
+            Some(&admin),
+            None,
+            None,
+            "Global retention default updated",
+        );
+        Ok(true)
+    }
+
+    /// Returns the global default retention period in seconds (0 = no default).
+    pub fn get_retention_default(env: Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RetentionDefault)
+            .unwrap_or(0)
+    }
+
+    /// Admin-only override that makes an expired record accessible again.
+    /// Every override is logged via the crypto audit trail.
+    pub fn admin_override_retention(
+        env: Env,
+        admin: Address,
+        record_id: u64,
+    ) -> Result<bool, Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        // Record must exist
+        env.storage()
+            .persistent()
+            .get::<_, MedicalRecord>(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        let now = env.ledger().timestamp();
+
+        let mut policy: RetentionPolicy = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordRetention(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        policy.overridden = true;
+        policy.overridden_by = Some(admin.clone());
+        policy.overridden_at = now;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordRetention(record_id), &policy);
+
+        // Log the override as a crypto audit event
+        let mut payload = Bytes::new(&env);
+        payload.append(&Bytes::from_slice(&env, &record_id.to_be_bytes()));
+        payload.append(&Bytes::from_slice(&env, &now.to_be_bytes()));
+        let details_hash: BytesN<32> = env.crypto().sha256(&payload).into();
+        Self::log_crypto_event(
+            &env,
+            &admin,
+            CryptoAuditAction::RetentionOverride,
+            Some(record_id),
+            details_hash,
+            None,
+        );
+
+        Self::log_info(
+            &env,
+            "admin_override_retention",
+            Some(&admin),
+            None,
+            Some(record_id),
+            "Admin override applied to retention-expired record",
+        );
+        Ok(true)
+    }
+
+    /// Returns true when a record has a retention policy AND is past its
+    /// retention window AND has not been overridden by an admin.
+    fn is_record_retention_expired(env: &Env, record_id: u64) -> bool {
+        let policy: Option<RetentionPolicy> =
+            env.storage()
+                .persistent()
+                .get(&DataKey::RecordRetention(record_id));
+
+        let now = env.ledger().timestamp();
+
+        if let Some(policy) = policy {
+            if policy.overridden {
+                return false;
+            }
+            let expiry = policy.retention_start.saturating_add(policy.retention_secs);
+            if now > expiry {
+                return true;
+            }
+        }
+
+        // Also check global default retention against the record timestamp
+        let default_secs: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RetentionDefault)
+            .unwrap_or(0);
+
+        if default_secs > 0 && policy.is_none() {
+            if let Some(meta) = env
+                .storage()
+                .persistent()
+                .get::<_, RecordMetadata>(&DataKey::RecordMeta(record_id))
+            {
+                let default_expiry = meta.timestamp.saturating_add(default_secs);
+                if now > default_expiry {
+                    return true;
+                }
+            }
+        }
+
+        false
     }
 
     /// Migrates a record to include a new quantum-safe envelope.
@@ -4802,7 +5295,7 @@ impl MedicalRecordsContract {
     // MIGRATION & UPGRADE SYSTEM
     // =================================================================
 
-    #[allow(dead_code)]
+    
     fn get_contract_version(env: &Env) -> u32 {
         env.storage()
             .instance()
@@ -4810,7 +5303,7 @@ impl MedicalRecordsContract {
             .unwrap_or(0)
     }
 
-    #[allow(dead_code)]
+    
     fn set_contract_version(env: &Env, new_version: u32) {
         env.storage()
             .instance()
@@ -5081,6 +5574,7 @@ impl MedicalRecordsContract {
         Ok(record_id)
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&UPGRADE_ADMIN) {
             Ok(())
@@ -5089,6 +5583,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env
             .storage()
@@ -5176,6 +5671,7 @@ impl MedicalRecordsContract {
         Self::is_active_role_with_context(env, &users, &rbac_addr, address, RbacRole::Patient)
     }
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_admin(env, caller) {
             Ok(())
@@ -5184,6 +5680,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_doctor(env: &Env, caller: &Address) -> Result<(), Error> {
         if Self::is_active_doctor(env, caller) {
             Ok(())
@@ -5192,6 +5689,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_user(env: &Env, user: &Address) -> Result<(), Error> {
         let users = Self::read_users(env);
         match users.get(user.clone()) {
@@ -5200,6 +5698,7 @@ impl MedicalRecordsContract {
         }
     }
 
+    #[must_use]
     fn require_active_patient(env: &Env, patient: &Address) -> Result<(), Error> {
         if Self::is_active_patient(env, patient) {
             Ok(())
@@ -5477,6 +5976,7 @@ impl MedicalRecordsContract {
         registry_client.is_root_revoked(issuer, root)
     }
 
+    #[must_use]
     fn resolve_record_provider(env: &Env, record_id: u64) -> Result<Address, Error> {
         if let Some(record) = env
             .storage()
@@ -5763,7 +6263,31 @@ impl MedicalRecordsContract {
             return false;
         }
 
-        if is_admin {
+        // Data retention enforcement: expired records are only accessible by admin
+        if Self::is_record_retention_expired(env, record_id) {
+            if Self::is_admin(env, caller) {
+                Self::log_warning(
+                    env,
+                    "can_view_record",
+                    Some(caller),
+                    Some(&record.patient_id),
+                    Some(record_id),
+                    "Admin accessed a retention-expired record",
+                );
+                return true;
+            }
+            Self::log_warning(
+                env,
+                "can_view_record",
+                Some(caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Record access denied due to retention expiry",
+            );
+            return false;
+        }
+
+        if Self::is_admin(env, caller) {
             return true;
         }
         if *caller == record.patient_id {
@@ -5852,6 +6376,7 @@ impl MedicalRecordsContract {
             .set(&DataKey::PatientAccessLog(patient.clone(), pnext), &next);
     }
 
+    #[must_use]
     fn require_cross_chain_contracts(env: &Env) -> Result<Address, Error> {
         let bridge: Address = env
             .storage()
@@ -5875,6 +6400,7 @@ impl MedicalRecordsContract {
         Ok(bridge)
     }
 
+    #[must_use]
     fn require_crypto_registry(env: &Env) -> Result<Address, Error> {
         env.storage()
             .persistent()
@@ -5902,6 +6428,33 @@ impl MedicalRecordsContract {
         record: &EncryptedRecord,
         record_id: u64,
     ) -> bool {
+        // Data retention enforcement for encrypted records
+        if Self::is_record_retention_expired(env, record_id) {
+            if Self::is_admin(env, caller) {
+                Self::log_warning(
+                    env,
+                    "can_view_encrypted_record",
+                    Some(caller),
+                    Some(&record.patient_id),
+                    Some(record_id),
+                    "Admin accessed a retention-expired encrypted record",
+                );
+                return true;
+            }
+            Self::log_warning(
+                env,
+                "can_view_encrypted_record",
+                Some(caller),
+                Some(&record.patient_id),
+                Some(record_id),
+                "Encrypted record access denied due to retention expiry",
+            );
+            return false;
+        }
+
+        if Self::is_admin(env, caller) {
+            return true;
+        }
         if *caller == record.patient_id {
             return true;
         }
@@ -6018,6 +6571,7 @@ impl MedicalRecordsContract {
     /// Internal guard – called at the start of rate-limited operations.
     /// Returns `Err(Error::RateLimitExceeded)` when the caller has consumed
     /// all allowed calls in the current window.
+    #[must_use]
     fn check_and_update_rate_limit(env: &Env, caller: &Address, op: u32) -> Result<(), Error> {
         // Admin-granted bypass flag
         let bypass: bool = env
@@ -6355,11 +6909,13 @@ impl MedicalRecordsContract {
 }
 
 impl upgradeability::migration::Migratable for MedicalRecordsContract {
+    #[must_use]
     fn migrate(env: &Env, from_version: u32) -> Result<(), upgradeability::UpgradeError> {
         Self::migrate_data(env, from_version);
         Ok(())
     }
 
+    #[must_use]
     fn verify_integrity(env: &Env) -> Result<BytesN<32>, upgradeability::UpgradeError> {
         // Simple integrity check: hash of the record count and next ID
         let next_id = env
@@ -6413,17 +6969,20 @@ pub struct MockRbac;
 impl MockRbac {
     pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
 
+    #[must_use]
     pub fn has_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         Ok(env.storage().instance().get(&key).unwrap_or(false))
     }
 
+    #[must_use]
     pub fn assign_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &true);
         Ok(true)
     }
 
+    #[must_use]
     pub fn remove_role(env: Env, address: Address, role: RbacRole) -> Result<bool, RbacError> {
         let key = (address, role);
         env.storage().instance().set(&key, &false);
@@ -6523,5 +7082,703 @@ impl MedicalRecordsContract {
         }
 
         Ok(traditional_ids)
+    }
+
+    /// Rolls back record metadata to a specific previous version.
+    /// Only the record's doctor or an admin may call this.
+    /// The target version's tags and custom_fields are restored.
+    /// History entries after the target version are removed.
+    pub fn rollback_record_metadata(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        target_version: u32,
+    // ─── Selective Export & Redaction (Issue #1163) ───────────────────────────
+
+    /// Redaction policy for a record — defines which fields are visible to non-owner viewers.
+    #[derive(Clone)]
+    #[contracttype]
+    pub struct RedactionPolicy {
+        pub record_id: u64,
+        pub redacted_fields: Vec<String>,
+        pub reason: String,
+        pub set_by: Address,
+        pub set_at: u64,
+    }
+
+    /// Export a specific subset of records for a patient.
+    /// If record_ids is empty, exports all records.
+    /// If record_ids is non-empty, only those records are included.
+    pub fn export_records_selective(
+        env: Env,
+        caller: Address,
+        patient_id: Address,
+        record_ids: Vec<u64>,
+    ) -> Result<Vec<MedicalRecord>, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        if caller != patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut results: Vec<MedicalRecord> = Vec::new(&env);
+
+        if record_ids.is_empty() {
+            // Export all
+            let total: u64 = env
+                .storage()
+                .persistent()
+                .get(&DataKey::PatientRecordCount(patient_id.clone()))
+                .unwrap_or(0);
+            for i in 0..total {
+                if let Some(rid) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::PatientRecord(patient_id.clone(), i))
+                {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(rid))
+                    {
+                        results.push_back(r);
+                    }
+                }
+            }
+        } else {
+            // Export specific records
+            for i in 0..record_ids.len() {
+                if let Some(rid) = record_ids.get(i) {
+                    if let Some(r) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(rid))
+                    {
+                        if r.patient_id == patient_id || Self::is_admin(&env, &caller) {
+                            results.push_back(r);
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    /// Set a redaction policy for a record — marks fields as redacted.
+    /// Only the patient or admin can set redaction policies.
+    pub fn set_redaction_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        redacted_fields: Vec<String>,
+        reason: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.doctor_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let mut meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if target_version == 0 || target_version >= meta.version {
+            return Err(Error::InvalidVersion);
+        }
+
+        // Find the history entry for the target version and truncate history
+        let mut found = false;
+        let mut new_tags = Vec::new(&env);
+        let mut new_custom_fields = Map::new(&env);
+        let mut keep_history: Vec<RecordMetadataHistoryEntry> = Vec::new(&env);
+
+        for i in 0..meta.history.len() {
+            if let Some(entry) = meta.history.get(i) {
+                if entry.version == target_version {
+                    found = true;
+                    new_tags = entry.tags.clone();
+                    new_custom_fields = entry.custom_fields.clone();
+                } else if !found {
+                    keep_history.push_back(entry);
+                }
+                // Entries after found are dropped
+            }
+        }
+
+        if !found {
+            return Err(Error::VersionNotFound);
+        }
+
+        let from_version = meta.version;
+
+        // Update tag index: remove old tags, add restored tags
+        Self::update_tag_index(&env, record_id, &meta.tags, &new_tags);
+
+        meta.tags = new_tags;
+        meta.custom_fields = new_custom_fields;
+        meta.version = target_version;
+        meta.history = keep_history;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordMeta(record_id), &meta);
+
+        events::emit_record_rolled_back(
+            &env,
+            caller.clone(),
+            record_id,
+            record.patient_id.clone(),
+            from_version,
+            target_version,
+        );
+        if caller != record.patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        let policy = RedactionPolicy {
+            record_id,
+            redacted_fields,
+            reason,
+            set_by: caller.clone(),
+            set_at: env.ledger().timestamp(),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::RedactionPolicy(record_id), &policy);
+
+        Self::log_info(
+            &env,
+            "set_redaction_policy",
+            Some(&caller),
+            Some(&record.patient_id),
+            Some(record_id),
+            "Redaction policy updated",
+        );
+
+        Ok(())
+    }
+
+    /// Get the redaction policy for a record.
+    pub fn get_redaction_policy(env: Env, record_id: u64) -> Option<RedactionPolicy> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RedactionPolicy(record_id))
+    }
+
+    /// Remove a redaction policy (restore full visibility).
+    pub fn remove_redaction_policy(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.patient_id && !Self::is_admin(&env, &caller) {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .persistent()
+            .remove(&DataKey::RedactionPolicy(record_id));
+
+        Ok(())
+    }
+
+    /// Returns the version history for a record's metadata.
+    /// The caller must be the record's doctor, the patient, or an admin.
+    pub fn get_record_version_history(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<RecordMetadata, Error> {
+    /// Export a record with redaction applied — returns the record with
+    /// redacted fields set to empty strings.
+    pub fn export_record_redacted(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+    ) -> Result<MedicalRecord, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+
+        let record: MedicalRecord = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Record(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if caller != record.doctor_id
+            && caller != record.patient_id
+            && !Self::is_admin(&env, &caller)
+        {
+            return Err(Error::Unauthorized);
+        }
+
+        let meta: RecordMetadata = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordMeta(record_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        Ok(meta)
+        // If caller is the patient or admin, return full record
+        if caller == record.patient_id || Self::is_admin(&env, &caller) {
+            return Ok(record);
+        }
+
+        // Apply redaction policy
+        let mut redacted = record.clone();
+        if let Some(policy) = env
+            .storage()
+            .persistent()
+            .get::<_, RedactionPolicy>(&DataKey::RedactionPolicy(record_id))
+        {
+            for i in 0..policy.redacted_fields.len() {
+                if let Some(field) = policy.redacted_fields.get(i) {
+                    let field_str = field.to_buffer().iter().collect::<Vec<u8>>();
+                    let field_name = core::str::from_utf8(&field_str).unwrap_or("");
+                    match field_name {
+                        "diagnosis" => {
+                            redacted.diagnosis = String::from_str(&env, "[REDACTED]");
+                        }
+                        "treatment" => {
+                            redacted.treatment = String::from_str(&env, "[REDACTED]");
+                        }
+                        "data_ref" => {
+                            redacted.data_ref = String::from_str(&env, "[REDACTED]");
+                        }
+                        "category" => {
+                            redacted.category = String::from_str(&env, "[REDACTED]");
+                        }
+                        "treatment_type" => {
+                            redacted.treatment_type = String::from_str(&env, "[REDACTED]");
+                        }
+                        "tags" => {
+                            redacted.tags = Vec::new(&env);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        Ok(redacted)
+    }
+
+    // ─── Binary Attachments (Issue #1216) ────────────────────────────────────
+
+    /// Register a large binary attachment reference for a medical record.
+    ///
+    /// The actual binary payload is stored off-chain (IPFS, Arweave, etc.).
+    /// This function registers the on-chain reference with content hash for
+    /// integrity verification. Only the record's doctor or an admin can add
+    /// attachments.
+    ///
+    /// # Arguments
+    /// * `caller` - Doctor or admin adding the attachment
+    /// * `record_id` - The medical record this attachment belongs to
+    /// * `uri` - Off-chain URI (IPFS CID, Arweave TX, or HTTPS URL)
+    /// * `content_type` - MIME type (e.g. "application/pdf", "image/dicom")
+    /// * `size_bytes` - Original file size in bytes
+    /// * `checksum` - SHA-256 hash of the binary payload
+    /// * `description` - Free-form description
+    ///
+    /// # Returns
+    /// The attachment ID (BytesN<32>)
+    pub fn add_attachment(
+        env: Env,
+        caller: Address,
+        record_id: u64,
+        uri: String,
+        content_type: String,
+        size_bytes: u64,
+        checksum: BytesN<32>,
+        description: String,
+    ) -> Result<BytesN<32>, Error> {
+        caller.require_auth();
+        Self::require_not_paused(&env)?;
+
+        let record: MedicalRecord = Self::get_record_internal(&env, record_id)?;
+        let caller_role = Self::get_user_role(&env, &caller);
+        let is_admin = matches!(caller_role, Some(Role::Admin));
+        let is_doctor = caller == record.doctor_id;
+        if !is_admin && !is_doctor {
+            return Err(Error::Unauthorized);
+        }
+
+        // Generate deterministic attachment ID
+        let timestamp = env.ledger().timestamp();
+        let mut id_data = soroban_sdk::Bytes::new(&env);
+        id_data.extend_from_slice(&record_id.to_be_bytes());
+        id_data.extend_from_slice(&timestamp.to_be_bytes());
+        id_data.extend_from_slice(checksum.as_ref());
+        let attachment_id: BytesN<32> = env.crypto().sha256(&id_data).into();
+
+        let attachment = Attachment {
+            id: attachment_id.clone(),
+            record_id,
+            uri,
+            content_type,
+            size_bytes,
+            checksum,
+            description,
+            uploaded_by: caller.clone(),
+            uploaded_at: timestamp,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::Attachment(attachment_id.clone()), &attachment);
+
+        // Add to record's attachment list
+        let mut ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+        ids.push_back(attachment_id.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachments(record_id), &ids);
+
+        // Increment counts
+        let count: u32 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachmentCount(record_id))
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordAttachmentCount(record_id), &(count + 1));
+
+        env.events().publish(
+            (symbol_short!("RECORD"), symbol_short!("ATTACH")),
+            (record_id, attachment_id.clone(), caller),
+        );
+
+        Ok(attachment_id)
+    }
+
+    /// Retrieve an attachment by ID.
+    pub fn get_attachment(env: Env, attachment_id: BytesN<32>) -> Result<Attachment, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+            .ok_or(Error::RecordNotFound)
+    }
+
+    /// List all attachments for a medical record.
+    pub fn list_attachments(env: Env, record_id: u64) -> Vec<Attachment> {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut attachments = Vec::new(&env);
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                attachments.push_back(att);
+            }
+        }
+        attachments
+    }
+
+    /// Get a summary of attachments for a record.
+    pub fn get_attachment_summary(env: Env, record_id: u64) -> AttachmentSummary {
+        let ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::RecordAttachments(record_id))
+            .unwrap_or(Vec::new(&env));
+
+        let mut total_size: u64 = 0;
+        for id in ids.iter() {
+            if let Some(att) = env
+                .storage()
+                .persistent()
+                .get::<_, Attachment>(&DataKey::Attachment(id))
+            {
+                total_size += att.size_bytes;
+            }
+        }
+
+        AttachmentSummary {
+            record_id,
+            attachment_count: ids.len() as u32,
+            total_size_bytes: total_size,
+        }
+    }
+
+    /// Verify the integrity of an attachment by comparing its stored checksum
+    /// against a provided hash. Returns true if they match.
+    pub fn verify_attachment_integrity(
+        env: Env,
+        attachment_id: BytesN<32>,
+        expected_checksum: BytesN<32>,
+    ) -> bool {
+        let att: Attachment = match env
+            .storage()
+            .persistent()
+            .get(&DataKey::Attachment(attachment_id))
+        {
+            Some(a) => a,
+            None => return false,
+        };
+        att.checksum == expected_checksum
+    // ==================== Schema Evolution Functions ====================
+
+    /// Register a new schema version for medical record metadata.
+    pub fn register_schema_version(
+        env: Env,
+        caller: Address,
+        major: u32,
+        minor: u32,
+        patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let version = SchemaVersion {
+            major,
+            minor,
+            patch,
+        };
+
+        // Check if version already exists
+        let key = DataKey::SchemaVersion(major, minor, patch);
+        if env.storage().persistent().has(&key) {
+            return Err(Error::SchemaVersionAlreadyExists);
+        }
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version: version.clone(),
+            to_version: version.clone(),
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage().persistent().set(&key, &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &version);
+
+        env.events().publish(
+            (symbol_short!("SCH_REG"),),
+            (evolution_id, major, minor, patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Evolve the schema to a new version with field changes.
+    pub fn evolve_schema(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        description: String,
+        field_additions: Vec<String>,
+        field_removals: Vec<String>,
+        field_renames: Map<String, String>,
+        breaking_changes: bool,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        // Verify source version exists
+        let from_key = DataKey::SchemaVersion(from_major, from_minor, from_patch);
+        if !env.storage().persistent().has(&from_key) {
+            return Err(Error::SchemaVersionNotFound);
+        }
+
+        // Prevent breaking changes without explicit acknowledgment
+        if breaking_changes {
+            env.events().publish(
+                (symbol_short!("SCH_BREAK"),),
+                (from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+            );
+        }
+
+        let from_version = SchemaVersion {
+            major: from_major,
+            minor: from_minor,
+            patch: from_patch,
+        };
+        let to_version = SchemaVersion {
+            major: to_major,
+            minor: to_minor,
+            patch: to_patch,
+        };
+
+        let now = env.ledger().timestamp();
+        let evolution = SchemaEvolution {
+            from_version,
+            to_version,
+            description,
+            created_at: now,
+            created_by: caller.clone(),
+            field_additions,
+            field_removals,
+            field_renames,
+            breaking_changes,
+        };
+
+        let evolution_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::SchemaEvolutionCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::SchemaEvolution(evolution_id), &evolution);
+        env.storage()
+            .instance()
+            .set(&DataKey::SchemaEvolutionCount, &evolution_id);
+
+        // Update current schema version
+        env.storage()
+            .instance()
+            .set(&DataKey::CurrentSchemaVersion, &to_version);
+
+        env.events().publish(
+            (symbol_short!("SCH_EVO"),),
+            (evolution_id, from_major, from_minor, from_patch, to_major, to_minor, to_patch),
+        );
+
+        Ok(evolution_id)
+    }
+
+    /// Get the migration plan for upgrading records between schema versions.
+    pub fn get_migration_plan(
+        env: Env,
+        plan_id: u64,
+    ) -> Option<MigrationPlan> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::MigrationPlan(plan_id))
+    }
+
+    /// Create a migration plan for upgrading records.
+    pub fn create_migration_plan(
+        env: Env,
+        caller: Address,
+        from_major: u32,
+        from_minor: u32,
+        from_patch: u32,
+        to_major: u32,
+        to_minor: u32,
+        to_patch: u32,
+        affected_records: u64,
+    ) -> Result<u64, Error> {
+        caller.require_auth();
+        Self::require_not_paused_admin(&env)?;
+
+        let plan_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::MigrationPlanCount)
+            .unwrap_or(0u64)
+            .checked_add(1)
+            .ok_or(Error::NumberOutOfBounds)?;
+
+        let plan = MigrationPlan {
+            plan_id,
+            from_version: SchemaVersion {
+                major: from_major,
+                minor: from_minor,
+                patch: from_patch,
+            },
+            to_version: SchemaVersion {
+                major: to_major,
+                minor: to_minor,
+                patch: to_patch,
+            },
+            affected_records,
+            migrated_count: 0,
+            status: MigrationStatus::Planned,
+            created_at: env.ledger().timestamp(),
+            completed_at: 0,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::MigrationPlan(plan_id), &plan);
+        env.storage()
+            .instance()
+            .set(&DataKey::MigrationPlanCount, &plan_id);
+
+        env.events()
+            .publish((symbol_short!("MIG_PLN"),), plan_id);
+
+        Ok(plan_id)
+    }
+
+    /// Get the current active schema version.
+    pub fn get_current_schema_version(env: Env) -> Option<SchemaVersion> {
+        env.storage()
+            .instance()
+            .get(&DataKey::CurrentSchemaVersion)
+    }
+
+    /// Get a schema evolution record by ID.
+    pub fn get_schema_evolution(env: Env, evolution_id: u64) -> Option<SchemaEvolution> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::SchemaEvolution(evolution_id))
     }
 }

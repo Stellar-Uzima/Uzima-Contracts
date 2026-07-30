@@ -12,6 +12,21 @@ CRITICAL_THRESHOLD=0.95     # 95% critical threshold
 TREND_DATA_FILE=".wasm_size_trends.json"
 OPTIMIZATION_TIPS_FILE=".wasm_optimization_tips.json"
 
+# --- Baseline regression gate (Issue #846) ----------------------------------
+# Committed baseline of per-contract wasm sizes, compared against on every PR.
+BASELINE_FILE="${BASELINE_FILE:-scripts/wasm_size_baselines.json}"
+# Where the wasm32 build job writes its output (cargo workspace target dir).
+WASM_DIR="${WASM_DIR:-target/wasm32-unknown-unknown/release}"
+# Absolute warning threshold (SECURITY_CHECKLIST section 8): 60 KB.
+WARN_SIZE_BYTES=61440
+# Per-contract regression budget: fail if a contract grows more than this % over
+# its baseline.
+REGRESSION_PCT=10
+# Space-separated contracts excluded from the gate (known oversized harnesses).
+EXCLUDED_CONTRACTS="${EXCLUDED_CONTRACTS:-load_testing}"
+# Markdown report path consumed by the CI PR-comment step.
+WASM_SIZE_REPORT="${WASM_SIZE_REPORT:-wasm_size_report.md}"
+
 # Colors for output
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
@@ -270,6 +285,104 @@ check_dependencies() {
     fi
 }
 
+# ============================================================================
+# Baseline regression gate (Issue #846)
+# ============================================================================
+
+# True if $1 is listed in EXCLUDED_CONTRACTS (space-separated).
+is_excluded() {
+    local name="$1" ex
+    # shellcheck disable=SC2086  # intentional word-splitting of the list
+    for ex in $EXCLUDED_CONTRACTS; do
+        [[ "$name" == "$ex" ]] && return 0
+    done
+    return 1
+}
+
+# Emit "<contract> <bytes>" for each non-excluded wasm in WASM_DIR.
+collect_current_sizes() {
+    local f name
+    shopt -s nullglob
+    for f in "$WASM_DIR"/*.wasm; do
+        name="$(basename "$f" .wasm)"
+        is_excluded "$name" && continue
+        printf '%s %s\n' "$name" "$(wc -c < "$f")"
+    done
+    shopt -u nullglob
+}
+
+# Regenerate the committed baseline from the current build (`--update`).
+cmd_update_baseline() {
+    check_dependencies
+    [[ -d "$WASM_DIR" ]] || { log "${RED}WASM dir not found: $WASM_DIR — build first (make build-opt)${NC}"; exit 1; }
+    local contracts="{}" name bytes
+    while read -r name bytes; do
+        contracts="$(jq --arg n "$name" --argjson b "$bytes" '.[$n] = $b' <<<"$contracts")"
+    done < <(collect_current_sizes)
+    if [[ "$contracts" == "{}" ]]; then
+        log "${RED}No wasm files found in $WASM_DIR${NC}"; exit 1
+    fi
+    jq -n --argjson warn "$WARN_SIZE_BYTES" --argjson pct "$REGRESSION_PCT" \
+        --arg excluded "$EXCLUDED_CONTRACTS" --argjson contracts "$contracts" '{
+            warning_threshold_bytes: $warn,
+            regression_pct: $pct,
+            excluded: ($excluded | split(" ")),
+            contracts: $contracts
+        }' > "$BASELINE_FILE"
+    log "${GREEN}Wrote baseline for $(jq '.contracts | length' "$BASELINE_FILE") contracts to $BASELINE_FILE${NC}"
+}
+
+# Compare the current build against the baseline (`--check-baseline`).
+# Hard-fails (exit 1) when a contract grows more than REGRESSION_PCT over its
+# baseline, or NEWLY crosses WARN_SIZE_BYTES. Contracts already over the
+# threshold in the baseline are grandfathered (reported as a warning, not a
+# failure) — see docs/WASM_SIZE_MONITORING.md.
+cmd_check_baseline() {
+    check_dependencies
+    [[ -f "$BASELINE_FILE" ]] || { log "${RED}Baseline not found: $BASELINE_FILE — run with --update${NC}"; exit 1; }
+    [[ -d "$WASM_DIR" ]] || { log "${RED}WASM dir not found: $WASM_DIR${NC}"; exit 1; }
+
+    local fail=0 warn=0 name bytes base delta pct status rows=""
+    while read -r name bytes; do
+        base="$(jq -r --arg n "$name" '.contracts[$n] // empty' "$BASELINE_FILE")"
+        if [[ -z "$base" ]]; then
+            status=":new: new contract"
+            if [[ "$bytes" -gt "$WARN_SIZE_BYTES" ]]; then status=":x: new contract over 60 KB"; fail=1; fi
+            rows+="| ${name} | — | $(bytes_to_human "$bytes") | — | ${status} |"$'\n'
+            continue
+        fi
+        delta=$((bytes - base))
+        pct="$(echo "scale=1; $delta * 100 / $base" | bc -l)"
+        status=":white_check_mark: ok"
+        if [[ "$(echo "$pct > $REGRESSION_PCT" | bc -l)" == "1" ]]; then
+            status=":x: +${pct}% (> ${REGRESSION_PCT}%)"; fail=1
+        elif [[ "$bytes" -gt "$WARN_SIZE_BYTES" && "$base" -le "$WARN_SIZE_BYTES" ]]; then
+            status=":x: crossed 60 KB"; fail=1
+        elif [[ "$bytes" -gt "$WARN_SIZE_BYTES" ]]; then
+            status=":warning: over 60 KB (baseline)"; warn=$((warn + 1))
+        fi
+        rows+="| ${name} | $(bytes_to_human "$base") | $(bytes_to_human "$bytes") | ${pct}% | ${status} |"$'\n'
+    done < <(collect_current_sizes)
+
+    {
+        echo "### WASM Size Report (Issue #846)"
+        echo
+        echo "Gate: fail if a contract grows > ${REGRESSION_PCT}% over baseline or newly crosses the 60 KB threshold. Contracts already over 60 KB are grandfathered (:warning:)."
+        echo
+        echo "| Contract | Baseline | Current | Δ | Status |"
+        echo "|---|---|---|---|---|"
+        printf '%s' "$rows"
+        echo
+        if [[ "$fail" -eq 1 ]]; then
+            echo "❌ WASM size gate failed (regression or new 60 KB breach)."
+        else
+            echo "✅ No size regressions (${warn} contract(s) grandfathered over 60 KB)."
+        fi
+    } | tee "$WASM_SIZE_REPORT"
+
+    return "$fail"
+}
+
 # Main function
 main() {
     log "${BLUE}=== WASM Size Monitor ===${NC}"
@@ -353,12 +466,21 @@ Usage: $0 [OPTIONS]
 WASM Size Monitoring Script for Stellar Contracts
 
 Options:
+  --update           Regenerate the size baseline (scripts/wasm_size_baselines.json)
+                     from the current build, then exit
+  --check-baseline   Compare the current build against the baseline; exit 1 on a
+                     >10% regression or a new 60 KB breach (used by CI)
   --export-trends    Export trend data as JSON
-  --help            Show this help message
+  --help             Show this help message
 
 Examples:
-  $0                    # Check all contracts
+  $0                    # Check all contracts (dist/, trend view)
+  $0 --update           # Refresh the committed size baseline after intended changes
+  $0 --check-baseline   # CI regression gate against target/wasm32-.../release
   $0 --export-trends    # Check contracts and export trend data
+
+Environment:
+  WASM_DIR   Directory of built .wasm files (default: target/wasm32-unknown-unknown/release)
 
 Requirements:
   - jq (JSON processor)
@@ -378,6 +500,16 @@ case "${1:-}" in
     --help|-h)
         show_help
         exit 0
+        ;;
+    --update)
+        # Regenerate scripts/wasm_size_baselines.json from the current build.
+        cmd_update_baseline
+        exit 0
+        ;;
+    --check-baseline)
+        # Compare the current build against the committed baseline. `if` keeps
+        # `set -e` from exiting before we translate the status into exit code.
+        if cmd_check_baseline; then exit 0; else exit 1; fi
         ;;
     *)
         main "$@"

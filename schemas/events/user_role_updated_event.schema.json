@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "UserRoleUpdatedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "user": {
+      "type": "string"
+    },
+    "newRole": {
+      "type": "string"
+    },
+    "previousRole": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "audit",
+    "user",
+    "newRole"
+  ]
+}

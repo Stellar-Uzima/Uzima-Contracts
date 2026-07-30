@@ -1,4 +1,4 @@
-//! # Contract Monitoring Dashboard
+﻿//! # Contract Monitoring Dashboard
 //!
 //! Resolves issue #432: provides a centralised on-chain metrics store that
 //! aggregates transaction volume, gas usage, error rates, storage utilisation,
@@ -14,7 +14,15 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String,
+};
+
+pub mod telemetry;
+pub mod security_telemetry;
+pub mod payload_compression;
+use telemetry::{
+    build_event, current_schema_version, emit_telemetry_event, EventClass, TelemetryEvent,
+    TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -88,6 +96,16 @@ pub enum MonitoringError {
     Unauthorized = 3,
 }
 
+impl core::fmt::Display for MonitoringError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            MonitoringError::NotInitialized => write!(f, "not initialized"),
+            MonitoringError::AlreadyInitialized => write!(f, "already initialized"),
+            MonitoringError::Unauthorized => write!(f, "unauthorized"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -101,9 +119,8 @@ impl ContractMonitoring {
         admin: Address,
         alert_config: AlertConfig,
     ) -> Result<(), MonitoringError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(MonitoringError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env)
+            .map_err(|_| MonitoringError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
@@ -180,6 +197,21 @@ impl ContractMonitoring {
         // Check alert thresholds.
         Self::check_alerts(&env, gas + gas_used);
 
+        // Emit telemetry event.
+        let caller_bytes: Bytes = caller.to_buffer().into();
+        let corr_id = telemetry::derive_correlation_id(&env, &caller_bytes);
+        let event = build_event(
+            &env,
+            "contract_monitoring",
+            "1.0.0",
+            TelemetryEventType::FunctionInvoked,
+            TelemetrySeverity::Info,
+            &function_name.to_string(),
+            &String::from_str(&env, "invoked"),
+            corr_id,
+        );
+        emit_telemetry_event(&env, &event);
+
         Ok(())
     }
 
@@ -196,6 +228,7 @@ impl ContractMonitoring {
             .instance()
             .set(&DataKey::TotalErrors, &(errors + 1));
 
+        let fn_name_for_telemetry = function_name.clone();
         let key = DataKey::FnStats(function_name);
         let mut stats: FunctionStats =
             env.storage().instance().get(&key).unwrap_or(FunctionStats {
@@ -207,9 +240,25 @@ impl ContractMonitoring {
         stats.error_count += 1;
         env.storage().instance().set(&key, &stats);
 
-        // Emit error event.
+        // Emit error event (legacy + structured telemetry).
         env.events()
             .publish((symbol_short!("MON"), symbol_short!("ERROR")), errors + 1);
+
+        let corr_id = telemetry::derive_correlation_id(
+            &env,
+            &soroban_sdk::Bytes::new(&env),
+        );
+        let event = build_event(
+            &env,
+            "contract_monitoring",
+            "1.0.0",
+            TelemetryEventType::FunctionCompleted,
+            TelemetrySeverity::Error,
+            &fn_name_for_telemetry.to_string(),
+            &String::from_str(&env, "error"),
+            corr_id,
+        );
+        emit_telemetry_event(&env, &event);
 
         Ok(())
     }
@@ -315,8 +364,106 @@ impl ContractMonitoring {
             }))
     }
 
+    /// Return a telemetry snapshot summarising event counts by class and severity.
+    ///
+    /// The snapshot uses the versioned `TelemetrySnapshot` schema so off-chain
+    /// dashboards can safely interpret it regardless of future schema changes.
+    pub fn get_telemetry_snapshot(env: Env) -> Result<TelemetrySnapshot, MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let total_calls: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalCalls)
+            .unwrap_or(0);
+        let total_errors: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalErrors)
+            .unwrap_or(0);
+        Ok(TelemetrySnapshot {
+            schema_version: current_schema_version(),
+            total_events: total_calls + total_errors,
+            operational_count: total_calls,
+            security_count: total_errors,
+            error_count: total_errors,
+            critical_count: 0,
+            snapshot_at: env.ledger().timestamp(),
+        })
+    }
+
+    /// Initialize security alerting configuration (admin only).
+    pub fn initialize_security_alerting(
+        env: Env,
+        config: security_telemetry::SecurityAlertConfig,
+    ) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::initialize_security_config(&env, &config);
+        Ok(())
+    }
+
+    /// Record a security event for tracking and alerting.
+    pub fn record_security_event(
+        env: Env,
+        event_type: security_telemetry::SecurityEventType,
+        source: Address,
+        function_name: soroban_sdk::String,
+    ) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        security_telemetry::record_security_event(&env, event_type, &source, &function_name)
+    }
+
+    /// Check if an address is currently locked.
+    pub fn is_address_locked(env: Env, address: Address) -> bool {
+        security_telemetry::is_address_locked(&env, &address)
+    }
+
+    /// Lock a suspicious address (admin only).
+    pub fn lock_address(env: Env, address: Address) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::lock_address(&env, &address);
+        Ok(())
+    }
+
+    /// Unlock an address (admin only).
+    pub fn unlock_address(env: Env, address: Address) -> Result<(), MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        let admin = Self::get_admin(&env)?;
+        admin.require_auth();
+        security_telemetry::unlock_address(&env, &admin, &address)
+    }
+
+    /// Get a snapshot of all security telemetry data.
+    pub fn get_security_snapshot(
+        env: Env,
+    ) -> Result<security_telemetry::SecuritySnapshot, MonitoringError> {
+        Self::ensure_initialized(&env)?;
+        security_telemetry::get_security_snapshot(&env)
+    }
+
+    /// Get a specific security alert by ID.
+    pub fn get_security_alert(
+        env: Env,
+        alert_id: u32,
+    ) -> Option<security_telemetry::SecurityAlert> {
+        security_telemetry::get_security_alert(&env, alert_id)
+    }
+
+    /// Get the failure count for a specific address and event type.
+    pub fn get_address_failure_count(
+        env: Env,
+        address: Address,
+        event_type: security_telemetry::SecurityEventType,
+    ) -> u64 {
+        security_telemetry::get_address_failure_count(&env, &address, event_type)
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    #[must_use]
     fn ensure_initialized(env: &Env) -> Result<(), MonitoringError> {
         if env.storage().instance().has(&DataKey::Admin) {
             Ok(())
@@ -325,6 +472,7 @@ impl ContractMonitoring {
         }
     }
 
+    #[must_use]
     fn get_admin(env: &Env) -> Result<Address, MonitoringError> {
         env.storage()
             .instance()
@@ -360,6 +508,18 @@ impl ContractMonitoring {
                 (symbol_short!("MON"), symbol_short!("ALERT")),
                 symbol_short!("ERRRATE"),
             );
+            let corr_id = telemetry::derive_correlation_id(&env, &soroban_sdk::Bytes::new(&env));
+            let event = build_event(
+                &env,
+                "contract_monitoring",
+                "1.0.0",
+                TelemetryEventType::ThresholdBreached,
+                TelemetrySeverity::Critical,
+                "check_alerts",
+                "error_rate",
+                corr_id,
+            );
+            emit_telemetry_event(&env, &event);
         }
 
         if config.max_gas_per_window > 0 && total_gas > config.max_gas_per_window {
@@ -367,6 +527,18 @@ impl ContractMonitoring {
                 (symbol_short!("MON"), symbol_short!("ALERT")),
                 symbol_short!("GAS"),
             );
+            let corr_id = telemetry::derive_correlation_id(&env, &soroban_sdk::Bytes::new(&env));
+            let event = build_event(
+                &env,
+                "contract_monitoring",
+                "1.0.0",
+                TelemetryEventType::ThresholdBreached,
+                TelemetrySeverity::Critical,
+                "check_alerts",
+                "gas",
+                corr_id,
+            );
+            emit_telemetry_event(&env, &event);
         }
     }
 }
@@ -477,6 +649,25 @@ mod test {
             client.try_initialize(&admin2, &default_config()),
             Err(Ok(MonitoringError::AlreadyInitialized))
         );
+    }
+
+    #[test]
+    fn test_telemetry_snapshot() {
+        let env = Env::default();
+        let (client, _) = setup(&env);
+        let caller = Address::generate(&env);
+
+        for _ in 0..3 {
+            client.record_call(&caller, &String::from_str(&env, "fn"), &10);
+        }
+        client.record_error(&String::from_str(&env, "fn"));
+
+        let snapshot = client.get_telemetry_snapshot();
+        assert_eq!(snapshot.schema_version, 10_000);
+        assert_eq!(snapshot.total_events, 4);
+        assert_eq!(snapshot.operational_count, 3);
+        assert_eq!(snapshot.security_count, 1);
+        assert_eq!(snapshot.error_count, 1);
     }
 }
 

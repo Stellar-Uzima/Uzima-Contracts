@@ -79,16 +79,30 @@ pub enum Error {
     InvalidSignature = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::IssuerNotFound => write!(f, "issuer not found"),
+            Error::RootVersionNotFound => write!(f, "root version not found"),
+            Error::InvalidCredentialId => write!(f, "invalid credential id"),
+            Error::InvalidExpiry => write!(f, "invalid expiry"),
+            Error::InvalidMetadata => write!(f, "invalid metadata"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+        }
+    }
+}
+
 #[contract]
 pub struct CredentialRegistryContract;
 
 #[contractimpl]
 impl CredentialRegistryContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
 
@@ -351,6 +365,7 @@ impl CredentialRegistryContract {
         env.storage().persistent().has(&DataKey::ActiveRoot(issuer))
     }
 
+    #[must_use]
     fn validate_credential_id(root: &BytesN<32>) -> Result<(), Error> {
         if root.to_array() == [0u8; 32] {
             return Err(Error::InvalidCredentialId);
@@ -358,6 +373,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_expiry(env: &Env, expiry: u64) -> Result<(), Error> {
         if expiry <= env.ledger().timestamp() {
             return Err(Error::InvalidExpiry);
@@ -365,6 +381,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_metadata_hash(metadata_hash: &BytesN<32>) -> Result<(), Error> {
         if metadata_hash.to_array() == [0u8; MAX_METADATA_HASH_SIZE as usize] {
             return Err(Error::InvalidMetadata);
@@ -372,6 +389,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn validate_signature(signature: &BytesN<64>) -> Result<(), Error> {
         if signature.to_array() == [0u8; 64] {
             return Err(Error::InvalidSignature);
@@ -379,6 +397,7 @@ impl CredentialRegistryContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Initialized) {
             Ok(())
@@ -387,6 +406,7 @@ impl CredentialRegistryContract {
         }
     }
 
+    #[must_use]
     fn require_global_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -400,6 +420,7 @@ impl CredentialRegistryContract {
         }
     }
 
+    #[must_use]
     fn require_issuer_manager(env: &Env, caller: &Address, issuer: &Address) -> Result<(), Error> {
         if Self::is_global_admin(env, caller) {
             return Ok(());

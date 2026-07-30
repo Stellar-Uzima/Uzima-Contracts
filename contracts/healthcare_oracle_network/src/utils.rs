@@ -6,6 +6,7 @@ use crate::types::{
     TreatmentOutcomeData,
 };
 
+#[must_use]
 pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
         FeedPayload::ClinicalTrial(data) => Ok(data.trial_id.clone()),
@@ -13,6 +14,7 @@ pub fn payload_feed_id_from_trial(payload: &FeedPayload) -> Result<String, Error
     }
 }
 
+#[must_use]
 pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Error> {
     match payload {
         FeedPayload::TreatmentOutcome(data) => Ok(data.outcome_id.clone()),
@@ -20,6 +22,7 @@ pub fn payload_feed_id_from_outcome(payload: &FeedPayload) -> Result<String, Err
     }
 }
 
+#[must_use]
 pub fn require_initialized(env: &Env) -> Result<(), Error> {
     if !env.storage().instance().has(&DataKey::Config) {
         return Err(Error::NotInitialized);
@@ -27,6 +30,7 @@ pub fn require_initialized(env: &Env) -> Result<(), Error> {
     Ok(())
 }
 
+#[must_use]
 pub fn require_admin(env: &Env, admin: Address) -> Result<(), Error> {
     admin.require_auth();
     let cfg: Config = env
@@ -74,6 +78,7 @@ pub fn invoke_contract_cached<
     result
 }
 
+#[must_use]
 pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, Error> {
     let cfg: Config = env
         .storage()
@@ -92,6 +97,7 @@ pub fn require_verified_oracle(env: &Env, operator: Address) -> Result<Config, E
     Ok(cfg)
 }
 
+#[must_use]
 pub fn read_oracle(env: &Env, operator: Address) -> Result<OracleNode, Error> {
     env.storage()
         .persistent()
@@ -103,6 +109,7 @@ pub fn hash_payload(env: &Env, payload: &FeedPayload) -> BytesN<32> {
     env.crypto().sha256(&payload.to_xdr(env)).into()
 }
 
+#[must_use]
 pub fn slash_oracle(env: &Env, operator: Address, penalty: i128, reason: String) -> Result<(), Error> {
     adjust_reputation(env, operator.clone(), penalty.saturating_neg(), true)?;
     env.events().publish(
@@ -187,6 +194,7 @@ pub fn submit_payload(
     Ok(round_id)
 }
 
+#[must_use]
 pub fn finalize_round(env: Env, key: FeedKey, round_id: u64) -> Result<ConsensusRecord, Error> {
     let cfg: Config = env
         .storage()
@@ -565,6 +573,7 @@ pub fn adjust_reputation(
     Ok(())
 }
 
+#[must_use]
 pub fn ensure_active_round(env: &Env, key: FeedKey) -> Result<u64, Error> {
     if let Ok(round_id) = active_round_id(env, key.clone()) {
         return Ok(round_id);
@@ -594,6 +603,7 @@ pub fn ensure_active_round(env: &Env, key: FeedKey) -> Result<u64, Error> {
     Ok(next_id)
 }
 
+#[must_use]
 pub fn active_round_id(env: &Env, key: FeedKey) -> Result<u64, Error> {
     let latest: u64 = env
         .storage()

@@ -18,7 +18,7 @@ fn hash(env: &Env, v: u8) -> BytesN<32> {
     BytesN::from_array(env, &[v; 32])
 }
 
-#[allow(dead_code)]
+
 fn sig(env: &Env, v: u8) -> BytesN<64> {
     BytesN::from_array(env, &[v; 64])
 }

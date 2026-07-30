@@ -3,8 +3,6 @@
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::match_like_matches_macro)]
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -240,6 +238,36 @@ pub enum Error {
     SwapAlreadyProcessed = 23,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::GrantNotFound => write!(f, "grant not found"),
+            Error::GrantExpired => write!(f, "grant expired"),
+            Error::GrantRevoked => write!(f, "grant revoked"),
+            Error::RequestNotFound => write!(f, "request not found"),
+            Error::RequestExpired => write!(f, "request expired"),
+            Error::RequestAlreadyProcessed => write!(f, "request already processed"),
+            Error::DelegationNotFound => write!(f, "delegation not found"),
+            Error::DelegationExpired => write!(f, "delegation expired"),
+            Error::InsufficientPermissions => write!(f, "insufficient permissions"),
+            Error::EmergencyNotEnabled => write!(f, "emergency not enabled"),
+            Error::EmergencyNotAuthorized => write!(f, "emergency not authorized"),
+            Error::InvalidScope => write!(f, "invalid scope"),
+            Error::InvalidCondition => write!(f, "invalid condition"),
+            Error::AuditRequired => write!(f, "audit required"),
+            Error::SingleUseConsumed => write!(f, "single use consumed"),
+            Error::TimeRestrictionViolated => write!(f, "time restriction violated"),
+            Error::Overflow => write!(f, "overflow"),
+            Error::SwapNotFound => write!(f, "swap not found"),
+            Error::SwapExpired => write!(f, "swap expired"),
+            Error::SwapAlreadyProcessed => write!(f, "swap already processed"),
+        }
+    }
+}
+
 #[contract]
 pub struct CrossChainAccessContract;
 
@@ -273,7 +301,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&DataKey::SwapCount, &0u64);
 
         env.events().publish(
-            (Symbol::new(&env, "AccessControlInitialized"),),
+            (Symbol::new(&env, "access_control_initialized"),),
             (admin.clone(),),
         );
 
@@ -321,7 +349,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&DataKey::Grants, &grants);
 
         env.events().publish(
-            (Symbol::new(&env, "AccessGranted"),),
+            (Symbol::new(&env, "access_granted"),),
             (grantor, grantee_chain, grantee_address, grant_id),
         );
 
@@ -349,7 +377,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&DataKey::Grants, &grants);
 
         env.events()
-            .publish((Symbol::new(&env, "AccessRevoked"),), (caller, grant_id));
+            .publish((Symbol::new(&env, "access_revoked"),), (caller, grant_id));
 
         Ok(true)
     }
@@ -459,7 +487,7 @@ impl CrossChainAccessContract {
         }
 
         env.events().publish(
-            (Symbol::new(&env, "AccessRequested"),),
+            (Symbol::new(&env, "access_requested"),),
             (
                 requester_chain,
                 requester_address,
@@ -525,7 +553,7 @@ impl CrossChainAccessContract {
         }
 
         env.events().publish(
-            (Symbol::new(&env, "RequestProcessed"),),
+            (Symbol::new(&env, "request_processed"),),
             (request_id, approve, caller),
         );
 
@@ -572,7 +600,7 @@ impl CrossChainAccessContract {
         );
 
         env.events().publish(
-            (Symbol::new(&env, "DelegationCreated"),),
+            (Symbol::new(&env, "delegation_created"),),
             (delegator, delegate),
         );
 
@@ -598,7 +626,7 @@ impl CrossChainAccessContract {
             env.storage().persistent().set(&deleg_key, &delegation);
 
             env.events().publish(
-                (Symbol::new(&env, "DelegationRevoked"),),
+                (Symbol::new(&env, "delegation_revoked"),),
                 (delegator, delegate),
             );
 
@@ -637,7 +665,7 @@ impl CrossChainAccessContract {
             .set(&DataKey::EmergencyConfig(patient.clone()), &config);
 
         env.events().publish(
-            (Symbol::new(&env, "EmergencyConfigured"),),
+            (Symbol::new(&env, "emergency_configured"),),
             (patient, is_enabled),
         );
 
@@ -685,7 +713,7 @@ impl CrossChainAccessContract {
             .set(&DataKey::AuditLog, &audit_log);
 
         env.events().publish(
-            (Symbol::new(&env, "AccessLogged"),),
+            (Symbol::new(&env, "access_logged"),),
             (accessor_chain, patient, record_id, action, success),
         );
 
@@ -747,7 +775,7 @@ impl CrossChainAccessContract {
             .set(&DataKey::Swap(swap_id), &swap);
 
         env.events().publish(
-            (Symbol::new(&env, "SwapProposed"),),
+            (Symbol::new(&env, "swap_proposed"),),
             (swap_id, initiator, counterpart_chain, counterpart_address),
         );
 
@@ -800,7 +828,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&swap_key, &swap);
 
         env.events().publish(
-            (Symbol::new(&env, "SwapAccepted"),),
+            (Symbol::new(&env, "swap_accepted"),),
             (swap_id, acceptor, offered_grant_id),
         );
 
@@ -850,7 +878,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&swap_key, &swap);
 
         env.events()
-            .publish((Symbol::new(&env, "SwapCompleted"),), (swap_id, caller));
+            .publish((Symbol::new(&env, "swap_completed"),), (swap_id, caller));
 
         Ok(true)
     }
@@ -887,7 +915,7 @@ impl CrossChainAccessContract {
         env.storage().persistent().set(&swap_key, &swap);
 
         env.events()
-            .publish((Symbol::new(&env, "SwapCancelled"),), (swap_id, caller));
+            .publish((Symbol::new(&env, "swap_cancelled"),), (swap_id, caller));
 
         Ok(true)
     }
@@ -1016,6 +1044,7 @@ impl CrossChainAccessContract {
 
     // ==================== Internal Helper Functions ====================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
@@ -1029,6 +1058,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn require_not_paused(env: &Env) -> Result<(), Error> {
         if env
             .storage()
@@ -1041,6 +1071,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn get_and_increment_grant_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1061,6 +1092,7 @@ impl CrossChainAccessContract {
             .unwrap_or(0)
     }
 
+    #[must_use]
     fn get_and_increment_request_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1074,6 +1106,7 @@ impl CrossChainAccessContract {
         Ok(new_count)
     }
 
+    #[must_use]
     fn get_and_increment_audit_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1087,6 +1120,7 @@ impl CrossChainAccessContract {
         Ok(new_count)
     }
 
+    #[must_use]
     fn get_and_increment_swap_count(env: &Env) -> Result<u64, Error> {
         let count: u64 = env
             .storage()
@@ -1176,7 +1210,7 @@ impl CrossChainAccessContract {
                         .set(&DataKey::Requests, &requests);
 
                     env.events().publish(
-                        (Symbol::new(&env, "EmergencyAutoApproved"),),
+                        (Symbol::new(&env, "emergency_auto_approved"),),
                         (request_id, patient.clone()),
                     );
                 }
@@ -1186,6 +1220,7 @@ impl CrossChainAccessContract {
         Ok(())
     }
 
+    #[must_use]
     fn create_request_grant(env: &Env, request: &AccessRequest) -> Result<(), Error> {
         let now = env.ledger().timestamp();
         let grant_id = Self::get_and_increment_grant_count(&env)?;

@@ -96,6 +96,17 @@ pub enum VerificationError {
     MetadataNotFound = 4,
 }
 
+impl core::fmt::Display for VerificationError {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            VerificationError::NotInitialized => write!(f, "not initialized"),
+            VerificationError::AlreadyInitialized => write!(f, "already initialized"),
+            VerificationError::Unauthorized => write!(f, "unauthorized"),
+            VerificationError::MetadataNotFound => write!(f, "metadata not found"),
+        }
+    }
+}
+
 // ── Contract ──────────────────────────────────────────────────────────────────
 
 #[contract]
@@ -105,9 +116,8 @@ pub struct ContractVerification;
 impl ContractVerification {
     /// Initialise the verification registry with an admin address.
     pub fn initialize(env: Env, admin: Address) -> Result<(), VerificationError> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(VerificationError::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env)
+            .map_err(|_| VerificationError::AlreadyInitialized)?;
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         Ok(())
@@ -247,6 +257,7 @@ impl ContractVerification {
 
     // ── Internal ──────────────────────────────────────────────────────────────
 
+    #[must_use]
     fn get_admin(env: &Env) -> Result<Address, VerificationError> {
         env.storage()
             .instance()

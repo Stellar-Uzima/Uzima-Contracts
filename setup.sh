@@ -1,253 +1,174 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# setup.sh — Reproducible developer environment bootstrap for Uzima Contracts.
+#
+# This script installs the correct toolchain versions (as pinned in
+# rust-toolchain.toml), builds the project, and verifies the environment.
+#
+# Requirements: bash 4+, curl, git
+# Optional: make, shellcheck
+#
+# Usage:
+#   ./setup.sh              # full setup
+#   ./setup.sh --skip-build # skip build and test
+#
 
-# setup.sh - Complete Soroban Project Setup Script
-# Th
-is script sets up a complete Soroban development environment
+set -euo pipefail
 
-set -e
-
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-PURPLE='\033[0;35m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-print_banner() {
-    echo -e "${PURPLE}"
-    echo "╔══════════════════════════════════════════════════════╗"
-    echo "║              Soroban Project Setup                   ║"
-    echo "║         Stellar Smart Contract Development           ║"
-    echo "╚══════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-}
+SKIP_BUILD=false
+[[ "${1:-}" == "--skip-build" ]] && SKIP_BUILD=true
 
-print_status() {
-    echo -e "${GREEN}[INFO]${NC} $1"
-}
+log()   { echo -e "${GREEN}[INFO]${NC} $1"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
+error() { echo -e "${RED}[ERROR]${NC} $1" >&2; }
+step()  { echo -e "${BLUE}[STEP]${NC} $1"; }
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+# ── Preflight ────────────────────────────────────────────────────────────────
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+if [[ ! -f "Cargo.toml" ]]; then
+  error "No Cargo.toml found. Run this script from the repository root."
+  exit 1
+fi
 
-print_step() {
-    echo -e "${BLUE}[STEP]${NC} $1"
-}
+if [[ ! -f "rust-toolchain.toml" ]]; then
+  error "No rust-toolchain.toml found. Cannot determine required Rust version."
+  exit 1
+fi
 
-check_command() {
-    if command -v "$1" &> /dev/null; then
-        return 0
-    else
-        return 1
-    fi
-}
+REQUIRED_RUST=$(grep '^channel' rust-toolchain.toml | sed 's/.*= *"\(.*\)"/\1/')
+log "Required Rust version: $REQUIRED_RUST"
 
-install_rust() {
-    print_step "Installing Rust 1.78.0..."
-    rustup install 1.78.0
-    rustup override set 1.78.0
-    rustc --version
-    print_status "Rust 1.78.0 installed and set"
-}
+# ── Step 1: Install Rust via rustup ─────────────────────────────────────────
 
-setup_rust_targets() {
-    print_step "Setting up Rust targets and components..."
-    rustup target add wasm32-unknown-unknown
-    rustup component add rustfmt clippy rust-src
-    print_status "Rust targets and components configured"
-}
+step "1/6 Installing Rust toolchain"
 
-install_soroban_cli() {
-    print_step "Installing Soroban CLI v23.1.4..."
-    
-    if check_command soroban; then
-        CURRENT_VERSION=$(soroban --version | head -n1 | awk '{print $2}')
-        if [ "$CURRENT_VERSION" = "23.1.4" ]; then
-            print_status "Soroban CLI v23.1.4 already installed"
-            return
-        else
-            print_warning "Different Soroban CLI version detected ($CURRENT_VERSION). Replacing..."
-        fi
-    fi
+if ! command -v rustup &>/dev/null; then
+  log "rustup not found. Installing Rust..."
+  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain "$REQUIRED_RUST"
+  source "$HOME/.cargo/env"
+else
+  log "rustup found. Ensuring correct toolchain..."
+  rustup install "$REQUIRED_RUST"
+fi
 
-    curl -L -o stellar-cli.tar.gz https://github.com/stellar/soroban-cli/releases/download/v23.1.4/stellar-cli-23.1.4-x86_64-unknown-linux-gnu.tar.gz
-    tar -xzf stellar-cli.tar.gz
-    sudo mv stellar /usr/local/bin/
-    sudo ln -sf /usr/local/bin/stellar /usr/local/bin/soroban
-    rm stellar-cli.tar.gz
+# Set the pinned toolchain as default for this directory
+rustup override set "$REQUIRED_RUST"
 
-    soroban --version
-    print_status "Soroban CLI v23.1.4 installed successfully"
-}
+INSTALLED_RUST=$(rustc --version | awk '{print $2}')
+if [[ "$INSTALLED_RUST" != "$REQUIRED_RUST" ]]; then
+  error "Rust version mismatch: expected $REQUIRED_RUST, got $INSTALLED_RUST"
+  exit 1
+fi
+log "Rust $INSTALLED_RUST installed"
 
-create_project_structure() {
-    print_step "Creating project structure..."
-    
-    # Create directories
-    mkdir -p contracts/medical_records/src
-    mkdir -p scripts
-    mkdir -p tests/{integration,unit}
-    mkdir -p .github/workflows
-    mkdir -p deployments
-    
-    print_status "Project structure created"
-}
+# ── Step 2: Add required targets and components ─────────────────────────────
 
-initialize_git() {
-    print_step "Initializing Git repository..."
-    if [ ! -d ".git" ]; then
-        git init
-        git add .
-        git commit -m "Initial commit: Complete Soroban project setup"
-        print_status "Git repository initialized"
-    else
-        print_status "Git repository already exists"
-    fi
-}
+step "2/6 Adding Rust targets and components"
 
-setup_soroban_config() {
-    print_step "Setting up Soroban configuration..."
-    
-    # Generate default identity if it doesn't exist
-    if ! soroban config identity show default &> /dev/null; then
-        print_status "Generating default identity..."
-        soroban config identity generate default
-        IDENTITY_ADDRESS=$(soroban config identity address default)
-        print_status "Default identity created: $IDENTITY_ADDRESS"
-    else
-        print_status "Default identity already exists"
-    fi
-    
-    # Configure networks
-    print_status "Configuring networks..."
-    
-    # Local network
-    soroban config network add local \
-        --rpc-url http://localhost:8000/soroban/rpc \
-        --network-passphrase "Standalone Network ; February 2017" \
-        2>/dev/null || print_status "Local network already configured"
-    
-    # Testnet
-    soroban config network add testnet \
-        --rpc-url https://soroban-testnet.stellar.org:443 \
-        --network-passphrase "Test SDF Network ; September 2015" \
-        2>/dev/null || print_status "Testnet already configured"
-    
-    # Futurenet
-    soroban config network add futurenet \
-        --rpc-url https://rpc-futurenet.stellar.org:443 \
-        --network-passphrase "Test SDF Future Network ; October 2022" \
-        2>/dev/null || print_status "Futurenet already configured"
-    
-    print_status "Networks configured successfully"
-}
+rustup target add wasm32-unknown-unknown
+rustup component add rustfmt clippy rust-src
+log "Targets and components configured"
 
-build_project() {
-    print_step "Building project..."
-    cargo build --all-targets
-    print_status "Project built successfully"
-}
+# ── Step 3: Install Soroban CLI ─────────────────────────────────────────────
 
-run_tests() {
-    print_step "Running tests..."
-    cargo test --all
-    print_status "All tests passed"
-}
+step "3/6 Installing Soroban CLI"
 
-make_scripts_executable() {
-    print_step "Making scripts executable..."
-    chmod +x scripts/*.sh 2>/dev/null || true
-    print_status "Scripts are now executable"
-}
+SOROBAN_VERSION="21.7.7"
 
-install_development_tools() {
-    print_step "Installing additional development tools..."
-    
-    # Install cargo-watch for auto-rebuilding
-    if ! check_command cargo-watch; then
-        cargo install cargo-watch
-        print_status "cargo-watch installed"
-    fi
-    
-    # Install cargo-audit for security auditing
-    if ! check_command cargo-audit; then
-        cargo install cargo-audit
-        print_status "cargo-audit installed"
-    fi
-    
-    print_status "Development tools installed"
-}
+if command -v soroban &>/dev/null; then
+  CURRENT_SOROBAN=$(soroban --version 2>/dev/null | awk '{print $2}' || echo "unknown")
+  if [[ "$CURRENT_SOROBAN" == "$SOROBAN_VERSION" ]]; then
+    log "Soroban CLI v$SOROBAN_VERSION already installed"
+  else
+    warn "Soroban CLI v$CURRENT_SOROBAN found (need v$SOROBAN_VERSION). Installing..."
+    cargo install --locked --version "$SOROBAN_VERSION" soroban-cli
+  fi
+else
+  log "Installing Soroban CLI v$SOROBAN_VERSION..."
+  cargo install --locked --version "$SOROBAN_VERSION" soroban-cli
+fi
 
-print_success_message() {
-    echo -e "${GREEN}"
-    echo "╔══════════════════════════════════════════════════════╗"
-    echo "║                  Setup Complete! 🚀                 ║"
-    echo "╚══════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    
-    echo -e "${BLUE}Next steps:${NC}"
-    echo "1. Start local Stellar network:"
-    echo "   soroban network start local"
-    echo ""
-    echo "2. Deploy your first contract:"
-    echo "   ./scripts/deploy.sh medical_records local"
-    echo ""
-    echo "3. Interact with your contract:"
-    echo "   ./scripts/interact.sh <CONTRACT_ID> local initialize"
-    echo ""
-    echo "4. Available make commands:"
-    echo "   make help          - Show all available commands"
-    echo "   make build         - Build all contracts"
-    echo "   make test          - Run all tests"
-    echo "   make deploy-local  - Deploy to local network"
-    echo ""
-    echo -e "${GREEN}Happy coding! 🎉${NC}"
-}
+log "Soroban CLI installed"
 
-print_error_message() {
-    echo -e "${RED}"
-    echo "╔══════════════════════════════════════════════════════╗"
-    echo "║                  Setup Failed! ❌                   ║"
-    echo "╚══════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    echo "Please check the error messages above and try again."
-    echo "For help, visit: https://soroban.stellar.org/docs"
-}
+# ── Step 4: Configure Soroban identity and networks ─────────────────────────
 
-# Main setup function
-main() {
-    print_banner
-    
-    print_status "Starting Soroban project setup..."
-    
-    # Check if we're in the right directory
-    if [ ! -f "Cargo.toml" ]; then
-        print_error "No Cargo.toml found. Please run this script from the project root."
-        exit 1
-    fi
-    
-    # Run setup steps
-    install_rust
-    setup_rust_targets
-    install_soroban_cli
-    create_project_structure
-    setup_soroban_config
-    make_scripts_executable
-    build_project
-    run_tests
-    install_development_tools
-    initialize_git
-    
-    print_success_message
-}
+step "4/6 Configuring Soroban identity and networks"
 
-# Error handling
-trap 'print_error_message; exit 1' ERR
+if ! soroban config identity show default &>/dev/null; then
+  soroban config identity generate default
+  log "Default identity created"
+else
+  log "Default identity already exists"
+fi
 
-# Run main function
-main "$@"
+soroban config network add local \
+  --rpc-url http://localhost:8000/soroban/rpc \
+  --network-passphrase "Standalone Network ; February 2017" \
+  2>/dev/null || true
+
+soroban config network add testnet \
+  --rpc-url https://soroban-testnet.stellar.org:443 \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  2>/dev/null || true
+
+soroban config network add futurenet \
+  --rpc-url https://rpc-futurenet.stellar.org:443 \
+  --network-passphrase "Test SDF Future Network ; October 2022" \
+  2>/dev/null || true
+
+log "Networks configured"
+
+# ── Step 5: Make scripts executable ─────────────────────────────────────────
+
+step "5/6 Setting permissions"
+
+chmod +x scripts/*.sh 2>/dev/null || true
+log "Scripts are executable"
+
+# ── Step 6: Build and test ──────────────────────────────────────────────────
+
+step "6/6 Building and testing"
+
+if [[ "$SKIP_BUILD" == "true" ]]; then
+  warn "Skipping build (--skip-build flag)"
+else
+  log "Building all contracts..."
+  cargo build --all-targets
+
+  log "Running tests..."
+  cargo test --all
+
+  log "Running formatting check..."
+  cargo fmt --all -- --check || {
+    warn "Formatting issues found. Run: cargo fmt --all"
+  }
+
+  log "Running clippy..."
+  cargo clippy --workspace --all-targets -- -D warnings || {
+    warn "Clippy warnings found. Review output above."
+  }
+fi
+
+# ── Summary ──────────────────────────────────────────────────────────────────
+
+echo ""
+echo -e "${GREEN}Setup complete!${NC}"
+echo ""
+echo "Toolchain:"
+echo "  Rust:      $(rustc --version)"
+echo "  Soroban:   $(soroban --version 2>/dev/null || echo 'not installed')"
+echo "  Targets:   $(rustup target list --installed | tr '\n' ' ')"
+echo ""
+echo "Quick start:"
+echo "  make help          Show all make targets"
+echo "  make build         Build all contracts"
+echo "  make test          Run all tests"
+echo "  make check         Run fmt + clippy + test"
+echo "  make start-local   Start local Stellar network"
+echo ""

@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 soroban-sdk = { workspace = true, features = ["alloc"] }
+governance_commons = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["alloc", "testutils"] }

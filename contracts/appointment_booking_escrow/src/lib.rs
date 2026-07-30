@@ -1,7 +1,5 @@
 #![no_std]
 //! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
-#![allow(dead_code)]
-
 #[cfg(test)]
 mod test;
 
@@ -82,11 +80,8 @@ pub struct AppointmentBookingEscrow;
 impl AppointmentBookingEscrow {
     /// Initialize the contract with an admin and token address
     pub fn initialize(env: Env, admin: Address, _token: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
 
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -673,6 +668,7 @@ impl AppointmentBookingEscrow {
 
     // ==================== Internal Helpers ====================
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);

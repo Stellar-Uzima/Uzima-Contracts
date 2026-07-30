@@ -1,8 +1,28 @@
 # Makefile for Soroban Smart Contract Development
 
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations
-.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
+# Auto-generated help: grep ##@ and ## comments from this Makefile
+# Usage  : make help
 
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size optimize analyze-optimizations bootstrap-test health-check smoke-test-docker
+.PHONY: help build test clean fmt lint deploy-local start-local stop-local install-deps check-deps shellcheck dist dev-deploy monitor-wasm check-wasm-size estimate-gas estimate-gas-batch estimate-storage estimate-cross-chain
+.PHONY: perf-budget perf-budget-update perf-budget-trend test-perf-budget
+.PHONY: build-incremental test-changed cache-status dev
+.PHONY: orchestrate-plan orchestrate-deploy orchestrate-deploy-live orchestrate-verify orchestrate-status
+.PHONY: promotion-gate promotion-gate-strict
+.PHONY: canary-dry-run canary-deploy canary-full
+.PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
+
+##@ General
+
+help: ## Show this help message
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@awk 'BEGIN {FS = ":.*##"; printf ""} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+##@ Setup
+
+install-deps: ## Install Rust toolchain, Soroban CLI, and shellcheck
 # Default target
 help:
 	@echo "Available commands:"
@@ -11,6 +31,10 @@ help:
 	@echo "  test           - Run all tests"
 	@echo "  test-unit      - Run unit tests only"
 	@echo "  test-integration - Run integration tests only"
+	@echo "  test-changed   - Run tests only for changed packages (incremental)"
+	@echo "  build-incremental - Incremental build (only recompile changed crates)"
+	@echo "  cache-status   - Show build cache and dependency status"
+	@echo "  dev            - Quick dev loop: incremental build + test changed"
 	@echo "  clean          - Clean build artifacts"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Run clippy linter"
@@ -30,27 +54,43 @@ help:
 	@echo "  setup          - Complete setup for new developers"
 	@echo "  estimate-gas        - Estimate gas for a single function"
 	@echo "  estimate-gas-batch  - Estimate gas for multiple functions"
-	@echo "  estimate-storage    - Calculate storage costs"
+	@echo "  estimate-storage    - Measure storage budget for all built contracts"
+	@echo "  measure-storage     - Alias for estimate-storage"
 	@echo "  estimate-cross-chain- Estimate cross-chain fees"
 	@echo "  release VERSION=X.Y.Z - Automated release process"
 	@echo "  bump-version VERSION=X.Y.Z - Bump version in all files"
 	@echo "  generate-changelog VERSION=X.Y.Z - Generate changelog entry"
 	@echo "  validate-release VERSION=X.Y.Z - Validate release prerequisites"
 	@echo "  check-versions      - Check version consistency"
+	@echo ""
+	@echo "  orchestrate-plan     - Generate typed deployment plan (NETWORK=... VERSION=...)"
+	@echo "  orchestrate-deploy   - Dry-run typed deployment (NETWORK=... VERSION=...)"
+	@echo "  orchestrate-verify   - Verify deployments (NETWORK=...)"
+	@echo "  orchestrate-status   - Show deployment status (NETWORK=...)"
+	@echo ""
+	@echo "  promotion-gate       - Run release promotion gate (VERSION=... FROM=... TO=...)"
+	@echo "  promotion-gate-strict - Strict promotion gate"
+	@echo ""
+	@echo "  canary-dry-run       - Canary deploy dry-run (NETWORK=... VERSION=...)"
+	@echo "  canary-deploy        - Canary deploy (NETWORK=... VERSION=...)"
+	@echo "  canary-full          - Full staged rollout (NETWORK=... VERSION=...)"
+	@echo ""
+	@echo "  coverage-gate        - Run coverage gate check"
+	@echo "  coverage-gate-report - Generate coverage gate report"
+	@echo "  test-coverage-gate   - Run coverage gate test suite"
 
 # Install required dependencies
 install-deps:
 	@echo "Installing Rust toolchain..."
 	rustup target add wasm32-unknown-unknown
-	rustup component add rustfmt clippy
-	@echo "Installing Soroban CLI..."
-	cargo install --locked soroban-cli
+	rustup component add rustfmt clippy rust-src
+	@echo "Installing Soroban CLI v21.7.7..."
+	cargo install --locked --version 21.7.7 soroban-cli
 	@echo "Installing shellcheck (if not present)..."
 	command -v shellcheck >/dev/null 2>&1 || { echo "Install shellcheck from https://github.com/koalaman/shellcheck"; }
 	@echo "Dependencies installed successfully!"
 
-# Check if required dependencies are installed
-check-deps:
+check-deps: ## Verify all required dependencies are installed
 	@echo "Checking dependencies..."
 	@command -v rustc >/dev/null 2>&1 || { echo "Rust not installed. Run 'make install-deps'"; exit 1; }
 	@command -v soroban >/dev/null 2>&1 || { echo "Soroban CLI not installed. Run 'make install-deps'"; exit 1; }
@@ -58,17 +98,13 @@ check-deps:
 	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed. Run 'make install-deps'"; exit 1; }
 	@echo "All dependencies are installed!"
 
-# Build all contracts
-build: check-deps
+##@ Build
+
+build: check-deps ## Build all contracts
 	@echo "Building all contracts..."
 	cargo build --all-targets
 
-# Build optimized contracts for deployment
-# Excludes host-only tools and test packages that are not wasm-compatible:
-#   contract_optimizer  — uses tokio/reqwest/octocrab (native I/O only)
-#   uzima-tests         — soroban testutils are host-side only
-#   interoperability_suite — test harness, no wasm output needed
-build-opt: check-deps
+build-opt: check-deps ## Build optimized WASM contracts for deployment
 	@echo "Building optimized contracts..."
 	cargo build --release --target wasm32-unknown-unknown \
 		--workspace \
@@ -77,53 +113,106 @@ build-opt: check-deps
 		--exclude interoperability_suite
 	@echo "Contracts built successfully!"
 
-# Run all tests
-test: check-deps
+##@ Test
+
+test: check-deps ## Run all tests
 	@echo "Running all tests..."
 	cargo test --all
 
-# Run unit tests only
-test-unit: check-deps
+test-unit: check-deps ## Run unit tests only
 	@echo "Running unit tests..."
 	cargo test --lib
 
-# Run integration tests only
-test-integration: check-deps
+test-integration: check-deps ## Run integration tests only
 	@echo "Running integration tests..."
 	cargo test --test integration
 
-# Clean build artifacts
-clean:
+build-incremental: check-deps ## Incremental build (only recompile changed crates)
+	@echo "Building incrementally..."
+	cargo build --all-targets
+
+test-changed: check-deps ## Run tests only for packages with changed source files
+	@echo "Detecting changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages detected. Running full test suite."; \
+		cargo test --all; \
+	else \
+		echo "Changed packages: $$CHANGED"; \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: package $$pkg not found in workspace, skipping"; \
+		done; \
+	fi
+
+cache-status: ## Show build cache and incremental compilation status
+	@echo "=== Build Cache Status ==="
+	@echo "Target directory size: $$(du -sh target/ 2>/dev/null | cut -f1 || echo 'not built')"
+	@echo "WASM artifacts: $$(find target/wasm32-unknown-unknown/release -name '*.wasm' 2>/dev/null | wc -l || echo 0)"
+	@echo "Last build: $$(stat -c '%y' target/.cargo-lock 2>/dev/null || stat -f '%Sm' target/.cargo-lock 2>/dev/null || echo 'unknown')"
+	@echo ""
+	@echo "=== Dependency Cache ==="
+	@echo "Cargo registry: $$(du -sh ~/.cargo/registry/ 2>/dev/null | cut -f1 || echo 'unknown')"
+	@echo "Cargo git cache: $$(du -sh ~/.cargo/git/ 2>/dev/null | cut -f1 || echo 'unknown')"
+
+dev: check-deps ## Quick dev loop: incremental build + test changed packages only
+	@echo "=== Quick Dev Cycle ==="
+	@echo "1. Incremental build..."
+	cargo build --all-targets 2>&1 | tail -5
+	@echo ""
+	@echo "2. Testing changed packages..."
+	@CHANGED=$$(git diff --name-only --diff-filter=ACMR -- 'contracts/*/src/' 'libs/*/src/' | \
+		sed 's|^\(contracts/\([^/]*\)\)/.*|\2|;s|^\(libs/\([^/]*\)\)/.*|\2|' | sort -u); \
+	if [ -z "$$CHANGED" ]; then \
+		echo "No changed packages. Skipping test."; \
+	else \
+		for pkg in $$CHANGED; do \
+			echo "--- Testing $$pkg ---"; \
+			cargo test --package "$$pkg" 2>/dev/null || echo "Warning: $$pkg not in workspace"; \
+		done; \
+	fi
+	@echo ""
+	@echo "Dev cycle complete!"
+
+##@ Maintenance
+
+clean: ## Clean build artifacts and WASM files
 	@echo "Cleaning build artifacts..."
 	cargo clean
 	@find . -name "*.wasm" -type f -delete
 	@rm -rf dist/ 2>/dev/null || true
 	@echo "Clean completed!"
 
-# Format code
-fmt:
+fmt: ## Format all Rust code with cargo fmt
 	@echo "Formatting code..."
 	cargo fmt --all
 
-# Run linter
-lint: check-deps
+# Check code format
+fmt-check:
+	@echo "Checking code format..."
+	cargo fmt --all -- --check
+
+lint: check-deps ## Run clippy linter and error code checks
 	@echo "Running clippy..."
 	cargo clippy --all-targets --all-features -- -D warnings
 	@echo "Checking error codes..."
 	bash scripts/check_error_codes.sh
 
-# Lint shell scripts
-shellcheck: check-deps
+shellcheck: check-deps ## Lint shell scripts with shellcheck
 	@echo "Linting shell scripts..."
 	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
-# Run all checks
-check: fmt lint test shellcheck
+check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
+	@echo "All checks passed!"
+
+# Run all checks without making changes
+check-all: fmt-check lint test check-wasm-size
 	@echo "All checks passed!"
 
 # Build .wasm into dist/
-dist: build-opt check-deps
+dist: build-opt check-deps ## Copy compiled .wasm files into dist/ directory
 	@echo "Copying .wasm files to dist/..."
 	mkdir -p dist/
 	@for contract in contracts/*/; do \
@@ -139,29 +228,28 @@ dist: build-opt check-deps
 	done
 	@echo "Dist built successfully in dist/!"
 
-# Start local Stellar network with passphrase validation
-start-local: check-deps
+##@ Local Network
+
+start-local: check-deps ## Start local Stellar network (Soroban RPC)
 	@echo "Starting local Stellar network..."
 	# Validate passphrase against Soroban settings
 	expected_passphrase="Standalone Network ; February 2017"
 	current_config=$(soroban config network show local --network-passphrase 2>/dev/null || echo "")
-	if [[ "$current_config" != *"$expected_passphrase"* ]]; then
-		@echo "Warning: Local network passphrase mismatch. Reconfiguring..."
+	if [[ "$$current_config" != *"$$expected_passphrase"* ]]; then
+		echo "Warning: Local network passphrase mismatch. Reconfiguring..."
 		soroban config network add local \
 			--rpc-url http://localhost:8000/soroban/rpc \
-			--network-passphrase "$expected_passphrase" || true
+			--network-passphrase "$$expected_passphrase" || true
 	fi
 	soroban network start local || { echo "Failed to start local network—check if port 8000 free"; exit 1; }
 	@echo "Local network started successfully!"
 
-# Stop local Stellar network
-stop-local:
+stop-local: ## Stop local Stellar network
 	@echo "Stopping local Stellar network..."
 	soroban network stop local || true
 	@echo "Local network stopped!"
 
-# Deploy contracts to local network
-deploy-local: build-opt start-local
+deploy-local: build-opt start-local ## Deploy all contracts to local network
 	@echo "Deploying contracts to local network..."
 	@for contract in contracts/*/; do \
 		if [ -d "$$contract" ]; then \
@@ -172,12 +260,19 @@ deploy-local: build-opt start-local
 	done
 	@echo "All contracts deployed reliably!"
 
-# Full dev-deploy: clean, build, dist, start, deploy
-dev-deploy: clean dist start-local deploy-local
-	@echo "Dev deployment complete! All contracts built/deployed reliably. 🚀"
+dev-deploy: clean dist start-local deploy-local ## Full dev workflow: clean, build-opt, dist, start-local, deploy-local
+	@echo "Dev deployment complete! All contracts built/deployed reliably."
 
-# Complete setup for new developers
-setup: install-deps
+deploy-testnet: ## One-command deploy all contracts to testnet
+	@./scripts/deploy-all.sh testnet
+
+deploy-futurenet: ## One-command deploy all contracts to futurenet
+	@./scripts/deploy-all.sh futurenet
+
+deploy: ## One-command deploy (set NETWORK=testnet for testnet, default: local)
+	@./scripts/deploy-all.sh $${NETWORK:-local}
+
+setup: install-deps ## Complete one-time setup for new developers
 	@echo "Running initial setup..."
 	@echo "Generating default identity..."
 	soroban config identity generate default || echo "Identity 'default' already exists"
@@ -192,45 +287,45 @@ setup: install-deps
 	@echo "2. Deploy contracts: make dev-deploy"
 	@echo "3. Happy coding! 🎉"
 
-# Development workflow shortcuts
-dev-build: fmt lint build test shellcheck
+dev-build: fmt lint build test shellcheck ## Run fmt, lint, build, test, shellcheck
 
-# Docker support (optional)
-docker-build:
+##@ Docker
+
+docker-build: ## Build Docker image for the project
 	@echo "Building Docker image..."
 	docker build -t soroban-project .
 
-docker-run:
+docker-run: ## Run project in Docker container
 	@echo "Running in Docker container..."
 	docker run -it --rm -v $(PWD):/workspace soroban-project
 
-# Security audit
-audit:
+##@ Security & Docs
+
+audit: ## Run security audit with cargo audit
 	@echo "Running security audit..."
 	cargo audit
 
-# Generate documentation
-docs:
+docs: ## Generate documentation with node scripts
 	@echo "Generating documentation..."
 	node scripts/docs/generate.mjs
 
-# Watch for changes and rebuild (requires cargo-watch)
-watch:
+##@ Development
+
+watch: ## Watch for changes and auto-rebuild (requires cargo-watch)
 	@echo "Watching for changes..."
 	cargo watch -x "build --all-targets"
 
-# Benchmark tests (if any)
-bench:
+bench: ## Run cargo benchmarks
 	@echo "Running benchmarks..."
 	cargo bench
 
-# Profile contract performance metrics
-profile:
+profile: ## Profile contract build times
 	@echo "Profiling build times..."
 	cargo build --timings
 
-# WASM size monitoring
-monitor-wasm: dist
+##@ WASM Size
+
+monitor-wasm: dist ## Monitor WASM contract sizes and trends
 	@echo "Monitoring WASM contract sizes..."
 	@if command -v jq >/dev/null 2>&1 && command -v bc >/dev/null 2>&1; then \
 		./scripts/wasm_size_monitor.sh; \
@@ -247,8 +342,7 @@ monitor-wasm: dist
 		./scripts/wasm_size_monitor.sh; \
 	fi
 
-# Quick WASM size check
-check-wasm-size: dist
+check-wasm-size: dist ## Quick WASM size check without trend analysis
 	@echo "Quick WASM size check..."
 	@for wasm_file in dist/*.wasm; do \
 		if [ -f "$$wasm_file" ]; then \
@@ -266,37 +360,37 @@ check-wasm-size: dist
 		fi; \
 	done
 
-# Contract optimization analysis
-optimize: check-deps
+##@ Optimization
+
+optimize: check-deps ## Run contract optimization analysis
 	@echo "Building optimization engine..."
 	cargo build --package contract_optimizer
 	@echo "Running optimization analysis..."
 	cargo run --package contract_optimizer -- analyze
 
-# Analyze and display optimization recommendations
-analyze-optimizations: optimize
+analyze-optimizations: optimize ## Analyze and display optimization recommendations
 	@echo "Generating optimization report..."
 	cargo run --package contract_optimizer -- report --input optimization_results.json --output reports/optimization_report.md
 	@echo "Report generated: reports/optimization_report.md"
 
-# View optimization metrics
-optimization-metrics:
+optimization-metrics: ## View optimization metrics
 	@echo "Viewing optimization metrics..."
 	cargo run --package contract_optimizer -- metrics
-# ─── Gas Estimation Tools (Issue #430) ───────────────────────────────────────
+
+##@ Gas Estimation
 
 FUNCTION  ?= transfer
 AMOUNT    ?= 1000
 ENTRIES   ?= 2
 FUNCTIONS ?= transfer mint burn
 
-estimate-gas:
+estimate-gas: ## Estimate gas for a single function call
 	@echo "Function:      $(FUNCTION)"
 	@echo "Estimated Gas: 45,678"
 	@echo "Max Fee:       0.00045678 XLM"
 	@echo "Storage:       +$(ENTRIES) entries"
 
-estimate-gas-batch:
+estimate-gas-batch: ## Estimate gas for multiple function calls
 	@for fn in $(FUNCTIONS); do \
 		echo "---"; \
 		echo "Function:      $$fn"; \
@@ -305,20 +399,37 @@ estimate-gas-batch:
 		echo "Storage:       +$(ENTRIES) entries"; \
 	done
 
-estimate-storage:
+estimate-storage: dist ## Calculate storage costs for a given number of entries
 	@echo "Storage Entries: $(ENTRIES)"
 	@printf "Storage Cost:    %.5f XLM\n" $$(echo "$(ENTRIES) * 0.00001" | bc -l)
+	@echo "Running storage budget measurement..."
+	@bash scripts/measure_storage.sh
 
-estimate-cross-chain:
+measure-storage: estimate-storage
+
+perf-budget: ## Check contracts against the performance budgets (Issue #1086)
+	@echo "Evaluating performance budgets..."
+	@bash scripts/performance_budget_gate.sh --check
+
+perf-budget-update: ## Re-record performance budgets from the current build
+	@echo "Recording performance budgets..."
+	@bash scripts/performance_budget_gate.sh --update
+
+perf-budget-trend: ## Show performance budget trend across retained samples
+	@bash scripts/performance_budget_gate.sh --trend
+
+test-perf-budget: ## Run the performance budget gate test suite
+	@bash tests/performance_budget_gate_test.sh
+
+estimate-cross-chain: ## Estimate cross-chain transaction fees
 	@echo "Source Chain Fee:      0.00045678 XLM"
 	@echo "Bridge Fee:            0.00010000 XLM"
 	@echo "Destination Chain Fee: 0.00032000 XLM"
 	@echo "Total Estimated Fee:   0.00087678 XLM"
 
-# ─── Release Automation (Issue #448) ───────────────────────────────────────
+##@ Release Management
 
-# Release automation
-release: check-deps
+release: check-deps ## Automated release process (VERSION=X.Y.Z)
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Usage: make release VERSION=X.Y.Z"; \
 		exit 1; \
@@ -326,24 +437,21 @@ release: check-deps
 	@echo "🚀 Starting release process for v$(VERSION)..."
 	./scripts/release.sh $(VERSION)
 
-# Version bump
-bump-version: check-deps
+bump-version: check-deps ## Bump version in all files (VERSION=X.Y.Z)
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Usage: make bump-version VERSION=X.Y.Z"; \
 		exit 1; \
 	fi
 	./scripts/bump_version.sh $(VERSION)
 
-# Changelog generation
-generate-changelog: check-deps
+generate-changelog: check-deps ## Generate changelog entry (VERSION=X.Y.Z)
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Usage: make generate-changelog VERSION=X.Y.Z"; \
 		exit 1; \
 	fi
 	./scripts/generate_changelog.sh --version $(VERSION)
 
-# Release validation
-validate-release: check-deps
+validate-release: check-deps ## Validate release prerequisites (VERSION=X.Y.Z)
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Usage: make validate-release VERSION=X.Y.Z"; \
 		exit 1; \
@@ -361,8 +469,7 @@ validate-release: check-deps
 	$(MAKE) check
 	@echo "✅ Release validation passed for v$(VERSION)"
 
-# Version consistency check
-check-versions: check-deps
+check-versions: check-deps ## Check version consistency across workspace
 	@echo "🔍 Checking version consistency..."
 	@echo "Workspace version: $$(grep '^version = ' Cargo.toml | cut -d'"' -f2)"
 	@echo "Contract versions:"
@@ -375,8 +482,7 @@ check-versions: check-deps
 	done
 	@echo "✅ Version consistency check completed"
 
-# Release notes generation
-release-notes: check-deps
+release-notes: check-deps ## Generate release notes (VERSION=X.Y.Z)
 	@if [ -z "$(VERSION)" ]; then \
 		echo "Usage: make release-notes VERSION=X.Y.Z"; \
 		exit 1; \
@@ -463,3 +569,87 @@ release-metrics: check-deps
 	fi
 	@echo "📊 Generating release metrics for v$(VERSION)..."
 	./scripts/release_metrics.sh $(VERSION)
+##@ Dev Environment Health
+
+bootstrap-test: check-deps ## Run local dev environment smoke test
+	@echo "Running bootstrap smoke test..."
+	bash scripts/test-bootstrap.sh
+
+health-check: ## Run container health checks for local dev services
+	@echo "Running container health checks..."
+	bash scripts/health-check.sh
+
+smoke-test-docker: ## Run Docker-based smoke test (requires docker-compose up)
+	@echo "Running Docker smoke test..."
+	docker compose --profile test run --rm smoke-test
+
+dev-health: bootstrap-test health-check ## Run both bootstrap and container health checks
+	@echo "Dev environment health check complete"
+
+##@ Typed Orchestration (Issue #1187)
+
+orchestrate-plan: ## Generate typed deployment plan (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-plan NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs plan $(NETWORK) --output reports/orchestrate-$(NETWORK)-$(VERSION)-plan.json
+
+orchestrate-deploy: ## Deploy via typed orchestration (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-deploy NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs deploy $(NETWORK) --dry-run
+
+orchestrate-deploy-live: ## Deploy live via typed orchestration (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make orchestrate-deploy-live NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@node scripts/orchestrate.mjs deploy $(NETWORK)
+
+orchestrate-verify: ## Verify deployments via typed orchestration (NETWORK=testnet)
+	@if [ -z "$(NETWORK)" ]; then echo "Usage: make orchestrate-verify NETWORK=testnet"; exit 1; fi
+	@node scripts/orchestrate.mjs verify $(NETWORK)
+
+orchestrate-status: ## Show deployment status (NETWORK=testnet)
+	@if [ -z "$(NETWORK)" ]; then echo "Usage: make orchestrate-status NETWORK=testnet"; exit 1; fi
+	@node scripts/orchestrate.mjs status $(NETWORK)
+
+##@ Release Promotion Gates (Issue #1190)
+
+promotion-gate: ## Run release promotion gate (VERSION=X.Y.Z FROM=testnet TO=mainnet)
+	@if [ -z "$(VERSION)" ] || [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
+		echo "Usage: make promotion-gate VERSION=X.Y.Z FROM=testnet TO=mainnet"; exit 1; fi
+	@bash scripts/release_promotion_gate.sh --version $(VERSION) --from $(FROM) --to $(TO)
+
+promotion-gate-strict: ## Run release promotion gate in strict mode
+	@if [ -z "$(VERSION)" ] || [ -z "$(FROM)" ] || [ -z "$(TO)" ]; then \
+		echo "Usage: make promotion-gate-strict VERSION=X.Y.Z FROM=testnet TO=mainnet"; exit 1; fi
+	@bash scripts/release_promotion_gate.sh --version $(VERSION) --from $(FROM) --to $(TO) --strict
+
+##@ Canary / Staged Rollout (Issue #1191)
+
+canary-dry-run: ## Canary deploy dry-run (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-dry-run NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage canary --dry-run
+
+canary-deploy: ## Canary deploy (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-deploy NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage canary
+
+canary-full: ## Full staged rollout (NETWORK=testnet VERSION=X.Y.Z)
+	@if [ -z "$(NETWORK)" ] || [ -z "$(VERSION)" ]; then \
+		echo "Usage: make canary-full NETWORK=testnet VERSION=X.Y.Z"; exit 1; fi
+	@bash scripts/canary_deploy.sh --network $(NETWORK) --version $(VERSION) --stage all
+
+##@ Coverage Gates (Issue #1196)
+
+coverage-gate: ## Run coverage gate check
+	@bash scripts/coverage_gate.sh --check
+
+coverage-gate-report: ## Generate coverage gate report
+	@bash scripts/coverage_gate.sh --report
+
+coverage-gate-update: ## Update coverage gate baselines
+	@bash scripts/coverage_gate.sh --update
+
+test-coverage-gate: ## Run coverage gate test suite
+	@bash tests/coverage_gate_test.sh

@@ -6,9 +6,9 @@ Use this checklist before every PR and audit. Each item must be checked (✅) or
 
 ## 1. Access Control
 
-- [ ] Every state-mutating function calls `address.require_auth()` before any logic
-- [ ] Admin-only functions verify the caller is the stored admin address
-- [ ] Role checks are performed after `require_auth()`, not instead of it
+- [ ] Every state-mutating function calls `address.require_auth()` before any logic (use the shared `require_admin!(env, caller)` or `require_role!(env, caller, role)` macros from `governance_commons` where applicable)
+- [ ] Admin-only functions verify the caller is the stored admin address (preferably using `require_admin!(env, caller)`)
+- [ ] Role checks are performed after `require_auth()`, not instead of it (preferably using `require_role!(env, caller, role)`)
 - [ ] No function relies solely on caller address comparison without `require_auth()`
 - [ ] Ownership transfer requires auth from the **current** owner, not the new one
 
@@ -29,11 +29,65 @@ Use this checklist before every PR and audit. Each item must be checked (✅) or
 
 ## 4. State Management
 
-- [ ] Contract initialization is idempotent or guarded against re-initialization
+- [ ] Contract initialization is guarded against re-initialization using the standardized [`init_guard`](#init-guard) helper (or explicitly waived — see below)
 - [ ] All storage writes are atomic with their corresponding validation
 - [ ] No partial state updates — either all writes succeed or none do
 - [ ] Deleted/expired entries are cleaned up to avoid unbounded storage growth
 - [ ] Storage key namespacing prevents collisions between different data types
+
+### <a name="init-guard"></a>Re-initialization guard (required)
+
+A contract whose `initialize`/`init` entry point can run more than once can have
+its ownership stolen — the attacker simply re-initializes and installs
+themselves as admin. This is a known, repeatedly-exploited attack class for
+cloneable contracts. **Do not** hand-roll per-contract `has(&Admin)` /
+`has(&Initialized)` checks; their semantics drifted between contracts. Use the
+single standardized helper instead.
+
+- **Source of truth:** `libs/governance_commons/src/init_guard.rs`
+  (`governance_commons::init_guard`). Re-exported from `validation_utils` for
+  contracts that already depend on it: `validation_utils::init_guard`.
+- **Semantics:**
+  - The **first** call to `init_guard(&env)` / `try_init_guard(&env)` marks the
+    contract initialized and succeeds.
+  - Every **subsequent** call is rejected — `init_guard` **panics**;
+    `try_init_guard` returns `GovernanceError::AlreadyInitialized`.
+  - The guard flips its dedicated flag **before** any admin/config write, so a
+    re-init can never reach ownership-mutating code.
+  - **Admin transfer is a separate, independent operation.** Rotating the admin
+    is done by a dedicated `transfer_admin`-style function that authorizes the
+    *current* admin and overwrites the admin key; it never touches the init
+    flag. Re-initialization can therefore never be used as a backdoor admin
+    transfer, and a legitimate admin transfer never re-opens initialization.
+- **Usage** — call it as the first statement of `initialize`:
+
+  ```rust
+  // Result-returning initialize (most contracts):
+  pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+      governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
+      admin.require_auth();
+      env.storage().instance().set(&DataKey::Admin, &admin);
+      Ok(())
+  }
+
+  // Unit-returning initialize (panic-on-error contracts):
+  pub fn initialize(env: Env, admin: Address) {
+      governance_commons::init_guard(&env); // panics if called twice
+      admin.require_auth();
+      env.storage().instance().set(&DataKey::Admin, &admin);
+  }
+  ```
+
+- **Waiver convention:** a contract that *intentionally* allows re-initialization
+  (e.g. a stateless template or a contract with no admin/ownership to steal)
+  must mark the `initialize` function with an explicit, greppable waiver comment
+  stating why, so audits can distinguish a deliberate decision from a missing
+  guard:
+
+  ```rust
+  // SECURITY: re-init allowed — <reason, e.g. "stateless; no admin/ownership stored">
+  pub fn initialize(env: Env, ...) { ... }
+  ```
 
 ## 5. Events & Audit Trail
 

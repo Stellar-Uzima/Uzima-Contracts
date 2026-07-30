@@ -25,6 +25,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Architecture Decision Records](#architecture-decision-records)
 - [Contract Review Checklist](#contract-review-checklist)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#frequently-asked-questions-faq)
@@ -49,6 +50,36 @@ Stellar Uzima transforms medical record management by leveraging Stellar's block
 - Health insurance companies
 - Patients seeking control over their medical data
 - Traditional medicine practitioners
+
+## Storage Budget Tracking
+
+The project includes automated **storage budget measurement** for all Soroban contracts. After each wasm32 build, the CI pipeline runs `scripts/measure_storage.sh` to compute:
+
+- **WASM binary size** — contract bytecode size (must be ≤ 64 KB)
+- **Estimated storage entries** — number of ledger entries a typical deployment uses
+- **Estimated ledger cost** — approximate XLM cost for 2 years of storage rent
+- **CPU instruction cost** — from storage benchmark tests (where available)
+
+### Current Storage Leaderboard
+
+_Top 5 contracts by estimated storage cost (from latest CI run):_
+
+| # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) |
+|---|----------|----------|-------------|-----------------|
+| 1 | — | — | — | — |
+
+> Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release` to regenerate.
+> Full Pareto report (top 10) is uploaded as a CI artifact (`reports/storage_pareto_top10.txt`).
+
+### Thresholds
+
+Thresholds are defined in [`docs/CONTRACT_RESOURCE_LIMITS.md`](docs/CONTRACT_RESOURCE_LIMITS.md) and enforced in CI:
+
+| Metric | Warning | Critical |
+|--------|---------|----------|
+| Contract size | > 51.2 KB (80%) | > 62.3 KB (95%) |
+| Storage entries | > 100 | > 500 |
+| CPU instructions | > 5,000,000 | > 10,000,000 |
 
 ## 🔧 Contract Optimization Engine
 
@@ -81,49 +112,58 @@ Get up and running in under 5 minutes:
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/Uzima-Contracts.git
+git clone https://github.com/Stellar-Uzima/Uzima-Contracts.git
 cd Uzima-Contracts
 
-# Run the automated setup script
+# Run the automated setup (installs pinned Rust + Soroban versions, builds, tests)
 chmod +x setup.sh
 ./setup.sh
 
-# Or use the Makefile for step-by-step setup
-make setup
+# Or use the Makefile for individual steps
+make install-deps   # Install Rust toolchain + Soroban CLI
+make build          # Build all contracts
+make test           # Run all tests
 ```
 
 ### 🔧 Environment Setup
 
 #### Option 1: Automated Setup (Recommended)
 
-The `setup.sh` script handles everything automatically:
+The `setup.sh` script handles everything automatically. It reads the pinned
+versions from `rust-toolchain.toml` and `Cargo.toml` so you get exactly the
+right toolchain:
 
 ```bash
 ./setup.sh
 ```
 
 This script will:
-- Install Rust 1.78.0 and required targets
+- Install the Rust version pinned in `rust-toolchain.toml` (currently 1.92.0)
+- Add the `wasm32-unknown-unknown` target, `rustfmt`, `clippy`, `rust-src`
 - Install Soroban CLI v21.7.7
-- Set up project structure
-- Configure Soroban networks (local, testnet, futurenet)
+- Configure Soroban identity and networks (local, testnet, futurenet)
 - Build the project and run tests
-- Generate default identity
+
+Use `./setup.sh --skip-build` to install tools without building.
 
 #### Option 2: Manual Setup
 
 ```bash
-# Install Rust targets and components
-rustup target add wasm32-unknown-unknown
-rustup component add rustfmt clippy rust-src
+# Rust 1.92.0 is pinned in rust-toolchain.toml — just install rustup
+# and it will auto-install the correct version:
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source ~/.cargo/env
 
-# Install Soroban CLI
+# Verify Rust version (should be 1.92.0)
+rustc --version
+
+# Install Soroban CLI (version pinned in Cargo.toml)
 cargo install --locked --version 21.7.7 soroban-cli
 
 # Configure Soroban
 soroban config identity generate default
 soroban config network add local \
-  --rpc-url http://localhost:8000/soroban/rpc \
+  --rpc-url http://localhost:8000/soroban/r \
   --network-passphrase "Standalone Network ; February 2017"
 
 # Build the project
@@ -735,6 +775,16 @@ All PRs undergo:
 
 ## Contract Review Checklist
 Review contract submissions using the shared checklist at [docs/contract-review-checklist.md](docs/contract-review-checklist.md).
+
+## Architecture Decision Records
+
+Significant architectural decisions are documented as Architecture Decision Records (ADRs) in [`docs/adr/`](docs/adr/).
+
+- **Process**: See [ADR-PROCESS.md](docs/adr/ADR-PROCESS.md) for the full lifecycle
+- **Template**: Use [`ADR-TEMPLATE.md`](docs/adr/ADR-TEMPLATE.md) when proposing new ADRs
+- **Existing ADRs**: ADR-001 through ADR-007 cover platform choice, consent models, governance parameters, and more
+
+When to write an ADR: choosing a new technology, changing contract interfaces, modifying governance, introducing cross-contract patterns, or any decision affecting long-term architecture.
 
 ### Definition of Done
 

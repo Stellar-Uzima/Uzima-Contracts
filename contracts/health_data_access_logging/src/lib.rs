@@ -28,9 +28,7 @@ impl HealthDataAccessLogging {
     /// # Panics
     /// Panics if already initialized
     pub fn initialize(env: Env, admin: Address, config: LoggingConfig) {
-        if Storage::is_initialized(&env) {
-            panic!("Contract already initialized");
-        }
+        governance_commons::init_guard(&env);
 
         admin.require_auth();
 
@@ -77,15 +75,16 @@ impl HealthDataAccessLogging {
         let log_id = Storage::get_next_log_id(&env);
 
         // Create hash of the log entry for integrity
-        let log_data = format!(
-            "{}:{}:{}:{}:{}",
-            log_id,
-            patient_id.to_string(),
-            accessor_address.to_string(),
-            env.ledger().timestamp(),
-            access_type.clone()
-        );
-        let entry_hash: soroban_sdk::BytesN<32> = env.crypto().sha256(log_data.as_bytes()).into();
+        let mut log_data = String::from_str(&env, &log_id.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&patient_id.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&accessor_address.to_string());
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&String::from_str(&env, &env.ledger().timestamp().to_string()));
+        log_data.append(&String::from_str(&env, ":"));
+        log_data.append(&access_type.clone());
+        let entry_hash: soroban_sdk::BytesN<32> = env.crypto().sha256(&log_data.to_bytes()).into();
 
         // Create the access log entry
         let access_log = AccessLogEntry {
@@ -319,5 +318,92 @@ impl HealthDataAccessLogging {
         }
 
         Storage::get_config(&env).expect("Config not set")
+    }
+
+    // ─── Data Retention & Purging (Issue #1218) ─────────────────────────────
+
+    /// Purge access logs older than the configured retention_period.
+    ///
+    /// Only admin can trigger purging. Iterates through the patient's log
+    /// index and removes entries whose timestamp is older than
+    /// `now - retention_period`. Returns the number of logs purged.
+    ///
+    /// When retention_period is 0 (no automatic deletion), returns 0.
+    pub fn purge_expired_logs(env: Env, patient_id: Address, admin: Address) -> u64 {
+        if !Storage::is_initialized(&env) {
+            panic!("Contract not initialized");
+        }
+
+        let stored_admin = Storage::get_admin(&env);
+        stored_admin.require_auth();
+
+        let config = Storage::get_config(&env).expect("Config not set");
+        if config.retention_period == 0 {
+            return 0;
+        }
+
+        let now = env.ledger().timestamp();
+        let cutoff = now.saturating_sub(config.retention_period);
+
+        let log_ids = Storage::get_patient_log_ids(&env, &patient_id);
+        let mut purged: u64 = 0;
+        let mut kept: soroban_sdk::Vec<u64> = soroban_sdk::Vec::new(&env);
+
+        for log_id in log_ids.iter() {
+            if let Some(entry) = Storage::get_access_log(&env, log_id) {
+                if entry.timestamp < cutoff {
+                    Storage::remove_access_log(&env, log_id);
+                    purged += 1;
+                } else {
+                    kept.push_back(log_id);
+                }
+            }
+        }
+
+        Storage::set_patient_log_ids(&env, &patient_id, &kept);
+
+        env.events().publish(
+            (symbol_short!("ACCESS"), symbol_short!("PURGE")),
+            (patient_id, purged),
+        );
+
+        purged
+    }
+
+    /// Preview how many logs would be purged for a patient without actually removing them.
+    /// Returns (count_expired, oldest_timestamp).
+    pub fn preview_purge(env: Env, patient_id: Address) -> (u64, u64) {
+        if !Storage::is_initialized(&env) {
+            panic!("Contract not initialized");
+        }
+
+        let config = Storage::get_config(&env).expect("Config not set");
+        if config.retention_period == 0 {
+            return (0, 0);
+        }
+
+        let now = env.ledger().timestamp();
+        let cutoff = now.saturating_sub(config.retention_period);
+        let log_ids = Storage::get_patient_log_ids(&env, &patient_id);
+
+        let mut expired: u64 = 0;
+        let mut oldest: u64 = u64::MAX;
+
+        for log_id in log_ids.iter() {
+            if let Some(entry) = Storage::get_access_log(&env, log_id) {
+                if entry.timestamp < cutoff {
+                    expired += 1;
+                    if entry.timestamp < oldest {
+                        oldest = entry.timestamp;
+                    }
+                }
+            }
+        }
+
+        if oldest == u64::MAX {
+            oldest = 0;
+        }
+
+        (expired, oldest)
     }
 }

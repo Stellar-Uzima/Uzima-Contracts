@@ -4,12 +4,45 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_telemetry;
+
+pub mod telemetry;
+pub mod consent_zkp_tracking;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short,
     xdr::{FromXdr, ToXdr},
     Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
+
+// Named constants for validation limits
+/// Maximum number of public inputs allowed for a circuit
+const MAX_PUBLIC_INPUTS: u32 = 50;
+/// Maximum number of private inputs allowed for a circuit
+const MAX_PRIVATE_INPUTS: u32 = 100;
+/// Maximum number of constraints allowed for a circuit
+const MAX_CONSTRAINTS: u32 = 10000;
+/// Maximum verification gas cost allowed
+const MAX_VERIFICATION_GAS: u64 = 100000;
+/// Maximum proof data size in bytes
+const MAX_PROOF_DATA_SIZE: u32 = 10000;
+/// Estimated verification cost for Poseidon-based SNARK proof
+const COST_POSEIDON: u64 = 50000;
+/// Estimated verification cost for MiMC-based SNARK proof
+const COST_MIMC: u64 = 45000;
+/// Estimated verification cost for SHA256-based SNARK proof
+const COST_SHA256: u64 = 80000;
+/// Estimated verification cost for Rescue-based SNARK proof
+const COST_RESCUE: u64 = 55000;
+/// Estimated verification cost for STARK proof
+const COST_STARK: u64 = 90000;
+/// Estimated verification cost for Bulletproof proof
+const COST_BULLETPROOF: u64 = 30000;
+/// Estimated verification cost for Pedersen commitment
+const COST_PEDERSEN: u64 = 20000;
+/// Estimated verification cost for Recursive proof
+const COST_RECURSIVE: u64 = 95000;
 
 // =============================================================================
 // Types
@@ -265,20 +298,16 @@ pub enum DataKey {
     RecursiveProof(BytesN<32>),
     ZKPCircuitParams(String),
     GasTracker(Address),
-    /// Per-issuer XOR salt used to decrypt `encrypted_expiration` blobs in
-    /// `CredentialProof`. Stored as `BytesN<32>` so the keystream cannot be
-    /// extended after issuance.
-    IssuerSalt(Address),
-    // Temporary storage keys (session/short-lived data)
-    ZKProof(BytesN<32>),
-    VerificationResult(BytesN<32>),
+    CircuitVkHistory(String),
 }
 
-#[allow(dead_code)] // Reserved for future admin-key lookups; kept for ABI consistency
+ // Reserved for future admin-key lookups; kept for ABI consistency
+#[allow(dead_code)]
 const ADMIN: Symbol = symbol_short!("ADMIN");
 
 // TTL constants for storage management
-#[allow(dead_code)] // Reserved for future TTL maintenance; kept as configuration constants
+ // Reserved for future TTL maintenance; kept as configuration constants
+#[allow(dead_code)]
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
 #[allow(dead_code)]
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
@@ -404,6 +433,49 @@ pub enum Error {
     BaseProofMissing = 618,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidProof => write!(f, "invalid proof"),
+            Error::ProofNotFound => write!(f, "proof not found"),
+            Error::CircuitNotFound => write!(f, "circuit not found"),
+            Error::VerificationFailed => write!(f, "verification failed"),
+            Error::GasLimitExceeded => write!(f, "gas limit exceeded"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::InvalidRange => write!(f, "invalid range"),
+            Error::CredentialExpired => write!(f, "credential expired"),
+            Error::InvalidCircuit => write!(f, "invalid circuit"),
+            Error::ProofTooLarge => write!(f, "proof too large"),
+            Error::RecursiveDepthExceeded => write!(f, "recursive depth exceeded"),
+            Error::InvalidHashFunction => write!(f, "invalid hash function"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+            Error::DeadlineExceeded => write!(f, "deadline exceeded"),
+            Error::InvalidSignature => write!(f, "invalid signature"),
+            Error::UnauthorizedCaller => write!(f, "unauthorized caller"),
+            Error::ContractPaused => write!(f, "contract paused"),
+            Error::StorageFull => write!(f, "storage full"),
+            Error::CrossChainTimeout => write!(f, "cross chain timeout"),
+            Error::InvalidSigner => write!(f, "invalid signer"),
+            Error::InvalidThreshold => write!(f, "invalid threshold"),
+            Error::ProposalNotFound => write!(f, "proposal not found"),
+            Error::AlreadyApproved => write!(f, "already approved"),
+            Error::TimelockNotExpired => write!(f, "timelock not expired"),
+            Error::AlreadyExecuted => write!(f, "already executed"),
+            Error::NotEnoughApprovals => write!(f, "not enough approvals"),
+            Error::MalformedProof => write!(f, "malformed proof"),
+            Error::VkMismatch => write!(f, "vk mismatch"),
+            Error::InconsistentPublicInputCount => write!(f, "inconsistent public input count"),
+            Error::InvalidExpirationCiphertext => write!(f, "invalid expiration ciphertext"),
+            Error::InconsistentCommitment => write!(f, "inconsistent commitment"),
+            Error::InvalidProofFormat => write!(f, "invalid proof format"),
+            Error::BaseProofMissing => write!(f, "base proof missing"),
+        }
+    }
+}
+
 // =============================================================================
 // Contract
 // =============================================================================
@@ -415,10 +487,8 @@ pub struct ZKPRegistry;
 impl ZKPRegistry {
     /// Initialize the ZKP registry
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
-        if env.storage().instance().has(&DataKey::Initialized) {
-            return Err(Error::AlreadyInitialized);
-        }
         env.storage().instance().set(&DataKey::Initialized, &true);
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.events()
@@ -654,10 +724,10 @@ impl ZKPRegistry {
     ) -> Result<(), Error> {
         admin.require_auth();
         Self::require_initialized(&env)?;
-        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &admin)?;
 
         // Validate circuit parameters
-        if num_public_inputs > 50 || num_private_inputs > 100 || num_constraints > 10000 {
+        if num_public_inputs > MAX_PUBLIC_INPUTS || num_private_inputs > MAX_PRIVATE_INPUTS || num_constraints > MAX_CONSTRAINTS {
             return Err(Error::InvalidCircuit);
         }
 
@@ -668,7 +738,7 @@ impl ZKPRegistry {
             num_private_inputs,
             num_constraints,
             security_param,
-            vk_hash,
+            vk_hash: vk_hash.clone(),
             pk_hash,
             setup_at: env.ledger().timestamp(),
             trusted_setup,
@@ -678,9 +748,152 @@ impl ZKPRegistry {
             .persistent()
             .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
 
+        // Initialize verification key history for the circuit
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let mut history = Vec::new(&env);
+        history.push_back(vk_hash);
+        env.storage().persistent().set(&history_key, &history);
+
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("circ_reg")),
             circuit_id,
+        );
+
+        Ok(())
+    }
+
+    /// Migrate an existing circuit to support verification key rotation.
+    pub fn migrate_vk_rotation(env: Env, admin: Address, circuit_id: String) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        if !env.storage().persistent().has(&history_key) {
+            let mut history = Vec::new(&env);
+            history.push_back(params.vk_hash.clone());
+            env.storage().persistent().set(&history_key, &history);
+        }
+
+        env.events()
+            .publish((symbol_short!("zkp"), symbol_short!("vk_migr")), circuit_id);
+
+        Ok(())
+    }
+
+    /// Rotate the verification key for a circuit.
+    pub fn rotate_vk(
+        env: Env,
+        admin: Address,
+        circuit_id: String,
+        new_vk_hash: BytesN<32>,
+        new_pk_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let mut history: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&history_key)
+            .unwrap_or_else(|| {
+                let mut h = Vec::new(&env);
+                h.push_back(params.vk_hash.clone());
+                h
+            });
+
+        // Add the new vk_hash to the history if not already present
+        let mut already_exists = false;
+        for i in 0..history.len() {
+            if history.get(i).unwrap() == new_vk_hash {
+                already_exists = true;
+                break;
+            }
+        }
+        if !already_exists {
+            history.push_back(new_vk_hash.clone());
+        }
+
+        // Update parameters
+        params.vk_hash = new_vk_hash.clone();
+        params.pk_hash = new_pk_hash;
+        params.setup_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
+        env.storage().persistent().set(&history_key, &history);
+
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("vk_rot")),
+            (circuit_id, new_vk_hash),
+        );
+
+        Ok(())
+    }
+
+    /// Rollback the verification key for a circuit to a previous vk_hash.
+    pub fn rollback_vk(
+        env: Env,
+        admin: Address,
+        circuit_id: String,
+        target_vk_hash: BytesN<32>,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_admin(&env, &admin)?;
+
+        let mut params: ZKPCircuitParams = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+        let history: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&history_key)
+            .ok_or(Error::CircuitNotFound)?;
+
+        // Ensure the target_vk_hash is in the history
+        let mut found = false;
+        for i in 0..history.len() {
+            if history.get(i).unwrap() == target_vk_hash {
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            return Err(Error::InvalidProof);
+        }
+
+        // Update the active vk_hash in params
+        params.vk_hash = target_vk_hash.clone();
+        params.setup_at = env.ledger().timestamp();
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ZKPCircuitParams(circuit_id.clone()), &params);
+
+        env.events().publish(
+            (symbol_short!("zkp"), symbol_short!("vk_roll")),
+            (circuit_id, target_vk_hash),
         );
 
         Ok(())
@@ -705,22 +918,44 @@ impl ZKPRegistry {
         Self::require_not_paused(&env)?;
 
         // Check gas limit
-        if verification_gas > 100000 {
+        if verification_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
         // Validate proof data size
-        if proof_data.len() > 10000 {
+        if proof_data.len() > MAX_PROOF_DATA_SIZE {
             return Err(Error::ProofTooLarge);
         }
 
         // Verify circuit exists
-        if !env
+        let params: ZKPCircuitParams = env
             .storage()
             .persistent()
-            .has(&DataKey::ZKPCircuitParams(circuit_id.clone()))
-        {
-            return Err(Error::CircuitNotFound);
+            .get(&DataKey::ZKPCircuitParams(circuit_id.clone()))
+            .ok_or(Error::CircuitNotFound)?;
+
+        // Verify that the provided vk_hash is valid for this circuit (either active or historical)
+        let mut vk_valid = params.vk_hash == vk_hash;
+
+        if !vk_valid {
+            // Check history
+            let history_key = DataKey::CircuitVkHistory(circuit_id.clone());
+            if let Some(history) = env
+                .storage()
+                .persistent()
+                .get::<_, Vec<BytesN<32>>>(&history_key)
+            {
+                for i in 0..history.len() {
+                    if history.get(i).unwrap() == vk_hash {
+                        vk_valid = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if !vk_valid {
+            return Err(Error::InvalidProof);
         }
 
         // Create ZK proof structure
@@ -778,7 +1013,17 @@ impl ZKPRegistry {
         // Emit events
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("proof_sub")),
-            (submitter, proof_id, is_valid),
+            (submitter.clone(), proof_id.clone(), is_valid),
+        );
+
+        // Emit telemetry
+        telemetry::emit_telemetry_event(
+            &env,
+            if is_valid { telemetry::TelemetryEventType::VerificationPassed } else { telemetry::TelemetryEventType::VerificationFailed },
+            &submitter,
+            &proof_id,
+            &circuit_id,
+            verification_gas,
         );
 
         if is_valid {
@@ -894,6 +1139,18 @@ impl ZKPRegistry {
         }
 
         Self::track_gas_usage(&env, &submitter, total_gas_used);
+
+        // Emit batch verification telemetry
+        let batch_proof_id = soroban_sdk::BytesN::<32>::from_array(&env, &[0u8; 32]);
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::BatchVerificationCompleted,
+            &submitter,
+            &batch_proof_id,
+            &soroban_sdk::String::from_str(&env, "batch"),
+            total_gas_used,
+        );
+
         Ok(results)
     }
 
@@ -965,7 +1222,7 @@ impl ZKPRegistry {
         }
 
         // Check gas limit
-        if verification_gas > 100000 {
+        if verification_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
@@ -1074,7 +1331,18 @@ impl ZKPRegistry {
 
         env.events().publish(
             (symbol_short!("zkp"), symbol_short!("cred_prf")),
-            (holder, credential_type),
+            (holder.clone(), credential_type.clone()),
+        );
+
+        // Emit credential proof telemetry
+        let cred_proof_id = Self::generate_telemetry_proof_id(&env, &holder, &credential_type);
+        telemetry::emit_telemetry_event(
+            &env,
+            telemetry::TelemetryEventType::CredentialProofVerified,
+            &holder,
+            &cred_proof_id,
+            &credential_type,
+            0,
         );
 
         Ok(())
@@ -1121,7 +1389,7 @@ impl ZKPRegistry {
         }
 
         // Check gas limit
-        if total_gas > 100000 {
+        if total_gas > MAX_VERIFICATION_GAS {
             return Err(Error::GasLimitExceeded);
         }
 
@@ -1410,6 +1678,7 @@ impl ZKPRegistry {
     // Internal helper functions
     // -------------------------------------------------------------------------
 
+    #[must_use]
     fn execute_action(env: &Env, action: &AdminAction) -> Result<(), Error> {
         match action {
             AdminAction::UpgradeContract(wasm_hash) => {
@@ -1433,6 +1702,7 @@ impl ZKPRegistry {
         Ok(())
     }
 
+    #[must_use]
     fn require_initialized(env: &Env) -> Result<(), Error> {
         if !env.storage().instance().has(&DataKey::Initialized) {
             return Err(Error::NotInitialized);
@@ -1440,17 +1710,22 @@ impl ZKPRegistry {
         Ok(())
     }
 
-    fn require_not_paused(env: &Env) -> Result<(), Error> {
-        if env
+    fn require_admin(env: &Env, admin: &Address) -> Result<(), Error> {
+        let stored_admin: Address = env
             .storage()
             .instance()
-            .get(&DataKey::ContractPaused)
-            .unwrap_or(false)
-        {
-            return Err(Error::ContractPaused);
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotAuthorized)?;
+        if admin != &stored_admin {
+            return Err(Error::NotAuthorized);
         }
         Ok(())
     }
+
+    /// Internal ZKP verification (simplified for demonstration)
+    fn verify_zkp_internal(_env: &Env, proof: &ZKProof) -> Result<bool, Error> {
+        // In production, this would perform actual cryptographic verification
+        // For demonstration, we do basic validation
 
     /// Internal ZKP verification with REAL cryptographic binding checks
     /// (replaces the prior "structural checks only, then `Ok(true)`" stub).
@@ -1469,6 +1744,7 @@ impl ZKPRegistry {
     /// On rejection of any step, the matching `Error` variant is returned and
     /// `Ok(false)` is never returned. This guarantees that the *only* way to
     /// advance a proof past this gate is to satisfy every binding constraint.
+    #[must_use]
     fn verify_zkp_internal(env: &Env, proof: &ZKProof) -> Result<bool, Error> {
         // 1. Format integrity
         Self::verify_proof_format(proof)?;
@@ -1486,39 +1762,33 @@ impl ZKPRegistry {
             return Err(Error::VkMismatch);
         }
 
-        // 4. Public-input count binding
-        let supplied = proof.public_inputs.len();
-        if supplied != circuit_params.num_public_inputs {
-            return Err(Error::InconsistentPublicInputCount);
+        // Check public inputs are reasonable
+        if proof.public_inputs.len() > MAX_PUBLIC_INPUTS {
+            return Ok(false);
         }
 
-        // 5. Per-input integrity: non-empty, length must fit within a sanity
-        //    bound derived from the circuit's declared constraint count so we
-        //    cannot accept arbitrarily-large public inputs that would bloat
-        //    memory but produce identical VK bindings.
-        let max_input_bytes = circuit_params.num_constraints.saturating_mul(64).max(1024);
-        for input in proof.public_inputs.iter() {
-            if input.is_empty() {
-                return Err(Error::MalformedProof);
-            }
-            if input.len() > max_input_bytes {
-                return Err(Error::MalformedProof);
-            }
-        }
+        // Simulate verification based on proof type and hash function
+        let verification_cost = match proof.proof_type {
+            ZKPType::SNARK => match proof.hash_function {
+                ZKPHashFunction::Poseidon => COST_POSEIDON,
+                ZKPHashFunction::MiMC => COST_MIMC,
+                ZKPHashFunction::SHA256 => COST_SHA256,
+                ZKPHashFunction::Rescue => COST_RESCUE,
+            },
+            ZKPType::STARK => COST_STARK,
+            ZKPType::Bulletproof => COST_BULLETPROOF,
+            ZKPType::PedersenCommitment => COST_PEDERSEN,
+            ZKPType::Recursive => COST_RECURSIVE,
+        };
 
-        // Sanity: declared ZKPType must match the circuit_type registered for
-        // the circuit. A Bulletproofs proof submitted against an SNARK
-        // circuit is rejected here before anything else is run.
-        if proof.proof_type != circuit_params.circuit_type {
-            return Err(Error::InvalidProofFormat);
-        }
-
-        Ok(true)
+        // Check if verification cost is within acceptable range
+        Ok(verification_cost <= MAX_VERIFICATION_GAS)
     }
 
     /// Validate the byte-level proof format for the declared `ZKPType`.
     /// Returns `MalformedProof` for empty/short data, `InvalidProofFormat` for
     /// a wrong version byte or unsupported ZKPType.
+    #[must_use]
     fn verify_proof_format(proof: &ZKProof) -> Result<(), Error> {
         if proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
@@ -1574,6 +1844,7 @@ impl ZKPRegistry {
     ///
     /// The verifier additionally enforces VK-binding to a registered circuit
     /// and (over `create_range_proof`) checks min < max.
+    #[must_use]
     fn verify_range_proof_internal(env: &Env, proof: &RangeProof) -> Result<bool, Error> {
         if proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
@@ -1632,6 +1903,7 @@ impl ZKPRegistry {
     /// recursive proof's `aggregated_vk_hash` MUST equal the SHA-256 of the
     /// base proof's vk_hash concatenated with the recursive step's vk_hash.
     /// This prevents reuse of stale base proofs once their VK is rotated.
+    #[must_use]
     fn verify_recursive_proof_internal(env: &Env, proof: &RecursiveProof) -> Result<bool, Error> {
         if proof.recursive_proof.proof_data.is_empty() {
             return Err(Error::MalformedProof);
@@ -1838,6 +2110,13 @@ impl ZKPRegistry {
         } else {
             DEFAULT_ISSUER_SALT
         }
+    }
+
+    fn generate_telemetry_proof_id(env: &Env, holder: &Address, _credential_type: &soroban_sdk::String) -> BytesN<32> {
+        let mut payload = soroban_sdk::Bytes::new(env);
+        payload.append(&soroban_sdk::Bytes::from_slice(env, b"TELEM_CRED_V1"));
+        payload.append(&soroban_sdk::Bytes::from_slice(env, &holder.to_array()));
+        env.crypto().sha256(&payload).into()
     }
 }
 

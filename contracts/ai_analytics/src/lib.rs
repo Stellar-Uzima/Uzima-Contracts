@@ -6,14 +6,30 @@
 #![allow(clippy::too_many_arguments)]
 
 mod admin;
+pub mod capability;
 mod rounds;
 mod serialization_edge_cases;
 mod serialization_utils;
 mod types;
 mod utils;
 
-#[cfg(all(test, feature = "testutils"))]
-mod test;
+use soroban_sdk::{
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env, String,
+    Symbol,
+};
+
+#[derive(Clone)]
+#[contracttype]
+pub struct FederatedRound {
+    pub id: u64,
+    pub base_model_id: BytesN<32>,
+    pub min_participants: u32,
+    pub dp_epsilon: u32,
+    pub started_at: u64,
+    pub finalized_at: u64,
+    pub total_updates: u32,
+    pub is_finalized: bool,
+}
 
 #[cfg(all(test, feature = "testutils"))]
 mod test_serialization;
@@ -38,7 +54,28 @@ impl AiAnalyticsContract {
         min_participants: u32,
         dp_epsilon: u32,
     ) -> Result<u64, Error> {
-        rounds::start_round(env, caller, base_model_id, min_participants, dp_epsilon)
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        if min_participants == 0 {
+            return Err(Error::NotEnoughParticipants);
+        }
+
+        let id = Self::next_round_id(&env);
+        let round = FederatedRound {
+            id,
+            base_model_id,
+            min_participants,
+            dp_epsilon,
+            started_at: env.ledger().timestamp(),
+            finalized_at: 0,
+            total_updates: 0,
+            is_finalized: false,
+        };
+
+        env.storage().instance().set(&DataKey::Round(id), &round);
+        env.events().publish((Symbol::new(&env, "rnd_start"),), id);
+        Ok(id)
     }
 
     pub fn submit_update(
@@ -77,5 +114,45 @@ impl AiAnalyticsContract {
 
     pub fn get_model(env: Env, model_id: BytesN<32>) -> Option<ModelMetadata> {
         rounds::get_model(env, model_id)
+    }
+
+    pub fn grant_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+        ttl_ledgers: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let analytics_cap =
+            capability::AnalyticsCapability::try_from(capability).map_err(|_| Error::InvalidInput)?;
+
+        capability::grant_analytics_capability(&env, &caller, &target, analytics_cap, ttl_ledgers)
+    }
+
+    pub fn revoke_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        capability::revoke_capability(&env, &caller, &target, capability)
+    }
+
+    pub fn has_capability(env: Env, address: Address, capability: u32) -> bool {
+        capability::has_capability(&env, &address, capability)
+    }
+
+    pub fn get_capability_grant(
+        env: Env,
+        address: Address,
+        capability: u32,
+    ) -> Option<capability::CapabilityGrant> {
+        capability::get_capability_grant(&env, &address, capability)
     }
 }

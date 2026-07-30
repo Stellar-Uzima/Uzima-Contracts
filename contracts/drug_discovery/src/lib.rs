@@ -153,6 +153,22 @@ pub enum Error {
     AlreadyInitialized = 9,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::MoleculeNotFound => write!(f, "molecule not found"),
+            Error::PredictionNotFound => write!(f, "prediction not found"),
+            Error::BenchmarkNotMet => write!(f, "benchmark not met"),
+            Error::IntegrationMissing => write!(f, "integration missing"),
+            Error::QuantumDisabled => write!(f, "quantum disabled"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+        }
+    }
+}
+
 #[soroban_sdk::contractclient(name = "GenomicDataClient")]
 pub trait GenomicDataContract {
     fn get_record(env: Env, id: u64) -> Option<BytesN<32>>;
@@ -214,6 +230,7 @@ impl DrugDiscoveryPlatform {
         Ok(())
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<PlatformConfig, Error> {
         env.storage()
             .instance()
@@ -221,6 +238,7 @@ impl DrugDiscoveryPlatform {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.admin != *caller {
@@ -229,6 +247,7 @@ impl DrugDiscoveryPlatform {
         Ok(cfg)
     }
 
+    #[must_use]
     fn ensure_analyzer(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.analyzer != *caller {
@@ -237,6 +256,7 @@ impl DrugDiscoveryPlatform {
         Ok(cfg)
     }
 
+    #[must_use]
     fn ensure_predictor(env: &Env, caller: &Address) -> Result<PlatformConfig, Error> {
         let cfg = Self::load_config(env)?;
         if cfg.predictor != *caller {

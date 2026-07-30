@@ -162,6 +162,7 @@ impl NLPEngine {
         })
     }
 
+    #[must_use]
     pub fn extract_entities(&self, text: &String) -> Result<Vec<ExtractedEntity>, Error> {
         let mut entities = Vec::new(&self.medical_terms.env);
 

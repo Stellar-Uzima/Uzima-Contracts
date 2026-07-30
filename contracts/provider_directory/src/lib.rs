@@ -1,7 +1,7 @@
 #![no_std]
 //! provider_directory - Healthcare smart contract on Stellar blockchain.
 
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, String, Vec};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, String, Symbol, Vec};
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -11,6 +11,61 @@ pub enum Error {
     AlreadyInitialized = 2,
     RateLimitExceeded = 3,
     NotAuthorized = 4,
+    ApprovalNotFound = 5,
+    AlreadyApproved = 6,
+    ApprovalExpired = 7,
+    CannotApproveOwnProvider = 8,
+    ProviderNotPending = 9,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::ApprovalNotFound => write!(f, "approval request not found"),
+            Error::AlreadyApproved => write!(f, "provider already approved"),
+            Error::ApprovalExpired => write!(f, "approval request expired"),
+            Error::CannotApproveOwnProvider => write!(f, "cannot approve own provider"),
+            Error::ProviderNotPending => write!(f, "provider is not in pending status"),
+        }
+    }
+}
+
+pub fn get_suggestion(error: Error) -> Symbol {
+    match error {
+        Error::NotInitialized => symbol_short!("INIT_CTR"),
+        Error::AlreadyInitialized => symbol_short!("ALREADY"),
+        Error::RateLimitExceeded => symbol_short!("RATE_LIM"),
+        Error::NotAuthorized => symbol_short!("CHK_AUTH"),
+        Error::ApprovalNotFound => symbol_short!("CHK_REQ"),
+        Error::AlreadyApproved => symbol_short!("DUP_APRV"),
+        Error::ApprovalExpired => symbol_short!("EXPIRED"),
+        Error::CannotApproveOwnProvider => symbol_short!("SELF_APR"),
+        Error::ProviderNotPending => symbol_short!("NOT_PEND"),
+    }
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum ApprovalStatus {
+    Pending,
+    Approved,
+    Rejected,
+    Expired,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct ApprovalRequest {
+    pub provider_id: Address,
+    pub requested_by: Address,
+    pub status: ApprovalStatus,
+    pub created_at: u64,
+    pub resolved_at: u64,
+    pub notes: String,
 }
 
 #[contracttype]
@@ -19,6 +74,8 @@ pub enum DataKey {
     RateLimitConfig,
     SearchRateLimit(Address),
     ExemptInstitution(Address),
+    ApprovalRequest(Address),
+    PendingApprovals,
 }
 
 #[contracttype]
@@ -41,9 +98,7 @@ pub struct ProviderDirectoryContract;
 #[contractimpl]
 impl ProviderDirectoryContract {
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&DataKey::Admin) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         env.storage().instance().set(&DataKey::Admin, &admin);
 
         // Set default rate limit: 10 searches per hour (3600 seconds)
@@ -126,6 +181,165 @@ impl ProviderDirectoryContract {
         Ok(Vec::new(&env))
     }
 
+    pub fn submit_for_approval(
+        env: Env,
+        caller: Address,
+        provider_id: Address,
+        notes: String,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+
+        let existing: Option<ApprovalRequest> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ApprovalRequest(provider_id.clone()));
+        if let Some(req) = existing {
+            if req.status == ApprovalStatus::Pending {
+                return Err(Error::AlreadyApproved);
+            }
+        }
+
+        let now = env.ledger().timestamp();
+        let request = ApprovalRequest {
+            provider_id: provider_id.clone(),
+            requested_by: caller,
+            status: ApprovalStatus::Pending,
+            created_at: now,
+            resolved_at: 0,
+            notes,
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::ApprovalRequest(provider_id.clone()), &request);
+
+        let mut pending: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::PendingApprovals)
+            .unwrap_or(Vec::new(&env));
+        pending.push_back(provider_id.clone());
+        env.storage()
+            .instance()
+            .set(&DataKey::PendingApprovals, &pending);
+
+        env.events()
+            .publish((symbol_short!("apvl_sub"),), (provider_id,));
+
+        Ok(())
+    }
+
+    pub fn approve_provider(
+        env: Env,
+        admin: Address,
+        provider_id: Address,
+        notes: String,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        let current_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if current_admin != admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        let mut request: ApprovalRequest = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ApprovalRequest(provider_id.clone()))
+            .ok_or(Error::ApprovalNotFound)?;
+
+        if request.status != ApprovalStatus::Pending {
+            return Err(Error::ProviderNotPending);
+        }
+
+        if request.requested_by == provider_id {
+            return Err(Error::CannotApproveOwnProvider);
+        }
+
+        let now = env.ledger().timestamp();
+        let approval_window: u64 = 2_592_000; // 30 days
+        if now.saturating_sub(request.created_at) > approval_window {
+            request.status = ApprovalStatus::Expired;
+            env.storage()
+                .persistent()
+                .set(&DataKey::ApprovalRequest(provider_id.clone()), &request);
+            return Err(Error::ApprovalExpired);
+        }
+
+        request.status = ApprovalStatus::Approved;
+        request.resolved_at = now;
+        request.notes = notes;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ApprovalRequest(provider_id.clone()), &request);
+
+        env.events()
+            .publish((symbol_short!("apvl_grnt"),), (provider_id,));
+
+        Ok(())
+    }
+
+    pub fn reject_provider(
+        env: Env,
+        admin: Address,
+        provider_id: Address,
+        notes: String,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        let current_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if current_admin != admin {
+            return Err(Error::NotAuthorized);
+        }
+
+        let mut request: ApprovalRequest = env
+            .storage()
+            .persistent()
+            .get(&DataKey::ApprovalRequest(provider_id.clone()))
+            .ok_or(Error::ApprovalNotFound)?;
+
+        if request.status != ApprovalStatus::Pending {
+            return Err(Error::ProviderNotPending);
+        }
+
+        let now = env.ledger().timestamp();
+        request.status = ApprovalStatus::Rejected;
+        request.resolved_at = now;
+        request.notes = notes;
+        env.storage()
+            .persistent()
+            .set(&DataKey::ApprovalRequest(provider_id.clone()), &request);
+
+        env.events()
+            .publish((symbol_short!("apvl_rej"),), (provider_id,));
+
+        Ok(())
+    }
+
+    pub fn get_approval_status(
+        env: Env,
+        provider_id: Address,
+    ) -> Result<ApprovalRequest, Error> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ApprovalRequest(provider_id))
+            .ok_or(Error::ApprovalNotFound)
+    }
+
+    pub fn list_pending_approvals(env: Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&DataKey::PendingApprovals)
+            .unwrap_or(Vec::new(&env))
+    }
+
+    #[must_use]
     fn check_search_rate_limit(env: &Env, caller: &Address) -> Result<(), Error> {
         let is_exempt: bool = env
             .storage()
@@ -166,5 +380,118 @@ impl ProviderDirectoryContract {
             &active_timestamps,
         );
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test_approval {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    fn setup() -> (Env, Address, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let provider = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+        client.initialize(&admin);
+        (env, admin, provider)
+    }
+
+    #[test]
+    fn test_submit_for_approval() {
+        let (env, _admin, provider) = setup();
+        let caller = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "New provider application");
+        client.submit_for_approval(&caller, &provider, &notes);
+
+        let request = client.get_approval_status(&provider);
+        assert_eq!(request.status, ApprovalStatus::Pending);
+        assert_eq!(request.requested_by, caller);
+    }
+
+    #[test]
+    fn test_approve_provider() {
+        let (env, admin, provider) = setup();
+        let caller = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "Application");
+        client.submit_for_approval(&caller, &provider, &notes);
+
+        let approve_notes = String::from_str(&env, "Approved after review");
+        client.approve_provider(&admin, &provider, &approve_notes);
+
+        let request = client.get_approval_status(&provider);
+        assert_eq!(request.status, ApprovalStatus::Approved);
+    }
+
+    #[test]
+    fn test_reject_provider() {
+        let (env, admin, provider) = setup();
+        let caller = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "Application");
+        client.submit_for_approval(&caller, &provider, &notes);
+
+        let reject_notes = String::from_str(&env, "Rejected - incomplete docs");
+        client.reject_provider(&admin, &provider, &reject_notes);
+
+        let request = client.get_approval_status(&provider);
+        assert_eq!(request.status, ApprovalStatus::Rejected);
+    }
+
+    #[test]
+    fn test_non_admin_cannot_approve() {
+        let (env, _admin, provider) = setup();
+        let caller = Address::generate(&env);
+        let non_admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "Application");
+        client.submit_for_approval(&caller, &provider, &notes);
+
+        let approve_notes = String::from_str(&env, "Nice try");
+        let result = client.try_approve_provider(&non_admin, &provider, &approve_notes);
+        assert_eq!(result, Err(Ok(Error::NotAuthorized)));
+    }
+
+    #[test]
+    fn test_cannot_approve_own_provider() {
+        let (env, admin, provider) = setup();
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "Self-approval attempt");
+        client.submit_for_approval(&provider, &provider, &notes);
+
+        let approve_notes = String::from_str(&env, "Approving myself");
+        let result = client.try_approve_provider(&admin, &provider, &approve_notes);
+        assert_eq!(result, Err(Ok(Error::CannotApproveOwnProvider)));
+    }
+
+    #[test]
+    fn test_list_pending_approvals() {
+        let (env, _admin, _provider) = setup();
+        let p1 = Address::generate(&env);
+        let p2 = Address::generate(&env);
+        let caller = Address::generate(&env);
+        let contract_id = env.register_contract(None, ProviderDirectoryContract);
+        let client = ProviderDirectoryContractClient::new(&env, &contract_id);
+
+        let notes = String::from_str(&env, "App");
+        client.submit_for_approval(&caller, &p1, &notes);
+        client.submit_for_approval(&caller, &p2, &notes);
+
+        let pending = client.list_pending_approvals();
+        assert_eq!(pending.len(), 2);
     }
 }

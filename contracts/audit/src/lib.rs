@@ -1,6 +1,7 @@
 #![no_std]
 //! audit - Healthcare smart contract on Stellar blockchain.
 
+pub mod errors;
 pub mod querying;
 pub mod storage;
 pub mod types;
@@ -9,13 +10,28 @@ pub mod verification;
 #[cfg(test)]
 mod test;
 
+use crate::errors::Error;
 use crate::types::{
     ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
     OperationResult, RetentionPolicy,
 };
+use governance_commons::require_admin;
 use soroban_sdk::{
-    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Vec,
+    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
+    Symbol, Vec,
 };
+
+#[contracterror]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
+#[repr(u32)]
+pub enum Error {
+    AlreadyInitialized = 1,
+    NotInitialized = 2,
+    NotAuthorized = 3,
+    ChainBroken = 4,
+    RetentionPolicyNotFound = 5,
+    RetentionWindowTooShort = 6,
+}
 
 #[contract]
 pub struct AuditTrail;
@@ -42,10 +58,20 @@ impl AuditTrail {
         let default_retention = RetentionPolicy {
             min_retention_seconds: 220_752_000,
             max_retention_seconds: 0,
+            export_window_days: 365,
+            auto_purge: false,
         };
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &default_retention);
+
+        // Seed default retention period and export window
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &220_752_000u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &365u64);
 
         // Seed the log reader list
         let empty: Vec<Address> = Vec::new(&env);
@@ -59,6 +85,18 @@ impl AuditTrail {
     // ─── Comprehensive Logging (Issue #399) ──────────────────────────────────
 
     /// Record a structured AuditLog entry.
+    ///
+    /// Covers all required event categories:
+    /// - Data access events (DataRead, DataWrite, DataDelete, DataExport)
+    /// - Permission changes (PermissionGrant/Revoke, RoleAssign/Revoke)
+    /// - Record modifications (RecordCreate/Update/Archive/Restore)
+    /// - Authentication attempts (AuthSuccess/Failure/Logout/TokenRefresh)
+    /// - Cross-chain transfers (CrossChainTransfer*)
+    /// - Compliance events (ConsentGranted/Revoked, DataBreach, RetentionViolation)
+    ///
+    /// # Tamper-Evidence (Issue #999)
+    /// Each entry stores the hash of the previous entry (`prev_hash`),
+    /// forming a cryptographically verifiable hash chain.
     pub fn log_event(
         env: Env,
         actor: Address,
@@ -71,6 +109,13 @@ impl AuditTrail {
 
         let id = Self::next_log_id(&env);
 
+        // Capture the current rolling hash as prev_hash before updating it
+        let prev_hash: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RollingHash)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+
         let log = AuditLog {
             id,
             timestamp: env.ledger().timestamp(),
@@ -79,13 +124,14 @@ impl AuditTrail {
             target: target.clone(),
             result,
             metadata,
+            prev_hash: prev_hash.clone(),
         };
 
         // Immutable persistent storage
         crate::storage::immutable_storage::ImmutableStorage::commit_log(&env, id, &log);
 
-        // Update rolling hash for tamper-evidence
-        Self::update_log_rolling_hash(&env, &log);
+        // Update rolling hash for tamper-evidence (uses this log's data)
+        Self::update_log_rolling_hash(&env, &log, &prev_hash);
 
         // Index by actor
         Self::index_log_by_actor(&env, &actor, id);
@@ -202,9 +248,8 @@ impl AuditTrail {
     // ─── Access Control ──────────────────────────────────────────────────────
 
     /// Grant log-read access to an address (admin only).
-    pub fn grant_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn grant_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         let entry = LogAccessEntry {
             reader: reader.clone(),
@@ -227,12 +272,12 @@ impl AuditTrail {
             (symbol_short!("AUDIT"), symbol_short!("GRANT")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Revoke log-read access (admin only).
-    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    pub fn revoke_log_access(env: Env, admin: Address, reader: Address) -> Result<(), Error> {
+        require_admin!(env, admin);
 
         env.storage()
             .persistent()
@@ -242,6 +287,7 @@ impl AuditTrail {
             (symbol_short!("AUDIT"), symbol_short!("REVOKE")),
             (reader, admin),
         );
+        Ok(())
     }
 
     /// Check whether an address has log-read access.
@@ -252,12 +298,37 @@ impl AuditTrail {
     // ─── Retention Policy ────────────────────────────────────────────────────
 
     /// Update the retention policy (admin only).
-    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) {
-        admin.require_auth();
-        Self::require_admin(&env, &admin);
+    /// Emits a retention_policy_updated event.
+    pub fn set_retention_policy(env: Env, admin: Address, policy: RetentionPolicy) -> Result<(), Error> {
+        require_admin!(env, admin);
+
+        // Validate: export_window_days must be at least 1 day
+        if policy.export_window_days == 0 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+        // Validate: min_retention_seconds must be at least 1 day
+        if policy.min_retention_seconds < 86_400 {
+            return Err(Error::RetentionWindowTooShort);
+        }
+
         env.storage()
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
+
+        // Also update the dedicated storage keys
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPeriod, &policy.min_retention_seconds);
+        env.storage()
+            .instance()
+            .set(&DataKey::ExportWindow, &policy.export_window_days);
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("RETPOL")),
+            (policy.min_retention_seconds, policy.export_window_days, policy.auto_purge),
+        );
+
+        Ok(())
     }
 
     /// Read the current retention policy.
@@ -287,6 +358,145 @@ impl AuditTrail {
             return false;
         }
         true
+    }
+
+    // ─── Data Purging (Issue #1218) ─────────────────────────────────────────
+
+    /// Purge expired audit logs that exceed the max_retention_seconds window.
+    ///
+    /// Only admin can trigger purging. The function iterates from log_id 1
+    /// upward and removes entries whose age exceeds max_retention_seconds.
+    /// Returns the number of logs purged.
+    ///
+    /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
+    pub fn purge_expired_logs(env: Env, admin: Address) -> u64 {
+    /// Enforce the retention policy across all logs.
+    /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
+    /// Returns the number of logs purged.
+    pub fn enforce_retention_policy(env: Env, admin: Address) -> Result<u64, Error> {
+        require_admin!(env, admin);
+
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        // Infinite retention: nothing to purge
+        if policy.max_retention_seconds == 0 {
+            return 0;
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
+            .ok_or(Error::RetentionPolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let log_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut purged: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    // Remove from persistent storage
+                    env.storage()
+                        .persistent()
+                        .remove(&DataKey::Log(id));
+                    purged += 1;
+                } else {
+                    // Logs are ordered by time; once we hit a non-expired log, stop
+                    break;
+        let mut purged = 0u64;
+
+        if policy.auto_purge && policy.max_retention_seconds > 0 {
+            for i in 1..=log_count {
+                if let Some(log) =
+                    crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+                {
+                    let age = now.saturating_sub(log.timestamp);
+                    if age > policy.max_retention_seconds {
+                        purged = purged.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("PURGE")),
+            (purged, admin),
+        );
+
+        purged
+    }
+
+    /// Return summary of logs eligible for purging without actually purging.
+    /// Useful for auditing and dry-run previews.
+    pub fn preview_purge(env: Env) -> (u64, u64) {
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        if policy.max_retention_seconds == 0 {
+            return (0, 0);
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut expired: u64 = 0;
+        let mut total_size_bytes: u64 = 0;
+
+        for id in 1..=count {
+            if let Some(log) =
+                crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
+            {
+                let age = now.saturating_sub(log.timestamp);
+                if age > policy.max_retention_seconds {
+                    expired += 1;
+                    // Rough estimate: each log ~256 bytes
+                    total_size_bytes += 256;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        (expired, total_size_bytes)
+    }
+
+    /// Update the max retention window (admin only).
+    /// After setting, call `purge_expired_logs` to enforce.
+    pub fn set_max_retention(env: Env, admin: Address, max_seconds: u64) -> Result<(), Error> {
+        require_admin!(env, admin);
+        let mut policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+        policy.max_retention_seconds = max_seconds;
+        env.storage()
+            .instance()
+            .set(&DataKey::RetentionPolicy, &policy);
+        Ok(())
+            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
+            (purged, policy.auto_purge),
+        );
+
+        Ok(purged)
     }
 
     // ─── Export Capability ───────────────────────────────────────────────────
@@ -348,6 +558,127 @@ impl AuditTrail {
         crate::verification::trail_verifier::TrailVerifier::is_log_chain_tampered(&env, expected)
     }
 
+    // ─── Hash Chain Verification (Issue #999) ────────────────────────────────
+
+    /// Verify the integrity of the full audit log hash chain.
+    ///
+    /// Iterates through all stored AuditLog entries and verifies that each
+    /// entry's `prev_hash` matches the hash computed from the previous entry.
+    /// Returns `true` if the chain is intact, `false` if tampering is detected.
+    ///
+    /// The verification works as follows:
+    /// 1. Start with a zeroed hash for the genesis entry.
+    /// 2. For each log entry, verify that `log.prev_hash` equals the expected
+    ///    hash computed from the previous entry.
+    /// 3. Recompute the expected hash for the next entry by hashing
+    ///    (prev_hash || id || timestamp || action || target).
+    /// 4. If any mismatch is found, the chain is broken.
+    pub fn verify_chain(env: Env) -> bool {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        if count == 0 {
+            return true; // Empty chain is vacuously valid
+        }
+
+        let mut expected_prev = BytesN::from_array(&env, &[0u8; 32]);
+
+        for i in 1..=count {
+            let log: AuditLog = match env
+                .storage()
+                .persistent()
+                .get::<DataKey, AuditLog>(&DataKey::Log(i))
+            {
+                Some(l) => l,
+                None => return false, // Missing entry = broken chain
+            };
+
+            // Verify the stored prev_hash matches our expected computation
+            if log.prev_hash != expected_prev {
+                return false;
+            }
+
+            // Compute the expected prev_hash for the next entry
+            use soroban_sdk::xdr::ToXdr;
+            let mut buffer = Bytes::new(&env);
+            buffer.append(&expected_prev.to_xdr(&env));
+            buffer.append(&log.id.to_xdr(&env));
+            buffer.append(&log.timestamp.to_xdr(&env));
+            let action_disc = log.action as u32;
+            buffer.append(&action_disc.to_xdr(&env));
+            buffer.append(&log.target.clone().to_xdr(&env));
+
+            expected_prev = env.crypto().sha256(&buffer).into();
+        }
+
+        // Final check: the last computed hash should match the stored rolling hash
+        let stored_rolling: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RollingHash)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+
+        expected_prev == stored_rolling
+    }
+
+    /// Return the ID of the first entry where the hash chain breaks, or None if intact.
+    /// Useful for pinpointing exactly where tampering occurred.
+    pub fn find_chain_break(env: Env) -> Option<u64> {
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        if count == 0 {
+            return None;
+        }
+
+        let mut expected_prev = BytesN::from_array(&env, &[0u8; 32]);
+
+        for i in 1..=count {
+            let log: AuditLog = match env
+                .storage()
+                .persistent()
+                .get::<DataKey, AuditLog>(&DataKey::Log(i))
+            {
+                Some(l) => l,
+                None => return Some(i),
+            };
+
+            if log.prev_hash != expected_prev {
+                return Some(i);
+            }
+
+            use soroban_sdk::xdr::ToXdr;
+            let mut buffer = Bytes::new(&env);
+            buffer.append(&expected_prev.to_xdr(&env));
+            buffer.append(&log.id.to_xdr(&env));
+            buffer.append(&log.timestamp.to_xdr(&env));
+            let action_disc = log.action as u32;
+            buffer.append(&action_disc.to_xdr(&env));
+            buffer.append(&log.target.clone().to_xdr(&env));
+
+            expected_prev = env.crypto().sha256(&buffer).into();
+        }
+
+        let stored_rolling: BytesN<32> = env
+            .storage()
+            .instance()
+            .get(&DataKey::RollingHash)
+            .unwrap_or(BytesN::from_array(&env, &[0u8; 32]));
+
+        if expected_prev != stored_rolling {
+            // The chain is consistent internally but the rolling hash is wrong
+            Some(count.saturating_add(1))
+        } else {
+            None
+        }
+    }
+
     // ─── Legacy API (backward compatibility) ─────────────────────────────────
 
     /// Returns the stored rolling hash (legacy alias kept for compatibility).
@@ -402,15 +733,16 @@ impl AuditTrail {
 
     // ─── Private helpers ─────────────────────────────────────────────────────
 
-    fn require_admin(env: &Env, caller: &Address) {
+    fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env
             .storage()
             .instance()
             .get(&DataKey::Admin)
-            .expect("Contract not initialized");
+            .ok_or(Error::NotInitialized)?;
         if *caller != admin {
-            panic!("Caller is not the admin");
+            return Err(Error::Unauthorized);
         }
+        Ok(())
     }
 
     fn require_log_access(env: &Env, caller: &Address) {
@@ -442,16 +774,11 @@ impl AuditTrail {
         next
     }
 
-    fn update_log_rolling_hash(env: &Env, log: &AuditLog) {
+    fn update_log_rolling_hash(env: &Env, log: &AuditLog, prev_hash: &BytesN<32>) {
         use soroban_sdk::xdr::ToXdr;
-        let current: BytesN<32> = env
-            .storage()
-            .instance()
-            .get(&DataKey::RollingHash)
-            .unwrap_or(BytesN::from_array(env, &[0u8; 32]));
 
         let mut buffer = Bytes::new(env);
-        buffer.append(&current.to_xdr(env));
+        buffer.append(&prev_hash.to_xdr(env));
         buffer.append(&log.id.to_xdr(env));
         buffer.append(&log.timestamp.to_xdr(env));
         let action_disc = log.action as u32;
@@ -459,9 +786,7 @@ impl AuditTrail {
         buffer.append(&log.target.clone().to_xdr(env));
 
         let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
-        env.storage()
-            .instance()
-            .set(&DataKey::RollingHash, &new_hash);
+        env.storage().instance().set(&DataKey::RollingHash, &new_hash);
     }
 
     fn index_log_by_actor(env: &Env, actor: &Address, id: u64) {
@@ -485,5 +810,47 @@ impl AuditTrail {
             .unwrap_or(Vec::new(env));
         list.push_back(id);
         env.storage().persistent().set(&key, &list);
+    }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, BytesN, Env, Symbol};
+use contract_monitoring::telemetry::{ExecutionStatus, TelemetryLogger};
+
+#[contract]
+pub struct AuditMonitoringContract;
+
+#[contractimpl]
+impl AuditMonitoringContract {
+    /// Records execution metrics and audit events for operational telemetry
+    pub fn record_execution(
+        env: Env,
+        target_contract: BytesN<32>,
+        function_name: Symbol,
+        cpu_instructions: u64,
+        memory_bytes: u64,
+        retry_count: u32,
+        error_code: u32,
+    ) {
+        let status = if error_code == 0 {
+            if retry_count > 0 {
+                ExecutionStatus::Retried
+            } else {
+                ExecutionStatus::Success
+            }
+        } else {
+            ExecutionStatus::Failed
+        };
+
+        TelemetryLogger::emit_execution_telemetry(
+            &env,
+            target_contract,
+            function_name,
+            cpu_instructions,
+            memory_bytes,
+            status,
+            retry_count,
+            error_code,
+        );
     }
 }

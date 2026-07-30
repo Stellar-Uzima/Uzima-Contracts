@@ -112,6 +112,23 @@ pub enum Error {
     InsufficientReplicas = 10,
 }
 
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::MaxRegionsExceeded => write!(f, "max regions exceeded"),
+            Error::AllRegionsUnavailable => write!(f, "all regions unavailable"),
+            Error::FailoverFailed => write!(f, "failover failed"),
+            Error::SyncFailed => write!(f, "sync failed"),
+            Error::RtoExceeded => write!(f, "rto exceeded"),
+            Error::InsufficientReplicas => write!(f, "insufficient replicas"),
+        }
+    }
+}
+
 // ============================================================================
 // Storage Keys
 // ============================================================================
@@ -144,9 +161,7 @@ impl MultiRegionOrchestrator {
     // ========================================================================
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
-        if env.storage().instance().has(&INITIALIZED) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
 
         env.storage().instance().set(&ADMIN, &admin);
         env.storage().instance().set(&INITIALIZED, &true);
@@ -568,6 +583,7 @@ impl MultiRegionOrchestrator {
     // Internal Utilities
     // ========================================================================
 
+    #[must_use]
     fn require_admin(env: &Env, caller: &Address) -> Result<(), Error> {
         let admin: Address = env.storage().instance().get(&ADMIN).ok_or(Error::NotInitialized)?;
         if admin != *caller {
@@ -576,6 +592,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn require_operator(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -590,6 +607,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn require_auditor(env: &Env, caller: &Address) -> Result<(), Error> {
         let roles: Map<Address, u32> = env
             .storage()
@@ -604,6 +622,7 @@ impl MultiRegionOrchestrator {
         Ok(())
     }
 
+    #[must_use]
     fn check_paused(env: &Env) -> Result<(), Error> {
         let paused: bool = env.storage().instance().get(&PAUSED).unwrap_or(false);
         if paused {
@@ -718,5 +737,67 @@ mod test {
 
         let updated_policy = MultiRegionOrchestrator::get_policy(env);
         assert_eq!(updated_policy.min_replicas_per_region, 5);
+    }
+}
+
+#![no_std]
+use soroban_sdk::{contract, contractimpl, Symbol, Address, Env, Map};
+use healthcare_compliance::policy_engine::{PolicyEngine, RegionalRule, TransferRequest, PolicyError};
+
+#[contract]
+pub struct MultiRegionOrchestrator;
+
+#[contractimpl]
+impl MultiRegionOrchestrator {
+    /// Configures regional data compliance rule
+    pub fn set_regional_rule(
+        env: Env,
+        admin: Address,
+        region_code: Symbol,
+        export_allowed: bool,
+        retention_period_sec: u64,
+        requires_patient_consent: bool,
+    ) {
+        admin.require_auth();
+
+        let mut rules: Map<Symbol, RegionalRule> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "RULES"))
+            .unwrap_or_else(|| Map::new(&env));
+
+        let rule = RegionalRule {
+            region_code: region_code.clone(),
+            export_allowed,
+            retention_period_sec,
+            requires_patient_consent,
+        };
+
+        rules.set(region_code, rule);
+        env.storage().instance().set(&Symbol::new(&env, "RULES"), &rules);
+    }
+
+    /// Validates cross-border transfers prior to cross-region routing
+    pub fn validate_cross_border_transfer(
+        env: Env,
+        source_region: Symbol,
+        target_region: Symbol,
+        data_type: Symbol,
+        patient_consent_given: bool,
+    ) -> Result<bool, PolicyError> {
+        let rules: Map<Symbol, RegionalRule> = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "RULES"))
+            .unwrap_or_else(|| Map::new(&env));
+
+        let request = TransferRequest {
+            source_region,
+            target_region,
+            data_type,
+            patient_consent_given,
+        };
+
+        PolicyEngine::evaluate_transfer(&env, &rules, &request)
     }
 }

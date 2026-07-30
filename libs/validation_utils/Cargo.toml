@@ -4,7 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-soroban-sdk = { version = "20.5.0", features = ["docs"] }
+# Pinned to the workspace soroban-sdk so the re-exported `init_guard` helper
+# (defined in governance_commons) shares a single soroban-sdk version and `Env`
+# type. Bumped from 20.5.0 in the init-guard standardization work.
+soroban-sdk = { version = "=21.7.7", features = ["docs"] }
+governance_commons = { path = "../governance_commons" }
 
 [lib]
 crate-type = ["rlib"]

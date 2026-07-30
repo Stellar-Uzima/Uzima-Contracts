@@ -67,8 +67,8 @@ mod tests {
         let metadata = Map::from_array(
             &env,
             &[(
-                String::from_slice(&env, "reason"),
-                String::from_slice(&env, "consultation"),
+                String::from_str(&env, "reason"),
+                String::from_str(&env, "consultation"),
             )],
         );
 
@@ -79,7 +79,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             metadata,
         );
 
@@ -103,7 +103,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -111,7 +111,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor2.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -141,7 +141,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -156,7 +156,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -185,7 +185,7 @@ mod tests {
                 env.clone(),
                 patient.clone(),
                 accessor.clone(),
-                String::from_slice(&env, "read"),
+                String::from_str(&env, "read"),
                 Map::new(&env),
             );
         }
@@ -216,7 +216,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -225,7 +225,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor2.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -234,7 +234,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "export"),
+            String::from_str(&env, "export"),
             Map::new(&env),
         );
 
@@ -278,7 +278,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -286,7 +286,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor2.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -294,7 +294,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor3.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -324,7 +324,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -332,7 +332,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor2.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -366,7 +366,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -416,7 +416,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor1.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 
@@ -424,7 +424,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor2.clone(),
-            String::from_slice(&env, "write"),
+            String::from_str(&env, "write"),
             Map::new(&env),
         );
 
@@ -455,7 +455,7 @@ mod tests {
             env.clone(),
             patient.clone(),
             accessor.clone(),
-            String::from_slice(&env, "read"),
+            String::from_str(&env, "read"),
             Map::new(&env),
         );
 

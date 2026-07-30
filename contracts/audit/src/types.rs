@@ -64,6 +64,11 @@ pub enum AuditType {
 
 /// Comprehensive audit log entry satisfying HIPAA/GDPR requirements.
 /// Matches the schema specified in issue #399.
+///
+/// # Tamper-Evidence (Issue #999)
+/// Each entry includes the hash of the previous entry (`prev_hash`),
+/// forming a cryptographically verifiable hash chain. Use `verify_chain`
+/// to validate the integrity of the full audit log.
 #[derive(Clone)]
 #[contracttype]
 pub struct AuditLog {
@@ -76,6 +81,9 @@ pub struct AuditLog {
     pub result: OperationResult,
     /// Flexible key-value metadata (e.g. ip_address, session_id, resource_type).
     pub metadata: Map<String, String>,
+    /// Hash of the previous AuditLog entry, forming a tamper-evident chain.
+    /// The first entry (id=1) has a zeroed prev_hash.
+    pub prev_hash: BytesN<32>,
 }
 
 // ─── Legacy AuditRecord (kept for reference) ─────────────────────────────────
@@ -97,6 +105,10 @@ pub struct RetentionPolicy {
     pub min_retention_seconds: u64,
     /// Maximum seconds before a log must be purged (0 = no upper bound).
     pub max_retention_seconds: u64,
+    /// Number of days after which logs are eligible for export/retention review.
+    pub export_window_days: u64,
+    /// Whether expired logs should be automatically purged.
+    pub auto_purge: bool,
 }
 
 /// Access control entry for log readers.
@@ -142,6 +154,8 @@ pub enum DataKey {
     Config,
     RollingHash,
     RetentionPolicy,
+    RetentionPeriod,
+    ExportWindow,
     // Legacy AuditRecord index
     Record(u64),
     ContractAudits(Address),

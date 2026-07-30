@@ -60,9 +60,7 @@ pub trait TargetContract {
 #[contractimpl]
 impl UpgradeManager {
     pub fn initialize(env: Env, admin: Address, validators: Vec<Address>) -> Result<(), Error> {
-        if env.storage().instance().has(&CONFIG) {
-            return Err(Error::AlreadyInitialized);
-        }
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         let config = Config {
             admin,
             min_delay: MIN_DELAY,

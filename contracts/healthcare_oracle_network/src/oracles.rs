@@ -69,6 +69,7 @@ pub fn verify_oracle(
     Ok(())
 }
 
+#[must_use]
 pub fn update_oracle_endpoint(env: Env, operator: Address, endpoint: String) -> Result<(), Error> {
     operator.require_auth();
 

@@ -4,8 +4,10 @@
 
 use soroban_sdk::{
     contract, contractclient, contracterror, contractimpl, contracttype, symbol_short, Address,
-    BytesN, Env, String, Vec,
+    BytesN, Env, String, Vec, Symbol
 };
+
+pub mod analytics_capability;
 
 #[derive(Clone)]
 #[contracttype]
@@ -259,6 +261,31 @@ pub enum Error {
     DataLakeNotFound = 12,
     ExportNotFound = 13,
     UnsupportedDataLakeProvider = 14,
+    CapabilityExpired = 15,
+    CapabilityNotFound = 16,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::NotAuthorized => write!(f, "not authorized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::PrivacyThresholdNotMet => write!(f, "privacy threshold not met"),
+            Error::MetricNotFound => write!(f, "metric not found"),
+            Error::TemplateNotFound => write!(f, "template not found"),
+            Error::ScheduleNotFound => write!(f, "schedule not found"),
+            Error::ComplianceNotFound => write!(f, "compliance not found"),
+            Error::AiAnalyticsNotConfigured => write!(f, "ai analytics not configured"),
+            Error::AiRoundNotFound => write!(f, "ai round not found"),
+            Error::DataLakeNotFound => write!(f, "data lake not found"),
+            Error::ExportNotFound => write!(f, "export not found"),
+            Error::UnsupportedDataLakeProvider => write!(f, "unsupported data lake provider"),
+            Error::CapabilityExpired => write!(f, "capability expired"),
+            Error::CapabilityNotFound => write!(f, "capability not found"),
+        }
+    }
 }
 
 #[contract]
@@ -299,11 +326,9 @@ impl HealthcareAnalyticsDashboardContract {
         min_cohort_size: u32,
         noise_bps: u32,
     ) -> Result<bool, Error> {
+        governance_commons::try_init_guard(&env).map_err(|_| Error::AlreadyInitialized)?;
         admin.require_auth();
 
-        if env.storage().instance().has(&DataKey::Config) {
-            return Err(Error::AlreadyInitialized);
-        }
         if min_cohort_size == 0 || noise_bps > 10_000 {
             return Err(Error::InvalidInput);
         }
@@ -330,10 +355,11 @@ impl HealthcareAnalyticsDashboardContract {
             .instance()
             .set(&DataKey::DataLakePartitionCounter, &0u64);
 
-        env.events().publish((symbol_short!("DashInit"),), true);
+        env.events().publish((Symbol::new(&env, "dash_init"),), true);
         Ok(true)
     }
 
+    #[must_use]
     fn load_config(env: &Env) -> Result<DashboardConfig, Error> {
         env.storage()
             .instance()
@@ -341,6 +367,7 @@ impl HealthcareAnalyticsDashboardContract {
             .ok_or(Error::NotInitialized)
     }
 
+    #[must_use]
     fn ensure_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin != *caller {
@@ -349,6 +376,7 @@ impl HealthcareAnalyticsDashboardContract {
         Ok(config)
     }
 
+    #[must_use]
     fn ensure_collector_or_admin(env: &Env, caller: &Address) -> Result<DashboardConfig, Error> {
         let config = Self::load_config(env)?;
         if config.admin == *caller {
@@ -828,7 +856,7 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage()
             .instance()
             .set(&DataKey::Template(id), &template);
-        env.events().publish((symbol_short!("TplCreate"),), id);
+        env.events().publish((Symbol::new(&env, "tpl_create"),), id);
         Ok(id)
     }
 
@@ -1112,6 +1140,48 @@ impl HealthcareAnalyticsDashboardContract {
         env.storage()
             .instance()
             .get(&DataKey::DifferentialPrivacyContract)
+    }
+
+    pub fn grant_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+        ttl_ledgers: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        let cap = analytics_capability::DashboardCapability::try_from(capability)
+            .map_err(|_| Error::InvalidInput)?;
+
+        analytics_capability::grant_capability(&env, &caller, &target, cap, ttl_ledgers)?;
+        Ok(true)
+    }
+
+    pub fn revoke_capability(
+        env: Env,
+        caller: Address,
+        target: Address,
+        capability: u32,
+    ) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::ensure_admin(&env, &caller)?;
+
+        analytics_capability::revoke_capability(&env, &caller, &target, capability)?;
+        Ok(true)
+    }
+
+    pub fn has_capability(env: Env, address: Address, capability: u32) -> bool {
+        analytics_capability::has_capability(&env, &address, capability)
+    }
+
+    pub fn get_capability_grant(
+        env: Env,
+        address: Address,
+        capability: u32,
+    ) -> Option<analytics_capability::CapabilityGrant> {
+        analytics_capability::get_capability_grant(&env, &address, capability)
     }
 
     /// Apply Laplace noise via the configured differential privacy contract.
