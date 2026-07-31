@@ -1,236 +1,306 @@
 #!/usr/bin/env bash
-# check_template_compat.sh
-#
-# Validates that a contract directory follows the project template conventions.
-# Can be used to check a single contract or all workspace-member contracts.
+# check_template_compat.sh — Verify that scaffolded contracts are compatible
+# with the canonical contracts/contract_template structure.
 #
 # Usage:
-#   ./scripts/check_template_compat.sh <contract_name>    # check one contract
-#   ./scripts/check_template_compat.sh --all              # check all contracts
-#   ./scripts/check_template_compat.sh --all --strict     # fail on any deviation
+#   ./scripts/check_template_compat.sh [--verbose] [--skip-exclude] [CONTRACT ...]
+#
+# Options:
+#   --verbose       Show PASS results in addition to failures.
+#   --skip-exclude  Also check contracts in the workspace exclude list.
+#   --list-checks   Print the check catalogue and exit.
+#
+# If CONTRACT names are given only those are checked; otherwise all
+# contracts/ subdirectories are scanned.
+#
+# Checks performed:
+#   C1  src/lib.rs exists
+#   C2  Cargo.toml exists
+#   C3  #![no_std] declared (or no_std-exempt comment present)
+#   C4  #[contract] struct present
+#   C5  #[contractimpl] block present
+#   C6  initialize function exists
+#   C7  require_auth() called
+#   C8  Error type (contracterror) defined
+#   C9  Event emission (events module or env.events())
+#   C10 Cargo.toml uses workspace version/edition
+#   C11 soroban-sdk dependency declared
+#   C12 crate-type includes "cdylib"
+#   C13 No 'use std::' imports in lib.rs
+#   C14 No format! macro in lib.rs (requires alloc)
+#   C15 README.md exists
 #
 # Exit codes:
-#   0 — contract is compatible with the template
-#   1 — one or more compatibility violations found
-
+#   0  All checks passed.
+#   1  One or more failures.
+#   2  Template directory not found.
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-CONTRACTS_DIR="$ROOT_DIR/contracts"
-TEMPLATE_DIR="$CONTRACTS_DIR/contract_template"
-STRICT=false
-CHECK_ALL=false
-TARGET_CONTRACT=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+TEMPLATE_DIR="$PROJECT_ROOT/contracts/contract_template"
+CONTRACTS_DIR="$PROJECT_ROOT/contracts"
+WORKSPACE_TOML="$PROJECT_ROOT/Cargo.toml"
 
-# ---------------------------------------------------------------------------
-# Template structure: required files and patterns
-# ---------------------------------------------------------------------------
-REQUIRED_FILES=(
-    "Cargo.toml"
-    "src/lib.rs"
-)
+VERBOSE=false
+SKIP_EXCLUDE=false
+TARGET_CONTRACTS=()
 
-RECOMMENDED_FILES=(
-    "src/errors.rs"
-    "src/events.rs"
-    "src/types.rs"
-)
-
-# Required patterns in Cargo.toml (substring match)
-CARGO_REQUIRED_PATTERNS=(
-    'crate-type = ["cdylib"]'
-    "soroban-sdk"
-)
-
-# Required patterns in lib.rs (substring match)
-LIB_RS_REQUIRED_PATTERNS=(
-    '#![no_std]'
-    '#![forbid(alloc)]'
-    "#[contract]"
-    "#[contractimpl]"
-)
-
-# Required patterns in errors.rs
-ERRORS_RS_REQUIRED_PATTERNS=(
-    "#[contracterror]"
-    "#[repr(u32)]"
-)
-
-# ---------------------------------------------------------------------------
-# Parse arguments
-# ---------------------------------------------------------------------------
 for arg in "$@"; do
-    case "$arg" in
-        --all)    CHECK_ALL=true ;;
-        --strict) STRICT=true ;;
-        -*)       echo "Unknown option: $arg"; exit 1 ;;
-        *)        TARGET_CONTRACT="$arg" ;;
-    esac
+  case "$arg" in
+    --verbose)      VERBOSE=true ;;
+    --skip-exclude) SKIP_EXCLUDE=true ;;
+    --list-checks)
+      grep -E "^#   C[0-9]" "$0" | sed 's/^# //'
+      exit 0 ;;
+    --*)
+      echo "Unknown option: $arg"
+      echo "Usage: $0 [--verbose] [--skip-exclude] [CONTRACT ...]"
+      exit 1 ;;
+    *)
+      TARGET_CONTRACTS+=("$arg") ;;
+  esac
 done
 
-if ! $CHECK_ALL && [[ -z "$TARGET_CONTRACT" ]]; then
-    echo "Usage: $0 <contract_name> | --all [--strict]"
-    echo ""
-    echo "Examples:"
-    echo "  $0 escrow           # check a single contract"
-    echo "  $0 --all            # check all workspace contracts"
-    echo "  $0 --all --strict   # check all, fail on any deviation"
-    exit 1
+if [[ ! -d "$TEMPLATE_DIR/src" ]]; then
+  echo "ERROR: Template directory not found: $TEMPLATE_DIR"
+  exit 2
 fi
 
 # ---------------------------------------------------------------------------
-# Excluded contracts (non-contract directories, fuzz harnesses, etc.)
+# Build excluded-contract set from workspace Cargo.toml
 # ---------------------------------------------------------------------------
-declare -A EXCLUDED=()
-EXCLUDED["contract_behavior_fuzzing"]=1
-EXCLUDED["governance_integration_tests"]=1
-EXCLUDED["storage-snapshot"]=1
-EXCLUDED["test-helpers"]=1
-EXCLUDED["contract_template"]=1
+declare -A EXCLUDED
+if [[ -f "$WORKSPACE_TOML" ]] && ! $SKIP_EXCLUDE; then
+  in_block=false
+  while IFS= read -r line; do
+    if echo "$line" | grep -q "^exclude\s*=\s*\["; then
+      in_block=true
+    fi
+    if $in_block; then
+      while IFS= read -r entry; do
+        name="${entry##contracts/}"
+        EXCLUDED["$name"]=1
+      done < <(echo "$line" | grep -oP '"contracts/[^"]*"' | tr -d '"' | sed 's|contracts/||')
+      if echo "$line" | grep -q "\]"; then
+        in_block=false
+      fi
+    fi
+  done < "$WORKSPACE_TOML"
+fi
 
 # ---------------------------------------------------------------------------
-# Check a single contract
+# Collect contracts to check
 # ---------------------------------------------------------------------------
+if [[ ${#TARGET_CONTRACTS[@]} -gt 0 ]]; then
+  CONTRACTS=("${TARGET_CONTRACTS[@]}")
+else
+  mapfile -t CONTRACTS < <(
+    find "$CONTRACTS_DIR" -maxdepth 1 -mindepth 1 -type d \
+      | xargs -I{} basename {} | sort
+  )
+fi
+
+pass_count=0
+fail_count=0
+skip_count=0
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+run_check() {
+  local id="$1" desc="$2" result="$3" detail="${4:-}"
+  if [[ "$result" == "pass" ]]; then
+    pass_count=$((pass_count + 1))
+    if [[ "$VERBOSE" == "true" ]]; then
+      echo "    [PASS] $id $desc"
+    fi
+  else
+    fail_count=$((fail_count + 1))
+    echo "    [FAIL] $id $desc${detail:+ — $detail}"
+  fi
+}
+
 check_contract() {
-    local contract="$1"
-    local contract_dir="$CONTRACTS_DIR/$contract"
-    local violations=0
-    local warnings=0
+  local name="$1"
+  local dir="$CONTRACTS_DIR/$name"
 
-    echo "--- Checking: $contract ---"
-
-    # 1. Check required files
-    for file in "${REQUIRED_FILES[@]}"; do
-        if [[ ! -f "$contract_dir/$file" ]]; then
-            echo "  FAIL [missing file]: $file"
-            violations=$((violations + 1))
-        fi
-    done
-
-    # 2. Check recommended files (warnings in strict mode)
-    for file in "${RECOMMENDED_FILES[@]}"; do
-        if [[ ! -f "$contract_dir/$file" ]]; then
-            if $STRICT; then
-                echo "  WARN [missing recommended file]: $file"
-                violations=$((violations + 1))
-            else
-                echo "  INFO [missing recommended file]: $file"
-                warnings=$((warnings + 1))
-            fi
-        fi
-    done
-
-    # 3. Check Cargo.toml patterns
-    if [[ -f "$contract_dir/Cargo.toml" ]]; then
-        local cargo_content
-        cargo_content="$(cat "$contract_dir/Cargo.toml")"
-        for pattern in "${CARGO_REQUIRED_PATTERNS[@]}"; do
-            if ! echo "$cargo_content" | grep -qF "$pattern"; then
-                echo "  FAIL [Cargo.toml]: missing pattern: $pattern"
-                violations=$((violations + 1))
-            fi
-        done
+  # Skip non-Rust entries
+  if [[ ! -d "$dir/src" && ! -f "$dir/Cargo.toml" ]]; then
+    skip_count=$((skip_count + 1))
+    if [[ "$VERBOSE" == "true" ]]; then
+      echo "  [SKIP] $name  (no src/ or Cargo.toml)"
     fi
+    return
+  fi
 
-    # 4. Check lib.rs patterns
-    if [[ -f "$contract_dir/src/lib.rs" ]]; then
-        local lib_content
-        lib_content="$(cat "$contract_dir/src/lib.rs")"
-        for pattern in "${LIB_RS_REQUIRED_PATTERNS[@]}"; do
-            if ! echo "$lib_content" | grep -qF "$pattern"; then
-                echo "  FAIL [lib.rs]: missing pattern: $pattern"
-                violations=$((violations + 1))
-            fi
-        done
-
-        # Check snake_case naming: contract name in lib.rs should be PascalCase
-        local pascal_name
-        pascal_name="$(echo "$contract" | sed -r 's/(^|_)([a-z])/\U\2/g')"
-        if ! echo "$lib_content" | grep -q "pub struct $pascal_name"; then
-            echo "  WARN [lib.rs]: expected 'pub struct $pascal_name' (PascalCase from snake_case)"
-            warnings=$((warnings + 1))
-        fi
+  # Skip workspace-excluded contracts (unless --skip-exclude)
+  if [[ -v "EXCLUDED[$name]" ]]; then
+    skip_count=$((skip_count + 1))
+    if [[ "$VERBOSE" == "true" ]]; then
+      echo "  [SKIP] $name  (workspace exclude list)"
     fi
+    return
+  fi
 
-    # 5. Check errors.rs patterns
-    if [[ -f "$contract_dir/src/errors.rs" ]]; then
-        local errors_content
-        errors_content="$(cat "$contract_dir/src/errors.rs")"
-        for pattern in "${ERRORS_RS_REQUIRED_PATTERNS[@]}"; do
-            if ! echo "$errors_content" | grep -qF "$pattern"; then
-                echo "  FAIL [errors.rs]: missing pattern: $pattern"
-                violations=$((violations + 1))
-            fi
-        done
-    fi
+  echo ""
+  echo "Checking: $name"
 
-    # 6. Check naming conventions in Cargo.toml
-    if [[ -f "$contract_dir/Cargo.toml" ]]; then
-        local expected_kebab
-        expected_kebab="$(echo "$contract" | tr '_' '-')"
-        local actual_name
-        actual_name="$(grep '^name' "$contract_dir/Cargo.toml" | head -1 | sed 's/.*= *"\(.*\)"/\1/')"
-        # Handle workspace name reference
-        if [[ "$actual_name" == *"{"* ]]; then
-            actual_name="workspace"
-        fi
-        if [[ "$actual_name" != "workspace" && "$actual_name" != "$expected_kebab" ]]; then
-            echo "  WARN [Cargo.toml]: package name '$actual_name' doesn't match expected '$expected_kebab'"
-            warnings=$((warnings + 1))
-        fi
-    fi
+  local lib_rs="$dir/src/lib.rs"
+  local cargo_toml="$dir/Cargo.toml"
+  local errors_rs="$dir/src/errors.rs"
+  local events_rs="$dir/src/events.rs"
+  local readme="$dir/README.md"
 
-    # Summary for this contract
-    if (( violations > 0 )); then
-        echo "  -> FAIL: $violations violation(s), $warnings warning(s)"
-    elif (( warnings > 0 )); then
-        echo "  -> WARN: $warnings warning(s)"
+  # C1 — src/lib.rs exists
+  if [[ -f "$lib_rs" ]]; then
+    run_check "C1" "src/lib.rs exists" "pass"
+  else
+    run_check "C1" "src/lib.rs exists" "fail" "file not found"
+    return
+  fi
+
+  # C2 — Cargo.toml exists
+  if [[ -f "$cargo_toml" ]]; then
+    run_check "C2" "Cargo.toml exists" "pass"
+  else
+    run_check "C2" "Cargo.toml exists" "fail" "file not found"
+  fi
+
+  # C3 — #![no_std]
+  if grep -q "#!\[no_std\]" "$lib_rs" || grep -q "no_std-exempt" "$lib_rs"; then
+    run_check "C3" "#![no_std] declared" "pass"
+  else
+    run_check "C3" "#![no_std] declared" "fail" "missing #![no_std]"
+  fi
+
+  # C4 — #[contract]
+  if grep -q "#\[contract\]" "$lib_rs"; then
+    run_check "C4" "#[contract] struct present" "pass"
+  else
+    run_check "C4" "#[contract] struct present" "fail" "no #[contract] attribute found"
+  fi
+
+  # C5 — #[contractimpl]
+  if grep -q "#\[contractimpl\]" "$lib_rs"; then
+    run_check "C5" "#[contractimpl] block present" "pass"
+  else
+    run_check "C5" "#[contractimpl] block present" "fail" "no #[contractimpl] attribute found"
+  fi
+
+  # C6 — initialize fn
+  if grep -q "fn initialize" "$lib_rs"; then
+    run_check "C6" "initialize function exists" "pass"
+  else
+    run_check "C6" "initialize function exists" "fail" "no 'fn initialize' found"
+  fi
+
+  # C7 — require_auth
+  if grep -q "require_auth" "$lib_rs"; then
+    run_check "C7" "require_auth() used" "pass"
+  else
+    run_check "C7" "require_auth() used" "fail" "no require_auth() — auth may be missing"
+  fi
+
+  # C8 — error type
+  if [[ -f "$errors_rs" ]] || grep -qr "contracterror" "$dir/src/" 2>/dev/null; then
+    run_check "C8" "error type (contracterror) defined" "pass"
+  else
+    run_check "C8" "error type (contracterror) defined" "fail" \
+      "no errors.rs and no #[contracterror] in src/"
+  fi
+
+  # C9 — event emission
+  if [[ -f "$events_rs" ]] || grep -qr "env\.events()" "$dir/src/" 2>/dev/null; then
+    run_check "C9" "event emission present" "pass"
+  else
+    run_check "C9" "event emission present" "fail" \
+      "no events.rs and no env.events() call found"
+  fi
+
+  if [[ -f "$cargo_toml" ]]; then
+    # C10 — workspace version/edition
+    if grep -q "version\.workspace\s*=\s*true" "$cargo_toml" \
+       && grep -q "edition\.workspace\s*=\s*true" "$cargo_toml"; then
+      run_check "C10" "Cargo.toml uses workspace version/edition" "pass"
     else
-        echo "  -> OK"
+      run_check "C10" "Cargo.toml uses workspace version/edition" "fail" \
+        "use 'version.workspace = true' and 'edition.workspace = true'"
     fi
 
-    return $violations
+    # C11 — soroban-sdk
+    if grep -q "soroban-sdk" "$cargo_toml"; then
+      run_check "C11" "soroban-sdk dependency declared" "pass"
+    else
+      run_check "C11" "soroban-sdk dependency declared" "fail" \
+        "soroban-sdk missing from [dependencies]"
+    fi
+
+    # C12 — cdylib present in crate-type (may also include rlib)
+    if grep -q 'crate-type\s*=\s*\[.*"cdylib".*\]' "$cargo_toml"; then
+      run_check "C12" 'crate-type includes "cdylib"' "pass"
+    else
+      run_check "C12" 'crate-type includes "cdylib"' "fail" \
+        "cdylib missing from crate-type — contract won't build to WASM"
+    fi
+  fi
+
+  # C13 — no use std::
+  if grep -q "use std::" "$lib_rs"; then
+    run_check "C13" "no 'use std::' imports" "fail" \
+      "found 'use std::' — use core:: or soroban-sdk equivalents"
+  else
+    run_check "C13" "no 'use std::' imports" "pass"
+  fi
+
+  # C14 — no format!
+  if grep -q "format!" "$lib_rs"; then
+    run_check "C14" "no format! macro" "fail" \
+      "format! requires alloc — use soroban_sdk::String::from_str()"
+  else
+    run_check "C14" "no format! macro" "pass"
+  fi
+
+  # C15 — README.md
+  if [[ -f "$readme" ]]; then
+    run_check "C15" "README.md exists" "pass"
+  else
+    run_check "C15" "README.md exists" "fail" "no README.md found"
+  fi
 }
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
-total_violations=0
-total_warnings=0
-checked=0
+echo "================================================================"
+echo "  Contract Template Compatibility Checker"
+echo "  Template : $TEMPLATE_DIR"
+echo "================================================================"
 
-if $CHECK_ALL; then
-    while IFS= read -r -d '' cargo_file; do
-        contract="$(basename "$(dirname "$cargo_file")")"
-        if [[ -v "EXCLUDED[$contract]" ]]; then
-            continue
-        fi
-        checked=$((checked + 1))
-        if ! check_contract "$contract"; then
-            total_violations=$((total_violations + $?))
-        fi
-    done < <(find "$CONTRACTS_DIR" -maxdepth 2 -name 'Cargo.toml' -print0 | sort -z)
-else
-    if [[ ! -d "$CONTRACTS_DIR/$TARGET_CONTRACT" ]]; then
-        echo "Error: contract directory not found: $CONTRACTS_DIR/$TARGET_CONTRACT"
-        exit 1
-    fi
-    checked=1
-    if ! check_contract "$TARGET_CONTRACT"; then
-        total_violations=$?
-    fi
+for contract in "${CONTRACTS[@]}"; do
+  check_contract "$contract"
+done
+
+echo ""
+echo "================================================================"
+echo "  Summary"
+echo "================================================================"
+echo "  Skipped  : $skip_count"
+echo "  Passes   : $pass_count"
+echo "  Failures : $fail_count"
+echo ""
+
+if [[ $fail_count -gt 0 ]]; then
+  echo "  ✗ $fail_count check(s) failed."
+  echo ""
+  echo "  Guidance:"
+  echo "    • Use './scripts/scaffold-contract.sh <name>' for new contracts."
+  echo "    • See docs/NO_STD_COMPLIANCE.md for no_std migration help."
+  echo "    • Run './scripts/enforce_no_std.sh --fix' to auto-add #![no_std]."
+  echo ""
+  exit 1
 fi
 
-echo
-echo "Template compatibility check results:"
-echo "  Contracts checked: $checked"
-echo "  Total violations:  $total_violations"
-echo
-
-if (( total_violations > 0 )); then
-    echo "FAIL: $total_violations compatibility violation(s) found."
-    echo "Fix the issues above or run 'cargo test --package <contract>' to verify."
-    exit 1
-fi
-
-echo "OK: all checked contracts are compatible with the template."
+echo "  ✓ All checks passed — contracts are template-compatible."
+echo ""
+exit 0

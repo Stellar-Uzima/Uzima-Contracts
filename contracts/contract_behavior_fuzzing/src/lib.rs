@@ -1,4 +1,6 @@
 //! contract_behavior_fuzzing - Healthcare smart contract on Stellar blockchain.
+// no_std-exempt: this crate is a native test/fuzz harness, not a WASM contract.
+// It uses std::panic and std::vec intentionally and does not target wasm32.
 use core::fmt::Debug;
 use std::panic::{self, AssertUnwindSafe};
 use std::vec::Vec;

@@ -1,3 +1,4 @@
+#![no_std]
 use soroban_sdk::{contracttype, contracterror, Address, Env, symbol_short};
 
 #[contracterror]
