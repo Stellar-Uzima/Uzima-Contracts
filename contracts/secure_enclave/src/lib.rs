@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! secure_enclave - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{

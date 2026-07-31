@@ -1,6 +1,7 @@
 //! anomaly_detection - Healthcare smart contract on Stellar blockchain.
 // Anomaly Detection Contract - Healthcare anomaly detection with proper validation
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::panic)]

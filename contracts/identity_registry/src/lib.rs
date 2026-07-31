@@ -1,6 +1,7 @@
 //! identity_registry - Healthcare smart contract on Stellar blockchain.
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]
@@ -1906,6 +1907,118 @@ impl IdentityRegistryContract {
         env.crypto().sha256(&data).into()
     }
 
+    // ========================================================================
+    // CANONICAL ADDRESS NORMALIZATION (Issue #1217)
+    // ========================================================================
+
+    /// Normalize a Stellar address to a canonical form.
+    /// - Strips surrounding whitespace from the network prefix.
+    /// - Lowercases the network identifier (testnet, mainnet, public, etc.).
+    /// - Ensures the address portion is a valid Stellar address (starts with 'G' or 'S').
+    /// Returns the normalized DID string: "did:stellar:uzima:<network>:<address>"
+    pub fn normalize_address(
+        env: Env,
+        network_id: String,
+        address: Address,
+    ) -> Result<String, Error> {
+        let network_lower = Self::normalize_network(&env, &network_id)?;
+        let addr_str = address.to_string();
+
+        // Validate address prefix (Stellar G/P/S keys)
+        let addr_len = addr_str.len() as usize;
+        let mut addr_buf = [0u8; 76];
+        addr_str.copy_into_slice(&mut addr_buf[..addr_len]);
+        if addr_len == 0 {
+            return Err(Error::InvalidVerificationMethod);
+        }
+        let first = addr_buf[0];
+        if first != b'G' && first != b'P' && first != b'S' {
+            return Err(Error::InvalidVerificationMethod);
+        }
+
+        Ok(Self::build_did_string(&env, &network_lower, &address))
+    }
+
+    /// Validate that a raw address conforms to the canonical format expected by
+    /// this registry.  Returns `true` if the address starts with a valid prefix
+    /// and the length is within the expected range for Stellar key types.
+    pub fn validate_address(_env: Env, address: Address) -> bool {
+        let addr_str = address.to_string();
+        let addr_len = addr_str.len() as usize;
+        if addr_len < 56 || addr_len > 57 {
+            return false;
+        }
+        let mut buf = [0u8; 76];
+        addr_str.copy_into_slice(&mut buf[..addr_len]);
+        let first = buf[0];
+        first == b'G' || first == b'P' || first == b'S'
+    }
+
+    /// Batch-normalize a list of addresses for cross-contract identity flows.
+    pub fn normalize_addresses_batch(
+        env: Env,
+        network_id: String,
+        addresses: Vec<Address>,
+    ) -> Result<Vec<String>, Error> {
+        let mut results = Vec::new(&env);
+        for addr in addresses.iter() {
+            let normalized = Self::normalize_address(env.clone(), network_id.clone(), addr.clone())?;
+            results.push_back(normalized);
+        }
+        Ok(results)
+    }
+
+    /// Internal: lowercase + trim a network identifier.
+    fn normalize_network(env: &Env, network_id: &String) -> Result<String, Error> {
+        let len = network_id.len() as usize;
+        let mut raw = [0u8; 128];
+        network_id.copy_into_slice(&mut raw[..len]);
+        let mut out = [0u8; 128];
+        for i in 0..len {
+            let b = raw[i];
+            if b >= b'A' && b <= b'Z' {
+                out[i] = b + 32;
+            } else {
+                out[i] = b;
+            }
+        }
+        // Trim leading/trailing whitespace
+        let mut start = 0;
+        while start < len && out[start] == b' ' {
+            start += 1;
+        }
+        let mut end = len;
+        while end > start && out[end - 1] == b' ' {
+            end -= 1;
+        }
+        if start == end {
+            return Err(Error::InvalidVerificationMethod);
+        }
+        Ok(String::from_bytes(env, &out[start..end]))
+    }
+
+    /// Internal: build "did:stellar:uzima:<net>:<addr>" from components.
+    fn build_did_string(env: &Env, network: &String, address: &Address) -> String {
+        const MAX_DID_LEN: usize = 512;
+        let subject_str = address.to_string();
+        let network_len = network.len() as usize;
+        let subject_len = subject_str.len() as usize;
+
+        let mut net_buf = [0u8; 128];
+        network.copy_into_slice(&mut net_buf[..network_len]);
+        let mut sub_buf = [0u8; 76];
+        subject_str.copy_into_slice(&mut sub_buf[..subject_len]);
+
+        let mut did_bytes = Bytes::new(env);
+        did_bytes.extend_from_slice(b"did:stellar:uzima:");
+        did_bytes.extend_from_slice(&net_buf[..network_len]);
+        did_bytes.extend_from_slice(b":");
+        did_bytes.extend_from_slice(&sub_buf[..subject_len]);
+
+        let did_buf = did_bytes.to_buffer::<MAX_DID_LEN>();
+        String::from_bytes(env, did_buf.as_slice())
+    }
+
     /// Archive the current DID document as a version history entry before mutation
     fn archive_did_version(env: &Env, subject: &Address, doc: &DIDDocument) {
         let count_key = DataKey::DIDDocumentHistoryCount(subject.clone());
@@ -2806,6 +2919,54 @@ mod tests {
         assert!(
             !client.verify_did_authorization(&subject, &VerificationRelationship::Authentication)
         );
+    }
+
+    // ========================================================================
+    // ADDRESS NORMALIZATION TESTS
+    // ========================================================================
+
+    #[test]
+    fn test_normalize_address_returns_valid_did() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let network_id = String::from_str(&env, "testnet");
+
+        let did = client.normalize_address(&network_id, &subject);
+        assert!(did.starts_with("did:stellar:uzima:testnet:"));
+    }
+
+    #[test]
+    fn test_validate_address_valid() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        assert!(client.validate_address(&subject));
+    }
+
+    #[test]
+    fn test_normalize_addresses_batch() {
+        let (env, client, _owner) = create_contract();
+        let a1 = Address::generate(&env);
+        let a2 = Address::generate(&env);
+        let network_id = String::from_str(&env, "testnet");
+
+        let mut addrs: Vec<Address> = Vec::new(&env);
+        addrs.push_back(a1);
+        addrs.push_back(a2);
+
+        let results = client.normalize_addresses_batch(&network_id, &addrs);
+        assert_eq!(results.len(), 2);
+        assert!(results.get(0).unwrap().starts_with("did:stellar:uzima:testnet:"));
+        assert!(results.get(1).unwrap().starts_with("did:stellar:uzima:testnet:"));
+    }
+
+    #[test]
+    fn test_normalize_address_network_lowercased() {
+        let (env, client, _owner) = create_contract();
+        let subject = Address::generate(&env);
+        let network_id = String::from_str(&env, "TestNet");
+
+        let did = client.normalize_address(&network_id, &subject);
+        assert!(did.contains("testnet"));
     }
 
     #[test]

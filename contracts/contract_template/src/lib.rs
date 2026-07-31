@@ -23,6 +23,7 @@
 //! ```
 
 #![no_std]
+#![forbid(alloc)]
 
 mod errors;
 mod events;

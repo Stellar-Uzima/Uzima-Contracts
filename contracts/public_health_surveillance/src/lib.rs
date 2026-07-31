@@ -1,6 +1,7 @@
 //! public_health_surveillance - Healthcare smart contract on Stellar blockchain.
 // Public Health Surveillance Platform - Privacy-Preserving Disease Monitoring and Response
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::too_many_arguments)]
 #![allow(clippy::arithmetic_side_effects)]
 

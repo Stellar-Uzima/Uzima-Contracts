@@ -13,6 +13,7 @@
 //!
 //! The `REENTRANCY_LOCK` guard provides an additional defense-in-depth layer.
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::needless_borrow)]
 #![allow(clippy::unnecessary_cast)]
 pub mod errors;

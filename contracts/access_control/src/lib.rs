@@ -9,6 +9,7 @@
 //! `require_admin`, `require_role`, and `has_permission` behaviour.
 
 #![no_std]
+#![forbid(alloc)]
 
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
 

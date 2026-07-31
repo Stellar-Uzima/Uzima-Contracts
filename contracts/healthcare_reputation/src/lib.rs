@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! healthcare_reputation - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::arithmetic_side_effects)]
 

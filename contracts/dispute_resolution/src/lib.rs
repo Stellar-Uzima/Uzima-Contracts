@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! # Dispute Resolution Contract
 //!
 //! Structured dispute lifecycle for healthcare payment claims.

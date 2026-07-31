@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! # Healthcare Payment
 //!
 //! Claims adjudication, eligibility checks, and provider payouts for the Uzima

@@ -22,6 +22,8 @@
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
     "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
     "health:dashboard": "node scripts/generate-health-dashboard.mjs",
+    "template:check": "bash scripts/check_template_compat.sh --all",
+    "template:check:strict": "bash scripts/check_template_compat.sh --all --strict"
     "drift:check": "bash scripts/check_drift.sh --all",
     "drift:check:schema": "bash scripts/check_drift.sh --schema",
     "drift:check:docs": "bash scripts/check_drift.sh --docs"
