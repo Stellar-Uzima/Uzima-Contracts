@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! # Governor
 //!
 //! On-chain governance for the Uzima Contracts platform. Token holders can

@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! medication_management - Healthcare smart contract on Stellar blockchain.
 #![allow(clippy::too_many_arguments)]
 

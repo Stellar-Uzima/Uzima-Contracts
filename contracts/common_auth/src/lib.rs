@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 
 use soroban_sdk::{contracttype, Address, Env, Symbol, Vec as SorobanVec};
 

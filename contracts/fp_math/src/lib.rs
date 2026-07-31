@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! fp_math - Healthcare smart contract on Stellar blockchain.
 
 /// Multiply `amount` by basis points (1 bps = 0.01%) using floor division.

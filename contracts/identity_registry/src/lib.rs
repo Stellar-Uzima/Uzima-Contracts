@@ -1,6 +1,7 @@
 //! identity_registry - Healthcare smart contract on Stellar blockchain.
 // Identity Registry - W3C DID Compliant with proper validation throughout
 #![no_std]
+#![forbid(alloc)]
 #![allow(clippy::arithmetic_side_effects)]
 #![allow(clippy::unwrap_used)]
 #![allow(clippy::panic)]

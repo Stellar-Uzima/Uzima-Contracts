@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! appointment_booking_escrow - Healthcare smart contract on Stellar blockchain.
 #[cfg(test)]
 mod test;

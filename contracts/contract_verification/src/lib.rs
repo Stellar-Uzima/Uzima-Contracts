@@ -15,6 +15,7 @@
 //! the information alongside the contract.
 
 #![no_std]
+#![forbid(alloc)]
 
 #[allow(unused_imports)]
 // `vec!` macro is re-exported to the nested test module via `use super::*`

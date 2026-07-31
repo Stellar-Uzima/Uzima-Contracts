@@ -25,6 +25,8 @@
     "deadcode:scan": "bash scripts/deadcode_scan.sh",
     "deadcode:scan:rust": "bash scripts/deadcode_scan.sh --rust-only",
     "deadcode:scan:js": "bash scripts/deadcode_scan.sh --js-only"
+    "template:check": "bash scripts/check_template_compat.sh --all",
+    "template:check:strict": "bash scripts/check_template_compat.sh --all --strict"
     "drift:check": "bash scripts/check_drift.sh --all",
     "drift:check:schema": "bash scripts/check_drift.sh --schema",
     "drift:check:docs": "bash scripts/check_drift.sh --docs"

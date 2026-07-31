@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! mpc_manager - Healthcare smart contract on Stellar blockchain.
 
 #[cfg(test)]

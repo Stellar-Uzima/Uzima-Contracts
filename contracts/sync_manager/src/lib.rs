@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! sync_manager - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{

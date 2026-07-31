@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! mfa - Healthcare smart contract on Stellar blockchain.
 
 pub mod factors;
