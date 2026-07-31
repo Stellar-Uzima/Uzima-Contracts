@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! timelock - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;

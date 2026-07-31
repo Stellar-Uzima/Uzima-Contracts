@@ -1,6 +1,7 @@
 //! cross_chain_enhancements - Healthcare smart contract on Stellar blockchain.
 // Cross-Chain Bridge Enhancements - ZK Proofs and Advanced Security Features
 #![no_std]
+#![forbid(alloc)]
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,

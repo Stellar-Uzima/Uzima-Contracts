@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! health_check - Healthcare smart contract on Stellar blockchain.
 
 use common_error::CommonError;

@@ -33,6 +33,7 @@
 //! - 400-499: Entity Existence
 
 #![no_std]
+#![forbid(alloc)]
 
 #[cfg(test)]
 mod test;

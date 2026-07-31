@@ -1,4 +1,5 @@
 #![no_std]
+#![forbid(alloc)]
 //! # Credential Registry
 //!
 //! Tracks per-issuer credential roots (one root per issuer per version) and
