@@ -6,6 +6,8 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String};
 
+use crate::telemetry::{
+    record_consent_zkp_metric,
 use super::telemetry::{
     emit_telemetry_event, record_consent_zkp_metric, TelemetryEventType,
 };

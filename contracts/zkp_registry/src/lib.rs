@@ -1341,6 +1341,7 @@ impl ZKPRegistry {
             &env,
             telemetry::TelemetryEventType::CredentialProofVerified,
             &holder,
+            &Self::generate_telemetry_proof_id(&env, &holder, &credential_type),
             &cred_proof_id,
             &credential_type,
             0,
@@ -2112,7 +2113,6 @@ impl ZKPRegistry {
             DEFAULT_ISSUER_SALT
         }
     }
-
     fn generate_telemetry_proof_id(env: &Env, holder: &Address, _credential_type: &soroban_sdk::String) -> BytesN<32> {
         let mut payload = soroban_sdk::Bytes::new(env);
         payload.append(&soroban_sdk::Bytes::from_slice(env, b"TELEM_CRED_V1"));

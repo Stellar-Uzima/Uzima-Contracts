@@ -22,6 +22,9 @@
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
     "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
     "health:dashboard": "node scripts/generate-health-dashboard.mjs",
+    "deadcode:scan": "bash scripts/deadcode_scan.sh",
+    "deadcode:scan:rust": "bash scripts/deadcode_scan.sh --rust-only",
+    "deadcode:scan:js": "bash scripts/deadcode_scan.sh --js-only"
     "template:check": "bash scripts/check_template_compat.sh --all",
     "template:check:strict": "bash scripts/check_template_compat.sh --all --strict"
     "drift:check": "bash scripts/check_drift.sh --all",
