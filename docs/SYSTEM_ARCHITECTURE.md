@@ -341,7 +341,7 @@ directory (e.g. fuzz harness, integration test repo).
 | --- | --- | --- |
 | **Fix & Include** (already reintegrated in this branch) | `audit`, `sync_manager`, `failover_detector` | Compile clean, tests in place |
 | **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check` | Compile clean (\*) = moved to **Deferred** this PR; see below |
-| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `mental_health_support`, `patient_gamification`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
 | **Non-contract paths** (cannot be workspace members) | `contracts/contract_behavior_fuzzing`, `contracts/governance_integration_tests` | Continue to be excluded; they are fuzz harnesses and integration test repos |
 
 When removing a contract from the `exclude` list, the change must:
@@ -352,4 +352,3 @@ When removing a contract from the `exclude` list, the change must:
    and `append_array` rather than `Vec::<u8>::with_capacity`.
 3. Provide at minimum three tests: an `initialize()` test, a happy-path test,
    and an error-path test (e.g. `expect_*Auth` failure).
-
