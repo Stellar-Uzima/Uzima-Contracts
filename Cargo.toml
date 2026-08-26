@@ -18,7 +18,7 @@ members = [
 exclude = [
     "contracts/medical_imaging",
     "contracts/remote_patient_monitoring",
-    "contracts/telemedicine",
+    "contracts/healthcare_data_marketplace",
     "contracts/medical_imaging_ai",
     "contracts/dicomweb_services",
     "contracts/multi_region_orchestrator",
@@ -94,4 +94,3 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
-
