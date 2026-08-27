@@ -16,7 +16,8 @@ members = [
 # non-workspace-member directories (fuzz harnesses, integration test
 # repos). Newly integrated contracts are no longer listed here.
 exclude = [
-    "contracts/remote_patient_monitoring",
+    "contracts/healthcare_compliance",
+    "contracts/clinical_nlp",
     "contracts/healthcare_data_marketplace",
     "contracts/medical_imaging_ai",
     "contracts/dicomweb_services",
