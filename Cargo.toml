@@ -55,7 +55,6 @@ exclude = [
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
-    "contracts/notification_system",
     "contracts/treasury_controller",
     "contracts/test-helpers",
 
