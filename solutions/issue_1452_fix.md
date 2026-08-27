@@ -1,0 +1,1 @@
+Solution proposal for medical_record_backup remains excluded from workspace: release gates omit its WASM artifact
