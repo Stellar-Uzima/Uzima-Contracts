@@ -22,7 +22,6 @@ exclude = [
     "contracts/healthcare_data_marketplace",
     "contracts/medical_imaging_ai",
     "contracts/dicomweb_services",
-    "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
     "contracts/digital_twin",
     "contracts/aml",
