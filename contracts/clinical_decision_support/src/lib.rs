@@ -279,39 +279,4 @@ impl ClinicalDecisionSupport {
 }
 
 #[cfg(test)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-
-    #[test]
-    fn test_drug_interaction_alert() {
-        let env = Env::default();
-        let contract_id = env.register_contract(None, ClinicalDecisionSupport);
-        let client = ClinicalDecisionSupportClient::new(&env, &contract_id);
-
-        let admin = Address::generate(&env);
-        let oracle = Address::generate(&env);
-        let medical_records = Address::generate(&env);
-
-        client.initialize(&admin, &oracle, &medical_records);
-
-        let drug_a = String::from_str(&env, "Rx001");
-        let drug_b = String::from_str(&env, "Rx002");
-        let severity = String::from_str(&env, "Critical: Risk of Serotonin Syndrome");
-
-        // Setup interaction database
-        env.mock_all_auths();
-        client.set_interaction(&admin, &drug_a, &drug_b, &severity);
-
-        let mut current_meds = Vec::new(&env);
-        current_meds.push_back(drug_a.clone());
-
-        let alerts =
-            client.check_drug_interactions(&String::from_str(&env, "P1"), &drug_b, &current_meds);
-
-        assert_eq!(alerts.len(), 1);
-        let alert = alerts.get(0).unwrap();
-        assert_eq!(alert.rec_type, RecommendationType::DrugInteraction);
-        assert_eq!(alert.content, severity);
-    }
-}
+mod test;
