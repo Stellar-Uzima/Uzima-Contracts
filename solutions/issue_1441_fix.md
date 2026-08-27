@@ -1,0 +1,1 @@
+Solution proposal for clinical_decision_support manifest is outside SDK policy: compatibility cannot be checked in CI
