@@ -118,13 +118,24 @@ Branch naming:
 - Run quality checks frequently: `make check`.
 - Keep changes focused and minimal.
 
-### 4. Test locally
+### Test locally
 
 ```bash
 make test            # all tests
 make test-unit       # unit tests only
 make test-integration # integration tests only
 ```
+
+### Fuzz Testing
+
+The repository includes a dedicated contract behavior fuzzing harness for property-based testing and invariant validation. This harness is excluded from the root workspace as it is a test-only component. To run the fuzz tests:
+
+```bash
+cd contracts/contract_behavior_fuzzing
+cargo test -- --nocapture
+```
+
+For more information about the fuzzing program, see [docs/FUZZING_PROGRAM.md](docs/FUZZING_PROGRAM.md) and the harness README at [contracts/contract_behavior_fuzzing/README.md](contracts/contract_behavior_fuzzing/README.md).
 
 ### 5. Commit
 
