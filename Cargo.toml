@@ -18,8 +18,6 @@ members = [
 exclude = [
     "contracts/medical_imaging",
     "contracts/remote_patient_monitoring",
-    "contracts/healthcare_analytics_dashboard",
-    "contracts/healthcare_data_marketplace",
     "contracts/telemedicine",
     "contracts/medical_imaging_ai",
     "contracts/dicomweb_services",
