@@ -56,9 +56,7 @@ exclude = [
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
-    "contracts/notification_system",
     "contracts/treasury_controller",
-    "contracts/test-helpers",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/governance_integration_tests",
