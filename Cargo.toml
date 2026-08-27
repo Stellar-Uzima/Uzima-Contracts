@@ -43,7 +43,6 @@ exclude = [
     "contracts/clinical_trial",
     "contracts/cross_chain_bridge",
     "contracts/emergency_access_override",
-    "contracts/healthcare_data_conversion",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
     "contracts/deprecation_framework",
