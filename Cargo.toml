@@ -16,7 +16,6 @@ members = [
 # non-workspace-member directories (fuzz harnesses, integration test
 # repos). Newly integrated contracts are no longer listed here.
 exclude = [
-    "contracts/medical_imaging",
     "contracts/remote_patient_monitoring",
     "contracts/telemedicine",
     "contracts/medical_imaging_ai",
@@ -94,4 +93,3 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
-
