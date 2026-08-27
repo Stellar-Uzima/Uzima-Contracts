@@ -61,6 +61,7 @@ exclude = [
     "contracts/test-helpers",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
+    # Fuzzing harness - see contracts/contract_behavior_fuzzing/README.md and docs/FUZZING_PROGRAM.md
     "contracts/contract_behavior_fuzzing",
     "contracts/governance_integration_tests",
     # Stray source directory — not a crate root (no Cargo.toml):
