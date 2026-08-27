@@ -17,8 +17,6 @@ members = [
 # repos). Newly integrated contracts are no longer listed here.
 exclude = [
     "contracts/medical_imaging",
-    "contracts/healthcare_compliance",
-    "contracts/clinical_nlp",
     "contracts/remote_patient_monitoring",
     "contracts/healthcare_analytics_dashboard",
     "contracts/healthcare_data_marketplace",
@@ -98,3 +96,4 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
