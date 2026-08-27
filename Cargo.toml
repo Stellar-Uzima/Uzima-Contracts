@@ -49,8 +49,6 @@ exclude = [
     "contracts/explainable_ai",
     "contracts/sut_token",
     "contracts/medical_record_hash_registry",
-    "contracts/runtime_validation",
-    "contracts/clinical_decision_support",
     "contracts/emr_integration",
     "contracts/crypto_registry",
     "contracts/medical_record_backup",
