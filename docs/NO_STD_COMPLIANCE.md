@@ -155,7 +155,6 @@ The following contracts are excluded from the workspace because they require `st
 - `mfa`
 - `multi_region_orchestrator`
 - `regional_node_manager`
-- `digital_twin`
 - `aml`
 - `forensics`
 - `audit`

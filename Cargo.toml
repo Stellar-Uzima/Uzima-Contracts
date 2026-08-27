@@ -24,7 +24,6 @@ exclude = [
     "contracts/dicomweb_services",
     "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
-    "contracts/digital_twin",
     "contracts/aml",
     "contracts/forensics",
     "contracts/rbac",
