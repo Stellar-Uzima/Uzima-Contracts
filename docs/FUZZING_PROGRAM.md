@@ -14,7 +14,12 @@ The fuzzing harness is maintained for the following versions:
 
 ## Workspace Relationship
 
-The fuzzing harness is intentionally excluded from the root workspace because it is a test-only component that runs natively (not as a WASM contract). It is not required for standard contract development or deployment. To run the fuzz tests, you must explicitly target the harness crate.
+The fuzzing harness is an active **workspace member** but remains a test-only component that runs natively (not as a WASM contract). Key benefits of this integration:
+- ✅ Automatically inherits the workspace's pinned `soroban-sdk = "=21.7.7"` version
+- ✅ Maintains a single consistent dependency graph across the entire repository
+- ✅ Still only runs when explicitly targeted - it doesn't interfere with production builds or standard test workflows
+
+To run the fuzz tests, you must still explicitly target the harness crate (see command below).
 
 ## Maintained Fuzz Targets
 
