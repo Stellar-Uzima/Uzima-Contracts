@@ -26,7 +26,6 @@ exclude = [
     "contracts/regional_node_manager",
     "contracts/digital_twin",
     "contracts/aml",
-    "contracts/forensics",
     "contracts/rbac",
     "contracts/federated_learning",
     "contracts/medical_records",
