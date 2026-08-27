@@ -29,7 +29,6 @@ exclude = [
     "contracts/forensics",
     "contracts/rbac",
     "contracts/federated_learning",
-    "contracts/medical_records",
     "contracts/healthcare_oracle_network",
 
     # Deferred (issue #828 triage): contract compiles against older soroban-sdk

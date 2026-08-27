@@ -1877,7 +1877,7 @@ fn test_create_data_compartment() {
     let compartment_id = Symbol::new(&env, "CARDIOLOGY");
     let description = String::from_str(&env, "Cardiology records compartment");
 
-    let result = client.create_data_compartment(
+    let result = client.try_create_data_compartment(
         &admin,
         &compartment_id,
         &DataAccessTier::Clinical,
@@ -1888,9 +1888,9 @@ fn test_create_data_compartment() {
 
     assert!(result.is_ok());
 
-    let compartment = client.get_data_compartment(&compartment_id);
+    let compartment = client.try_get_data_compartment(&compartment_id);
     assert!(compartment.is_ok());
-    let c = compartment.unwrap();
+    let c = compartment.unwrap().unwrap();
     assert_eq!(c.tier, DataAccessTier::Clinical);
     assert_eq!(c.required_role, Role::Doctor);
 }
@@ -1905,7 +1905,7 @@ fn test_create_data_compartment_not_admin() {
     let compartment_id = Symbol::new(&env, "CARDIOLOGY");
     let description = String::from_str(&env, "Cardiology records");
 
-    let result = client.create_data_compartment(
+    let result = client.try_create_data_compartment(
         &user,
         &compartment_id,
         &DataAccessTier::Clinical,
@@ -1914,7 +1914,7 @@ fn test_create_data_compartment_not_admin() {
         &false,
     );
 
-    assert_eq!(result, Err(Error::NotAuthorized));
+    assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
 
 #[test]
@@ -1938,7 +1938,7 @@ fn test_grant_and_revoke_compartment_access() {
     );
 
     // Grant access
-    let result = client.grant_compartment_access(
+    let result = client.try_grant_compartment_access(
         &admin,
         &patient,
         &compartment_id,
@@ -1957,7 +1957,7 @@ fn test_grant_and_revoke_compartment_access() {
     ));
 
     // Revoke access
-    let result = client.revoke_compartment_access(&admin, &patient, &compartment_id);
+    let result = client.try_revoke_compartment_access(&admin, &patient, &compartment_id);
     assert!(result.is_ok());
 
     assert!(!client.has_compartment_access(

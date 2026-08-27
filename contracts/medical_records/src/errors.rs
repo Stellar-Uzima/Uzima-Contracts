@@ -7,81 +7,93 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 pub enum Error {
     // --- Access Control & Authorization (100–199) ---
     Unauthorized = 100,
+    NotAuthorized = 101,
     NotAICoordinator = 150,
     EmergencyAccessExpired = 160,
     RecordRetentionExpired = 170,
 
-    // --- Input Validation (1100–1199) ---
-    InvalidPagination = 1202,
-    InputTooLong = 1201,
-    BatchTooLarge = 1208,
-    InvalidSignature = 1207,
-    InvalidDataRefLength = 1250,
-    InvalidDataRefCharset = 1251,
-    InvalidDiagnosisLength = 1252,
-    InvalidTreatmentLength = 1253,
-    InvalidPurposeLength = 1254,
-    InvalidTagLength = 1255,
-    InvalidModelVersionLength = 1256,
-    InvalidExplanationLength = 1257,
-    InvalidTreatmentTypeLength = 1258,
-    InvalidAddress = 1290,
-    SameAddress = 1291,
-    InvalidBatch = 1292,
-    NumberOutOfBounds = 1293,
-    InvalidCategory = 1280,
-    EmptyTreatment = 1281,
-    EmptyDiagnosis = 1282,
-    EmptyTag = 1283,
-    EmptyDataRef = 1284,
+    // --- Input Validation (200–299) ---
+    InvalidInput = 200,
+    InputTooLong = 201,
+    InvalidPagination = 202,
+    InvalidSignature = 207,
+    BatchTooLarge = 208,
+    InvalidDataRefLength = 250,
+    InvalidDataRefCharset = 251,
+    InvalidDiagnosisLength = 252,
+    InvalidTreatmentLength = 253,
+    InvalidPurposeLength = 254,
+    InvalidTagLength = 255,
+    InvalidModelVersionLength = 256,
+    InvalidExplanationLength = 257,
+    InvalidTreatmentTypeLength = 258,
+    InvalidCategory = 280,
+    EmptyTreatment = 281,
+    EmptyDiagnosis = 282,
+    EmptyTag = 283,
+    EmptyDataRef = 284,
+    InvalidAddress = 290,
+    SameAddress = 291,
+    InvalidBatch = 292,
+    NumberOutOfBounds = 293,
 
-    // --- Lifecycle & State (1200–1299) ---
-    ProposalAlreadyExecuted = 1320,
-    TimelockNotElapsed = 1321,
-    NotEnoughApproval = 1322,
-    CryptoRegistryNotSet = 1340,
-    EncryptionRequired = 1341,
-    IdentityRegistryNotSet = 1342,
-    InvalidVersion = 1350,
-    VersionNotFound = 1351,
+    // --- Lifecycle & State (300–399) ---
+    NotInitialized = 300,
+    AlreadyInitialized = 301,
+    ContractPaused = 302,
+    DeadlineExceeded = 306,
+    RateLimitExceeded = 307,
+    ProposalAlreadyExecuted = 320,
+    TimelockNotElapsed = 321,
+    NotEnoughApproval = 322,
+    CryptoRegistryNotSet = 340,
+    EncryptionRequired = 341,
+    IdentityRegistryNotSet = 342,
+    InvalidVersion = 350,
+    VersionNotFound = 351,
+    SchemaVersionAlreadyExists = 352,
+    SchemaVersionNotFound = 353,
 
-    // --- Entity Existence (1300–1399) ---
-    RecordNotFound = 1403,
-    EmergencyAccessNotFound = 1460,
-    DIDNotFound = 1470,
-    DIDNotActive = 1471,
-    RecordAlreadySynced = 1480,
+    // --- Entity Existence (400–499) ---
+    RecordNotFound = 403,
+    NotFound = 404,
+    EmergencyAccessNotFound = 460,
+    DIDNotFound = 470,
+    DIDNotActive = 471,
+    RecordAlreadySynced = 480,
 
-    // --- Financial & Resource (1400–1499) ---
-    StorageFull = 1502,
+    // --- Financial & Resource (500–599) ---
+    InsufficientFunds = 500,
+    StorageFull = 502,
 
-    // --- Cryptography & ZK (1500–1599) ---
-    InvalidCredential = 1640,
-    MissingRequiredCredential = 1641,
-    CredentialExpired = 1605,
-    CredentialRevoked = 1606,
+    // --- Cryptography & ZK (600–699) ---
+    CredentialExpired = 605,
+    CredentialRevoked = 606,
+    InvalidCredential = 640,
+    MissingRequiredCredential = 641,
 
-    // --- Cross-Chain & Integration (1600–1699) ---
-    CrossChainAccessDenied = 1700,
-    CrossChainTimeout = 1702,
-    InvalidChain = 1703,
-    CrossChainNotEnabled = 1710,
-    CrossChainContractsNotSet = 1711,
+    // --- Cross-Chain & Integration (700–799) ---
+    CrossChainAccessDenied = 700,
+    CrossChainTimeout = 702,
+    InvalidChain = 703,
+    CrossChainNotEnabled = 710,
+    CrossChainContractsNotSet = 711,
 
-    // --- Domain-Specific: AI/Medical (1700–1799) ---
-    AIConfigNotSet = 1830,
-    InvalidAIScore = 1831,
-    InvalidScore = 1832,
-    InvalidDPEpsilon = 1833,
-    InvalidParticipantCount = 1834,
+    // --- Domain-Specific: AI/Medical (800–899) ---
+    AIConfigNotSet = 830,
+    InvalidAIScore = 831,
+    InvalidScore = 832,
+    InvalidDPEpsilon = 833,
+    InvalidParticipantCount = 834,
 }
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::Unauthorized | Error::NotAuthorized => write!(f, "unauthorized"),
             Error::InvalidInput => write!(f, "invalid input"),
             Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
             Error::ContractPaused => write!(f, "contract paused"),
             Error::DeadlineExceeded => write!(f, "deadline exceeded"),
             Error::RateLimitExceeded => write!(f, "rate limit exceeded"),
@@ -116,7 +128,7 @@ impl core::fmt::Display for Error {
             Error::CryptoRegistryNotSet => write!(f, "crypto registry not set"),
             Error::EncryptionRequired => write!(f, "encryption required"),
             Error::IdentityRegistryNotSet => write!(f, "identity registry not set"),
-            Error::RecordNotFound => write!(f, "record not found"),
+            Error::RecordNotFound | Error::NotFound => write!(f, "record not found"),
             Error::EmergencyAccessNotFound => write!(f, "emergency access not found"),
             Error::DIDNotFound => write!(f, "d i d not found"),
             Error::DIDNotActive => write!(f, "d i d not active"),
@@ -137,24 +149,31 @@ impl core::fmt::Display for Error {
             Error::InvalidDPEpsilon => write!(f, "invalid d p epsilon"),
             Error::InvalidVersion => write!(f, "invalid version"),
             Error::VersionNotFound => write!(f, "version not found"),
+            Error::SchemaVersionAlreadyExists => write!(f, "schema version already exists"),
+            Error::SchemaVersionNotFound => write!(f, "schema version not found"),
             Error::InvalidParticipantCount => write!(f, "invalid participant count"),
         }
     }
 }
 
-
 pub fn get_suggestion(error: Error) -> Symbol {
     match error {
         Error::ContractPaused | Error::RateLimitExceeded => symbol_short!("RE_TRY_L"),
         Error::InvalidPagination => symbol_short!("CHK_DATA"),
-        Error::Unauthorized | Error::NotAICoordinator => symbol_short!("CHK_AUTH"),
+        Error::Unauthorized | Error::NotAuthorized | Error::NotAICoordinator => {
+            symbol_short!("CHK_AUTH")
+        }
         Error::EmptyDiagnosis | Error::EmptyTreatment => symbol_short!("FILL_FLD"),
         Error::EmergencyAccessExpired => symbol_short!("NEW_EMER"),
         Error::RecordRetentionExpired => symbol_short!("ADM_OVR"),
         Error::InvalidCategory => symbol_short!("FIX_CAT"),
-        Error::InvalidBatch => symbol_short!("CHK_DATA"),
+        Error::InvalidBatch | Error::AlreadyInitialized => symbol_short!("CHK_DATA"),
         Error::NotInitialized => symbol_short!("INIT_CTR"),
-        Error::RecordNotFound | Error::DIDNotFound => symbol_short!("CHK_ID"),
+        Error::RecordNotFound
+        | Error::NotFound
+        | Error::DIDNotFound
+        | Error::SchemaVersionNotFound => symbol_short!("CHK_ID"),
+        Error::SchemaVersionAlreadyExists => symbol_short!("CHK_SCHM"),
         Error::InsufficientFunds => symbol_short!("ADD_FUND"),
         Error::StorageFull => symbol_short!("CLN_OLD"),
         _ => symbol_short!("CONTACT"),

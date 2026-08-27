@@ -49,9 +49,9 @@ pub mod medical_records_tests {
             );
 
         // Verify record was added
-        let record_opt = client.get_record(&patient, &record_id);
-        assert!(record_opt.is_some());
-        let record = record_opt.unwrap();
+        let record_opt = client.try_get_record(&patient, &record_id);
+        assert!(record_opt.is_ok());
+        let record = record_opt.unwrap().unwrap();
         assert_eq!(record.patient_id, patient);
         assert_eq!(record.diagnosis, diagnosis);
         assert_eq!(record.category, String::from_str(&env, "Traditional"));
@@ -225,7 +225,11 @@ pub mod medical_records_tests {
         let (contract_id, client, admin, doctor, patient) = setup_default_workflow(&env);
         let record_id = add_sample_record(&env, &contract_id, &client, &doctor, &patient);
 
-        assert!(client.mock_all_auths().set_zk_enforced(&admin, &true).unwrap());
+        assert!(client
+            .mock_all_auths()
+            .try_set_zk_enforced(&admin, &true)
+            .unwrap()
+            .unwrap());
         assert!(!client.has_valid_zk_access_grant(&patient, &record_id));
 
         let res = client.mock_all_auths().try_get_record(&patient, &record_id);
@@ -238,17 +242,21 @@ pub mod medical_records_tests {
         let (contract_id, client, _admin, doctor, patient) = setup_default_workflow(&env);
         let record_id = add_sample_record(&env, &contract_id, &client, &doctor, &patient);
 
-        assert!(client
+        let grant_res = client
             .mock_all_auths()
-            .grant_emergency_access(&patient, &doctor, &3600, &vec![&env, record_id])
-            .unwrap());
+            .try_grant_emergency_access(&patient, &doctor, &3600, &vec![&env, record_id])
+            .unwrap()
+            .unwrap();
+        assert!(grant_res);
 
         assert!(client.has_emergency_access(&doctor, &patient, &record_id));
 
-        assert!(client
+        let revoke_res = client
             .mock_all_auths()
-            .revoke_emergency_access(&patient, &doctor)
-            .unwrap());
+            .try_revoke_emergency_access(&patient, &doctor)
+            .unwrap()
+            .unwrap();
+        assert!(revoke_res);
 
         assert!(!client.has_emergency_access(&doctor, &patient, &record_id));
     }
@@ -261,7 +269,7 @@ pub mod medical_records_tests {
 
         assert!(client
             .mock_all_auths()
-            .update_record_metadata(
+            .try_update_record_metadata(
                 &doctor,
                 &record_id,
                 &vec![String::from_str(&env, "updated")],
@@ -271,10 +279,11 @@ pub mod medical_records_tests {
 
         let history = client
             .mock_all_auths()
-            .get_history(&doctor, &patient, &0u32, &10u32)
+            .try_get_history(&doctor, &patient, &0u32, &10u32)
+            .unwrap()
             .unwrap();
         assert!(!history.is_empty());
-        assert_eq!(history[0].0, record_id);
+        assert_eq!(history.get(0).unwrap().0, record_id);
     }
 
     #[test]
@@ -291,7 +300,7 @@ pub mod medical_records_tests {
 
         assert!(client
             .mock_all_auths()
-            .set_rate_limit_config(&admin, &1u32, &config)
+            .try_set_rate_limit_config(&admin, &1u32, &config)
             .is_ok());
 
         let _ = add_sample_record(&env, &contract_id, &client, &doctor, &patient);
