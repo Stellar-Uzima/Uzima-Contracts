@@ -1,6 +1,54 @@
 # Contract Behavior Fuzzing & Invariant Testing Program
 
-This document defines the repository-wide fuzzing and invariant testing strategy for high-risk contract workflows.
+This document defines the repository-wide fuzzing and invariant testing strategy for high-risk contract workflows. For the harness-specific implementation details, see [contracts/contract_behavior_fuzzing/README.md](../contracts/contract_behavior_fuzzing/README.md).
+
+## Supported Versions
+
+The fuzzing harness is maintained for the following versions:
+
+| Component | Version |
+|-----------|---------|
+| Rust | 1.92.0 |
+| Soroban SDK | 21.7.7 |
+| Proptest | 1.6.0 |
+
+## Workspace Relationship
+
+The fuzzing harness is intentionally excluded from the root workspace because it is a test-only component that runs natively (not as a WASM contract). It is not required for standard contract development or deployment. To run the fuzz tests, you must explicitly target the harness crate.
+
+## Maintained Fuzz Targets
+
+The following fuzz targets are actively maintained under `contracts/contract_behavior_fuzzing/tests/`:
+
+| Target File | Description | Contracts Tested |
+|-------------|-------------|------------------|
+| `medical_records_serde_fuzz.rs` | Validates serialization/deserialization round-tripping of all medical record types | `medical_records` |
+| `identity_registry_fuzz.rs` | Tests access control and identity management invariants | `identity_registry` |
+| `sut_token_fuzz.rs` | Tests token economics and transfer invariants | `sut_token` |
+| `token_sale_fuzz.rs` | Tests token sale mechanics and invariants | `token_sale` |
+| `access_control_fuzz.rs` | Tests role-based access control and permission boundaries | multiple |
+| `consent_handling_fuzz.rs` | Tests patient consent management workflows | multiple |
+| `cross_contract_fuzz.rs` | Tests cross-contract interaction atomicity and state consistency | multiple |
+
+## Bounded Verification Command
+
+For reproducible verification that passes from a clean checkout, run the bounded fuzzing suite with proptest's default bounds:
+
+```bash
+cd contracts/contract_behavior_fuzzing
+cargo test -- --nocapture
+```
+
+This command executes all fuzz targets with a manageable number of test cases, ensuring it completes quickly while still validating core invariants.
+
+### Expected Exit Status & Artifacts
+
+- **Successful run**: Exit code 0, all tests pass
+- **Failed run**: Non-zero exit code, with a `CrashReport` output that includes:
+  - The index of the failing operation
+  - The full sequence of operations that led to the failure
+  - The panic message from the violated invariant
+- **Regression failures**: If a previously fixed bug reoccurs, the harness will panic with the name of the failing regression case
 
 ## High-Risk Workflows
 
