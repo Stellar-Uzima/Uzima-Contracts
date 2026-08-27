@@ -12,13 +12,13 @@ This directory contains a property-based fuzzing and invariant testing harness f
 
 ## Workspace Relationship
 
-This crate is intentionally excluded from the root workspace because:
-1. It is a **test-only harness** that does not deploy to any network
-2. It runs natively (not `#[no_std]` or WASM-compatible) - it depends on `std::panic` and other host-level features
-3. It is not required for standard contract development workflows
-4. It has different build requirements and runtime characteristics than production contracts
+This crate is a **workspace member** but is a **test-only harness** that does not deploy to any network. Key characteristics:
+1. ✅ Now part of the root workspace to ensure dependency alignment with the pinned `soroban-sdk = "=21.7.7"`
+2. Runs natively (not `#[no_std]` or WASM-compatible) - it depends on `std::panic` and other host-level features
+3. Only its dev-dependencies are resolved, so it doesn't force fuzz-only tooling into production WASM crates
+4. It is not built by default in production workflows - you must explicitly target this crate to run fuzz tests
 
-To run the fuzz tests, you must explicitly target this crate (see commands below).
+All dependencies use workspace-level version pins to ensure a single consistent dependency graph across the entire repository.
 
 ## Maintained Fuzz Targets
 
