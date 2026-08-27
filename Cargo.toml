@@ -53,7 +53,6 @@ exclude = [
     "contracts/clinical_decision_support",
     "contracts/emr_integration",
     "contracts/crypto_registry",
-    "contracts/medical_record_backup",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
     "contracts/notification_system",
