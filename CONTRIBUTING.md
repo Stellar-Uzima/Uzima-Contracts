@@ -128,7 +128,7 @@ make test-integration # integration tests only
 
 ### Fuzz Testing
 
-The repository includes a dedicated contract behavior fuzzing harness for property-based testing and invariant validation. This harness is excluded from the root workspace as it is a test-only component. To run the fuzz tests:
+The repository includes a dedicated contract behavior fuzzing harness for property-based testing and invariant validation. This harness is a workspace member but is a test-only component that only runs when explicitly targeted. It uses workspace dependencies to maintain compatibility with the pinned Soroban SDK version. To run the fuzz tests:
 
 ```bash
 cd contracts/contract_behavior_fuzzing
