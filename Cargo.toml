@@ -28,7 +28,6 @@ exclude = [
     "contracts/aml",
     "contracts/forensics",
     "contracts/rbac",
-    "contracts/federated_learning",
     "contracts/medical_records",
     "contracts/healthcare_oracle_network",
 
