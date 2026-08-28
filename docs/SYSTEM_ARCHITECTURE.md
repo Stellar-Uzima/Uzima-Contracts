@@ -335,15 +335,15 @@ either a contract whose source predates the current `soroban-sdk = "=21.7.7"`
 workspace pin, has unresolved local-path cycles, or is a non-workspace-member
 directory (e.g. fuzz harness, integration test repo).
 
-### Categorization Snapshot (last updated: fix/issue-828-reintegrate-excluded-contracts)
+### Categorization Snapshot (last updated: fix/reintegrate-deprecation-framework)
 
 | Category | Contracts | Action |
 | --- | --- | --- |
 | **Fix & Include** (already reintegrated in this branch) | `audit`, `sync_manager`, `failover_detector` | Compile clean, tests in place |
 | **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check` | Compile clean (\*) = moved to **Deferred** this PR; see below |
-| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
-| **Non-contract paths** (cannot be workspace members) | `contracts/governance_integration_tests` | Continue to be excluded; they are integration test repos |
-| **Test-only workspace member** | `contracts/contract_behavior_fuzzing` | Active workspace member - fuzzing harness that uses workspace dependencies to maintain SDK compatibility; test-only, never deployed |
+| **Fix & Include** (reintegrated — closes #1427, #1428) | `deprecation_framework` | Removed from `exclude`; uses `workspace = true` deps; regression tests in `src/test.rs`; compile-checked via `cargo check -p deprecation_framework` |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard` (dev-dep on excluded `ai_analytics`), `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Non-contract paths** (cannot be workspace members) | `contracts/governance_integration_tests`, `contracts/contract_behavior_fuzzing` (fuzz harness: has dev-deps on `identity_registry`, `sut_token`, `token_sale` which are not in `workspace.dependencies`; excluded to unblock workspace resolution) | Continue to be excluded |
 
 When removing a contract from the `exclude` list, the change must:
 1. Pin `soroban-sdk = { workspace = true }` (no literal versions) so all crates

@@ -8,7 +8,6 @@ members = [
     "tests/integration_framework",
     "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
-    "contracts/contract_behavior_fuzzing",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
@@ -31,6 +30,9 @@ exclude = [
     "contracts/federated_learning",
     "contracts/medical_records",
     "contracts/healthcare_oracle_network",
+    # dev-dep on ai_analytics which is excluded and uses workspace = true; cannot
+    # load manifest outside the workspace.
+    "contracts/healthcare_analytics_dashboard",
 
     # Deferred (issue #828 triage): contract compiles against older soroban-sdk
     # 21 patterns (format! in #[no_std], Vec::with_capacity, BytesN::from_array
@@ -46,7 +48,6 @@ exclude = [
     "contracts/healthcare_data_conversion",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
-    "contracts/deprecation_framework",
     "contracts/explainable_ai",
     "contracts/sut_token",
     "contracts/medical_record_hash_registry",
@@ -63,6 +64,9 @@ exclude = [
     # Stray source directory — not a crate root (no Cargo.toml):
     "contracts/src",
     "contracts/storage-snapshot",
+    # Fuzz harness: references identity_registry and other contracts not yet
+    # in workspace.dependencies; excluded until those deps are added.
+    "contracts/contract_behavior_fuzzing",
 ] 
 
 [workspace.dependencies]
