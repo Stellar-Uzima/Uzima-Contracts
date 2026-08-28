@@ -128,6 +128,16 @@ let snapshot_id = client.snapshot();
 let user_balance_at_snapshot = client.balance_of_at(&user, &snapshot_id);
 ```
 
+## Workspace and SDK compatibility
+
+This crate is a root-workspace member and resolves `soroban-sdk` exclusively through the workspace dependency pin (`=21.7.7`). Its production library remains `#![no_std]`; the `testutils` feature is limited to development/test builds. No public contract types or entrypoints were changed by this workspace integration.
+
+Verify the production library with:
+
+```bash
+cargo check --manifest-path contracts/sut_token/Cargo.toml --lib
+```
+
 ## Testing
 
 The contract includes comprehensive unit tests covering:
