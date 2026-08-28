@@ -1,26 +1,24 @@
 [package]
 name = "explainable_ai"
-version = "0.1.0"
-edition = "2021"
-authors = ["Your Name <your.email@example.com>"]
-license = "MIT"
-repository = "https://github.com/yourusername/soroban-project"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# Pinned to the workspace-wide Soroban SDK policy (=21.7.7, see root Cargo.toml
-# `[workspace.dependencies]`). Declared as a literal version rather than
-# `.workspace = true` because this crate is still listed in the root
-# `exclude` list (see issue #1429/#1431) and therefore is not a resolvable
-# workspace member for inheritance purposes; the version is kept in exact
-# lockstep with the workspace pin so there is no conflicting SDK declaration.
-soroban-sdk = { version = "=21.7.7" }
-governance_commons = { path = "../../libs/governance_commons" }
+# Reintegrated into the workspace (issue #1431): pinned through the shared
+# workspace policy (`soroban-sdk = "=21.7.7"`, see root Cargo.toml
+# `[workspace.dependencies]`) rather than a literal version, so this crate
+# resolves to the exact same SDK instance as every other workspace member.
+soroban-sdk.workspace = true
+governance_commons = { workspace = true }
 
 [dev-dependencies]
-soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
+soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

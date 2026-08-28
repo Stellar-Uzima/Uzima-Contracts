@@ -47,7 +47,6 @@ exclude = [
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
     "contracts/deprecation_framework",
-    "contracts/explainable_ai",
     "contracts/sut_token",
     "contracts/medical_record_hash_registry",
     "contracts/runtime_validation",
@@ -71,6 +70,20 @@ soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
 replay_protection = { path = "libs/replay_protection" }
 common_auth = { path = "contracts/common_auth" }
+# Pre-existing gap (unrelated to issues #1429/#1430/#1431/#1433): these four
+# entries are referenced via `.workspace = true` by
+# `contracts/contract_behavior_fuzzing/Cargo.toml` (an active, non-excluded
+# workspace member) but were missing here, which made `cargo check
+# --workspace` / `cargo test --workspace` fail to parse the workspace at all
+# on a fresh checkout — independent of explainable_ai. Added so workspace-wide
+# commands required by issue #1431 can actually run. `sut_token` and
+# `medical_records` remain in the `exclude` list above (path dependencies to
+# excluded crates are still valid; `exclude` only controls default build/test
+# target membership, not dependency resolution).
+identity_registry = { path = "contracts/identity_registry" }
+medical_records = { path = "contracts/medical_records" }
+sut_token = { path = "contracts/sut_token" }
+token_sale = { path = "contracts/token_sale" }
 
 [workspace.package]
 version = "0.1.0"
