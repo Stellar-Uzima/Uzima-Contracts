@@ -8,6 +8,7 @@ members = [
     "tests/integration_framework",
     "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
+    "contracts/contract_behavior_fuzzing",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
@@ -49,17 +50,14 @@ exclude = [
     "contracts/explainable_ai",
     "contracts/sut_token",
     "contracts/medical_record_hash_registry",
+    "contracts/runtime_validation",
     "contracts/emr_integration",
     "contracts/crypto_registry",
-    "contracts/medical_record_backup",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
-    "contracts/notification_system",
     "contracts/treasury_controller",
-    "contracts/test-helpers",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
-    "contracts/contract_behavior_fuzzing",
     "contracts/governance_integration_tests",
     # Stray source directory — not a crate root (no Cargo.toml):
     "contracts/src",

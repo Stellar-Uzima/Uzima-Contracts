@@ -12,12 +12,12 @@ doctest = false
 [dependencies]
 
 [dev-dependencies]
-identity_registry = { path = "../identity_registry" }
-medical_records = { path = "../medical_records" }
+identity_registry = { workspace = true }
+medical_records = { workspace = true }
 proptest = "1.6.0"
-soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
-sut_token = { path = "../sut_token" }
-token_sale = { path = "../token_sale" }
+soroban-sdk = { workspace = true, features = ["testutils"] }
+sut_token = { workspace = true }
+token_sale = { workspace = true }
 
 [features]
 default = []

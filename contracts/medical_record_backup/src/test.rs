@@ -44,6 +44,36 @@ fn register_two_targets(
 }
 
 #[test]
+fn initialize_can_only_run_once() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+
+    let other_admin = Address::generate(&env);
+    let err = client.try_initialize(&other_admin);
+    assert_eq!(err, Err(Ok(Error::AlreadyInitialized)));
+}
+
+#[test]
+fn register_target_rejects_unauthorized_caller() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+
+    let non_operator = Address::generate(&env);
+    let err = client.try_register_target(
+        &non_operator,
+        &BackupNetwork::Ipfs,
+        &GeoRegion::UsEast,
+        &sample_hash(&env, 1),
+        &true,
+        &10,
+        &1000,
+    );
+    assert_eq!(err, Err(Ok(Error::NotAuthorized)));
+}
+
+#[test]
 fn backup_run_creates_geo_redundant_artifact() {
     let env = Env::default();
     env.mock_all_auths();
