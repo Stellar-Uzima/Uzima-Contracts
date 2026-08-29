@@ -1,11 +1,14 @@
 [package]
 name = "dicomweb-services"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
 description = "DICOMweb Services Integration for Uzima Contracts - QIDO-RS, WADO-RS, STOW-RS"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 soroban-sdk = { workspace = true }

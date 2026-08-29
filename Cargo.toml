@@ -8,7 +8,6 @@ members = [
     "tests/integration_framework",
     "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
-    "contracts/contract_behavior_fuzzing",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
@@ -24,12 +23,13 @@ exclude = [
     "contracts/dicomweb_services",
     "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
-    "contracts/digital_twin",
     "contracts/aml",
+    "contracts/digital_twin",
     "contracts/forensics",
+    "contracts/aml",
     "contracts/rbac",
+    "contracts/forensics",
     "contracts/federated_learning",
-    "contracts/medical_records",
     "contracts/healthcare_oracle_network",
 
     # Deferred (issue #828 triage): contract compiles against older soroban-sdk
@@ -39,23 +39,34 @@ exclude = [
     # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
     # clippy enforcement). These contracts have real compile bugs (not clippy
     # lints) that predate this PR and need separate fixes.
-    "contracts/ai_analytics",
     "contracts/clinical_trial",
     "contracts/cross_chain_bridge",
-    "contracts/emergency_access_override",
     "contracts/healthcare_data_conversion",
+    "contracts/emergency_access_override",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
     "contracts/deprecation_framework",
     "contracts/sut_token",
+    "contracts/explainable_ai",
     "contracts/medical_record_hash_registry",
     "contracts/runtime_validation",
     "contracts/clinical_decision_support",
+
     "contracts/emr_integration",
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
+    "contracts/notification_system",
+    "contracts/test-helpers",
     "contracts/treasury_controller",
+
+    # Fuzz harness: dev-deps reference excluded contracts (sut_token,
+    # medical_records) that cannot be path deps; fuzz regressions are not
+    # CI-visible (see #1481).
+    "contracts/contract_behavior_fuzzing",
+    # Dev-dep on excluded contracts/ai_analytics (compile bugs) — its tests
+    # cannot build while ai_analytics stays excluded.
+    "contracts/healthcare_analytics_dashboard",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/governance_integration_tests",

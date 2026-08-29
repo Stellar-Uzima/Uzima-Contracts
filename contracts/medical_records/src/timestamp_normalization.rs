@@ -182,11 +182,29 @@ pub fn format_utc_iso8601(env: &Env, utc_seconds: u64) -> String {
     let month = ((day_of_year / 30) + 1).min(12) as u32;
     let day = (day_of_year % 30) + 1;
 
-    let s = format!(
-        "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z",
-        year, month, day, hours, minutes, seconds
-    );
-    String::from_str(env, &s)
+    // Write a zero-padded decimal number into a fixed-width field.
+    fn write_field(buf: &mut [u8], start: usize, width: usize, value: u64) {
+        let mut v = value;
+        for i in (0..width).rev() {
+            buf[start + i] = b'0' + (v % 10) as u8;
+            v /= 10;
+        }
+    }
+
+    let mut s = [b'0'; 20];
+    s[4] = b'-';
+    s[7] = b'-';
+    s[10] = b'T';
+    s[13] = b':';
+    s[16] = b':';
+    s[19] = b'Z';
+    write_field(&mut s, 0, 4, year as u64);
+    write_field(&mut s, 5, 2, month as u64);
+    write_field(&mut s, 8, 2, day);
+    write_field(&mut s, 11, 2, hours);
+    write_field(&mut s, 14, 2, minutes);
+    write_field(&mut s, 17, 2, seconds);
+    String::from_bytes(env, &s)
 }
 
 /// Check if two timestamps are within a specified tolerance (in seconds).

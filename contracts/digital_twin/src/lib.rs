@@ -464,7 +464,7 @@ impl DigitalTwinContract {
             if let Some(stream) = env
                 .storage()
                 .persistent()
-                .get::<DataKey, DataStream>(&DataKey::DataStream(*stream_id))
+                .get::<DataKey, DataStream>(&DataKey::DataStream(stream_id))
             {
                 if stream.source == source && stream.data_type == data_type {
                     return Err(Error::DuplicateDataStream);
@@ -804,8 +804,12 @@ impl DigitalTwinContract {
         let expires_at = now + (duration_hours as u64 * 3600);
 
         // Compute snapshot hash
-        let snapshot_data = format!("{}{}{}{}", twin_id, researcher, now, privacy_level);
-        let snapshot_hash = env.crypto().sha256(&snapshot_data.into_bytes());
+        let mut snapshot_data = Bytes::new(&env);
+        snapshot_data.append(&twin_id.to_xdr(&env));
+        snapshot_data.append(&researcher.clone().to_xdr(&env));
+        snapshot_data.append(&now.to_xdr(&env));
+        snapshot_data.append(&(privacy_level as u64).to_xdr(&env));
+        let snapshot_hash = env.crypto().sha256(&snapshot_data).to_bytes();
 
         let snapshot = ResearchSnapshot {
             snapshot_id,
@@ -1117,11 +1121,14 @@ impl DigitalTwinContract {
     }
 
     fn compute_data_hash(env: &Env, value: &String, metadata: &Map<String, String>) -> BytesN<32> {
-        let mut data = value.clone();
+        let mut data = Bytes::new(env);
+        data.append(&value.clone().to_xdr(env));
         for (key, val) in metadata.iter() {
-            data = format!("{}{}:{}", data, key, val);
+            data.append(&key.to_xdr(env));
+            data.append(&Bytes::from_slice(env, b":"));
+            data.append(&val.to_xdr(env));
         }
-        env.crypto().sha256(&data.into_bytes())
+        env.crypto().sha256(&data).to_bytes()
     }
 
     fn update_global_stats(env: &Env, stat_key: &str, increment: u64) {

@@ -2,56 +2,58 @@
 #![cfg(test)]
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Bytes, Env, String as SorobanString, Vec, Map};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Bytes, Env, Vec, Map};
 
 #[test]
 fn test_initialize() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
     let admin = Address::random(&env);
     let medical_imaging = Address::random(&env);
 
-    let result = client.initialize(&admin, &medical_imaging);
-    assert!(result.is_ok());
-    assert!(result.unwrap());
+    let result = client.try_initialize(&admin, &medical_imaging);
+    assert_eq!(result, Ok(Ok(true)));
 }
 
 #[test]
 fn test_initialize_already_initialized() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
     let admin = Address::random(&env);
     let medical_imaging = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
-    let result = client.initialize(&admin, &medical_imaging);
+    let result = client.try_initialize(&admin, &medical_imaging);
     assert_eq!(result, Err(Ok(Error::AlreadyInitialized)));
 }
 
 #[test]
 fn test_set_paused() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
     let admin = Address::random(&env);
     let medical_imaging = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
-    let result = client.set_paused(&admin, &true);
-    assert!(result.is_ok());
-    assert!(result.unwrap());
+    let result = client.try_set_paused(&admin, &true);
+    assert_eq!(result, Ok(Ok(true)));
 }
 
 #[test]
 fn test_set_paused_not_admin() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -59,15 +61,16 @@ fn test_set_paused_not_admin() {
     let medical_imaging = Address::random(&env);
     let non_admin = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
-    let result = client.set_paused(&non_admin, &true);
+    let result = client.try_set_paused(&non_admin, &true);
     assert_eq!(result, Err(Ok(Error::NotAuthorized)));
 }
 
 #[test]
 fn test_stow_store_instance() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -75,7 +78,7 @@ fn test_stow_store_instance() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let mut json_metadata = DicomJsonObject {
         attributes: Map::new(&env),
@@ -102,10 +105,10 @@ fn test_stow_store_instance() {
         json_metadata,
     };
 
-    let result = client.stow_store_instance(&caller, &request);
+    let result = client.try_stow_store_instance(&caller, &request);
     assert!(result.is_ok());
 
-    let response = result.unwrap();
+    let response = result.unwrap().unwrap();
     assert!(response.success);
     assert_eq!(
         response.sop_instance_uid,
@@ -116,6 +119,7 @@ fn test_stow_store_instance() {
 #[test]
 fn test_stow_store_batch() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -123,7 +127,7 @@ fn test_stow_store_batch() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let mut requests = Vec::new(&env);
 
@@ -155,10 +159,10 @@ fn test_stow_store_batch() {
         requests.push_back(request);
     }
 
-    let result = client.stow_store_batch(&caller, &requests);
+    let result = client.try_stow_store_batch(&caller, &requests);
     assert!(result.is_ok());
 
-    let responses = result.unwrap();
+    let responses = result.unwrap().unwrap();
     assert_eq!(responses.len(), 3);
 
     for response in responses.iter() {
@@ -169,6 +173,7 @@ fn test_stow_store_batch() {
 #[test]
 fn test_qido_search_studies() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -176,7 +181,7 @@ fn test_qido_search_studies() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store a study
     let mut json_metadata = DicomJsonObject {
@@ -213,7 +218,7 @@ fn test_qido_search_studies() {
         json_metadata,
     };
 
-    client.stow_store_instance(&caller, &request).unwrap();
+    client.stow_store_instance(&caller, &request);
 
     // Query studies
     let params = DicomwebQueryParams {
@@ -230,10 +235,10 @@ fn test_qido_search_studies() {
         offset: 0,
     };
 
-    let result = client.qido_search_studies(&caller, &params);
+    let result = client.try_qido_search_studies(&caller, &params);
     assert!(result.is_ok());
 
-    let studies = result.unwrap();
+    let studies = result.unwrap().unwrap();
     assert_eq!(studies.len(), 1);
     assert_eq!(
         studies.get(0).unwrap().study_instance_uid,
@@ -244,6 +249,7 @@ fn test_qido_search_studies() {
 #[test]
 fn test_wado_retrieve_instance() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -251,7 +257,7 @@ fn test_wado_retrieve_instance() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store an instance
     let mut json_metadata = DicomJsonObject {
@@ -284,19 +290,18 @@ fn test_wado_retrieve_instance() {
         json_metadata,
     };
 
-    client.stow_store_instance(&caller, &request).unwrap();
+    client.stow_store_instance(&caller, &request);
 
     // Retrieve instance
-    let result = client.wado_retrieve_instance(
+    let result = client.try_wado_retrieve_instance(
         &caller,
         &String::from_str(&env, "1.2.3.4.5"),
         &String::from_str(&env, "1.2.3.4.5.1"),
         &String::from_str(&env, "1.2.3.4.5.1.1"),
     );
-
     assert!(result.is_ok());
 
-    let instance = result.unwrap();
+    let instance = result.unwrap().unwrap();
     assert_eq!(instance.rows, 512);
     assert_eq!(instance.columns, 512);
     assert_eq!(instance.transfer_syntax, TransferSyntax::Jpeg2000Lossless);
@@ -305,6 +310,7 @@ fn test_wado_retrieve_instance() {
 #[test]
 fn test_wado_retrieve_bulk_data() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -312,7 +318,7 @@ fn test_wado_retrieve_bulk_data() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store an instance with bulk data
     let mut json_metadata = DicomJsonObject {
@@ -331,17 +337,16 @@ fn test_wado_retrieve_bulk_data() {
         json_metadata,
     };
 
-    client.stow_store_instance(&caller, &request).unwrap();
+    client.stow_store_instance(&caller, &request);
 
     // Retrieve bulk data
-    let result = client.wado_retrieve_bulk_data(
+    let result = client.try_wado_retrieve_bulk_data(
         &caller,
         &String::from_str(&env, "1.2.3.4.5.1.1"),
     );
-
     assert!(result.is_ok());
 
-    let bulk_data = result.unwrap();
+    let bulk_data = result.unwrap().unwrap();
     assert_eq!(
         bulk_data.data_reference,
         String::from_str(&env, "ipfs://QmTest123")
@@ -352,6 +357,7 @@ fn test_wado_retrieve_bulk_data() {
 #[test]
 fn test_wado_retrieve_bulk_data_batch() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -359,7 +365,7 @@ fn test_wado_retrieve_bulk_data_batch() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store multiple instances
     for i in 0..3 {
@@ -379,7 +385,7 @@ fn test_wado_retrieve_bulk_data_batch() {
             json_metadata,
         };
 
-        client.stow_store_instance(&caller, &request).unwrap();
+        client.stow_store_instance(&caller, &request);
     }
 
     // Retrieve bulk data batch
@@ -388,16 +394,17 @@ fn test_wado_retrieve_bulk_data_batch() {
     sop_uids.push_back(String::from_str(&env, "1.2.3.4.5.1.1"));
     sop_uids.push_back(String::from_str(&env, "1.2.3.4.5.1.2"));
 
-    let result = client.wado_retrieve_bulk_data_batch(&caller, &sop_uids);
+    let result = client.try_wado_retrieve_bulk_data_batch(&caller, &sop_uids);
     assert!(result.is_ok());
 
-    let bulk_data_list = result.unwrap();
+    let bulk_data_list = result.unwrap().unwrap();
     assert_eq!(bulk_data_list.len(), 3);
 }
 
 #[test]
 fn test_cache_operations() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -405,26 +412,27 @@ fn test_cache_operations() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let key = BytesN::random(&env);
     let data = Bytes::from_array(&env, &[1, 2, 3, 4, 5]);
 
     // Set cache
-    let result = client.cache_set(&caller, &key, &data);
-    assert!(result.is_ok());
+    let result = client.try_cache_set(&caller, &key, &data);
+    assert_eq!(result, Ok(Ok(true)));
 
     // Get cache
-    let result = client.cache_get(&key);
+    let result = client.try_cache_get(&key);
     assert!(result.is_ok());
 
-    let cached_data = result.unwrap();
+    let cached_data = result.unwrap().unwrap();
     assert_eq!(cached_data, data);
 }
 
 #[test]
 fn test_cache_invalidate() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -432,33 +440,34 @@ fn test_cache_invalidate() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let key = BytesN::random(&env);
     let data = Bytes::from_array(&env, &[1, 2, 3, 4, 5]);
 
     // Set cache
-    client.cache_set(&caller, &key, &data).unwrap();
+    assert!(client.cache_set(&caller, &key, &data));
 
     // Invalidate cache
-    let result = client.cache_invalidate(&admin, &key);
-    assert!(result.is_ok());
+    let result = client.try_cache_invalidate(&admin, &key);
+    assert_eq!(result, Ok(Ok(true)));
 
     // Try to get invalidated cache
-    let result = client.cache_get(&key);
+    let result = client.try_cache_get(&key);
     assert_eq!(result, Err(Ok(Error::CacheMiss)));
 }
 
 #[test]
 fn test_concurrency_tracking() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
     let admin = Address::random(&env);
     let medical_imaging = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let stats = client.get_concurrency_stats();
     assert_eq!(stats.active_requests, 0);
@@ -468,6 +477,7 @@ fn test_concurrency_tracking() {
 #[test]
 fn test_get_study() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -475,7 +485,7 @@ fn test_get_study() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store a study
     let mut json_metadata = DicomJsonObject {
@@ -494,7 +504,7 @@ fn test_get_study() {
         json_metadata,
     };
 
-    client.stow_store_instance(&caller, &request).unwrap();
+    client.stow_store_instance(&caller, &request);
 
     // Get study
     let result = client.get_study(&String::from_str(&env, "1.2.3.4.5"));
@@ -510,6 +520,7 @@ fn test_get_study() {
 #[test]
 fn test_list_studies() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -517,7 +528,7 @@ fn test_list_studies() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Store multiple studies
     for i in 0..3 {
@@ -537,7 +548,7 @@ fn test_list_studies() {
             json_metadata,
         };
 
-        client.stow_store_instance(&caller, &request).unwrap();
+        client.stow_store_instance(&caller, &request);
     }
 
     // List studies
@@ -548,6 +559,7 @@ fn test_list_studies() {
 #[test]
 fn test_stow_invalid_input() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -555,7 +567,7 @@ fn test_stow_invalid_input() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     let mut json_metadata = DicomJsonObject {
         attributes: Map::new(&env),
@@ -574,13 +586,14 @@ fn test_stow_invalid_input() {
         json_metadata,
     };
 
-    let result = client.stow_store_instance(&caller, &request);
+    let result = client.try_stow_store_instance(&caller, &request);
     assert_eq!(result, Err(Ok(Error::InvalidInput)));
 }
 
 #[test]
 fn test_wado_instance_not_found() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -588,21 +601,21 @@ fn test_wado_instance_not_found() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
-    let result = client.wado_retrieve_instance(
+    let result = client.try_wado_retrieve_instance(
         &caller,
         &String::from_str(&env, "1.2.3.4.5"),
         &String::from_str(&env, "1.2.3.4.5.1"),
         &String::from_str(&env, "1.2.3.4.5.1.1"),
     );
-
     assert_eq!(result, Err(Ok(Error::InstanceNotFound)));
 }
 
 #[test]
 fn test_bulk_data_batch_limit() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register_contract(None, DicomwebServicesContract);
     let client = DicomwebServicesContractClient::new(&env, &contract_id);
 
@@ -610,7 +623,7 @@ fn test_bulk_data_batch_limit() {
     let medical_imaging = Address::random(&env);
     let caller = Address::random(&env);
 
-    client.initialize(&admin, &medical_imaging).unwrap();
+    assert!(client.initialize(&admin, &medical_imaging));
 
     // Try to retrieve more than MAX_BULK_RETRIEVAL items
     let mut sop_uids = Vec::new(&env);
@@ -618,18 +631,6 @@ fn test_bulk_data_batch_limit() {
         sop_uids.push_back(String::from_str(&env, &format!("1.2.3.4.5.1.{}", i)));
     }
 
-    let result = client.wado_retrieve_bulk_data_batch(&caller, &sop_uids);
+    let result = client.try_wado_retrieve_bulk_data_batch(&caller, &sop_uids);
     assert_eq!(result, Err(Ok(Error::InvalidInput)));
-}
-*/
-
-// Placeholder test to ensure compilation
-// The full test suite is provided above and can be uncommented
-// once the compilation issues are resolved
-
-#[test]
-fn test_placeholder() {
-    // This is a placeholder test to ensure compilation
-    // The full DICOMweb services test suite is provided above
-    assert!(true);
 }

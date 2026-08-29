@@ -389,9 +389,11 @@ mod tests {
 
     #[test]
     fn test_error_codes_are_stable() {
-        assert_eq!(crate::errors::Error::Unauthorized as u32, 100);
-        assert_eq!(crate::errors::Error::NotInitialized as u32, 300);
-        assert_eq!(crate::errors::Error::AlreadyInitialized as u32, 301);
+        // Discriminants are derived from the canonical CommonError taxonomy so
+        // cross-contract tooling only needs to learn one shape of errors.
+        assert_eq!(crate::errors::Error::Unauthorized as u32, 1);
+        assert_eq!(crate::errors::Error::NotInitialized as u32, 2);
+        assert_eq!(crate::errors::Error::AlreadyInitialized as u32, 3);
     }
 
     #[test]

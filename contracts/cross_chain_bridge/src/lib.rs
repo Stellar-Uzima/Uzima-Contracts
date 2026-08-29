@@ -29,7 +29,8 @@ mod reorg_protection_tests;
 ///   - `Nonce`: A monotonically increasing 64-bit integer unique to the validator's public key.
 use governance_commons::require_admin;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, Address, Bytes, BytesN, Env, String, Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env, String,
+    Symbol, Vec,
 };
 
 // ==================== Submit Message Request ====================
@@ -402,6 +403,7 @@ pub enum DataKey {
     RollbackCount,
     EventCount,
     OpCount,
+    AsyncJobCount,
     // Persistent storage keys (critical long-lived data)
     Nonce(String),
     Validator(Address),
@@ -415,6 +417,8 @@ pub enum DataKey {
     Rollback(BytesN<32>),
     Event(u64),
     CrossChainOp(BytesN<32>),
+    ReconciliationResult(BytesN<32>),
+    AsyncJob(u64),
     // Temporary storage keys (session/short-lived data)
     Confirmations(BytesN<32>),
     AuthorizedRelayer(Address),
@@ -646,7 +650,7 @@ impl CrossChainBridgeContract {
         // Issue #1001: Enforce cross-border data transfer jurisdiction restrictions.
         // For record-related messages, verify the destination chain's jurisdiction
         // is allowed by the patient's consent record.
-        Self::enforce_jurisdiction_check(&env, &payload_type, &dest_chain)?;
+        Self::enforce_jurisdiction_check(&env, &request.payload_type, &request.dest_chain)?;
 
         let timestamp = env.ledger().timestamp();
 
@@ -687,7 +691,7 @@ impl CrossChainBridgeContract {
 
         env.events().publish(
             (Symbol::new(&env, "message_submitted"),),
-            (message_id.clone(), timestamp),
+            (request.message_id.clone(), timestamp),
         );
 
         Ok(request.message_id)
@@ -2435,35 +2439,144 @@ impl CrossChainBridgeContract {
             _ => Ok(()),
         }
     }
-}
 
-#![no_std]
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Symbol};
+    // ============================================================
+    // Offline reconciliation (disconnected operation recovery)
+    // ============================================================
 
-#[contract]
-pub struct CrossChainBridgeContract;
-
-#[contractimpl]
-impl CrossChainBridgeContract {
-    /// Emits bridge state sync event to be consumed asynchronously by SyncManager.
-    pub fn trigger_bridge_sync(
+    /// Record a batch reconciliation request for offline processing.
+    /// Rejects requests with no record IDs; returns the request ID of the
+    /// stored reconciliation for later completion via `complete_reconciliation`.
+    pub fn reconcile_offline(
         env: Env,
-        sender: Address,
-        sync_manager: Address,
-        payload_hash: BytesN<32>,
-    ) -> u64 {
-        sender.require_auth();
+        caller: Address,
+        source_chain: ChainId,
+        dest_chain: ChainId,
+        record_ids: Vec<BytesN<32>>,
+        expected_state_hash: BytesN<32>,
+        ttl_secs: u64,
+    ) -> Result<BytesN<32>, Error> {
+        caller.require_auth();
+        if record_ids.is_empty() {
+            return Err(Error::InvalidPayload);
+        }
 
-        // Invoke SyncManager contract asynchronously via cross-contract call
-        let client = sync_manager_client::Client::new(&env, &sync_manager);
-        client.enqueue_reconciliation(&env.current_contract_address(), &payload_hash)
+        let mut id_bytes = [0u8; 32];
+        id_bytes.copy_from_slice(&expected_state_hash.to_array());
+        let request_id = BytesN::from_array(&env, &id_bytes);
+
+        let result = OfflineReconciliationResult {
+            request_id: request_id.clone(),
+            reconciled_records: 0,
+            failed_records: 0,
+            conflict_count: 0,
+            state_hash_matched: false,
+            completed_at: 0,
+            details: String::from_str(&env, "pending"),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::ReconciliationResult(request_id.clone()), &result);
+        env.storage().persistent().extend_ttl(
+            &DataKey::ReconciliationResult(request_id.clone()),
+            ttl_secs as u32,
+            ttl_secs as u32,
+        );
+
+        Ok(request_id)
+    }
+
+    /// Queue an asynchronous reconciliation job. Job IDs are allocated
+    /// monotonically starting at 1 so callers can track jobs.
+    pub fn queue_async_reconciliation(
+        env: Env,
+        caller: Address,
+        source_chain: ChainId,
+        dest_chain: ChainId,
+        record_ids: Vec<BytesN<32>>,
+        max_attempts: u32,
+    ) -> u64 {
+        caller.require_auth();
+        if record_ids.is_empty() {
+            return 0;
+        }
+
+        let next: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AsyncJobCount)
+            .unwrap_or(0);
+        let job_id = next.saturating_add(1);
+
+        let mut id_bytes = [0u8; 32];
+        id_bytes[..8].copy_from_slice(&job_id.to_be_bytes());
+        let request_id = BytesN::from_array(&env, &id_bytes);
+        env.storage().persistent().set(
+            &DataKey::AsyncJob(job_id),
+            &AsyncReconciliationJob {
+                job_id,
+                request: OfflineReconciliationRequest {
+                    request_id,
+                    source_chain,
+                    dest_chain,
+                    record_ids,
+                    expected_state_hash: BytesN::from_array(&env, &[0u8; 32]),
+                    created_at: env.ledger().timestamp(),
+                    expires_at: env.ledger().timestamp().saturating_add(86_400),
+                    requester: caller,
+                },
+                status: ReconciliationStatus::Pending,
+                queued_at: env.ledger().timestamp(),
+                started_at: 0,
+                completed_at: 0,
+                retry_count: 0,
+                max_retries: max_attempts,
+            },
+        );
+        env.storage().persistent().extend_ttl(&DataKey::AsyncJob(job_id), 100, 10_000);
+        env.storage().instance().set(&DataKey::AsyncJobCount, &job_id);
+
+        job_id
+    }
+
+    /// Mark a previously recorded offline reconciliation as complete and
+    /// persist its outcome. Returns `false` if no such reconciliation exists.
+    pub fn complete_reconciliation(
+        env: Env,
+        caller: Address,
+        request_id: BytesN<32>,
+        reconciled_records: u32,
+        failed_records: u32,
+        _pending_records: u32,
+        state_hash_matched: bool,
+        note: String,
+    ) -> bool {
+        caller.require_auth();
+        let key = DataKey::ReconciliationResult(request_id);
+        let Some(mut result) = env
+            .storage()
+            .persistent()
+            .get::<_, OfflineReconciliationResult>(&key)
+        else {
+            return false;
+        };
+        result.reconciled_records = reconciled_records;
+        result.failed_records = failed_records;
+        result.state_hash_matched = state_hash_matched;
+        result.completed_at = env.ledger().timestamp();
+        result.details = note;
+        env.storage().persistent().set(&key, &result);
+        true
+    }
+
+    /// Read the stored outcome of an offline reconciliation request, if any.
+    pub fn get_reconciliation_status(
+        env: Env,
+        request_id: BytesN<32>,
+    ) -> Option<OfflineReconciliationResult> {
+        env.storage()
+            .persistent()
+            .get::<_, OfflineReconciliationResult>(&DataKey::ReconciliationResult(request_id))
     }
 }
 
-mod sync_manager_client {
-    use soroban_sdk::{Address, BytesN, Env};
-    soroban_sdk::contractclient!(
-        name = "Client",
-        wasm = "../../target/wasm32-unknown-unknown/release/sync_manager.wasm"
-    );
-}
