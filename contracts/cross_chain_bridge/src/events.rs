@@ -12,6 +12,6 @@ const TOPIC_PREFIX: &str = "XBRIDGE";
 pub fn emit_jurisdiction_check(env: &Env, jurisdiction: &str) {
     env.events().publish(
         (Symbol::new(env, TOPIC_PREFIX), symbol_short!("JUR_CHECK")),
-        (symbol_short!(jurisdiction),),
+        (Symbol::new(env, jurisdiction),),
     );
 }
