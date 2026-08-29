@@ -256,3 +256,81 @@ mod tests {
         assert_eq!(count, 1);
     }
 }
+
+    // ── Reintegration regression coverage (issue #1439) ──────────────────────
+
+    /// Verifies that a double-initialize panics (authorization / init-guard).
+    #[test]
+    #[should_panic]
+    fn test_double_initialize_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, RuntimeValidation);
+        let client = RuntimeValidationClient::new(&env, &contract_id);
+        client.initialize(&admin);
+        // Second call must panic.
+        client.initialize(&admin);
+    }
+
+    /// Full happy-path: initialize → register invariant → verify success → verify failure.
+    #[test]
+    fn test_full_invariant_lifecycle() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, RuntimeValidation);
+        let client = RuntimeValidationClient::new(&env, &contract_id);
+
+        client.initialize(&admin);
+
+        let check_id = String::from_str(&env, "lifecycle_check");
+        let description = String::from_str(&env, "Value must be non-negative");
+        client.register_invariant(&admin, &check_id, &description, &2);
+
+        // Happy path: value ≥ lower bound
+        assert!(client.verify_invariant(&check_id, &50, &0, &100));
+        // Violation path: value < lower bound
+        assert!(!client.verify_invariant(&check_id, &-1, &0, &100));
+    }
+
+    /// Unauthorized caller must not be able to register invariants.
+    #[test]
+    #[should_panic]
+    fn test_register_invariant_unauthorized() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let non_admin = Address::generate(&env);
+        let contract_id = env.register_contract(None, RuntimeValidation);
+        let client = RuntimeValidationClient::new(&env, &contract_id);
+
+        client.initialize(&admin);
+
+        // non_admin is not the stored admin — must panic.
+        let check_id = String::from_str(&env, "unauthorized_check");
+        let description = String::from_str(&env, "Should fail");
+        client.register_invariant(&non_admin, &check_id, &description, &1);
+    }
+
+    /// Violation counter increments correctly across multiple reports.
+    #[test]
+    fn test_violation_count_accumulates() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let reporter = Address::generate(&env);
+        let contract_id = env.register_contract(None, RuntimeValidation);
+        let client = RuntimeValidationClient::new(&env, &contract_id);
+
+        client.initialize(&admin);
+        assert_eq!(client.get_violation_count(), 0);
+
+        let check_id = String::from_str(&env, "counter_check");
+        let details = String::from_str(&env, "detail");
+
+        client.report_violation(&reporter, &check_id, &ViolationType::InvariantViolation, &details);
+        client.report_violation(&reporter, &check_id, &ViolationType::StateInconsistency, &details);
+
+        assert_eq!(client.get_violation_count(), 2);
+    }
