@@ -49,6 +49,8 @@ exclude = [
     "contracts/deprecation_framework",
     "contracts/explainable_ai",
     "contracts/runtime_validation",
+    "contracts/clinical_decision_support",
+
     "contracts/emr_integration",
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
