@@ -340,6 +340,7 @@ directory (e.g. fuzz harness, integration test repo).
 | Category | Contracts | Action |
 | --- | --- | --- |
 | **Fix & Include** (already reintegrated in this branch) | `audit`, `sync_manager`, `failover_detector` | Compile clean, tests in place |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `sut_token`, `medical_record_hash_registry` | Compile clean (\*) = moved to **Deferred** this PR; see below |
 | **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `crypto_registry`, `emr_integration` | Compile clean (\*) = moved to **Deferred** this PR; see below. `crypto_registry` and `emr_integration` reintegrated in issues #1446, #1447, #1448, #1449 |
 | **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check` | Compile clean (\*) = moved to **Deferred** this PR; see below |
 | **Fix & Include** (reintegrated — issues #1442/#1443) | `clinical_decision_support` | `test.rs` added (init, happy-path, error-path); removed from `exclude` in root `Cargo.toml` |
