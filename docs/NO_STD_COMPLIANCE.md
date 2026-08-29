@@ -159,7 +159,6 @@ The following contracts are excluded from the workspace because they require `st
 - `aml`
 - `forensics`
 - `audit`
-- `rbac`
 - `federated_learning`
 - `sync_manager`
 - `failover_detector`
