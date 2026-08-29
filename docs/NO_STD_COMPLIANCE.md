@@ -156,7 +156,6 @@ The following contracts are excluded from the workspace because they require `st
 - `multi_region_orchestrator`
 - `digital_twin`
 - `aml`
-- `forensics`
 - `audit`
 - `federated_learning`
 - `sync_manager`
