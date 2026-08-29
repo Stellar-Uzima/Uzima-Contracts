@@ -30,6 +30,23 @@ impl AnalyticsCapability {
     }
 }
 
+impl TryFrom<u32> for AnalyticsCapability {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::StartRound),
+            2 => Ok(Self::SubmitUpdate),
+            3 => Ok(Self::FinalizeRound),
+            4 => Ok(Self::ReadRound),
+            5 => Ok(Self::ReadModel),
+            6 => Ok(Self::ManageParticipants),
+            7 => Ok(Self::ExportResults),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum DashboardCapability {
