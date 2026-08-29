@@ -156,7 +156,6 @@ The following contracts are excluded from the workspace because they require `st
 - `regional_node_manager`
 - `digital_twin`
 - `aml`
-- `forensics`
 - `audit`
 - `rbac`
 - `federated_learning`
