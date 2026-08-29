@@ -1,5 +1,8 @@
 use super::*;
-use soroban_sdk::{testutils::Address as _, Address, Env, String};
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    Address, Env, String,
+};
 
 fn create_token_contract(env: &Env) -> Address {
     env.register_contract(None, SutToken)
@@ -79,12 +82,21 @@ fn test_mint() {
 
     let mint_amount = 1000i128;
 
+    let events_before = env.events().all().len();
+
     // Mint tokens
     client.mint(&admin, &user, &mint_amount);
 
-    // Check balances
+    // Check balances (persisted result)
     assert_eq!(client.balance_of(&user), mint_amount);
     assert_eq!(client.total_supply(), mint_amount);
+
+    // Check that a mint event was emitted
+    let events_after = env.events().all();
+    assert!(
+        events_after.len() > events_before,
+        "mint must emit an event"
+    );
 }
 
 #[test]
