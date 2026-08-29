@@ -116,7 +116,7 @@ impl DeploymentSimulator {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::Env;
+    use soroban_sdk::Env;
 
     #[test]
     fn test_deployment_scenario_creation() {
