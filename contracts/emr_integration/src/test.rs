@@ -266,3 +266,90 @@ fn benchmark_meets_throughput_target() {
 
     assert!(benchmark.messages_per_second > 1000);
 }
+
+// ── Init-guard tests ──────────────────────────────────────────────────────────
+
+/// A second call to `initialize` must be rejected.
+///
+/// The contract uses `governance_commons::try_init_guard` which maps to
+/// `Error::EMRSystemAlreadyExists` on a second invocation.
+#[test]
+fn test_double_initialize_is_rejected() {
+    let env = Env::default();
+    let (client, admin, fhir_contract) = setup(&env);
+
+    let result = client
+        .mock_all_auths()
+        .try_initialize(&admin, &fhir_contract);
+
+    assert!(result.is_err(), "second initialize must return an error");
+}
+
+// ── Error-path tests ──────────────────────────────────────────────────────────
+
+/// Querying a message that was never generated must return EMRSystemNotFound
+/// (or MessageNotFound depending on call path) — not silently succeed.
+#[test]
+fn test_get_nonexistent_message_returns_error() {
+    let env = Env::default();
+    let (client, _admin, _) = setup(&env);
+
+    let result = client.try_get_message(&String::from_str(&env, "ghost-msg-999"));
+
+    assert!(result.is_err(), "getting a non-existent message must fail");
+}
+
+/// register_emr_system called by a non-admin address must be rejected.
+#[test]
+fn test_register_emr_system_unauthorized_caller_rejected() {
+    let env = Env::default();
+    let (client, _admin, _) = setup(&env);
+
+    let impostor = Address::generate(&env);
+
+    // mock_all_auths approves all auth, so we deliberately do NOT mock here so
+    // that require_auth() on the impostor causes a host auth error.
+    let result = client.try_register_emr_system(
+        &impostor,
+        &String::from_str(&env, "rogue-sys"),
+        &String::from_str(&env, "Rogue Vendor"),
+        &String::from_str(&env, "rogue@example.com"),
+        &String::from_str(&env, "1.0"),
+        &soroban_sdk::vec![&env, String::from_str(&env, "HL7 v2")],
+        &soroban_sdk::vec![&env, String::from_str(&env, "mllp://rogue")],
+    );
+
+    assert!(
+        result.is_err(),
+        "registration by an unauthorized caller must fail"
+    );
+}
+
+/// Generating a message for an EMR system that was never registered must fail.
+#[test]
+fn test_generate_message_for_unknown_system_fails() {
+    let env = Env::default();
+    let (client, _admin, _) = setup(&env);
+
+    let result = client.mock_all_auths().try_generate_message(
+        &Address::generate(&env),
+        &String::from_str(&env, "orphan-msg"),
+        &String::from_str(&env, "nonexistent-system"),
+        &MessagingStandard::HL7v2,
+        &String::from_str(&env, "2.5.1"),
+        &String::from_str(&env, "ADT^A01"),
+        &CharacterEncoding::UTF8,
+        &TransportProtocol::MLLP,
+        &String::from_str(&env, "application/hl7-v2"),
+        &{
+            let mut m = Map::new(&env);
+            m.set(String::from_str(&env, "patient_id"), String::from_str(&env, "P-X"));
+            m
+        },
+    );
+
+    assert!(
+        result.is_err(),
+        "generating a message for an unknown EMR system must fail"
+    );
+}

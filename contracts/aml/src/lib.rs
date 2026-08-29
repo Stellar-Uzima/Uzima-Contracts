@@ -291,6 +291,37 @@ impl AntiMoneyLaundering {
         Ok(())
     }
 
+    fn log_violation_internal(env: &Env, user: &Address, rule_id: u32) {
+        let mut profile = Self::get_or_create_profile(env, user);
+        profile.violation_count = profile.violation_count.saturating_add(1);
+        profile.last_checked = env.ledger().timestamp();
+        profile.last_risk_level = Self::compute_risk_level(profile.risk_score);
+        if profile.risk_score >= 9000 {
+            profile.is_blacklisted = true;
+        }
+
+        let mut stats: GlobalAMLStats = env
+            .storage()
+            .instance()
+            .get(&DataKey::GlobalStats)
+            .unwrap_or(GlobalAMLStats {
+                total_monitored: 0,
+                active_violations: 0,
+                blacklisted_count: 0,
+            });
+        stats.active_violations = stats.active_violations.saturating_add(1);
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::UserRisk(user.clone()), &profile);
+        env.storage().instance().set(&DataKey::GlobalStats, &stats);
+
+        env.events().publish(
+            (symbol_short!("AML"), symbol_short!("VIOLATION")),
+            (user.clone(), rule_id),
+        );
+    }
+
     fn ensure_upgrade_metadata(env: &Env, admin: &Address) {
         if !env.storage().instance().has(&UPGRADE_ADMIN) {
             env.storage().instance().set(&UPGRADE_ADMIN, admin);

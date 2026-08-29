@@ -114,6 +114,13 @@ impl core::fmt::Display for Error {
             Error::OperationAlreadyCompleted => write!(f, "operation already completed"),
             Error::MaxExtensionsReached => write!(f, "max extensions reached"),
             Error::RefundFailed => write!(f, "refund failed"),
+            Error::DisputeNotFound => write!(f, "dispute not found"),
+            Error::DisputeAlreadyExists => write!(f, "dispute already exists"),
+            Error::DisputeInvalidTransition => write!(f, "dispute invalid transition"),
+            Error::DisputeNotMediator => write!(f, "dispute not mediator"),
+            Error::DisputeAlreadyVoted => write!(f, "dispute already voted"),
+            Error::DisputeQuorumNotReached => write!(f, "dispute quorum not reached"),
+            Error::DisputeAlreadyClosed => write!(f, "dispute already closed"),
         }
     }
 }
