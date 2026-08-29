@@ -4,7 +4,7 @@
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, vec, Address, BytesN, Env,
-    String, Vec, Symbol
+    Map, String, Symbol, Vec
 };
 
 // Removed unused 'max' to prevent compiler warnings
