@@ -25,7 +25,7 @@ mod reorg_protection_tests {
     };
     use ed25519_dalek::{Signer, SigningKey};
     use soroban_sdk::{
-        testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec,
+        testutils::Address as _, Address, BytesN, Env, String,
     };
 
     // ── Minimum confirmation depths per chain ─────────────────────────
@@ -186,16 +186,17 @@ mod reorg_protection_tests {
         client.set_min_confirmations(&admin, &eth_min);
 
         // Register 6 validators to cover full finality (only use 3 for this test).
-        let validators: Vec<_> = (0..6)
-            .map(|_| register_validator(&env, &client, &admin))
-            .collect();
+        let mut validators: std::vec::Vec<(Address, SigningKey)> = std::vec::Vec::new();
+        for _ in 0..6 {
+            validators.push(register_validator(&env, &client, &admin));
+        }
 
         let msg_id = BytesN::from_array(&env, &[0x02u8; 32]);
         submit_message(
             &env,
             &client,
-            &validators[0].0,
-            &validators[0].1,
+            &validators.get(0).unwrap().0,
+            &validators.get(0).unwrap().1,
             msg_id.clone(),
             ChainId::Ethereum,
             ChainId::Stellar,
@@ -226,16 +227,17 @@ mod reorg_protection_tests {
         env.mock_all_auths();
         client.set_min_confirmations(&admin, &eth_min);
 
-        let validators: Vec<_> = (0..eth_min)
-            .map(|_| register_validator(&env, &client, &admin))
-            .collect();
+        let mut validators: std::vec::Vec<(Address, SigningKey)> = std::vec::Vec::new();
+        for _ in 0..eth_min {
+            validators.push(register_validator(&env, &client, &admin));
+        }
 
         let msg_id = BytesN::from_array(&env, &[0x03u8; 32]);
         submit_message(
             &env,
             &client,
-            &validators[0].0,
-            &validators[0].1,
+            &validators.get(0).unwrap().0,
+            &validators.get(0).unwrap().1,
             msg_id.clone(),
             ChainId::Ethereum,
             ChainId::Stellar,
@@ -344,16 +346,17 @@ mod reorg_protection_tests {
         env.mock_all_auths();
         client.set_min_confirmations(&admin, &polygon_min);
 
-        let validators: Vec<_> = (0..polygon_min)
-            .map(|_| register_validator(&env, &client, &admin))
-            .collect();
+        let mut validators: std::vec::Vec<(Address, SigningKey)> = std::vec::Vec::new();
+        for _ in 0..polygon_min {
+            validators.push(register_validator(&env, &client, &admin));
+        }
 
         let msg_id = BytesN::from_array(&env, &[0x06u8; 32]);
         submit_message(
             &env,
             &client,
-            &validators[0].0,
-            &validators[0].1,
+            &validators.get(0).unwrap().0,
+            &validators.get(0).unwrap().1,
             msg_id.clone(),
             ChainId::Polygon,
             ChainId::Stellar,
@@ -370,7 +373,7 @@ mod reorg_protection_tests {
         );
 
         // 3rd confirmation crosses threshold → Verified.
-        confirm_message(&env, &client, &validators[2].0, &validators[2].1, &msg_id, 3);
+        confirm_message(&env, &client, &validators.get(2).unwrap().0, &validators.get(2).unwrap().1, &msg_id, 3);
         assert_eq!(
             client.get_message(&msg_id).unwrap().status,
             MessageStatus::Verified,

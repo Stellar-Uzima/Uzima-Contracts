@@ -1,20 +1,20 @@
 [package]
-name = "emr_integration"
+name = "batch-rewards"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
 soroban-sdk.workspace = true
-governance_commons = { workspace = true }
+shared-types = { path = "../shared_types" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
-
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []

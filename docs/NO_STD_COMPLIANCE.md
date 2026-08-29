@@ -154,12 +154,11 @@ The following contracts are excluded from the workspace because they require `st
 - `health_data_access_logging`
 - `mfa`
 - `multi_region_orchestrator`
-- `regional_node_manager`
 - `digital_twin`
 - `aml`
-- `forensics`
 - `audit`
 - `rbac`
+- `federated_learning`
 - `sync_manager`
 - `failover_detector`
 - `healthcare_compliance_automation`
