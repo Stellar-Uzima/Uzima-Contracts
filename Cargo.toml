@@ -37,7 +37,6 @@ exclude = [
     # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
     # clippy enforcement). These contracts have real compile bugs (not clippy
     # lints) that predate this PR and need separate fixes.
-    "contracts/ai_analytics",
     "contracts/clinical_trial",
     "contracts/emergency_access_override",
     "contracts/healthcare_data_conversion",
