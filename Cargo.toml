@@ -49,6 +49,8 @@ exclude = [
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
+    "contracts/notification_system",
+    "contracts/test-helpers",
     "contracts/treasury_controller",
 
     # Fuzz harness: dev-deps reference excluded contracts (sut_token,
