@@ -23,6 +23,7 @@ exclude = [
     "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
     "contracts/digital_twin",
+    "contracts/forensics",
     "contracts/aml",
     "contracts/rbac",
     "contracts/forensics",
