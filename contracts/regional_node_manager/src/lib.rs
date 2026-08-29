@@ -560,6 +560,24 @@ mod test {
     }
 
     #[test]
+    fn test_assign_role_rejects_unauthorized_caller() {
+        let env = Env::default();
+        let admin = Address::random(&env);
+        let impostor = Address::random(&env);
+        let user = Address::random(&env);
+
+        RegionalNodeManager::initialize(env.clone(), admin).unwrap();
+
+        let result = RegionalNodeManager::assign_role(
+            env,
+            impostor,
+            user,
+            ROLE_OPERATOR,
+        );
+        assert!(matches!(result, Err(Error::NotAuthorized)));
+    }
+
+    #[test]
     fn test_register_node() {
         let env = Env::default();
         let admin = Address::random(&env);
