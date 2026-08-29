@@ -47,6 +47,7 @@ exclude = [
     "contracts/predictive_analytics",
     "contracts/deprecation_framework",
     "contracts/explainable_ai",
+    "contracts/medical_record_hash_registry",
     "contracts/runtime_validation",
     "contracts/clinical_decision_support",
 
