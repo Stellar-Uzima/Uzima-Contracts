@@ -150,7 +150,6 @@ The following contracts are excluded from the workspace because they require `st
 - `mental_health_support`
 - `patient_gamification`
 - `medical_imaging_ai`
-- `dicomweb_services`
 - `health_data_access_logging`
 - `mfa`
 - `multi_region_orchestrator`
