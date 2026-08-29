@@ -38,7 +38,6 @@ exclude = [
     # lints) that predate this PR and need separate fixes.
     "contracts/clinical_trial",
     "contracts/emergency_access_override",
-    "contracts/healthcare_data_conversion",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
     "contracts/deprecation_framework",
