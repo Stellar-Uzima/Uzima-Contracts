@@ -39,6 +39,16 @@ impl Default for RateLimitConfig {
     }
 }
 
+/// Rolling rate-limit window state tracked per requester.
+#[derive(Clone, Debug)]
+#[contracttype]
+pub struct RequesterWindow {
+    /// Timestamp when the current window started.
+    pub window_start: u64,
+    /// Number of requests submitted within the current window.
+    pub request_count: u32,
+}
+
 /// An emergency access request with full metadata for audit and rate-limiting.
 #[derive(Clone, Debug)]
 #[contracttype]
@@ -107,12 +117,21 @@ pub enum DataKey {
     GlobalGrantCount,                  // total grants in current window
     GlobalGrantWindowStart,            // timestamp when current window started
     CircuitBreakerTripped,             // bool: auto-paused due to rate limit
+    AccessRequest(u64),                // request_id -> EmergencyAccessRequest
+    RequestCounter,                    // next request id (instance)
+    RateLimitConfig,                   // instance: configurable rate-limit parameters
+    RequesterWindow(Address),          // requester -> RequesterWindow (rolling window state)
+    AuditCount,                        // next audit entry id (instance)
+    AuditEntry(u64),                   // audit id -> AccessApproval
+    AuditForRequest(u64),              // request_id -> Vec<AccessApproval>
 }
 
 // ==================== Contract ====================
 
 /// Default cooldown period: 24 hours in seconds.
 const DEFAULT_COOLDOWN_SECONDS: u64 = 86_400;
+/// Default expiry for legacy multi-sig emergency requests (1 hour).
+const DEFAULT_EXPIRY_SECONDS: u64 = 3_600;
 /// Global rate limit: max grants per rolling window.
 const GLOBAL_GRANT_LIMIT: u64 = 10;
 /// Rolling window duration for global rate limit: 1 hour.
@@ -516,6 +535,248 @@ impl EmergencyAccessOverride {
             .instance()
             .get(&DataKey::Admin)
             .ok_or(Error::NotInitialized)
+    }
+
+    /// Submit an emergency access request subject to per-requester rate limiting.
+    /// Returns the assigned request id on success.
+    pub fn submit_emergency_access_request(
+        env: Env,
+        requester: Address,
+        patient: Address,
+        provider: Address,
+        reason: Symbol,
+        duration_seconds: u64,
+    ) -> Result<u64, Error> {
+        requester.require_auth();
+        Self::require_initialized(&env)?;
+
+        let config: RateLimitConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::RateLimitConfig)
+            .unwrap_or_default();
+
+        let now = env.ledger().timestamp();
+        let window_key = DataKey::RequesterWindow(requester.clone());
+        let mut window: RequesterWindow = env
+            .storage()
+            .persistent()
+            .get(&window_key)
+            .unwrap_or(RequesterWindow {
+                window_start: now,
+                request_count: 0,
+            });
+
+        // Reset the window once it has elapsed.
+        if now.saturating_sub(window.window_start) >= config.window_seconds {
+            window.window_start = now;
+            window.request_count = 0;
+        }
+
+        if window.request_count >= config.max_requests_per_window {
+            return Err(Error::RateLimitExceeded);
+        }
+        window.request_count = window.request_count.saturating_add(1);
+        env.storage().persistent().set(&window_key, &window);
+
+        let request_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::RequestCounter)
+            .unwrap_or(0)
+            .saturating_add(1);
+        env.storage()
+            .instance()
+            .set(&DataKey::RequestCounter, &request_id);
+
+        let request = EmergencyAccessRequest {
+            request_id,
+            patient: patient.clone(),
+            provider: provider.clone(),
+            reason,
+            requester: requester.clone(),
+            approvals: Vec::new(&env),
+            created_at: now,
+            granted: false,
+            granted_at: 0,
+            expires_at: now.saturating_add(duration_seconds),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessRequest(request_id), &request);
+
+        Ok(request_id)
+    }
+
+    /// Read an emergency access request by id.
+    pub fn get_access_request(env: Env, request_id: u64) -> Option<EmergencyAccessRequest> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AccessRequest(request_id))
+    }
+
+    /// Update the rate-limit configuration. Only callable by admin.
+    pub fn update_rate_limit_config(
+        env: Env,
+        admin: Address,
+        config: RateLimitConfig,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_initialized(&env)?;
+
+        let stored_admin: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Admin)
+            .ok_or(Error::NotInitialized)?;
+        if stored_admin != admin {
+            return Err(Error::Unauthorized);
+        }
+
+        env.storage()
+            .instance()
+            .set(&DataKey::RateLimitConfig, &config);
+        Ok(())
+    }
+
+    /// Read the current rate-limit configuration.
+    pub fn get_rate_limit_config(env: Env) -> RateLimitConfig {
+        env.storage()
+            .instance()
+            .get(&DataKey::RateLimitConfig)
+            .unwrap_or_default()
+    }
+
+    /// Approve an emergency access request. Returns true when this approval
+    /// reaches the configured threshold and access is granted.
+    pub fn approve_access_request(
+        env: Env,
+        approver: Address,
+        request_id: u64,
+    ) -> Result<bool, Error> {
+        approver.require_auth();
+        Self::require_initialized(&env)?;
+
+        let trusted: Vec<Address> = env
+            .storage()
+            .instance()
+            .get(&DataKey::TrustedApprovers)
+            .ok_or(Error::NotInitialized)?;
+        multi_sig::validate_approver(&approver, &trusted).map_err(|_| Error::Unauthorized)?;
+
+        let mut request: EmergencyAccessRequest = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AccessRequest(request_id))
+            .ok_or(Error::RecordNotFound)?;
+
+        if request.granted {
+            return Ok(true);
+        }
+
+        if !multi_sig::add_approval(approver.clone(), &mut request.approvers) {
+            events::publish_duplicate_approval(
+                &env,
+                &request.patient,
+                &request.provider,
+                &approver,
+                env.ledger().timestamp(),
+            );
+            return Ok(false);
+        }
+
+        let threshold: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ApprovalThreshold)
+            .ok_or(Error::NotInitialized)?;
+        let reached = multi_sig::check_approval_status(&request.approvers, threshold, false)
+            == ApprovalStatus::Ready;
+
+        if reached {
+            request.granted = true;
+            request.granted_at = env.ledger().timestamp();
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::AccessRequest(request_id), &request);
+
+        // Append an immutable audit-trail entry for this approval.
+        let audit_id: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::AuditCount)
+            .unwrap_or(0)
+            .saturating_add(1);
+        env.storage().instance().set(&DataKey::AuditCount, &audit_id);
+
+        let entry = AccessApproval {
+            request_id,
+            approver: approver.clone(),
+            approved_at: env.ledger().timestamp(),
+            ledger_sequence: env.ledger().sequence(),
+            final_approval: reached,
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditEntry(audit_id), &entry);
+
+        let mut trail: Vec<AccessApproval> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::AuditForRequest(request_id))
+            .unwrap_or_else(|| Vec::new(&env));
+        trail.push_back(entry);
+        env.storage()
+            .persistent()
+            .set(&DataKey::AuditForRequest(request_id), &trail);
+
+        events::record_audit_entry(
+            &env,
+            if reached {
+                events::AuditAction::GrantGranted
+            } else {
+                events::AuditAction::GrantApproved
+            },
+            &approver,
+            Some(request.patient.clone()),
+            Some(request.provider.clone()),
+            symbol_short!("OK"),
+        );
+        if reached {
+            events::publish_emergency_access_granted(
+                &env,
+                &request.patient,
+                &request.provider,
+                request.expires_at,
+                env.ledger().timestamp(),
+            );
+        }
+
+        Ok(reached)
+    }
+
+    /// Return the audit trail for a request in approval order.
+    pub fn get_approval_audit_trail(env: Env, request_id: u64) -> Vec<AccessApproval> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditForRequest(request_id))
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Total number of audit-trail entries recorded across all requests.
+    pub fn get_audit_trail_count(env: Env) -> u64 {
+        env.storage()
+            .instance()
+            .get(&DataKey::AuditCount)
+            .unwrap_or(0)
+    }
+
+    /// Read a single audit-trail entry by its sequential id.
+    pub fn get_audit_trail_entry(env: Env, audit_id: u64) -> Option<AccessApproval> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::AuditEntry(audit_id))
     }
 
     #[must_use]
