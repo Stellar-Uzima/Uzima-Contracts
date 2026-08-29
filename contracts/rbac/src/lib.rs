@@ -29,8 +29,9 @@
 //! - `Service` - Automated service account
 //!
 //! ## Error Ranges
-//! - 100: Unauthorized
-//! - 300-301: Lifecycle & State
+//! Discriminants are mapped onto the canonical `CommonError` taxonomy
+//! (`Unauthorized = 1`, `NotInitialized = 2`, `AlreadyInitialized = 3`), so
+//! cross-contract tooling only needs to handle one shape of errors.
 //!
 //! ## Example Usage
 //! ```rust,ignore

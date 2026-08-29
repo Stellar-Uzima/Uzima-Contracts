@@ -58,14 +58,6 @@ pub fn submit_update(
     num_samples: u32,
 ) -> Result<bool, Error> {
     participant.require_auth();
-    let admin_check = utils::ensure_admin(&env, &participant);
-    if admin_check.is_err() {
-        capability::require_capability(
-            &env,
-            &participant,
-            AnalyticsCapability::SubmitUpdate as u32,
-        )?;
-    }
 
     let mut round: FederatedRound = env
         .storage()
