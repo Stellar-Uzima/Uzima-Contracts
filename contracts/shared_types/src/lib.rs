@@ -2,9 +2,16 @@
 //!
 //! Common error types and codes shared across all Uzima contracts.
 //! Import this crate in any contract's `ContractError` via `CommonError`.
+//!
+//! Also hosts the shared tiered-rate utility ([`rate_curve`]) used by the
+//! `fee`, `batch-rewards`, and `rewards` contracts (issue #1341).
 
 #![no_std]
 
+pub mod rate_curve;
+pub use rate_curve::{calculate_tiered_rate, Tier};
+
+use soroban_sdk::contract;
 use soroban_sdk::contracterror;
 
 /// Shared error codes used consistently across all contracts.
@@ -26,10 +33,6 @@ pub enum CommonError {
     /// Contract is paused; no state-changing calls are allowed.
     ContractPaused = 6,
 }
-#![no_std]
-#![forbid(alloc)]
-
-use soroban_sdk::contract;
 
 #[contract]
 pub struct SharedTypes;
