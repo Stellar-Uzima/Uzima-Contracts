@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Stellar-Uzima/Uzima-Contracts/schemas/trace/contract_trace.schema.json",
+  "title": "ContractTrace",
+  "version": "1.0.0",
+  "description": "Canonical JSON schema for one Soroban contract invocation trace: the ordered, correlated record that binds a contract function call, its typed arguments, its return value, the events it emitted, and (optionally) the raw result XDR. Each record is one JSON object emitted on a single NDJSON/JSONL line by the M1 extractor. trace_id is the cross-contract correlation key (the telemetry correlation id in docs/TELEMETRY_SCHEMA.md); event objects conform to schemas/events/event_envelope.schema.json and their topics are linked to the authoritative registry schemas/events/event-schema-registry.json. Bump `version` (and make it breaking) whenever a consuming decoder must change.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "trace_id",
+    "contract",
+    "contract_name",
+    "function",
+    "status",
+    "arguments",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Must equal the `version` of contract_trace.schema.json; a breaking schema change bumps both."
+    },
+    "trace_id": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$",
+      "description": "32-byte hex correlation key linking events spawned by the same invocation (and its nested cross-contract calls)."
+    },
+    "contract": {
+      "type": "string",
+      "pattern": "^(C[A-Z2-7]{55}|[0-9a-fA-F]{64})$",
+      "description": "Soroban contract id of the invoked contract (C-prefixed strkey form, or the raw 32-byte hex)."
+    },
+    "contract_name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Contract name as registered in schemas/events/event-schema-registry.json; used to link emitted events to the authoritative registry."
+    },
+    "function": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Function symbol that was invoked."
+    },
+    "account": {
+      "type": "string",
+      "pattern": "^G[A-Z2-7]{55}$",
+      "description": "Source account that authorized the invocation (optional)."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["success", "failed"]
+    },
+    "ledger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "block_time": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Ledger close time (unix seconds)."
+    },
+    "arguments": {
+      "type": "array",
+      "description": "Ordered invocation arguments decoded per docs/SERIALIZATION_STANDARDS.md; each entry carries a typed value.",
+      "items": {
+        "$ref": "#/$defs/typedValue"
+      }
+    },
+    "return_value": {
+      "$ref": "#/$defs/typedValue",
+      "description": "Function return value decoded per docs/SERIALIZATION_STANDARDS.md."
+    },
+    "events": {
+      "type": "array",
+      "description": "Ordered list of events emitted by this invocation. Each item is an event envelope (schemas/events/event_envelope.schema.json) plus the raw topic symbols and its 0-based emission order.",
+      "items": {
+        "$ref": "#/$defs/traceEvent"
+      }
+    },
+    "result_xdr": {
+      "type": "string",
+      "description": "Optional base64-encoded raw result XDR (TransactionMeta) for auditability."
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "typedValue": {
+      "type": "object",
+      "required": ["type", "value"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "XDR type of the value (e.g. u32, i128, address, bytes, string, bool, vec, map, void)."
+        },
+        "value": {
+          "description": "Decoded value; `null` for void/nullable with no payload."
+        }
+      },
+      "additionalProperties": false
+    },
+    "traceEvent": {
+      "type": "object",
+      "required": ["sequence", "contract", "name", "version", "topics", "body"],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based emission order within the trace."
+        },
+        "contract": {
+          "type": "string",
+          "description": "Soroban contract id that emitted the event."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Event name; must exist in schema_version registry entry for the trace's contract_name."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Event schema version from the registry."
+        },
+        "topics": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          },
+          "description": "Topic symbols (as extracted, e.g. [\"record_created\", \"medical_records\"]); every symbol must appear in the registry entry's topics list."
+        },
+        "body": {
+          "type": "object",
+          "description": "Event payload; validated against the registry event schema and, structurally, against schemas/events/event_envelope.schema.json."
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}
