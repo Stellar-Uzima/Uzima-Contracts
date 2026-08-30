@@ -5,6 +5,11 @@
 
 set -euo pipefail  # Exit on error, undefined vars, or pipe fail
 
+# Capture helpers (issue #1509): preserve interactive output while persisting a
+# durable invocation XDR artifact under reports/traces/.
+# shellcheck source=capture_trace.sh
+source "$(dirname "$0")/capture_trace.sh"
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -67,20 +72,39 @@ fi
 IDENTITY_ADDRESS=$(soroban config identity address "$IDENTITY")
 print_status "Using identity: $IDENTITY ($IDENTITY_ADDRESS)"
 
-# Build the command
-CMD="soroban contract invoke --id $CONTRACT_ID --source $IDENTITY --network $NETWORK"
+# Build the command (array form so the artifact captures run exactly like the
+# interactive invocation does)
+CMD=(soroban contract invoke --id "$CONTRACT_ID" --source "$IDENTITY" --network "$NETWORK")
 
 # Add function and arguments
 if [ ${#ARGS[@]} -eq 0 ]; then
-    CMD="$CMD -- $FUNCTION"
+    CMD+=("--" "$FUNCTION")
 else
-    CMD="$CMD -- $FUNCTION ${ARGS[*]}"
+    CMD+=("--" "$FUNCTION" "${ARGS[@]}")
 fi
 
-print_step "Executing: $CMD"
+ARGS_STR=""
+if [ ${#ARGS[@]} -gt 0 ]; then
+    ARGS_STR="${ARGS[*]}"
+fi
 
-# Execute the command
-if ! eval "$CMD"; then
+print_step "Executing: soroban contract invoke --id $CONTRACT_ID --source $IDENTITY --network $NETWORK -- $FUNCTION $ARGS_STR"
+
+# Execute the command, streaming the live output while preserving the
+# invocation result and its environment diagnostics as a durable XDR artifact
+# (reports/traces/) so traces stay recoverable after the fact (issue #1509).
+CAPTURE_RC=0
+if capture_invoke_result "$NETWORK" "$CONTRACT_ID" "$FUNCTION" "${CMD[@]}"; then
+    CAPTURE_RC=0
+else
+    CAPTURE_RC=$?
+fi
+
+while IFS= read -r trace_file; do
+    print_status "Invocation artifact: $trace_file"
+done <<< "$TRACE_ARTIFACTS"
+
+if [ "$CAPTURE_RC" -ne 0 ]; then
     print_error "Contract interaction failed ❌"
     exit 1
 fi

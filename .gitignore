@@ -51,6 +51,9 @@ lcov.info
 dashboard/data/complexity_report.json
 dashboard/data/complexity_trends.json
 
+# Per-invocation XDR / trace artifacts (issue #1509 — capture_trace.sh)
+reports/traces/
+
 # Temporary files
 *.tmp
 *.temp
