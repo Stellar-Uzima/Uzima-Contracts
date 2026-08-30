@@ -16,20 +16,18 @@
     "api-docs:generate": "node scripts/docs/generate-from-registry.mjs",
     "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
     "changelog:generate": "node scripts/generate-changelog-entries.mjs",
-    "changelog:append": "node scripts/generate-changelog-entries.mjs --append"
-    "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check"
-    "api-docs:check": "node scripts/docs/generate-from-registry.mjs --check",
-    "changelog:generate": "node scripts/generate-changelog-entries.mjs",
     "changelog:append": "node scripts/generate-changelog-entries.mjs --append",
     "health:dashboard": "node scripts/generate-health-dashboard.mjs",
     "deadcode:scan": "bash scripts/deadcode_scan.sh",
     "deadcode:scan:rust": "bash scripts/deadcode_scan.sh --rust-only",
-    "deadcode:scan:js": "bash scripts/deadcode_scan.sh --js-only"
+    "deadcode:scan:js": "bash scripts/deadcode_scan.sh --js-only",
     "template:check": "bash scripts/check_template_compat.sh --all",
-    "template:check:strict": "bash scripts/check_template_compat.sh --all --strict"
+    "template:check:strict": "bash scripts/check_template_compat.sh --all --strict",
     "drift:check": "bash scripts/check_drift.sh --all",
     "drift:check:schema": "bash scripts/check_drift.sh --schema",
-    "drift:check:docs": "bash scripts/check_drift.sh --docs"
+    "drift:check:docs": "bash scripts/check_drift.sh --docs",
+    "trace:validate": "node scripts/trace/validate-trace-ndjson.mjs --file schemas/trace/samples/valid_extractor.ndjson",
+    "trace:check": "node scripts/trace/trace-selfcheck.mjs"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",
