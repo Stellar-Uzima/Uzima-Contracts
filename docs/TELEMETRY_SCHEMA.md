@@ -4,7 +4,7 @@ This document defines the versioned on-chain telemetry event schema and incident
 
 ## Overview
 
-The monitoring contract emits structured telemetry events that off-chain systems can parse to build dashboards, trigger alerts, and conduct incident response. Every event carries a **schema version** for forward/backward compatibility, a **correlation ID** to link related events, and a **classification** that separates routine operations from security-relevant anomalies.
+The monitoring contract emits structured telemetry events that off-chain systems can parse to build dashboards, trigger alerts, and conduct incident response. Every event carries a **schema version** for forward/backward compatibility, a **trace ID** to link every contract in a single logical transaction, a legacy **correlation ID**, and a **classification** that separates routine operations from security-relevant anomalies.
 
 ## Event Schema
 
@@ -13,7 +13,8 @@ Each telemetry event is a `TelemetryEvent` struct emitted with topic `(TEL, <typ
 | Field | Type | Description |
 |---|---|---|
 | `schema_version` | `u32` | Packed semver `MAJOR*10000 + MINOR*100 + PATCH` |
-| `correlation_id` | `BytesN<32>` | Links events across a transaction chain |
+| `correlation_id` | `BytesN<32>` | **Legacy** per-contract ID, derived from the direct caller + timestamp. Not a reliable trace key. |
+| `trace_id` | `BytesN<32>` | Trace ID invariant across a cross-contract call chain (see [Trace IDs](#trace-ids)) |
 | `contract_name` | `String` | Name of the emitting contract |
 | `contract_version` | `String` | Version of the emitting contract |
 | `event_type` | `TelemetryEventType` | Specific type of event |
@@ -27,11 +28,13 @@ Each telemetry event is a `TelemetryEvent` struct emitted with topic `(TEL, <typ
 
 The version follows semver:
 
-- **MAJOR** (breaking): removed or reordered fields — all consumers must update.
+- **MAJOR** (breaking): removed, reordered, or newly required fields — all consumers must update.
 - **MINOR** (additive): new optional fields appended at the end — consumers can ignore.
 - **PATCH** (fixes): bug fixes, documentation, no schema change.
 
-Current version: **1.0.0** (`schema_version = 10000`).
+Current version: **2.0.0** (`schema_version = 20000`).
+
+Version 2.0.0 (a MAJOR bump from 1.0.0) is a breaking change: `TelemetryEvent` gained a required `trace_id` field, changing the packed event payload. Any off-chain consumer of v1 must be updated to emit and parse v2.
 
 To upgrade, update `SCHEMA_VERSION_MINOR` or `SCHEMA_VERSION_MAJOR` in `telemetry.rs` and emit a migration event in the changelog.
 
@@ -65,9 +68,21 @@ To upgrade, update `SCHEMA_VERSION_MINOR` or `SCHEMA_VERSION_MAJOR` in `telemetr
 | `Error` (2) | Operation failed |
 | `Critical` (3) | System-level failure, threshold breach, requires immediate attention |
 
-## Correlation IDs
+## Trace IDs
 
-Every event includes a `correlation_id` derived from the caller address and ledger timestamp. Off-chain systems should group events by correlation ID to reconstruct a full execution trace for a given transaction or call chain.
+Every event includes a `trace_id` (`BytesN<32>`) that is **invariant across a single transaction's cross-contract call chain**. Off-chain systems group events by `trace_id` to reconstruct a full execution trace.
+
+The trace ID is derived by the top-level submitter from the caller that authorized the submission plus the current ledger sequence:
+
+```text
+trace_id = sha256(top_level_caller_address || ledger_sequence)
+```
+
+The derivation rule is implemented once in `telemetry::derive_trace_id`. The top-level contract computes it and **forwards the value** through every downstream contract in the chain; each downstream contract reuses the ID it was passed rather than recomputing it from its own direct caller. Because the direct caller changes at every hop (contract A's caller is the end user, contract B's caller is A), recomputing per hop is exactly what produced disjoint IDs — the fix is to forward a single value.
+
+The legacy `correlation_id` is derived per-contract from the direct caller and ledger timestamp; it is **not** a reliable trace key and must not be used to reconstruct traces. Consumers of events at or above schema 2.0.0 must group on `trace_id`.
+
+> **Note for off-chain consumers:** the on-chain `trace_id` derivation (top-level caller + ledger sequence) must be mirrored off-chain so events regroup identically. The M1 trace extractor implements this same rule.
 
 ## Threshold Breach Events
 
@@ -94,7 +109,7 @@ When an alert threshold is breached:
 1. The contract emits a `ThresholdBreached` event with severity `Critical`.
 2. Off-chain monitoring (Grafana, PagerDuty, custom) detects the event.
 3. The operator queries `get_telemetry_snapshot()` to assess the current state.
-4. Events with the same `correlation_id` are correlated to trace the root cause.
+4. Events with the same `trace_id` are correlated to trace the root cause.
 5. The operator may call `update_alert_config()` (admin only) to adjust thresholds or silence non-critical alerts.
 6. For persistent issues, the operator should:
    - Review the contract's gas and error rate trends.
@@ -117,3 +132,10 @@ When upgrading from one schema version to another:
 3. Old consumers will ignore unknown trailing fields (forward-compatible).
 4. New consumers must handle missing optional fields gracefully.
 5. Document the change in `docs/TELEMETRY_SCHEMA.md`.
+
+### Migrating 1.0.0 → 2.0.0
+
+Version 2.0.0 is a **breaking** release: `TelemetryEvent` replaced the meaning of its trace-linkage with a new required `trace_id` field.
+
+- Emitters must now call `record_call` / `record_error` with a `trace_id` derived once by the top-level submitter (`telemetry::derive_trace_id`) and forwarded down the call chain.
+- Consumers must parse the new `trace_id` field and group by it. The legacy `correlation_id` remains present but is explicitly not a trace key.

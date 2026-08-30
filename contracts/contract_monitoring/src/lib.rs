@@ -15,15 +15,16 @@
 #![forbid(alloc)]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, Env, String,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Bytes, BytesN, Env,
+    String,
 };
 
 pub mod telemetry;
 pub mod security_telemetry;
 pub mod payload_compression;
 use telemetry::{
-    build_event, current_schema_version, emit_telemetry_event, EventClass, TelemetryEvent,
-    TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,
+    build_event, current_schema_version, derive_trace_id, emit_telemetry_event, EventClass,
+    TelemetryEvent, TelemetryEventType, TelemetrySeverity, TelemetrySnapshot, TELEMETRY_TOPIC,
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -135,11 +136,15 @@ impl ContractMonitoring {
     /// `caller` – the address that invoked the function.
     /// `function_name` – name of the function called.
     /// `gas_used` – estimated gas consumed (pass 0 if unknown).
+    /// `trace_id` – the trace ID for the enclosing logical transaction, derived
+    /// once by the top-level submitter via [`telemetry::derive_trace_id`] and
+    /// forwarded (not recomputed) by every contract in the call chain.
     pub fn record_call(
         env: Env,
         caller: Address,
         function_name: String,
         gas_used: u64,
+        trace_id: BytesN<32>,
     ) -> Result<(), MonitoringError> {
         Self::ensure_initialized(&env)?;
 
@@ -196,7 +201,7 @@ impl ContractMonitoring {
         env.storage().instance().set(&key, &stats);
 
         // Check alert thresholds.
-        Self::check_alerts(&env, gas + gas_used);
+        Self::check_alerts(&env, gas + gas_used, &trace_id);
 
         // Emit telemetry event.
         let caller_bytes: Bytes = caller.to_buffer().into();
@@ -210,6 +215,7 @@ impl ContractMonitoring {
             &function_name.to_string(),
             &String::from_str(&env, "invoked"),
             corr_id,
+            trace_id,
         );
         emit_telemetry_event(&env, &event);
 
@@ -217,7 +223,14 @@ impl ContractMonitoring {
     }
 
     /// Record a failed function call / error.
-    pub fn record_error(env: Env, function_name: String) -> Result<(), MonitoringError> {
+    ///
+    /// `trace_id` – the trace ID for the enclosing logical transaction (see
+    /// [`Self::record_call`]).
+    pub fn record_error(
+        env: Env,
+        function_name: String,
+        trace_id: BytesN<32>,
+    ) -> Result<(), MonitoringError> {
         Self::ensure_initialized(&env)?;
 
         let errors: u64 = env
@@ -258,6 +271,7 @@ impl ContractMonitoring {
             &fn_name_for_telemetry.to_string(),
             &String::from_str(&env, "error"),
             corr_id,
+            trace_id,
         );
         emit_telemetry_event(&env, &event);
 
@@ -481,7 +495,7 @@ impl ContractMonitoring {
             .ok_or(MonitoringError::NotInitialized)
     }
 
-    fn check_alerts(env: &Env, total_gas: u64) {
+    fn check_alerts(env: &Env, total_gas: u64, trace_id: &BytesN<32>) {
         let config: AlertConfig = match env.storage().instance().get(&DataKey::AlertConfig) {
             Some(c) => c,
             None => return,
@@ -519,6 +533,7 @@ impl ContractMonitoring {
                 "check_alerts",
                 "error_rate",
                 corr_id,
+                trace_id.clone(),
             );
             emit_telemetry_event(&env, &event);
         }
@@ -538,6 +553,7 @@ impl ContractMonitoring {
                 "check_alerts",
                 "gas",
                 corr_id,
+                trace_id.clone(),
             );
             emit_telemetry_event(&env, &event);
         }
@@ -549,7 +565,62 @@ impl ContractMonitoring {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Env, String};
+    use soroban_sdk::{
+        contract, contractimpl, testutils::Address as _, testutils::Events, Address, BytesN, Env,
+        String, Symbol, TryFromVal, Vec,
+    };
+
+    /// Derive a trace id for a given top-level caller (mirrors the production
+    /// `derive_trace_id` rule so the tests exercise the same invariant).
+    fn trace_for(env: &Env, top_level_caller: &Address) -> BytesN<32> {
+        derive_trace_id(env, top_level_caller)
+    }
+
+    /// A callable contract representing the **callee** in a cross-contract
+    /// chain. It forwards the `trace_id` it was passed (it does not recompute
+    /// it from its own direct caller) so its telemetry joins the same trace.
+    #[contract]
+    struct MockCallee;
+
+    #[contractimpl]
+    impl MockCallee {
+        pub fn emit(env: Env, monitor: Address, forwarded_caller: Address, trace_id: BytesN<32>) {
+            let monitor_client = ContractMonitoringClient::new(&env, &monitor);
+            monitor_client
+                .record_call(
+                    &forwarded_caller,
+                    &String::from_str(&env, "callee_op"),
+                    &50,
+                    &trace_id,
+                )
+                .unwrap();
+        }
+    }
+
+    /// A callable contract representing the **caller** in a cross-contract
+    /// chain. It is invoked by the top-level user (via `authorized()`), derives
+    /// the trace id from that user, then calls the callee through
+    /// `authorized()`, forwarding the same trace id.
+    #[contract]
+    struct MockCaller;
+
+    #[contractimpl]
+    impl MockCaller {
+        pub fn invoke(env: Env, monitor: Address, callee: Address, user: Address) -> BytesN<32> {
+            user.require_auth();
+            let trace_id = derive_trace_id(&env, &user);
+
+            let monitor_client = ContractMonitoringClient::new(&env, &monitor);
+            monitor_client
+                .record_call(&user, &String::from_str(&env, "caller_op"), &100, &trace_id)
+                .unwrap();
+
+            let callee_client = MockCalleeClient::new(&env, &callee);
+            callee_client.emit(&monitor, &user, &trace_id);
+
+            trace_id
+        }
+    }
 
     fn default_config() -> AlertConfig {
         AlertConfig {
@@ -573,9 +644,10 @@ mod test {
         let env = Env::default();
         let (client, _) = setup(&env);
         let caller = Address::generate(&env);
+        let trace = trace_for(&env, &caller);
 
-        client.record_call(&caller, &String::from_str(&env, "write_record"), &100);
-        client.record_call(&caller, &String::from_str(&env, "write_record"), &150);
+        client.record_call(&caller, &String::from_str(&env, "write_record"), &100, &trace);
+        client.record_call(&caller, &String::from_str(&env, "write_record"), &150, &trace);
 
         let dash = client.get_dashboard();
         assert_eq!(dash.total_calls, 2);
@@ -590,7 +662,8 @@ mod test {
 
         for _ in 0..5 {
             let caller = Address::generate(&env);
-            client.record_call(&caller, &String::from_str(&env, "read_record"), &50);
+            let trace = trace_for(&env, &caller);
+            client.record_call(&caller, &String::from_str(&env, "read_record"), &50, &trace);
         }
 
         let dash = client.get_dashboard();
@@ -602,11 +675,12 @@ mod test {
         let env = Env::default();
         let (client, _) = setup(&env);
         let caller = Address::generate(&env);
+        let trace = trace_for(&env, &caller);
 
         for _ in 0..9 {
-            client.record_call(&caller, &String::from_str(&env, "fn"), &10);
+            client.record_call(&caller, &String::from_str(&env, "fn"), &10, &trace);
         }
-        client.record_error(&String::from_str(&env, "fn"));
+        client.record_error(&String::from_str(&env, "fn"), &trace);
 
         let dash = client.get_dashboard();
         assert_eq!(dash.total_calls, 9);
@@ -620,10 +694,11 @@ mod test {
         let env = Env::default();
         let (client, _) = setup(&env);
         let caller = Address::generate(&env);
+        let trace = trace_for(&env, &caller);
         let fn_name = String::from_str(&env, "initialize");
 
-        client.record_call(&caller, &fn_name, &200);
-        client.record_call(&caller, &fn_name, &300);
+        client.record_call(&caller, &fn_name, &200, &trace);
+        client.record_call(&caller, &fn_name, &300, &trace);
 
         let stats = client.get_function_stats(&fn_name);
         assert_eq!(stats.call_count, 2);
@@ -657,18 +732,78 @@ mod test {
         let env = Env::default();
         let (client, _) = setup(&env);
         let caller = Address::generate(&env);
+        let trace = trace_for(&env, &caller);
 
         for _ in 0..3 {
-            client.record_call(&caller, &String::from_str(&env, "fn"), &10);
+            client.record_call(&caller, &String::from_str(&env, "fn"), &10, &trace);
         }
-        client.record_error(&String::from_str(&env, "fn"));
+        client.record_error(&String::from_str(&env, "fn"), &trace);
 
         let snapshot = client.get_telemetry_snapshot();
-        assert_eq!(snapshot.schema_version, 10_000);
+        assert_eq!(snapshot.schema_version, 20_000);
         assert_eq!(snapshot.total_events, 4);
         assert_eq!(snapshot.operational_count, 3);
         assert_eq!(snapshot.security_count, 1);
         assert_eq!(snapshot.error_count, 1);
+    }
+
+    #[test]
+    fn test_cross_contract_trace_id_joined() {
+        // The caller contract and the callee contract, invoked through
+        // `authorized()`, emit telemetry events that share a single `trace_id`
+        // for one logical transaction.
+        let env = Env::default();
+        let (client, _) = setup(&env);
+        let user = Address::generate(&env);
+        env.mock_all_auths();
+
+        let caller_id = env.register_contract(None, MockCaller);
+        let callee_id = env.register_contract(None, MockCallee);
+        let caller_client = MockCallerClient::new(&env, &caller_id);
+
+        let monitor = client.address.clone();
+        let expected_trace = derive_trace_id(&env, &user);
+        caller_client.invoke(&monitor, &callee_id, &user);
+
+        // Collect every telemetry event emitted by either contract in the chain.
+        let mut trace_ids: Vec<BytesN<32>> = Vec::new(&env);
+        for event in env.events().all().iter() {
+            if event.1.len() < 2 {
+                continue;
+            }
+            let Some(topic) = event.1.get(0) else {
+                continue;
+            };
+            if Symbol::try_from_val(&env, &topic) != Ok(TELEMETRY_TOPIC) {
+                continue;
+            }
+            if let Ok(evt) = TelemetryEvent::try_from_val(&env, &event.2) {
+                trace_ids.push_back(evt.trace_id);
+            }
+        }
+
+        // Both contracts must have joined the same trace.
+        assert!(trace_ids.len() >= 2, "expected two telemetry events");
+        for id in trace_ids.iter() {
+            assert_eq!(*id, expected_trace, "all events must share the trace_id");
+        }
+    }
+
+    #[test]
+    fn test_different_traces_do_not_collide() {
+        // Two events raised by different top-level callers in the same ledger
+        // must not share a `trace_id`.
+        let env = Env::default();
+        let (client, _) = setup(&env);
+        let caller_a = Address::generate(&env);
+        let caller_b = Address::generate(&env);
+        let trace_a = trace_for(&env, &caller_a);
+        let trace_b = trace_for(&env, &caller_b);
+
+        client.record_call(&caller_a, &String::from_str(&env, "a"), &10, &trace_a);
+        client.record_call(&caller_b, &String::from_str(&env, "b"), &10, &trace_b);
+
+        assert_ne!(trace_a, trace_b);
     }
 }
 
