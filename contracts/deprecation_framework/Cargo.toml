@@ -16,5 +16,5 @@ default = []
 testutils = ["soroban-sdk/testutils"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 

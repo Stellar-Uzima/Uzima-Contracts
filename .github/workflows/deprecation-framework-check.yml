@@ -1,0 +1,40 @@
+name: deprecation-framework-check
+
+on:
+  push:
+    paths:
+      - "contracts/deprecation_framework/**"
+      - "libs/governance_commons/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+  pull_request:
+    paths:
+      - "contracts/deprecation_framework/**"
+      - "libs/governance_commons/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  deprecation-framework:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned by rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@1
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Check the contract against the workspace SDK policy
+        # Verifies the crate compiles for the pinned toolchain with its
+        # #![no_std] implementation and no conflicting SDK declaration.
+        run: cargo check --manifest-path contracts/deprecation_framework/Cargo.toml --lib
+
+      - name: Run the contract unit tests
+        run: cargo test --manifest-path contracts/deprecation_framework/Cargo.toml --lib
