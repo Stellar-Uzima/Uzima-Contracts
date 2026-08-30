@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 use std::vec::Vec;
 
 use contract_behavior_fuzzing::{
-    execute_sequence, run_regressions, BehaviorHarness, OperationOutcome, RegressionCase,
+    execute_sequence, run_regressions, BehaviorHarness, ExpectedTrace, ExpectedTraceEvent,
+    OperationOutcome, RegressionCase, TraceEvent,
 };
 use identity_registry::{
     DIDStatus, Error, IdentityRegistryContract, IdentityRegistryContractClient, ServiceEndpoint,
@@ -16,6 +17,18 @@ use soroban_sdk::{
 };
 
 mod support;
+
+/// Builds an operation outcome whose trace assertion expects exactly one event
+/// with the given topic next time the operation reports `success`. The event
+/// count is still expressed through `expected_event_delta` exactly as before,
+/// so existing harnesses keep their semantics and only gain trace typing.
+fn outcome_tracing(delta: usize, success: bool, topic: &str) -> OperationOutcome {
+    let mut outcome = OperationOutcome::new(delta);
+    if success {
+        outcome.expected_trace = ExpectedTrace::new(vec![ExpectedTraceEvent::new_topic(topic)]);
+    }
+    outcome
+}
 
 #[derive(Clone, Debug)]
 enum IdentityOp {
@@ -146,7 +159,7 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(matches!(result, Err(Ok(Error::DIDAlreadyExists))));
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "did_created")
             },
             IdentityOp::AddService {
                 subject,
@@ -174,7 +187,7 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "service_added")
             },
             IdentityOp::RemoveService {
                 subject,
@@ -204,7 +217,7 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "service_removed")
             },
             IdentityOp::AddVerificationMethod {
                 subject,
@@ -241,7 +254,11 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(
+                    usize::from(success),
+                    success,
+                    "verification_method_added",
+                )
             },
             IdentityOp::RotateKey {
                 subject,
@@ -270,7 +287,7 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "key_rotated")
             },
             IdentityOp::RevokeVerificationMethod {
                 subject,
@@ -307,7 +324,11 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(
+                    usize::from(success),
+                    success,
+                    "verification_method_revoked",
+                )
             },
             IdentityOp::DeactivateDid { subject } => {
                 let subject_index = *subject as usize % self.subjects.len();
@@ -321,7 +342,7 @@ impl BehaviorHarness for IdentityHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "did_deactivated")
             },
         }
     }
@@ -377,6 +398,10 @@ impl BehaviorHarness for IdentityHarness {
 
     fn event_count(&self) -> usize {
         self.env.events().all().len() as usize
+    }
+
+    fn captured_trace(&self) -> Vec<TraceEvent> {
+        support::captured_trace(&self.env)
     }
 }
 
