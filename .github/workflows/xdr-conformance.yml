@@ -1,0 +1,45 @@
+name: xdr-conformance
+
+on:
+  push:
+    paths:
+      - "contracts/**"
+      - "libs/**"
+      - "tests/xdr_conformance.rs"
+      - "tests/xdr-fixtures/**"
+      - "tests/Cargo.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/SERIALIZATION_STANDARDS.md"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "libs/**"
+      - "tests/xdr_conformance.rs"
+      - "tests/xdr-fixtures/**"
+      - "tests/Cargo.toml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/SERIALIZATION_STANDARDS.md"
+
+permissions:
+  contents: read
+
+jobs:
+  xdr-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain (pinned by rust-toolchain.toml)
+        uses: dtolnay/rust-toolchain@1
+
+      - name: Run the XDR serialization conformance suite
+        # The gate runs on changed contracts/libs/schemas only (see the `paths`
+        # triggers above), so pre-existing deviations across workspace-excluded
+        # contracts never block new/changed ABI work.
+        run: cargo test --manifest-path tests/Cargo.toml --test xdr_conformance
+
+      - name: Confirm golden fixtures are byte-stable
+        # Re-run with the probe test to catch accidental regeneration drift.
+        run: cargo test --manifest-path tests/Cargo.toml --test xdr_conformance option_fixture
