@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::vec::Vec;
 
 use contract_behavior_fuzzing::{
-    execute_sequence, run_regressions, BehaviorHarness, OperationOutcome, RegressionCase,
+    execute_sequence, run_regressions, BehaviorHarness, ExpectedTrace, ExpectedTraceEvent,
+    OperationOutcome, RegressionCase, TraceEvent,
 };
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -13,6 +14,18 @@ use soroban_sdk::{
 use sut_token::{Error, SutToken, SutTokenClient};
 
 mod support;
+
+/// Attaches a one-event ordered topic expectation to the outcome when the
+/// operation reports `success`, mirroring the contract's event emission for
+/// that op (all success paths below emit exactly one event, matching the
+/// existing `expected_event_delta`).
+fn outcome_tracing(delta: usize, success: bool, topic: &str) -> OperationOutcome {
+    let mut outcome = OperationOutcome::new(delta);
+    if success {
+        outcome.expected_trace = ExpectedTrace::new(vec![ExpectedTraceEvent::new_topic(topic)]);
+    }
+    outcome
+}
 
 #[derive(Clone, Debug)]
 enum SutTokenOp {
@@ -164,7 +177,7 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "mint")
             },
             SutTokenOp::Burn {
                 minter,
@@ -191,7 +204,7 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "burn")
             },
             SutTokenOp::Transfer { from, to, amount } => {
                 let from_index = *from as usize % self.accounts.len();
@@ -213,7 +226,7 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success && amount > 0))
+                outcome_tracing(usize::from(success && amount > 0), success && amount > 0, "transfer")
             },
             SutTokenOp::Approve {
                 owner,
@@ -242,7 +255,10 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                // `approve` always emits one `approval` event on success (even for a
+                // zero amount, which only clears the allowance), matching its
+                // existing unconditional expected_event_delta of 1.
+                outcome_tracing(usize::from(success), success, "approval")
             },
             SutTokenOp::TransferFrom {
                 spender,
@@ -287,7 +303,7 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success && amount > 0))
+                outcome_tracing(usize::from(success && amount > 0), success && amount > 0, "transfer")
             },
             SutTokenOp::AddMinter { minter } => {
                 let minter_index = *minter as usize % self.accounts.len();
@@ -327,7 +343,7 @@ impl BehaviorHarness for SutTokenHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_tracing(usize::from(success), success, "snapshot")
             },
         }
     }
@@ -395,6 +411,10 @@ impl BehaviorHarness for SutTokenHarness {
 
     fn event_count(&self) -> usize {
         self.env.events().all().len() as usize
+    }
+
+    fn captured_trace(&self) -> Vec<TraceEvent> {
+        support::captured_trace(&self.env)
     }
 }
 
