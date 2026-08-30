@@ -39,14 +39,16 @@ exclude = [
 
     # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
     # clippy enforcement). These contracts have real compile bugs (not clippy
-    # lints) that predate this PR and need separate fixes.
+    # lints) that predate this PR and need separate fixes. Note:
+    # contracts/deprecation_framework was reintegrated and removed from this
+    # list by issue #1426 (its manifest and crate compile against the pinned
+    # soroban-sdk 21.7.7 workspace policy).
     "contracts/clinical_trial",
     "contracts/cross_chain_bridge",
     "contracts/healthcare_data_conversion",
     "contracts/emergency_access_override",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
-    "contracts/deprecation_framework",
     "contracts/sut_token",
     "contracts/explainable_ai",
     "contracts/medical_record_hash_registry",
