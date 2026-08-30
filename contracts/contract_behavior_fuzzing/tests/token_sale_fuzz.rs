@@ -1,7 +1,8 @@
 use std::vec::Vec;
 
 use contract_behavior_fuzzing::{
-    execute_sequence, run_regressions, BehaviorHarness, OperationOutcome, RegressionCase,
+    execute_sequence, run_regressions, BehaviorHarness, ExpectedTrace, ExpectedTraceEvent,
+    OperationOutcome, RegressionCase, TraceEvent,
 };
 use proptest::collection::vec;
 use proptest::prelude::*;
@@ -12,6 +13,24 @@ use soroban_sdk::{
 use token_sale::{TokenSaleContract, TokenSaleContractClient};
 
 mod support;
+
+/// Attaches an ordered topic expectation to the outcome when `emits` is true.
+/// The event sequences below include the cross-contract Stellar asset
+/// `transfer` event that precedes each sale event, matching the existing
+/// `expected_event_delta` (2 for contribute/claim + asset transfer, 1 for
+/// pause/unpause/finalize).
+fn outcome_with_event(delta: usize, emits: bool, topics: &[&str]) -> OperationOutcome {
+    let mut outcome = OperationOutcome::new(delta);
+    if emits {
+        outcome.expected_trace = ExpectedTrace::new(
+            topics
+                .iter()
+                .map(|topic| ExpectedTraceEvent::new_topic(topic))
+                .collect(),
+        );
+    }
+    outcome
+}
 
 #[derive(Clone, Debug)]
 enum TokenSaleOp {
@@ -139,12 +158,12 @@ impl BehaviorHarness for TokenSaleHarness {
             TokenSaleOp::Pause => {
                 self.client.pause_sale();
                 self.paused = true;
-                OperationOutcome::new(1)
+                outcome_with_event(1, true, &["sale_paused"])
             },
             TokenSaleOp::Unpause => {
                 self.client.unpause_sale();
                 self.paused = false;
-                OperationOutcome::new(1)
+                outcome_with_event(1, true, &["sale_unpaused"])
             },
             TokenSaleOp::Contribute {
                 contributor,
@@ -182,7 +201,7 @@ impl BehaviorHarness for TokenSaleHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(if success { 2 } else { 0 })
+                outcome_with_event(if success { 2 } else { 0 }, success, &["transfer", "contribution"])
             },
             TokenSaleOp::Finalize => {
                 let success = !self.finalized;
@@ -196,7 +215,7 @@ impl BehaviorHarness for TokenSaleHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(usize::from(success))
+                outcome_with_event(usize::from(success), success, &["sale_finalized"])
             },
             TokenSaleOp::ClaimTokens { contributor } => {
                 let contributor_index = *contributor as usize % self.contributors.len();
@@ -223,7 +242,11 @@ impl BehaviorHarness for TokenSaleHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(if emits_event { 2 } else { 0 })
+                outcome_with_event(
+                    if emits_event { 2 } else { 0 },
+                    emits_event,
+                    &["transfer", "tokens_claimed"],
+                )
             },
             TokenSaleOp::ClaimRefund { contributor } => {
                 let contributor_index = *contributor as usize % self.contributors.len();
@@ -251,7 +274,11 @@ impl BehaviorHarness for TokenSaleHarness {
                     assert!(result.is_err());
                 }
 
-                OperationOutcome::new(if emits_event { 2 } else { 0 })
+                outcome_with_event(
+                    if emits_event { 2 } else { 0 },
+                    emits_event,
+                    &["transfer", "refund_claimed"],
+                )
             },
         }
     }
@@ -289,6 +316,10 @@ impl BehaviorHarness for TokenSaleHarness {
 
     fn event_count(&self) -> usize {
         self.env.events().all().len() as usize
+    }
+
+    fn captured_trace(&self) -> Vec<TraceEvent> {
+        support::captured_trace(&self.env)
     }
 }
 

@@ -1,0 +1,20 @@
+{
+  "version": "1.0.0",
+  "$comment": "Shared golden fixtures for the SCVal -> typed mapping used by the M1 trace decoder (libs). The XDR bytes for each canonical type are produced by the soroban Env at test time and asserted byte-stable; the `expected_json` column is the typed JSON the decoder must produce for each canonical type named in docs/SERIALIZATION_STANDARDS.md. The decoder must load this file and the *.xdr fixtures from tests/xdr-fixtures/ so both sides verify the same encoding contract.",
+  "types": [
+    { "type": "option_none", "note": "Option encode: None serialises as SCVal::Void, never a sentinel number", "expected_json": null },
+    { "type": "bool", "note": "SCVal::Bool", "expected_json": true },
+    { "type": "u32", "note": "SCVal::U32", "expected_json": 4294967295 },
+    { "type": "i32", "note": "SCVal::I32", "expected_json": -2147483648 },
+    { "type": "u64", "note": "SCVal::U64 / ledger seq", "expected_json": 18446744073709551615 },
+    { "type": "i64", "note": "SCVal::I64", "expected_json": -9223372036854775808 },
+    { "type": "u128", "note": "SCVal::U128 / balances", "expected_json": "340282366920938463463374607431768211455" },
+    { "type": "i128", "note": "SCVal::I128 / fixed-point quantities", "expected_json": "-170141183460469231731687303715884105728" },
+    { "type": "bytes", "note": "SCVal::Bytes", "expected_json": "f00dcafe" },
+    { "type": "string", "note": "SCVal::String (bounded by max_len)", "expected_json": "herbal therapy" },
+    { "type": "symbol", "note": "SCVal::Symbol, max 32 chars", "expected_json": "STATE_LEDGER" },
+    { "type": "vec", "note": "SCVal::Vec", "expected_json": [1, 2, 3] },
+    { "type": "map", "note": "SCVal::Map (compare by keys, not bytes)", "expected_json": { "alpha": 1, "beta": 2 } },
+    { "type": "option_some", "note": "Some(T) serialises as SCVal::T and is distinguishable from None", "expected_json": 42 }
+  ]
+}

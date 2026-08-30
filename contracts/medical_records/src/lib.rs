@@ -135,19 +135,6 @@ pub struct CompartmentAccess {
     pub expires_at: Option<u64>,
 }
 
-/// Role types in the system.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
-pub enum Role {
-    Admin,
-    Doctor,
-    Nurse,
-    Specialist,
-    Patient,
-    Researcher,
-    Auditor,
-}
-
 // ==================== Schema Evolution Types =============
 /// Version identifier for medical record metadata schemas.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -247,13 +234,18 @@ pub struct RecordMetadataHistoryEntry {
 }
 
 // ==================== Users / DID =============
+/// Role types in the system.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracttype]
 pub enum Role {
     Admin,
     Doctor,
+    Nurse,
+    Specialist,
     Patient,
     None,
+    Researcher,
+    Auditor,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -1402,8 +1394,12 @@ impl MedicalRecordsContract {
         let role_str = match role {
             Role::Admin => "Admin",
             Role::Doctor => "Doctor",
+            Role::Nurse => "Nurse",
+            Role::Specialist => "Specialist",
             Role::Patient => "Patient",
             Role::None => "None",
+            Role::Researcher => "Researcher",
+            Role::Auditor => "Auditor",
         };
 
         if let Some(profile) = existing {
@@ -1411,8 +1407,12 @@ impl MedicalRecordsContract {
             let prev_str = match profile.role {
                 Role::Admin => "Admin",
                 Role::Doctor => "Doctor",
+                Role::Nurse => "Nurse",
+                Role::Specialist => "Specialist",
                 Role::Patient => "Patient",
                 Role::None => "None",
+                Role::Researcher => "Researcher",
+                Role::Auditor => "Auditor",
             };
             Self::sync_rbac_role_with_contract(&env, &rbac_addr, &user, Some(previous_role), role)?;
             users.set(
@@ -1590,7 +1590,9 @@ impl MedicalRecordsContract {
             }
             match profile.role {
                 Role::Admin => return true,
-                Role::Doctor => {
+                Role::Doctor
+                | Role::Nurse
+                | Role::Specialist => {
                     if matches!(
                         permission,
                         Permission::CreateRecord
@@ -1600,7 +1602,7 @@ impl MedicalRecordsContract {
                         return true;
                     }
                 },
-                Role::Patient | Role::None => {},
+                Role::Patient | Role::None | Role::Researcher | Role::Auditor => {},
             }
         }
 
@@ -5460,6 +5462,10 @@ impl MedicalRecordsContract {
             Role::Doctor => 1u8,
             Role::Patient => 2u8,
             Role::None => 3u8,
+            Role::Nurse => 4u8,
+            Role::Specialist => 5u8,
+            Role::Researcher => 6u8,
+            Role::Auditor => 7u8,
         };
         payload.append(&Bytes::from_array(&env, &[role_byte]));
         if let Some(did) = user_profile.did_reference {
@@ -6992,11 +6998,9 @@ impl upgradeability::migration::Migratable for MedicalRecordsContract {
     }
 }
 
-#[cfg(any(test, feature = "testutils"))]
 #[soroban_sdk::contract]
 pub struct MockRbac;
 
-#[cfg(any(test, feature = "testutils"))]
 #[soroban_sdk::contractimpl]
 impl MockRbac {
     pub fn initialize(env: Env, admin: Address, config: soroban_sdk::Val) {}
@@ -7366,13 +7370,6 @@ impl MedicalRecordsContract {
             return Err(Error::Unauthorized);
         }
 
-        let meta: RecordMetadata = env
-            .storage()
-            .persistent()
-            .get(&DataKey::RecordMeta(record_id))
-            .ok_or(Error::RecordNotFound)?;
-
-        Ok(meta)
         // If caller is the patient or admin, return full record
         if caller == record.patient_id || Self::is_admin(&env, &caller) {
             return Ok(record);
@@ -7385,30 +7382,26 @@ impl MedicalRecordsContract {
             .persistent()
             .get::<_, RedactionPolicy>(&DataKey::RedactionPolicy(record_id))
         {
+            let diagnosis = String::from_str(&env, "diagnosis");
+            let treatment = String::from_str(&env, "treatment");
+            let data_ref = String::from_str(&env, "data_ref");
+            let category = String::from_str(&env, "category");
+            let treatment_type = String::from_str(&env, "treatment_type");
+            let tags = String::from_str(&env, "tags");
             for i in 0..policy.redacted_fields.len() {
                 if let Some(field) = policy.redacted_fields.get(i) {
-                    let field_str = field.to_buffer().iter().collect::<Vec<u8>>();
-                    let field_name = core::str::from_utf8(&field_str).unwrap_or("");
-                    match field_name {
-                        "diagnosis" => {
-                            redacted.diagnosis = String::from_str(&env, "[REDACTED]");
-                        }
-                        "treatment" => {
-                            redacted.treatment = String::from_str(&env, "[REDACTED]");
-                        }
-                        "data_ref" => {
-                            redacted.data_ref = String::from_str(&env, "[REDACTED]");
-                        }
-                        "category" => {
-                            redacted.category = String::from_str(&env, "[REDACTED]");
-                        }
-                        "treatment_type" => {
-                            redacted.treatment_type = String::from_str(&env, "[REDACTED]");
-                        }
-                        "tags" => {
-                            redacted.tags = Vec::new(&env);
-                        }
-                        _ => {}
+                    if field == diagnosis {
+                        redacted.diagnosis = String::from_str(&env, "[REDACTED]");
+                    } else if field == treatment {
+                        redacted.treatment = String::from_str(&env, "[REDACTED]");
+                    } else if field == data_ref {
+                        redacted.data_ref = String::from_str(&env, "[REDACTED]");
+                    } else if field == category {
+                        redacted.category = String::from_str(&env, "[REDACTED]");
+                    } else if field == treatment_type {
+                        redacted.treatment_type = String::from_str(&env, "[REDACTED]");
+                    } else if field == tags {
+                        redacted.tags = Vec::new(&env);
                     }
                 }
             }
@@ -7538,6 +7531,8 @@ impl MedicalRecordsContract {
                 | (Role::Doctor, Role::Doctor)
                 | (Role::Nurse, Role::Nurse)
                 | (Role::Specialist, Role::Specialist)
+                | (Role::Patient, Role::Patient)
+                | (Role::None, Role::None)
                 | (Role::Researcher, Role::Researcher)
                 | (Role::Auditor, Role::Auditor)
                 | (Role::Patient, Role::Patient)

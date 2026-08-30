@@ -23,12 +23,13 @@ exclude = [
     "contracts/dicomweb_services",
     "contracts/multi_region_orchestrator",
     "contracts/regional_node_manager",
-    "contracts/digital_twin",
     "contracts/aml",
+    "contracts/digital_twin",
     "contracts/forensics",
+    "contracts/aml",
     "contracts/rbac",
+    "contracts/forensics",
     "contracts/federated_learning",
-    "contracts/medical_records",
     "contracts/healthcare_oracle_network",
     # dev-dep on ai_analytics which is excluded and uses workspace = true; cannot
     # load manifest outside the workspace.
@@ -40,24 +41,38 @@ exclude = [
 
     # Deferred (pre-existing compile errors surfaced by issue #861 `--workspace`
     # clippy enforcement). These contracts have real compile bugs (not clippy
-    # lints) that predate this PR and need separate fixes.
-    "contracts/ai_analytics",
+    # lints) that predate this PR and need separate fixes. Note:
+    # contracts/deprecation_framework was reintegrated and removed from this
+    # list by issue #1426 (its manifest and crate compile against the pinned
+    # soroban-sdk 21.7.7 workspace policy).
     "contracts/clinical_trial",
     "contracts/cross_chain_bridge",
-    "contracts/emergency_access_override",
     "contracts/healthcare_data_conversion",
+    "contracts/emergency_access_override",
     "contracts/iot_device_management",
     "contracts/predictive_analytics",
     "contracts/explainable_ai",
     "contracts/sut_token",
+    "contracts/explainable_ai",
     "contracts/medical_record_hash_registry",
     "contracts/runtime_validation",
     "contracts/clinical_decision_support",
+
     "contracts/emr_integration",
     "contracts/crypto_registry",
     "contracts/meta_tx_forwarder",
     "contracts/code_ownership",
+    "contracts/notification_system",
+    "contracts/test-helpers",
     "contracts/treasury_controller",
+
+    # Fuzz harness: dev-deps reference excluded contracts (sut_token,
+    # medical_records) that cannot be path deps; fuzz regressions are not
+    # CI-visible (see #1481).
+    "contracts/contract_behavior_fuzzing",
+    # Dev-dep on excluded contracts/ai_analytics (compile bugs) — its tests
+    # cannot build while ai_analytics stays excluded.
+    "contracts/healthcare_analytics_dashboard",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/governance_integration_tests",
@@ -74,7 +89,22 @@ soroban-sdk = { version = "=21.7.7" }
 soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
 replay_protection = { path = "libs/replay_protection" }
+xdr_trace = { path = "libs/xdr_trace" }
 common_auth = { path = "contracts/common_auth" }
+# Pre-existing gap (unrelated to issues #1429/#1430/#1431/#1433): these four
+# entries are referenced via `.workspace = true` by
+# `contracts/contract_behavior_fuzzing/Cargo.toml` (an active, non-excluded
+# workspace member) but were missing here, which made `cargo check
+# --workspace` / `cargo test --workspace` fail to parse the workspace at all
+# on a fresh checkout — independent of explainable_ai. Added so workspace-wide
+# commands required by issue #1431 can actually run. `sut_token` and
+# `medical_records` remain in the `exclude` list above (path dependencies to
+# excluded crates are still valid; `exclude` only controls default build/test
+# target membership, not dependency resolution).
+identity_registry = { path = "contracts/identity_registry" }
+medical_records = { path = "contracts/medical_records" }
+sut_token = { path = "contracts/sut_token" }
+token_sale = { path = "contracts/token_sale" }
 
 [workspace.package]
 version = "0.1.0"

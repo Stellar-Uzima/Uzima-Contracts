@@ -149,21 +149,44 @@ EOF
      
     log "INFO" "Deployment info saved to: $DEPLOY_INFO_FILE"
      
-    # Initialize contract if it has an initialize function
+# Initialize contract if it has an initialize function. The invocation
+    # result is no longer thrown away with `2>/dev/null` (issue #1509): it is
+    # streamed to the terminal, persisted as a durable XDR artifact, and the
+    # captured output is used below to tell "already initialized" apart from a
+    # genuine initialization failure while keeping the deploy resilient.
     log "INFO" "Attempting to initialize contract..."
-    if soroban contract invoke \
+    # shellcheck source=capture_trace.sh
+    source "$(dirname "$0")/capture_trace.sh"
+    INIT_RC=0
+    if capture_invoke_result "$NETWORK" "$CONTRACT_ID" "initialize" \
+        soroban contract invoke \
         --id "$CONTRACT_ID" \
         --source "$IDENTITY" \
         --network "$NETWORK" \
-        -- initialize 2>/dev/null; then
-        log "INFO" "Contract initialized successfully"
+        -- initialize; then
+        INIT_RC=0
     else
-        log "WARN" "Contract initialization failed or not required"
+        INIT_RC=$?
     fi
-     
+
+    if [ "$INIT_RC" -eq 0 ]; then
+        log "INFO" "Contract initialized successfully"
+    elif grep -qiE 'AlreadyInitialized|Already Initialized|Error\(Contract, 1\)' \
+        "$TRACE_ARTIFACT_OUTPUT" "$TRACE_ARTIFACT_ERROR" 2>/dev/null; then
+        log "INFO" "Contract already initialized"
+    else
+        log "WARN" "Contract initialization failed (exit $INIT_RC) — inspect the artifacts below"
+    fi
+
+    while IFS= read -r trace_file; do
+        log "INFO" "Invocation artifact: $trace_file"
+    done <<< "$TRACE_ARTIFACTS"
+
     # Automated Verification Hook
     log "INFO" "Running automated verification..."
-    if ! ./scripts/verify_deployment.sh "$CONTRACT_ID" "$NETWORK" "$IDENTITY" "$CONTRACT_NAME"; then
+    if ! VERIFY_INVOCATION_OUTPUT="$TRACE_ARTIFACT_OUTPUT" \
+        VERIFY_INVOCATION_ERROR="$TRACE_ARTIFACT_ERROR" \
+        ./scripts/verify_deployment.sh "$CONTRACT_ID" "$NETWORK" "$IDENTITY" "$CONTRACT_NAME"; then
         log "ERROR" "Automated verification failed!"
         exit 1
     fi

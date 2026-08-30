@@ -115,3 +115,31 @@ See `libs/validation_utils/src/string.rs` for:
 
 See `libs/validation_utils/src/address.rs` for:
 - `validate_address()` — basic address sanity checks
+
+## Conformance enforcement
+
+The rules above are not just documentation: the XDR serialization conformance
+suite (`tests/xdr_conformance.rs`, issue #1516) asserts the canonical encoding
+rules and is wired into CI via `.github/workflows/xdr-conformance.yml`:
+
+- **`Option<T>` vs sentinel** — `Option::None` must serialize as
+  `SCVal::Void` and never collide with any `Some(value)` encoding. Golden XDR
+  fixtures live in `tests/xdr-fixtures/` (`option_none.xdr`,
+  `option_some_u32_max.xdr`) and are byte-asserted by the suite.
+- **`Map` ordering** — the suite verifies insertion order is encoded but that
+  key-based comparison (as this standard mandates) is order-independent.
+- **Enumerated state** — a mechanical ABI check rejects raw `u32` where a
+  `#[contracttype] enum` is required.
+- **Bounded strings** — lengths are validated against an explicit `max_len`.
+- **Canonical type coverage** — the `SCVal -> typed JSON` mapping the M1 trace
+  decoder uses is enumerated in `tests/xdr-fixtures/scval-mapping.json` and
+  asserted byte-stable for every canonical type (`option`/`void`, `bool`,
+  `u32`/`i32`, `u64`/`i64`, `u128`/`i128`, `bytes`, `string`, `symbol`,
+  `vec`, `map`). The `libs` decoder MUST load these same fixtures so both
+  sides verify one encoding contract.
+
+The gate triggers on changes to contracts, libs, the fixture/suite files, or
+this document, so new or changed ABIs are checked without forcing the
+workspace-`exclude`d contracts to comply up front.
+
+Run locally: `cargo test --manifest-path tests/Cargo.toml --test xdr_conformance`.

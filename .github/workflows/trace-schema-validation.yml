@@ -1,0 +1,37 @@
+name: trace-schema-validation
+
+on:
+  push:
+    paths:
+      - "schemas/trace/**"
+      - "scripts/trace/**"
+      - "schemas/events/**"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "schemas/trace/**"
+      - "scripts/trace/**"
+      - "schemas/events/**"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-trace-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate trace NDJSON samples against the ContractTrace schema
+        run: npm run trace:check

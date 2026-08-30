@@ -10,6 +10,10 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# Reintegrated into the workspace (issue #1431): pinned through the shared
+# workspace policy (`soroban-sdk = "=21.7.7"`, see root Cargo.toml
+# `[workspace.dependencies]`) rather than a literal version, so this crate
+# resolves to the exact same SDK instance as every other workspace member.
 soroban-sdk.workspace = true
 governance_commons = { workspace = true }
 

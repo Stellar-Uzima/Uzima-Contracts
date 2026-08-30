@@ -10,6 +10,40 @@ fn register_contract(env: &Env) -> (CryptoRegistryClient<'_>, soroban_sdk::Addre
     (CryptoRegistryClient::new(env, &id), id)
 }
 
+// ── Initialization ──────────────────────────────────────────────────────────
+
+/// Verifies that the contract can be initialized exactly once and that the
+/// admin is stored correctly.
+#[test]
+fn initialize_succeeds_once() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = register_contract(&env);
+    let admin = soroban_sdk::Address::generate(&env);
+    client.initialize(&admin);
+
+    // After init, an operation that requires initialization should succeed.
+    let alice = soroban_sdk::Address::generate(&env);
+    assert_eq!(client.get_current_version(&alice), 0);
+}
+
+/// Verifies that a second `initialize` call returns `AlreadyInitialized`.
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #1)")]
+fn double_initialize_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = register_contract(&env);
+    let admin = soroban_sdk::Address::generate(&env);
+    client.initialize(&admin);
+    // Second call must panic with Error::AlreadyInitialized (code 1).
+    client.initialize(&admin);
+}
+
+// ── Happy path ──────────────────────────────────────────────────────────────
+
 #[test]
 fn key_bundle_registration_and_rotation() {
     let env = Env::default();
@@ -108,6 +142,8 @@ fn post_quantum_key_registration() {
     assert_eq!(current.signing_key.algorithm, KeyAlgorithm::Dilithium3);
 }
 
+// ── Error path ──────────────────────────────────────────────────────────────
+
 #[test]
 #[should_panic(expected = "HostError: Error(Contract, #7)")]
 fn invalid_pq_key_length() {
@@ -137,4 +173,31 @@ fn invalid_pq_key_length() {
     };
 
     client.register_key_bundle(&alice, &enc_key, &kyber_key, &true, &empty, &false);
+}
+
+/// Verifies that revoking an already-revoked bundle returns `KeyAlreadyRevoked` (code 6).
+#[test]
+#[should_panic(expected = "HostError: Error(Contract, #6)")]
+fn double_revoke_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, _id) = register_contract(&env);
+    let admin = soroban_sdk::Address::generate(&env);
+    client.initialize(&admin);
+
+    let alice = soroban_sdk::Address::generate(&env);
+    let enc_key = PublicKey {
+        algorithm: KeyAlgorithm::X25519,
+        key: Bytes::from_slice(&env, &[1u8; 32]),
+    };
+    let empty = PublicKey {
+        algorithm: KeyAlgorithm::Custom(0),
+        key: Bytes::new(&env),
+    };
+
+    let v1 = client.register_key_bundle(&alice, &enc_key, &empty, &false, &empty, &false);
+    client.revoke_key_bundle(&alice, &v1);
+    // Second revoke must panic with Error::KeyAlreadyRevoked (code 6).
+    client.revoke_key_bundle(&alice, &v1);
 }

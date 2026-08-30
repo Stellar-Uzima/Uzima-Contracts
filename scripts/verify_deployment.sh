@@ -200,6 +200,18 @@ print_info "Contract successfully located on the network."
 # STEP 2: Initialization Check
 # ------------------------------------------------------------------------------
 print_step "2/5: Checking initialization status..."
+# When called from deploy.sh, the captured initialize invocation output
+# (issue #1509) is kept available to this verification step so the previous
+# on-chain call can be audited against what it actually did.
+if [ "${VERIFY_INVOCATION_OUTPUT:-}" != "" ] || [ "${VERIFY_INVOCATION_ERROR:-}" != "" ]; then
+    print_info "Reusing captured initialization output from the deploy step:"
+    if [ "${VERIFY_INVOCATION_OUTPUT:-}" != "" ] && [ -f "$VERIFY_INVOCATION_OUTPUT" ]; then
+        print_info "  stdout: $VERIFY_INVOCATION_OUTPUT"
+    fi
+    if [ "${VERIFY_INVOCATION_ERROR:-}" != "" ] && [ -f "$VERIFY_INVOCATION_ERROR" ]; then
+        print_info "  stderr: $VERIFY_INVOCATION_ERROR"
+    fi
+fi
 # Try to call initialize again - if it fails with "AlreadyInitialized" or similar, it's good.
 # Or try to read 'Initialized' key if we know the contract structure.
 INIT_CHECK=$(invoke_soroban initialize --admin "$(soroban config identity address "$IDENTITY")" 2>&1 || true)

@@ -1,20 +1,27 @@
 [package]
 name = "sut_token"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-repository.workspace = true
+version = "0.1.0"
+edition = "2021"
+authors = ["Your Name <your.email@example.com>"]
+license = "MIT"
+repository = "https://github.com/yourusername/soroban-project"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk.workspace = true
-governance_commons = { workspace = true }
+# Pinned to the workspace-wide Soroban SDK policy (=21.7.7, see root Cargo.toml
+# `[workspace.dependencies]`). Declared as a literal version rather than
+# `.workspace = true`: this crate remains in the root `exclude` list per
+# issue #1433 (only the standalone `--manifest-path` test command is in
+# scope here, not workspace reintegration), so it is not a resolvable
+# workspace member for inheritance purposes. The version is kept in exact
+# lockstep with the workspace pin so there is no conflicting SDK declaration.
+soroban-sdk = { version = "=21.7.7" }
+governance_commons = { path = "../../libs/governance_commons" }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
+soroban-sdk = { version = "=21.7.7", features = ["testutils"] }
 
 [features]
 testutils = ["soroban-sdk/testutils"]

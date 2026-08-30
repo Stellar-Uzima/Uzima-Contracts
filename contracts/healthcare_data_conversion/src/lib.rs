@@ -1,8 +1,8 @@
 #![no_std]
 //! healthcare_data_conversion - Healthcare smart contract on Stellar blockchain.
 
-// #[cfg(test)]
-// mod test;
+#[cfg(test)]
+mod test;
 
 use soroban_sdk::symbol_short;
 use soroban_sdk::{

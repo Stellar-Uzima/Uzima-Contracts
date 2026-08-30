@@ -14,7 +14,7 @@ governance_commons = { workspace = true }
 soroban-sdk = { workspace = true, features = ["testutils"] }
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
 
 [features]
 default = []

@@ -340,6 +340,18 @@ directory (e.g. fuzz harness, integration test repo).
 | Category | Contracts | Action |
 | --- | --- | --- |
 | **Fix & Include** (already reintegrated in this branch) | `audit`, `sync_manager`, `failover_detector` | Compile clean, tests in place |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `aml` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `medical_imaging_ai` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `federated_learning` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `forensics` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `regional_node_manager` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard`, `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `sut_token`, `medical_record_hash_registry` | Compile clean (\*) = moved to **Deferred** this PR; see below |
+| **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check`, `crypto_registry`, `emr_integration` | Compile clean (\*) = moved to **Deferred** this PR; see below. `crypto_registry` and `emr_integration` reintegrated in issues #1446, #1447, #1448, #1449 |
 | **Fix & Include** (reintegrated at HEAD) | `credential_notifications`, `clinical_decision_support`, `patient_portal`, `health_data_access_logging` \*, `mfa`, `rbac`, `healthcare_compliance_automation`, `drug_discovery`, `health_check` | Compile clean (\*) = moved to **Deferred** this PR; see below |
 | **Fix & Include** (reintegrated — closes #1427, #1428) | `deprecation_framework` | Removed from `exclude`; uses `workspace = true` deps; regression tests in `src/test.rs`; compile-checked via `cargo check -p deprecation_framework` |
 | **Deferred** (out of scope for current PR) | `health_data_access_logging` (re-deferred this PR due to 14 `#[no_std]`/SDK-21 incompatibilities: missing `format!` macro, `Vec::with_capacity` not on `soroban_sdk::Vec`, wrong `BytesN::from_array` arg shape, missing `Copy` derives), `medical_imaging`, `healthcare_compliance`, `clinical_nlp`, `remote_patient_monitoring`, `healthcare_analytics_dashboard` (dev-dep on excluded `ai_analytics`), `healthcare_data_marketplace`, `telemedicine`, `medical_imaging_ai`, `dicomweb_services`, `multi_region_orchestrator`, `regional_node_manager`, `digital_twin`, `aml`, `forensics`, `federated_learning`, `medical_records`, `healthcare_oracle_network` | Tracked in `Cargo.toml` `exclude` block with rationale; follow-up PR per contract |
@@ -353,3 +365,49 @@ When removing a contract from the `exclude` list, the change must:
    and `append_array` rather than `Vec::<u8>::with_capacity`.
 3. Provide at minimum three tests: an `initialize()` test, a happy-path test,
    and an error-path test (e.g. `expect_*Auth` failure).
+
+### `explainable_ai` and `sut_token` (issues #1429, #1430, #1431, #1433)
+
+* **`explainable_ai`** was reintegrated: removed from the `exclude` list and
+  its manifest converted to `soroban-sdk.workspace = true` /
+  `governance_commons = { workspace = true }` per the policy above (#1429,
+  #1431). It gained dedicated regression coverage in
+  `contracts/explainable_ai/src/test.rs` — initialization (single-init +
+  admin/auth enforcement), a happy-path request/fulfill workflow test
+  (persisted state + emitted event), and an error-path test
+  (`Error::InvalidImportance`) (#1430). No fixture/mock contract is required:
+  the crate makes no cross-contract calls. Verified independently via
+  `cargo check --manifest-path contracts/explainable_ai/Cargo.toml --lib` and
+  `cargo test --manifest-path contracts/explainable_ai/Cargo.toml` (6/6
+  tests pass).
+* **`sut_token`** remains in the `exclude` list by design (issue #1433 only
+  asked for standalone regression coverage, not workspace reintegration). Its
+  manifest was made standalone-buildable (explicit `soroban-sdk = "=21.7.7"`
+  instead of `.workspace = true`, which cannot resolve while excluded) and
+  its existing `contracts/sut_token/src/test.rs` suite (20 tests, including
+  an explicit emitted-event assertion on `mint`) passes via
+  `cargo test --manifest-path contracts/sut_token/Cargo.toml`.
+* **Known pre-existing blocker for full `cargo check/test/build --workspace`
+  verification (discovered while verifying #1431, NOT introduced by it):**
+  independently of `explainable_ai`, roughly 24 of the ~30 still-excluded
+  contracts (e.g. `ai_analytics`, `clinical_nlp`, `rbac`, `forensics`,
+  `crypto_registry`, …) still declare `.workspace = true` inherited manifest
+  fields despite being excluded. At least one, `ai_analytics`, is referenced
+  via a path dependency from an *included* workspace member
+  (`healthcare_analytics_dashboard`), which makes the whole workspace fail to
+  parse (`error: failed to find a workspace root`) before any compilation is
+  reached — for any `cargo` command run at the workspace root, regardless of
+  which package is targeted. This is the same root-cause class of bug fixed
+  here for `explainable_ai`/`sut_token`, but it spans the full issue #828
+  "Reintegrate 36 Excluded Contracts" backlog and is out of scope for
+  #1429/#1430/#1431/#1433 to fix wholesale. As a narrow, unrelated prerequisite
+  fix, `[workspace.dependencies]` was also missing `identity_registry`,
+  `medical_records`, `sut_token`, and `token_sale` (referenced via
+  `.workspace = true` by the already-included `contract_behavior_fuzzing`
+  fuzz harness); those four path entries were added so workspace parsing gets
+  at least that far. Full `cargo check --workspace --all-targets` /
+  `cargo test --workspace` / `cargo build --release --target
+  wasm32-unknown-unknown --workspace` remain blocked until the remaining
+  ~24 contracts are fixed (tracked under issue #828); `explainable_ai`'s own
+  code and dependency policy have been verified independently instead (see
+  above) and will resolve cleanly once that backlog is cleared.
