@@ -1,3 +1,4 @@
+extern crate std;
 use super::*;
 use crate::types::{ActionType, AuditConfig, AuditType, OperationResult, RetentionPolicy};
 use soroban_sdk::testutils::Address as _;
@@ -6,6 +7,11 @@ use soroban_sdk::{BytesN, Map, Vec};
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn setup(env: &Env) -> (AuditTrailClient<'_>, Address) {
+    let (client, admin, _) = setup_with_id(env);
+    (client, admin)
+}
+
+fn setup_with_id(env: &Env) -> (AuditTrailClient<'_>, Address, Address) {
     env.mock_all_auths();
     let admin = Address::generate(env);
     let contract_id = env.register_contract(None, AuditTrail);
@@ -20,7 +26,7 @@ fn setup(env: &Env) -> (AuditTrailClient<'_>, Address) {
         enabled_types,
     };
     client.initialize(&admin, &config);
-    (client, admin)
+    (client, admin, contract_id)
 }
 
 fn dummy_target(env: &Env) -> BytesN<32> {
@@ -415,6 +421,169 @@ fn test_export_logs() {
     assert_eq!(bundle.logs.len(), 3);
     assert_eq!(bundle.exported_by, admin);
     assert_ne!(bundle.integrity_hash, BytesN::from_array(&env, &[0u8; 32]));
+    assert_eq!(bundle.integrity_hash, client.get_log_rolling_hash());
+    assert_eq!(bundle.integrity_hash, client.verify_log_integrity());
+}
+
+#[test]
+fn test_export_integrity_hash_matches_rolling_hash_for_all_entries() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    for _ in 0..5 {
+        client.log_event(
+            &actor,
+            &ActionType::RecordCreate,
+            &target,
+            &OperationResult::Success,
+            &empty_meta(&env),
+        );
+    }
+
+    let rolling_hash = client.get_log_rolling_hash();
+    let bundle = client.export_logs(&admin, &1, &5);
+    assert_eq!(bundle.integrity_hash, rolling_hash);
+    assert_eq!(bundle.integrity_hash, client.verify_log_integrity());
+    assert_eq!(client.verify_chain(), true);
+}
+
+#[test]
+fn test_verify_chain_empty_and_valid() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+    assert_eq!(client.verify_chain(), true);
+}
+
+#[test]
+fn test_verify_chain_multiple_entries() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    for _ in 0..10 {
+        client.log_event(
+            &actor,
+            &ActionType::DataWrite,
+            &target,
+            &OperationResult::Success,
+            &empty_meta(&env),
+        );
+    }
+
+    assert_eq!(client.verify_chain(), true);
+}
+
+#[test]
+fn test_verify_chain_tamper_detection_action() {
+    let env = Env::default();
+    let (client, _admin, contract_id) = setup_with_id(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::DataWrite,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+
+    assert_eq!(client.verify_chain(), true);
+
+    // Tamper with log 1's action directly in persistent storage
+    env.as_contract(&contract_id, || {
+        let mut tampered_log = crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, 1).unwrap();
+        tampered_log.action = ActionType::DataDelete;
+        env.storage().persistent().set(&DataKey::Log(1), &tampered_log);
+    });
+
+    // Chain verification must detect the tampering
+    assert_eq!(client.verify_chain(), false);
+}
+
+#[test]
+fn test_verify_chain_tamper_detection_prev_hash() {
+    let env = Env::default();
+    let (client, _admin, contract_id) = setup_with_id(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::DataWrite,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+
+    assert_eq!(client.verify_chain(), true);
+
+    // Tamper with log 2's prev_hash directly in persistent storage
+    env.as_contract(&contract_id, || {
+        let mut tampered_log = crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, 2).unwrap();
+        tampered_log.prev_hash = BytesN::from_array(&env, &[0xffu8; 32]);
+        env.storage().persistent().set(&DataKey::Log(2), &tampered_log);
+    });
+
+    // Chain verification must detect the tampering
+    assert_eq!(client.verify_chain(), false);
+}
+
+#[test]
+fn test_verify_chain_tamper_detection_target() {
+    let env = Env::default();
+    let (client, _admin, contract_id) = setup_with_id(&env);
+
+    let actor = Address::generate(&env);
+    let target = dummy_target(&env);
+
+    client.log_event(
+        &actor,
+        &ActionType::DataRead,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+    client.log_event(
+        &actor,
+        &ActionType::DataWrite,
+        &target,
+        &OperationResult::Success,
+        &empty_meta(&env),
+    );
+
+    assert_eq!(client.verify_chain(), true);
+
+    // Tamper with log 1's target directly in persistent storage
+    env.as_contract(&contract_id, || {
+        let mut tampered_log = crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, 1).unwrap();
+        tampered_log.target = BytesN::from_array(&env, &[0x11u8; 32]);
+        env.storage().persistent().set(&DataKey::Log(1), &tampered_log);
+    });
+
+    // Chain verification must detect the tampering
+    assert_eq!(client.verify_chain(), false);
 }
 
 // ─── Integrity / Tamper-evidence ─────────────────────────────────────────────
@@ -703,6 +872,8 @@ fn test_get_denial_summary() {
     let summary = client.get_denial_summary();
     assert_eq!(summary.get(String::from_str(&env, "NO_ROLE")), Some(2));
     assert_eq!(summary.get(String::from_str(&env, "DENIED")), Some(1));
+}
+
 // ─── Configurable Retention & Export Windows (Issue #1171) ──────────────────
 
 #[test]

@@ -1,5 +1,4 @@
 #![no_std]
-#![forbid(alloc)]
 //! audit - Healthcare smart contract on Stellar blockchain.
 
 pub mod errors;
@@ -18,21 +17,9 @@ use crate::types::{
 };
 use governance_commons::require_admin;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
+    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
     Symbol, Vec,
 };
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    ChainBroken = 4,
-    RetentionPolicyNotFound = 5,
-    RetentionWindowTooShort = 6,
-}
 
 #[contract]
 pub struct AuditTrail;
@@ -363,14 +350,6 @@ impl AuditTrail {
 
     // ─── Data Purging (Issue #1218) ─────────────────────────────────────────
 
-    /// Purge expired audit logs that exceed the max_retention_seconds window.
-    ///
-    /// Only admin can trigger purging. The function iterates from log_id 1
-    /// upward and removes entries whose age exceeds max_retention_seconds.
-    /// Returns the number of logs purged.
-    ///
-    /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
-    pub fn purge_expired_logs(env: Env, admin: Address) -> u64 {
     /// Enforce the retention policy across all logs.
     /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
     /// Returns the number of logs purged.
@@ -381,19 +360,63 @@ impl AuditTrail {
             .storage()
             .instance()
             .get(&DataKey::RetentionPolicy)
-            .expect("Retention policy not set");
-
-        // Infinite retention: nothing to purge
-        if policy.max_retention_seconds == 0 {
-            return 0;
-        }
-
-        let now = env.ledger().timestamp();
-        let count: u64 = env
             .ok_or(Error::RetentionPolicyNotFound)?;
 
         let now = env.ledger().timestamp();
         let log_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
+        let mut purged = 0u64;
+
+        if policy.auto_purge && policy.max_retention_seconds > 0 {
+            for i in 1..=log_count {
+                if let Some(log) =
+                    crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
+                {
+                    let age = now.saturating_sub(log.timestamp);
+                    if age > policy.max_retention_seconds {
+                        purged = purged.saturating_add(1);
+                    }
+                }
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
+            (purged, policy.auto_purge),
+        );
+
+        Ok(purged)
+    }
+
+    // ─── Data Purging (Issue #1218) ─────────────────────────────────────────
+
+    /// Purge expired audit logs that exceed the max_retention_seconds window.
+    ///
+    /// Only admin can trigger purging. The function iterates from log_id 1
+    /// upward and removes entries whose age exceeds max_retention_seconds.
+    /// Returns the number of logs purged.
+    ///
+    /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
+    pub fn purge_expired_logs(env: Env, admin: Address) -> Result<u64, Error> {
+        require_admin!(env, admin);
+
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .expect("Retention policy not set");
+
+        // Infinite retention: nothing to purge
+        if policy.max_retention_seconds == 0 {
+            return Ok(0);
+        }
+
+        let now = env.ledger().timestamp();
+        let count: u64 = env
             .storage()
             .instance()
             .get(&DataKey::LogCount)
@@ -415,17 +438,6 @@ impl AuditTrail {
                 } else {
                     // Logs are ordered by time; once we hit a non-expired log, stop
                     break;
-        let mut purged = 0u64;
-
-        if policy.auto_purge && policy.max_retention_seconds > 0 {
-            for i in 1..=log_count {
-                if let Some(log) =
-                    crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, i)
-                {
-                    let age = now.saturating_sub(log.timestamp);
-                    if age > policy.max_retention_seconds {
-                        purged = purged.saturating_add(1);
-                    }
                 }
             }
         }
@@ -435,7 +447,7 @@ impl AuditTrail {
             (purged, admin),
         );
 
-        purged
+        Ok(purged)
     }
 
     /// Return summary of logs eligible for purging without actually purging.
@@ -493,37 +505,30 @@ impl AuditTrail {
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
         Ok(())
-            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
-            (purged, policy.auto_purge),
-        );
-
-        Ok(purged)
     }
 
     // ─── Export Capability ───────────────────────────────────────────────────
 
     /// Export a range of AuditLog entries as a signed bundle (requires log access).
-    /// The bundle includes an integrity hash over all exported entries.
+    /// The bundle includes an integrity hash computed over the exported entries
+    /// using the canonical rolling hash chain.
     pub fn export_logs(env: Env, caller: Address, start_id: u64, end_id: u64) -> ExportBundle {
         caller.require_auth();
         Self::require_log_access(&env, &caller);
 
         let mut logs: Vec<AuditLog> = Vec::new(&env);
-        let mut hash_input = Bytes::new(&env);
+        let mut current_hash = BytesN::from_array(&env, &[0u8; 32]);
 
         for id in start_id..=end_id {
             if let Some(log) =
                 crate::storage::immutable_storage::ImmutableStorage::fetch_log(&env, id)
             {
-                use soroban_sdk::xdr::ToXdr;
-                hash_input.append(&log.id.to_xdr(&env));
-                hash_input.append(&log.timestamp.to_xdr(&env));
-                hash_input.append(&log.target.clone().to_xdr(&env));
+                current_hash = Self::compute_entry_hash(&env, &log.prev_hash, &log);
                 logs.push_back(log);
             }
         }
 
-        let integrity_hash: BytesN<32> = env.crypto().sha256(&hash_input).into();
+        let integrity_hash = current_hash;
 
         env.events().publish(
             (symbol_short!("AUDIT"), symbol_short!("EXPORT")),
@@ -775,19 +780,36 @@ impl AuditTrail {
         next
     }
 
-    fn update_log_rolling_hash(env: &Env, log: &AuditLog, prev_hash: &BytesN<32>) {
+    /// Computes the canonical rolling hash for an audit log entry given its preceding rolling hash.
+    /// Canonical Scheme 1: SHA256(prev_hash.to_xdr || id.to_xdr || timestamp.to_xdr || action_disc.to_xdr || target.to_xdr)
+    fn compute_entry_hash(env: &Env, prev_hash: &BytesN<32>, log: &AuditLog) -> BytesN<32> {
         use soroban_sdk::xdr::ToXdr;
 
         let mut buffer = Bytes::new(env);
-        buffer.append(&prev_hash.to_xdr(env));
+        buffer.append(&prev_hash.clone().to_xdr(env));
         buffer.append(&log.id.to_xdr(env));
         buffer.append(&log.timestamp.to_xdr(env));
         let action_disc = log.action as u32;
         buffer.append(&action_disc.to_xdr(env));
         buffer.append(&log.target.clone().to_xdr(env));
 
-        let new_hash: BytesN<32> = env.crypto().sha256(&buffer).into();
+        env.crypto().sha256(&buffer).into()
+    }
+
+    fn update_log_rolling_hash(env: &Env, log: &AuditLog, prev_hash: &BytesN<32>) {
+        let new_hash = Self::compute_entry_hash(env, prev_hash, log);
         env.storage().instance().set(&DataKey::RollingHash, &new_hash);
+    }
+
+    fn symbol_to_string(env: &Env, sym: &Symbol) -> String {
+        use soroban_sdk::xdr::{FromXdr, ScVal, ToXdr};
+        let bytes = sym.clone().to_xdr(env);
+        if let Ok(ScVal::Symbol(sym_str)) = ScVal::from_xdr(env, &bytes) {
+            if let Ok(s) = core::str::from_utf8(sym_str.as_slice()) {
+                return String::from_str(env, s);
+            }
+        }
+        String::from_str(env, "UNKNOWN")
     }
 
     fn index_log_by_actor(env: &Env, actor: &Address, id: u64) {
@@ -819,7 +841,7 @@ impl AuditTrail {
     /// Stores denial details and emits a compliance event.
     pub fn log_auth_denial(
         env: Env,
-        admin: Address,
+        _admin: Address,
         caller: Address,
         target_function: Symbol,
         denial_reason: Symbol,
@@ -830,11 +852,11 @@ impl AuditTrail {
         let mut log_metadata = metadata;
         log_metadata.set(
             String::from_str(&env, "denial_reason"),
-            denial_reason.to_string(),
+            Self::symbol_to_string(&env, &denial_reason),
         );
         log_metadata.set(
             String::from_str(&env, "target_function"),
-            target_function.to_string(),
+            Self::symbol_to_string(&env, &target_function),
         );
 
         let log = AuditLog {
@@ -871,15 +893,15 @@ impl AuditTrail {
         let mut metadata = Map::new(&env);
         metadata.set(
             String::from_str(&env, "policy_name"),
-            policy_name.to_string(),
+            Self::symbol_to_string(&env, &policy_name),
         );
         metadata.set(
             String::from_str(&env, "decision"),
-            decision.to_string(),
+            Self::symbol_to_string(&env, &decision),
         );
         metadata.set(
             String::from_str(&env, "target_function"),
-            target_function.to_string(),
+            Self::symbol_to_string(&env, &target_function),
         );
 
         let action = if decision == symbol_short!("ALLOW") {
@@ -934,47 +956,5 @@ impl AuditTrail {
         }
 
         summary
-    }
-}
-
-#![no_std]
-use soroban_sdk::{contract, contractimpl, BytesN, Env, Symbol};
-use contract_monitoring::telemetry::{ExecutionStatus, TelemetryLogger};
-
-#[contract]
-pub struct AuditMonitoringContract;
-
-#[contractimpl]
-impl AuditMonitoringContract {
-    /// Records execution metrics and audit events for operational telemetry
-    pub fn record_execution(
-        env: Env,
-        target_contract: BytesN<32>,
-        function_name: Symbol,
-        cpu_instructions: u64,
-        memory_bytes: u64,
-        retry_count: u32,
-        error_code: u32,
-    ) {
-        let status = if error_code == 0 {
-            if retry_count > 0 {
-                ExecutionStatus::Retried
-            } else {
-                ExecutionStatus::Success
-            }
-        } else {
-            ExecutionStatus::Failed
-        };
-
-        TelemetryLogger::emit_execution_telemetry(
-            &env,
-            target_contract,
-            function_name,
-            cpu_instructions,
-            memory_bytes,
-            status,
-            retry_count,
-            error_code,
-        );
     }
 }
