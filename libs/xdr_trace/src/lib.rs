@@ -47,10 +47,17 @@
 
 pub mod decode;
 pub mod error;
+pub mod json;
 pub mod model;
+pub mod validate;
 
 pub use decode::{decode_contract_events, decode_diagnostic_events, decode_trace};
 pub use error::TraceError;
+pub use json::{
+    address_to_strkey, contract_id_to_strkey, derive_trace_id, format_events, scval_to_native_json,
+    scval_to_typed_value, ContractTraceJson, TraceEventJson, TraceJsonOptions, TypedValue,
+};
 pub use model::{ContractId, ContractTrace};
+pub use validate::validate_trace_record;
 
 pub use soroban_sdk::xdr::{ContractEvent, DiagnosticEvent, ScVal};

@@ -1,4 +1,5 @@
 //! Shared test support: builders for the canonical trace fixture.
+#![allow(dead_code)]
 
 use soroban_sdk::xdr::{
     ContractEvent, ContractEventBody, ContractEventType, ContractEventV0, DiagnosticEvent,

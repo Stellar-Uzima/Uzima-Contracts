@@ -8,6 +8,7 @@ members = [
     "tests/integration_framework",
     "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
+    "libs/xdr_trace",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts

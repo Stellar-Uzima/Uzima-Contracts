@@ -38,8 +38,30 @@ pub fn decode_trace(bytes: &[u8]) -> Result<ContractTrace, TraceError> {
         return Err(TraceError::EmptyInput);
     }
 
-    let meta = SorobanTransactionMeta::from_xdr(bytes, Limits::none())
-        .map_err(TraceError::InvalidXdr)?;
+    if let Ok(meta) = SorobanTransactionMeta::from_xdr(bytes, Limits::none()) {
+        return trace_from_meta(&meta);
+    }
+
+    if let Ok(soroban_sdk::xdr::TransactionMeta::V3(v3)) =
+        soroban_sdk::xdr::TransactionMeta::from_xdr(bytes, Limits::none())
+    {
+        if let Some(soroban_meta) = v3.soroban_meta {
+            return trace_from_meta(&soroban_meta);
+        }
+    }
+
+    if let Ok(tx_res_meta) =
+        soroban_sdk::xdr::TransactionResultMeta::from_xdr(bytes, Limits::none())
+    {
+        if let soroban_sdk::xdr::TransactionMeta::V3(v3) = tx_res_meta.tx_apply_processing {
+            if let Some(soroban_meta) = v3.soroban_meta {
+                return trace_from_meta(&soroban_meta);
+            }
+        }
+    }
+
+    let meta =
+        SorobanTransactionMeta::from_xdr(bytes, Limits::none()).map_err(TraceError::InvalidXdr)?;
 
     trace_from_meta(&meta)
 }
@@ -78,10 +100,8 @@ enum ControlEvent<'a> {
         data: &'a ScVal,
     },
     /// The host recorded the return of `function`; `data` is the result vector.
-    FnReturn {
-        function: &'a [u8],
-        data: &'a ScVal,
-    },
+    #[allow(dead_code)]
+    FnReturn { function: &'a [u8], data: &'a ScVal },
 }
 
 /// Extracts a control event from a diagnostic event, if its topic names one.
@@ -106,7 +126,7 @@ fn control_event(diagnostic: &DiagnosticEvent) -> Result<Option<ControlEvent<'_>
                     return Err(TraceError::MalformedControlEvent(
                         "`fn_call` topic[1] must be the called contract id (ScBytes)",
                     ))
-                }
+                },
             };
             let function = match topics.get(2) {
                 Some(ScVal::Symbol(function)) => &function.0[..],
@@ -114,14 +134,14 @@ fn control_event(diagnostic: &DiagnosticEvent) -> Result<Option<ControlEvent<'_>
                     return Err(TraceError::MalformedControlEvent(
                         "`fn_call` topic[2] must be the function symbol",
                     ))
-                }
+                },
             };
             Ok(Some(ControlEvent::FnCall {
                 called_contract,
                 function,
                 data: &v0.data,
             }))
-        }
+        },
         b"fn_return" => {
             let function = match topics.get(1) {
                 Some(ScVal::Symbol(function)) => &function.0[..],
@@ -129,13 +149,13 @@ fn control_event(diagnostic: &DiagnosticEvent) -> Result<Option<ControlEvent<'_>
                     return Err(TraceError::MalformedControlEvent(
                         "`fn_return` topic[1] must be the function symbol",
                     ))
-                }
+                },
             };
             Ok(Some(ControlEvent::FnReturn {
                 function,
                 data: &v0.data,
             }))
-        }
+        },
         _ => Ok(None),
     }
 }
@@ -172,9 +192,7 @@ fn trace_from_meta(meta: &SorobanTransactionMeta) -> Result<ContractTrace, Trace
 
                 if diagnostic.event.contract_id.is_none() && root_invocation.is_none() {
                     let function_name = String::from_utf8(function.to_vec()).map_err(|_| {
-                        TraceError::MalformedControlEvent(
-                            "`fn_call` function symbol is not UTF-8",
-                        )
+                        TraceError::MalformedControlEvent("`fn_call` function symbol is not UTF-8")
                     })?;
                     let arguments = match data {
                         ScVal::Vec(Some(arguments)) => arguments.0.as_vec().clone(),
@@ -183,12 +201,12 @@ fn trace_from_meta(meta: &SorobanTransactionMeta) -> Result<ContractTrace, Trace
                             return Err(TraceError::MalformedControlEvent(
                                 "`fn_call` data must be an ScVal vector of arguments",
                             ))
-                        }
+                        },
                     };
                     root_invocation = Some((contract_id, function_name, arguments));
                 }
-            }
-            ControlEvent::FnReturn { .. } => {}
+            },
+            ControlEvent::FnReturn { .. } => {},
         }
     }
 

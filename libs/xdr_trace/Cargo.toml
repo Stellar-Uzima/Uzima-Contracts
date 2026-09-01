@@ -1,13 +1,23 @@
 [package]
 name = "xdr_trace"
 version = "0.1.0"
-edition.workspace = true
+edition = "2021"
 
 [dependencies]
 soroban-sdk = { workspace = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4"
+stellar-strkey = "0.0.8"
+sha2 = "0.10"
+
+[[bin]]
+name = "trace_extractor"
+path = "src/bin/trace_extractor.rs"
 
 [lib]
 crate-type = ["rlib"]
 
 [dev-dependencies]
 soroban-sdk = { workspace = true }
+serde_json = "1.0"
