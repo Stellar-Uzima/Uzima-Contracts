@@ -1,16 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "IdentityRegisteredEvent",
   "type": "object",
   "properties": {
-    "record_id": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "patient": {
+    "identity": {
       "type": "string"
     },
-    "accessor": {
+    "role": {
       "type": "string"
     },
     "ledger": {
@@ -19,9 +15,8 @@
     }
   },
   "required": [
-    "record_id",
-    "patient",
-    "accessor",
+    "identity",
+    "role",
     "ledger"
   ],
   "additionalProperties": false

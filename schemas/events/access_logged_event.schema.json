@@ -1,17 +1,23 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "AccessLoggedEvent",
   "type": "object",
   "properties": {
-    "record_id": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "patient": {
+    "actor": {
       "type": "string"
     },
-    "accessor": {
+    "action": {
       "type": "string"
+    },
+    "resource": {
+      "type": "string"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny"
+      ]
     },
     "ledger": {
       "type": "integer",
@@ -19,9 +25,10 @@
     }
   },
   "required": [
-    "record_id",
-    "patient",
-    "accessor",
+    "actor",
+    "action",
+    "resource",
+    "outcome",
     "ledger"
   ],
   "additionalProperties": false

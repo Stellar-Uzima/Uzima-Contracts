@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "AiAnalysisTriggeredEvent",
+  "title": "RecordRolledBackEvent",
   "type": "object",
   "properties": {
     "audit": {
@@ -11,11 +11,19 @@
     },
     "patient": {
       "type": "string"
+    },
+    "fromVersion": {
+      "type": "integer"
+    },
+    "toVersion": {
+      "type": "integer"
     }
   },
   "required": [
     "audit",
     "recordId",
-    "patient"
+    "patient",
+    "fromVersion",
+    "toVersion"
   ]
 }

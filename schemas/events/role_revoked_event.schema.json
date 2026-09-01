@@ -1,16 +1,15 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "RoleRevokedEvent",
   "type": "object",
   "properties": {
-    "record_id": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "patient": {
+    "revokee": {
       "type": "string"
     },
-    "accessor": {
+    "role": {
+      "type": "string"
+    },
+    "revoked_by": {
       "type": "string"
     },
     "ledger": {
@@ -19,9 +18,9 @@
     }
   },
   "required": [
-    "record_id",
-    "patient",
-    "accessor",
+    "revokee",
+    "role",
+    "revoked_by",
     "ledger"
   ],
   "additionalProperties": false

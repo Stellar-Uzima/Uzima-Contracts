@@ -1,29 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RiskScoreSubmittedEvent",
+  "title": "ConsentRevokedEvent",
   "type": "object",
   "properties": {
-    "audit": {
-      "type": "object"
-    },
     "patient": {
       "type": "string"
     },
-    "modelId": {
+    "provider": {
       "type": "string"
     },
-    "scoreBps": {
-      "type": "integer"
-    },
-    "modelVersion": {
+    "data_type": {
       "type": "string"
+    },
+    "ledger": {
+      "type": "integer",
+      "minimum": 0
     }
   },
   "required": [
-    "audit",
     "patient",
-    "modelId",
-    "scoreBps",
-    "modelVersion"
-  ]
+    "provider",
+    "data_type",
+    "ledger"
+  ],
+  "additionalProperties": false
 }

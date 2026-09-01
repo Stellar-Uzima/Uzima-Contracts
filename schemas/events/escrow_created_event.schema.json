@@ -1,17 +1,25 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "EscrowCreatedEvent",
   "type": "object",
   "properties": {
-    "record_id": {
+    "escrow_id": {
       "type": "integer",
       "minimum": 0
     },
-    "patient": {
+    "payer": {
       "type": "string"
     },
-    "accessor": {
+    "payee": {
       "type": "string"
+    },
+    "amount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "release_ledger": {
+      "type": "integer",
+      "minimum": 0
     },
     "ledger": {
       "type": "integer",
@@ -19,9 +27,11 @@
     }
   },
   "required": [
-    "record_id",
-    "patient",
-    "accessor",
+    "escrow_id",
+    "payer",
+    "payee",
+    "amount",
+    "release_ledger",
     "ledger"
   ],
   "additionalProperties": false
