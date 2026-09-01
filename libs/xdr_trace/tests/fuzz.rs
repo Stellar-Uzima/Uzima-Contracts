@@ -56,13 +56,15 @@ fn random_and_truncated_buffers_never_panic() {
 /// of it completes without panicking.
 #[test]
 fn valid_fixture_truncated_and_bitflipped_never_panics() {
-    let bytes = common::build_fixture_meta().to_xdr(Limits::none()).expect("xdr encode");
+    let bytes = common::build_fixture_meta()
+        .to_xdr(Limits::none())
+        .expect("xdr encode");
 
     for n in 0..=bytes.len() {
         let _ = decode_trace(&bytes[..n]);
     }
 
-    for (i, byte) in bytes.iter().enumerate() {
+    for (i, _byte) in bytes.iter().enumerate() {
         for bit in 0..u8::BITS {
             let mut corrupted = bytes.clone();
             corrupted[i] ^= 1 << bit;
@@ -107,7 +109,10 @@ fn decoded_event_order_preserves_serialization_order() {
         let bytes = meta.to_xdr(Limits::none()).expect("xdr encode");
         let trace = decode_trace(&bytes).expect("decode");
 
-        assert_eq!(trace.events, encoded_events, "contract event order was scrambled");
+        assert_eq!(
+            trace.events, encoded_events,
+            "contract event order was scrambled"
+        );
         assert_eq!(
             trace.diagnostic_events,
             meta_template.diagnostic_events.as_vec().clone(),
@@ -120,10 +125,15 @@ fn decoded_event_order_preserves_serialization_order() {
 /// exactly the distinct `fn_call` targets encoded in the XDR.
 #[test]
 fn invoked_contract_set_matches_encoded_fn_calls() {
-    let bytes = common::build_fixture_meta().to_xdr(Limits::none()).expect("xdr encode");
+    let bytes = common::build_fixture_meta()
+        .to_xdr(Limits::none())
+        .expect("xdr encode");
     let trace = decode_trace(&bytes).expect("decode");
 
-    let mut expected = vec![ContractId(common::CONTRACT_A), ContractId(common::CONTRACT_B)];
+    let mut expected = vec![
+        ContractId(common::CONTRACT_A),
+        ContractId(common::CONTRACT_B),
+    ];
     expected.sort_unstable();
     assert_eq!(trace.invoked_contract_ids, expected);
 }

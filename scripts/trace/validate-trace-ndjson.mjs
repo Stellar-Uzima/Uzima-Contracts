@@ -14,6 +14,7 @@
 //   --envelope  event envelope path      (default schemas/events/event_envelope.schema.json)
 
 import Ajv2020 from "ajv/dist/2020.js";
+import Ajv from "ajv";
 import { readFile } from "node:fs/promises";
 
 function fail(msg) {
@@ -32,6 +33,10 @@ function loadJson(p) {
 
 function ajv() {
   return new Ajv2020({ allErrors: true, strict: false });
+}
+
+function ajvDraft7() {
+  return new Ajv({ allErrors: true, strict: false });
 }
 
 async function readInputLines(file) {
@@ -61,15 +66,22 @@ async function validate() {
   const registry = await loadJson(registryPath);
   const envelope = await loadJson(envelopePath);
 
-  const validateTrace = ajv().compile(schema);
-  const validateEnvelope = ajv().compile(envelope);
+  function compileSchema(s) {
+    if (s?.$schema && s.$schema.includes("draft-07")) {
+      return ajvDraft7().compile(s);
+    }
+    return ajv().compile(s);
+  }
+
+  const validateTrace = compileSchema(schema);
+  const validateEnvelope = compileSchema(envelope);
 
   const registryEntries = registry.events ?? {};
   const bodyValidators = new Map();
   for (const [key, entry] of Object.entries(registryEntries)) {
     if (entry?.schema) {
       try {
-        bodyValidators.set(key, ajv().compile(entry.schema));
+        bodyValidators.set(key, compileSchema(entry.schema));
       } catch (error) {
         fail(`Registry event '${key}' has an invalid body schema: ${error.message}`);
       }

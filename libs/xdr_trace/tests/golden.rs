@@ -31,7 +31,9 @@ fn committed_golden_fixture_decodes() {
 
     // Sanity: the committed fixture is byte-identical to a fresh serialization
     // of the canonical meta, i.e. the file and generator cannot drift apart.
-    let bytes2 = common::build_fixture_meta().to_xdr(Limits::none()).expect("xdr encode");
+    let bytes2 = common::build_fixture_meta()
+        .to_xdr(Limits::none())
+        .expect("xdr encode");
     assert_eq!(bytes, bytes2);
 }
 
@@ -42,7 +44,9 @@ fn malformed_input_errors_typed() {
     assert_eq!(decode_trace(&[]), Err(TraceError::EmptyInput));
     assert_eq!(decode_diagnostic_events(&[]), Err(TraceError::EmptyInput));
 
-    let bytes = common::build_fixture_meta().to_xdr(Limits::none()).expect("xdr encode");
+    let bytes = common::build_fixture_meta()
+        .to_xdr(Limits::none())
+        .expect("xdr encode");
 
     // Truncations at several boundaries must fail with a typed XDR error.
     for n in [1, 3, 4, 7, 8, 16, 63, 64, 128, bytes.len() - 1] {
@@ -56,10 +60,13 @@ fn malformed_input_errors_typed() {
     // Trailing garbage makes the buffer a valid prefix but not a complete type.
     let mut trailing = bytes.clone();
     trailing.push(0);
-    assert!(matches!(decode_trace(&trailing), Err(TraceError::InvalidXdr(_))));
+    assert!(matches!(
+        decode_trace(&trailing),
+        Err(TraceError::InvalidXdr(_))
+    ));
 
     // The untouched buffer still decodes.
-    assert!(matches!(decode_trace(&bytes), Ok(_)));
+    assert!(decode_trace(&bytes).is_ok());
 }
 
 /// An error-valued return decodes as a typed `FailedInvocation`, not a trace.
@@ -77,7 +84,10 @@ fn failed_invocation_errors_typed() {
     };
 
     let bytes = failed.to_xdr(Limits::none()).expect("xdr encode");
-    assert!(matches!(decode_trace(&bytes), Err(TraceError::FailedInvocation)));
+    assert!(matches!(
+        decode_trace(&bytes),
+        Err(TraceError::FailedInvocation)
+    ));
 }
 
 /// A structurally valid meta without a host-level `fn_call` diagnostic yields a
@@ -93,7 +103,10 @@ fn missing_invocation_record_errors_typed() {
     };
 
     let bytes = meta.to_xdr(Limits::none()).expect("xdr encode");
-    assert!(matches!(decode_trace(&bytes), Err(TraceError::MissingInvocationRecord)));
+    assert!(matches!(
+        decode_trace(&bytes),
+        Err(TraceError::MissingInvocationRecord)
+    ));
 }
 
 /// `decode_diagnostic_events` decodes a raw `DiagnosticEvents` blob.
