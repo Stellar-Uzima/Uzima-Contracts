@@ -30,8 +30,14 @@ function loadJson(p) {
   return readFile(p, "utf8").then((s) => JSON.parse(s));
 }
 
+const draft7MetaSchema = await loadJson(
+  new URL("../../node_modules/ajv/dist/refs/json-schema-draft-07.json", import.meta.url)
+);
+
 function ajv() {
-  return new Ajv2020({ allErrors: true, strict: false });
+  const instance = new Ajv2020({ allErrors: true, strict: false });
+  instance.addMetaSchema(draft7MetaSchema);
+  return instance;
 }
 
 async function readInputLines(file) {

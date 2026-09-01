@@ -11,7 +11,7 @@
 #![no_std]
 #![forbid(alloc)]
 
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
 
@@ -115,6 +115,10 @@ impl AccessControlImpl {
     pub fn init(env: &Env, admin: &Address) {
         governance_commons::init_guard(env);
         env.storage().instance().set(&DataKey::Admin, admin);
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("INIT")),
+            admin.clone(),
+        );
     }
 
     // ── Admin helpers ─────────────────────────────────────────────────────────
@@ -211,6 +215,10 @@ impl AccessControlImpl {
             &DataKey::Permission(address.clone(), permission as u32),
             &true,
         );
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("GRANT_P")),
+            (address.clone(), permission as u32),
+        );
         Ok(())
     }
 
@@ -224,6 +232,10 @@ impl AccessControlImpl {
         env.storage()
             .persistent()
             .remove(&DataKey::Permission(address.clone(), permission as u32));
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("REVOKE_P")),
+            (address.clone(), permission as u32),
+        );
         Ok(())
     }
 
@@ -263,6 +275,10 @@ impl AccessControlImpl {
                 granted = granted.saturating_add(1);
             }
         }
+        env.events().publish(
+            (symbol_short!("AC"), symbol_short!("BATCH_G")),
+            granted,
+        );
         Ok(granted)
     }
 
@@ -308,7 +324,7 @@ impl AccessControlImpl {
             }
         }
         env.events().publish(
-            (symbol_short!("AC"), symbol_short!("BATCH_PERM")),
+            (symbol_short!("AC"), symbol_short!("BATCH_PRM")),
             (address, granted),
         );
         Ok(granted)
