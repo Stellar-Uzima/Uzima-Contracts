@@ -18,8 +18,11 @@ pub fn set_paused(env: &Env, paused: bool, caller: Address) -> Result<(), &'stat
         return Err("unauthorized");
     }
     env.storage().instance().set(&PauseKey::Paused, &paused);
-    let event = if paused { symbol_short!("pause") } else { symbol_short!("unpause") };
-    env.events().publish((event,), (caller,));
+    if paused {
+        env.events().publish((symbol_short!("pause"),), (caller,));
+    } else {
+        env.events().publish((symbol_short!("unpause"),), (caller,));
+    }
     Ok(())
 }
 

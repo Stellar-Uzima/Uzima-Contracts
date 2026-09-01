@@ -1,0 +1,55 @@
+name: event-emission-check
+
+on:
+  push:
+    paths:
+      - "contracts/**"
+      - "scripts/check_events.sh"
+      - "scripts/allowlists/**"
+      - "tests/check_events_gate_test.sh"
+      - "schemas/events/**"
+      - "scripts/events/**"
+      - "scripts/trace/**"
+      - "docs/EVENTS.md"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - "contracts/**"
+      - "scripts/check_events.sh"
+      - "scripts/allowlists/**"
+      - "tests/check_events_gate_test.sh"
+      - "schemas/events/**"
+      - "scripts/events/**"
+      - "scripts/trace/**"
+      - "docs/EVENTS.md"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+jobs:
+  event-emission-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Audit event emission and test gate
+        run: |
+          chmod +x scripts/check_events.sh tests/check_events_gate_test.sh
+          ./tests/check_events_gate_test.sh
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate event registry schema
+        run: npm run events:validate
+
+      - name: Validate trace schemas
+        run: npm run trace:check

@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env};
+use soroban_sdk::{symbol_short, Address, Env};
 
 use crate::types::{DataKey, Error};
 
@@ -8,5 +8,9 @@ pub fn initialize(env: Env, admin: Address) -> Result<bool, Error> {
     admin.require_auth();
 
     env.storage().instance().set(&DataKey::Admin, &admin);
+    env.events().publish(
+        (symbol_short!("AI_AN"), symbol_short!("INIT")),
+        admin,
+    );
     Ok(true)
 }

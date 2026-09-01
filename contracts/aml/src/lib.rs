@@ -83,6 +83,10 @@ impl AntiMoneyLaundering {
             is_enabled: true,
         };
         env.storage().instance().set(&DataKey::Rule(id), &rule);
+        env.events().publish(
+            (symbol_short!("AML"), symbol_short!("CFG_RULE")),
+            (id, threshold),
+        );
         Ok(())
     }
 
