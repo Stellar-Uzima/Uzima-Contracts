@@ -1,5 +1,8 @@
 #![no_std]
 //! deprecation_framework - Healthcare smart contract on Stellar blockchain.
+//!
+//! Coordinates phased deprecation of a deployed contract: sunset timelines,
+//! migration guidance, and deprecation status tracking.
 
 mod errors;
 mod events;

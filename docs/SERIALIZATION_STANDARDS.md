@@ -143,3 +143,6 @@ this document, so new or changed ABIs are checked without forcing the
 workspace-`exclude`d contracts to comply up front.
 
 Run locally: `cargo test --manifest-path tests/Cargo.toml --test xdr_conformance`.
+
+CI runs the same suite (the `xdr-conformance` workflow) on a toolchain
+installed from the version pinned in `rust-toolchain.toml`.
