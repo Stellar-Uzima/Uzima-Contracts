@@ -1,6 +1,7 @@
 name: deprecation-framework-check
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "contracts/deprecation_framework/**"
@@ -26,7 +27,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain (pinned by rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1
+        uses: dtolnay/rust-toolchain@1.92.0
 
       - name: Add wasm32 target
         run: rustup target add wasm32-unknown-unknown

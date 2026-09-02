@@ -1,6 +1,7 @@
 name: xdr-conformance
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "contracts/**"
@@ -32,7 +33,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install Rust toolchain (pinned by rust-toolchain.toml)
-        uses: dtolnay/rust-toolchain@1
+        uses: dtolnay/rust-toolchain@1.92.0
 
       - name: Run the XDR serialization conformance suite
         # The gate runs on changed contracts/libs/schemas only (see the `paths`
