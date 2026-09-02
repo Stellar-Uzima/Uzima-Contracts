@@ -1,0 +1,51 @@
+name: Events Validation
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "contracts/**"
+      - "schemas/events/**"
+      - "scripts/events/**"
+      - "docs/EVENTS.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/events-validation.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "contracts/**"
+      - "schemas/events/**"
+      - "scripts/events/**"
+      - "docs/EVENTS.md"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/events-validation.yml"
+
+jobs:
+  validate-events:
+    name: Validate Event Schemas and Drift Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Event Registry and Schemas
+        run: npm run events:validate
+
+      - name: Verify Trace Contract Schemas
+        run: npm run trace:check

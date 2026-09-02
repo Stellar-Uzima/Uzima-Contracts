@@ -3,26 +3,59 @@
   "title": "Uzima Contract Event Schema Registry",
   "description": "Central registry mapping every contract event to its typed schema, version, and validation rules",
   "version": "2.0.0",
-  "generated_at": "2026-07-23T00:00:00Z",
+  "generated_at": "2026-09-01T19:11:31.118Z",
   "events": {
     "medical_records.record_created": {
       "contract": "medical_records",
       "name": "record_created",
       "version": 1,
       "description": "Emitted when a new medical record is created",
-      "topics": ["record_created", "medical_records"],
+      "topics": [
+        "record_created",
+        "medical_records"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "record_id": { "type": "integer", "minimum": 0 },
-          "patient": { "type": "string", "pattern": "^G[A-Z2-7]{55}$" },
-          "doctor": { "type": "string", "pattern": "^G[A-Z2-7]{55}$" },
-          "category": { "type": "string", "minLength": 1, "maxLength": 64 },
-          "is_confidential": { "type": "boolean" },
-          "ledger": { "type": "integer", "minimum": 0 },
-          "tags": { "type": "array", "items": { "type": "string" } }
+          "record_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "patient": {
+            "type": "string",
+            "pattern": "^G[A-Z2-7]{55}$"
+          },
+          "doctor": {
+            "type": "string",
+            "pattern": "^G[A-Z2-7]{55}$"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "is_confidential": {
+            "type": "boolean"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         },
-        "required": ["record_id", "patient", "doctor", "category", "is_confidential", "ledger"],
+        "required": [
+          "record_id",
+          "patient",
+          "doctor",
+          "category",
+          "is_confidential",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -31,16 +64,34 @@
       "name": "record_accessed",
       "version": 1,
       "description": "Emitted when a medical record is read",
-      "topics": ["record_accessed", "medical_records"],
+      "topics": [
+        "record_accessed",
+        "medical_records"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "record_id": { "type": "integer", "minimum": 0 },
-          "patient": { "type": "string" },
-          "accessor": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "record_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "patient": {
+            "type": "string"
+          },
+          "accessor": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["record_id", "patient", "accessor", "ledger"],
+        "required": [
+          "record_id",
+          "patient",
+          "accessor",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -49,17 +100,38 @@
       "name": "consent_granted",
       "version": 1,
       "description": "Emitted when a patient grants consent to a provider",
-      "topics": ["consent_granted", "patient_consent_management"],
+      "topics": [
+        "consent_granted",
+        "patient_consent_management"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "patient": { "type": "string" },
-          "provider": { "type": "string" },
-          "data_type": { "type": "string" },
-          "expiry_ledger": { "type": "integer", "minimum": 0 },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "patient": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "data_type": {
+            "type": "string"
+          },
+          "expiry_ledger": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["patient", "provider", "data_type", "expiry_ledger", "ledger"],
+        "required": [
+          "patient",
+          "provider",
+          "data_type",
+          "expiry_ledger",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -68,16 +140,33 @@
       "name": "consent_revoked",
       "version": 1,
       "description": "Emitted when consent is revoked",
-      "topics": ["consent_revoked", "patient_consent_management"],
+      "topics": [
+        "consent_revoked",
+        "patient_consent_management"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "patient": { "type": "string" },
-          "provider": { "type": "string" },
-          "data_type": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "patient": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "data_type": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["patient", "provider", "data_type", "ledger"],
+        "required": [
+          "patient",
+          "provider",
+          "data_type",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -86,15 +175,29 @@
       "name": "identity_registered",
       "version": 1,
       "description": "Emitted when a new DID identity is registered",
-      "topics": ["identity_registered", "identity_registry"],
+      "topics": [
+        "identity_registered",
+        "identity_registry"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "identity": { "type": "string" },
-          "role": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "identity": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["identity", "role", "ledger"],
+        "required": [
+          "identity",
+          "role",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -103,18 +206,44 @@
       "name": "escrow_created",
       "version": 1,
       "description": "Emitted when an escrow is created",
-      "topics": ["escrow_created", "escrow"],
+      "topics": [
+        "escrow_created",
+        "escrow"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "escrow_id": { "type": "integer", "minimum": 0 },
-          "payer": { "type": "string" },
-          "payee": { "type": "string" },
-          "amount": { "type": "integer", "minimum": 1 },
-          "release_ledger": { "type": "integer", "minimum": 0 },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "escrow_id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "payer": {
+            "type": "string"
+          },
+          "payee": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "release_ledger": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["escrow_id", "payer", "payee", "amount", "release_ledger", "ledger"],
+        "required": [
+          "escrow_id",
+          "payer",
+          "payee",
+          "amount",
+          "release_ledger",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -123,18 +252,44 @@
       "name": "contract_upgraded",
       "version": 1,
       "description": "Emitted when a contract WASM is upgraded",
-      "topics": ["contract_upgraded", "upgradeability"],
+      "topics": [
+        "contract_upgraded",
+        "upgradeability"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "contract": { "type": "string" },
-          "old_version": { "type": "integer", "minimum": 0 },
-          "new_version": { "type": "integer", "minimum": 1 },
-          "wasm_hash": { "type": "string", "minLength": 64, "maxLength": 64 },
-          "upgraded_by": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "contract": {
+            "type": "string"
+          },
+          "old_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "new_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "wasm_hash": {
+            "type": "string",
+            "minLength": 64,
+            "maxLength": 64
+          },
+          "upgraded_by": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["contract", "new_version", "wasm_hash", "upgraded_by", "ledger"],
+        "required": [
+          "contract",
+          "new_version",
+          "wasm_hash",
+          "upgraded_by",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -143,15 +298,32 @@
       "name": "lifecycle_transition",
       "version": 1,
       "description": "Emitted on every lifecycle state machine transition",
-      "topics": ["lifecycle", "transition"],
+      "topics": [
+        "lifecycle",
+        "transition"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "old_state": { "type": "integer", "minimum": 0, "maximum": 4 },
-          "new_state": { "type": "integer", "minimum": 0, "maximum": 4 },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "old_state": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "new_state": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 4
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["old_state", "new_state"],
+        "required": [
+          "old_state",
+          "new_state"
+        ],
         "additionalProperties": false
       }
     },
@@ -160,17 +332,41 @@
       "name": "access_logged",
       "version": 1,
       "description": "Emitted when an access event is recorded in the audit trail",
-      "topics": ["access_logged", "audit"],
+      "topics": [
+        "access_logged",
+        "audit"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "actor": { "type": "string" },
-          "action": { "type": "string" },
-          "resource": { "type": "string" },
-          "outcome": { "type": "string", "enum": ["allow", "deny"] },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "actor": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "allow",
+              "deny"
+            ]
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["actor", "action", "resource", "outcome", "ledger"],
+        "required": [
+          "actor",
+          "action",
+          "resource",
+          "outcome",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -179,16 +375,33 @@
       "name": "role_granted",
       "version": 1,
       "description": "Emitted when a role is granted to an address",
-      "topics": ["role_granted", "rbac"],
+      "topics": [
+        "role_granted",
+        "rbac"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "grantee": { "type": "string" },
-          "role": { "type": "string" },
-          "granted_by": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "grantee": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "granted_by": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["grantee", "role", "granted_by", "ledger"],
+        "required": [
+          "grantee",
+          "role",
+          "granted_by",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     },
@@ -197,16 +410,33 @@
       "name": "role_revoked",
       "version": 1,
       "description": "Emitted when a role is revoked from an address",
-      "topics": ["role_revoked", "rbac"],
+      "topics": [
+        "role_revoked",
+        "rbac"
+      ],
       "schema": {
         "type": "object",
         "properties": {
-          "revokee": { "type": "string" },
-          "role": { "type": "string" },
-          "revoked_by": { "type": "string" },
-          "ledger": { "type": "integer", "minimum": 0 }
+          "revokee": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string"
+          },
+          "revoked_by": {
+            "type": "string"
+          },
+          "ledger": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
-        "required": ["revokee", "role", "revoked_by", "ledger"],
+        "required": [
+          "revokee",
+          "role",
+          "revoked_by",
+          "ledger"
+        ],
         "additionalProperties": false
       }
     }

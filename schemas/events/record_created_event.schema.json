@@ -1,37 +1,46 @@
 {
-  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RecordCreatedEvent",
   "type": "object",
   "properties": {
-    "audit": {
-      "type": "object"
-    },
-    "recordId": {
-      "type": "integer"
+    "record_id": {
+      "type": "integer",
+      "minimum": 0
     },
     "patient": {
-      "type": "string"
+      "type": "string",
+      "pattern": "^G[A-Z2-7]{55}$"
     },
     "doctor": {
-      "type": "string"
-    },
-    "isConfidential": {
-      "type": "boolean"
+      "type": "string",
+      "pattern": "^G[A-Z2-7]{55}$"
     },
     "category": {
-      "type": "string"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "is_confidential": {
+      "type": "boolean"
+    },
+    "ledger": {
+      "type": "integer",
+      "minimum": 0
     },
     "tags": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "required": [
-    "audit",
-    "recordId",
+    "record_id",
     "patient",
     "doctor",
-    "isConfidential",
     "category",
-    "tags"
-  ]
+    "is_confidential",
+    "ledger"
+  ],
+  "additionalProperties": false
 }

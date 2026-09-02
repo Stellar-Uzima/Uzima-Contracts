@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "AiAnalysisTriggeredEvent",
+  "title": "TraditionalRecordAddedEvent",
   "type": "object",
   "properties": {
     "audit": {
@@ -11,11 +11,15 @@
     },
     "patient": {
       "type": "string"
+    },
+    "practiceType": {
+      "type": "string"
     }
   },
   "required": [
     "audit",
     "recordId",
-    "patient"
+    "patient",
+    "practiceType"
   ]
 }

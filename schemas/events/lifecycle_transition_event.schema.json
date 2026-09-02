@@ -1,17 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "LifecycleTransitionEvent",
   "type": "object",
   "properties": {
-    "record_id": {
+    "old_state": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "maximum": 4
     },
-    "patient": {
-      "type": "string"
-    },
-    "accessor": {
-      "type": "string"
+    "new_state": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4
     },
     "ledger": {
       "type": "integer",
@@ -19,10 +19,8 @@
     }
   },
   "required": [
-    "record_id",
-    "patient",
-    "accessor",
-    "ledger"
+    "old_state",
+    "new_state"
   ],
   "additionalProperties": false
 }

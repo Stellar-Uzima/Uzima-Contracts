@@ -1,17 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "RecordAccessedEvent",
+  "title": "ConsentGrantedEvent",
   "type": "object",
   "properties": {
-    "record_id": {
-      "type": "integer",
-      "minimum": 0
-    },
     "patient": {
       "type": "string"
     },
-    "accessor": {
+    "provider": {
       "type": "string"
+    },
+    "data_type": {
+      "type": "string"
+    },
+    "expiry_ledger": {
+      "type": "integer",
+      "minimum": 0
     },
     "ledger": {
       "type": "integer",
@@ -19,9 +22,10 @@
     }
   },
   "required": [
-    "record_id",
     "patient",
-    "accessor",
+    "provider",
+    "data_type",
+    "expiry_ledger",
     "ledger"
   ],
   "additionalProperties": false
