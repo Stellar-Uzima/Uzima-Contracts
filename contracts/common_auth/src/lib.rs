@@ -1,7 +1,7 @@
 #![no_std]
 #![forbid(alloc)]
 
-use soroban_sdk::{contracttype, Address, Env, Symbol, Vec as SorobanVec};
+use soroban_sdk::{contracttype, Address, Env, Symbol};
 
 // ==================== Authorization Observability Types ====================
 
@@ -19,7 +19,6 @@ pub enum DenialReason {
     ExpiredToken = 6,
     MissingConsent = 7,
     PolicyDenied = 8,
-    Custom(u32),
 }
 
 /// Record of a policy evaluation result.
@@ -30,7 +29,11 @@ pub struct PolicyEvaluation {
     pub caller: Address,
     pub target_function: Symbol,
     pub decision: PolicyDecision,
-    pub denial_reason: Option<DenialReason>,
+    /// [`DenialReason`] discriminant; `None` when the evaluation allowed the
+    /// call. Stored as the raw `u32` because the SDK's testutils XDR
+    /// conversions for `Option<enum>` fields require an infallible
+    /// `Into<ScVal>`, which integer-enum `contracttype`s do not provide.
+    pub denial_reason: Option<u32>,
     pub evaluated_at: u64,
     pub policy_name: Symbol,
 }
@@ -134,58 +137,6 @@ macro_rules! require_admin_custom {
     };
 }
 
-// ==================== Authorization Observability Types ====================
-
-/// Reasons why an authorization attempt was denied.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
-#[repr(u32)]
-pub enum DenialReason {
-    NotAdmin = 0,
-    NotAuthorized = 1,
-    InsufficientRole = 2,
-    ContractPaused = 3,
-    RateLimited = 4,
-    InvalidSignature = 5,
-    ExpiredToken = 6,
-    MissingConsent = 7,
-    PolicyDenied = 8,
-    Custom(u32),
-}
-
-/// Record of a policy evaluation result.
-#[derive(Clone)]
-#[contracttype]
-pub struct PolicyEvaluation {
-    pub evaluation_id: u64,
-    pub caller: Address,
-    pub target_function: Symbol,
-    pub decision: PolicyDecision,
-    pub denial_reason: Option<DenialReason>,
-    pub evaluated_at: u64,
-    pub policy_name: Symbol,
-}
-
-/// Decision outcome of a policy evaluation.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[contracttype]
-pub enum PolicyDecision {
-    Allow,
-    Deny,
-}
-
-/// An observable event emitted on authorization denial.
-#[derive(Clone)]
-#[contracttype]
-pub struct AuthObservabilityEvent {
-    pub event_id: u64,
-    pub caller: Address,
-    pub target_function: Symbol,
-    pub denial_reason: DenialReason,
-    pub timestamp: u64,
-    pub metadata: Symbol,
-}
-
 // ==================== Authorization Observability Functions ====================
 
 /// Log an authorization denial reason to persistent storage.
@@ -270,7 +221,7 @@ pub fn evaluate_policy(
         denial_reason: if is_authorized {
             None
         } else {
-            Some(DenialReason::PolicyDenied)
+            Some(DenialReason::PolicyDenied as u32)
         },
         evaluated_at: env.ledger().timestamp(),
         policy_name,

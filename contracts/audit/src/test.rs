@@ -703,6 +703,8 @@ fn test_get_denial_summary() {
     let summary = client.get_denial_summary();
     assert_eq!(summary.get(String::from_str(&env, "NO_ROLE")), Some(2));
     assert_eq!(summary.get(String::from_str(&env, "DENIED")), Some(1));
+}
+
 // ─── Configurable Retention & Export Windows (Issue #1171) ──────────────────
 
 #[test]

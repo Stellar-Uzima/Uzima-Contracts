@@ -251,8 +251,8 @@ pub fn emit_upgrade_event(
     };
 
     let phase_symbol = match phase {
-        UpgradePhase::PreFlightCheck => symbol_short!("PREFLIGHT"),
-        UpgradePhase::StorageValidated => symbol_short!("STOR_VALID"),
+        UpgradePhase::PreFlightCheck => symbol_short!("PRECHECK"),
+        UpgradePhase::StorageValidated => symbol_short!("STORVAL"),
         UpgradePhase::InvariantsChecked => symbol_short!("INV_CHECK"),
         UpgradePhase::Migrating => symbol_short!("MIGRATING"),
         UpgradePhase::PostMigrationCheck => symbol_short!("POST_MIG"),

@@ -200,8 +200,7 @@ fn test_misbehavior_report_prevents_repeated_reports() {
     let reason = String::from_str(&env, "Repeated bad payload");
 
     let pre = client.get_oracle(&reported).unwrap();
-    let result = client.report_oracle_misbehavior(&reporter, &reported, &FeedKind::DrugPricing, &feed_id, &reason);
-    assert_eq!(result, Ok(()));
+    client.report_oracle_misbehavior(&reporter, &reported, &FeedKind::DrugPricing, &feed_id, &reason);
 
     let post = client.get_oracle(&reported).unwrap();
     assert!(post.reputation < pre.reputation);

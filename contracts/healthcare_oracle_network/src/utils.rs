@@ -1,7 +1,9 @@
-use soroban_sdk::{symbol_short, Address, BytesN, Env, IntoVal, RawVal, String, Symbol, TryFromVal, Val, Vec, xdr::ToXdr};
+use soroban_sdk::{
+    symbol_short, Address, BytesN, Env, IntoVal, String, Symbol, TryFromVal, Val, Vec, xdr::ToXdr,
+};
 
 use crate::types::{
-    AggregationRound, ClinicalTrialData, CallCacheKey, Config, ConsensusRecord, DataKey,
+    AggregationRound, ClinicalTrialData, Config, ConsensusRecord, CrossContractCallCacheKey, DataKey,
     DrugPriceData, Error, FeedKey, FeedKind, FeedPayload, OracleNode, RegulatoryUpdateData,
     TreatmentOutcomeData,
 };
@@ -50,10 +52,10 @@ pub fn make_cross_contract_cache_key(
     env: &Env,
     contract: &Address,
     function_name: Symbol,
-    args: &Vec<RawVal>,
-) -> CallCacheKey {
-    let args_hash: BytesN<32> = env.crypto().sha256(&args.to_xdr(env)).into();
-    CallCacheKey {
+    args: &Vec<Val>,
+) -> CrossContractCallCacheKey {
+    let args_hash: BytesN<32> = env.crypto().sha256(&args.clone().to_xdr(env)).into();
+    CrossContractCallCacheKey {
         contract: contract.clone(),
         function_name,
         args_hash,
@@ -66,7 +68,7 @@ pub fn invoke_contract_cached<
     env: &Env,
     contract: Address,
     function_name: Symbol,
-    args: Vec<RawVal>,
+    args: Vec<Val>,
 ) -> T {
     let cache_key = make_cross_contract_cache_key(env, &contract, function_name.clone(), &args);
     if let Some(value) = env.storage().temporary().get(&cache_key) {
@@ -106,14 +108,14 @@ pub fn read_oracle(env: &Env, operator: Address) -> Result<OracleNode, Error> {
 }
 
 pub fn hash_payload(env: &Env, payload: &FeedPayload) -> BytesN<32> {
-    env.crypto().sha256(&payload.to_xdr(env)).into()
+    env.crypto().sha256(&payload.clone().to_xdr(env)).into()
 }
 
 #[must_use]
 pub fn slash_oracle(env: &Env, operator: Address, penalty: i128, reason: String) -> Result<(), Error> {
     adjust_reputation(env, operator.clone(), penalty.saturating_neg(), true)?;
     env.events().publish(
-        (symbol_short!("ORACLE_SLASHED"),),
+        (Symbol::new(env, "ORACLE_SLASHED"),),
         (operator, penalty, reason),
     );
     Ok(())
@@ -139,7 +141,7 @@ pub fn detect_duplicate_submission(
                 String::from_str(env, "Duplicate submission detected"),
             )?;
             env.events().publish(
-                (symbol_short!("DUPLICATE_SUBMISSION"),),
+                (Symbol::new(env, "DUPLICATE_SUBMISSION"),),
                 (operator.clone(), key.kind, key.feed_id.clone(), round_id),
             );
             return Err(Error::SubmissionAlreadyExists);

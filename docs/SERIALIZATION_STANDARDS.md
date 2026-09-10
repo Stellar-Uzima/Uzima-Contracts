@@ -39,8 +39,11 @@ Do **not** use sentinel values (e.g. `u64::MAX` for "no value") — use `Option`
 
 ### 2. `Map` ordering
 
-`soroban_sdk::Map` preserves insertion order in XDR. When comparing maps across
-versions, always compare keys explicitly rather than byte-level equality.
+`soroban_sdk::Map` canonicalizes entries by key before XDR encoding (its
+encoding is byte-identical regardless of insertion order). Even so, when
+comparing maps across versions, always compare keys explicitly rather than
+byte-level equality: the canonicalization is an SDK implementation property,
+not a contract the decoder should lean on.
 
 ### 3. `BytesN` vs `Bytes`
 

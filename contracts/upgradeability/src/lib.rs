@@ -1,13 +1,17 @@
+//! upgradeability - Healthcare smart contract on Stellar blockchain.
 #![no_std]
 #![forbid(alloc)]
-//! upgradeability - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
-    contracterror, contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,
+    String, Symbol, Vec,
 };
 
 pub mod migration;
 pub use migration::UpgradeValidation;
+
+pub mod pausable;
+use pausable::{PausableControl, PauseError};
 
 pub mod upgrade_safety;
 pub use upgrade_safety::{
@@ -81,9 +85,9 @@ pub mod storage {
     pub const ADMIN: Symbol = symbol_short!("UP_ADMIN");
     pub const HISTORY: Symbol = symbol_short!("HISTORY");
     pub const IS_FROZEN: Symbol = symbol_short!("FROZEN");
-    pub const DEPRECATED_FUNCTIONS: Symbol = symbol_short!("DEPRLIST");
+    pub const DEPRECATED_FUNCTIONS: Symbol = symbol_short!("DEPRFNCS");
     pub const UPGRADE_POLICY: Symbol = symbol_short!("UP_POLICY");
-    pub const CURRENT_MANIFEST: Symbol = symbol_short!("UP_MANIFEST");
+    pub const CURRENT_MANIFEST: Symbol = symbol_short!("UPMNFST");
     pub const ROLLBACK_COUNT: Symbol = symbol_short!("RB_COUNT");
 
     pub fn get_version(env: &Env) -> u32 {
@@ -173,7 +177,7 @@ pub mod storage {
     }
 
     pub fn increment_rollback_count(env: &Env) {
-        let count = Self::get_rollback_count(env);
+        let count = get_rollback_count(env);
         env.storage()
             .instance()
             .set(&ROLLBACK_COUNT, &(count + 1));
@@ -569,11 +573,7 @@ pub fn emit_deprecation_warning(env: &Env, function: Symbol) -> Result<(), Upgra
     Ok(())
 }
 
-#![no_std]
-pub mod pausable;
-
-use soroban_sdk::{contract, contractimpl, Address, Env};
-use pausable::{PausableControl, PauseError};
+// ==================== Pause/Resume contract facade (issue #1337) ====================
 
 #[contract]
 pub struct UpgradeableContract;

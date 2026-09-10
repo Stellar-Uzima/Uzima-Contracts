@@ -47,7 +47,7 @@ fn option_none_round_trips_without_sentinel_ambiguity() {
     // Canonical SCVal::Void (discriminant 1), the committed golden fixture.
     assert_eq!(
         &none_bytes[..],
-        &include_bytes!("../xdr-fixtures/option_none.xdr")[..],
+        &include_bytes!("xdr-fixtures/option_none.xdr")[..],
         "Option::None must serialize as SCVal::Void"
     );
     let decoded: Option<u32> =
@@ -59,7 +59,7 @@ fn option_none_round_trips_without_sentinel_ambiguity() {
     // Canonical SCVal::U32(u32::MAX) (discriminant 3), the committed fixture.
     assert_eq!(
         &some_max_bytes[..],
-        &include_bytes!("../xdr-fixtures/option_some_u32_max.xdr")[..],
+        &include_bytes!("xdr-fixtures/option_some_u32_max.xdr")[..],
         "Option::Some(u32::MAX) must serialize as SCVal::U32"
     );
     let decoded_max: Option<u32> =
@@ -89,7 +89,7 @@ fn option_some_round_trips_byte_stable() {
 }
 
 #[test]
-fn map_encoding_preserves_insertion_order_but_consumers_compare_keys() {
+fn map_encoding_is_key_canonical_and_consumers_compare_keys() {
     let env = Env::default();
 
     let mut first = Map::new(&env);
@@ -102,10 +102,17 @@ fn map_encoding_preserves_insertion_order_but_consumers_compare_keys() {
     reordered.set(SString::from_str(&env, "alpha"), 1u64);
     let reordered_bytes = reordered.to_xdr(&env).to_alloc_vec();
 
-    assert_ne!(
+    // The SDK canonicalizes `Map` entries by key before encoding, so two maps
+    // built in different insertion orders encode identically. Pin that
+    // behavior here: if a future SDK change ever made the encoding
+    // order-sensitive, byte-level version comparisons in downstream decoders
+    // would silently become insertion-order dependent, and this assertion is
+    // the tripwire. Consumers must still compare by keys (below), never by
+    // bytes, per docs/SERIALIZATION_STANDARDS.md.
+    assert_eq!(
         first_bytes, reordered_bytes,
-        "soroban_sdk::Map preserves insertion order in XDR, so byte-level \
-         comparison of two version-ordered maps must not be used"
+        "soroban_sdk::Map encoding must be canonical (key-sorted), \
+         independent of insertion order"
     );
 
     // Canonical consumer discipline: compare by keys explicitly.
@@ -210,7 +217,7 @@ fn string_lengths_are_bounded_per_standard() {
 
 #[test]
 fn scval_mapping_manifest_covers_all_canonical_types() {
-    let manifest: Value = serde_json::from_str(include_str!("../xdr-fixtures/scval-mapping.json"))
+    let manifest: Value = serde_json::from_str(include_str!("xdr-fixtures/scval-mapping.json"))
         .expect("scval-mapping.json must parse");
     let types = manifest["types"].as_array().expect("types array");
     let handled_types = {
@@ -326,8 +333,8 @@ fn scval_mapping_manifest_covers_all_canonical_types() {
                         json!(decoded.get(SString::from_str(&env, "beta")).unwrap()),
                     );
                     let expected_object = expected.as_object().unwrap();
-                    assert_eq!(expected_object["alpha"], &json!(1u64));
-                    assert_eq!(expected_object["beta"], &json!(2u64));
+                    assert_eq!(expected_object["alpha"], json!(1u64));
+                    assert_eq!(expected_object["beta"], json!(2u64));
                     assert_eq!(Value::Object(object), *expected);
                 }
                 other => panic!("manifest names an unhandled canonical type: {other}"),

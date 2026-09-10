@@ -3,8 +3,8 @@
 //! Centralizes all storage read/write operations for consistent TTL management
 //! and access patterns.
 
-use crate::types::{ConsentLog, ConsentRecord, DataKey};
-use soroban_sdk::{Address, Env, Vec};
+use crate::{ConsentLog, ConsentRecord, DataKey};
+use soroban_sdk::{Address, Env};
 
 /// TTL threshold: extend persistent data if remaining TTL falls below this.
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;

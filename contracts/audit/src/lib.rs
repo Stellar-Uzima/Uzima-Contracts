@@ -11,27 +11,21 @@ pub mod verification;
 #[cfg(test)]
 mod test;
 
-use crate::errors::Error;
+pub use crate::errors::Error;
 use crate::types::{
     ActionType, AuditConfig, AuditLog, AuditSummary, DataKey, ExportBundle, LogAccessEntry,
     OperationResult, RetentionPolicy,
 };
 use governance_commons::require_admin;
 use soroban_sdk::{
-    contract, contracterror, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String,
-    Symbol, Vec,
+    contract, contractimpl, symbol_short, Address, Bytes, BytesN, Env, Map, String, Symbol,
+    SymbolStr, TryFromVal, Vec,
 };
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    NotAuthorized = 3,
-    ChainBroken = 4,
-    RetentionPolicyNotFound = 5,
-    RetentionWindowTooShort = 6,
+/// Convert a [`Symbol`] to a soroban [`String`] without touching `alloc`.
+fn symbol_to_string(env: &Env, sym: &Symbol) -> String {
+    let ss: SymbolStr = SymbolStr::try_from_val(env, &sym.to_symbol_val()).unwrap();
+    String::from_bytes(env, ss.as_ref())
 }
 
 #[contract]
@@ -365,35 +359,29 @@ impl AuditTrail {
 
     /// Purge expired audit logs that exceed the max_retention_seconds window.
     ///
+    /// Purge expired audit logs (admin only).
+    ///
     /// Only admin can trigger purging. The function iterates from log_id 1
     /// upward and removes entries whose age exceeds max_retention_seconds.
     /// Returns the number of logs purged.
     ///
     /// Logs with max_retention_seconds == 0 are never purged (infinite retention).
-    pub fn purge_expired_logs(env: Env, admin: Address) -> u64 {
-    /// Enforce the retention policy across all logs.
-    /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
-    /// Returns the number of logs purged.
-    pub fn enforce_retention_policy(env: Env, admin: Address) -> Result<u64, Error> {
+    pub fn purge_expired_logs(env: Env, admin: Address) -> Result<u64, Error> {
         require_admin!(env, admin);
 
         let policy: RetentionPolicy = env
             .storage()
             .instance()
             .get(&DataKey::RetentionPolicy)
-            .expect("Retention policy not set");
+            .ok_or(Error::RetentionPolicyNotFound)?;
 
         // Infinite retention: nothing to purge
         if policy.max_retention_seconds == 0 {
-            return 0;
+            return Ok(0);
         }
 
         let now = env.ledger().timestamp();
         let count: u64 = env
-            .ok_or(Error::RetentionPolicyNotFound)?;
-
-        let now = env.ledger().timestamp();
-        let log_count: u64 = env
             .storage()
             .instance()
             .get(&DataKey::LogCount)
@@ -415,6 +403,37 @@ impl AuditTrail {
                 } else {
                     // Logs are ordered by time; once we hit a non-expired log, stop
                     break;
+                }
+            }
+        }
+
+        env.events().publish(
+            (symbol_short!("AUDIT"), symbol_short!("PURGE")),
+            (purged, admin),
+        );
+
+        Ok(purged)
+    }
+
+    /// Enforce the retention policy across all logs.
+    /// If auto_purge is enabled, removes logs that exceed max_retention_seconds.
+    /// Returns the number of logs purged.
+    pub fn enforce_retention_policy(env: Env, admin: Address) -> Result<u64, Error> {
+        require_admin!(env, admin);
+
+        let policy: RetentionPolicy = env
+            .storage()
+            .instance()
+            .get(&DataKey::RetentionPolicy)
+            .ok_or(Error::RetentionPolicyNotFound)?;
+
+        let now = env.ledger().timestamp();
+        let log_count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::LogCount)
+            .unwrap_or(0u64);
+
         let mut purged = 0u64;
 
         if policy.auto_purge && policy.max_retention_seconds > 0 {
@@ -431,11 +450,11 @@ impl AuditTrail {
         }
 
         env.events().publish(
-            (symbol_short!("AUDIT"), symbol_short!("PURGE")),
-            (purged, admin),
+            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
+            (purged, policy.auto_purge),
         );
 
-        purged
+        Ok(purged)
     }
 
     /// Return summary of logs eligible for purging without actually purging.
@@ -493,11 +512,6 @@ impl AuditTrail {
             .instance()
             .set(&DataKey::RetentionPolicy, &policy);
         Ok(())
-            (symbol_short!("AUDIT"), symbol_short!("ENFRET")),
-            (purged, policy.auto_purge),
-        );
-
-        Ok(purged)
     }
 
     // ─── Export Capability ───────────────────────────────────────────────────
@@ -779,7 +793,7 @@ impl AuditTrail {
         use soroban_sdk::xdr::ToXdr;
 
         let mut buffer = Bytes::new(env);
-        buffer.append(&prev_hash.to_xdr(env));
+        buffer.append(&prev_hash.clone().to_xdr(env));
         buffer.append(&log.id.to_xdr(env));
         buffer.append(&log.timestamp.to_xdr(env));
         let action_disc = log.action as u32;
@@ -830,11 +844,11 @@ impl AuditTrail {
         let mut log_metadata = metadata;
         log_metadata.set(
             String::from_str(&env, "denial_reason"),
-            denial_reason.to_string(),
+            symbol_to_string(&env, &denial_reason),
         );
         log_metadata.set(
             String::from_str(&env, "target_function"),
-            target_function.to_string(),
+            symbol_to_string(&env, &target_function),
         );
 
         let log = AuditLog {
@@ -871,15 +885,15 @@ impl AuditTrail {
         let mut metadata = Map::new(&env);
         metadata.set(
             String::from_str(&env, "policy_name"),
-            policy_name.to_string(),
+            symbol_to_string(&env, &policy_name),
         );
         metadata.set(
             String::from_str(&env, "decision"),
-            decision.to_string(),
+            symbol_to_string(&env, &decision),
         );
         metadata.set(
             String::from_str(&env, "target_function"),
-            target_function.to_string(),
+            symbol_to_string(&env, &target_function),
         );
 
         let action = if decision == symbol_short!("ALLOW") {
@@ -934,47 +948,5 @@ impl AuditTrail {
         }
 
         summary
-    }
-}
-
-#![no_std]
-use soroban_sdk::{contract, contractimpl, BytesN, Env, Symbol};
-use contract_monitoring::telemetry::{ExecutionStatus, TelemetryLogger};
-
-#[contract]
-pub struct AuditMonitoringContract;
-
-#[contractimpl]
-impl AuditMonitoringContract {
-    /// Records execution metrics and audit events for operational telemetry
-    pub fn record_execution(
-        env: Env,
-        target_contract: BytesN<32>,
-        function_name: Symbol,
-        cpu_instructions: u64,
-        memory_bytes: u64,
-        retry_count: u32,
-        error_code: u32,
-    ) {
-        let status = if error_code == 0 {
-            if retry_count > 0 {
-                ExecutionStatus::Retried
-            } else {
-                ExecutionStatus::Success
-            }
-        } else {
-            ExecutionStatus::Failed
-        };
-
-        TelemetryLogger::emit_execution_telemetry(
-            &env,
-            target_contract,
-            function_name,
-            cpu_instructions,
-            memory_bytes,
-            status,
-            retry_count,
-            error_code,
-        );
     }
 }

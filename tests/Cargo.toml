@@ -5,7 +5,16 @@ edition = "2021"
 publish = false
 
 [dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
+# NOTE: no `testutils` feature here or in [dev-dependencies]. Feature
+# unification would turn on `soroban-sdk-macros/testutils` for the whole
+# graph, which makes `#[contracttype]` structs with `Option<CustomStruct>`
+# fields (e.g. medical_records `RecordInput.traditional_metadata`) fail to
+# compile: the macro's test-only `TryFrom<&T> for ScVal` impls require
+# `T: Into<ScVal>`, which cannot be satisfied for custom contracttype types
+# (any manual `From` impl conflicts with the macro's own `TryFrom` via the
+# blanket impl). The xdr-conformance suite uses only core SDK APIs, so the
+# feature is simply not needed here (issue #1516).
+soroban-sdk = { workspace = true }
 medical_records = { path = "../contracts/medical_records" }
 sut_token = { path = "../contracts/sut_token" }
 healthcare_oracle_network = { path = "../contracts/healthcare_oracle_network" }
@@ -19,7 +28,8 @@ audit = { path = "../contracts/audit" }
 patient_consent_management = { path = "../contracts/patient_consent_management" }
 
 [dev-dependencies]
-soroban-sdk = { workspace = true, features = ["testutils"] }
+# `alloc` is required for `Bytes::to_alloc_vec` used by the conformance suite.
+soroban-sdk = { workspace = true, features = ["alloc"] }
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 serde_json = "1"
@@ -27,3 +37,10 @@ serde_json = "1"
 [lib]
 name = "uzima_tests"
 path = "lib.rs"
+
+# The package root is the `tests/` directory itself, so cargo autodiscovers
+# integration tests from `tests/tests/` (which does not exist) and finds no
+# targets. Declare the XDR conformance suite explicitly (issue #1516).
+[[test]]
+name = "xdr_conformance"
+path = "xdr_conformance.rs"

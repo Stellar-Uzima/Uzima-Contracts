@@ -1,4 +1,4 @@
-use soroban_sdk::{Address, Env, String, symbol_short};
+use soroban_sdk::{Address, Env, String, Symbol};
 
 use crate::types::{
     ClinicalTrialData, ConsensusRecord, DataKey, DrugPriceData, Error, FeedKey, FeedKind,
@@ -230,7 +230,7 @@ pub fn report_oracle_misbehavior(
     )?;
 
     env.events().publish(
-        (symbol_short!("MISBEHAVIOR_REPORTED"),),
+        (Symbol::new(&env, "MISBEHAVIOR_REPORTED"),),
         (reporter, reported_oracle, key.kind, key.feed_id, reason),
     );
     Ok(())

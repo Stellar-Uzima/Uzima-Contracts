@@ -3,6 +3,9 @@ resolver = "2"
 rust-version = "1.92.0"
 members = [
     "contracts/*",
+    # Integration test crates that depend on workspace members via
+    # `workspace = true` inheritance; they must be members for that to resolve.
+    "tests",
     "contract_optimizer",
     "tests/interoperability_suite",
     "tests/integration_framework",

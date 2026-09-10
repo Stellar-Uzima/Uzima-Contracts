@@ -1,11 +1,53 @@
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+use soroban_sdk::{
+    contracttype, Address, BytesN, Env, IntoVal, String, TryFromVal, TryIntoVal, Val, Vec,
+};
 
-#[contracttype]
+/// Typed envelope for structured contract events.
+///
+/// Not a `#[contracttype]` — the derive does not support generics — so the
+/// `Val` conversion that `publish` requires is implemented manually below:
+/// each field converts through `IntoVal`, and the struct itself becomes a
+/// Soroban `Vec` of its four field values, matching the wire shape the
+/// `#[contracttype]` derive would have produced.
+#[derive(Clone)]
 pub struct EventEnvelope<T> {
     pub contract: Address,
     pub name: String,
     pub version: u32,
     pub body: T,
+}
+
+impl<T> IntoVal<Env, Val> for EventEnvelope<T>
+where
+    T: IntoVal<Env, Val>,
+{
+    fn into_val(&self, env: &Env) -> Val {
+        (
+            self.contract.clone(),
+            self.name.clone(),
+            self.version,
+            T::into_val(&self.body, env),
+        )
+            .into_val(env)
+    }
+}
+
+impl<T> TryFromVal<Env, Val> for EventEnvelope<T>
+where
+    T: TryFromVal<Env, Val>,
+{
+    type Error = soroban_sdk::ConversionError;
+
+    fn try_from_val(env: &Env, val: &Val) -> Result<Self, Self::Error> {
+        let (contract, name, version, body): (Address, String, u32, T) =
+            val.try_into_val(env)?;
+        Ok(EventEnvelope {
+            contract,
+            name,
+            version,
+            body,
+        })
+    }
 }
 
 #[contracttype]
@@ -183,4 +225,32 @@ pub struct TraditionalRecordAddedEvent {
     pub record_id: u64,
     pub patient: Address,
     pub practice_type: String,
+}
+
+#[contracttype]
+pub struct PermissionGrantedEvent {
+    pub audit: AuditContext,
+    pub granter: Address,
+    pub grantee: Address,
+    pub permission: u32,
+    pub expires_at: u64,
+    pub is_delegatable: bool,
+}
+
+#[contracttype]
+pub struct PermissionRevokedEvent {
+    pub audit: AuditContext,
+    pub revoker: Address,
+    pub grantee: Address,
+    pub permission: u32,
+}
+
+#[contracttype]
+pub struct DataQualityValidatedEvent {
+    pub audit: AuditContext,
+    pub validator: Address,
+    pub record_id: u64,
+    pub quality_score: u32,
+    pub is_fhir_compliant: bool,
+    pub issue_count: u32,
 }

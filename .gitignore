@@ -3,7 +3,9 @@
 **/target/
 **/*.rs.bk
 *.pdb
-Cargo.lock
+# Cargo.lock is committed: it pins the transitive graph (notably
+# ed25519-dalek < 3 for soroban-env-host 21.2.1, which re-resolves broken
+# when floating) and CI workflows key on it.
 **/test_snapshots/
 contracts/medical_records/test_snapshots/
 

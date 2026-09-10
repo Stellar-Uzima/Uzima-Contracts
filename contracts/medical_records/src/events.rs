@@ -1,10 +1,11 @@
 use super::event_schema::{
     AccessGrantedEvent, AccessRequestedEvent, AiAnalysisTriggeredEvent, AiConfigUpdatedEvent,
     AnomalyScoreSubmittedEvent, AuditContext, ContractPausedEvent, ContractUnpausedEvent,
-    EmergencyAccessGrantedEvent, EventEnvelope, HealthCheckEvent, MetadataUpdatedEvent,
-    RecordAccessedEvent, RecordCreatedEvent, RecordRolledBackEvent, RecoveryApprovedEvent,
-    RecoveryExecutedEvent, RecoveryProposedEvent, RiskScoreSubmittedEvent,
-    TraditionalRecordAddedEvent, UserCreatedEvent, UserDeactivatedEvent, UserRoleUpdatedEvent,
+    DataQualityValidatedEvent, EmergencyAccessGrantedEvent, EventEnvelope, HealthCheckEvent,
+    MetadataUpdatedEvent, PermissionGrantedEvent, PermissionRevokedEvent, RecordAccessedEvent,
+    RecordCreatedEvent, RecordRolledBackEvent, RecoveryApprovedEvent, RecoveryExecutedEvent,
+    RecoveryProposedEvent, RiskScoreSubmittedEvent, TraditionalRecordAddedEvent,
+    UserCreatedEvent, UserDeactivatedEvent, UserRoleUpdatedEvent,
 };
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
@@ -413,7 +414,7 @@ pub fn emit_ai_analysis_triggered(env: &Env, record_id: u64, patient: Address) {
                 block_height: env.ledger().sequence() as u64,
             },
             record_id,
-            patient,
+            patient: patient.clone(),
         },
     };
     env.events()
@@ -521,4 +522,82 @@ pub fn emit_traditional_record_added(
     };
     env.events()
         .publish((symbol_short!("TRAD_REC"), caller, patient), event);
+}
+
+pub fn emit_permission_granted(
+    env: &Env,
+    granter: Address,
+    grantee: Address,
+    permission: u32,
+    expires_at: u64,
+    is_delegatable: bool,
+) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "permission_granted"),
+        version: 1,
+        body: PermissionGrantedEvent {
+            audit: AuditContext {
+                actor: granter.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            granter: granter.clone(),
+            grantee,
+            permission,
+            expires_at,
+            is_delegatable,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("PERM_GRNT"), granter), event);
+}
+
+pub fn emit_permission_revoked(env: &Env, revoker: Address, grantee: Address, permission: u32) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "permission_revoked"),
+        version: 1,
+        body: PermissionRevokedEvent {
+            audit: AuditContext {
+                actor: revoker.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            revoker: revoker.clone(),
+            grantee,
+            permission,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("PERM_RVOK"), revoker), event);
+}
+
+pub fn emit_data_quality_validated(
+    env: &Env,
+    validator: Address,
+    record_id: u64,
+    quality_score: u32,
+    is_fhir_compliant: bool,
+    issue_count: u32,
+) {
+    let event = EventEnvelope {
+        contract: env.current_contract_address(),
+        name: String::from_str(env, "data_quality_validated"),
+        version: 1,
+        body: DataQualityValidatedEvent {
+            audit: AuditContext {
+                actor: validator.clone(),
+                timestamp: env.ledger().timestamp(),
+                block_height: env.ledger().sequence() as u64,
+            },
+            validator: validator.clone(),
+            record_id,
+            quality_score,
+            is_fhir_compliant,
+            issue_count,
+        },
+    };
+    env.events()
+        .publish((symbol_short!("DQ_VAL"), validator), event);
 }

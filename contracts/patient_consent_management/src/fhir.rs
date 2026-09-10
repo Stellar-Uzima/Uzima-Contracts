@@ -135,10 +135,14 @@ fn is_leap_year(y: u64) -> bool {
 /// Appends an escaped JSON string value to the buffer.
 /// Takes a `soroban_sdk::String` and escapes special chars.
 fn json_escape_string(env: &Env, s: &String, buf: &mut Bytes) {
-    let s_bytes = s.to_buffer::<256>();
-    let slice = s_bytes.as_slice();
-    for i in 0..s_bytes.len() {
-        let b = slice[i as usize];
+    // Copy the string bytes into a fixed stack buffer (strings are bounded
+    // well under 256 bytes: hex ids, strkey addresses) and escape ASCII
+    // special characters byte by byte.
+    let len = s.len() as usize;
+    let mut s_buf = [0u8; 256];
+    s.copy_into_slice(&mut s_buf[..len]);
+    for i in 0..len {
+        let b = s_buf[i];
         match b {
             b'"' => buf.append(&Bytes::from_slice(env, b"\\\"")),
             b'\\' => buf.append(&Bytes::from_slice(env, b"\\\\")),
@@ -291,13 +295,17 @@ fn generate_consent_id(env: &Env, record: &ConsentRecord) -> String {
     let mut payload = Bytes::new(env);
 
     let patient_s = record.patient.to_string();
-    let patient_bytes = patient_s.to_buffer::<256>();
-    payload.append(&Bytes::from_slice(env, patient_bytes.as_slice()));
+    let patient_len = patient_s.len() as usize;
+    let mut patient_buf = [0u8; 256];
+    patient_s.copy_into_slice(&mut patient_buf[..patient_len]);
+    payload.append(&Bytes::from_slice(env, &patient_buf[..patient_len]));
     payload.append(&Bytes::from_slice(env, b":"));
 
     let provider_s = record.provider.to_string();
-    let provider_bytes = provider_s.to_buffer::<256>();
-    payload.append(&Bytes::from_slice(env, provider_bytes.as_slice()));
+    let provider_len = provider_s.len() as usize;
+    let mut provider_buf = [0u8; 256];
+    provider_s.copy_into_slice(&mut provider_buf[..provider_len]);
+    payload.append(&Bytes::from_slice(env, &provider_buf[..provider_len]));
     payload.append(&Bytes::from_slice(env, b":"));
 
     payload.append(&Bytes::from_slice(env, &record.granted_at.to_be_bytes()));
@@ -312,7 +320,7 @@ fn generate_consent_id(env: &Env, record: &ConsentRecord) -> String {
 fn bytes_to_hex_prefix(env: &Env, bytes: &BytesN<32>) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut buf = Bytes::new(env);
-    let raw = bytes.as_array();
+    let raw = bytes.to_array();
     for &b in raw.iter().take(8) {
         buf.append(&Bytes::from_slice(env, &[HEX[(b >> 4) as usize]]));
         buf.append(&Bytes::from_slice(env, &[HEX[(b & 0x0F) as usize]]));

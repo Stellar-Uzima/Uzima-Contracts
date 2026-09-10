@@ -16,7 +16,7 @@ mod test;
 mod types;
 mod utils;
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, Address, Env, IntoVal, String, Symbol, Vec};
 
 pub use types::{
     AggregationRound, ClinicalTrialData, Config, ConsensusRecord, DataKey, Dispute, DisputeStatus,

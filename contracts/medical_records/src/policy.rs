@@ -122,7 +122,7 @@ fn lifecycle_denied(error: Error, env: &Env, msg: &str) -> PolicyDecision {
 ///
 /// This is a prerequisite for every lifecycle operation.
 pub fn require_initialized(env: &Env) -> PolicyDecision {
-    use crate::upgradeability::storage::ADMIN as UPGRADE_ADMIN;
+    use upgradeability::storage::ADMIN as UPGRADE_ADMIN;
     if env.storage().instance().has(&UPGRADE_ADMIN) {
         PolicyDecision::Allowed
     } else {
@@ -217,9 +217,9 @@ pub fn check_patient_not_forgotten(env: &Env, patient: &Address) -> PolicyDecisi
         Some(addr) => {
             // Attempt the cross-contract call; if it fails, deny access
             // to be conservative.
-            let result: Result<bool, _> = env.invoke_contract(
+            let result: Result<bool, soroban_sdk::Error> = env.invoke_contract(
                 &addr,
-                &soroban_sdk::symbol_short!("is_forgotten"),
+                &soroban_sdk::Symbol::new(env, "is_forgotten"),
                 (patient.clone(),).into_val(env),
             );
             match result {

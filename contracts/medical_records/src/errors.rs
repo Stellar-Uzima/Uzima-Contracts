@@ -90,6 +90,7 @@ pub enum Error {
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
+            Error::RecordRetentionExpired => write!(f, "record retention expired"),
             Error::Unauthorized | Error::NotAuthorized => write!(f, "unauthorized"),
             Error::InvalidInput => write!(f, "invalid input"),
             Error::NotInitialized => write!(f, "not initialized"),
