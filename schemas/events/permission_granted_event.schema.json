@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PermissionGrantedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "granter": {
+      "type": "string"
+    },
+    "grantee": {
+      "type": "string"
+    },
+    "permission": {
+      "type": "integer"
+    },
+    "expiresAt": {
+      "type": "integer"
+    },
+    "isDelegatable": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "audit",
+    "granter",
+    "grantee",
+    "permission",
+    "expiresAt",
+    "isDelegatable"
+  ]
+}

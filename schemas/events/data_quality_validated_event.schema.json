@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DataQualityValidatedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "validator": {
+      "type": "string"
+    },
+    "recordId": {
+      "type": "integer"
+    },
+    "qualityScore": {
+      "type": "integer"
+    },
+    "isFhirCompliant": {
+      "type": "boolean"
+    },
+    "issueCount": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "audit",
+    "validator",
+    "recordId",
+    "qualityScore",
+    "isFhirCompliant",
+    "issueCount"
+  ]
+}

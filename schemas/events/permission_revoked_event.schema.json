@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "PermissionRevokedEvent",
+  "type": "object",
+  "properties": {
+    "audit": {
+      "type": "object"
+    },
+    "revoker": {
+      "type": "string"
+    },
+    "grantee": {
+      "type": "string"
+    },
+    "permission": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "audit",
+    "revoker",
+    "grantee",
+    "permission"
+  ]
+}

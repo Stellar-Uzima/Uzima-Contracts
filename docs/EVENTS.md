@@ -3,7 +3,7 @@
 This document is auto-generated from on-chain event emissions found in `contracts/**/src/**/*.rs`.
 
 - Registry format version: `1.0.0`
-- Generated at: `2026-09-01T19:11:31.118Z`
+- Generated at: `2026-09-14T09:18:57.373Z`
 
 ## access_control
 
@@ -115,19 +115,20 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `AUDIT` · `AUTH_DENY` | tuple (2) | `contracts/audit/src/lib.rs:853` |
-| `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/lib.rs:528` |
+| `AUDIT` · `AUTH_DENY` | tuple (2) | `contracts/audit/src/lib.rs:867` |
+| `AUDIT` · `ENFRET` | tuple (2) | `contracts/audit/src/lib.rs:452` |
+| `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/lib.rs:542` |
 | `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/vec.rs:317` |
-| `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/lib.rs:272` |
+| `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/lib.rs:266` |
 | `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/vec.rs:226` |
-| `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/lib.rs:144` |
+| `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/lib.rs:138` |
 | `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/vec.rs:97` |
-| `AUDIT` · `POLICY` | tuple (2) | `contracts/audit/src/lib.rs:904` |
-| `AUDIT` · `PURGE` | tuple (2) | `contracts/audit/src/lib.rs:433` |
-| `AUDIT` · `RETPOL` | tuple (3) | `contracts/audit/src/lib.rs:327` |
-| `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/lib.rs:287` |
+| `AUDIT` · `POLICY` | tuple (2) | `contracts/audit/src/lib.rs:918` |
+| `AUDIT` · `PURGE` | tuple (2) | `contracts/audit/src/lib.rs:410` |
+| `AUDIT` · `RETPOL` | tuple (3) | `contracts/audit/src/lib.rs:321` |
+| `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/lib.rs:281` |
 | `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/vec.rs:241` |
-| `Init` | single (1) | `contracts/audit/src/lib.rs:83` |
+| `Init` | single (1) | `contracts/audit/src/lib.rs:77` |
 | `Init` | single (1) | `contracts/audit/src/vec.rs:56` |
 | `audit` · `entry` | tuple (4) | `contracts/audit/src/batch_audit.rs:88` |
 | `audit` · `flushed` | tuple (2) | `contracts/audit/src/batch_audit.rs:97` |
@@ -201,8 +202,8 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `AUTH_DENY` | tuple (3) | `contracts/common_auth/src/lib.rs:222` |
-| `POLICY` | tuple (3) | `contracts/common_auth/src/lib.rs:286` |
+| `AUTH_DENY` | tuple (3) | `contracts/common_auth/src/lib.rs:173` |
+| `POLICY` | tuple (3) | `contracts/common_auth/src/lib.rs:237` |
 | `policy` · `role_chk` | tuple (2) | `contracts/common_auth/src/policy_engine.rs:243` |
 
 ## common_error
@@ -528,9 +529,9 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `DUPLICATE_SUBMISSION` | tuple (4) | `contracts/healthcare_oracle_network/src/utils.rs:141` |
+| `DUPLICATE_SUBMISSION` | tuple (4) | `contracts/healthcare_oracle_network/src/utils.rs:143` |
 | `MISBEHAVIOR_REPORTED` | tuple (5) | `contracts/healthcare_oracle_network/src/submissions.rs:232` |
-| `ORACLE_SLASHED` | tuple (3) | `contracts/healthcare_oracle_network/src/utils.rs:115` |
+| `ORACLE_SLASHED` | tuple (3) | `contracts/healthcare_oracle_network/src/utils.rs:117` |
 
 ## healthcare_payment
 
@@ -695,17 +696,17 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `COMP` · `CREATE` | tuple (2) | `contracts/medical_records/src/lib.rs:7440` |
-| `COMP` · `GRANT` | tuple (2) | `contracts/medical_records/src/lib.rs:7482` |
-| `COMP` · `REVOKE` | tuple (2) | `contracts/medical_records/src/lib.rs:7557` |
-| `EXPORT` · `DATA` | tuple (3) | `contracts/medical_records/src/lib.rs:5507` |
-| `LOG` | single (1) | `contracts/medical_records/src/lib.rs:1190` |
-| `PAUSED` | single (1) | `contracts/medical_records/src/events.rs:234` |
-| `RECORD` · `ATTACH` | tuple (3) | `contracts/medical_records/src/lib.rs:7649` |
-| `SCH_BREAK` | tuple (6) | `contracts/medical_records/src/lib.rs:7823` |
-| `SCH_EVO` | tuple (7) | `contracts/medical_records/src/lib.rs:7873` |
-| `SCH_REG` | tuple (4) | `contracts/medical_records/src/lib.rs:7788` |
-| `TradRecAdded` | tuple (5) | `contracts/medical_records/src/lib.rs:7062` |
+| `COMP` · `CREATE` | tuple (2) | `contracts/medical_records/src/lib.rs:7469` |
+| `COMP` · `GRANT` | tuple (2) | `contracts/medical_records/src/lib.rs:7512` |
+| `COMP` · `REVOKE` | tuple (2) | `contracts/medical_records/src/lib.rs:7587` |
+| `EXPORT` · `DATA` | tuple (3) | `contracts/medical_records/src/lib.rs:5497` |
+| `LOG` | single (1) | `contracts/medical_records/src/lib.rs:1195` |
+| `PAUSED` | single (1) | `contracts/medical_records/src/events.rs:235` |
+| `RECORD` · `ATTACH` | tuple (3) | `contracts/medical_records/src/lib.rs:7686` |
+| `SCH_BREAK` | tuple (6) | `contracts/medical_records/src/lib.rs:7860` |
+| `SCH_EVO` | tuple (7) | `contracts/medical_records/src/lib.rs:7914` |
+| `SCH_REG` | tuple (4) | `contracts/medical_records/src/lib.rs:7825` |
+| `TradRecAdded` | tuple (5) | `contracts/medical_records/src/lib.rs:7068` |
 
 ## medication_management
 
@@ -963,7 +964,7 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `DeprecationsUpdated` | single (1) | `contracts/upgradeability/src/lib.rs:307` |
+| `DeprecationsUpdated` | single (1) | `contracts/upgradeability/src/lib.rs:311` |
 | `lifecycle` · `transition` | tuple (2) | `contracts/upgradeability/src/lifecycle.rs:197` |
 | `pausable` · `paused` | single (1) | `contracts/upgradeability/src/pausable.rs:57` |
 | `pausable` · `unpaused` | single (1) | `contracts/upgradeability/src/pausable.rs:75` |
