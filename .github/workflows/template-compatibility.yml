@@ -1,0 +1,24 @@
+name: Template Compatibility Gate
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  check-template-compatibility:
+    name: Check Template Compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Verify Soroban template contract compilation
+        run: cargo check --manifest-path contracts/contract_template/Cargo.toml --target wasm32-unknown-unknown
