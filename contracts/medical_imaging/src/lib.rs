@@ -1474,7 +1474,7 @@ impl MedicalImagingContract {
             let current_status = study.status;
 
             // Check if all hashes match
-            let first_hash = all_diagnosis_hashes.get(0).unwrap_or_default();
+            let first_hash = all_diagnosis_hashes.get(0).unwrap_or_else(|| BytesN::from_array(&env, &[0u8; 32]));
             let all_match = all_diagnosis_hashes.iter().all(|h| h == first_hash);
 
             if all_match {
