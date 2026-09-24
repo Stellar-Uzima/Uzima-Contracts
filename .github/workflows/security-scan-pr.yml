@@ -1,0 +1,70 @@
+name: Security Scan (PR)
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "Cargo.lock"
+      - "scripts/security-scan.sh"
+      - "scripts/security_review_check.sh"
+      - ".github/workflows/security-scan-pr.yml"
+
+jobs:
+  security-scan:
+    name: cargo-audit / cargo-geiger / custom lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin
+          key: ${{ runner.os }}-cargo-security-scan-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install cargo-audit and cargo-geiger
+        run: |
+          cargo install cargo-audit --locked || true
+          cargo install cargo-geiger --locked || true
+
+      # Exits 1 only on critical/high cargo-audit advisories — see
+      # scripts/security-scan.sh. Medium findings and unsafe-code counts
+      # are reported but non-blocking (script's own behaviour).
+      - name: Run security scan
+        run: ./scripts/security-scan.sh security-reports
+
+      - name: Upload security scan report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-report
+          path: security-reports/
+          if-no-files-found: ignore
+
+  security-review-check:
+    name: Automated security review checklist (informational)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Informational for now — see
+      # docs/audits/SECURITY_REVIEW_CHECK_FALSE_POSITIVES.md. Check 2's
+      # unwrap() heuristic (previously: any contract with .unwrap() calls
+      # in its test file failed, since the old exclusion only removed the
+      # #[cfg(test)] attribute line, not the rest of the test module) was
+      # fixed to exclude dedicated test files, but it still can't catch
+      # unwrap() inside an inline `#[cfg(test)] mod tests { ... }` block
+      # within a production file — that needs a real Rust-aware scan, not
+      # grep. Kept non-blocking until a clean CI run confirms no remaining
+      # false positives across the whole contract set.
+      - name: Run security review checklist
+        run: ./scripts/security_review_check.sh || true
