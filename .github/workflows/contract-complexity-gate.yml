@@ -1,0 +1,52 @@
+name: Contract Complexity Gate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "contract_optimizer/**"
+      - "scripts/check_complexity.sh"
+      - ".github/workflows/contract-complexity-gate.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "contract_optimizer/**"
+      - "scripts/check_complexity.sh"
+      - ".github/workflows/contract-complexity-gate.yml"
+
+jobs:
+  complexity-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-complexity-${{ hashFiles('**/Cargo.lock') }}
+
+      # contract_optimizer's own check-complexity subcommand exits non-zero
+      # ("Pipeline blocked") when any contract exceeds its fail threshold —
+      # nothing here swallows that.
+      - name: Run contract complexity check
+        run: ./scripts/check_complexity.sh
+
+      - name: Upload complexity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: |
+            dashboard/data/complexity_report.json
+            reports/complexity_pr_comment.txt
+          if-no-files-found: ignore

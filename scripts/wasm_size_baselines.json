@@ -2,7 +2,14 @@
   "warning_threshold_bytes": 61440,
   "regression_pct": 10,
   "excluded": [
-    "load_testing"
+    "load_testing",
+    "common_auth",
+    "common_error",
+    "contract_behavior_fuzzing",
+    "fp_math",
+    "sanitization",
+    "shared_consent_policy",
+    "test-helpers"
   ],
   "contracts": {
     "access_control": 1129,

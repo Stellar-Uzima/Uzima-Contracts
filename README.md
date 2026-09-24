@@ -64,11 +64,14 @@ The project includes automated **storage budget measurement** for all Soroban co
 
 _Top 5 contracts by estimated storage cost (from latest CI run):_
 
-| # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) |
-|---|----------|----------|-------------|-----------------|
-| 1 | — | — | — | — |
+<!-- STORAGE_LEADERBOARD_START -->
+| # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) | Status |
+|---|----------|----------|-------------|-----------------|--------|
+| — | _not yet generated — see below_ | — | — | — | — |
+<!-- STORAGE_LEADERBOARD_END -->
 
-> Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release` to regenerate.
+> Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release`,
+> then `./scripts/update_readme_storage_leaderboard.sh` to regenerate this table from the measurement output.
 > Full Pareto report (top 10) is uploaded as a CI artifact (`reports/storage_pareto_top10.txt`).
 
 ### Thresholds
