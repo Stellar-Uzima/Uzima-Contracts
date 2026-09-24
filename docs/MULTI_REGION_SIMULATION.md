@@ -58,6 +58,16 @@ cargo test -p multi-region-orchestrator -- simulation
 cargo test -p regional-node-manager -- simulation
 ```
 
+## CI
+
+`.github/workflows/multi-region-dr-simulation.yml` runs
+`./scripts/simulate_multi_region_deploy.sh` on every push/PR touching the
+simulation script, `config/multi_region_dr.json`, or the
+`multi_region_orchestrator`/`regional_node_manager`/`failover_detector`/
+`sync_manager` contracts. A failing assertion fails the job (the script's
+own `TESTS_FAILED` exit-1 behavior — nothing swallows it), and
+`reports/multi_region_simulation/` is uploaded as a build artifact.
+
 ## Output
 
 Simulation results are saved to `reports/multi_region_simulation/`:

@@ -1,0 +1,48 @@
+name: SDK Bindings Drift Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/generate-sdk-types.mjs"
+      - "schemas/**"
+      - "package.json"
+      - ".github/workflows/sdk-bindings-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/generate-sdk-types.mjs"
+      - "schemas/**"
+      - "package.json"
+      - ".github/workflows/sdk-bindings-check.yml"
+
+jobs:
+  sdk-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fails the job when the checked-in TypeScript/Python SDK bindings
+      # have drifted from what the generator would produce — see
+      # scripts/generate-sdk-types.mjs's own --check exit behavior.
+      # Nothing here swallows it with || true.
+      - name: Check SDK bindings for drift
+        run: npm run sdk:check -- --report reports/sdk_bindings_drift.txt
+
+      - name: Upload SDK drift report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-bindings-drift-report
+          path: reports/sdk_bindings_drift.txt
+          if-no-files-found: ignore

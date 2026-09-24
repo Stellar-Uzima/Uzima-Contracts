@@ -16,9 +16,22 @@ field names, or types.
 
 ### Detection Workflow
 
-1. **Automated Checks**: CI runs \scripts/abi_compat_check.sh --ci\ on every PR
-2. **Report Generation**: Human-readable reports generated in \eports/\
+1. **Automated Checks**: `.github/workflows/abi-compat-check.yml` runs
+   `npm run abi:check` (`node scripts/abi-compat.mjs --check`) on every
+   push/PR touching `scripts/abi-compat.mjs`,
+   `schemas/interface-registry/**`, or `package.json`, comparing the
+   generated snapshot against the committed baseline in
+   `schemas/interface-registry/registry.json` and failing the job on a
+   breaking change.
+2. **Report Generation**: Machine-readable report written to
+   `reports/abi_compat.txt` and uploaded as a CI artifact.
 3. **Review Process**: Breaking changes require explicit approval
+
+`scripts/abi_compat_check.sh` (the git-ref-diff-based wrapper below) is
+not wired into CI - it depends on `origin/main` being resolvable, which
+isn't guaranteed on a shallow CI checkout, whereas the npm script above
+compares directly against the committed baseline file regardless of git
+history depth.
 
 ### Types of Changes
 

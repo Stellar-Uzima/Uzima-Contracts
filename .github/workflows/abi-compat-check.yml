@@ -1,0 +1,48 @@
+name: ABI Compatibility Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/abi-compat.mjs"
+      - "schemas/interface-registry/**"
+      - "package.json"
+      - ".github/workflows/abi-compat-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/abi-compat.mjs"
+      - "schemas/interface-registry/**"
+      - "package.json"
+      - ".github/workflows/abi-compat-check.yml"
+
+jobs:
+  abi-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Fails the job when a breaking ABI change is detected against the
+      # committed baseline (schemas/interface-registry/registry.json) —
+      # see scripts/abi-compat.mjs's own --check exit behavior. Nothing
+      # here swallows it with --allow-breaking or || true.
+      - name: Check ABI compatibility
+        run: npm run abi:check -- --report reports/abi_compat.txt
+
+      - name: Upload ABI compatibility report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: abi-compat-report
+          path: reports/abi_compat.txt
+          if-no-files-found: ignore

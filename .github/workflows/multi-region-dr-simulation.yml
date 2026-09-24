@@ -1,0 +1,43 @@
+name: Multi-Region DR Simulation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/simulate_multi_region_deploy.sh"
+      - "config/multi_region_dr.json"
+      - "contracts/multi_region_orchestrator/**"
+      - "contracts/regional_node_manager/**"
+      - "contracts/failover_detector/**"
+      - "contracts/sync_manager/**"
+      - ".github/workflows/multi-region-dr-simulation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "scripts/simulate_multi_region_deploy.sh"
+      - "config/multi_region_dr.json"
+      - "contracts/multi_region_orchestrator/**"
+      - "contracts/regional_node_manager/**"
+      - "contracts/failover_detector/**"
+      - "contracts/sync_manager/**"
+      - ".github/workflows/multi-region-dr-simulation.yml"
+
+jobs:
+  dr-simulation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Fails the job (exit 1) if any DR scenario assertion fails — see
+      # scripts/simulate_multi_region_deploy.sh's TESTS_FAILED handling.
+      - name: Run multi-region DR simulation
+        run: ./scripts/simulate_multi_region_deploy.sh
+
+      - name: Upload simulation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: multi-region-dr-simulation-report
+          path: reports/multi_region_simulation/
+          if-no-files-found: ignore
