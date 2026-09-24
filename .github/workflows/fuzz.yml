@@ -1,0 +1,46 @@
+name: Contract Fuzz Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-fuzz-${{ hashFiles('**/Cargo.lock') }}
+
+      # Failure persistence is left enabled (see scripts/run_contract_fuzz.sh)
+      # so a panic writes a reproducible witness under each fuzz target's
+      # proptest-regressions/ directory.
+      - name: Run contract fuzz tests
+        id: fuzz
+        run: ./scripts/run_contract_fuzz.sh
+
+      # Upload witnesses even when the fuzz run itself failed, so a panic
+      # is reproducible from the CI artifact instead of only locally.
+      - name: Upload fuzz panic witnesses
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-panic-witnesses
+          path: |
+            contracts/contract_behavior_fuzzing/**/proptest-regressions/**
+            tests/**/proptest-regressions/**
+          if-no-files-found: ignore
+          retention-days: 30
