@@ -2,6 +2,10 @@
 
 Simulates contract deployment and generates JSON deployment plans for release candidates without actually deploying.
 
+## CI
+
+`.github/workflows/preflight-deploy-dryrun.yml` runs `scripts/preflight_check.sh --network testnet` followed by `scripts/deploy_dryrun.sh --all testnet` on every push/PR touching `contracts/**`, `scripts/preflight_check.sh`, `scripts/deploy_dryrun.sh`, `config/networks.toml`, or `deployments/**`. Either script failing (non-zero exit) fails the job — nothing is swallowed with `|| true`. The generated plan is uploaded as a `deploy-dryrun-plan` build artifact.
+
 ## Overview
 
 The `deploy_dryrun.sh` script analyzes contracts, checks build status, validates dependencies, and produces a structured JSON deployment plan. This allows teams to review and approve deployment plans before execution.

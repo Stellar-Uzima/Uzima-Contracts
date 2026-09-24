@@ -180,3 +180,5 @@ no single PR trips a tolerance.
 - `scripts/wasm_size_monitor.sh` — size-only baseline gate (Issue #846)
 - `scripts/measure_storage.sh` — storage and CPU measurement engine
 - `contract_optimizer/` — optimisation passes for oversized contracts
+- [`BENCHMARK_CI.md`](./BENCHMARK_CI.md) — the separate throughput
+  benchmark/load CI job (`scripts/run_benchmarks.py`)

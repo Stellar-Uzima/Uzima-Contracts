@@ -1,0 +1,65 @@
+name: Benchmark / Load
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/run_benchmarks.py"
+      - "resource-budgets/**"
+      - "tests/benchmark_runner_test.py"
+      - ".github/workflows/benchmark-load.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/run_benchmarks.py"
+      - "resource-budgets/**"
+      - "tests/benchmark_runner_test.py"
+      - ".github/workflows/benchmark-load.yml"
+  schedule:
+    # Nightly, to catch perf regressions even without a triggering PR.
+    - cron: "0 3 * * *"
+
+jobs:
+  benchmark:
+    name: Contract performance benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate benchmark runner itself
+        run: python3 -m unittest tests/benchmark_runner_test.py -v
+
+      # Fails the job (sys.exit(1)) if any contract falls below its
+      # resource-budgets/contracts_budget.json throughput threshold.
+      - name: Run contract benchmarks against resource budgets
+        run: python3 scripts/run_benchmarks.py
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: tests/benchmark_results.json
+          if-no-files-found: ignore

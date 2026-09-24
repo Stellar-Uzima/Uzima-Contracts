@@ -7,12 +7,19 @@ on:
     branches: [main]
 
 jobs:
+  admin-recovery-hardening:
   security-telemetry-conformance:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Informational for now — see docs/audits/ADMIN_RECOVERY_HARDENING.md
+      # for why this doesn't fail the build yet.
+      - name: Check admin/recovery negative-test coverage
+        run: ./scripts/check_admin_recovery_test_coverage.sh
+
+  crypto-conformance:
       # Informational for now — see docs/audits/SECURITY_TELEMETRY_CONFORMANCE.md
       # for why this doesn't fail the build yet.
       - name: Check security telemetry conformance
@@ -24,6 +31,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Informational for now — see
+      # docs/audits/CRYPTOGRAPHIC_SECURITY_MODEL_CONFORMANCE.md for why
+      # this doesn't fail the build yet.
+      - name: Check cryptographic security model conformance
+        run: ./scripts/check_crypto_conformance.sh
       # Informational — see docs/audits/ARTIFACT_SIGNING_KEY_ROTATION.md.
       # Reproduces sign -> verify -> rotate -> verify against a throwaway
       # fixture artifact; doesn't require building any contracts.
