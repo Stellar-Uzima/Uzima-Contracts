@@ -8,6 +8,7 @@ on:
 
 jobs:
   admin-recovery-hardening:
+  security-telemetry-conformance:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,6 +20,12 @@ jobs:
         run: ./scripts/check_admin_recovery_test_coverage.sh
 
   crypto-conformance:
+      # Informational for now — see docs/audits/SECURITY_TELEMETRY_CONFORMANCE.md
+      # for why this doesn't fail the build yet.
+      - name: Check security telemetry conformance
+        run: ./scripts/check_security_telemetry_conformance.sh
+
+  artifact-signing-key-rotation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,3 +36,8 @@ jobs:
       # this doesn't fail the build yet.
       - name: Check cryptographic security model conformance
         run: ./scripts/check_crypto_conformance.sh
+      # Informational — see docs/audits/ARTIFACT_SIGNING_KEY_ROTATION.md.
+      # Reproduces sign -> verify -> rotate -> verify against a throwaway
+      # fixture artifact; doesn't require building any contracts.
+      - name: Test key rotation invalidates old artifact verification
+        run: ./scripts/test_key_rotation_invalidation.sh
