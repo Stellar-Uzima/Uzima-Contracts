@@ -57,7 +57,22 @@ scan_contract() {
   fi
 
   # Check 2: No bare unwrap in non-test code
-  unwrap_count=$(grep -rn '\.unwrap()' "$dir" 2>/dev/null | grep -v '#\[cfg(test)\]' | grep -v '//.*unwrap' | wc -l || echo 0)
+  # Excludes dedicated test files (test.rs, tests.rs, *_test.rs, *_tests.rs,
+  # and anything under a tests/ directory) in addition to lines carrying the
+  # #[cfg(test)] attribute itself — the previous version only excluded the
+  # attribute line, so any contract with .unwrap() inside its (separate)
+  # test file failed this check regardless of production-code safety. This
+  # still won't catch unwrap() inside an inline `#[cfg(test)] mod tests {
+  # ... }` block within an otherwise-production file; that needs a real
+  # Rust-aware scan, not grep.
+  unwrap_count=0
+  while IFS= read -r -d '' file; do
+    case "$file" in
+      */test.rs|*/tests.rs|*_test.rs|*_tests.rs|*/tests/*) continue ;;
+    esac
+    file_count=$(grep -n '\.unwrap()' "$file" 2>/dev/null | grep -v '#\[cfg(test)\]' | grep -v '//.*unwrap' | wc -l || echo 0)
+    unwrap_count=$((unwrap_count + file_count))
+  done < <(find "$dir" -name '*.rs' -print0)
   if [[ "$unwrap_count" -eq 0 ]]; then
     check "No bare unwrap()" "pass" ""
   else
