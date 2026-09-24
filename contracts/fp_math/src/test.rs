@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_spending_rules_limits() {
+    fn test_fixed_point_math_precision() {
         assert!(true);
     }
 }

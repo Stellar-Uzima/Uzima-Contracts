@@ -1,0 +1,63 @@
+name: Preflight / Deploy Dry-Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/preflight_check.sh"
+      - "scripts/deploy_dryrun.sh"
+      - "config/networks.toml"
+      - "deployments/**"
+      - ".github/workflows/preflight-deploy-dryrun.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/preflight_check.sh"
+      - "scripts/deploy_dryrun.sh"
+      - "config/networks.toml"
+      - "deployments/**"
+      - ".github/workflows/preflight-deploy-dryrun.yml"
+
+jobs:
+  preflight-and-dryrun:
+    name: Preflight check + deploy dry-run (testnet)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-build-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build contracts
+        run: make build
+
+      # Fails the job (non-zero exit) if any preflight check fails — see
+      # scripts/preflight_check.sh's CHECKS_FAILED handling.
+      - name: Run preflight check (testnet)
+        run: ./scripts/preflight_check.sh --network testnet
+
+      # Fails the job on any deploy_dryrun.sh error (set -euo pipefail).
+      - name: Run deploy dry-run for all contracts (testnet)
+        run: ./scripts/deploy_dryrun.sh --all testnet --output deploy-dryrun-plan.json --verbose
+
+      - name: Upload dry-run plan
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-dryrun-plan
+          path: deploy-dryrun-plan.json
+          if-no-files-found: ignore

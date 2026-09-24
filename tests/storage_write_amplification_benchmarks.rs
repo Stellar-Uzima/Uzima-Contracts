@@ -2,6 +2,15 @@
 //!
 //! These tests measure storage operations to identify write amplification
 //! patterns and verify optimized storage usage.
+//!
+//! Extended coverage (#1578): patient_consent_management now has an
+//! equivalent write-amplification benchmark in
+//! `contracts/patient_consent_management/src/benchmarks.rs` (picked up by
+//! `scripts/measure_storage.sh`). `audit` and `identity_registry` were not
+//! extended in the same pass — both require nontrivial fixture setup
+//! (audit: `AuditConfig`/`Map<String,String>` event payloads; identity_registry:
+//! full DID document construction) that needs its own reviewed follow-up
+//! rather than being guessed at without compiling.
 
 #![cfg(all(test, feature = "testutils"))]
 
