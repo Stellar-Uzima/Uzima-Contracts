@@ -1,0 +1,71 @@
+name: Storage Leaderboard Freshness
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/measure_storage.sh"
+      - "scripts/update_readme_storage_leaderboard.sh"
+      - "README.md"
+      - ".github/workflows/storage-leaderboard-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/measure_storage.sh"
+      - "scripts/update_readme_storage_leaderboard.sh"
+      - "README.md"
+      - ".github/workflows/storage-leaderboard-check.yml"
+
+jobs:
+  leaderboard-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-storage-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build contracts
+        run: cargo build --workspace --target wasm32-unknown-unknown --release
+
+      - name: Measure storage
+        run: ./scripts/measure_storage.sh
+
+      - name: Regenerate README leaderboard
+        run: ./scripts/update_readme_storage_leaderboard.sh
+
+      # Fails if the checked-in README.md's leaderboard is stale relative
+      # to what a fresh measurement produces — the fix is to run both
+      # scripts above locally and commit the result.
+      - name: Fail if README.md leaderboard is out of date
+        run: |
+          if ! git diff --quiet -- README.md; then
+            echo "README.md's storage leaderboard is stale. Run:"
+            echo "  ./scripts/measure_storage.sh && ./scripts/update_readme_storage_leaderboard.sh"
+            echo "and commit the result."
+            git diff -- README.md
+            exit 1
+          fi
+          echo "README.md storage leaderboard is up to date."
+
+      - name: Upload storage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storage-reports
+          path: reports/
+          if-no-files-found: ignore

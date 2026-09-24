@@ -4,6 +4,72 @@
 
 This document provides a comprehensive mapping of security controls across all threat models for the Uzima medical records smart contract system. It consolidates controls from access control, state manipulation, resource exhaustion, cryptographic, and cross-contract interaction threat models into a unified framework for security assessment and operational monitoring.
 
+## Per-Contract Control Coverage (Gap Tracking)
+
+_Added for #1574. Everything below the Executive Summary in this document
+has always been a **thematic** control taxonomy (control categories,
+threat-type coverage matrices, defense-in-depth layers) — it has never
+mapped individual contracts against individual control IDs. This section
+starts that tracking rather than claiming coverage that was never
+verified._
+
+**Current state:** of the 114 contracts under `contracts/`, **none** have
+a recorded per-contract control-ID mapping. (`docs/threat_models/` — the
+closest per-contract security artifact this repo has — contains only
+`TEMPLATE.md`; no contract has an actual threat model doc yet, tracked
+separately as #1567.)
+
+**Priority list for initial per-contract mapping** — contracts flagged by
+name as handling a security-sensitive responsibility (auth, treasury,
+admin, bridge, consent, credential, custody, escrow, recovery, access
+control, identity, key management, cryptography, ZK, MPC, secure
+enclaves), i.e. the contracts where an unmapped control is highest-risk:
+
+| Contract | Likely relevant control categories (needs confirmation) |
+|---|---|
+| `access_control` | AUTH-*, GOV-* |
+| `appointment_booking_escrow` | AUTH-*, STATE-* |
+| `bridge_dispute_mediation` | GOV-*, cross-contract |
+| `common_auth` | AUTH-* (shared library, used by many contracts) |
+| `credential_notifications` | AUTH-*, CRYPTO-* |
+| `credential_registry` | AUTH-*, CRYPTO-* |
+| `cross_chain_bridge` | CRYPTO-*, cross-contract, resource |
+| `cross_chain_identity` | AUTH-*, CRYPTO-* |
+| `crypto_registry` | CRYPTO-* (already referenced elsewhere in this doc, but not in a per-control table) |
+| `escrow` | AUTH-*, STATE-* |
+| `fido2_authenticator` | AUTH-*, CRYPTO-* |
+| `homomorphic_registry` | CRYPTO-* |
+| `identity_registry` | AUTH-*, CRYPTO-* |
+| `medical_consent_nft` | AUTH-*, STATE-* |
+| `mpc_manager` | CRYPTO-*, resource |
+| `patient_consent_management` | AUTH-*, STATE-* |
+| `reputation_access_control` | AUTH-* |
+| `secure_enclave` | AUTH-*, CRYPTO-*, GOV-* (attestation trust) |
+| `shared_consent_policy` | AUTH-* (shared library) |
+| `treasury_controller` | AUTH-*, GOV-* |
+| `zk_verifier` | CRYPTO-* |
+| `zkp_registry` | CRYPTO-*, GOV-* |
+
+The "likely relevant" column above is a first-pass categorization by
+contract *name and apparent purpose only* — it has not been verified
+against each contract's actual code, and should not be read as confirming
+those controls are implemented. Confirming or refuting each cell (and
+extending this table to the remaining ~92 contracts) is follow-up work,
+not something to guess at here.
+
+### Follow-ups
+
+1. For each contract above, confirm which control IDs from the sections
+   below are actually implemented (not just "likely relevant"), and mark
+   genuinely unmapped/unimplemented controls as explicit gaps.
+2. Extend this table to the remaining contracts, prioritized by whichever
+   list comes out of `docs/audits/GAS_OPTIMIZATION_PASS.md`'s complexity
+   scoring (higher complexity often correlates with more control surface
+   to map) — see #1577.
+3. Once `docs/threat_models/<contract>.md` exists for a contract (#1567),
+   cross-link it from this table instead of re-deriving control coverage
+   from scratch.
+
 ## Control Categories
 
 ### 1. Authentication and Authorization Controls

@@ -1,0 +1,29 @@
+name: WASM Baseline Staleness Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/wasm_size_baselines.json"
+      - ".github/workflows/wasm-baseline-check.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/wasm_size_baselines.json"
+      - ".github/workflows/wasm-baseline-check.yml"
+
+jobs:
+  check-baseline-staleness:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Non-blocking for now — see docs/audits/WASM_BASELINE_STALENESS.md.
+      # A real backlog of 31 already-shipped contracts is missing a
+      # baseline; this reports the gap without failing until that's
+      # cleared. Pass --strict to make it block once populated.
+      - name: Check for contracts missing a WASM size baseline
+        run: ./scripts/check_wasm_baseline_staleness.sh
