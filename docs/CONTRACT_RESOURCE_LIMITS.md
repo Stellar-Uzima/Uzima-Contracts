@@ -126,15 +126,16 @@ Applies to all contracts in `contracts/*` and all deployments built using the St
 
 ## 9. Automated Enforcement
 
-The limits above are enforced automatically in CI by the performance budget
-framework, so a change that pushes a contract toward one of these limits is
-caught in review rather than at deployment time.
+| Tool | Enforces | Wired into CI? |
+|---|---|---|
+| `scripts/performance_budget_gate.sh` | Unified gate over WASM size, storage entries and CPU instructions, against both absolute limits and relative regressions | Not yet — documented here but no workflow calls it |
+| `scripts/wasm_size_monitor.sh` | Size-only baseline regression gate | Not yet — see #1556 |
+| `scripts/measure_storage.sh` | Measures storage entries, ledger cost, and instruction counts; enforces the thresholds above | **Yes** — `.github/workflows/storage-budget-measurement.yml` (#1557), fails the job on a threshold violation |
 
-| Tool | Enforces |
-|---|---|
-| `scripts/performance_budget_gate.sh` | Unified gate over WASM size, storage entries and CPU instructions, against both absolute limits and relative regressions |
-| `scripts/wasm_size_monitor.sh` | Size-only baseline regression gate |
-| `scripts/measure_storage.sh` | Measures storage entries and instruction counts |
+`.github/workflows/storage-budget-measurement.yml` runs
+`./scripts/measure_storage.sh` after a release build on every push/PR
+touching `contracts/**`, and uploads the full report, the Pareto top-10
+report, the PR-comment snippet, and the JSON summary as build artifacts.
 
 Budgets are versioned in `scripts/performance_budgets.json` and reviewed with the
 code that changes them. Run the gate locally with:

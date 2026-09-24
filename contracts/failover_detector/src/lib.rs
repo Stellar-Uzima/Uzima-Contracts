@@ -622,4 +622,382 @@ mod test {
         });
         assert!(result.is_ok());
     }
+
+    // ========================================================================
+    // Setup helper
+    // ========================================================================
+
+    /// Initializes the contract and assigns the operator role to `operator`.
+    /// Returns the contract address so callers can wrap further calls in
+    /// `env.as_contract`.
+    fn setup(env: &Env) -> (Address, Address, Address) {
+        let admin = Address::generate(env);
+        let operator = Address::generate(env);
+        let contract = env.register_contract(None, FailoverDetector);
+
+        env.as_contract(&contract, || {
+            FailoverDetector::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin.clone(), operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        (contract, admin, operator)
+    }
+
+    // ========================================================================
+    // assign_role
+    // ========================================================================
+
+    #[test]
+    fn test_assign_role_rejects_invalid_role_mask() {
+        let env = Env::default();
+        let (contract, admin, _operator) = setup(&env);
+        let stranger = Address::generate(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), admin, stranger, ALL_ROLES + 1)
+        });
+        assert!(matches!(result, Err(Error::InvalidInput)));
+    }
+
+    #[test]
+    fn test_assign_role_rejects_non_admin_caller() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let stranger = Address::generate(&env);
+
+        // `operator` has the operator role but not admin, so it must not be
+        // able to grant roles to others.
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::assign_role(env.clone(), operator, stranger, ROLE_OPERATOR)
+        });
+        assert!(matches!(result, Err(Error::NotAuthorized)));
+    }
+
+    // ========================================================================
+    // detect_node_failure
+    // ========================================================================
+
+    #[test]
+    fn test_detect_node_failure_rejects_unauthorized_caller() {
+        let env = Env::default();
+        let (contract, _admin, _operator) = setup(&env);
+        let stranger = Address::generate(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::detect_node_failure(
+                env.clone(),
+                stranger,
+                1,
+                FailoverReason::NodeFailure,
+                3,
+            )
+        });
+        assert!(matches!(result, Err(Error::NotAuthorized)));
+    }
+
+    #[test]
+    fn test_detect_node_failure_rejects_out_of_range_severity() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+
+        for invalid_severity in [0u32, 6u32] {
+            let result = env.as_contract(&contract, || {
+                FailoverDetector::detect_node_failure(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    FailoverReason::NodeFailure,
+                    invalid_severity,
+                )
+            });
+            assert!(matches!(result, Err(Error::InvalidInput)));
+        }
+    }
+
+    /// Table-driven check of the FAILURE_THRESHOLD (3) invariant: a node's
+    /// `is_critical` detection flag must stay false for the first two
+    /// consecutive failures and flip true from the third onward, with
+    /// `consecutive_failures` tracking the call count exactly.
+    #[test]
+    fn test_detect_node_failure_critical_threshold_invariant() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let node_id = 42u32;
+
+        let expected_is_critical = [false, false, true, true];
+
+        for (i, expected_critical) in expected_is_critical.iter().enumerate() {
+            env.as_contract(&contract, || {
+                FailoverDetector::detect_node_failure(
+                    env.clone(),
+                    operator.clone(),
+                    node_id,
+                    FailoverReason::HeartbeatTimeout,
+                    3,
+                )
+            })
+            .unwrap();
+
+            let metric = env
+                .as_contract(&contract, || {
+                    FailoverDetector::get_node_metrics(env.clone(), node_id)
+                })
+                .unwrap();
+            assert_eq!(metric.consecutive_failures, (i as u32) + 1);
+
+            let detections = env.as_contract(&contract, || {
+                FailoverDetector::get_detections(env.clone())
+            });
+            let last = detections.get_unchecked(detections.len() - 1);
+            assert_eq!(last.is_critical, *expected_critical);
+        }
+    }
+
+    #[test]
+    fn test_get_node_metrics_returns_none_for_unknown_node() {
+        let env = Env::default();
+        let (contract, _admin, _operator) = setup(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::get_node_metrics(env.clone(), 999)
+        });
+        assert!(result.is_none());
+    }
+
+    // ========================================================================
+    // create_failover_plan
+    // ========================================================================
+
+    #[test]
+    fn test_create_failover_plan_rejects_empty_targets() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let targets = Vec::new(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::create_failover_plan(env.clone(), operator, 1, targets)
+        });
+        assert!(matches!(result, Err(Error::NoAvailableTargets)));
+    }
+
+    #[test]
+    fn test_create_failover_plan_rejects_unauthorized_caller() {
+        let env = Env::default();
+        let (contract, _admin, _operator) = setup(&env);
+        let stranger = Address::generate(&env);
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::create_failover_plan(env.clone(), stranger, 1, targets)
+        });
+        assert!(matches!(result, Err(Error::NotAuthorized)));
+    }
+
+    // ========================================================================
+    // execute_failover
+    // ========================================================================
+
+    #[test]
+    fn test_execute_failover_rejects_unknown_detection() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::execute_failover(env.clone(), operator, 999, 2)
+        });
+        assert!(matches!(result, Err(Error::FailoverNotFound)));
+    }
+
+    #[test]
+    fn test_execute_failover_rejects_when_already_in_progress() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+
+        let detection_id = env
+            .as_contract(&contract, || {
+                FailoverDetector::detect_node_failure(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    FailoverReason::NodeFailure,
+                    3,
+                )
+            })
+            .unwrap();
+
+        // Directly flip the internal in-progress flag to simulate a
+        // concurrent failover, since execute_failover clears it again
+        // before returning within a single call.
+        env.as_contract(&contract, || {
+            env.storage().instance().set(&FAILOVER_IN_PROGRESS, &true);
+        });
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::execute_failover(env.clone(), operator, detection_id, 2)
+        });
+        assert!(matches!(result, Err(Error::FailoverInProgress)));
+    }
+
+    #[test]
+    fn test_execute_failover_happy_path_resets_consecutive_failures() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let node_id = 7u32;
+
+        // Two failures short of the critical threshold; execute_failover
+        // should reset the counter back to zero on success.
+        for _ in 0..2 {
+            env.as_contract(&contract, || {
+                FailoverDetector::detect_node_failure(
+                    env.clone(),
+                    operator.clone(),
+                    node_id,
+                    FailoverReason::NodeFailure,
+                    2,
+                )
+            })
+            .unwrap();
+        }
+
+        let detections = env.as_contract(&contract, || {
+            FailoverDetector::get_detections(env.clone())
+        });
+        let detection_id = detections.get_unchecked(detections.len() - 1).detection_id;
+
+        let execution_id = env
+            .as_contract(&contract, || {
+                FailoverDetector::execute_failover(env.clone(), operator.clone(), detection_id, 9)
+            })
+            .unwrap();
+        assert!(execution_id > 0);
+
+        let executions = env.as_contract(&contract, || {
+            FailoverDetector::get_failover_executions(env.clone())
+        });
+        assert_eq!(executions.len(), 1);
+        assert!(matches!(
+            executions.get_unchecked(0).state,
+            FailoverState::Completed
+        ));
+
+        let metric = env
+            .as_contract(&contract, || {
+                FailoverDetector::get_node_metrics(env.clone(), node_id)
+            })
+            .unwrap();
+        assert_eq!(metric.consecutive_failures, 0);
+        assert_eq!(metric.recovery_attempts, 1);
+    }
+
+    // ========================================================================
+    // mark_recovery_success
+    // ========================================================================
+
+    #[test]
+    fn test_mark_recovery_success_rejects_unknown_node() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::mark_recovery_success(env.clone(), operator, 999)
+        });
+        assert!(matches!(result, Err(Error::NodeNotFound)));
+    }
+
+    #[test]
+    fn test_mark_recovery_success_resets_consecutive_failures() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let node_id = 5u32;
+
+        env.as_contract(&contract, || {
+            FailoverDetector::detect_node_failure(
+                env.clone(),
+                operator.clone(),
+                node_id,
+                FailoverReason::HighLatency,
+                4,
+            )
+        })
+        .unwrap();
+
+        env.as_contract(&contract, || {
+            FailoverDetector::mark_recovery_success(env.clone(), operator, node_id)
+        })
+        .unwrap();
+
+        let metric = env
+            .as_contract(&contract, || {
+                FailoverDetector::get_node_metrics(env.clone(), node_id)
+            })
+            .unwrap();
+        assert_eq!(metric.consecutive_failures, 0);
+        assert_eq!(metric.recovery_attempts, 1);
+    }
+
+    // ========================================================================
+    // deactivate_failover_plan
+    // ========================================================================
+
+    #[test]
+    fn test_deactivate_failover_plan_rejects_non_admin_caller() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup(&env);
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+
+        let plan_id = env
+            .as_contract(&contract, || {
+                FailoverDetector::create_failover_plan(env.clone(), operator.clone(), 1, targets)
+            })
+            .unwrap();
+
+        // Operators may create plans, but only admin may deactivate one.
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::deactivate_failover_plan(env.clone(), operator, plan_id)
+        });
+        assert!(matches!(result, Err(Error::NotAuthorized)));
+    }
+
+    #[test]
+    fn test_deactivate_failover_plan_rejects_unknown_plan() {
+        let env = Env::default();
+        let (contract, admin, _operator) = setup(&env);
+
+        let result = env.as_contract(&contract, || {
+            FailoverDetector::deactivate_failover_plan(env.clone(), admin, 999)
+        });
+        assert!(matches!(result, Err(Error::FailoverNotFound)));
+    }
+
+    #[test]
+    fn test_deactivate_failover_plan_happy_path() {
+        let env = Env::default();
+        let (contract, admin, operator) = setup(&env);
+        let mut targets = Vec::new(&env);
+        targets.push_back(2u32);
+
+        let plan_id = env
+            .as_contract(&contract, || {
+                FailoverDetector::create_failover_plan(env.clone(), operator, 1, targets)
+            })
+            .unwrap();
+
+        env.as_contract(&contract, || {
+            FailoverDetector::deactivate_failover_plan(env.clone(), admin, plan_id)
+        })
+        .unwrap();
+
+        let plans = env.as_contract(&contract, || {
+            FailoverDetector::get_failover_plans(env.clone())
+        });
+        let plan = plans.get_unchecked(plans.len() - 1);
+        assert_eq!(plan.plan_id, plan_id);
+        assert!(!plan.is_active);
+    }
 }

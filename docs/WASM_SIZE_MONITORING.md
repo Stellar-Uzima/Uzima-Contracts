@@ -13,8 +13,10 @@ This document describes the WASM size monitoring system implemented for Stellar 
 
 ## Baseline Regression Gate (CI) — Issue #846
 
-Separate from the trend view below, the CI `build` job enforces a size
-**regression gate** on every PR. After building all contracts for
+Separate from the trend view below,
+`.github/workflows/wasm-size-monitoring.yml` (#1556) enforces a size
+**regression gate** on every PR touching `contracts/**` or the monitor
+script/baseline. After building all contracts for
 `wasm32-unknown-unknown --release`, it runs:
 
 ```bash
