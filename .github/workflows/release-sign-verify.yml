@@ -1,0 +1,65 @@
+name: Release Sign & Verify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/sign_release_artifacts.sh"
+      - "scripts/verify_release_artifacts.sh"
+      - ".github/workflows/release-sign-verify.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/**"
+      - "scripts/sign_release_artifacts.sh"
+      - "scripts/verify_release_artifacts.sh"
+      - ".github/workflows/release-sign-verify.yml"
+
+jobs:
+  build-sign-verify:
+    name: Build, sign, and verify a release bundle (dry-run version)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build release WASM artifacts (make dist)
+        run: make dist
+
+      # No key is passed, so this generates and uses a throwaway
+      # self-signed key (the script's own existing fallback behavior) —
+      # this workflow validates the sign->verify pipeline itself, it
+      # isn't producing a real, publishable release signature.
+      - name: Sign release artifacts (CI dry-run version)
+        run: ./scripts/sign_release_artifacts.sh 0.0.0-ci
+
+      # Fails the job (exit 1) on any checksum/signature/manifest
+      # mismatch — see scripts/verify_release_artifacts.sh's ERRORS
+      # handling. Deployment-hash and build-provenance checks are
+      # warning-only when no real deployment record exists yet, which is
+      # expected for this CI dry-run.
+      - name: Verify release artifacts
+        run: ./scripts/verify_release_artifacts.sh 0.0.0-ci
+
+      - name: Upload signed release bundle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-bundle-ci
+          path: artifacts/release-v0.0.0-ci/
+          if-no-files-found: ignore

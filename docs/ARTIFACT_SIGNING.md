@@ -106,6 +106,18 @@ The signing process integrates with:
 - **`deploy.sh`**: Records WASM hashes during deployment
 - **`verify_deployment.sh`**: Validates deployed artifacts against records
 
+## CI
+
+`.github/workflows/release-sign-verify.yml` builds release WASM artifacts
+(`make dist`), signs them (`sign_release_artifacts.sh 0.0.0-ci`, using a
+throwaway self-signed key since no key is provided), and verifies the
+result (`verify_release_artifacts.sh 0.0.0-ci`) on every push/PR touching
+`contracts/**` or either script. This validates the sign → verify pipeline
+itself on a dry-run version, not a publishable release signature. A
+checksum, signature, or manifest mismatch fails the job (no `|| true`);
+missing deployment-hash/build-provenance records are warning-only, which
+is expected for a CI dry-run that hasn't actually deployed anything.
+
 ## Security Considerations
 
 - Never commit signing keys to the repository
