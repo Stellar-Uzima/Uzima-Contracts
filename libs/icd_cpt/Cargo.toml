@@ -1,0 +1,17 @@
+[package]
+name = "icd_cpt"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Canonical ICD-10 / CPT code mapping shared by clinical contracts and off-chain tooling"
+repository.workspace = true
+
+# No `soroban-sdk` dependency on purpose: the mapping is plain data, so the
+# same table is usable on-chain and by tests, fixtures and CLI tooling. A
+# Soroban dependency here would force `soroban-sdk` (and its host-feature
+# baggage) into every off-chain consumer.
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
