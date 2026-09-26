@@ -204,6 +204,10 @@ shellcheck: check-deps ## Lint shell scripts with shellcheck
 	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
+check-events: ## Require an event from every state-changing pub fn (#1587)
+	@echo "Auditing state-changing functions for event emission..."
+	@bash scripts/check_events.sh
+
 check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
 	@echo "All checks passed!"
 

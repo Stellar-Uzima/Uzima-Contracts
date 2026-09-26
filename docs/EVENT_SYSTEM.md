@@ -388,13 +388,33 @@ requires that every state-changing operation emit a corresponding event. The
 
 ### How the audit works
 
-`scripts/check_events.sh` parses every `contracts/*/src/lib.rs` file and:
+`scripts/check_events.sh` parses every non-test Rust source under
+`contracts/*/src/` and:
 
-1. Identifies all `pub fn` entrypoints at the standard 4-space contract-impl indent.
-2. Skips read-only functions whose names start with `get_`, `is_`, `has_`, or `query_`.
+1. Identifies all `pub fn` entrypoints at 0, 4 or 8 spaces of indent — 4 for a free
+   function inside a `mod`, 8 for a method inside an `impl` block, 0 for a
+   module-level helper. All three are matched; a single `^ *pub fn` pattern is
+   not, because the awk in use rejects it.
+2. Skips read-only functions whose names start with `get_`, `is_`, `has_`, `query_`
+   or `view_`.
 3. Extracts each function body via brace-depth counting (suitable for `no_std` Soroban
    code, which never contains string literals with unbalanced braces).
 4. Reports any function that does not contain a `.events()` call in its body.
+5. Reports allowlist entries that have gone stale, in either direction: a function
+   that now emits an event, or one that no longer exists at all. Both are silent
+   exemptions otherwise.
+
+Test sources are excluded by path (`*/src/test.rs`, `*/src/test_*.rs`,
+`*/src/*_tests.rs`, and the `test-helpers` and `load_testing` crates) because test
+helpers never publish events by design and would bury the real findings.
+
+Until #1587 the script read only `contracts/*/src/lib.rs` and matched only
+4-space `pub fn`, so submodule code, `impl`-block methods and module-level
+helpers were never audited. See the "newly-covered surface" section of the
+allowlist for what that had been hiding.
+
+The script targets bash 3.2 so that it runs on macOS, where `/bin/bash` is still
+3.2. In particular it avoids `declare -A` and nested quotes inside `${...}`.
 
 Functions in `scripts/allowlists/event_emission.txt` are exempt from the check. The
 allowlist exists solely for pre-existing functions that were written before this
@@ -420,9 +440,15 @@ FAIL [missing event]: contracts/foo/src/lib.rs  fn transfer_funds
 
 ### CI enforcement
 
-The `event-audit` job in `.github/workflows/ci.yml` runs `check_events.sh` on every
-push and pull request targeting `main` or `develop`. A PR that introduces a new
+The `event-emission-audit` job in `.github/workflows/event-emission-check.yml` runs
+`check_events.sh` on every push and pull request targeting `main` or `develop` that
+touches `contracts/**`, the script, or the allowlist. A PR that introduces a new
 state-mutating function without an event emission call will fail this job.
+
+This section previously described an `event-audit` job in
+`.github/workflows/ci.yml`. Neither the job nor that workflow file existed, so the
+audit was documented but never ran. The check has also been enforced locally as
+`make check-events`.
 
 ### Adding events to a function
 

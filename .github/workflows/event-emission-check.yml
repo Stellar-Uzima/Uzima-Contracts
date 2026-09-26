@@ -1,0 +1,42 @@
+name: event-emission-check
+
+# Enforces docs/SECURITY_CHECKLIST.md §5 — every state-changing operation must
+# emit a corresponding event — via scripts/check_events.sh.
+#
+# docs/EVENT_SYSTEM.md previously described an `event-audit` job in
+# .github/workflows/ci.yml. No such job, and no such workflow file, existed, so
+# the audit was documented but never ran. This workflow is that enforcement.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - "contracts/**"
+      - "scripts/check_events.sh"
+      - "scripts/allowlists/event_emission.txt"
+      - ".github/workflows/event-emission-check.yml"
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - "contracts/**"
+      - "scripts/check_events.sh"
+      - "scripts/allowlists/event_emission.txt"
+      - ".github/workflows/event-emission-check.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  event-emission-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No Rust toolchain needed: this is a source-level audit, not a build.
+      - name: Audit state-changing functions for event emission
+        run: bash scripts/check_events.sh
