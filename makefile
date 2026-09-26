@@ -38,7 +38,7 @@ help:
 	@echo "  clean          - Clean build artifacts"
 	@echo "  fmt            - Format code"
 	@echo "  lint           - Run clippy linter"
-	@echo "  shellcheck     - Lint shell scripts with shellcheck"
+	@echo "  shellcheck     - Lint all tracked shell scripts"
 	@echo "  check          - Run all checks (fmt, lint, test)"
 	@echo "  install-deps   - Install required dependencies"
 	@echo "  check-deps     - Check if dependencies are installed"
@@ -199,9 +199,19 @@ lint: check-deps ## Run clippy linter and error code checks
 	@echo "Checking error codes..."
 	bash scripts/check_error_codes.sh
 
-shellcheck: check-deps ## Lint shell scripts with shellcheck
-	@echo "Linting shell scripts..."
-	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
+# Every tracked shell script, not just scripts/*.sh: setup.sh and the suites
+# under tests/ are shell too, and a non-recursive glob silently skipped them.
+SHELL_SCRIPTS := $(shell git ls-files '*.sh')
+
+# Kept in step with SEVERITY in .github/workflows/shellcheck.yml. Override to
+# tighten locally, e.g. `make shellcheck SHELLCHECK_SEVERITY=style`.
+SHELLCHECK_SEVERITY ?= error
+
+shellcheck: ## Lint all tracked shell scripts
+	@command -v shellcheck >/dev/null 2>&1 || { echo "shellcheck not installed. See https://github.com/koalaman/shellcheck"; exit 1; }
+	@[ -n "$(SHELL_SCRIPTS)" ] || { echo "No shell scripts found. Run from a git checkout."; exit 1; }
+	@echo "Linting $(words $(SHELL_SCRIPTS)) shell script(s) at severity=$(SHELLCHECK_SEVERITY)..."
+	@shellcheck --severity=$(SHELLCHECK_SEVERITY) $(SHELL_SCRIPTS) || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
 check-events: ## Require an event from every state-changing pub fn (#1587)

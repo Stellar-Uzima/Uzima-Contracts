@@ -1,0 +1,59 @@
+name: ShellCheck
+
+# Shell scripts are the deployment and release path, and nothing ran ShellCheck
+# in CI. `make check` does invoke it, but that target is local-only and also
+# demands rustc, soroban and the wasm32 target, so it is not a gate anyone is
+# forced through on a pull request.
+#
+# No `paths` filter on purpose, for the same reason as
+# path-case-collision-check.yml: the invariant is a property of the whole tree.
+#
+# Severity starts at `error`. This corpus has never been linted, so failing on
+# warning/info/style would land a wall of pre-existing findings and block every
+# pull request on the day it lands. Raise SEVERITY below as the corpus is
+# cleaned; the make target uses the same default so the two agree.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  SHELLCHECK_VERSION: v0.11.0
+  SEVERITY: error
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck ${{ env.SHELLCHECK_VERSION }}
+        run: |
+          set -euo pipefail
+          url="https://github.com/koalaman/shellcheck/releases/download/${SHELLCHECK_VERSION}/shellcheck-${SHELLCHECK_VERSION}.linux.x86_64.tar.gz"
+          tmp="$(mktemp -d)"
+          curl -fsSL "$url" | tar -xz -C "$tmp"
+          sudo install -m 0755 "${tmp}/shellcheck-${SHELLCHECK_VERSION}/shellcheck" /usr/local/bin/shellcheck
+          shellcheck --version
+
+      - name: Lint every tracked shell script
+        run: |
+          set -euo pipefail
+          mapfile -t scripts < <(git ls-files '*.sh')
+          count="${#scripts[@]}"
+          if [ "$count" -eq 0 ]; then
+            echo "no shell scripts found; is this a git checkout?" >&2
+            exit 1
+          fi
+          echo "linting ${count} shell script(s) at severity=${SEVERITY}"
+          shellcheck --severity="${SEVERITY}" "${scripts[@]}"
