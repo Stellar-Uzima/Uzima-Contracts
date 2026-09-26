@@ -1,0 +1,2 @@
+# Regex patterns passed to `trufflehog git --exclude-paths`.
+^deployments/testnet/medical_records/plan\.json$

@@ -25,6 +25,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [CLI Guide](#cli-guide)
 - [Helpful Links](#helpful-links)
 - [Contribution Guidelines](#contribution-guidelines)
+- [Issue Triage and Review Routing](docs/ISSUE_TRIAGE_AND_REVIEW_ROUTING.md)
 - [Architecture Decision Records](#architecture-decision-records)
 - [Contract Review Checklist](#contract-review-checklist)
 - [Troubleshooting](#troubleshooting)
@@ -777,6 +778,8 @@ All PRs undergo:
 4. **Security audit** for significant changes
 
 ## Contract Review Checklist
+
+See the [Issue Triage and Review Routing Guide](docs/ISSUE_TRIAGE_AND_REVIEW_ROUTING.md) for canonical issue labels, maintainer response targets, and contract ownership coverage.
 Review contract submissions using the shared checklist at [docs/contract-review-checklist.md](docs/contract-review-checklist.md).
 
 ## Architecture Decision Records

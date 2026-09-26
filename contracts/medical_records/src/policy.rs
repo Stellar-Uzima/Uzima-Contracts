@@ -170,7 +170,7 @@ pub fn check_consent(
     provider: &Address,
 ) -> (PolicyDecision, bool) {
     use crate::DataKey;
-    use patient_consent_management::PatientConsentManagementClient;
+    use crate::consent_client::PatientConsentManagementClient;
 
     let consent_addr: Option<Address> = env
         .storage()

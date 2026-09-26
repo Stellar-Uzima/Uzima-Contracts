@@ -80,6 +80,7 @@ mod test_timestamp_normalization;
 mod errors;
 mod events;
 mod event_schema;
+mod consent_client;
 pub mod policy;
 pub mod timestamp_normalization;
 mod validation;
@@ -88,7 +89,7 @@ mod types;
 
 pub use errors::Error;
 
-use patient_consent_management::PatientConsentManagementClient;
+use consent_client::PatientConsentManagementClient;
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, xdr::ToXdr, Address, Bytes,
     BytesN, Env, IntoVal, Map, String, Symbol, Vec,

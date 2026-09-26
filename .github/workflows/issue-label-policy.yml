@@ -1,0 +1,22 @@
+name: Issue Label Policy
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  canonical-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Validate newly applied label
+        run: python3 scripts/check_issue_label.py "${LABEL}"
+        env:
+          LABEL: ${{ github.event.label.name }}
