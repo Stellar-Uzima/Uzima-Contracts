@@ -1,0 +1,50 @@
+name: Architecture Doc Drift Check
+
+# docs/SYSTEM_ARCHITECTURE.md lists the contract paths that the root Cargo.toml
+# excludes. That list is generated from the manifest, and this job is what stops
+# the two drifting apart again: editing the doc by hand, or adding a path to
+# `exclude` without regenerating the table, fails here.
+#
+# The `paths` filter is deliberately wider than just the two files. Changing
+# which contracts are excluded also happens via directory moves and manifest
+# edits, and a check that only triggers on the doc itself would miss those.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/SYSTEM_ARCHITECTURE.md"
+      - "scripts/check_architecture_doc_drift.py"
+      - ".github/workflows/arch-doc-drift-check.yml"
+      - "contracts/*/Cargo.toml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "docs/SYSTEM_ARCHITECTURE.md"
+      - "scripts/check_architecture_doc_drift.py"
+      - ".github/workflows/arch-doc-drift-check.yml"
+      - "contracts/*/Cargo.toml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-drift:
+    name: Doc matches Cargo.toml exclude list
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject a SYSTEM_ARCHITECTURE.md that disagrees with Cargo.toml
+        run: python3 scripts/check_architecture_doc_drift.py

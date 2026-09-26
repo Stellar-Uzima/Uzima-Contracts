@@ -12,7 +12,8 @@
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 .PHONY: check-gates check-everything gates-list check-node-deps check-paths
-.PHONY: check-multi-tenant-config check-network-config
+.PHONY: check-architecture-doc
+.PHONY: generate-dashboard-data check-dashboard-data
 
 ##@ General
 
@@ -349,6 +350,9 @@ check-multi-tenant-config: ## Validate config/multi_tenant.json (#1613)
 # you want those verified locally.
 check-network-config: ## Validate config/networks.toml, repo-only checks (#1613)
 	@bash scripts/validate_network_config.sh --offline
+
+check-architecture-doc: ## Fail if SYSTEM_ARCHITECTURE.md disagrees with Cargo.toml (#1603)
+	@python3 scripts/check_architecture_doc_drift.py
 
 ##@ WASM Size
 

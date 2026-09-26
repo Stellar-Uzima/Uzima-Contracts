@@ -105,8 +105,9 @@ The engine integrates with CI/CD pipelines to automatically review pull requests
 
 Before you begin, ensure you have the following installed:
 
-- **Rust 1.78.0+** - [Install Rust](https://www.rust-lang.org/tools/install)
-- **Soroban CLI v21.7.7+** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
+- **Rust 1.92.0** (pinned by `rust-toolchain.toml`; install `rustup` and the
+  pin applies automatically) - [Install Rust](https://www.rust-lang.org/tools/install)
+- **Soroban CLI v21.7.7** - [Install Soroban](https://soroban.stellar.org/docs/getting-started/installation)
 - **Git** - For version control
 - **Make** - For using the provided Makefile (optional but recommended)
 
