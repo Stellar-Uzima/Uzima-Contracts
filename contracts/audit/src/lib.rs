@@ -10,6 +10,8 @@ pub mod verification;
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod test_export_failure;
 
 pub use crate::errors::Error;
 use crate::types::{
