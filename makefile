@@ -204,6 +204,10 @@ shellcheck: check-deps ## Lint shell scripts with shellcheck
 	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
+check-paths: ## Reject tracked paths that collide case-insensitively (#1599)
+	@echo "🔍 Checking tracked paths for case collisions..."
+	@python3 scripts/check_path_case_collisions.py
+
 check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
 	@echo "All checks passed!"
 
