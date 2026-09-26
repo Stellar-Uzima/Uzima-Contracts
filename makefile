@@ -12,7 +12,7 @@
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 .PHONY: check-gates check-everything gates-list check-node-deps check-paths
-.PHONY: generate-dashboard-data check-dashboard-data
+.PHONY: check-multi-tenant-config check-network-config
 
 ##@ General
 
@@ -339,13 +339,16 @@ profile: ## Profile contract build times
 	@echo "Profiling build times..."
 	cargo build --timings
 
-##@ Dashboard
+##@ Config
 
-generate-dashboard-data: ## Regenerate committed dashboard data (#1640)
-	@./scripts/generate_dashboard_data.sh
+check-multi-tenant-config: ## Validate config/multi_tenant.json (#1613)
+	@bash scripts/validate_multi_tenant_config.sh
 
-check-dashboard-data: ## Fail if committed dashboard data is stale (#1640)
-	@python3 scripts/check_dashboard_data.py
+# --offline: skips RPC connectivity, the local soroban config/keyring,
+# environment variables and the cargo build check. Use the bare script when
+# you want those verified locally.
+check-network-config: ## Validate config/networks.toml, repo-only checks (#1613)
+	@bash scripts/validate_network_config.sh --offline
 
 ##@ WASM Size
 
