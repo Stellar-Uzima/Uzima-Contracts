@@ -11,6 +11,7 @@
 .PHONY: promotion-gate promotion-gate-strict
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
+.PHONY: check-gates check-everything gates-list check-node-deps check-paths
 
 ##@ General
 
@@ -657,3 +658,33 @@ coverage-gate-update: ## Update coverage gate baselines
 
 test-coverage-gate: ## Run coverage gate test suite
 	@bash tests/coverage_gate_test.sh
+
+##@ Aggregate Gates (Issue #1645)
+
+# The order gates run in is defined once, in scripts/gates.json, and executed
+# by scripts/run-gates.mjs. These targets are thin wrappers so that `make` and
+# `npm run` cannot drift into disagreeing about what "all the checks" means.
+#
+# Run them without -j: the tiers are ordered cheapest-first so a bad change
+# fails in seconds rather than after a release build.
+#
+# `cargo test` is deliberately NOT part of check-everything. It is by far the
+# slowest gate and `make check-all` already runs it alongside the build gates.
+
+gates-list: ## Print the gate order without running anything (Issue #1645)
+	@node scripts/run-gates.mjs --list
+
+check-gates: ## Run every gate that needs no cargo build (Issue #1645)
+	@node scripts/run-gates.mjs --tier fast
+
+check-everything: ## Run all gates in order, including budgets (Issue #1645)
+	@node scripts/run-gates.mjs --tier full
+
+check-node-deps: ## Verify node and installed packages for the JS gates
+	@command -v node >/dev/null 2>&1 || { echo "node not installed. See docs/DEVELOPMENT_CHECKS.md"; exit 1; }
+	@command -v npm >/dev/null 2>&1 || { echo "npm not installed. See docs/DEVELOPMENT_CHECKS.md"; exit 1; }
+	@[ -d node_modules ] || { echo "node_modules missing. Run 'npm ci'"; exit 1; }
+	@echo "Node.js dependencies are installed!"
+
+check-paths: ## Reject paths that differ only in case (#1599)
+	@python3 scripts/check_path_case_collisions.py

@@ -155,11 +155,18 @@ function generateReport(results) {
   lines.push('|----------|-----------|--------|--------|');
 
   for (const r of results) {
-    const size = r.wasm_bytes !== null ? `${(r.wasm_bytes / 1024).toFixed(1)} KB` : 'N/A';
+    const measured = r.wasm_bytes !== null;
+    const size = measured ? `${(r.wasm_bytes / 1024).toFixed(1)} KB` : 'N/A';
     const budget = `${(r.max_wasm_bytes / 1024).toFixed(0)} KB`;
     const violations = r.violations.filter(v => v.metric === 'wasm_bytes');
-    const status = violations.length === 0 ? 'OK' : violations[0].severity === 'critical' ? 'CRITICAL' : 'WARNING';
-    const icon = status === 'OK' ? ':white_check_mark:' : status === 'CRITICAL' ? ':x:' : ':warning:';
+    // An unmeasured contract is not a passing contract; say so rather than
+    // reporting "OK" for something that was never checked.
+    const status = !measured ? 'NOT MEASURED'
+      : violations.length === 0 ? 'OK'
+      : violations[0].severity === 'critical' ? 'CRITICAL' : 'WARNING';
+    const icon = !measured ? ':grey_question:'
+      : status === 'OK' ? ':white_check_mark:'
+      : status === 'CRITICAL' ? ':x:' : ':warning:';
     lines.push(`| ${r.contract} | ${size} | ${budget} | ${icon} ${status} |`);
   }
 
@@ -241,11 +248,30 @@ function main() {
   const budgets = loadJSON(BUDGET_FILE);
   const results = checkBudgets(budgets, filterContract);
 
+  // A contract with no release artifact measures nothing, and an unmeasured
+  // contract produces no violations. Without this guard a clean checkout
+  // reports "All contracts within budget" having checked zero contracts, so
+  // the gate would pass while measuring nothing.
+  const measured = results.filter(r => r.wasm_bytes !== null);
+  if (measured.length === 0) {
+    console.error(`[budget] No contract artifacts found in ${WASM_DIR}`);
+    console.error(`[budget] Checked ${results.length} contract(s) and measured 0.`);
+    console.error("[budget] Build the contracts first: 'make build-opt'");
+    process.exit(1);
+  }
+  if (measured.length < results.length) {
+    console.error(
+      `[budget] Warning: ${results.length - measured.length} contract(s) had no ` +
+      `artifact in ${WASM_DIR} and were not measured.`
+    );
+  }
+
   // Write violations JSON
   const violations = results.filter(r => r.violations.length > 0);
   saveJSON(VIOLATIONS_FILE, {
     checked_at: new Date().toISOString(),
     total_contracts: results.length,
+    contracts_measured: measured.length,
     contracts_with_violations: violations.length,
     results
   });

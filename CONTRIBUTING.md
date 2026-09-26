@@ -8,7 +8,8 @@ Thank you for your interest in contributing to Stellar Uzima. This guide explain
 
 - [Getting Started](#getting-started)
 - [Repository Layout](#repository-layout)
-- [Development Workflow](#development-workflow)
+  - [Development Workflow](#development-workflow)
+  - [Repository Gates](#run-the-repository-gates)
 - [Contract Authoring Patterns](#contract-authoring-patterns)
 - [Naming Conventions](#naming-conventions)
 - [Testing Requirements](#testing-requirements)
@@ -126,6 +127,20 @@ make test            # all tests
 make test-unit       # unit tests only
 make test-integration # integration tests only
 ```
+
+### Run the repository gates
+
+`make check` does not cover the event, generated-artifact, template, dead-code
+or budget gates. Run the aggregate before opening a pull request:
+
+```bash
+make check-gates       # everything that needs no cargo build
+make check-everything  # all gates, including budgets (run `make build-opt` first)
+make gates-list        # show the order without running anything
+```
+
+See [docs/development.md](docs/development.md#repository-gates) for the gate
+order and the reasoning behind it.
 
 ### Fuzz Testing
 
