@@ -204,6 +204,10 @@ shellcheck: check-deps ## Lint shell scripts with shellcheck
 	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
+check-manifest: ## Reject duplicate workspace.members / workspace.exclude entries (#1632)
+	@echo "🔍 Checking workspace manifest path lists..."
+	@python3 scripts/check_workspace_manifest.py
+
 check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
 	@echo "All checks passed!"
 
