@@ -157,6 +157,30 @@ FORCE=true ./scripts/network_manager.sh configure testnet
 ./scripts/validate_network_config.sh --contract medical_records --network testnet
 ```
 
+The full run above needs a live network, a configured `soroban` CLI and a
+local identity keyring. It reports each check as PASS, WARN, FAIL or SKIP and
+exits non-zero if any check that ran failed.
+
+#### Offline Validation (for CI)
+
+```bash
+./scripts/validate_network_config.sh --offline
+```
+
+`--offline` runs only the checks that depend on files in this repository and
+skips the ones that need your machine: RPC connectivity, the local `soroban`
+config and keyring, `SOROBAN_RPC_URL` / `SOROBAN_NETWORK_PASSPHRASE`, and the
+`cargo check` build probe. Skipped checks are counted and printed separately
+rather than silently dropped, and a passing offline run says so explicitly.
+
+Use it in CI. Do **not** run the full validation in a workflow: a runner has no
+reachable `local` network, no Soroban keyring, and no business depending on
+public RPC uptime, so the job would be permanently red for reasons unrelated to
+the change being tested.
+
+A green offline run is a statement about `config/networks.toml` only. Run the
+full validation locally before deploying.
+
 ## Safety Features
 
 ### Mainnet Protection
@@ -314,9 +338,16 @@ DEBUG=true ./scripts/deploy_enhanced.sh medical_records testnet --debug
 
 ### GitHub Actions Example
 
+`config-validation.yml` already runs both config validators on changes to
+`config/**`, so nothing needs to be added to a deploy workflow for this to be
+enforced. If you do wire it in by hand, use `--offline`:
+
 ```yaml
 - name: Validate Network Configuration
-  run: ./scripts/validate_network_config.sh --network testnet
+  run: ./scripts/validate_network_config.sh --offline
+
+- name: Validate Multi-Tenant Configuration
+  run: ./scripts/validate_multi_tenant_config.sh
 
 - name: Deploy to Testnet
   run: ./scripts/deploy_enhanced.sh medical_records testnet --auto-fallback

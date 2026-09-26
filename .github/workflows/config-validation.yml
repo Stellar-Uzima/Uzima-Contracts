@@ -1,0 +1,54 @@
+name: Config Validation
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "config/**"
+      - "scripts/validate_multi_tenant_config.sh"
+      - "scripts/validate_network_config.sh"
+      - ".github/workflows/config-validation.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "config/**"
+      - "scripts/validate_multi_tenant_config.sh"
+      - "scripts/validate_network_config.sh"
+      - ".github/workflows/config-validation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  multi-tenant:
+    name: Multi-tenant config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate config/multi_tenant.json
+        run: bash scripts/validate_multi_tenant_config.sh
+
+  network-config:
+    name: Network config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # --offline, deliberately. Without it this job cannot pass on a runner:
+      # validate_network_config.sh also curls every RPC endpoint in
+      # config/networks.toml and shells out to the local `soroban` config and
+      # keyring, none of which exist on a GitHub runner. The offline subset is
+      # everything that depends only on files in this repository, which is what
+      # a config change can actually regress.
+      - name: Validate config/networks.toml
+        run: bash scripts/validate_network_config.sh --offline

@@ -20,9 +20,18 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 NETWORKS_CONFIG="$PROJECT_ROOT/config/networks.toml"
 
 # Test results
+# TESTS_TOTAL counts *executed* checks only. Skipped checks are counted
+# separately so that a partial (--offline) run is not penalised in the
+# success rate and never looks like a full validation.
 TESTS_PASSED=0
 TESTS_FAILED=0
+TESTS_WARNED=0
+TESTS_SKIPPED=0
 TESTS_TOTAL=0
+
+# When 1, checks that need a live network, a local Soroban keyring, local
+# environment variables or a cargo build are skipped instead of run.
+OFFLINE=0
 
 # Print functions
 print_status() {
@@ -50,17 +59,42 @@ print_test_result() {
     local result="$2"
     local message="${3:-}"
     
+    # A SKIP is not a test that ran, so it is excluded from TESTS_TOTAL.
+    if [[ "$result" == "SKIP" ]]; then
+        echo -e "  ${BLUE}○ SKIP${NC} $test_name"
+        [[ -n "$message" ]] && echo -e "    ${BLUE}$message${NC}"
+        TESTS_SKIPPED=$((TESTS_SKIPPED + 1))
+        return 0
+    fi
+    
     TESTS_TOTAL=$((TESTS_TOTAL + 1))
     
     if [[ "$result" == "PASS" ]]; then
         echo -e "  ${GREEN}✓ PASS${NC} $test_name"
         [[ -n "$message" ]] && echo -e "    ${CYAN}$message${NC}"
         TESTS_PASSED=$((TESTS_PASSED + 1))
+    elif [[ "$result" == "WARN" ]]; then
+        # Callers have always passed WARN here. It used to fall through to the
+        # else branch, so a warning was printed as "✗ FAIL" and incremented
+        # TESTS_FAILED, which made a clean environment fail the run.
+        echo -e "  ${YELLOW}⚠ WARN${NC} $test_name"
+        [[ -n "$message" ]] && echo -e "    ${YELLOW}$message${NC}"
+        TESTS_WARNED=$((TESTS_WARNED + 1))
     else
         echo -e "  ${RED}✗ FAIL${NC} $test_name"
         [[ -n "$message" ]] && echo -e "    ${RED}$message${NC}"
         TESTS_FAILED=$((TESTS_FAILED + 1))
     fi
+    
+    return 0
+}
+
+# Record a check that was deliberately not run.
+skip_test() {
+    local test_name="$1"
+    local message="${2:-not run}"
+    print_test_result "$test_name" "SKIP" "$message"
+    return 0
 }
 
 # Test if file exists and is readable
@@ -225,6 +259,11 @@ test_deployment_prerequisites() {
     fi
     
     # Test if WASM can be built (dry run)
+    if [[ "$OFFLINE" -eq 1 ]]; then
+        skip_test "Contract Build Check" "cargo check not run in --offline mode"
+        return 0
+    fi
+    
     if cargo check -p "$contract_name" --target wasm32-unknown-unknown 2>/dev/null; then
         print_test_result "Contract Build Check" "PASS" "Contract can be built"
     else
@@ -290,6 +329,8 @@ generate_report() {
     echo "Total Tests: $TESTS_TOTAL"
     echo -e "Passed: ${GREEN}$TESTS_PASSED${NC}"
     echo -e "Failed: ${RED}$TESTS_FAILED${NC}"
+    echo -e "Warnings: ${YELLOW}$TESTS_WARNED${NC}"
+    echo -e "Skipped: ${BLUE}$TESTS_SKIPPED${NC}"
     
     local success_rate=0
     if [[ $TESTS_TOTAL -gt 0 ]]; then
@@ -299,7 +340,15 @@ generate_report() {
     echo "Success Rate: $success_rate%"
     
     if [[ $TESTS_FAILED -eq 0 ]]; then
-        echo -e "\n${GREEN}🎉 All tests passed!${NC}"
+        if [[ "$OFFLINE" -eq 1 && $TESTS_SKIPPED -gt 0 ]]; then
+            echo -e "\n${GREEN}✅ All executed checks passed.${NC}"
+            echo -e "${BLUE}$TESTS_SKIPPED check(s) were skipped because --offline was set.${NC}"
+            echo -e "${BLUE}This is NOT a full validation: connectivity, Soroban CLI config,${NC}"
+            echo -e "${BLUE}identity, environment variables and cargo build were not verified.${NC}"
+            echo -e "${BLUE}Run without --offline to check those.${NC}"
+        else
+            echo -e "\n${GREEN}🎉 All tests passed!${NC}"
+        fi
         return 0
     else
         echo -e "\n${RED}❌ Some tests failed. Please review the issues above.${NC}"
@@ -317,8 +366,8 @@ run_validation() {
     echo
     
     # Basic file tests
-    test_file_exists "$NETWORKS_CONFIG" "Network Configuration File"
-    test_toml_syntax "$NETWORKS_CONFIG"
+    test_file_exists "$NETWORKS_CONFIG" "Network Configuration File" || true
+    test_toml_syntax "$NETWORKS_CONFIG" || true
     
     # Network tests
     local networks=("local" "testnet" "futurenet" "mainnet")
@@ -329,27 +378,44 @@ run_validation() {
     for net in "${networks[@]}"; do
         echo
         print_step "Testing network: $net"
-        test_network_config_completeness "$net"
-        test_network_connectivity "$net"
-        test_soroban_config "$net"
-        test_security_configurations "$net"
+        # `|| true` on every check: with `set -e` a single failing check used to
+        # abort the whole script, so the report below never printed and a
+        # config with several problems only ever showed the first one. Failures
+        # are counted and surfaced by generate_report instead.
+        test_network_config_completeness "$net" || true
+        if [[ "$OFFLINE" -eq 1 ]]; then
+            skip_test "Network $net - Connectivity" "no network access in --offline mode"
+            skip_test "Soroban Config - $net" "no local Soroban config in --offline mode"
+        else
+            test_network_connectivity "$net" || true
+            test_soroban_config "$net" || true
+        fi
+        test_security_configurations "$net" || true
     done
     
     # Identity tests
     echo
     print_step "Testing identity configuration"
-    test_identity_config "$identity"
+    if [[ "$OFFLINE" -eq 1 ]]; then
+        skip_test "Identity $identity" "no local Soroban keyring in --offline mode"
+    else
+        test_identity_config "$identity" || true
+    fi
     
     # Environment tests
     echo
     print_step "Testing environment configuration"
-    test_environment_variables
+    if [[ "$OFFLINE" -eq 1 ]]; then
+        skip_test "Environment variables" "not checked in --offline mode"
+    else
+        test_environment_variables || true
+    fi
     
     # Deployment tests (if contract specified)
     if [[ -n "$contract" ]]; then
         echo
         print_step "Testing deployment prerequisites for: $contract"
-        test_deployment_prerequisites "$contract" "${network:-testnet}"
+        test_deployment_prerequisites "$contract" "${network:-testnet}" || true
     fi
     
     # Generate report
@@ -367,6 +433,11 @@ Options:
     --network <name>       Validate specific network (default: all networks)
     --contract <name>      Validate deployment prerequisites for contract
     --identity <name>      Validate specific identity (default: default)
+    --offline              Only run checks that need nothing but this repository.
+                           Skips RPC connectivity, the local Soroban CLI config and
+                           keyring, environment variables and the cargo build check.
+                           Intended for CI. Reports skips separately and still fails
+                           on any check that did run and failed.
     --help                 Show this help message
 
 Examples:
@@ -374,6 +445,7 @@ Examples:
     $0 --network testnet                 # Validate testnet only
     $0 --network mainnet --contract medical_records  # Validate mainnet deployment for medical_records
     $0 --contract medical_records --identity alice    # Validate deployment with specific identity
+    $0 --offline                          # Repository-only checks, for CI
 
 EOF
 }
@@ -393,6 +465,10 @@ parse_arguments() {
             --identity)
                 IDENTITY="$2"
                 shift 2
+                ;;
+            --offline)
+                OFFLINE=1
+                shift
                 ;;
             --help|--help|-h)
                 show_help

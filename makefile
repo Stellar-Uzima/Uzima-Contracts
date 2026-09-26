@@ -12,6 +12,7 @@
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 .PHONY: check-gates check-everything gates-list check-node-deps check-paths
+.PHONY: check-multi-tenant-config check-network-config
 
 ##@ General
 
@@ -337,6 +338,17 @@ bench: ## Run cargo benchmarks
 profile: ## Profile contract build times
 	@echo "Profiling build times..."
 	cargo build --timings
+
+##@ Config
+
+check-multi-tenant-config: ## Validate config/multi_tenant.json (#1613)
+	@bash scripts/validate_multi_tenant_config.sh
+
+# --offline: skips RPC connectivity, the local soroban config/keyring,
+# environment variables and the cargo build check. Use the bare script when
+# you want those verified locally.
+check-network-config: ## Validate config/networks.toml, repo-only checks (#1613)
+	@bash scripts/validate_network_config.sh --offline
 
 ##@ WASM Size
 

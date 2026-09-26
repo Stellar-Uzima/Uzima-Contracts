@@ -45,10 +45,32 @@
       "why": "Two paths differing only in case build on macOS and fail on Linux."
     },
     {
+      "id": "multi-tenant-config",
+      "tier": "structure",
+      "command": "bash scripts/validate_multi_tenant_config.sh",
+      "requires": [
+        "bash",
+        "python3"
+      ],
+      "why": "A tenant that extends a missing _default, or names a contract that does not exist, only fails at deploy time."
+    },
+    {
+      "id": "network-config",
+      "tier": "structure",
+      "command": "bash scripts/validate_network_config.sh --offline",
+      "requires": [
+        "bash",
+        "python3"
+      ],
+      "why": "networks.toml drives every deploy. --offline, because the full run needs live RPC, a soroban keyring and a cargo build that CI does not have."
+    },
+    {
       "id": "events",
       "tier": "schema",
       "npm": "events:validate",
-      "requires": ["node_modules"],
+      "requires": [
+        "node_modules"
+      ],
       "why": "Event definitions drive indexing; drift here is a silent data bug."
     },
     {
