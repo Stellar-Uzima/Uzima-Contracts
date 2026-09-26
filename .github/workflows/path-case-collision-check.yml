@@ -1,0 +1,31 @@
+name: Path Case Collision Check
+
+# No `paths` filter on purpose: the invariant is a property of the tree as a
+# whole, and a filter would let a collision slip in through a path the filter
+# happens not to match. The job is a single stdlib script over the index, so
+# running it on every push and PR costs a few seconds.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-case-collisions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject tracked paths that collide case-insensitively
+        run: python3 scripts/check_path_case_collisions.py

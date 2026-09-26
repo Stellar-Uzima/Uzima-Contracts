@@ -13,6 +13,9 @@ soroban-sdk = "21.7.7"
 upgradeability = { path = "../upgradeability" }
 medical_records = { path = "../medical_records" }
 governance_commons = { path = "../../libs/governance_commons" }
+# Canonical ICD-10/CPT mapping (issue #1629). The seed catalog used to be a
+# ~950-line literal block in src/icd_cpt_codes.rs, visible only to this crate.
+icd_cpt = { path = "../../libs/icd_cpt" }
 
 [dev-dependencies]
 soroban-sdk = { version = "21.7.7", features = ["testutils"] }
