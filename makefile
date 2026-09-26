@@ -12,6 +12,7 @@
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 .PHONY: check-gates check-everything gates-list check-node-deps check-paths
+.PHONY: generate-dashboard-data check-dashboard-data
 
 ##@ General
 
@@ -327,6 +328,14 @@ bench: ## Run cargo benchmarks
 profile: ## Profile contract build times
 	@echo "Profiling build times..."
 	cargo build --timings
+
+##@ Dashboard
+
+generate-dashboard-data: ## Regenerate committed dashboard data (#1640)
+	@./scripts/generate_dashboard_data.sh
+
+check-dashboard-data: ## Fail if committed dashboard data is stale (#1640)
+	@python3 scripts/check_dashboard_data.py
 
 ##@ WASM Size
 
