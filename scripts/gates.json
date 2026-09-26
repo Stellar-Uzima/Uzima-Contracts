@@ -45,6 +45,15 @@
       "why": "Two paths differing only in case build on macOS and fail on Linux."
     },
     {
+      "id": "arch-doc",
+      "tier": "structure",
+      "command": "python3 scripts/check_architecture_doc_drift.py",
+      "requires": [
+        "python3"
+      ],
+      "why": "The architecture doc's excluded-contract table is generated from Cargo.toml; this stops the two drifting apart again."
+    },
+    {
       "id": "events",
       "tier": "schema",
       "npm": "events:validate",

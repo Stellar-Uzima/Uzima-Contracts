@@ -12,6 +12,7 @@
 .PHONY: canary-dry-run canary-deploy canary-full
 .PHONY: coverage-gate coverage-gate-report coverage-gate-update test-coverage-gate
 .PHONY: check-gates check-everything gates-list check-node-deps check-paths
+.PHONY: check-architecture-doc
 .PHONY: generate-dashboard-data check-dashboard-data
 
 ##@ General
@@ -346,6 +347,9 @@ generate-dashboard-data: ## Regenerate committed dashboard data (#1640)
 
 check-dashboard-data: ## Fail if committed dashboard data is stale (#1640)
 	@python3 scripts/check_dashboard_data.py
+
+check-architecture-doc: ## Fail if SYSTEM_ARCHITECTURE.md disagrees with Cargo.toml (#1603)
+	@python3 scripts/check_architecture_doc_drift.py
 
 ##@ WASM Size
 
