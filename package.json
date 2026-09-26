@@ -27,7 +27,10 @@
     "drift:check:schema": "bash scripts/check_drift.sh --schema",
     "drift:check:docs": "bash scripts/check_drift.sh --docs",
     "trace:validate": "node scripts/trace/validate-trace-ndjson.mjs --file schemas/trace/samples/valid_extractor.ndjson",
-    "trace:check": "node scripts/trace/trace-selfcheck.mjs"
+    "trace:check": "node scripts/trace/trace-selfcheck.mjs",
+    "gates:list": "node scripts/run-gates.mjs --list",
+    "check:gates": "node scripts/run-gates.mjs --tier fast",
+    "check:everything": "node scripts/run-gates.mjs --tier full"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^14.4.3",

@@ -1,0 +1,118 @@
+{
+  "$comment": [
+    "Single source of truth for the order in which repository gates run.",
+    "Consumed by scripts/run-gates.mjs, which backs both `make check-gates` /",
+    "`make check-everything` and `npm run check:gates` / `npm run check:everything`.",
+    "Do not reorder casually: the tiers are ordered cheapest-and-most-selective",
+    "first so a bad change fails in seconds rather than after a release build.",
+    "See docs/DEVELOPMENT_CHECKS.md for the rationale."
+  ],
+  "tiers": [
+    {
+      "id": "structure",
+      "summary": "Shape of the change itself. Pure text/JSON, no compiler needed."
+    },
+    {
+      "id": "schema",
+      "summary": "Do the declared interfaces and event/trace schemas parse and agree?"
+    },
+    {
+      "id": "artifacts",
+      "summary": "Source changed but a committed generated artifact did not."
+    },
+    {
+      "id": "toolchain",
+      "summary": "Rust correctness. Needs cargo, but no build of the contracts."
+    },
+    {
+      "id": "build",
+      "summary": "Measures real build output. Needs a release build first."
+    }
+  ],
+  "gates": [
+    {
+      "id": "template",
+      "tier": "structure",
+      "npm": "template:check",
+      "requires": ["bash"],
+      "why": "A malformed contract scaffold is cheaper to catch than anything downstream."
+    },
+    {
+      "id": "path-case",
+      "tier": "structure",
+      "command": "python3 scripts/check_path_case_collisions.py",
+      "requires": ["python3"],
+      "why": "Two paths differing only in case build on macOS and fail on Linux."
+    },
+    {
+      "id": "events",
+      "tier": "schema",
+      "npm": "events:validate",
+      "requires": ["node_modules"],
+      "why": "Event definitions drive indexing; drift here is a silent data bug."
+    },
+    {
+      "id": "interfaces",
+      "tier": "schema",
+      "npm": "interface:check",
+      "requires": ["node_modules"],
+      "why": "Catches interface drift before it is baked into generated SDK types."
+    },
+    {
+      "id": "trace",
+      "tier": "schema",
+      "npm": "trace:check",
+      "requires": ["node_modules"],
+      "why": "The trace tooling validates the fixtures other gates rely on."
+    },
+    {
+      "id": "compat",
+      "tier": "artifacts",
+      "npm": "compat:check",
+      "requires": ["node_modules"],
+      "why": "ABI and SDK type drift are breaking for integrators, not just noisy."
+    },
+    {
+      "id": "api-docs",
+      "tier": "artifacts",
+      "npm": "api-docs:check",
+      "requires": ["node_modules"],
+      "why": "Generated API docs drift silently because nothing imports them."
+    },
+    {
+      "id": "drift",
+      "tier": "artifacts",
+      "command": "bash scripts/check_drift.sh --all",
+      "requires": ["bash"],
+      "why": "Schemas and registries are hand-maintained next to generated docs."
+    },
+    {
+      "id": "fmt",
+      "tier": "toolchain",
+      "command": "cargo fmt --all -- --check",
+      "requires": ["cargo"],
+      "why": "Cheapest possible rejection once we are already paying for cargo."
+    },
+    {
+      "id": "lint",
+      "tier": "toolchain",
+      "command": "cargo clippy --all-targets --all-features -- -D warnings && bash scripts/check_error_codes.sh",
+      "requires": ["cargo", "bash"],
+      "why": "Clippy plus the repo's error-code convention."
+    },
+    {
+      "id": "deadcode",
+      "tier": "toolchain",
+      "npm": "deadcode:scan",
+      "requires": ["bash"],
+      "why": "Unused dependencies inflate every WASM size budget downstream."
+    },
+    {
+      "id": "budgets",
+      "tier": "build",
+      "npm": "budget:check",
+      "requires": ["node_modules", "release_wasm"],
+      "why": "Last, because it is the only gate that measures compiled output."
+    }
+  ]
+}
