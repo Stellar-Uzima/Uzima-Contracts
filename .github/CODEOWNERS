@@ -98,6 +98,10 @@ scripts/               @Stellar-Uzima/maintainers
 Cargo.toml             @Stellar-Uzima/maintainers
 rust-toolchain.toml    @Stellar-Uzima/maintainers
 
+# Every contract directory has an explicit owner; more-specific entries above
+# retain their existing ownership and risk classification.
+contracts/*/           @Stellar-Uzima/maintainers
+
 # ── Fallback — anything else not listed above ─────────────────────────────────
 # Default to maintainers for safety; change to a more specific team as needed.
 *                       @Stellar-Uzima/maintainers

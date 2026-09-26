@@ -14,6 +14,7 @@ Thank you for your interest in contributing to Stellar Uzima. This guide explain
 - [Testing Requirements](#testing-requirements)
 - [Documentation Standards](#documentation-standards)
 - [Review Expectations](#review-expectations)
+- [Issue Triage and Review Routing](#issue-triage-and-review-routing)
 - [Pull Request Process](#pull-request-process)
 - [Event Topic Naming Convention](#event-topic-naming-convention)
 - [Security Guidelines](#security-guidelines)
@@ -438,6 +439,8 @@ See [docs/contract-review-checklist.md](docs/contract-review-checklist.md) for t
 - `[question]` - Clarification needed
 
 See [docs/CODE_REVIEW_PROCESS.md](docs/CODE_REVIEW_PROCESS.md) for the full review process including timelines, escalation, and approval requirements.
+
+For issue labels, response targets, and contract ownership coverage, follow the [Issue Triage and Review Routing Guide](docs/ISSUE_TRIAGE_AND_REVIEW_ROUTING.md).
 
 ---
 

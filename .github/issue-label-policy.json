@@ -1,0 +1,31 @@
+{
+  "description": "Canonical labels for issue intake and triage. Prefixes keep the taxonomy compact and searchable.",
+  "labels": [
+    "area/contracts",
+    "area/deployment",
+    "area/ci",
+    "area/sdk",
+    "area/docs",
+    "area/security",
+    "area/governance",
+    "kind/bug",
+    "kind/feature",
+    "kind/docs",
+    "kind/question",
+    "kind/maintenance",
+    "priority/p0",
+    "priority/p1",
+    "priority/p2",
+    "priority/p3",
+    "state/needs-triage",
+    "state/accepted",
+    "state/blocked"
+  ],
+  "priority_response_hours": {
+    "priority/p0": 24,
+    "priority/p1": 72,
+    "priority/p2": 168
+  },
+  "default_labels": ["state/needs-triage"],
+  "note": "P3 is reviewed during the next planned backlog/release review; it has no fixed response-hour target."
+}
