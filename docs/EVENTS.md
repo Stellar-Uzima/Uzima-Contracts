@@ -3,7 +3,7 @@
 This document is auto-generated from on-chain event emissions found in `contracts/**/src/**/*.rs`.
 
 - Registry format version: `1.0.0`
-- Generated at: `2026-09-26T16:40:54.444Z`
+- Generated at: `2026-09-26T17:48:11.321Z`
 
 ## access_control
 
@@ -115,20 +115,20 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `AUDIT` · `AUTH_DENY` | tuple (2) | `contracts/audit/src/lib.rs:867` |
-| `AUDIT` · `ENFRET` | tuple (2) | `contracts/audit/src/lib.rs:452` |
-| `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/lib.rs:542` |
+| `AUDIT` · `AUTH_DENY` | tuple (2) | `contracts/audit/src/lib.rs:869` |
+| `AUDIT` · `ENFRET` | tuple (2) | `contracts/audit/src/lib.rs:454` |
+| `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/lib.rs:544` |
 | `AUDIT` · `EXPORT` | tuple (3) | `contracts/audit/src/vec.rs:317` |
-| `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/lib.rs:266` |
+| `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/lib.rs:268` |
 | `AUDIT` · `GRANT` | tuple (2) | `contracts/audit/src/vec.rs:226` |
-| `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/lib.rs:138` |
+| `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/lib.rs:140` |
 | `AUDIT` · `LOG` | tuple (3) | `contracts/audit/src/vec.rs:97` |
-| `AUDIT` · `POLICY` | tuple (2) | `contracts/audit/src/lib.rs:918` |
-| `AUDIT` · `PURGE` | tuple (2) | `contracts/audit/src/lib.rs:410` |
-| `AUDIT` · `RETPOL` | tuple (3) | `contracts/audit/src/lib.rs:321` |
-| `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/lib.rs:281` |
+| `AUDIT` · `POLICY` | tuple (2) | `contracts/audit/src/lib.rs:920` |
+| `AUDIT` · `PURGE` | tuple (2) | `contracts/audit/src/lib.rs:412` |
+| `AUDIT` · `RETPOL` | tuple (3) | `contracts/audit/src/lib.rs:323` |
+| `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/lib.rs:283` |
 | `AUDIT` · `REVOKE` | tuple (2) | `contracts/audit/src/vec.rs:241` |
-| `Init` | single (1) | `contracts/audit/src/lib.rs:77` |
+| `Init` | single (1) | `contracts/audit/src/lib.rs:79` |
 | `Init` | single (1) | `contracts/audit/src/vec.rs:56` |
 | `audit` · `entry` | tuple (4) | `contracts/audit/src/batch_audit.rs:88` |
 | `audit` · `flushed` | tuple (2) | `contracts/audit/src/batch_audit.rs:97` |
@@ -358,9 +358,9 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `dp` · `budget` | tuple (3) | `contracts/differential_privacy/src/lib.rs:150` |
-| `dp` · `gaussian` | tuple (3) | `contracts/differential_privacy/src/lib.rs:285` |
-| `dp` · `laplace` | tuple (3) | `contracts/differential_privacy/src/lib.rs:217` |
+| `dp` · `budget` | tuple (3) | `contracts/differential_privacy/src/lib.rs:168` |
+| `dp` · `gaussian` | tuple (3) | `contracts/differential_privacy/src/lib.rs:337` |
+| `dp` · `laplace` | tuple (3) | `contracts/differential_privacy/src/lib.rs:254` |
 
 ## digital_twin
 
@@ -532,8 +532,8 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `TierPurchased` | tuple (3) | `contracts/healthcare_data_marketplace/src/lib.rs:688` |
-| `settled` | tuple (3) | `contracts/healthcare_data_marketplace/src/lib.rs:497` |
+| `TierPurchased` | tuple (3) | `contracts/healthcare_data_marketplace/src/lib.rs:690` |
+| `settled` | tuple (3) | `contracts/healthcare_data_marketplace/src/lib.rs:499` |
 
 ## healthcare_oracle_network
 
@@ -633,6 +633,7 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
+| `dev_off` · `IoT` | tuple (2) | `contracts/iot_device_management/src/events.rs:104` |
 | `dev_reg` · `IoT` | tuple (3) | `contracts/iot_device_management/src/events.rs:16` |
 | `dev_sts` · `IoT` | tuple (3) | `contracts/iot_device_management/src/events.rs:28` |
 | `fw_pub` · `IoT` | tuple (3) | `contracts/iot_device_management/src/events.rs:40` |
@@ -792,11 +793,11 @@ This document is auto-generated from on-chain event emissions found in `contract
 | `CONSENT` · `JURISDICT` | tuple (3) | `contracts/patient_consent_management/src/events.rs:50` |
 | `CONSENT` · `POLICY` | tuple (2) | `contracts/patient_consent_management/src/events.rs:58` |
 | `CONSENT` · `REVOKE` | tuple (3) | `contracts/patient_consent_management/src/events.rs:11` |
-| `Paused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:539` |
-| `ProxyConsentGranted` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:854` |
-| `ProxyConsentRevoked` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:876` |
-| `ProxyDesignated` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:817` |
-| `Unpaused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:550` |
+| `Paused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:541` |
+| `ProxyConsentGranted` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:856` |
+| `ProxyConsentRevoked` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:878` |
+| `ProxyDesignated` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:819` |
+| `Unpaused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:552` |
 
 ## patient_gamification
 
@@ -840,18 +841,18 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `phs` · `alert_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:591` |
-| `phs` · `amr_alert` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1216` |
-| `phs` · `amr_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:782` |
-| `phs` · `auto_alrt` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1129` |
-| `phs` · `colab_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:954` |
-| `phs` · `cov_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:661` |
-| `phs` · `env_alert` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1174` |
-| `phs` · `env_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:725` |
-| `phs` · `intv_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:894` |
-| `phs` · `model_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:533` |
-| `phs` · `out_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:463` |
-| `phs` · `sdoh_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:831` |
+| `phs` · `alert_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:593` |
+| `phs` · `amr_alert` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1218` |
+| `phs` · `amr_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:784` |
+| `phs` · `auto_alrt` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1131` |
+| `phs` · `colab_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:956` |
+| `phs` · `cov_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:663` |
+| `phs` · `env_alert` | tuple (2) | `contracts/public_health_surveillance/src/lib.rs:1176` |
+| `phs` · `env_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:727` |
+| `phs` · `intv_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:896` |
+| `phs` · `model_crt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:535` |
+| `phs` · `out_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:465` |
+| `phs` · `sdoh_rpt` | tuple (3) | `contracts/public_health_surveillance/src/lib.rs:833` |
 
 ## regional_node_manager
 

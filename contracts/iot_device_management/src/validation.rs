@@ -6,6 +6,7 @@ const MAX_STRING_LEN: u32 = 256;
 const MIN_STRING_LEN: u32 = 1;
 const MAX_LOCATION_LEN: u32 = 512;
 const MAX_MODEL_LEN: u32 = 128;
+const MAX_STALE_SWEEP_BATCH: u32 = 20;
 
 #[must_use]
 pub fn validate_string(s: &String, min: u32, max: u32) -> Result<(), Error> {
@@ -43,6 +44,16 @@ pub fn validate_location(s: &String) -> Result<(), Error> {
 pub fn validate_metric_value(value: u32, max: u32) -> Result<(), Error> {
     if value > max {
         return Err(Error::InvalidMetricValue);
+    }
+    Ok(())
+}
+
+/// Stale-device sweeps are caller-bounded so a single invocation can never
+/// walk an unbounded number of devices in one ledger transaction.
+#[must_use]
+pub fn validate_sweep_batch(len: u32) -> Result<(), Error> {
+    if len > MAX_STALE_SWEEP_BATCH {
+        return Err(Error::StaleSweepTooLarge);
     }
     Ok(())
 }

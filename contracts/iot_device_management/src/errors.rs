@@ -45,6 +45,8 @@ pub enum Error {
     DeviceSuspended = 824,
     DowngradeNotAllowed = 825,
     DeviceOffline = 826,
+    HeartbeatWindowTooShort = 827,
+    StaleSweepTooLarge = 828,
 }
 
 impl core::fmt::Display for Error {
@@ -80,6 +82,10 @@ impl core::fmt::Display for Error {
             Error::DeviceSuspended => write!(f, "device suspended"),
             Error::DowngradeNotAllowed => write!(f, "downgrade not allowed"),
             Error::DeviceOffline => write!(f, "device offline"),
+            Error::HeartbeatWindowTooShort => {
+                write!(f, "heartbeat window must exceed the minimum heartbeat interval")
+            },
+            Error::StaleSweepTooLarge => write!(f, "stale sweep batch too large"),
         }
     }
 }

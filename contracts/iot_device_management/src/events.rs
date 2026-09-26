@@ -94,3 +94,15 @@ pub fn emit_unpaused(env: &Env, admin: &Address) {
     env.events()
         .publish(("IoT", symbol_short!("unpause")), admin.clone());
 }
+
+pub fn emit_heartbeat_window(env: &Env, window_secs: u64) {
+    env.events()
+        .publish(("IoT", symbol_short!("hb_win")), window_secs);
+}
+
+pub fn emit_device_stale(env: &Env, device_id: &BytesN<32>, last_heartbeat: u64) {
+    env.events().publish(
+        ("IoT", symbol_short!("dev_off")),
+        (device_id.clone(), last_heartbeat),
+    );
+}

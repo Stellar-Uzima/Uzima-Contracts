@@ -1,6 +1,6 @@
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger};
-use soroban_sdk::{Address, BytesN, Env, String};
+use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 fn setup(env: &Env) -> (IoTDeviceManagementClient<'_>, Address) {
     let contract_id = Address::generate(env);
@@ -674,4 +674,394 @@ fn test_get_suggestion_returns_expected_hint() {
         get_suggestion(Error::ContractPaused),
         symbol_short!("RE_TRY_L")
     );
+}
+
+// ============================================================
+// HEARTBEAT WINDOW + STALE DEVICE ALERTING (issue #1623)
+// ============================================================
+
+#[test]
+fn test_heartbeat_window_default() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    assert_eq!(client.get_heartbeat_window(), 900);
+}
+
+#[test]
+fn test_set_heartbeat_window() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    client.set_heartbeat_window(&admin, &300u64);
+    assert_eq!(client.get_heartbeat_window(), 300);
+}
+
+#[test]
+fn test_set_heartbeat_window_rejects_shorter_than_min_interval() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    // Default HeartbeatMinInterval is 60s, so a 60s window would let a
+    // compliant device be flagged stale before it could report again.
+    let result = client.try_set_heartbeat_window(&admin, &60u64);
+    assert_eq!(result, Err(Ok(Error::HeartbeatWindowTooShort)));
+    let result = client.try_set_heartbeat_window(&admin, &30u64);
+    assert_eq!(result, Err(Ok(Error::HeartbeatWindowTooShort)));
+    // The rejected writes must not have changed the stored window.
+    assert_eq!(client.get_heartbeat_window(), 900);
+}
+
+#[test]
+fn test_set_heartbeat_window_requires_admin() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let stranger = Address::generate(&env);
+    let result = client.try_set_heartbeat_window(&stranger, &300u64);
+    assert_eq!(result, Err(Ok(Error::NotAdmin)));
+    assert_eq!(client.get_heartbeat_window(), 900);
+}
+
+#[test]
+fn test_active_device_without_heartbeat_is_stale() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    // Activated but has never reported in.
+    assert_eq!(client.get_device(&device_id).last_heartbeat, 0);
+    assert!(client.is_device_stale(&device_id));
+}
+
+#[test]
+fn test_fresh_heartbeat_is_not_stale() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &90u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
+
+    assert!(!client.is_device_stale(&device_id));
+
+    // Boundary: staleness is strictly "silence greater than the window",
+    // so a device exactly at the window is still healthy.
+    env.ledger().with_mut(|li| li.timestamp = 1900);
+    assert!(!client.is_device_stale(&device_id));
+
+    env.ledger().with_mut(|li| li.timestamp = 1901);
+    assert!(client.is_device_stale(&device_id));
+}
+
+#[test]
+fn test_stale_threshold_follows_configured_window() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &90u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
+
+    // Tighten the window to 120s: stale at 1121 rather than 1901.
+    client.set_heartbeat_window(&admin, &120u64);
+    env.ledger().with_mut(|li| li.timestamp = 1120);
+    assert!(!client.is_device_stale(&device_id));
+    env.ledger().with_mut(|li| li.timestamp = 1121);
+    assert!(client.is_device_stale(&device_id));
+}
+
+#[test]
+fn test_suspended_device_is_never_stale() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    // Report in first so health is Healthy, making the assertion below about
+    // the sweep leaving health untouched rather than about the default.
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &90u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
+    client.suspend_device(&operator, &device_id);
+
+    // A suspended device is expected to be silent, so it must not alert.
+    env.ledger().with_mut(|li| li.timestamp = 100_000);
+    assert!(!client.is_device_stale(&device_id));
+    let ids = vec![&env, &device_id];
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 0);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Healthy
+    );
+}
+
+#[test]
+fn test_sweep_marks_stale_device_offline() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 100_000);
+    let ids = vec![&env, &device_id];
+    // Devices are registered with health_status Offline, so this also proves
+    // the first alert is not suppressed by the pre-existing Offline value.
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 1);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Offline
+    );
+}
+
+#[test]
+fn test_sweep_is_idempotent() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 100_000);
+    let ids = vec![&env, &device_id];
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 1);
+    // A second sweep must not re-flag or re-alert an already-offline device.
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 0);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Offline
+    );
+}
+
+#[test]
+fn test_sweep_skips_fresh_devices() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &90u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
+
+    env.ledger().with_mut(|li| li.timestamp = 1100);
+    let ids = vec![&env, &device_id];
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 0);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Healthy
+    );
+}
+
+#[test]
+fn test_new_heartbeat_clears_offline_flag() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    env.ledger().with_mut(|li| li.timestamp = 1000);
+    let ids = vec![&env, &device_id];
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 1);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Offline
+    );
+
+    // The device comes back and reports in; it must not stay offline.
+    let metrics_ref = String::from_str(&env, "m");
+    client.submit_heartbeat(
+        &operator,
+        &device_id,
+        &HealthStatus::Healthy,
+        &90u32,
+        &80u32,
+        &0u32,
+        &metrics_ref,
+    );
+    assert!(!client.is_device_stale(&device_id));
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Healthy
+    );
+
+    // A second, distinct outage after that heartbeat must alert again rather
+    // than be swallowed by the first alert.
+    env.ledger().with_mut(|li| li.timestamp = 1_000 + 901);
+    assert!(client.is_device_stale(&device_id));
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 1);
+    assert_eq!(
+        client.get_device(&device_id).health_status,
+        HealthStatus::Offline
+    );
+    // ...and still be deduplicated while that same outage persists.
+    assert_eq!(client.sweep_stale_devices(&operator, &ids), 0);
+}
+
+#[test]
+fn test_sweep_rejects_oversized_batch() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+
+    let mut ids = Vec::new(&env);
+    for i in 0..21u8 {
+        ids.push_back(make_bytes32(&env, i));
+    }
+    let result = client.try_sweep_stale_devices(&operator, &ids);
+    assert_eq!(result, Err(Ok(Error::StaleSweepTooLarge)));
+}
+
+#[test]
+fn test_sweep_accepts_maximum_batch_size() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+
+    let mut ids = Vec::new(&env);
+    for i in 0..20u8 {
+        ids.push_back(make_bytes32(&env, i));
+    }
+    // Size 20 is allowed; it then fails on the unregistered id, not the bound.
+    let result = client.try_sweep_stale_devices(&operator, &ids);
+    assert_eq!(result, Err(Ok(Error::DeviceNotFound)));
+}
+
+#[test]
+fn test_sweep_rejects_unknown_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+
+    let unknown = make_bytes32(&env, 99);
+    let ids = vec![&env, &unknown];
+    let result = client.try_sweep_stale_devices(&operator, &ids);
+    assert_eq!(result, Err(Ok(Error::DeviceNotFound)));
+}
+
+#[test]
+fn test_is_device_stale_rejects_unknown_device() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let unknown = make_bytes32(&env, 77);
+    let result = client.try_is_device_stale(&unknown);
+    assert_eq!(result, Err(Ok(Error::DeviceNotFound)));
+}
+
+#[test]
+fn test_sweep_requires_operator_role() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let viewer = Address::generate(&env);
+    client.set_role(&admin, &viewer, &Role::Viewer);
+
+    let unknown = make_bytes32(&env, 5);
+    let ids = vec![&env, &unknown];
+    let result = client.try_sweep_stale_devices(&viewer, &ids);
+    assert_eq!(result, Err(Ok(Error::Unauthorized)));
+}
+
+#[test]
+fn test_sweep_rejected_while_paused() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    client.initialize(&admin);
+    let operator = Address::generate(&env);
+    client.set_role(&admin, &operator, &Role::Operator);
+    let mfr_id = register_manufacturer(&env, &client, &admin, 1);
+    let device_id = register_device(&env, &client, &operator, &mfr_id, 10);
+    client.activate_device(&operator, &device_id);
+
+    client.pause(&admin);
+    env.ledger().with_mut(|li| li.timestamp = 100_000);
+    let ids = vec![&env, &device_id];
+    let result = client.try_sweep_stale_devices(&operator, &ids);
+    assert_eq!(result, Err(Ok(Error::ContractPaused)));
+}
+
+#[test]
+fn test_stale_error_codes_are_stable() {
+    assert_eq!(Error::HeartbeatWindowTooShort as u32, 827);
+    assert_eq!(Error::StaleSweepTooLarge as u32, 828);
+    // Pre-existing IoT codes must not shift.
+    assert_eq!(Error::HeartbeatTooFrequent as u32, 822);
+    assert_eq!(Error::DeviceNotActive as u32, 823);
+    assert_eq!(Error::DeviceOffline as u32, 826);
 }
