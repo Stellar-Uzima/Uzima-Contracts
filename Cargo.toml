@@ -11,6 +11,9 @@ members = [
     "tests/integration_framework",
     "tests/upgrade_and_migration_tests",
     "libs/replay_protection",
+    # Pure-data canonical ICD-10/CPT mapping (issue #1629). A member, not just
+    # a path dep, so `cargo test --workspace` runs its catalog invariants.
+    "libs/icd_cpt",
 ]
 
 # Issue #828 audit (see docs/SYSTEM_ARCHITECTURE.md "Excluded Contracts
@@ -92,6 +95,7 @@ soroban-sdk = { version = "=21.7.7" }
 soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
 replay_protection = { path = "libs/replay_protection" }
+icd_cpt = { path = "libs/icd_cpt" }
 xdr_trace = { path = "libs/xdr_trace" }
 common_auth = { path = "contracts/common_auth" }
 # Pre-existing gap (unrelated to issues #1429/#1430/#1431/#1433): these four
