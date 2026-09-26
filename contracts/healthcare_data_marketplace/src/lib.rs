@@ -4,6 +4,8 @@
 
 #[cfg(test)]
 mod test;
+#[cfg(test)]
+mod load_tests;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, BytesN, Env,

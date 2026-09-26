@@ -169,6 +169,33 @@ These directories store deterministic seed files generated when properties fail,
 - **Regression testing**: Failed seeds added to repo are tested in every run
 - **Minimal reproductions**: Proptest shrinks test cases to minimal failing examples
 
+### 3b. Scale / Load Tests (issue #1594)
+
+Property-based tests cover a wide input space at small scale. Load tests cover
+the opposite axis — many correct operations — and live next to the contracts
+they exercise, as `#[cfg(test)]` modules inside each contract crate:
+
+| Contract | File | Coverage |
+|---|---|---|
+| `patient_consent_management` | `src/load_tests.rs` | Consent lifecycle at volume: grant/check/revoke across many providers per patient, `batch_grant_consent`, expiry cleanup, re-grant idempotence |
+| `healthcare_data_marketplace` | `src/load_tests.rs` | Read-heavy workload over a populated catalogue: provider registration, listing creation, repeated browse, missing-key lookups |
+| `medical_records` | `src/load_tests.rs` | Clinical record workflows: many records per patient, many patients per doctor, repeated reads of a large record set |
+
+These are deliberately in the contract crates rather than the top-level `tests/`
+directory. The `uzima-tests` crate does not enable `soroban-sdk/testutils`, so it
+cannot host tests that need `Address::generate` or `mock_all_auths`; the contract
+crates enable that feature in their own dev-dependencies, so their `#[cfg(test)]`
+modules compile and run as part of `cargo test --workspace`.
+
+Routine cases are sized to stay inside a normal test run. The high-volume
+variants are `#[ignore]`d with a reason, matching the existing convention in
+`healthcare_data_marketplace`:
+
+```
+cargo test --workspace                          # routine load tests
+cargo test --workspace -- --ignored             # the #[ignore]d stress cases
+```
+
 ### 4. CI/CD Integration
 
 Created `.github/workflows/proptest-regressions.yml` with two jobs:

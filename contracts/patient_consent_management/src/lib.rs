@@ -39,6 +39,8 @@
 mod test;
 #[cfg(test)]
 mod benchmarks;
+#[cfg(test)]
+mod load_tests;
 
 mod errors;
 mod events;
