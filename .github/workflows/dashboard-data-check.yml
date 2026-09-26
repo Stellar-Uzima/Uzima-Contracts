@@ -1,0 +1,46 @@
+name: Dashboard Data Check
+
+# dashboard/contract_inventory.json and dashboard/risk_matrix.json are generated
+# artifacts, but nothing regenerated or verified them. risk_matrix.json shipped
+# an empty "contracts" array and contract_inventory.json shipped five
+# hand-written sample entries, for a repository of 114 contracts.
+#
+# fetch-depth: 0 is required, not an optimisation. The risk score includes a
+# git-history component (commit count and fix-commit count per contract), so a
+# shallow clone produces different scores and the guard would fail on data that
+# is actually correct.
+#
+# The comparison ignores `generated_at`, which is a wall-clock timestamp.
+#
+# No `paths` filter on purpose: these files are the output, so a change anywhere
+# in contracts/ can invalidate them.
+
+on:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dashboard-data:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the risk score is history-dependent.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Reject stale dashboard data
+        run: python3 scripts/check_dashboard_data.py

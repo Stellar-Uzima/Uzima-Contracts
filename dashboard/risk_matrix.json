@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
   "scoring_weights": {
-    "complexity": 0.30,
-    "history": 0.20,
-    "blast_radius": 0.50
+    "complexity": 0.3,
+    "history": 0.2,
+    "blast_radius": 0.5
   },
   "risk_thresholds": {
     "CRITICAL": 70.0,
@@ -11,5 +11,1146 @@
     "MEDIUM": 20.0,
     "LOW": 0.0
   },
-  "contracts": []
+  "contracts": [
+    {
+      "contract": "access_control",
+      "composite_score": 76.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 33.5,
+        "blast_radius": 80.0
+      }
+    },
+    {
+      "contract": "ai_analytics",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "aml",
+      "composite_score": 96.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 84.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "anomaly_detection",
+      "composite_score": 93.3,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 66.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "anomaly_detector",
+      "composite_score": 92.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 62.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "appointment_booking_escrow",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "audit",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "audit_forensics",
+      "composite_score": 92.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 61.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "batch-rewards",
+      "composite_score": 5.91,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 18.7,
+        "history": 1.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "bridge_dispute_mediation",
+      "composite_score": 80.3,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 1.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "clinical_decision_support",
+      "composite_score": 68.4,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 37.0,
+        "blast_radius": 62.0
+      }
+    },
+    {
+      "contract": "clinical_nlp",
+      "composite_score": 86.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 32.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "clinical_trial",
+      "composite_score": 92.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 61.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "code_ownership",
+      "composite_score": 82.25,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 79.5,
+        "history": 42.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "common_auth",
+      "composite_score": 49.6,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 20.5,
+        "blast_radius": 31.0
+      }
+    },
+    {
+      "contract": "common_error",
+      "composite_score": 45.0,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 50.0,
+        "blast_radius": 10.0
+      }
+    },
+    {
+      "contract": "contract_behavior_fuzzing",
+      "composite_score": 87.3,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 36.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "contract_monitoring",
+      "composite_score": 89.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 47.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "contract_template",
+      "composite_score": 58.41,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 38.7,
+        "history": 41.5,
+        "blast_radius": 77.0
+      }
+    },
+    {
+      "contract": "contract_usage_analytics",
+      "composite_score": 36.08,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 65.6,
+        "history": 32.0,
+        "blast_radius": 20.0
+      }
+    },
+    {
+      "contract": "contract_verification",
+      "composite_score": 72.82,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 50.4,
+        "history": 38.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "credential_notifications",
+      "composite_score": 72.43,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 37.1,
+        "history": 56.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "credential_registry",
+      "composite_score": 87.21,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 89.7,
+        "history": 51.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "cross_chain_access",
+      "composite_score": 89.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 48.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "cross_chain_bridge",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "cross_chain_enhancements",
+      "composite_score": 91.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 59.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "cross_chain_identity",
+      "composite_score": 87.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 35.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "crypto_registry",
+      "composite_score": 94.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 74.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "deprecation_framework",
+      "composite_score": 85.79,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 89.3,
+        "history": 45.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "dicomweb_services",
+      "composite_score": 85.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 27.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "differential_privacy",
+      "composite_score": 88.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 40.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "digital_twin",
+      "composite_score": 83.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 17.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "dispute_resolution",
+      "composite_score": 85.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 28.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "drug_discovery",
+      "composite_score": 86.1,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 30.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "emergency_access_override",
+      "composite_score": 98.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 94.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "emr_integration",
+      "composite_score": 96.1,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 80.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "escrow",
+      "composite_score": 99.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 99.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "explainable_ai",
+      "composite_score": 90.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 51.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "failover_detector",
+      "composite_score": 65.3,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 51.5,
+        "blast_radius": 50.0
+      }
+    },
+    {
+      "contract": "federated_learning",
+      "composite_score": 97.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 89.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "fee",
+      "composite_score": 5.82,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 18.4,
+        "history": 1.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "fhir_integration",
+      "composite_score": 92.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 64.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "fido2_authenticator",
+      "composite_score": 85.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 27.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "forensics",
+      "composite_score": 85.27,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 93.9,
+        "history": 35.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "fp_math",
+      "composite_score": 32.8,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 14.0,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "genomic_data",
+      "composite_score": 91.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 57.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "governor",
+      "composite_score": 97.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 88.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "health_check",
+      "composite_score": 81.11,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 87.7,
+        "history": 24.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "health_data_access_logging",
+      "composite_score": 84.1,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 20.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_analytics_dashboard",
+      "composite_score": 87.3,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 36.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_compliance",
+      "composite_score": 91.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 56.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_compliance_automation",
+      "composite_score": 85.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 28.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_data_conversion",
+      "composite_score": 92.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 61.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_data_marketplace",
+      "composite_score": 85.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 28.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_oracle_network",
+      "composite_score": 93.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 67.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_payment",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "healthcare_reputation",
+      "composite_score": 95.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 77.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "homomorphic_registry",
+      "composite_score": 87.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 38.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "identity_registry",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "ihe_integration",
+      "composite_score": 86.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 32.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "iot_device_management",
+      "composite_score": 93.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 65.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "load_testing",
+      "composite_score": 85.84,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 94.8,
+        "history": 37.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_consent_nft",
+      "composite_score": 93.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 68.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_imaging",
+      "composite_score": 94.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 73.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_imaging_ai",
+      "composite_score": 87.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 35.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_record_backup",
+      "composite_score": 88.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 42.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_record_hash_registry",
+      "composite_score": 82.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 84.0,
+        "blast_radius": 72.0
+      }
+    },
+    {
+      "contract": "medical_record_search",
+      "composite_score": 86.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 32.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medical_records",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "medication_management",
+      "composite_score": 87.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 38.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "mental_health_support",
+      "composite_score": 82.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 11.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "meta_tx_forwarder",
+      "composite_score": 95.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 77.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "mfa",
+      "composite_score": 86.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 32.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "mpc_manager",
+      "composite_score": 88.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 43.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "multi_region_orchestrator",
+      "composite_score": 68.7,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 33.5,
+        "blast_radius": 64.0
+      }
+    },
+    {
+      "contract": "notification_system",
+      "composite_score": 92.3,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 61.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "patient_consent_management",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "patient_gamification",
+      "composite_score": 87.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 38.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "patient_portal",
+      "composite_score": 82.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 11.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "patient_risk_stratification",
+      "composite_score": 81.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 24.0,
+        "blast_radius": 94.0
+      }
+    },
+    {
+      "contract": "payment_router",
+      "composite_score": 24.16,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 17.2,
+        "history": 35.0,
+        "blast_radius": 24.0
+      }
+    },
+    {
+      "contract": "pharma_supply_chain",
+      "composite_score": 91.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 58.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "predictive_analytics",
+      "composite_score": 93.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 69.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "provider_directory",
+      "composite_score": 94.1,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 70.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "public_health_surveillance",
+      "composite_score": 84.4,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 22.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "rbac",
+      "composite_score": 95.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 79.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "regional_node_manager",
+      "composite_score": 58.4,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 37.0,
+        "blast_radius": 42.0
+      }
+    },
+    {
+      "contract": "regulatory_compliance",
+      "composite_score": 62.98,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 33.6,
+        "history": 32.0,
+        "blast_radius": 93.0
+      }
+    },
+    {
+      "contract": "remote_patient_monitoring",
+      "composite_score": 95.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 78.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "reputation",
+      "composite_score": 31.47,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 26.9,
+        "history": 27.0,
+        "blast_radius": 36.0
+      }
+    },
+    {
+      "contract": "reputation_access_control",
+      "composite_score": 93.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 68.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "reputation_integration",
+      "composite_score": 89.6,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 91.0,
+        "history": 61.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "rewards",
+      "composite_score": 5.82,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 18.4,
+        "history": 1.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "runtime_validation",
+      "composite_score": 89.7,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 48.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "sanitization",
+      "composite_score": 36.1,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 30.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "secure_enclave",
+      "composite_score": 67.48,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 46.6,
+        "history": 17.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "shared_consent_policy",
+      "composite_score": 18.06,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 59.2,
+        "history": 1.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "shared_types",
+      "composite_score": 9.25,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 22.5,
+        "history": 12.5,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "spending-categories",
+      "composite_score": 51.57,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 25.9,
+        "history": 1.5,
+        "blast_radius": 87.0
+      }
+    },
+    {
+      "contract": "spending-limits",
+      "composite_score": 53.28,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 31.6,
+        "history": 1.5,
+        "blast_radius": 87.0
+      }
+    },
+    {
+      "contract": "spending-rules",
+      "composite_score": 29.55,
+      "risk_tier": "MEDIUM",
+      "metrics": {
+        "complexity": 51.5,
+        "history": 3.0,
+        "blast_radius": 27.0
+      }
+    },
+    {
+      "contract": "storage_cleanup",
+      "composite_score": 84.8,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 24.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "storage_migration",
+      "composite_score": 71.18,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 68.6,
+        "history": 3.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "sut_token",
+      "composite_score": 98.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 92.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "sync_manager",
+      "composite_score": 90.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 54.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "telemedicine",
+      "composite_score": 90.2,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 51.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "test-helpers",
+      "composite_score": 1.29,
+      "risk_tier": "LOW",
+      "metrics": {
+        "complexity": 2.3,
+        "history": 3.0,
+        "blast_radius": 0.0
+      }
+    },
+    {
+      "contract": "timelock",
+      "composite_score": 47.67,
+      "risk_tier": "HIGH",
+      "metrics": {
+        "complexity": 68.9,
+        "history": 100.0,
+        "blast_radius": 14.0
+      }
+    },
+    {
+      "contract": "token_sale",
+      "composite_score": 94.5,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 72.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "treasury_controller",
+      "composite_score": 99.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 99.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "upgrade_manager",
+      "composite_score": 87.57,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 83.9,
+        "history": 62.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "upgradeability",
+      "composite_score": 94.9,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 74.5,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "zk_verifier",
+      "composite_score": 91.05,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 97.5,
+        "history": 59.0,
+        "blast_radius": 100.0
+      }
+    },
+    {
+      "contract": "zkp_registry",
+      "composite_score": 100.0,
+      "risk_tier": "CRITICAL",
+      "metrics": {
+        "complexity": 100.0,
+        "history": 100.0,
+        "blast_radius": 100.0
+      }
+    }
+  ]
 }

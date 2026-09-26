@@ -1,78 +1,1259 @@
 {
-  "generated_at": "2026-07-25T00:00:00Z",
+  "generated_at": "2026-09-26T17:05:40Z",
   "project": "Uzima-Contracts",
-  "note": "This is a sample/template inventory file showing the expected output format. Run ./scripts/contract_inventory.sh to generate a live inventory.",
-  "contracts": [
-    {
-      "name": "contract-template",
-      "path": "contracts/contract_template",
-      "version": "0.1.0",
-      "dependencies": [
-        "soroban-sdk",
-        "governance_commons"
-      ],
-      "wasm_target": true,
-      "health": {
-        "can_build": true,
-        "has_tests": true,
-        "has_docs": true
-      }
-    },
-    {
-      "name": "medical-records",
-      "path": "contracts/medical_records",
-      "version": "0.1.0",
-      "dependencies": [
-        "soroban-sdk"
-      ],
-      "wasm_target": true,
-      "health": {
-        "can_build": true,
-        "has_tests": true,
-        "has_docs": false
-      }
-    },
-    {
-      "name": "patient-consent-management",
-      "path": "contracts/patient_consent_management",
-      "version": "0.1.0",
-      "dependencies": [
-        "soroban-sdk"
-      ],
-      "wasm_target": true,
-      "health": {
-        "can_build": true,
-        "has_tests": true,
-        "has_docs": true
-      }
-    },
-    {
-      "name": "provider-directory",
-      "path": "contracts/provider_directory",
-      "version": "0.1.0",
-      "dependencies": [
-        "soroban-sdk"
-      ],
-      "wasm_target": true,
-      "health": {
-        "can_build": true,
-        "has_tests": true,
-        "has_docs": true
-      }
-    },
-    {
-      "name": "medical-record-search",
-      "path": "contracts/medical_record_search",
-      "version": "0.1.0",
-      "dependencies": [
-        "soroban-sdk"
-      ],
-      "wasm_target": true,
-      "health": {
-        "can_build": true,
-        "has_tests": true,
-        "has_docs": false
-      }
+  "contracts": [{
+    "name": "access_control",
+    "path": "contracts/access_control",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
     }
-  ]
+  },{
+    "name": "ai_analytics",
+    "path": "contracts/ai_analytics",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "aml",
+    "path": "contracts/aml",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","upgradeability","governance_commons.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "anomaly_detection",
+    "path": "contracts/anomaly_detection",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_error"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "anomaly_detector",
+    "path": "contracts/anomaly_detector",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "appointment_booking_escrow",
+    "path": "contracts/appointment_booking_escrow",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","upgradeability","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "audit_forensics",
+    "path": "contracts/audit_forensics",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "audit",
+    "path": "contracts/audit",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "batch-rewards",
+    "path": "contracts/batch-rewards",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","shared-types"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": false
+    }
+  },{
+    "name": "bridge_dispute_mediation",
+    "path": "contracts/bridge_dispute_mediation",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "clinical_decision_support",
+    "path": "contracts/clinical_decision_support",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "clinical_nlp",
+    "path": "contracts/clinical_nlp",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","upgradeability","medical_records","governance_commons","icd_cpt"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "clinical_trial",
+    "path": "contracts/clinical_trial",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "code_ownership",
+    "path": "contracts/code_ownership",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "common_auth",
+    "path": "contracts/common_auth",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": false
+    }
+  },{
+    "name": "common_error",
+    "path": "contracts/common_error",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "contract_behavior_fuzzing",
+    "path": "contracts/contract_behavior_fuzzing",
+    "version": "0.1.0",
+    "dependencies": [],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "contract_monitoring",
+    "path": "contracts/contract_monitoring",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "contract-template",
+    "path": "contracts/contract_template",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "contract_usage_analytics",
+    "path": "contracts/contract_usage_analytics",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "contract_verification",
+    "path": "contracts/contract_verification",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "credential_notifications",
+    "path": "contracts/credential_notifications",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "credential_registry",
+    "path": "contracts/credential_registry",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "cross_chain_access",
+    "path": "contracts/cross_chain_access",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","replay_protection"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "cross_chain_bridge",
+    "path": "contracts/cross_chain_bridge",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","replay_protection","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "cross_chain_enhancements",
+    "path": "contracts/cross_chain_enhancements",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","replay_protection"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "cross_chain_identity",
+    "path": "contracts/cross_chain_identity",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","replay_protection"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "crypto_registry",
+    "path": "contracts/crypto_registry",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "deprecation_framework",
+    "path": "contracts/deprecation_framework",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "dicomweb-services",
+    "path": "contracts/dicomweb_services",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","common_auth"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "differential_privacy",
+    "path": "contracts/differential_privacy",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "digital_twin",
+    "path": "contracts/digital_twin",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons","upgradeability"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "dispute_resolution",
+    "path": "contracts/dispute_resolution",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "drug_discovery",
+    "path": "contracts/drug_discovery",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","common_error"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "emergency_access_override",
+    "path": "contracts/emergency_access_override",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "emr_integration",
+    "path": "contracts/emr_integration",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "escrow",
+    "path": "contracts/escrow",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "explainable_ai",
+    "path": "contracts/explainable_ai",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "failover-detector",
+    "path": "contracts/failover_detector",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "federated_learning",
+    "path": "contracts/federated_learning",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "fee",
+    "path": "contracts/fee",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","shared-types"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": false
+    }
+  },{
+    "name": "fhir_integration",
+    "path": "contracts/fhir_integration",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "fido2_authenticator",
+    "path": "contracts/fido2_authenticator",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "forensics",
+    "path": "contracts/forensics",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "fp-math",
+    "path": "contracts/fp_math",
+    "version": "0.1.0",
+    "dependencies": [],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "genomic_data",
+    "path": "contracts/genomic_data",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","common_error","upgradeability","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "governor",
+    "path": "contracts/governor",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "health_check",
+    "path": "contracts/health_check",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","common_error"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "health_data_access_logging",
+    "path": "contracts/health_data_access_logging",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_analytics_dashboard",
+    "path": "contracts/healthcare_analytics_dashboard",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_compliance_automation",
+    "path": "contracts/healthcare_compliance_automation",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_compliance",
+    "path": "contracts/healthcare_compliance",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_data_conversion",
+    "path": "contracts/healthcare_data_conversion",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_data_marketplace",
+    "path": "contracts/healthcare_data_marketplace",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_oracle_network",
+    "path": "contracts/healthcare_oracle_network",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_payment",
+    "path": "contracts/healthcare_payment",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "healthcare_reputation",
+    "path": "contracts/healthcare_reputation",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "homomorphic_registry",
+    "path": "contracts/homomorphic_registry",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","common_auth"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "identity_registry",
+    "path": "contracts/identity_registry",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons","uzima-sanitization"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "ihe_integration",
+    "path": "contracts/ihe_integration",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "iot_device_management",
+    "path": "contracts/iot_device_management",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "load_testing",
+    "path": "contracts/load_testing",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_consent_nft",
+    "path": "contracts/medical_consent_nft",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_imaging_ai",
+    "path": "contracts/medical_imaging_ai",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_imaging",
+    "path": "contracts/medical_imaging",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_record_backup",
+    "path": "contracts/medical_record_backup",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_record_hash_registry",
+    "path": "contracts/medical_record_hash_registry",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons","upgradeability"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_record_search",
+    "path": "contracts/medical_record_search",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medical_records",
+    "path": "contracts/medical_records",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","common_error","upgradeability"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "medication_management",
+    "path": "contracts/medication_management",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "mental_health_support",
+    "path": "contracts/mental_health_support",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "meta_tx_forwarder",
+    "path": "contracts/meta_tx_forwarder",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "mfa",
+    "path": "contracts/mfa",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "mpc_manager",
+    "path": "contracts/mpc_manager",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "multi-region-orchestrator",
+    "path": "contracts/multi_region_orchestrator",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "notification_system",
+    "path": "contracts/notification_system",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "patient_consent_management",
+    "path": "contracts/patient_consent_management",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","upgradeability"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "patient_gamification",
+    "path": "contracts/patient_gamification",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "patient_portal",
+    "path": "contracts/patient_portal",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "patient_risk_stratification",
+    "path": "contracts/patient_risk_stratification",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_error"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "payment_router",
+    "path": "contracts/payment_router",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","fp-math"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "pharma_supply_chain",
+    "path": "contracts/pharma_supply_chain",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "predictive_analytics",
+    "path": "contracts/predictive_analytics",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "provider_directory",
+    "path": "contracts/provider_directory",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","uzima-sanitization","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "public_health_surveillance",
+    "path": "contracts/public_health_surveillance",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "rbac",
+    "path": "contracts/rbac",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_error","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "regional-node-manager",
+    "path": "contracts/regional_node_manager",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "regulatory_compliance",
+    "path": "contracts/regulatory_compliance",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "remote_patient_monitoring",
+    "path": "contracts/remote_patient_monitoring",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","upgradeability","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "reputation_access_control",
+    "path": "contracts/reputation_access_control",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "reputation_integration",
+    "path": "contracts/reputation_integration",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","common_auth.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "reputation",
+    "path": "contracts/reputation",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "rewards",
+    "path": "contracts/rewards",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","shared-types"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": false
+    }
+  },{
+    "name": "runtime_validation",
+    "path": "contracts/runtime_validation",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "uzima-sanitization",
+    "path": "contracts/sanitization",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "secure_enclave",
+    "path": "contracts/secure_enclave",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "shared_consent_policy",
+    "path": "contracts/shared_consent_policy",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "shared-types",
+    "path": "contracts/shared_types",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "spending-categories",
+    "path": "contracts/spending-categories",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": false
+    }
+  },{
+    "name": "spending-limits",
+    "path": "contracts/spending-limits",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": false
+    }
+  },{
+    "name": "spending-rules",
+    "path": "contracts/spending-rules",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": false
+    }
+  },{
+    "name": "storage_cleanup",
+    "path": "contracts/storage_cleanup",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "storage_migration",
+    "path": "contracts/storage_migration",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": false,
+      "has_docs": true
+    }
+  },{
+    "name": "sut_token",
+    "path": "contracts/sut_token",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "sync-manager",
+    "path": "contracts/sync_manager",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "telemedicine",
+    "path": "contracts/telemedicine",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "test-helpers",
+    "path": "contracts/test-helpers",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": false
+    }
+  },{
+    "name": "timelock",
+    "path": "contracts/timelock",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "token_sale",
+    "path": "contracts/token_sale",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","fp-math","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "treasury_controller",
+    "path": "contracts/treasury_controller",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk.workspace","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "upgrade-manager",
+    "path": "contracts/upgrade_manager",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","upgradeability","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "upgradeability",
+    "path": "contracts/upgradeability",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk.workspace"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "zk_verifier",
+    "path": "contracts/zk_verifier",
+    "version": "workspace",
+    "dependencies": ["soroban-sdk","common_auth"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  },{
+    "name": "zkp_registry",
+    "path": "contracts/zkp_registry",
+    "version": "0.1.0",
+    "dependencies": ["soroban-sdk","governance_commons"],
+    "wasm_target": true,
+    "health": {
+      "can_build": true,
+      "has_tests": true,
+      "has_docs": true
+    }
+  }]
 }

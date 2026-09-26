@@ -8,13 +8,34 @@ Evaluates Soroban smart contracts across three dimensions:
 3. Blast Radius (Cross-contract calls, authorization depth, TVL/state dependencies)
 """
 
+import argparse
 import json
 import math
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 from typing import Dict, Any
+
+# Single source of truth for the scoring model. These were previously hardcoded
+# inline in evaluate_composite_risk() and separately transcribed into
+# dashboard/risk_matrix.json, so the file and the engine could disagree.
+SCORING_WEIGHTS: Dict[str, float] = {
+    "complexity": 0.30,
+    "history": 0.20,
+    "blast_radius": 0.50,
+}
+
+# Lower bound of each tier, in descending order.
+RISK_THRESHOLDS: Dict[str, float] = {
+    "CRITICAL": 70.0,
+    "HIGH": 40.0,
+    "MEDIUM": 20.0,
+    "LOW": 0.0,
+}
+
+RISK_MATRIX_VERSION = "1.0.0"
 
 
 class ContractRiskAnalyzer:
@@ -72,13 +93,17 @@ class ContractRiskAnalyzer:
         blast_radius = self.compute_blast_radius()
 
         # Weighted calculation: 30% Complexity, 20% History, 50% Blast Radius
-        composite_score = (complexity * 0.30) + (history * 0.20) + (blast_radius * 0.50)
-        
-        if composite_score >= 70.0:
+        composite_score = (
+            (complexity * SCORING_WEIGHTS["complexity"])
+            + (history * SCORING_WEIGHTS["history"])
+            + (blast_radius * SCORING_WEIGHTS["blast_radius"])
+        )
+
+        if composite_score >= RISK_THRESHOLDS["CRITICAL"]:
             risk_tier = "CRITICAL"
-        elif composite_score >= 40.0:
+        elif composite_score >= RISK_THRESHOLDS["HIGH"]:
             risk_tier = "HIGH"
-        elif composite_score >= 20.0:
+        elif composite_score >= RISK_THRESHOLDS["MEDIUM"]:
             risk_tier = "MEDIUM"
         else:
             risk_tier = "LOW"
@@ -95,20 +120,77 @@ class ContractRiskAnalyzer:
         }
 
 
-def analyze_all_contracts(contracts_dir: str = "contracts") -> str:
-    results = []
+def collect_contract_risks(contracts_dir: str = "contracts"):
+    """Score every contract directory. Sorted so output is byte-stable."""
     base_path = Path(contracts_dir)
-    
-    if not base_path.exists():
-        return json.dumps({"error": f"Path {contracts_dir} does not exist"}, indent=2)
 
-    for item in base_path.iterdir():
+    if not base_path.exists():
+        raise FileNotFoundError(f"Path {contracts_dir} does not exist")
+
+    results = []
+    for item in sorted(base_path.iterdir()):
         if item.is_dir() and (item / "Cargo.toml").exists():
             analyzer = ContractRiskAnalyzer(item)
             results.append(analyzer.evaluate_composite_risk())
 
-    return json.dumps(results, indent=2)
+    return results
+
+
+def build_risk_matrix(contracts_dir: str = "contracts") -> Dict[str, Any]:
+    """The dashboard/risk_matrix.json document."""
+    return {
+        "version": RISK_MATRIX_VERSION,
+        "scoring_weights": dict(SCORING_WEIGHTS),
+        "risk_thresholds": dict(RISK_THRESHOLDS),
+        "contracts": collect_contract_risks(contracts_dir),
+    }
+
+
+def analyze_all_contracts(contracts_dir: str = "contracts") -> str:
+    """Backwards-compatible entrypoint: a bare JSON list of scores."""
+    try:
+        return json.dumps(collect_contract_risks(contracts_dir), indent=2)
+    except FileNotFoundError as exc:
+        return json.dumps({"error": str(exc)}, indent=2)
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        description="Score contracts for dashboard/risk_matrix.json."
+    )
+    parser.add_argument(
+        "--contracts-dir",
+        default="contracts",
+        help="Directory holding one subdirectory per contract (default: contracts)",
+    )
+    parser.add_argument(
+        "--out",
+        default=None,
+        help="Write the full risk-matrix document here. Without it, prints a "
+        "bare JSON list as before.",
+    )
+    args = parser.parse_args(argv)
+
+    try:
+        if args.out:
+            matrix = build_risk_matrix(args.contracts_dir)
+            destination = Path(args.out)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(
+                json.dumps(matrix, indent=2) + "\n", encoding="utf-8"
+            )
+            print(
+                f"risk matrix written to {destination} "
+                f"({len(matrix['contracts'])} contracts)"
+            )
+        else:
+            print(analyze_all_contracts(args.contracts_dir))
+    except FileNotFoundError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    return 0
 
 
 if __name__ == "__main__":
-    print(analyze_all_contracts())
+    sys.exit(main())
