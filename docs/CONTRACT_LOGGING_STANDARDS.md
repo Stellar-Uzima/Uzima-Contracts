@@ -307,6 +307,28 @@ Some contracts may have custom event types for domain-specific operations:
 
 These contracts maintain domain-specific event types while adhering to core standards.
 
+## Enforcement
+
+These standards are checked automatically by `scripts/check_events.sh`, which
+audits every non-test Rust source under `contracts/*/src/` and fails when a
+`pub fn` that is neither read-only-prefixed nor allowlisted does not publish an
+event via `env.events().publish(...)`.
+
+```bash
+make check-events      # or: bash scripts/check_events.sh
+```
+
+It runs in CI via the `event-emission-audit` job in
+`.github/workflows/event-emission-check.yml`, and also reports allowlist entries
+that have gone stale — a function that has since been refactored to emit an
+event, or one that no longer exists.
+
+Pre-existing functions that predate this requirement are listed in
+`scripts/allowlists/event_emission.txt`. That list is a record of deferred work,
+not a permanent exemption: a new function must never be added to it. See
+`docs/EVENT_SYSTEM.md` § Event Emission Audit for the detection rules and
+`docs/SECURITY_CHECKLIST.md` § 5 for the underlying requirement.
+
 ## References
 
 - Event system implementation: `contracts/medical_records/src/events.rs`
