@@ -204,6 +204,10 @@ shellcheck: check-deps ## Lint shell scripts with shellcheck
 	shellcheck scripts/*.sh || { echo "Shellcheck found issues—fix them!"; exit 1; }
 	@echo "Shell scripts linted successfully!"
 
+check-config-json: ## Reject malformed JSON in config/ (#1635)
+	@echo "🔍 Parsing config/*.json..."
+	@python3 scripts/check_config_json.py
+
 check: fmt lint test shellcheck ## Run fmt, lint, test, and shellcheck
 	@echo "All checks passed!"
 
