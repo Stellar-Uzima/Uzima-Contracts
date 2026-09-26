@@ -32,9 +32,7 @@ exclude = [
     "contracts/aml",
     "contracts/digital_twin",
     "contracts/forensics",
-    "contracts/aml",
     "contracts/rbac",
-    "contracts/forensics",
     "contracts/federated_learning",
     "contracts/healthcare_oracle_network",
     # dev-dep on ai_analytics which is excluded and uses workspace = true; cannot
@@ -59,7 +57,6 @@ exclude = [
     "contracts/predictive_analytics",
     "contracts/explainable_ai",
     "contracts/sut_token",
-    "contracts/explainable_ai",
     "contracts/medical_record_hash_registry",
     "contracts/runtime_validation",
     "contracts/clinical_decision_support",
@@ -76,18 +73,12 @@ exclude = [
     # medical_records) that cannot be path deps; fuzz regressions are not
     # CI-visible (see #1481).
     "contracts/contract_behavior_fuzzing",
-    # Dev-dep on excluded contracts/ai_analytics (compile bugs) — its tests
-    # cannot build while ai_analytics stays excluded.
-    "contracts/healthcare_analytics_dashboard",
 
     # Non-contract or no-Cargo.toml entries (cannot be workspace members):
     "contracts/governance_integration_tests",
     # Stray source directory — not a crate root (no Cargo.toml):
     "contracts/src",
     "contracts/storage-snapshot",
-    # Fuzz harness: references identity_registry and other contracts not yet
-    # in workspace.dependencies; excluded until those deps are added.
-    "contracts/contract_behavior_fuzzing",
 ] 
 
 [workspace.dependencies]
