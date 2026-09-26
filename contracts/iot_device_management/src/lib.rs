@@ -206,6 +206,12 @@ pub enum DataKey {
     CommChannel(BytesN<32>),   // channel_id -> CommChannel
     DeviceChannel(BytesN<32>), // device_id -> channel_id
     KeyRotationMinInterval,    // u64 seconds
+
+    // Appended for issue #1623. New DataKey variants must be added at the end
+    // of this enum: #[contracttype] enums serialize by variant index, so
+    // inserting here would re-map every subsequent key for live deployments.
+    HeartbeatWindow,          // u64 seconds of silence before a device counts as stale
+    StaleAlert(BytesN<32>),   // device_id -> last_heartbeat value already alerted
 }
 
 // ============================================================
@@ -240,6 +246,11 @@ impl IoTDeviceManagement {
         env.storage()
             .persistent()
             .set(&DataKey::HeartbeatMinInterval, &60u64);
+        // Max silence before an active device is considered stale. Must stay
+        // above HeartbeatMinInterval so a device can always report in time.
+        env.storage()
+            .persistent()
+            .set(&DataKey::HeartbeatWindow, &900u64);
         env.storage()
             .persistent()
             .set(&DataKey::KeyRotationMinInterval, &3600u64);
@@ -1065,6 +1076,124 @@ impl IoTDeviceManagement {
             .persistent()
             .set(&DataKey::HeartbeatMinInterval, &interval_secs);
         Ok(())
+    }
+
+    /// Max silence, in seconds, before an active device is treated as stale.
+    /// Must exceed the minimum heartbeat interval, otherwise a compliant
+    /// device could be flagged stale before it is even allowed to report.
+    pub fn set_heartbeat_window(
+        env: Env,
+        admin: Address,
+        window_secs: u64,
+    ) -> Result<(), Error> {
+        admin.require_auth();
+        Self::require_admin(&env, &admin)?;
+        let min_interval: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::HeartbeatMinInterval)
+            .unwrap_or(60);
+        if window_secs <= min_interval {
+            return Err(Error::HeartbeatWindowTooShort);
+        }
+        env.storage()
+            .persistent()
+            .set(&DataKey::HeartbeatWindow, &window_secs);
+        events::emit_heartbeat_window(&env, window_secs);
+        Ok(())
+    }
+
+    pub fn get_heartbeat_window(env: Env) -> u64 {
+        Self::heartbeat_window(&env)
+    }
+
+    #[must_use]
+    fn heartbeat_window(env: &Env) -> u64 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::HeartbeatWindow)
+            .unwrap_or(900)
+    }
+
+    /// Staleness is evaluated for `Active` devices only: a device in
+    /// `Maintenance` is expected to be silent, and a device that has not been
+    /// activated yet has nothing to report.
+    #[must_use]
+    fn device_is_stale(device: &Device, now: u64, window: u64) -> bool {
+        if device.status != DeviceStatus::Active {
+            return false;
+        }
+        if device.last_heartbeat == 0 {
+            return true;
+        }
+        now.saturating_sub(device.last_heartbeat) > window
+    }
+
+    pub fn is_device_stale(env: Env, device_id: BytesN<32>) -> Result<bool, Error> {
+        let device: Device = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Device(device_id))
+            .ok_or(Error::DeviceNotFound)?;
+        let window = Self::heartbeat_window(&env);
+        Ok(Self::device_is_stale(&device, env.ledger().timestamp(), window))
+    }
+
+    /// Marks stale active devices offline and emits a `dev_off` alert for each
+    /// newly-detected outage. Device IDs are supplied by the caller and the
+    /// batch size is capped, so this never iterates the full device set in one
+    /// transaction.
+    pub fn sweep_stale_devices(
+        env: Env,
+        caller: Address,
+        device_ids: Vec<BytesN<32>>,
+    ) -> Result<u32, Error> {
+        caller.require_auth();
+        Self::check_not_paused(&env)?;
+        Self::require_role(&env, &caller, Role::Operator)?;
+        validation::validate_sweep_batch(device_ids.len())?;
+
+        let now = env.ledger().timestamp();
+        let window = Self::heartbeat_window(&env);
+        let mut flagged = 0u32;
+
+        for device_id in device_ids.iter() {
+            let mut device: Device = env
+                .storage()
+                .persistent()
+                .get(&DataKey::Device(device_id.clone()))
+                .ok_or(Error::DeviceNotFound)?;
+
+            if !Self::device_is_stale(&device, now, window) {
+                continue;
+            }
+
+            // Devices are registered with health_status Offline, so that field
+            // cannot double as "already alerted" -- an activated device that has
+            // never reported would never raise an alert. Deduplicate on the
+            // last_heartbeat value instead: a repeat alert is due only once a
+            // new heartbeat has arrived and the device has gone stale again.
+            let alerted_at: Option<u64> = env
+                .storage()
+                .persistent()
+                .get(&DataKey::StaleAlert(device_id.clone()));
+            if alerted_at == Some(device.last_heartbeat) {
+                continue;
+            }
+
+            device.health_status = HealthStatus::Offline;
+            env.storage()
+                .persistent()
+                .set(&DataKey::Device(device_id.clone()), &device);
+            env.storage().persistent().set(
+                &DataKey::StaleAlert(device_id.clone()),
+                &device.last_heartbeat,
+            );
+            events::emit_device_stale(&env, device_id, device.last_heartbeat);
+            flagged += 1;
+        }
+
+        Ok(flagged)
     }
 
     // ============================================================
