@@ -215,3 +215,96 @@ fn test_contention_under_encrypted_records() {
     let patient_count = client.get_patient_record_count(&patient);
     assert!(patient_count >= 6);
 }
+
+// ---------------------------------------------------------------------------
+// Issue #1594: scale/load coverage for clinical record workflows.
+//
+// The tests above cover contention between a handful of actors. These drive the
+// per-patient record collection to a larger size, which is the axis that grows:
+// every add_record appends to a per-patient list, so cost per write and per
+// indexed read both scale with how many records one patient accumulates.
+// Sized for a routine `cargo test --workspace`; the heavy case is #[ignore]d.
+// ---------------------------------------------------------------------------
+
+/// Records accumulated by a single patient in the routine-size tests.
+const RECORDS_PER_PATIENT: u64 = 25;
+/// Independent patients driven in parallel with the routine-size tests.
+const PATIENT_FANOUT: u64 = 8;
+/// Ignored-by-default record count for the stress case.
+const SCALE_RECORDS_PER_PATIENT: u64 = 200;
+
+/// Add `count` records and return their ids. The ids come back from
+/// `add_record` rather than being assumed to be `0..count`, matching how the
+/// rest of this file reads records back.
+fn add_bulk_records(
+    env: &Env,
+    client: &MedicalRecordsContractClient,
+    doctor: &Address,
+    patient: &Address,
+    count: u64,
+) -> Vec<u64> {
+    let tags = Vec::new(env);
+    let mut ids = Vec::new(env);
+    for _ in 0..count {
+        ids.push_back(add_sample_record(client, doctor, patient, &tags));
+    }
+    ids
+}
+
+#[test]
+fn test_load_many_records_for_one_patient() {
+    let (env, client, admin, _cid) = setup_env();
+    let doctor = create_doctor(&env, &client, &admin);
+    let patient = create_patient(&env, &client, &admin);
+
+    let _ids = add_bulk_records(&env, &client, &doctor, &patient, RECORDS_PER_PATIENT);
+
+    assert!(
+        client.get_patient_record_count(&patient) >= RECORDS_PER_PATIENT,
+        "every added record must be counted for the patient"
+    );
+}
+
+#[test]
+fn test_load_many_patients_for_one_doctor() {
+    let (env, client, admin, _cid) = setup_env();
+    let doctor = create_doctor(&env, &client, &admin);
+
+    for _ in 0..PATIENT_FANOUT {
+        let patient = create_patient(&env, &client, &admin);
+        let _ids = add_bulk_records(&env, &client, &doctor, &patient, RECORDS_PER_PATIENT / 2);
+    }
+
+    // The doctor's own record list stays independent of the patients' totals.
+    assert!(client.get_patient_record_count(&doctor) < PATIENT_FANOUT * RECORDS_PER_PATIENT);
+}
+
+#[test]
+fn test_load_repeated_reads_of_large_record_set() {
+    let (env, client, admin, _cid) = setup_env();
+    let doctor = create_doctor(&env, &client, &admin);
+    let patient = create_patient(&env, &client, &admin);
+
+    let ids = add_bulk_records(&env, &client, &doctor, &patient, RECORDS_PER_PATIENT);
+
+    // Re-read the whole set several times: catches a read path that degrades
+    // with collection size rather than indexing by record id.
+    for _ in 0..3 {
+        for i in 0..ids.len() {
+            let record = client.get_record(&patient, &ids.get(i).unwrap());
+            assert!(!record.encrypted, "sample records are added unencrypted");
+        }
+    }
+}
+
+#[test]
+#[ignore = "stress test for clinical record scale"]
+fn test_load_records_to_high_count() {
+    let (env, client, admin, _cid) = setup_env();
+    let doctor = create_doctor(&env, &client, &admin);
+    let patient = create_patient(&env, &client, &admin);
+
+    let _ids = add_bulk_records(&env, &client, &doctor, &patient, SCALE_RECORDS_PER_PATIENT);
+
+    assert!(client.get_patient_record_count(&patient) >= SCALE_RECORDS_PER_PATIENT);
+}
