@@ -3,7 +3,7 @@
 This document is auto-generated from on-chain event emissions found in `contracts/**/src/**/*.rs`.
 
 - Registry format version: `1.0.0`
-- Generated at: `2026-09-14T09:18:57.373Z`
+- Generated at: `2026-09-26T16:40:54.444Z`
 
 ## access_control
 
@@ -518,6 +518,16 @@ This document is auto-generated from on-chain event emissions found in `contract
 | `consent_revoked` | tuple (3) | `contracts/healthcare_compliance/src/lib.rs:546` |
 | `health_check` | tuple (2) | `contracts/healthcare_compliance/src/lib.rs:406` |
 
+## healthcare_compliance_automation
+
+| Topics | Payload | Source |
+|---|---:|---|
+| `hca` · `ctl_add` | tuple (2) | `contracts/healthcare_compliance_automation/src/lib.rs:259` |
+| `hca` · `ctl_rec` | tuple (3) | `contracts/healthcare_compliance_automation/src/lib.rs:301` |
+| `hca` · `eval` | tuple (3) | `contracts/healthcare_compliance_automation/src/lib.rs:384` |
+| `hca` · `fw_add` | single (1) | `contracts/healthcare_compliance_automation/src/lib.rs:210` |
+| `hca` · `init` | single (1) | `contracts/healthcare_compliance_automation/src/lib.rs:166` |
+
 ## healthcare_data_marketplace
 
 | Topics | Payload | Source |
@@ -696,17 +706,17 @@ This document is auto-generated from on-chain event emissions found in `contract
 
 | Topics | Payload | Source |
 |---|---:|---|
-| `COMP` · `CREATE` | tuple (2) | `contracts/medical_records/src/lib.rs:7469` |
-| `COMP` · `GRANT` | tuple (2) | `contracts/medical_records/src/lib.rs:7512` |
-| `COMP` · `REVOKE` | tuple (2) | `contracts/medical_records/src/lib.rs:7587` |
-| `EXPORT` · `DATA` | tuple (3) | `contracts/medical_records/src/lib.rs:5497` |
-| `LOG` | single (1) | `contracts/medical_records/src/lib.rs:1195` |
+| `COMP` · `CREATE` | tuple (2) | `contracts/medical_records/src/lib.rs:7470` |
+| `COMP` · `GRANT` | tuple (2) | `contracts/medical_records/src/lib.rs:7513` |
+| `COMP` · `REVOKE` | tuple (2) | `contracts/medical_records/src/lib.rs:7588` |
+| `EXPORT` · `DATA` | tuple (3) | `contracts/medical_records/src/lib.rs:5498` |
+| `LOG` | single (1) | `contracts/medical_records/src/lib.rs:1196` |
 | `PAUSED` | single (1) | `contracts/medical_records/src/events.rs:235` |
-| `RECORD` · `ATTACH` | tuple (3) | `contracts/medical_records/src/lib.rs:7686` |
-| `SCH_BREAK` | tuple (6) | `contracts/medical_records/src/lib.rs:7860` |
-| `SCH_EVO` | tuple (7) | `contracts/medical_records/src/lib.rs:7914` |
-| `SCH_REG` | tuple (4) | `contracts/medical_records/src/lib.rs:7825` |
-| `TradRecAdded` | tuple (5) | `contracts/medical_records/src/lib.rs:7068` |
+| `RECORD` · `ATTACH` | tuple (3) | `contracts/medical_records/src/lib.rs:7687` |
+| `SCH_BREAK` | tuple (6) | `contracts/medical_records/src/lib.rs:7861` |
+| `SCH_EVO` | tuple (7) | `contracts/medical_records/src/lib.rs:7915` |
+| `SCH_REG` | tuple (4) | `contracts/medical_records/src/lib.rs:7826` |
+| `TradRecAdded` | tuple (5) | `contracts/medical_records/src/lib.rs:7069` |
 
 ## medication_management
 
@@ -782,11 +792,11 @@ This document is auto-generated from on-chain event emissions found in `contract
 | `CONSENT` · `JURISDICT` | tuple (3) | `contracts/patient_consent_management/src/events.rs:50` |
 | `CONSENT` · `POLICY` | tuple (2) | `contracts/patient_consent_management/src/events.rs:58` |
 | `CONSENT` · `REVOKE` | tuple (3) | `contracts/patient_consent_management/src/events.rs:11` |
-| `Paused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:537` |
-| `ProxyConsentGranted` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:852` |
-| `ProxyConsentRevoked` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:874` |
-| `ProxyDesignated` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:815` |
-| `Unpaused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:548` |
+| `Paused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:539` |
+| `ProxyConsentGranted` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:854` |
+| `ProxyConsentRevoked` | tuple (3) | `contracts/patient_consent_management/src/lib.rs:876` |
+| `ProxyDesignated` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:817` |
+| `Unpaused` | tuple (2) | `contracts/patient_consent_management/src/lib.rs:550` |
 
 ## patient_gamification
 
