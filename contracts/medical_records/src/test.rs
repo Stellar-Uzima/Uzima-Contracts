@@ -5,7 +5,8 @@
 use super::*;
 use common_error::CommonError;
 use crate::errors::Error;
-use patient_consent_management::{PatientConsentManagement, PatientConsentManagementClient};
+use crate::consent_client::PatientConsentManagementClient;
+use patient_consent_management::PatientConsentManagement;
 
 // external crates
 use soroban_sdk::testutils::{Address as _, Events, Ledger};
