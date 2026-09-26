@@ -51,7 +51,17 @@ let hasErrors = false;
 files.forEach(file => {
   if (file.endsWith('.json') && file !== 'schema.json') {
     const configFile = path.join(configDir, file);
-    const config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    // A malformed file must not abort the loop: report it and keep validating
+    // the rest, otherwise one truncated config hides every other finding
+    // (#1635 committed an 11-byte `config/health_alerts.json`).
+    let config;
+    try {
+      config = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    } catch (error) {
+      console.error(`Parse error in ${configFile}: ${error.message}`);
+      hasErrors = true;
+      return;
+    }
     const mergedConfig = mergeConfig(config);
 
     const valid = validate(mergedConfig);
