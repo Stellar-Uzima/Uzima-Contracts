@@ -57,7 +57,9 @@
       "id": "events",
       "tier": "schema",
       "npm": "events:validate",
-      "requires": ["node_modules"],
+      "requires": [
+        "node_modules"
+      ],
       "why": "Event definitions drive indexing; drift here is a silent data bug."
     },
     {
