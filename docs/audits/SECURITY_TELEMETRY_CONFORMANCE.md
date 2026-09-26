@@ -66,3 +66,39 @@ exempt), not an automatic CI failure.
    consolidate to a single shared dependency.
 3. Once a critical mass of contracts conform, flip the CI check from
    informational to `--strict` (non-zero exit) for new contracts only.
+
+## Follow-up 2, measured (#1586)
+
+Follow-up 2 above asked whether `zkp_registry`'s copy stays in sync with the
+canonical schema. It does not — the two files are not two versions of one
+schema, they are unrelated schemas that share a filename
+(`diff` reports 473 lines vs 259 with no shared body).
+
+| | `contract_monitoring` (canonical) | `zkp_registry` |
+|---|---|---|
+| Topic root | `TEL` | `zkp_telemetry` |
+| Event types | `FN_INVOKE`, `FN_DONE`, `STATE`, `METRIC`, `AUTH_FAIL`, `AUTHZ_FAIL`, `THRESHOLD`, `ANOMALY`, `CFG_CHG` | `TEL_SUB`, `TEL_PASS`, `TEL_FAIL`, `TEL_BATCH`, `TEL_RNG`, `TEL_CRED`, `TEL_RECR`, `TEL_CONS` |
+| `trace_id` | present, derived from top-level caller + ledger sequence | **absent** |
+| `schema_version` | present, packed semver (currently 2.0.0) | **absent** |
+| `severity` / `event_class` | present | **absent** |
+| Storage | emits only | also writes each event to `persistent()` storage |
+
+The two `TelemetryEvent` structs are both `#[contracttype]`, so both serialize
+to XDR, but they are **not** the same type and cannot be decoded by the same
+consumer. Because `zkp_registry` emits no `trace_id` and no `schema_version`,
+its events cannot be joined with conforming events or version-filtered, which
+is exactly the unified-querying break described in #1586. A consumer that
+subscribes to topic `TEL` never sees them at all.
+
+`check_security_telemetry_conformance.sh` now measures this rather than asking
+a reviewer to: its second pass classifies every contract that references the
+telemetry API as `CONFORMS` or `DIVERGENT` and names each missing marker. That
+pass deliberately ignores the security-sensitivity name filter, because
+`zkp_registry` — like `contract_monitoring` — does not match it, so the
+name-filtered pass could never have found this.
+
+Neither contract matches the name heuristic, which is worth noting on its own:
+of the 16 contracts the heuristic does examine, none emits telemetry, while
+both contracts that do emit it are ones it skips. The heuristic's value is
+finding obvious gaps in obvious places, not measuring conformance.
+

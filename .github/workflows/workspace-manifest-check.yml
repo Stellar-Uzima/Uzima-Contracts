@@ -1,0 +1,34 @@
+name: Workspace Manifest Check
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "scripts/check_workspace_manifest.py"
+      - ".github/workflows/workspace-manifest-check.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "scripts/check_workspace_manifest.py"
+      - ".github/workflows/workspace-manifest-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-duplicate-paths:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject duplicate workspace.members / workspace.exclude entries
+        run: python3 scripts/check_workspace_manifest.py

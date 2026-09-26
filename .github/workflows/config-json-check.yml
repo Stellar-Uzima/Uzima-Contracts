@@ -1,0 +1,34 @@
+name: Config JSON Check
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "config/**"
+      - "scripts/check_config_json.py"
+      - ".github/workflows/config-json-check.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "config/**"
+      - "scripts/check_config_json.py"
+      - ".github/workflows/config-json-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  parse-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject malformed JSON in config/
+        run: python3 scripts/check_config_json.py
