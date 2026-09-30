@@ -1,0 +1,43 @@
+name: On-Ramp Ownership Check
+
+# docs/ONRAMP_OWNERSHIP.md lists one row per root Cargo.toml `workspace.exclude`
+# entry. This job fails when the two drift apart, when a row is duplicated or
+# out of order, or when a row is missing a required owner/blocker/status field.
+#
+# Adding to or removing from `exclude` therefore cannot happen without updating
+# the ownership map in the same change.
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "docs/ONRAMP_OWNERSHIP.md"
+      - "scripts/check_onramp_ownership.py"
+      - ".github/workflows/onramp-ownership-check.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "Cargo.toml"
+      - "docs/ONRAMP_OWNERSHIP.md"
+      - "scripts/check_onramp_ownership.py"
+      - ".github/workflows/onramp-ownership-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  no-drift:
+    name: Ownership map matches Cargo.toml exclude list
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject an ownership map that disagrees with Cargo.toml
+        run: python3 scripts/check_onramp_ownership.py

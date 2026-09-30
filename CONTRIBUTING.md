@@ -14,6 +14,8 @@ Thank you for your interest in contributing to Stellar Uzima. This guide explain
 - [Naming Conventions](#naming-conventions)
 - [Testing Requirements](#testing-requirements)
 - [Documentation Standards](#documentation-standards)
+- [Architecture Decision Records](#architecture-decision-records)
+- [Excluded-Contract Ownership](#excluded-contract-ownership)
 - [Review Expectations](#review-expectations)
 - [Issue Triage and Review Routing](#issue-triage-and-review-routing)
 - [Pull Request Process](#pull-request-process)
@@ -391,7 +393,8 @@ For security-sensitive contracts, add fuzz targets under `tests/fuzz/` and prope
 | New public function | Add doc comment on the function |
 | New contract | Create `contracts/<name>/README.md` |
 | New event | Update `schemas/events/` and event docs |
-| Breaking API change | Update `docs/api.md` and `CHANGELOG.md` |
+| Breaking API change | Update `docs/api.md`, `CHANGELOG.md`, and add an [ADR](#architecture-decision-records) |
+| Storage-layout change (`DataKey`, `#[contracttype]`) | Add an [ADR](#architecture-decision-records) |
 | New deployment step | Update `docs/DEPLOYMENT_GUIDE.md` |
 | New error code | Update `docs/ERROR_CODES.md` |
 
@@ -417,6 +420,59 @@ pub fn add_record(...) -> Result<u64, Error> { ... }
 
 ---
 
+## Architecture Decision Records
+
+Significant decisions are recorded as Architecture Decision Records (ADRs) in
+[`docs/adr/`](docs/adr/). The lifecycle, the template, and the full list live
+there; the process is documented in [ADR-PROCESS.md](docs/adr/ADR-PROCESS.md).
+
+**A breaking change requires an ADR in the same pull request.** That means:
+
+- Removing or re-signing an exported contract function (`pub fn` inside `#[contractimpl]`).
+- Removing a `DataKey` enum variant.
+- Removing or renaming a `#[contracttype]` struct field.
+
+Additive changes (a new function, a new `DataKey` variant, a new field) are
+recommended but not required. Copy [`docs/adr/ADR-TEMPLATE.md`](docs/adr/ADR-TEMPLATE.md),
+fill in the **Change Classification** section, and give it the next number.
+
+CI enforces this with `python3 scripts/check_adr_required.py`, which runs on
+every pull request and as part of `make check-gates`. Run it before opening a
+PR:
+
+```bash
+python3 scripts/check_adr_required.py
+```
+
+If the detector is too eager, a maintainer can waive it with
+`--allow-breaking`; the waiver is printed to the CI log. Adoption examples are
+in [`docs/adr/ADOPTION_NOTES.md`](docs/adr/ADOPTION_NOTES.md).
+
+---
+
+## Excluded-Contract Ownership
+
+Contracts listed in the root `Cargo.toml` `workspace.exclude` array are tracked
+one row per contract in [`docs/ONRAMP_OWNERSHIP.md`](docs/ONRAMP_OWNERSHIP.md),
+with an owner, an assignee, the current blocker, and a progress status.
+
+If you pick up an excluded contract, set its row to `in-progress` with your
+handle as the assignee before you start, and `reintegration-ready` when it
+builds and tests against the workspace pin. When a contract is removed from
+`exclude`, regenerate the map so the row is dropped:
+
+```bash
+python3 scripts/check_onramp_ownership.py --write
+python3 scripts/check_onramp_ownership.py   # verify
+```
+
+The check runs in CI whenever `Cargo.toml` or the map changes, so a manifest
+edit that is not reflected in the map fails the build. The three technical
+steps for on-ramping a contract are in
+[docs/SYSTEM_ARCHITECTURE.md](docs/SYSTEM_ARCHITECTURE.md#excluded-contracts-audit-issue-828).
+
+---
+
 ## Review Expectations
 
 ### Before requesting review
@@ -433,6 +489,8 @@ Verify the following before opening or marking a PR ready for review:
 - [ ] Authorization checks are present on all privileged functions
 - [ ] Integer arithmetic uses `checked_*` where overflow is possible
 - [ ] PR description references the relevant issue(s)
+- [ ] Breaking ABI/storage changes include an ADR (see [Architecture Decision Records](#architecture-decision-records))
+- [ ] Excluded-contract changes update `docs/ONRAMP_OWNERSHIP.md`
 
 See [docs/contract-review-checklist.md](docs/contract-review-checklist.md) for the full checklist.
 

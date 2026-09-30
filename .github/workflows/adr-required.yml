@@ -1,0 +1,57 @@
+name: ADR Required
+
+# A breaking contract interface or storage-layout change must arrive with an
+# Architecture Decision Record. The ADR process already described the lifecycle;
+# this job is what makes "required" mean required. It also checks the ADR files
+# themselves (heading, status, date) and that the index in ADR-PROCESS.md lists
+# exactly the ADRs on disk.
+#
+# The `paths` filter is deliberately wider than just docs/adr: a breaking change
+# is detected in contract sources and in the manifest, so those must trigger the
+# job too.
+on:
+  push:
+    branches:
+      - master
+      - main
+    paths:
+      - "contracts/**/src/**"
+      - "docs/adr/**"
+      - "scripts/check_adr_required.py"
+      - ".github/workflows/adr-required.yml"
+  pull_request:
+    branches:
+      - master
+      - main
+    paths:
+      - "contracts/**/src/**"
+      - "docs/adr/**"
+      - "scripts/check_adr_required.py"
+      - ".github/workflows/adr-required.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  adr-required:
+    name: ADR present for breaking changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The check reads contract sources at the merge base, so it needs the
+          # full history rather than the default single-commit checkout.
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Check ADR hygiene, index, and breaking-change coverage
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/check_adr_required.py \
+              --base "${{ github.event.pull_request.base.sha }}" \
+              --head "${{ github.event.pull_request.head.sha }}"
+          else
+            python3 scripts/check_adr_required.py
+          fi

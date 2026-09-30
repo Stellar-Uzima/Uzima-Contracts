@@ -27,6 +27,7 @@ The platform provides a comprehensive solution for modern healthcare data manage
 - [Contribution Guidelines](#contribution-guidelines)
 - [Issue Triage and Review Routing](docs/ISSUE_TRIAGE_AND_REVIEW_ROUTING.md)
 - [Architecture Decision Records](#architecture-decision-records)
+- [Excluded-Contract Ownership Map](#excluded-contract-ownership-map)
 - [Contract Review Checklist](#contract-review-checklist)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#frequently-asked-questions-faq)
@@ -790,8 +791,11 @@ Significant architectural decisions are documented as Architecture Decision Reco
 - **Process**: See [ADR-PROCESS.md](docs/adr/ADR-PROCESS.md) for the full lifecycle
 - **Template**: Use [`ADR-TEMPLATE.md`](docs/adr/ADR-TEMPLATE.md) when proposing new ADRs
 - **Existing ADRs**: ADR-001 through ADR-007 cover platform choice, consent models, governance parameters, and more
+- **Adoption examples**: [ADOPTION_NOTES.md](docs/adr/ADOPTION_NOTES.md)
 
 When to write an ADR: choosing a new technology, changing contract interfaces, modifying governance, introducing cross-contract patterns, or any decision affecting long-term architecture.
+
+**Required for breaking changes.** Removing or re-signing an exported contract function, or removing a `DataKey` variant or `#[contracttype]` field, must be accompanied by an ADR in the same pull request. This is enforced in CI by [`scripts/check_adr_required.py`](scripts/check_adr_required.py) and documented in [CONTRIBUTING.md](CONTRIBUTING.md#architecture-decision-records).
 
 ### Definition of Done
 
@@ -802,6 +806,17 @@ A contribution is complete when:
 - ✅ Documentation is updated
 - ✅ CI/CD pipeline passes
 - ✅ Security review completed (if applicable)
+
+## Excluded-Contract Ownership Map
+
+Contracts deferred via the root `Cargo.toml` `workspace.exclude` list are tracked one row per contract in [`docs/ONRAMP_OWNERSHIP.md`](docs/ONRAMP_OWNERSHIP.md) — owner, assignee, blocker, and progress status — so the [issue #828](https://github.com/Stellar-Uzima/Uzima-Contracts/issues/828) on-ramp backlog has accountable owners.
+
+The row set is generated from `Cargo.toml` and verified by [`scripts/check_onramp_ownership.py`](scripts/check_onramp_ownership.py), which runs in CI whenever the manifest or the map changes:
+
+```bash
+python3 scripts/check_onramp_ownership.py           # verify
+python3 scripts/check_onramp_ownership.py --write   # add/drop/reorder rows
+```
 
 ---
 
