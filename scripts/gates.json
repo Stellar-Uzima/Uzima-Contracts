@@ -54,6 +54,24 @@
       "why": "The architecture doc's excluded-contract table is generated from Cargo.toml; this stops the two drifting apart again."
     },
     {
+      "id": "adr",
+      "tier": "structure",
+      "command": "python3 scripts/check_adr_required.py",
+      "requires": [
+        "python3"
+      ],
+      "why": "A breaking ABI or storage change without an ADR is an undocumented break for every integrator (#1651)."
+    },
+    {
+      "id": "onramp-ownership",
+      "tier": "structure",
+      "command": "python3 scripts/check_onramp_ownership.py",
+      "requires": [
+        "python3"
+      ],
+      "why": "The excluded-contract ownership map is generated from Cargo.toml; this keeps the on-ramp backlog accountable (#1652)."
+    },
+    {
       "id": "events",
       "tier": "schema",
       "npm": "events:validate",

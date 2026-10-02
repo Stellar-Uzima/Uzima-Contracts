@@ -41,8 +41,8 @@ Two aggregate targets compose those gates in a defined order:
 
 | Command | What it runs |
 | --- | --- |
-| `make check-gates` | Every gate that needs no cargo build (8 gates) |
-| `make check-everything` | All of the above, plus `fmt`, `lint`, dead code and budgets (12 gates) |
+| `make check-gates` | Every gate that needs no cargo build (11 gates) |
+| `make check-everything` | All of the above, plus `fmt`, `lint`, dead code and budgets (15 gates) |
 | `make gates-list` | Print the order without running anything |
 
 The same targets are available through npm, so neither entrypoint can drift
@@ -63,7 +63,7 @@ after a release build:
 
 | Tier | Gates | Needs |
 | --- | --- | --- |
-| `structure` | `template`, `path-case` | nothing but `bash` / `python3` |
+| `structure` | `template`, `path-case`, `arch-doc`, `adr`, `onramp-ownership` | nothing but `bash` / `python3` |
 | `schema` | `events`, `interfaces`, `trace` | `npm ci` |
 | `artifacts` | `compat`, `api-docs`, `drift` | `npm ci` |
 | `toolchain` | `fmt`, `lint`, `deadcode` | cargo |

@@ -18,6 +18,28 @@ Write an ADR when:
 - Modifying data retention or purging behavior
 - Any decision that affects the long-term architecture
 
+## When an ADR is Required
+
+Some changes cannot be merged without an ADR. These are the **breaking**
+changes: an integrator or a deployed contract has to do something before the
+change is safe. The distinction matters because "required" is enforced in CI
+(see [Enforcement](#enforcement)), while the list above is review guidance.
+
+| Change | ADR | Why |
+| --- | --- | --- |
+| Removing or re-signing an exported contract function (`pub fn` in a `#[contractimpl]`) | **Required** | Breaks every caller of the contract. |
+| Removing a `DataKey` enum variant | **Required** | Orphans persisted entries and changes the storage layout. |
+| Removing or renaming a field of a `#[contracttype]` struct | **Required** | Changes the serialized shape of stored values. |
+| Removing a `#[contracttype]` type or the `DataKey` enum itself | **Required** | Changes the storage schema. |
+| Adding a function, a `DataKey` variant, or a `#[contracttype]` field | Recommended | Additive and usually backward compatible; record it if the decision is non-obvious. |
+| Internal refactors with no interface or storage change | Not required | Nothing observable changes. |
+
+A change in the left column and the ADR that justifies it belong in the **same
+pull request**. The record is part of the change, not a follow-up.
+
+See [docs/CHANGE_IMPACT_MATRIX.md](../CHANGE_IMPACT_MATRIX.md) for the full
+ABI/storage/migration checklist this rule is drawn from.
+
 ## ADR Lifecycle
 
 ```
@@ -49,9 +71,43 @@ Use the template at `docs/adr/ADR-TEMPLATE.md`.
 4. **Decision**: Once consensus is reached, update the status to "Accepted"
 5. **Merge**: ADR is merged and becomes part of the project record
 
+Where a change is breaking, the ADR is created in step 1 of the *change*
+itself rather than before it: the contract edit and the ADR land together, so
+the reasoning is available to the reviewer at the moment it is needed.
+
+## Enforcement
+
+[`scripts/check_adr_required.py`](../../scripts/check_adr_required.py) turns the
+rules above into a gate. It runs on every pull request
+([`.github/workflows/adr-required.yml`](../../.github/workflows/adr-required.yml))
+and as part of `make check-gates` / `make check-everything`. It checks three
+things:
+
+1. **ADR hygiene** — every numbered ADR has a title, a valid `**Status:**`, and an ISO `**Date:**`.
+2. **Index sync** — the "Existing ADRs" table below lists exactly the ADR files on disk.
+3. **ADR required for breaking changes** — a detected ABI or storage break with no ADR in the change set fails the build.
+
+Run it locally before opening a PR:
+
+```bash
+python3 scripts/check_adr_required.py                 # compare HEAD with origin/main
+python3 scripts/check_adr_required.py --diff-file d.patch
+python3 scripts/check_adr_required.py --allow-breaking  # maintainer waiver, printed to the log
+```
+
+`--allow-breaking` exists for the rare case where the detector is too eager. It
+prints exactly what it waived, so a waiver is a visible line in CI rather than
+a silent skip.
+
 ## File Location
 
-All ADRs live in `docs/adr/`. The index below is auto-maintained.
+All ADRs live in `docs/adr/`. The index below is auto-maintained and verified
+by `scripts/check_adr_required.py`.
+
+## Adoption Notes
+
+Examples of the process in action, including how the requirement was
+introduced, are recorded in [ADOPTION_NOTES.md](ADOPTION_NOTES.md).
 
 ## Existing ADRs
 

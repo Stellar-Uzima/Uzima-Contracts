@@ -354,6 +354,21 @@ check-network-config: ## Validate config/networks.toml, repo-only checks (#1613)
 check-architecture-doc: ## Fail if SYSTEM_ARCHITECTURE.md disagrees with Cargo.toml (#1603)
 	@python3 scripts/check_architecture_doc_drift.py
 
+check-adr: ## Require an ADR for breaking ABI/storage changes (#1651)
+	@python3 scripts/check_adr_required.py
+
+test-adr-gate: ## Run the ADR gate test suite (#1651)
+	@bash tests/adr_required_test.sh
+
+check-onramp-ownership: ## Fail if the on-ramp ownership map disagrees with Cargo.toml (#1652)
+	@python3 scripts/check_onramp_ownership.py
+
+onramp-ownership-write: ## Regenerate the on-ramp ownership map from Cargo.toml (#1652)
+	@python3 scripts/check_onramp_ownership.py --write
+
+test-onramp-ownership: ## Run the on-ramp ownership gate test suite (#1652)
+	@bash tests/onramp_ownership_test.sh
+
 ##@ WASM Size
 
 monitor-wasm: dist ## Monitor WASM contract sizes and trends
