@@ -1,82 +1,4 @@
-#![no_std]
-use soroban_sdk::{contracterror, contracttype, Address, Env, Symbol};
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-#[repr(u32)]
-pub enum PauseError {
-    ContractIsPaused = 100,
-    ContractNotPaused = 101,
-    UnauthorizedAdmin = 102,
-}
-
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PauseState {
-    pub is_paused: bool,
-    pub paused_by: Address,
-    pub paused_at: u64,
-}
-
-pub struct PausableControl;
-
-impl PausableControl {
-    /// Ensures execution is allowed; panics/fails if contract is currently paused
-    pub fn require_not_paused(env: &Env) -> Result<(), PauseError> {
-        if Self::is_paused(env) {
-            return Err(PauseError::ContractIsPaused);
-        }
-        Ok(())
-    }
-
-    /// Reads current contract pause status from instance storage
-    pub fn is_paused(env: &Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&Symbol::new(env, "PAUSED"))
-            .unwrap_or(false)
-    }
-
-    /// Sets contract paused state to true with admin authorization
-    pub fn pause(env: &Env, admin: Address) -> Result<(), PauseError> {
-        admin.require_auth();
-
-        if Self::is_paused(env) {
-            return Err(PauseError::ContractIsPaused);
-        }
-
-        let state = PauseState {
-            is_paused: true,
-            paused_by: admin,
-            paused_at: env.ledger().timestamp(),
-        };
-
-        env.storage().instance().set(&Symbol::new(env, "PAUSED"), &true);
-        env.storage().instance().set(&Symbol::new(env, "PAUSE_STATE"), &state);
-
-        env.events().publish(
-            (Symbol::new(env, "pausable"), Symbol::new(env, "paused")),
-            state,
-        );
-
-        Ok(())
-    }
-
-    /// Restores operational state to unpaused
-    pub fn unpause(env: &Env, admin: Address) -> Result<(), PauseError> {
-        admin.require_auth();
-
-        if !Self::is_paused(env) {
-            return Err(PauseError::ContractNotPaused);
-        }
-
-        env.storage().instance().set(&Symbol::new(env, "PAUSED"), &false);
-
-        env.events().publish(
-            (Symbol::new(env, "pausable"), Symbol::new(env, "unpaused")),
-            env.ledger().timestamp(),
-        );
-
-        Ok(())
-    }
-}
+‹-vë²Šèm©ìvG(ÚÚr×«®ŠÜ¢{kiËmÊ—€uÚŞ²Á'½,¦n‰\¢{kiË^®º+uêâ½à¨§ ¥¢wƒy» £Ú®Øš”J­ÓÚ®Øš”êİ­êk»}©¹·§ºcÚºÇ„®º+
+‰í­§-"ÃÚºÇ×M¢{kiËM¢ÓÚºÇ×MT«­†ŠâÍç@vh§×Mœ¢{kiËmÊ—z¸¯x)hàŞnè¨ö«¶&¥ªnnËk¹ËOjëJÖ­z››ŠÊZºÇnŠ%¦æéjëu¼€uÚŞ²Ênn–®±çZ¶î¸¦æì¶»œ´ö®±¦åx*'¶º%Šje=«¬i¹^
+‰í®‰ÿñ'²êŞ±ì^rëb¢x¬jYhÁçijxœ³÷ÚŠ["}Ê'¶¶œ¶+ººŞÙr¥«¬yÚnmùëz«¢­éè¶–®±ç^ñ'½¬º[Ojëºè®'ÒzWâ²–®±ç^úŞ¶êçºÏjëºè¬*'¶¶œ´‹jëté?ÿô^iÛººŞ×(ÚÚrÚZºÇ¬µ«n±úèšØ^²)à•ãÀQ!LÄ­ç(­Únmùâ²–®±ç^ñ'½º(•éï²Ú+j¢ËZÇ zÔ²™º%=«¬y+Zµä²™º%ìóÀQ!LÄ™ªlµ«^²Ö­z+)jëvéğ­ªh­ö¥±ïÿı'­±Ê'¶¶œ¶–®±çlµ«^¶‹k¹ì"¶š)ÚºØh®,Ú¶*'¦æß–®±ç§¼IïiÙ¢œ]­ë,Eë.–ÓÚºÇ„®º+iÙ¢·ªº*Şjëa‰ô•ø¬¥«¬y×§¾·­º¹Ä®³ÚºÇ„®º+
+‰í­§-"ÃÚºÇ•ëlµ«^=«¬y+Zµè¬¥«¬yÛk¹êZºÇo&š)éjëu«^ù^v«¶)²Ö¦¥éï²Ú+j¢ËZÇ¬zÔ²™º%ìóÀQ!LÄ²Ö­yéïz÷§¶ÊnnX¬…,¦n‰g{§¾–®±¦åy,¦n‰g{§¾–®±çlµ«^:Oÿı¬¶ŠŞ²Š^­«b¢v¥²Ö­zÚ.–®±çi¹·çºzZºÇñ'½§fŠpv·¬±¬º[Ojëºè­§fŠzŞªè«y«­†'ÒzWâ²–®±ç^úŞ¶êçºÏjëºè¬*'¶¶œ´Ú-=«¬yÙ^¶šŞ¾*.°ö®±ä­j×
