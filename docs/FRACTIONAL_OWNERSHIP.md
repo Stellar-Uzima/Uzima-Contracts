@@ -112,3 +112,25 @@ Coverage by area:
 
 Every `Error` variant except `Reentrancy` (covered in
 `src/test_reentrancy.rs`, see the security review) is asserted at least once.
+
+## Fuzz tests (#1786)
+
+`src/fuzz_test.rs` uses `proptest` (the same 1.6 line as the other contract
+fuzz targets). Run it with:
+
+```bash
+PROPTEST_CASES=256 cargo test -p fractional_ownership fuzz_
+```
+
+CI runs it through `scripts/run_contract_fuzz.sh` (`PROPTEST_CASES` defaults to
+40 there).
+
+| Property | What it checks |
+|---|---|
+| `fuzz_random_sequences_match_model` | Random sequences (up to 39 operations) of transfer, list, cancel, buy, deposit and claim over 4 users. Every outcome (success or typed error) must match a plain-Rust model, and after every step: balances match the model, shares sum to the supply, the contract's token balance equals deposits minus claims, and the sum of everything owed never exceeds what the contract holds |
+| `fuzz_extreme_amounts_never_trap` | Boundary and random `i128` values (`MIN`, `-1`, `0`, `1`, `MAX/2`, `MAX`, arbitrary) through every entry point. The result must be success or a typed contract error, never a host trap, which would mean unchecked arithmetic |
+| `fuzz_payout_split_is_pro_rata_and_solvent` | Random supplies, holder splits and deposits. Each holder's payout is at most the exact pro-rata share and at most 2 base units below it, total paid never exceeds the deposit, and dust is bounded by `2 * holders` |
+
+Panic witnesses are written to `contracts/fractional_ownership/proptest-regressions/`
+and replayed first on the next run. The test environment budget is lifted in
+the sequence test because one `Env` serves a whole sequence of calls.

@@ -9,6 +9,9 @@ mod types;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod fuzz_test;
+
 pub use errors::Error;
 pub use types::{DataKey, Listing};
 
