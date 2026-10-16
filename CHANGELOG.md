@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
+- NatSpec documentation for the `fractional_ownership` crate and every public entry point (#1787)
 - Property-based fuzz tests for `fractional_ownership`, run in CI by `scripts/run_contract_fuzz.sh` (#1786)
 - Unit tests for `fractional_ownership` covering every entry point and every error variant (#1785)
 - `contracts/fractional_ownership`: fixed-supply fractional ownership shares with transfers, fixed-price listings and a pro-rata payout pool; error codes reserved in `3000-3099` (base contract for #1785, #1786, #1787, #1788)

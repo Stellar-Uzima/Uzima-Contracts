@@ -1,4 +1,24 @@
 #![no_std]
+//! # FractionalOwnership
+//!
+//! @title FractionalOwnership
+//! @notice Splits ownership of an asset into fungible shares that can be
+//!         transferred, sold on a simple fixed-price order book, and entitled
+//!         to a pro-rata share of payouts (for example rental income).
+//! @dev Amounts are `i128`. Shares are tracked per asset id. Payouts use a
+//!      cumulative "payout index" (payout per share, scaled by
+//!      [`PAYOUT_PRECISION`]) so that deposits cost O(1) regardless of the
+//!      number of holders. A holder's entitlement is settled lazily, always
+//!      before that holder's balance changes.
+//!
+//! ## Rounding
+//! Every division floors, so the contract can never owe more than it holds.
+//! The remainder ("dust", less than one payment-token base unit per deposit
+//! and per settlement) stays in the contract.
+//!
+//! ## Storage
+//! Instance: `Admin`, `PaymentToken`, `AssetCount`.
+//! Persistent: balances, listings, payout index, checkpoints, pending claims.
 
 #[cfg(test)]
 extern crate std;
@@ -17,6 +37,7 @@ pub use types::{DataKey, Listing};
 
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, IntoVal, Val};
 
+/// @notice Fixed-point scale applied to the cumulative payout index.
 pub const PAYOUT_PRECISION: i128 = 1_000_000_000_000;
 
 const LEDGERS_PER_DAY: u32 = 17_280;
@@ -28,6 +49,12 @@ pub struct FractionalOwnership;
 
 #[contractimpl]
 impl FractionalOwnership {
+    /// @notice One-time setup of the contract.
+    /// @dev Requires `admin` authorization. Can only succeed once.
+    /// @param admin Address allowed to create assets.
+    /// @param payment_token Token contract used for purchases and payouts.
+    /// @return `Ok(())` on success.
+    /// @custom:error AlreadyInitialized The contract was already initialized.
     pub fn initialize(env: Env, admin: Address, payment_token: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
@@ -46,6 +73,16 @@ impl FractionalOwnership {
         Ok(())
     }
 
+    /// @notice Create a new fractionalized asset and mint every share to `issuer`.
+    /// @dev Only the admin can call this. Asset ids start at 1 and increase
+    ///      by one per asset. The total supply is fixed at creation.
+    /// @param admin The stored admin; must authorize the call.
+    /// @param issuer Initial holder of all minted shares.
+    /// @param total_shares Total supply of shares, must be positive.
+    /// @return The new asset id.
+    /// @custom:error NotInitialized The contract is not initialized.
+    /// @custom:error Unauthorized `admin` is not the stored admin.
+    /// @custom:error InvalidAmount `total_shares` is zero or negative.
     pub fn create_asset(
         env: Env,
         admin: Address,
@@ -84,6 +121,17 @@ impl FractionalOwnership {
         Ok(asset_id)
     }
 
+    /// @notice Move shares from `from` to `to`.
+    /// @dev Settles both parties' pending payouts first so the transfer never
+    ///      changes what either of them is owed.
+    /// @param from Current holder; must authorize the call.
+    /// @param to Receiver of the shares.
+    /// @param asset_id Asset to transfer.
+    /// @param amount Number of shares, must be positive.
+    /// @custom:error InvalidAmount `amount` is zero or negative.
+    /// @custom:error SelfTransfer `from` equals `to`.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
+    /// @custom:error InsufficientShares `from` holds fewer than `amount`.
     pub fn transfer(
         env: Env,
         from: Address,
@@ -107,6 +155,17 @@ impl FractionalOwnership {
         Ok(())
     }
 
+    /// @notice Offer `amount` shares for sale at a fixed price per share.
+    /// @dev Shares are not escrowed. The seller's balance is re-checked when
+    ///      someone buys. A new listing replaces any earlier one for the same
+    ///      seller and asset.
+    /// @param seller Holder making the offer; must authorize the call.
+    /// @param asset_id Asset being sold.
+    /// @param amount Shares on offer, must be positive and not exceed the balance.
+    /// @param price_per_share Price in payment-token base units, must be positive.
+    /// @custom:error InvalidAmount `amount` or `price_per_share` is not positive.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
+    /// @custom:error InsufficientShares `seller` holds fewer than `amount`.
     pub fn list_shares(
         env: Env,
         seller: Address,
@@ -137,6 +196,10 @@ impl FractionalOwnership {
         Ok(())
     }
 
+    /// @notice Remove the caller's open listing for an asset.
+    /// @param seller Listing owner; must authorize the call.
+    /// @param asset_id Asset whose listing is removed.
+    /// @custom:error NoListing `seller` has no open listing for `asset_id`.
     pub fn cancel_listing(env: Env, seller: Address, asset_id: u64) -> Result<(), Error> {
         seller.require_auth();
         let key = DataKey::Listing(asset_id, seller.clone());
@@ -149,6 +212,23 @@ impl FractionalOwnership {
         Ok(())
     }
 
+    /// @notice Buy shares from a seller's open listing.
+    /// @dev Follows checks-effects-interactions: share balances, payout
+    ///      checkpoints and the listing are updated before the payment token
+    ///      is called. The seller does not need to authorize; the listing is
+    ///      their standing authorization at the listed price.
+    /// @param buyer Purchaser; must authorize the call and pays in the payment token.
+    /// @param seller Holder whose listing is being filled.
+    /// @param asset_id Asset being bought.
+    /// @param amount Shares to buy, must be positive and not exceed the listing.
+    /// @return Total cost paid in payment-token base units.
+    /// @custom:error InvalidAmount `amount` is zero or negative.
+    /// @custom:error SelfTransfer `buyer` equals `seller`.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
+    /// @custom:error NoListing `seller` has no open listing.
+    /// @custom:error ExceedsListing `amount` is larger than the listed amount.
+    /// @custom:error Overflow `amount * price_per_share` overflows `i128`.
+    /// @custom:error InsufficientShares `seller` no longer holds `amount` shares.
     pub fn buy(
         env: Env,
         buyer: Address,
@@ -200,6 +280,17 @@ impl FractionalOwnership {
         Ok(cost)
     }
 
+    /// @notice Add funds to an asset's payout pool, shared pro rata by holders.
+    /// @dev Raises the payout index by `amount * PAYOUT_PRECISION / total_shares`
+    ///      (floored) before pulling the tokens from `depositor`.
+    /// @param depositor Funds source; must authorize the call.
+    /// @param asset_id Asset receiving the payout.
+    /// @param amount Payment-token base units to distribute, must be positive.
+    /// @custom:error InvalidAmount `amount` is zero or negative.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
+    /// @custom:error Overflow The scaled amount or the index overflows `i128`.
+    /// @custom:error PayoutTooSmall The deposit is too small to raise the index
+    ///               (it would be unclaimable), so it is rejected.
     pub fn deposit_payout(
         env: Env,
         depositor: Address,
@@ -231,6 +322,15 @@ impl FractionalOwnership {
         Ok(())
     }
 
+    /// @notice Withdraw everything the caller is owed from an asset's payout pool.
+    /// @dev Settles, zeroes the pending balance, then transfers (checks-
+    ///      effects-interactions).
+    /// @param owner Share holder; must authorize the call and receives the funds.
+    /// @param asset_id Asset to claim from.
+    /// @return Amount paid out in payment-token base units.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
+    /// @custom:error Overflow Settlement arithmetic overflowed.
+    /// @custom:error NothingToClaim Nothing is owed to `owner`.
     pub fn claim_payout(env: Env, owner: Address, asset_id: u64) -> Result<i128, Error> {
         owner.require_auth();
         total_shares_of(&env, asset_id)?;
@@ -248,10 +348,14 @@ impl FractionalOwnership {
         Ok(owed)
     }
 
+    /// @notice The stored admin address.
+    /// @custom:error NotInitialized The contract is not initialized.
     pub fn get_admin(env: Env) -> Result<Address, Error> {
         read_admin(&env)
     }
 
+    /// @notice The token used for purchases and payouts.
+    /// @custom:error NotInitialized The contract is not initialized.
     pub fn get_payment_token(env: Env) -> Result<Address, Error> {
         env.storage()
             .instance()
@@ -259,6 +363,7 @@ impl FractionalOwnership {
             .ok_or(Error::NotInitialized)
     }
 
+    /// @notice Number of assets created so far (also the latest asset id).
     pub fn get_asset_count(env: Env) -> u64 {
         env.storage()
             .instance()
@@ -266,24 +371,31 @@ impl FractionalOwnership {
             .unwrap_or(0)
     }
 
+    /// @notice Fixed total supply of an asset.
+    /// @custom:error AssetNotFound Unknown `asset_id`.
     pub fn get_total_shares(env: Env, asset_id: u64) -> Result<i128, Error> {
         total_shares_of(&env, asset_id)
     }
 
+    /// @notice Shares of `asset_id` held by `owner` (zero if none).
     pub fn get_balance(env: Env, asset_id: u64, owner: Address) -> i128 {
         balance(&env, asset_id, &owner)
     }
 
+    /// @notice The open listing of `seller` for `asset_id`, if any.
     pub fn get_listing(env: Env, asset_id: u64, seller: Address) -> Option<Listing> {
         env.storage()
             .persistent()
             .get(&DataKey::Listing(asset_id, seller))
     }
 
+    /// @notice Cumulative payout per share, scaled by [`PAYOUT_PRECISION`].
     pub fn get_payout_index(env: Env, asset_id: u64) -> i128 {
         payout_index(&env, asset_id)
     }
 
+    /// @notice What `owner` could claim right now, including unsettled accrual.
+    /// @custom:error Overflow Accrual arithmetic overflowed.
     pub fn get_pending_payout(env: Env, asset_id: u64, owner: Address) -> Result<i128, Error> {
         let settled = read_i128(&env, &DataKey::Pending(asset_id, owner.clone()));
         let unsettled = accrued(&env, asset_id, &owner)?;
@@ -339,6 +451,7 @@ fn payout_index(env: &Env, asset_id: u64) -> i128 {
     read_i128(env, &DataKey::PayoutIndex(asset_id))
 }
 
+/// Payout accrued by `owner` since their last checkpoint, not yet settled.
 fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
     let index = payout_index(env, asset_id);
     let checkpoint = read_i128(env, &DataKey::Checkpoint(asset_id, owner.clone()));
@@ -349,6 +462,7 @@ fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
     Ok(bal.checked_mul(index - checkpoint).ok_or(Error::Overflow)? / PAYOUT_PRECISION)
 }
 
+/// Move accrued payout into the pending balance and advance the checkpoint.
 fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
     let owed = accrued(env, asset_id, owner)?;
     if owed > 0 {
@@ -363,6 +477,7 @@ fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
     Ok(())
 }
 
+/// Settle both parties, then move `amount` shares from `from` to `to`.
 fn move_shares(
     env: &Env,
     asset_id: u64,

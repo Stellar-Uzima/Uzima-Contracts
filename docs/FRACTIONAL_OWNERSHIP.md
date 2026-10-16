@@ -134,3 +134,18 @@ CI runs it through `scripts/run_contract_fuzz.sh` (`PROPTEST_CASES` defaults to
 Panic witnesses are written to `contracts/fractional_ownership/proptest-regressions/`
 and replayed first on the next run. The test environment budget is lifted in
 the sequence test because one `Env` serves a whole sequence of calls.
+
+## NatSpec documentation (#1787)
+
+`src/lib.rs` documents the crate and every public entry point with
+NatSpec-style tags inside Rust doc comments, so they also render in `cargo doc`:
+
+| Tag | Used for |
+|---|---|
+| `@title`, `@notice` | One-line purpose of the contract or function |
+| `@dev` | Implementation notes: authorization, ordering, rounding |
+| `@param` | Each argument, with its constraints |
+| `@return` | The returned value |
+| `@custom:error` | Each error the function can return and when |
+
+Module-level notes describe rounding, the payout index and storage layout.
