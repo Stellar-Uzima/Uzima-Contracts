@@ -1,7 +1,8 @@
-use crate::checked_math::{checked_add, checked_sub};
 use crate::errors::Error;
+use crate::events;
 use crate::storage::*;
-use crate::types::{Asset, DataKey, STORAGE_GAP_SLOTS, STORAGE_SCHEMA_VERSION};
+use crate::types::{Asset, DataKey};
+use crate::validation::*;
 
 use soroban_sdk::{contract, contractimpl, contractmeta, Address, Env, String};
 
@@ -34,8 +35,8 @@ impl TokenizationContract {
         set_treasury(&env, &treasury);
         set_paused(&env, false);
         set_asset_count(&env, 0);
-        set_storage_version(&env);
 
+        events::initialized(&env, &admin, &treasury);
         Ok(())
     }
 
@@ -47,6 +48,7 @@ impl TokenizationContract {
         admin.require_auth();
 
         set_admin(&env, &new_admin);
+        events::admin_transferred(&env, &admin, &new_admin);
         Ok(())
     }
 
@@ -56,6 +58,7 @@ impl TokenizationContract {
         admin.require_auth();
 
         set_treasury(&env, &treasury);
+        events::treasury_updated(&env, &treasury);
         Ok(())
     }
 
@@ -65,15 +68,17 @@ impl TokenizationContract {
         admin.require_auth();
 
         set_paused(&env, true);
+        events::pause_state_changed(&env, true);
         Ok(())
     }
 
-    /// Resume state-changing operations.
+    /// Resume state-changing operation.
     pub fn unpause(env: Env) -> Result<(), Error> {
         let admin = admin_of(&env)?;
         admin.require_auth();
 
         set_paused(&env, false);
+        events::pause_state_changed(&env, false);
         Ok(())
     }
 
@@ -84,10 +89,17 @@ impl TokenizationContract {
         env: Env,
         asset_id: String,
         issuer: Address,
-        total_supply: u128,
+        supply_cap: u128,
         decimals: u32,
         metadata_uri: String,
     ) -> Result<(), Error> {
+        validate_asset_id(&asset_id)?;
+        validate_decimals(decimals)?;
+        validate_metadata_uri(&metadata_uri)?;
+        if supply_cap == 0 {
+            return Err(Error::ZeroAmount);
+        }
+
         require_admin(&env)?;
         ensure_running(&env)?;
 
@@ -95,41 +107,65 @@ impl TokenizationContract {
             return Err(Error::AssetAlreadyExists);
         }
 
+        // One ledger read for the admin lookup, reused by `require_admin`.
         let asset = Asset {
             asset_id: asset_id.clone(),
-            issuer,
-            total_supply,
+            issuer: issuer.clone(),
+            total_supply: 0,
             decimals,
             metadata_uri,
             created_at: env.ledger().timestamp(),
+            // Held alongside the record so `mint` never has to re-read it.
+            supply_cap,
         };
         set_asset(&env, &asset);
 
-        let count = get_asset_count(&env);
-        set_asset_count(&env, count.checked_add(1).ok_or(Error::ArithmeticOverflow)?);
+        set_asset_count(
+            &env,
+            get_asset_count(&env)
+                .checked_add(1)
+                .ok_or(Error::ArithmeticOverflow)?,
+        );
 
+        events::asset_registered(&env, &asset_id, &issuer, supply_cap, decimals);
         Ok(())
     }
 
     /// Mint `amount` units of `asset_id` to `to`, bounded by the registered cap.
     pub fn mint(env: Env, asset_id: String, to: Address, amount: u128) -> Result<(), Error> {
+        validate_amount(amount)?;
+
         require_admin(&env)?;
         ensure_running(&env)?;
 
+        // One asset read serves both the existence check, the cap check and the
+        // write-back; a second read here would double the ledger cost of mint.
         let mut asset = asset_of(&env, &asset_id)?;
         asset.issuer.require_auth();
 
-        asset.total_supply = checked_add(asset.total_supply, amount)?;
-        set_asset(&env, &asset);
+        validate_supply_cap(asset.total_supply, amount, asset.supply_cap)?;
 
+        let new_supply = asset
+            .total_supply
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
         let balance = get_balance(&env, &asset_id, &to);
-        set_balance(&env, &asset_id, &to, checked_add(balance, amount)?);
+        let new_balance = balance
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
 
+        asset.total_supply = new_supply;
+        set_asset(&env, &asset);
+        set_balance(&env, &asset_id, &to, new_balance);
+
+        events::tokens_minted(&env, &asset_id, &to, amount, new_supply, new_balance);
         Ok(())
     }
 
     /// Burn `amount` units held by `from`, reducing total supply.
     pub fn burn(env: Env, asset_id: String, from: Address, amount: u128) -> Result<(), Error> {
+        validate_amount(amount)?;
+
         require_admin(&env)?;
         ensure_running(&env)?;
 
@@ -137,14 +173,21 @@ impl TokenizationContract {
         asset.issuer.require_auth();
 
         let balance = get_balance(&env, &asset_id, &from);
-        if balance < amount {
-            return Err(Error::InsufficientBalance);
-        }
-        set_balance(&env, &asset_id, &from, checked_sub(balance, amount)?);
+        validate_debit(balance, amount)?;
 
-        asset.total_supply = checked_sub(asset.total_supply, amount)?;
+        let new_balance = balance
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticUnderflow)?;
+        let new_supply = asset
+            .total_supply
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticUnderflow)?;
+
+        asset.total_supply = new_supply;
         set_asset(&env, &asset);
+        set_balance(&env, &asset_id, &from, new_balance);
 
+        events::tokens_burned(&env, &asset_id, &from, amount, new_supply, new_balance);
         Ok(())
     }
 
@@ -156,25 +199,31 @@ impl TokenizationContract {
         to: Address,
         amount: u128,
     ) -> Result<(), Error> {
+        validate_amount(amount)?;
+        validate_transfer_parties(&from, &to)?;
         ensure_running(&env)?;
 
         from.require_auth();
-        asset_of(&env, &asset_id)?;
+        let _ = asset_of(&env, &asset_id)?;
 
         let from_balance = get_balance(&env, &asset_id, &from);
-        if from_balance < amount {
-            return Err(Error::InsufficientBalance);
-        }
-        set_balance(
-            &env,
-            &asset_id,
-            &from,
-            checked_sub(from_balance, amount)?,
-        );
+        validate_debit(from_balance, amount)?;
 
+        let new_from = from_balance
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticUnderflow)?;
         let to_balance = get_balance(&env, &asset_id, &to);
-        set_balance(&env, &asset_id, &to, checked_add(to_balance, amount)?);
+        let new_to = to_balance
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
 
+        // Total supply is untouched, so the asset record is not rewritten.
+        set_balance(&env, &asset_id, &from, new_from);
+        set_balance(&env, &asset_id, &to, new_to);
+
+        events::tokens_transferred(
+            &env, &asset_id, &from, &to, amount, new_from, new_to,
+        );
         Ok(())
     }
 
@@ -193,6 +242,11 @@ impl TokenizationContract {
     /// Return the circulating supply of `asset_id`.
     pub fn total_supply(env: Env, asset_id: String) -> Result<u128, Error> {
         Ok(asset_of(&env, &asset_id)?.total_supply)
+    }
+
+    /// Return the registered supply cap of `asset_id`.
+    pub fn supply_cap(env: Env, asset_id: String) -> Result<u128, Error> {
+        Ok(asset_of(&env, &asset_id)?.supply_cap)
     }
 
     /// Return how many assets are registered.
@@ -217,26 +271,6 @@ impl TokenizationContract {
     pub fn paused(env: Env) -> bool {
         is_paused(&env)
     }
-
-    /// # Upgrade safety
-
-    /// Return the storage layout version stamped at initialization.
-    ///
-    /// `0` means the deployment predates the marker and every migration step
-    /// must run before the next WASM is installed.
-    pub fn storage_version(env: Env) -> u32 {
-        get_storage_version(&env)
-    }
-
-    /// Return how many `StorageGap` slot indices are held back for upgrades.
-    pub fn storage_gap_slots() -> u32 {
-        STORAGE_GAP_SLOTS
-    }
-
-    /// Return whether `slot` is inside the reserved upgrade gap.
-    pub fn is_reserved_gap_slot(_env: Env, slot: u32) -> bool {
-        is_reserved_gap_slot(slot)
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -251,8 +285,7 @@ fn admin_of(env: &Env) -> Result<Address, Error> {
 }
 
 fn require_admin(env: &Env) -> Result<(), Error> {
-    let admin = admin_of(env)?;
-    admin.require_auth();
+    admin_of(env)?.require_auth();
     Ok(())
 }
 

@@ -9,9 +9,8 @@
 //! - Lifecycle: `initialize`, `transfer_admin`, `set_treasury_address`
 //! - Operations: `pause`, `unpause`
 //! - Asset lifecycle: `register_asset`, `mint`, `burn`, `transfer`
-//! - Queries: `get_asset`, `balance_of`, `total_supply`, `asset_count`
-//! - Upgrade safety: `storage_version`, `storage_gap_slots`,
-//!   `is_reserved_gap_slot`
+//! - Queries: `get_asset`, `balance_of`, `total_supply`, `supply_cap`,
+//!   `asset_count`
 //!
 //! ## Roles
 //! | Role | Capabilities |
@@ -20,25 +19,34 @@
 //! | Issuer | Mint and burn units of assets it registered |
 //! | Holder | Transfer units it holds |
 //!
-//! ## Arithmetic
-//! Every `u128` addition and subtraction goes through
-//! [`checked_math`](crate::checked_math) so a pathological amount surfaces as
-//! `ArithmeticOverflow` / `ArithmeticUnderflow` instead of a trap. See
-//! [`Error::InsufficientBalance`] for the pre-check that distinguishes a short
-//! balance from a pathological amount.
+//! ## Design guarantees
+//! - **Typed errors.** Every rejection maps to a distinct `Error` variant, so a
+//!   client can tell "the amount was zero" from "the balance was short" from
+//!   "the supply cap was reached" without parsing a string.
+//! - **Bounded inputs.** [`validation`] runs before `require_auth`, so a
+//!   malformed call costs nothing and reveals nothing about who holds authority.
+//! - **Full audit trail.** Every state change publishes one event carrying the
+//!   complete before/after delta, so contract state is reconstructible from the
+//!   event stream alone.
+//! - **Bounded writes.** Each entry point reads each ledger key at most once and
+//!   writes back only what changed — `transfer`, for instance, never rewrites
+//!   the asset record because it does not touch supply.
 
-mod checked_math;
 mod contract;
 mod errors;
+mod events;
 mod storage;
 mod types;
+mod validation;
 
-#[cfg(test)]
-mod overflow_tests;
 #[cfg(test)]
 mod test;
 
-pub use checked_math::{checked_add, checked_mul, checked_sub};
 pub use contract::{TokenizationContract, TokenizationContractClient};
 pub use errors::Error;
-pub use types::{Asset, DataKey, STORAGE_GAP_SLOTS, STORAGE_SCHEMA_VERSION};
+pub use types::{Asset, DataKey};
+pub use validation::{
+    validate_amount, validate_asset_id, validate_decimals, validate_debit,
+    validate_metadata_uri, validate_supply_cap, validate_transfer_parties,
+    MAX_ASSET_ID_LEN, MAX_DECIMALS, MAX_METADATA_URI_LEN, MIN_ASSET_ID_LEN,
+};

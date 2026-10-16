@@ -1,4 +1,4 @@
-use crate::types::{Asset, DataKey, STORAGE_GAP_SLOTS, STORAGE_SCHEMA_VERSION};
+use crate::types::{Asset, DataKey};
 use soroban_sdk::{Address, Env, String};
 
 pub fn is_initialized(env: &Env) -> bool {
@@ -45,41 +45,6 @@ pub fn get_asset_count(env: &Env) -> u32 {
 pub fn set_asset_count(env: &Env, count: u32) {
     env.storage().instance().set(&DataKey::AssetCount, &count);
 }
-
-// ---------------------------------------------------------------------------
-// Upgrade-safety layout markers
-// ---------------------------------------------------------------------------
-
-/// Layout version stamped into instance storage at initialization.
-pub fn set_storage_version(env: &Env) {
-    env.storage()
-        .instance()
-        .set(&DataKey::StorageVersion, &STORAGE_SCHEMA_VERSION);
-}
-
-/// Layout version recorded on-chain.
-///
-/// Returns `0` for a deployment that predates the marker, which upgrade tooling
-/// treats as "run every migration step".
-pub fn get_storage_version(env: &Env) -> u32 {
-    env.storage()
-        .instance()
-        .get(&DataKey::StorageVersion)
-        .unwrap_or(0)
-}
-
-/// Whether `slot` falls inside the reserved upgrade gap.
-///
-/// Slots outside the gap are *not* free to claim without bumping
-/// [`STORAGE_SCHEMA_VERSION`], because today they are either live keys or
-/// outside the reserved range entirely.
-pub fn is_reserved_gap_slot(slot: u32) -> bool {
-    slot < STORAGE_GAP_SLOTS
-}
-
-// ---------------------------------------------------------------------------
-// Asset records and balances
-// ---------------------------------------------------------------------------
 
 pub fn has_asset(env: &Env, asset_id: &String) -> bool {
     env.storage().persistent().has(&DataKey::Asset(asset_id.clone()))

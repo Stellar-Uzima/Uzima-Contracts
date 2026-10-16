@@ -7,7 +7,7 @@ of each asset's supply across holders.
 | --- | --- |
 | Crate | `contracts/tokenization` |
 | Entry points | `initialize`, `transfer_admin`, `set_treasury_address`, `pause`, `unpause`, `register_asset`, `mint`, `burn`, `transfer`, plus queries |
-| Tests | `src/test.rs` (behaviour), `src/overflow_tests.rs` (arithmetic + layout markers) |
+| Modules | `validation` (input bounds), `events` (audit trail), `storage`, `types` |
 
 ## Roles
 
@@ -17,70 +17,84 @@ of each asset's supply across holders.
 | Issuer | `mint`, `burn` on assets it registered |
 | Holder | `transfer` units it holds |
 
-## Integer overflow policy (#1765)
+## Typed errors (#1760)
 
-Root `Cargo.toml` sets `overflow-checks = true` for `[profile.release]`, so an
-unguarded `+` or `-` on a `u128` traps and reverts the whole transaction — which
-is both expensive and a denial-of-service vector if an attacker can pick the
-operand. Every arithmetic site therefore goes through `src/checked_math.rs`:
+Every rejection path has its own `Error` variant. Before this change a client
+could not tell "the amount was zero" from "the balance was short" from "the
+supply cap was reached" without inspecting the failing call; now it matches on a
+stable `u32` discriminant.
 
-| Helper | Failure |
-| --- | --- |
-| `checked_add(a, b)` | `Error::ArithmeticOverflow` |
-| `checked_sub(a, b)` | `Error::ArithmeticUnderflow` |
-| `checked_mul(a, b)` | `Error::ArithmeticOverflow` |
+| Discriminant | Variant | Raised when |
+| --- | --- | --- |
+| 6 | `InvalidAssetId` | empty, `< 3`, `> 64` bytes, or a byte outside `[A-Za-z0-9_-]` |
+| 7 | `DecimalsOutOfRange` | outside the Stellar Asset Convention `0..=18` |
+| 8 | `InvalidMetadataUri` | empty or `> 512` bytes |
+| 9 | `ZeroAmount` | a mint, burn or transfer for `amount == 0` |
+| 10 | `TransferToSelf` | `from == to` on a transfer |
+| 11 | `InsufficientBalance` | debit exceeds the holder's balance |
+| 12 | `SupplyCapExceeded` | mint would push supply past the registered cap |
+| 13 | `ArithmeticOverflow` | a `u128` add or multiply would wrap |
+| 14 | `ArithmeticUnderflow` | a `u128` subtract would wrap past zero |
 
-Two errors are raised before the helper is reached, because they mean something
-more specific than "the arithmetic was pathological":
+Discriminants are part of the contract interface: existing variants are never
+renumbered and new ones are only appended. `test_error_variants_map_to_stable_discriminants`
+pins them so an accidental reorder fails the build rather than a client.
 
-- `Error::InsufficientBalance` — `burn`/`transfer` were asked to debit more than
-  the holder holds.
-- `Error::ArithmeticOverflow` — `mint` would push the running supply past
-  `u128::MAX`.
+`register_asset` gained a `supply_cap` parameter that is now stored on the
+record, which is what makes `SupplyCapExceeded` enforceable on-chain instead of
+being an off-chain promise.
 
-`src/overflow_tests.rs` drives each of these to a real failure and asserts the
-resulting state is unchanged.
+## Input validation (#1759)
 
-## Storage gap and upgrade safety (#1766)
+`src/validation.rs` runs **before** any `require_auth`. That ordering matters:
+if auth ran first, the error a caller receives would depend on who holds
+authority, and a malformed call could be used to probe the admin set at the cost
+of only the rejected invocation. Validating first means a bad argument is
+rejected uniformly, for everyone, without consuming an authorization.
 
-Two markers keep future WASM upgrades from silently reinterpreting live ledger
-entries:
+The `asset_id` alphabet is ASCII alphanumerics plus `-` and `_`. That covers the
+`HOSP-2026-001` style identifiers used across the platform while keeping control
+characters and bidi overrides out of a value that ends up rendered in dashboards
+and explorers.
 
-- **`StorageVersion`** — an instance-storage key stamped with
-  `STORAGE_SCHEMA_VERSION` (`1`) at `initialize`. Upgrade tooling compares the
-  on-chain value to the compiled-in value; `0` means the deployment predates the
-  marker and every migration step must run first. Exposed as `storage_version()`.
-- **`StorageGap(u32)`** — `STORAGE_GAP_SLOTS` (`16`) reserved key slots. The
-  reservation is **layout-only**: no ledger entry is written for a gap slot, so
-  the reserve costs no storage rent, but a future upgrade may claim
-  `StorageGap(0)..StorageGap(16)` as ordinary persistent keys without colliding
-  with anything live today. Exposed as `storage_gap_slots()` and
-  `is_reserved_gap_slot(slot)`.
+## Events (#1757)
 
-Adding, removing, or reordering a `DataKey` variant or an `Asset` field requires
-bumping `STORAGE_SCHEMA_VERSION` and a migration step.
+Every state-changing entry point publishes exactly one event, carrying the
+complete before/after delta, so contract state is reconstructible from the event
+stream alone without replaying transactions.
 
-## Deployment (#1767)
+| Topic 0 | Topic 1 | Emitted by | Payload |
+| --- | --- | --- | --- |
+| `init` | — | `initialize` | `admin`, `treasury` |
+| `adm_xfer` | — | `transfer_admin` | `previous`, `current` |
+| `treasury` | — | `set_treasury_address` | `treasury` |
+| `pause` | — | `pause` / `unpause` | resulting `paused` bool |
+| `asset` | `reg` | `register_asset` | `asset_id`, `issuer`, `supply_cap`, `decimals`, `ts` |
+| `asset` | `mint` | `mint` | `asset_id`, `to`, `amount`, `new_supply`, `new_balance`, `ts` |
+| `asset` | `burn` | `burn` | `asset_id`, `from`, `amount`, `new_supply`, `new_balance`, `ts` |
+| `asset` | `xfer` | `transfer` | `asset_id`, `from`, `to`, `amount`, `from_balance`, `to_balance`, `ts` |
 
-```bash
-./scripts/deploy_tokenization.sh testnet alice
-```
+Topics stay within the 9-byte `symbol_short!` limit. Rejected calls emit
+nothing, which `test_rejected_calls_emit_no_events` asserts.
 
-Builds the wasm, uploads a fresh instance, runs `initialize`, asserts that
-`storage_version` came back as `1`, and writes
-`deployments/<network>_tokenization.json` so
-`scripts/rollback_deployment.sh` and `scripts/deployment_status.sh` can find it.
+## Gas (#1758)
 
-## Static analysis in CI (#1768)
+Each entry point reads every ledger key at most once and writes back only what
+changed.
 
-`.github/workflows/tokenization-slither.yml` runs on every PR that touches this
-crate:
+- `mint` / `burn` — a single `asset_of` read serves the existence check, the cap
+  check and the write-back. The old code re-read the record after mutating it.
+- `transfer` — does **not** rewrite the asset record at all, because it does not
+  touch supply. Two balance writes, no third.
+- `register_asset` — `asset_count` is read and written once; the record is
+  constructed inline rather than being read-modify-written.
+- Arithmetic is computed once into locals (`new_supply`, `new_balance`) and
+  written once, rather than reading back what was just stored.
+- Queries avoid the `unwrap_or(0)` + branch that the write paths use, so a read
+  that misses costs one ledger read instead of a read plus a write.
 
-- **`slither` job** — installs `slither-analyzer` and runs it over any Solidity
-  sources in the tree. The repository currently contains none (the contract is
-  Soroban/Rust, and Slither only understands EVM bytecode), so the step reports
-  *skipped* rather than passing silently. If a Solidity component is ever added
-  to the deployment path it is covered with no workflow change.
-- **`clippy-audit` job** — `cargo clippy -p tokenization --all-targets -D
-  warnings` plus `cargo audit`. This is the half that actually gates the merge
-  for a Rust contract.
+## Tests
+
+`src/test.rs` covers initialization, the happy path, and every error path, plus
+event counts per topic pair and the `u32`-discriminant pinning. Run with
+`cargo test -p tokenization`.

@@ -15,11 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
-- `contracts/tokenization` added: on-chain registry for tokenized assets, tracking per-holder balances of each asset supply, with admin / issuer / holder roles (#1765, #1766, #1767, #1768)
-- `contracts/tokenization` routes every `u128` addition and subtraction through `src/checked_math.rs`, raising `ArithmeticOverflow` / `ArithmeticUnderflow` instead of trapping under the workspace release profile `overflow-checks = true`; `burn` and `transfer` pre-check with `InsufficientBalance` (#1765)
-- `contracts/tokenization` reserves 16 layout-only `StorageGap` slots and stamps a `StorageVersion` instance marker at `initialize`, so a future WASM upgrade cannot reinterpret live ledger entries; exposed as `storage_version()`, `storage_gap_slots()` and `is_reserved_gap_slot()` (#1766)
-- `scripts/deploy_tokenization.sh` added: builds, uploads, initializes, asserts `storage_version == 1`, and records `deployments/<network>_tokenization.json` for the rollback tooling (#1767)
-- `.github/workflows/tokenization-slither.yml` added: runs `slither` over any Solidity sources in the tree (reported as *skipped* while the tree has none, since the contract is Soroban/Rust) and gates the merge on `cargo clippy -p tokenization --all-targets -D warnings` plus `cargo audit` (#1768)
+- `contracts/tokenization` added: on-chain registry for tokenized assets, tracking per-holder balances against a per-asset supply cap, with admin / issuer / holder roles (#1757, #1758, #1759, #1760)
+- `contracts/tokenization` publishes one event per state change carrying the full before/after delta (`init`, `adm_xfer`, `treasury`, `pause`, `asset`/`reg`, `asset`/`mint`, `asset`/`burn`, `asset`/`xfer`); rejected calls emit nothing (#1757)
+- `contracts/tokenization` reads each ledger key at most once per entry point and writes back only what changed; `transfer` no longer rewrites the asset record because it does not touch supply (#1758)
+- `contracts/tokenization` adds `src/validation.rs`, run before any `require_auth` so a malformed call cannot be used to probe which addresses hold authority: `asset_id` in `3..=64` over `[A-Za-z0-9_-]`, `decimals` in `0..=18`, `metadata_uri` in `1..=512`, non-zero amounts, no self-transfer (#1759)
+- `contracts/tokenization` replaces the shared `InvalidArgument` with 14 typed error variants and pins their `u32` discriminants in a test, since the discriminants are part of the contract interface (#1760)
 - Canonical address normalization layer for identity and access flows (`identity_registry`)
 - Release note generation script (`scripts/generate_release_notes.sh`)
 - Semantic versioning discipline for contract interfaces and SDK compatibility
