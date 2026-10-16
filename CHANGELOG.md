@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
+- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, under admin / registrar / owner roles (#1781, #1782, #1783, #1784)
+- `contracts/property_registry` routes every `u128` addition and subtraction through `src/checked_math.rs`, raising `ArithmeticOverflow` / `ArithmeticUnderflow` instead of trapping under the workspace release profile `overflow-checks = true`; share movement credits before it debits and raises `ShareTotalExceeded` / `OwnershipExceedsShare` so a rejected call leaves the split untouched (#1781)
+- `contracts/property_registry` reserves 16 layout-only `StorageGap` slots and stamps a `StorageVersion` instance marker at `initialize`, so a future WASM upgrade cannot reinterpret live ledger entries; exposed as `storage_version()`, `storage_gap_slots()` and `is_reserved_gap_slot()` (#1782)
+- `scripts/deploy_property_registry.sh` added: builds, uploads, initializes, asserts `storage_version == 1`, and records `deployments/<network>_property_registry.json` for the rollback tooling (#1783)
+- `.github/workflows/property-registry-slither.yml` added: runs `slither` over any Solidity sources in the tree (reported as *skipped* while the tree has none, since the contract is Soroban/Rust) and gates the merge on `cargo clippy -p property_registry --all-targets -D warnings` plus `cargo audit` (#1784)
 - Canonical address normalization layer for identity and access flows (`identity_registry`)
 - Release note generation script (`scripts/generate_release_notes.sh`)
 - Semantic versioning discipline for contract interfaces and SDK compatibility
