@@ -15,11 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
-- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, with role-based access control (#1777, #1778, #1779, #1780)
-- `contracts/property_registry` gains `src/access_control.rs`, an in-tree `Ownable` + `AccessControl` model with `DEFAULT_ADMIN_ROLE` and `REGISTRAR`; `record_ownership` is gated by both the registrar role and the owner of record, and revoking `DEFAULT_ADMIN_ROLE` from its last holder is refused with `CannotRevokeLastAdmin` (#1777)
-- `contracts/property_registry/tests/flows.rs` added: four end-to-end scenarios driven only through the crate`s public re-exports, so the suite doubles as a public-surface regression check (#1778)
-- `contracts/property_registry/SECURITY_AUDIT.md` added: trust model, six access-control findings, an entry-point-to-negative-test coverage map, and the residual risk left accepted (#1779)
-- `contracts/property_registry/src/invariant_tests.rs` added: ten state-machine invariants covering the ownership split, holder counts, rejected-call inertness, admin conservation and pause totality (#1780)
+- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, under admin / registrar / owner-of-record authorities (#1769, #1770, #1771, #1772)
+- `contracts/property_registry/src/test.rs` added: unit tests grouped by the initialization / happy-path / error-path triad, covering every error variant, dilution to exactly 100%, partial-position handover, and rejection leaving the split byte-identical (#1769)
+- `tests/fuzz/property_registry` added: proptest harness asserting five properties — no panic ever, the ownership split is conserved, no share exceeds 100%, rejected calls are inert, and reentrancy never wedges the contract (#1770)
+- `contracts/property_registry` documented entry-point by entry-point: every public function carries `# Auth`, `# Errors` and `# Events` sections, and `DATA_KEY_VARIANT_COUNT` duplicates the `DataKey` variant count by hand so inserting a variant in the middle fails the build instead of silently changing the XDR encoding of live keys (#1771)
+- `contracts/property_registry` adds `src/reentrancy_guard.rs`, `src/reentrancy_tests.rs` and `REENTRANCY_REVIEW.md`: the contract makes no cross-contract call in any value path, but `require_auth()` dispatches to an attacker-chosen `SorobanAuthorization` contract, so the two multi-key entry points take the guard before any authorization dispatch (#1772)
 - Canonical address normalization layer for identity and access flows (`identity_registry`)
 - Release note generation script (`scripts/generate_release_notes.sh`)
 - Semantic versioning discipline for contract interfaces and SDK compatibility
