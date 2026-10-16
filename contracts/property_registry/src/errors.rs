@@ -11,12 +11,14 @@ pub enum Error {
     PropertyAlreadyExists = 5,
     InvalidArgument = 6,
     ArithmeticOverflow = 7,
-    /// A `u128` subtraction would have wrapped past zero.
     ArithmeticUnderflow = 8,
-    /// The requested ownership share is larger than the recorded share.
+    /// The owner of record does not hold the share being moved.
     OwnershipExceedsShare = 9,
     /// The resulting shares for a property would exceed 100%.
     ShareTotalExceeded = 10,
+    /// Revoking `DEFAULT_ADMIN_ROLE` from its last holder would leave the
+    /// contract permanently unadministrable.
+    CannotRevokeLastAdmin = 11,
 }
 
 impl core::fmt::Display for Error {
@@ -32,6 +34,7 @@ impl core::fmt::Display for Error {
             Error::ArithmeticUnderflow => write!(f, "arithmetic underflow"),
             Error::OwnershipExceedsShare => write!(f, "ownership exceeds recorded share"),
             Error::ShareTotalExceeded => write!(f, "share total exceeds 100 percent"),
+            Error::CannotRevokeLastAdmin => write!(f, "cannot revoke the last admin"),
         }
     }
 }

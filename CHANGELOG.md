@@ -15,11 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
-- `contracts/tokenization` added: on-chain registry for tokenized assets, tracking per-holder balances against a per-asset supply cap, with admin / issuer / holder roles (#1757, #1758, #1759, #1760)
-- `contracts/tokenization` publishes one event per state change carrying the full before/after delta (`init`, `adm_xfer`, `treasury`, `pause`, `asset`/`reg`, `asset`/`mint`, `asset`/`burn`, `asset`/`xfer`); rejected calls emit nothing (#1757)
-- `contracts/tokenization` reads each ledger key at most once per entry point and writes back only what changed; `transfer` no longer rewrites the asset record because it does not touch supply (#1758)
-- `contracts/tokenization` adds `src/validation.rs`, run before any `require_auth` so a malformed call cannot be used to probe which addresses hold authority: `asset_id` in `3..=64` over `[A-Za-z0-9_-]`, `decimals` in `0..=18`, `metadata_uri` in `1..=512`, non-zero amounts, no self-transfer (#1759)
-- `contracts/tokenization` replaces the shared `InvalidArgument` with 14 typed error variants and pins their `u32` discriminants in a test, since the discriminants are part of the contract interface (#1760)
+- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, with role-based access control (#1777, #1778, #1779, #1780)
+- `contracts/property_registry` gains `src/access_control.rs`, an in-tree `Ownable` + `AccessControl` model with `DEFAULT_ADMIN_ROLE` and `REGISTRAR`; `record_ownership` is gated by both the registrar role and the owner of record, and revoking `DEFAULT_ADMIN_ROLE` from its last holder is refused with `CannotRevokeLastAdmin` (#1777)
+- `contracts/property_registry/tests/flows.rs` added: four end-to-end scenarios driven only through the crate`s public re-exports, so the suite doubles as a public-surface regression check (#1778)
+- `contracts/property_registry/SECURITY_AUDIT.md` added: trust model, six access-control findings, an entry-point-to-negative-test coverage map, and the residual risk left accepted (#1779)
+- `contracts/property_registry/src/invariant_tests.rs` added: ten state-machine invariants covering the ownership split, holder counts, rejected-call inertness, admin conservation and pause totality (#1780)
 - Canonical address normalization layer for identity and access flows (`identity_registry`)
 - Release note generation script (`scripts/generate_release_notes.sh`)
 - Semantic versioning discipline for contract interfaces and SDK compatibility

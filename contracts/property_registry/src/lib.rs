@@ -7,40 +7,35 @@
 //!
 //! ## Scope
 //! - Lifecycle: `initialize`, `transfer_admin`, `set_registrar`
+//! - Access control: `grant_role`, `revoke_role`, `renounce_role`, `has_role`,
+//!   `role_members`
 //! - Operations: `pause`, `unpause`
 //! - Property lifecycle: `register_property`, `update_valuation`,
 //!   `transfer_property`, `record_ownership`
 //! - Queries: `get_property`, `ownership_of`, `total_properties`
-//! - Upgrade safety: `storage_version`, `storage_gap_slots`,
-//!   `is_reserved_gap_slot`
 //!
 //! ## Roles
 //! | Role | Capabilities |
 //! | --- | --- |
-//! | Admin | Rotate admin and registrar, pause/unpause |
-//! | Registrar | Register properties, revalue, record ownership shares |
-//! | Owner | Transfer the property of record, authorize share transfers |
+//! | `DEFAULT_ADMIN_ROLE` | Rotate admin and registrar, grant and revoke roles, pause/unpause |
+//! | `REGISTRAR` | Register properties, revalue, record ownership shares |
+//! | Owner of record | Transfer the property, authorize debits from their position |
 //!
-//! ## Arithmetic
-//! Every `u128` addition and subtraction goes through
-//! [`checked_math`](crate::checked_math) so a pathological amount surfaces as
-//! `ArithmeticOverflow` / `ArithmeticUnderflow` instead of a trap. Ownership
-//! shares are additionally bounded by [`BASIS_POINTS_SCALE`], and the two legs
-//! of a share movement are credited before they are debited so a rejected call
-//! leaves the split untouched.
+//! See `src/access_control.rs` for why these primitives live in-tree rather
+//! than being pulled from an OpenZeppelin Soroban crate.
 
-mod checked_math;
+mod access_control;
 mod contract;
 mod errors;
 mod storage;
 mod types;
 
 #[cfg(test)]
-mod overflow_tests;
+mod invariant_tests;
 #[cfg(test)]
 mod test;
 
-pub use checked_math::{bps_to_percent, checked_add, checked_mul, checked_sub};
+pub use access_control::{DEFAULT_ADMIN_ROLE, REGISTRAR_ROLE};
 pub use contract::{PropertyRegistryContract, PropertyRegistryContractClient};
 pub use errors::Error;
-pub use types::{DataKey, Property, BASIS_POINTS_SCALE, STORAGE_GAP_SLOTS, STORAGE_SCHEMA_VERSION};
+pub use types::{DataKey, Property, BASIS_POINTS_SCALE};

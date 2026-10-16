@@ -1,22 +1,5 @@
 use soroban_sdk::{contracttype, Address, String};
 
-/// Version of the storage layout this contract was compiled against.
-///
-/// Upgrade tooling compares the on-chain value against the compiled-in value
-/// to decide whether a migration step is required before the new WASM is
-/// installed. Bump this whenever a `DataKey` variant or a `Property` field is
-/// added, removed, or reordered.
-pub const STORAGE_SCHEMA_VERSION: u32 = 1;
-
-/// Number of `DataKey::StorageGap` slot indices reserved for future upgrades.
-///
-/// The slots are *reserved in the key layout only* — no ledger entry is written
-/// for them, so the reserve costs no storage rent. A future upgrade may claim
-/// `StorageGap(0)..StorageGap(STORAGE_GAP_SLOTS)` as ordinary persistent keys
-/// without risking a collision with the keys live today, which is what keeps
-/// reordering today's `DataKey` variants safe.
-pub const STORAGE_GAP_SLOTS: u32 = 16;
-
 /// Ownership shares are denominated in basis points; 10_000 == 100%.
 pub const BASIS_POINTS_SCALE: u128 = 10_000;
 
@@ -48,7 +31,8 @@ pub struct Property {
 /// Storage keys for the contract.
 #[contracttype]
 pub enum DataKey {
-    /// Instance: administrator address.
+    /// Instance: administrator address, mirrored from the `DEFAULT_ADMIN_ROLE`
+    /// membership so `admin()` stays a cheap single read.
     Admin,
     /// Instance: registrar allowed to create and revalue properties.
     Registrar,
@@ -56,12 +40,12 @@ pub enum DataKey {
     Paused,
     /// Instance: number of registered properties.
     PropertyCount,
-    /// Instance: layout version marker, see [`STORAGE_SCHEMA_VERSION`].
-    StorageVersion,
+    /// Instance: addresses holding a role, per role id.
+    RoleMembers(u32),
     /// Persistent: property record keyed by `property_id`.
     Property(String),
     /// Persistent: ownership share keyed by `(property_id, holder)`.
     Ownership(String, Address),
-    /// Reserved for future upgrades; see [`STORAGE_GAP_SLOTS`].
-    StorageGap(u32),
+    /// Persistent: whether `(account, role)` is held.
+    Role(Address, u32),
 }

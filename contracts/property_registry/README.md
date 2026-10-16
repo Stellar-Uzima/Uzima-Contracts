@@ -6,94 +6,111 @@ recorded valuation, and fractional ownership shares in basis points.
 | | |
 | --- | --- |
 | Crate | `contracts/property_registry` |
-| Entry points | `initialize`, `transfer_admin`, `set_registrar`, `pause`, `unpause`, `register_property`, `update_valuation`, `transfer_property`, `record_ownership`, plus queries |
-| Tests | `src/test.rs` (behaviour), `src/overflow_tests.rs` (arithmetic + layout markers) |
+| Access control | `src/access_control.rs`, audited in [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) |
+| Tests | `src/test.rs` (behaviour + access control), `src/invariant_tests.rs` (state-machine invariants), `tests/flows.rs` (end-to-end through the public interface) |
 
 ## Roles
 
 | Role | Capabilities |
 | --- | --- |
-| Admin | Rotate admin and registrar, pause/unpause |
-| Registrar | Register properties, revalue, record ownership shares |
-| Owner of record | Transfer the property, authorize share movements out of their position |
+| `DEFAULT_ADMIN_ROLE` | Rotate admin and registrar, grant and revoke roles, pause/unpause |
+| `REGISTRAR` | Register properties, revalue, record ownership shares |
+| Owner of record | Transfer the property, authorize debits from their own position |
 
-## Share accounting
+The three gates are deliberately distinct: `REGISTRAR` says *who may amend the
+register*, *owner of record* says *whose position may be debited*. Neither alone
+is sufficient for `record_ownership`.
 
-Shares are denominated in basis points, `BASIS_POINTS_SCALE = 10_000` == 100%.
-Every mutation moves both legs of the split together:
+## OpenZeppelin primitives (#1777)
 
-- `record_ownership(id, holder, amount)` debits the owner of record and credits
-  `holder` in the same call, so the total across all holders is always exactly
-  `BASIS_POINTS_SCALE`.
-- `transfer_property(id, new_owner)` credits the successor **before** debiting
-  the incumbent, and refuses with `ShareTotalExceeded` if that would push the
-  successor past 100%. A rejected call therefore leaves the split untouched.
+`src/access_control.rs` implements role-based access control modelled on
+OpenZeppelin's `Ownable` + `AccessControl`, deliberately **in-tree** rather than
+as a dependency. The workspace pins `soroban-sdk = "=21.7.7"` and carries no
+OpenZeppelin Soroban crate; adding one changes the dependency graph for every
+contract in the workspace, and OpenZeppelin's Soroban contracts are still
+pre-1.0. That is a decision for maintainers, not a side effect of a hardening
+PR.
 
-`holder_count` on the record tracks distinct holders, and a repeat transfer to an
-existing holder does not double-count them.
+The module is written to be drop-in replaceable:
 
-## Integer overflow policy (#1781)
-
-Root `Cargo.toml` sets `overflow-checks = true` for `[profile.release]`, so an
-unguarded `+` or `-` on a `u128` traps and reverts the whole transaction. Every
-arithmetic site goes through `src/checked_math.rs`:
-
-| Helper | Failure |
+| This module | OpenZeppelin equivalent |
 | --- | --- |
-| `checked_add(a, b)` | `Error::ArithmeticOverflow` |
-| `checked_sub(a, b)` | `Error::ArithmeticUnderflow` |
-| `checked_mul(a, b)` | `Error::ArithmeticOverflow` |
+| `DEFAULT_ADMIN_ROLE`, `REGISTRAR_ROLE` | `DEFAULT_ADMIN_ROLE`, custom role constants |
+| `has_role` / `require_role` | `has_role` / `only_role` |
+| `require_admin` / `require_registrar` | modifier-style guards |
+| `grant_role` / `revoke_role` / `renounce_role` | `grant_role` / `revoke_role` / `renounce_role` |
+| `role_members` | `get_role_members` (enumeration variant) |
 
-Two errors are raised ahead of the helper, because they mean something more
-specific than "the arithmetic was pathological":
+Swapping the implementation for the real crate later is a `use` change, not a
+rewrite.
 
-- `Error::ShareTotalExceeded` — the result would push shares past 100%.
-- `Error::OwnershipExceedsShare` — more was requested than the owner of record
-  currently holds.
+Two deviations from stock OpenZeppelin, both deliberate:
 
-`bps_to_percent` converts basis points to whole percent, rounding down, so
-callers never do the division themselves and get it wrong.
+1. **Last-admin protection.** `revoke_role` refuses to remove `DEFAULT_ADMIN_ROLE`
+   from its last holder (`CannotRevokeLastAdmin`). Stock OZ lets an admin
+   renounce itself into a bricked contract; on a registry that would mean no
+   pause, no registrar rotation and no upgrade path.
+2. **Grant before revoke.** `transfer_admin` grants the successor the role before
+   revoking the incumbent, so there is never an instant with zero admins.
 
-`src/overflow_tests.rs` drives each path to a real failure and asserts the
-resulting split is unchanged.
+The registrar slot (`DataKey::Registrar`, surfaced as `registrar()`) is retained
+alongside the role and is checked by `require_registrar_role`. It records *who the
+registry was configured with*; the role records *who may currently amend*. Both
+are enforced so a rotation that updates only the slot cannot silently do nothing.
 
-## Storage gap and upgrade safety (#1782)
+## Integration tests (#1778)
 
-- **`StorageVersion`** — an instance-storage key stamped with
-  `STORAGE_SCHEMA_VERSION` (`1`) at `initialize`. Upgrade tooling compares
-  on-chain vs compiled-in values; `0` means the deployment predates the marker
-  and every migration step must run first. Exposed as `storage_version()`.
-- **`StorageGap(u32)`** — 16 reserved key slots. The reservation is
-  **layout-only**: no ledger entry is written for a gap slot, so it costs no
-  storage rent, but a future upgrade may claim `StorageGap(0)..StorageGap(16)`
-  as ordinary persistent keys without colliding with anything live today.
-  Exposed as `storage_gap_slots()` and `is_reserved_gap_slot(slot)`, with tests
-  walking the boundary of the range.
+`tests/flows.rs` lives outside the crate and reaches the contract only through
+what `lib.rs` re-exports, so it doubles as a public-surface regression check: if
+a flow there stops compiling, the exported API has regressed even though the
+unit tests still pass. Four end-to-end scenarios — register lifecycle with share
+reconciliation, admin handover, rejection paths asserting the register is
+untouched, registrar-role withdrawal, and pause.
 
-Adding, removing, or reordering a `DataKey` variant or a `Property` field
-requires bumping `STORAGE_SCHEMA_VERSION` and a migration step.
+## Access control audit (#1779)
 
-## Deployment (#1783)
+[`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) records the trust model, six findings
+and their fixes, an entry-point-to-negative-test coverage map, and the residual
+risk that remains accepted. Summary:
+
+- **F1** The registrar slot was the whole access model; there was no way to add a
+  second registrar or withdraw one without rotating the slot. `REGISTRAR_ROLE`
+  now gates every amendment.
+- **F2** Authority was a single mirrored slot, so the authorization target and the
+  record of who is in charge could not be checked independently. Authority is
+  now derived from role membership and cross-checked.
+- **F3** Nothing stopped an admin revoking its own admin role and bricking the
+  contract. Now refused.
+- **F4** `renounce_role` could orphan the role-member index, which would have
+  defeated the F3 guard. Both are cleared together.
+- **F5** `holder_count` could drift if the transitions were driven off the
+  argument rather than the share read. Both are driven off the share.
+- **F6** Pause does not block queries — accepted, and recorded as a decision.
+
+Tests that assert *which* address had to authorize use `env.auths()` rather than
+relying on `mock_all_auths()`, because the audit question is "whose signature was
+demanded", not "did the call succeed".
+
+## Invariants (#1780)
+
+`src/invariant_tests.rs` asserts properties that must hold for **any** path
+through the state machine, rather than for documented flows:
+
+- the ownership split always totals exactly 100%
+- no single share can exceed 100%
+- the owner of record is always a holder
+- `holder_count` tracks distinct holders and a repeat transfer never double-counts
+- property count is monotone and re-registration is rejected
+- revaluation never disturbs the ownership split
+- rejected calls leave the register byte-identical
+- exactly one admin exists after any transfer
+- withdrawing `REGISTRAR` halts amendments; restoring it resumes from the ledger
+- pause is total: no role, however privileged, can move state while it holds
+
+## Running
 
 ```bash
-./scripts/deploy_property_registry.sh testnet alice
+cargo test -p property_registry               # unit + invariant tests
+cargo test -p property_registry --test flows  # end-to-end flows
+cargo clippy -p property_registry --all-targets -- -D warnings
 ```
-
-Builds the wasm, uploads a fresh instance, runs `initialize`, asserts that
-`storage_version` came back as `1`, and writes
-`deployments/<network>_property_registry.json` in the shape
-`scripts/rollback_deployment.sh` and `scripts/deployment_status.sh` consume.
-
-## Static analysis in CI (#1784)
-
-`.github/workflows/property-registry-slither.yml` runs on every PR that touches
-this crate:
-
-- **`slither` job** — installs `slither-analyzer` and runs it over any Solidity
-  sources in the tree. The repository currently contains none (the contract is
-  Soroban/Rust, and Slither only understands EVM bytecode), so the step reports
-  *skipped* rather than passing silently. If a Solidity component is ever added
-  to the deployment path it is covered with no workflow change.
-- **`clippy-audit` job** — `cargo clippy -p property_registry --all-targets -D
-  warnings` plus `cargo audit`. This is the half that actually gates the merge
-  for a Rust contract.

@@ -1,4 +1,4 @@
-use crate::types::{DataKey, Property, STORAGE_GAP_SLOTS, STORAGE_SCHEMA_VERSION};
+use crate::types::{DataKey, Property};
 use soroban_sdk::{Address, Env, String};
 
 pub fn is_initialized(env: &Env) -> bool {
@@ -45,37 +45,6 @@ pub fn get_property_count(env: &Env) -> u32 {
 pub fn set_property_count(env: &Env, count: u32) {
     env.storage().instance().set(&DataKey::PropertyCount, &count);
 }
-
-// ---------------------------------------------------------------------------
-// Upgrade-safety layout markers
-// ---------------------------------------------------------------------------
-
-/// Layout version stamped into instance storage at initialization.
-pub fn set_storage_version(env: &Env) {
-    env.storage()
-        .instance()
-        .set(&DataKey::StorageVersion, &STORAGE_SCHEMA_VERSION);
-}
-
-/// Layout version recorded on-chain.
-///
-/// Returns `0` for a deployment that predates the marker, which upgrade tooling
-/// treats as "run every migration step".
-pub fn get_storage_version(env: &Env) -> u32 {
-    env.storage()
-        .instance()
-        .get(&DataKey::StorageVersion)
-        .unwrap_or(0)
-}
-
-/// Whether `slot` falls inside the reserved upgrade gap.
-pub fn is_reserved_gap_slot(slot: u32) -> bool {
-    slot < STORAGE_GAP_SLOTS
-}
-
-// ---------------------------------------------------------------------------
-// Property records and ownership shares
-// ---------------------------------------------------------------------------
 
 pub fn has_property(env: &Env, property_id: &String) -> bool {
     env.storage()
