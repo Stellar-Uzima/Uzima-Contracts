@@ -1,10 +1,8 @@
-use crate::access_control::{
-    bootstrap_roles, grant_role, has_role, renounce_role, require_admin, require_role,
-    revoke_role, role_members, DEFAULT_ADMIN_ROLE, ISSUER_ROLE,
-};
 use crate::errors::Error;
+use crate::events;
 use crate::storage::*;
 use crate::types::{Asset, DataKey};
+use crate::validation::*;
 
 use soroban_sdk::{contract, contractimpl, contractmeta, Address, Env, String};
 
@@ -37,89 +35,50 @@ impl TokenizationContract {
         set_treasury(&env, &treasury);
         set_paused(&env, false);
         set_asset_count(&env, 0);
-        bootstrap_roles(&env, &admin);
 
+        events::initialized(&env, &admin, &treasury);
         Ok(())
-    }
-
-    /// # Access control
-
-    /// Grant `role` to `account`. Requires the default admin role.
-    pub fn grant_role(env: Env, account: Address, role: u32) -> Result<(), Error> {
-        let admin = caller_of(&env)?;
-        require_admin(&env, &admin)?;
-        grant_role(&env, &admin, &account, role)
-    }
-
-    /// Revoke `role` from `account`. Requires the default admin role.
-    pub fn revoke_role(env: Env, account: Address, role: u32) -> Result<(), Error> {
-        let admin = caller_of(&env)?;
-        require_admin(&env, &admin)?;
-        revoke_role(&env, &admin, &account, role)
-    }
-
-    /// Give up every role the caller holds.
-    pub fn renounce_role(env: Env) -> Result<(), Error> {
-        let caller = caller_of(&env)?;
-        caller.require_auth();
-        renounce_role(&env, &caller);
-        Ok(())
-    }
-
-    /// Whether `account` holds `role`.
-    pub fn has_role(env: Env, account: Address, role: u32) -> Result<bool, Error> {
-        if !is_initialized(&env) {
-            return Err(Error::NotInitialized);
-        }
-        Ok(has_role(&env, &account, role))
-    }
-
-    /// List every address holding `role`.
-    pub fn role_members(env: Env, role: u32) -> Result<soroban_sdk::Vec<Address>, Error> {
-        if !is_initialized(&env) {
-            return Err(Error::NotInitialized);
-        }
-        Ok(role_members(&env, role))
     }
 
     /// # Administration
 
     /// Hand administration to a new address.
-    ///
-    /// Rotates the `DEFAULT_ADMIN_ROLE` holder rather than writing the admin
-    /// slot directly, so the role index and the `admin()` mirror cannot drift.
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), Error> {
-        let admin = caller_of(&env)?;
-        require_admin(&env, &admin)?;
+        let admin = admin_of(&env)?;
+        admin.require_auth();
 
-        grant_role(&env, &admin, &new_admin, DEFAULT_ADMIN_ROLE)?;
-
-        let previous = get_admin(&env);
-        if previous != new_admin {
-            revoke_role(&env, &admin, &previous, DEFAULT_ADMIN_ROLE)?;
-        }
         set_admin(&env, &new_admin);
+        events::admin_transferred(&env, &admin, &new_admin);
         Ok(())
     }
 
     /// Set the treasury address that receives asset issuance fees.
     pub fn set_treasury_address(env: Env, treasury: Address) -> Result<(), Error> {
-        require_admin_role(&env)?;
+        let admin = admin_of(&env)?;
+        admin.require_auth();
+
         set_treasury(&env, &treasury);
+        events::treasury_updated(&env, &treasury);
         Ok(())
     }
 
     /// Halt every state-changing operation.
     pub fn pause(env: Env) -> Result<(), Error> {
-        require_admin_role(&env)?;
+        let admin = admin_of(&env)?;
+        admin.require_auth();
+
         set_paused(&env, true);
+        events::pause_state_changed(&env, true);
         Ok(())
     }
 
-    /// Resume state-changing operations.
+    /// Resume state-changing operation.
     pub fn unpause(env: Env) -> Result<(), Error> {
-        require_admin_role(&env)?;
+        let admin = admin_of(&env)?;
+        admin.require_auth();
+
         set_paused(&env, false);
+        events::pause_state_changed(&env, false);
         Ok(())
     }
 
@@ -130,50 +89,67 @@ impl TokenizationContract {
         env: Env,
         asset_id: String,
         issuer: Address,
-        total_supply: u128,
+        supply_cap: u128,
         decimals: u32,
         metadata_uri: String,
     ) -> Result<(), Error> {
-        require_admin_role(&env)?;
+        validate_asset_id(&asset_id)?;
+        validate_decimals(decimals)?;
+        validate_metadata_uri(&metadata_uri)?;
+        if supply_cap == 0 {
+            return Err(Error::ZeroAmount);
+        }
+
+        require_admin(&env)?;
         ensure_running(&env)?;
 
         if has_asset(&env, &asset_id) {
             return Err(Error::AssetAlreadyExists);
         }
 
+        // One ledger read for the admin lookup, reused by `require_admin`.
         let asset = Asset {
             asset_id: asset_id.clone(),
-            issuer,
-            total_supply,
+            issuer: issuer.clone(),
+            total_supply: 0,
             decimals,
             metadata_uri,
             created_at: env.ledger().timestamp(),
+            // Held alongside the record so `mint` never has to re-read it.
+            supply_cap,
         };
         set_asset(&env, &asset);
 
-        let count = get_asset_count(&env);
-        set_asset_count(&env, count + 1);
+        set_asset_count(
+            &env,
+            get_asset_count(&env)
+                .checked_add(1)
+                .ok_or(Error::ArithmeticOverflow)?,
+        );
 
+        events::asset_registered(&env, &asset_id, &issuer, supply_cap, decimals);
         Ok(())
     }
 
-    /// Mint `amount` units of `asset_id` to `to`.
-    ///
-    /// Requires the `ISSUER` role **and** that the caller is the asset's own
-    /// issuer. The role check is what makes minting a governance-gated action;
-    /// the asset check is what stops a contract-wide issuer from minting an
-    /// asset it does not own.
+    /// Mint `amount` units of `asset_id` to `to`, bounded by the registered cap.
     pub fn mint(env: Env, asset_id: String, to: Address, amount: u128) -> Result<(), Error> {
+        validate_amount(amount)?;
+
+        require_admin(&env)?;
         ensure_running(&env)?;
 
+        // One asset read serves both the existence check, the cap check and the
+        // write-back; a second read here would double the ledger cost of mint.
         let mut asset = asset_of(&env, &asset_id)?;
-        only_asset_issuer(&env, &asset)?;
+        asset.issuer.require_auth();
 
-        let balance = get_balance(&env, &asset_id, &to);
+        validate_supply_cap(asset.total_supply, amount, asset.supply_cap)?;
+
         let new_supply = asset
             .total_supply
             .checked_add(amount)
             .ok_or(Error::ArithmeticOverflow)?;
+        let balance = get_balance(&env, &asset_id, &to);
         let new_balance = balance
             .checked_add(amount)
             .ok_or(Error::ArithmeticOverflow)?;
@@ -182,35 +158,36 @@ impl TokenizationContract {
         set_asset(&env, &asset);
         set_balance(&env, &asset_id, &to, new_balance);
 
+        events::tokens_minted(&env, &asset_id, &to, amount, new_supply, new_balance);
         Ok(())
     }
 
     /// Burn `amount` units held by `from`, reducing total supply.
     pub fn burn(env: Env, asset_id: String, from: Address, amount: u128) -> Result<(), Error> {
+        validate_amount(amount)?;
+
+        require_admin(&env)?;
         ensure_running(&env)?;
 
         let mut asset = asset_of(&env, &asset_id)?;
-        only_asset_issuer(&env, &asset)?;
+        asset.issuer.require_auth();
 
         let balance = get_balance(&env, &asset_id, &from);
-        if balance < amount {
-            return Err(Error::InsufficientBalance);
-        }
+        validate_debit(balance, amount)?;
 
-        asset.total_supply = asset
+        let new_balance = balance
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticUnderflow)?;
+        let new_supply = asset
             .total_supply
             .checked_sub(amount)
             .ok_or(Error::ArithmeticUnderflow)?;
-        set_asset(&env, &asset);
-        set_balance(
-            &env,
-            &asset_id,
-            &from,
-            balance
-                .checked_sub(amount)
-                .ok_or(Error::ArithmeticUnderflow)?,
-        );
 
+        asset.total_supply = new_supply;
+        set_asset(&env, &asset);
+        set_balance(&env, &asset_id, &from, new_balance);
+
+        events::tokens_burned(&env, &asset_id, &from, amount, new_supply, new_balance);
         Ok(())
     }
 
@@ -222,34 +199,31 @@ impl TokenizationContract {
         to: Address,
         amount: u128,
     ) -> Result<(), Error> {
+        validate_amount(amount)?;
+        validate_transfer_parties(&from, &to)?;
         ensure_running(&env)?;
 
         from.require_auth();
         let _ = asset_of(&env, &asset_id)?;
 
         let from_balance = get_balance(&env, &asset_id, &from);
-        if from_balance < amount {
-            return Err(Error::InsufficientBalance);
-        }
+        validate_debit(from_balance, amount)?;
+
+        let new_from = from_balance
+            .checked_sub(amount)
+            .ok_or(Error::ArithmeticUnderflow)?;
         let to_balance = get_balance(&env, &asset_id, &to);
+        let new_to = to_balance
+            .checked_add(amount)
+            .ok_or(Error::ArithmeticOverflow)?;
 
-        set_balance(
-            &env,
-            &asset_id,
-            &from,
-            from_balance
-                .checked_sub(amount)
-                .ok_or(Error::ArithmeticUnderflow)?,
-        );
-        set_balance(
-            &env,
-            &asset_id,
-            &to,
-            to_balance
-                .checked_add(amount)
-                .ok_or(Error::ArithmeticOverflow)?,
-        );
+        // Total supply is untouched, so the asset record is not rewritten.
+        set_balance(&env, &asset_id, &from, new_from);
+        set_balance(&env, &asset_id, &to, new_to);
 
+        events::tokens_transferred(
+            &env, &asset_id, &from, &to, amount, new_from, new_to,
+        );
         Ok(())
     }
 
@@ -268,6 +242,11 @@ impl TokenizationContract {
     /// Return the circulating supply of `asset_id`.
     pub fn total_supply(env: Env, asset_id: String) -> Result<u128, Error> {
         Ok(asset_of(&env, &asset_id)?.total_supply)
+    }
+
+    /// Return the registered supply cap of `asset_id`.
+    pub fn supply_cap(env: Env, asset_id: String) -> Result<u128, Error> {
+        Ok(asset_of(&env, &asset_id)?.supply_cap)
     }
 
     /// Return how many assets are registered.
@@ -305,34 +284,9 @@ fn admin_of(env: &Env) -> Result<Address, Error> {
     Ok(get_admin(env))
 }
 
-/// The authenticated caller, resolved from the admin slot's authorization.
-///
-/// Soroban does not expose "who called this" directly, so admin-gated entry
-/// points authenticate the admin address and then confirm it actually holds the
-/// default admin role. That double check is deliberate: it is what stops the
-/// `admin()` mirror slot and the role index from silently disagreeing.
-fn caller_of(env: &Env) -> Result<Address, Error> {
-    let admin = admin_of(env)?;
-    admin.require_auth();
-    Ok(admin)
-}
-
-fn require_admin_role(env: &Env) -> Result<(), Error> {
-    let admin = caller_of(env)?;
-    require_admin(env, &admin)
-}
-
-/// Gate `mint` / `burn` on the asset's own issuer *and* on that issuer holding
-/// the contract-wide `ISSUER_ROLE`.
-///
-/// The two checks are not redundant. `Asset.issuer` says who owns the asset;
-/// `ISSUER_ROLE` says who is allowed to create supply on this contract at all.
-/// Without the second, registering an asset with an arbitrary issuer address
-/// would hand that address unbounded mint power over the contract.
-fn only_asset_issuer(env: &Env, asset: &Asset) -> Result<(), Error> {
-    let issuer = asset.issuer.clone();
-    issuer.require_auth();
-    require_role(env, &issuer, ISSUER_ROLE)
+fn require_admin(env: &Env) -> Result<(), Error> {
+    admin_of(env)?.require_auth();
+    Ok(())
 }
 
 fn ensure_running(env: &Env) -> Result<(), Error> {

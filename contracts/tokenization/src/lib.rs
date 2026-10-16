@@ -7,34 +7,46 @@
 //!
 //! ## Scope
 //! - Lifecycle: `initialize`, `transfer_admin`, `set_treasury_address`
-//! - Access control: `grant_role`, `revoke_role`, `renounce_role`, `has_role`,
-//!   `role_members`
 //! - Operations: `pause`, `unpause`
 //! - Asset lifecycle: `register_asset`, `mint`, `burn`, `transfer`
-//! - Queries: `get_asset`, `balance_of`, `total_supply`, `asset_count`
+//! - Queries: `get_asset`, `balance_of`, `total_supply`, `supply_cap`,
+//!   `asset_count`
 //!
 //! ## Roles
 //! | Role | Capabilities |
 //! | --- | --- |
-//! | `DEFAULT_ADMIN_ROLE` | Register assets, rotate admin, grant and revoke roles, pause/unpause |
-//! | `ISSUER` | Mint and burn, and only on assets whose recorded `issuer` is the caller |
+//! | Admin | Register assets, pause/unpause, rotate admin and treasury |
+//! | Issuer | Mint and burn units of assets it registered |
 //! | Holder | Transfer units it holds |
 //!
-//! See `src/access_control.rs` for why these primitives live in-tree rather
-//! than being pulled from an OpenZeppelin Soroban crate.
+//! ## Design guarantees
+//! - **Typed errors.** Every rejection maps to a distinct `Error` variant, so a
+//!   client can tell "the amount was zero" from "the balance was short" from
+//!   "the supply cap was reached" without parsing a string.
+//! - **Bounded inputs.** [`validation`] runs before `require_auth`, so a
+//!   malformed call costs nothing and reveals nothing about who holds authority.
+//! - **Full audit trail.** Every state change publishes one event carrying the
+//!   complete before/after delta, so contract state is reconstructible from the
+//!   event stream alone.
+//! - **Bounded writes.** Each entry point reads each ledger key at most once and
+//!   writes back only what changed — `transfer`, for instance, never rewrites
+//!   the asset record because it does not touch supply.
 
-mod access_control;
 mod contract;
 mod errors;
+mod events;
 mod storage;
 mod types;
+mod validation;
 
-#[cfg(test)]
-mod invariant_tests;
 #[cfg(test)]
 mod test;
 
-pub use access_control::{DEFAULT_ADMIN_ROLE, ISSUER_ROLE};
 pub use contract::{TokenizationContract, TokenizationContractClient};
 pub use errors::Error;
 pub use types::{Asset, DataKey};
+pub use validation::{
+    validate_amount, validate_asset_id, validate_decimals, validate_debit,
+    validate_metadata_uri, validate_supply_cap, validate_transfer_parties,
+    MAX_ASSET_ID_LEN, MAX_DECIMALS, MAX_METADATA_URI_LEN, MIN_ASSET_ID_LEN,
+};

@@ -6,97 +6,95 @@ of each asset's supply across holders.
 | | |
 | --- | --- |
 | Crate | `contracts/tokenization` |
-| Access control | `src/access_control.rs`, audited in [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) |
-| Tests | `src/test.rs` (behaviour + access control), `src/invariant_tests.rs` (state-machine invariants), `tests/flows.rs` (end-to-end through the public interface) |
+| Entry points | `initialize`, `transfer_admin`, `set_treasury_address`, `pause`, `unpause`, `register_asset`, `mint`, `burn`, `transfer`, plus queries |
+| Modules | `validation` (input bounds), `events` (audit trail), `storage`, `types` |
 
 ## Roles
 
 | Role | Capabilities |
 | --- | --- |
-| `DEFAULT_ADMIN_ROLE` | Register assets, rotate admin, grant and revoke roles, pause/unpause |
-| `ISSUER` | Mint and burn, and only on assets whose recorded `issuer` is the caller |
-| Holder | Transfer units it holds |
+| Admin | `register_asset`, `pause`, `unpause`, `transfer_admin`, `set_treasury_address` |
+| Issuer | `mint`, `burn` on assets it registered |
+| Holder | `transfer` units it holds |
 
-## OpenZeppelin primitives (#1761)
+## Typed errors (#1760)
 
-`src/access_control.rs` implements role-based access control modelled on
-OpenZeppelin's `Ownable` + `AccessControl`, deliberately **in-tree** rather than
-as a dependency. The workspace pins `soroban-sdk = "=21.7.7"` and carries no
-OpenZeppelin Soroban crate; adding one changes the dependency graph for every
-contract in the workspace, and OpenZeppelin's Soroban contracts are still
-pre-1.0. That is a decision for maintainers, not a side effect of a hardening
-PR.
+Every rejection path has its own `Error` variant. Before this change a client
+could not tell "the amount was zero" from "the balance was short" from "the
+supply cap was reached" without inspecting the failing call; now it matches on a
+stable `u32` discriminant.
 
-The module is written to be drop-in replaceable:
+| Discriminant | Variant | Raised when |
+| --- | --- | --- |
+| 6 | `InvalidAssetId` | empty, `< 3`, `> 64` bytes, or a byte outside `[A-Za-z0-9_-]` |
+| 7 | `DecimalsOutOfRange` | outside the Stellar Asset Convention `0..=18` |
+| 8 | `InvalidMetadataUri` | empty or `> 512` bytes |
+| 9 | `ZeroAmount` | a mint, burn or transfer for `amount == 0` |
+| 10 | `TransferToSelf` | `from == to` on a transfer |
+| 11 | `InsufficientBalance` | debit exceeds the holder's balance |
+| 12 | `SupplyCapExceeded` | mint would push supply past the registered cap |
+| 13 | `ArithmeticOverflow` | a `u128` add or multiply would wrap |
+| 14 | `ArithmeticUnderflow` | a `u128` subtract would wrap past zero |
 
-| This module | OpenZeppelin equivalent |
-| --- | --- |
-| `DEFAULT_ADMIN_ROLE`, `ISSUER_ROLE` | `DEFAULT_ADMIN_ROLE`, custom role constants |
-| `has_role` / `require_role` | `has_role` / `only_role` |
-| `grant_role` / `revoke_role` / `renounce_role` | `grant_role` / `revoke_role` / `renounce_role` |
-| `role_members` | `get_role_members` (enumeration variant) |
+Discriminants are part of the contract interface: existing variants are never
+renumbered and new ones are only appended. `test_error_variants_map_to_stable_discriminants`
+pins them so an accidental reorder fails the build rather than a client.
 
-Swapping the implementation for the real crate later is a `use` change, not a
-rewrite.
+`register_asset` gained a `supply_cap` parameter that is now stored on the
+record, which is what makes `SupplyCapExceeded` enforceable on-chain instead of
+being an off-chain promise.
 
-Two deviations from stock OpenZeppelin, both deliberate:
+## Input validation (#1759)
 
-1. **Last-admin protection.** `revoke_role` refuses to remove `DEFAULT_ADMIN_ROLE`
-   from its last holder (`CannotRevokeLastAdmin`). Stock OZ lets an admin renounce
-   itself into a bricked contract; on a registry that would mean no pause and no
-   upgrade path.
-2. **Grant before revoke.** `transfer_admin` grants the successor the role before
-   revoking the incumbent, so there is never an instant with zero admins.
+`src/validation.rs` runs **before** any `require_auth`. That ordering matters:
+if auth ran first, the error a caller receives would depend on who holds
+authority, and a malformed call could be used to probe the admin set at the cost
+of only the rejected invocation. Validating first means a bad argument is
+rejected uniformly, for everyone, without consuming an authorization.
 
-## Integration tests (#1762)
+The `asset_id` alphabet is ASCII alphanumerics plus `-` and `_`. That covers the
+`HOSP-2026-001` style identifiers used across the platform while keeping control
+characters and bidi overrides out of a value that ends up rendered in dashboards
+and explorers.
 
-`tests/flows.rs` lives outside the crate and reaches the contract only through
-what `lib.rs` re-exports, so it doubles as a public-surface regression check:
-if a flow there stops compiling, the exported API has regressed even though the
-unit tests still pass. Four end-to-end scenarios — issuance lifecycle with
-accounting reconciliation, admin handover, rejection paths asserting the ledger
-is untouched, issuer-role withdrawal, and pause.
+## Events (#1757)
 
-## Access control audit (#1763)
+Every state-changing entry point publishes exactly one event, carrying the
+complete before/after delta, so contract state is reconstructible from the event
+stream alone without replaying transactions.
 
-[`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) records the trust model, five findings
-and their fixes, an entry-point-to-negative-test coverage map, and the residual
-risk that remains accepted. Summary:
+| Topic 0 | Topic 1 | Emitted by | Payload |
+| --- | --- | --- | --- |
+| `init` | — | `initialize` | `admin`, `treasury` |
+| `adm_xfer` | — | `transfer_admin` | `previous`, `current` |
+| `treasury` | — | `set_treasury_address` | `treasury` |
+| `pause` | — | `pause` / `unpause` | resulting `paused` bool |
+| `asset` | `reg` | `register_asset` | `asset_id`, `issuer`, `supply_cap`, `decimals`, `ts` |
+| `asset` | `mint` | `mint` | `asset_id`, `to`, `amount`, `new_supply`, `new_balance`, `ts` |
+| `asset` | `burn` | `burn` | `asset_id`, `from`, `amount`, `new_supply`, `new_balance`, `ts` |
+| `asset` | `xfer` | `transfer` | `asset_id`, `from`, `to`, `amount`, `from_balance`, `to_balance`, `ts` |
 
-- **F1** Supply creation was gated only by asset ownership; `ISSUER_ROLE` now
-  gates it, so that power is separately auditable and revocable.
-- **F2** Authority was resolved from a single mirrored slot; it is now derived
-  from role membership and cross-checked, so the two cannot drift.
-- **F3** Nothing stopped an admin from revoking its own admin role and bricking
-  the contract; now refused.
-- **F4** `renounce_role` could orphan the role-member index, which would have
-  defeated the F3 guard; both are cleared together.
-- **F5** Pause does not block queries — accepted, and recorded as a decision.
+Topics stay within the 9-byte `symbol_short!` limit. Rejected calls emit
+nothing, which `test_rejected_calls_emit_no_events` asserts.
 
-Tests that assert *which* address had to authorize use `env.auths()` rather than
-relying on `mock_all_auths()`, because the audit question is "whose signature was
-demanded", not "did the call succeed".
+## Gas (#1758)
 
-## Invariants (#1764)
+Each entry point reads every ledger key at most once and writes back only what
+changed.
 
-`src/invariant_tests.rs` asserts properties that must hold for **any** path
-through the state machine, rather than for documented flows:
+- `mint` / `burn` — a single `asset_of` read serves the existence check, the cap
+  check and the write-back. The old code re-read the record after mutating it.
+- `transfer` — does **not** rewrite the asset record at all, because it does not
+  touch supply. Two balance writes, no third.
+- `register_asset` — `asset_count` is read and written once; the record is
+  constructed inline rather than being read-modify-written.
+- Arithmetic is computed once into locals (`new_supply`, `new_balance`) and
+  written once, rather than reading back what was just stored.
+- Queries avoid the `unwrap_or(0)` + branch that the write paths use, so a read
+  that misses costs one ledger read instead of a read plus a write.
 
-- balances of tracked holders sum to reported supply
-- supply moves only by the explicit mint/burn amount; transfers are value-preserving
-- no balance can exceed reported supply
-- rejected calls leave state byte-identical
-- the asset record and the `total_supply` query can never disagree
-- asset count is monotone and re-registration is rejected
-- exactly one admin exists after any transfer
-- withdrawing `ISSUER_ROLE` halts all supply creation; restoring it resumes from
-  the ledger, not from zero
-- pause is total: no role, however privileged, can move state while it holds
+## Tests
 
-## Running
-
-```bash
-cargo test -p tokenization              # unit + invariant tests
-cargo test -p tokenization --test flows # end-to-end flows
-cargo clippy -p tokenization --all-targets -- -D warnings
-```
+`src/test.rs` covers initialization, the happy path, and every error path, plus
+event counts per topic pair and the `u32`-discriminant pinning. Run with
+`cargo test -p tokenization`.
