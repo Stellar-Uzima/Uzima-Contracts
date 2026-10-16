@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
+- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, under admin / registrar / owner roles (#1773, #1774, #1775, #1776)
+- `contracts/property_registry` publishes one event per state change carrying the full before/after delta (`init`, `adm_xfer`, `registrar`, `pause`, `prop`/`reg`, `prop`/`value`, `prop`/`xfer`, `prop`/`share`); rejected calls emit nothing (#1773)
+- `contracts/property_registry` reads each ledger key at most once per entry point and settles both legs of an ownership split before any of them lands (#1774)
+- `contracts/property_registry` adds `src/validation.rs`, run before any `require_auth` so a malformed call cannot be used to probe which addresses hold authority: `property_id` in `3..=64` over `[A-Za-z0-9_-]`, strictly positive `valuation`, alphabetic `valuation_currency` of at most 8 bytes, `metadata_uri` in `1..=512`, shares in `1..=BASIS_POINTS_SCALE` (#1775)
+- `contracts/property_registry` replaces the shared `InvalidArgument` with 16 typed error variants and pins their `u32` discriminants in a test, since the discriminants are part of the contract interface (#1776)
 - Canonical address normalization layer for identity and access flows (`identity_registry`)
 - Release note generation script (`scripts/generate_release_notes.sh`)
 - Semantic versioning discipline for contract interfaces and SDK compatibility
