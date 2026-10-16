@@ -1,0 +1,92 @@
+# FractionalOwnership
+
+`contracts/fractional_ownership` splits ownership of an asset into fungible
+shares. Shares can be transferred, sold at a fixed price, and entitle their
+holder to a pro-rata part of payouts (for example rental income) funded into
+the contract.
+
+Tracking issues: #1785 (unit tests), #1786 (fuzz tests), #1787 (NatSpec),
+#1788 (reentrancy review).
+
+## Model
+
+- An **asset** is created by the admin with a fixed number of shares, all
+  minted to an issuer. Asset ids start at 1.
+- A **listing** is a standing offer by a holder: `amount` shares at
+  `price_per_share` payment-token base units. Shares are not escrowed; the
+  seller's balance is re-checked when someone buys.
+- A **payout pool** per asset is funded by anyone through `deposit_payout`
+  and shared by holders in proportion to their shares.
+
+## Entry points
+
+| Function | Caller | Effect |
+|---|---|---|
+| `initialize(admin, payment_token)` | admin | One-time setup |
+| `create_asset(admin, issuer, total_shares)` | admin | Mint a fixed supply to `issuer`, returns the asset id |
+| `transfer(from, to, asset_id, amount)` | holder | Move shares |
+| `list_shares(seller, asset_id, amount, price_per_share)` | holder | Create or replace a listing |
+| `cancel_listing(seller, asset_id)` | holder | Remove a listing |
+| `buy(buyer, seller, asset_id, amount)` | buyer | Fill (part of) a listing, returns the cost |
+| `deposit_payout(depositor, asset_id, amount)` | anyone | Fund the payout pool |
+| `claim_payout(owner, asset_id)` | holder | Withdraw everything owed, returns the amount |
+| `get_admin`, `get_payment_token`, `get_asset_count` | anyone | Configuration views |
+| `get_total_shares`, `get_balance`, `get_listing` | anyone | Share and listing views |
+| `get_payout_index`, `get_pending_payout` | anyone | Payout views |
+
+Read-only functions use the `get_` prefix so `scripts/check_events.sh`
+recognises them as non-mutating.
+
+## Payout accounting
+
+The contract keeps a cumulative **payout index** per asset: payout per share
+scaled by `PAYOUT_PRECISION` (10^12).
+
+```
+deposit:  index += amount * PAYOUT_PRECISION / total_shares      (floored)
+accrued:  balance * (index - checkpoint) / PAYOUT_PRECISION      (floored)
+```
+
+A holder's accrual is **settled** (moved to a pending balance and the
+checkpoint advanced) before that holder's balance changes, so transfers and
+purchases never change what either side is already owed. A deposit costs the
+same regardless of the number of holders.
+
+Rounding always floors, so the contract can never owe more than it holds.
+The remainder (dust, under one payment-token base unit per deposit and per
+settlement) stays in the contract. A deposit so small that it would not move
+the index is rejected with `PayoutTooSmall` instead of being locked up.
+
+## Errors
+
+Codes are registered in `docs/ERROR_CODES.md` under the reserved range
+`3000-3099`.
+
+| Code | Name | Meaning |
+|---|---|---|
+| 3001 | `NotInitialized` | `initialize` has not run |
+| 3002 | `AlreadyInitialized` | `initialize` already ran |
+| 3003 | `Unauthorized` | Caller is not the stored admin |
+| 3004 | `InvalidAmount` | Zero or negative amount, supply or price |
+| 3005 | `AssetNotFound` | Unknown asset id |
+| 3006 | `InsufficientShares` | Holder owns fewer shares than requested |
+| 3007 | `SelfTransfer` | `from == to` or `buyer == seller` |
+| 3008 | `NoListing` | No open listing to cancel or buy |
+| 3009 | `ExceedsListing` | Buying more than the listing offers |
+| 3010 | `Overflow` | Checked arithmetic overflowed |
+| 3011 | `NothingToClaim` | Nothing is owed to the caller |
+| 3012 | `PayoutTooSmall` | Deposit too small to distribute |
+
+## Storage
+
+Instance: `Admin`, `PaymentToken`, `AssetCount`. Persistent: `TotalShares`,
+`Balance`, `Listing`, `PayoutIndex`, `Checkpoint`, `Pending`. Persistent
+entries have their TTL extended on every write.
+
+## Known limitations
+
+- The supply of an asset is fixed at creation; there is no burn or re-mint.
+- There is no pause switch and no fee. Both are intentionally out of scope for
+  the base contract.
+- The payment token is fixed at `initialize` and is trusted to behave like a
+  standard token (see the security review for what that assumes).

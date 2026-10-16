@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
+- `contracts/fractional_ownership`: fixed-supply fractional ownership shares with transfers, fixed-price listings and a pro-rata payout pool; error codes reserved in `3000-3099` (base contract for #1785, #1786, #1787, #1788)
 - `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, with role-based access control (#1777, #1778, #1779, #1780)
 - `contracts/property_registry` gains `src/access_control.rs`, an in-tree `Ownable` + `AccessControl` model with `DEFAULT_ADMIN_ROLE` and `REGISTRAR`; `record_ownership` is gated by both the registrar role and the owner of record, and revoking `DEFAULT_ADMIN_ROLE` from its last holder is refused with `CannotRevokeLastAdmin` (#1777)
 - `contracts/property_registry/tests/flows.rs` added: four end-to-end scenarios driven only through the crate`s public re-exports, so the suite doubles as a public-surface regression check (#1778)

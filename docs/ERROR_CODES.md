@@ -27,6 +27,7 @@ Only rows with status `unique-range` are enforced for overlap by `scripts/check_
 | `common_error` | `unique-range` | `0-99` | Shared reusable contract-agnostic errors |
 | `medical_records` | `unique-range` | `1000-1899` | Already migrated to contract-unique numbering |
 | `rbac` | `unique-range` | `2000-2099` | Uses `common_error` for shared low-code compatibility helpers |
+| `fractional_ownership` | `unique-range` | `3000-3099` | Share ledger, fixed-price listings and payout pool (#1785-#1788) |
 | `appointment_booking_escrow` | `legacy-shared-category` | `100-599` | Still uses shared category bands |
 | `audit` | `legacy-shared-category` | `100-499` | Still uses shared category bands |
 | `clinical_nlp` | `legacy-shared-category` | `100-899` | Still uses shared category bands |
