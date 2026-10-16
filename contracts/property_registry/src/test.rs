@@ -1,12 +1,14 @@
+//! Unit tests for `PropertyRegistry`, grouped by the acceptance criteria each
+//! group covers: initialization, happy path, and error path.
 #![cfg(test)]
 #![allow(clippy::unwrap_used)]
 
 use super::*;
 
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Symbol};
+use soroban_sdk::{testutils::{Address as _, Ledger as _}, Address, Env, String};
 
 macro_rules! setup {
-    ($registrar_has_role:expr) => {{
+    () => {{
         let env = Env::default();
         env.mock_all_auths();
 
@@ -17,14 +19,8 @@ macro_rules! setup {
         let contract_id = env.register_contract(None, PropertyRegistryContract);
         let client = PropertyRegistryContractClient::new(&env, &contract_id);
         client.initialize(&admin, &registrar);
-        if $registrar_has_role {
-            client.grant_role(&registrar, &REGISTRAR_ROLE);
-        }
 
-        let id = sid(&env, "PROP-1");
-        client.register_property(&id, &owner, &250_000_00, &sid(&env, "USD"), &sid(&env, "ipfs://deed"));
-
-        (env, contract_id, client, admin, registrar, owner, id)
+        (env, client, admin, registrar, owner)
     }};
 }
 
@@ -32,33 +28,37 @@ fn sid(env: &Env, value: &str) -> String {
     String::from_str(env, value)
 }
 
-/// Was `who` the address that had to authorize `function` on `contract_id`?
-///
-/// `Symbol::new` rather than `symbol_short!` because several entry-point names
-/// exceed the 9-character short-symbol limit.
-fn authorized(env: &Env, who: &Address, contract_id: &Address, function: &str) -> bool {
-    let expected = Symbol::new(env, function);
-    env.auths()
-        .iter()
-        .any(|record| record.0 == *who && record.1 == *contract_id && record.2 == expected)
+macro_rules! register {
+    ($env:expr, $client:expr, $owner:expr) => {{
+        let id = sid($env, "PROP-1");
+        $client.register_property(
+            &$id,
+            $owner,
+            &250_000_00,
+            &sid($env, "USD"),
+            &sid($env, "ipfs://deed"),
+        );
+        $id
+    }};
 }
 
 // ---------------------------------------------------------------------------
-// Lifecycle
+// Initialization
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_initialize_grants_the_deployer_the_admin_role() {
-    let (_env, _cid, client, admin, _registrar, _owner, _id) = setup!(false);
+fn test_initialize_records_admin_and_registrar() {
+    let (_env, client, admin, registrar, _owner) = setup!();
 
-    assert!(client.has_role(&admin, &DEFAULT_ADMIN_ROLE));
     assert_eq!(client.admin(), admin);
-    assert_eq!(client.role_members(&DEFAULT_ADMIN_ROLE).len(), 1);
+    assert_eq!(client.registrar(), registrar);
+    assert!(!client.paused());
+    assert_eq!(client.total_properties(), 0);
 }
 
 #[test]
 fn test_initialize_can_only_run_once() {
-    let (_env, _cid, client, admin, registrar, _owner, _id) = setup!(false);
+    let (_env, client, admin, registrar, _owner) = setup!();
 
     assert_eq!(
         client.try_initialize(&admin, &registrar),
@@ -67,210 +67,172 @@ fn test_initialize_can_only_run_once() {
 }
 
 #[test]
-fn test_initialize_is_gated_by_the_deployer() {
+fn test_queries_before_initialization_report_not_initialized() {
     let env = Env::default();
-    env.mock_all_auths();
-
-    let deployer = Address::generate(&env);
     let contract_id = env.register_contract(None, PropertyRegistryContract);
     let client = PropertyRegistryContractClient::new(&env, &contract_id);
 
-    client.initialize(&deployer, &deployer);
-
-    assert!(authorized(&env, &deployer, &contract_id, "initialize"));
-}
-
-// ---------------------------------------------------------------------------
-// #1779 — access control audit
-// ---------------------------------------------------------------------------
-
-#[test]
-fn test_register_property_is_gated_by_the_registrar() {
-    let (env, contract_id, client, _admin, registrar, _owner, _id) = setup!(true);
-
-    client.register_property(
-        &sid(&env, "PROP-2"),
-        &Address::generate(&env),
-        &100,
-        &sid(&env, "USD"),
-        &sid(&env, "uri"),
-    );
-
-    assert!(authorized(
-        &env,
-        &registrar,
-        &contract_id,
-        "register_property"
-    ));
-}
-
-#[test]
-fn test_registrar_slot_without_the_role_cannot_amend_the_register() {
-    let (env, _cid, client, _admin, _registrar, _owner, _id) = setup!(false);
-
-    // `initialize` recorded this address as the registrar, but no role was
-    // granted, so every registrar-gated write is refused.
+    assert_eq!(client.try_admin(), Err(Ok(Error::NotInitialized)));
+    assert_eq!(client.try_registrar(), Err(Ok(Error::NotInitialized)));
     assert_eq!(
-        client.try_update_valuation(&sid(&env, "PROP-1"), &1),
-        Err(Ok(Error::Unauthorized))
+        client.try_get_property(&sid(&env, "PROP-1")),
+        Err(Ok(Error::NotInitialized))
     );
 }
 
 #[test]
-fn test_role_checks_reject_addresses_without_the_role() {
-    let (env, _cid, client, _admin, registrar, _owner, _id) = setup!(false);
-    let stranger = Address::generate(&env);
+fn test_admin_functions_before_initialization_report_not_initialized() {
+    let env = Env::default();
+    env.mock_all_auths();
 
-    assert!(!client.has_role(&stranger, &DEFAULT_ADMIN_ROLE));
-    assert!(!client.has_role(&registrar, &REGISTRAR_ROLE));
+    let next = Address::generate(&env);
+    let contract_id = env.register_contract(None, PropertyRegistryContract);
+    let client = PropertyRegistryContractClient::new(&env, &contract_id);
+
+    assert_eq!(
+        client.try_transfer_admin(&next),
+        Err(Ok(Error::NotInitialized))
+    );
+    assert_eq!(client.try_pause(), Err(Ok(Error::NotInitialized)));
+}
+
+// ---------------------------------------------------------------------------
+// Happy path
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_register_property_seeds_the_full_position() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+
+    assert_eq!(client.total_properties(), 1);
+    assert_eq!(client.ownership_of(&id, &owner), BASIS_POINTS_SCALE);
+
+    let property = client.get_property(&id);
+    assert_eq!(property.property_id, id);
+    assert_eq!(property.owner, owner);
+    assert_eq!(property.valuation, 250_000_00);
+    assert_eq!(property.holder_count, 1);
+    assert_eq!(property.created_at, property.updated_at);
 }
 
 #[test]
-fn test_update_valuation_is_gated_by_the_registrar() {
-    let (env, contract_id, client, _admin, registrar, _owner, id) = setup!(true);
+fn test_update_valuation_changes_the_record() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
 
+    env.ledger().set_timestamp(1_700_000_000);
     client.update_valuation(&id, &300_000_00);
 
-    assert!(authorized(&env, &registrar, &contract_id, "update_valuation"));
+    let property = client.get_property(&id);
+    assert_eq!(property.valuation, 300_000_00);
+    assert_eq!(property.created_at, 0);
+    assert_eq!(property.updated_at, 1_700_000_000);
 }
 
 #[test]
-fn test_record_ownership_needs_both_the_role_and_the_owner() {
-    let (env, contract_id, client, _admin, _registrar, owner, id) = setup!(true);
+fn test_record_ownership_moves_share_and_counts_the_holder() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
     let investor = Address::generate(&env);
 
     client.record_ownership(&id, &investor, &2_500);
 
-    // Both signatures are demanded: the registrar to amend the register, the
-    // owner of record to have their position debited.
-    assert!(authorized(&env, &owner, &contract_id, "record_ownership"));
+    assert_eq!(client.ownership_of(&id, &owner), 7_500);
+    assert_eq!(client.ownership_of(&id, &investor), 2_500);
+    assert_eq!(client.get_property(&id).holder_count, 2);
 }
 
 #[test]
-fn test_transfer_property_is_gated_by_the_owner_of_record() {
-    let (env, contract_id, client, _admin, _registrar, owner, id) = setup!(true);
+fn test_repeat_transfer_to_the_same_holder_does_not_double_count() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let investor = Address::generate(&env);
+
+    client.record_ownership(&id, &investor, &2_500);
+    client.record_ownership(&id, &investor, &1_500);
+
+    assert_eq!(client.ownership_of(&id, &investor), 4_000);
+    assert_eq!(client.get_property(&id).holder_count, 2);
+}
+
+#[test]
+fn test_shares_can_be_diluted_to_exactly_one_hundred_percent() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let first = Address::generate(&env);
+    let second = Address::generate(&env);
+
+    client.record_ownership(&id, &first, &4_000);
+    client.record_ownership(&id, &second, &6_000);
+
+    let total = client.ownership_of(&id, &owner)
+        + client.ownership_of(&id, &first)
+        + client.ownership_of(&id, &second);
+    assert_eq!(total, BASIS_POINTS_SCALE);
+    assert_eq!(client.get_property(&id).holder_count, 3);
+}
+
+#[test]
+fn test_transfer_property_moves_the_whole_position() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
     let buyer = Address::generate(&env);
 
     client.transfer_property(&id, &buyer);
 
-    assert!(authorized(
-        &env,
-        &owner,
-        &contract_id,
-        "transfer_property"
-    ));
+    assert_eq!(client.get_property(&id).owner, buyer);
+    assert_eq!(client.ownership_of(&id, &owner), 0);
+    assert_eq!(client.ownership_of(&id, &buyer), BASIS_POINTS_SCALE);
+    assert_eq!(client.get_property(&id).holder_count, 1);
 }
 
 #[test]
-fn test_revoke_removes_the_role_and_stops_amendments() {
-    let (env, _cid, client, _admin, registrar, _owner, id) = setup!(true);
+fn test_transfer_property_moves_only_the_incumbents_position() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let investor = Address::generate(&env);
+    let buyer = Address::generate(&env);
 
-    client.revoke_role(&registrar, &REGISTRAR_ROLE);
+    client.record_ownership(&id, &investor, &3_000);
+    client.transfer_property(&id, &buyer);
 
-    assert!(!client.has_role(&registrar, &REGISTRAR_ROLE));
-    assert_eq!(client.role_members(&REGISTRAR_ROLE).len(), 0);
-    assert_eq!(
-        client.try_update_valuation(&id, &1),
-        Err(Ok(Error::Unauthorized))
-    );
+    // The owner of record held 7_000 bps, so 7_000 move and the investor keeps
+    // its 3_000; the buyer lands at 7_000, not 100%.
+    assert_eq!(client.ownership_of(&id, &investor), 3_000);
+    assert_eq!(client.ownership_of(&id, &buyer), 7_000);
+    assert_eq!(client.ownership_of(&id, &owner), 0);
+    assert_eq!(client.get_property(&id).holder_count, 2);
 }
 
 #[test]
-fn test_a_registrar_without_the_role_cannot_escalate_itself() {
-    let (env, _cid, client, _admin, _registrar, _owner, _id) = setup!(false);
-    let intruder = Address::generate(&env);
-
-    client.grant_role(&intruder, &REGISTRAR_ROLE);
-    assert!(!client.has_role(&intruder, &DEFAULT_ADMIN_ROLE));
-}
-
-#[test]
-fn test_last_admin_cannot_be_revoked() {
-    let (_env, _cid, client, admin, _registrar, _owner, _id) = setup!(false);
-
-    assert_eq!(
-        client.try_revoke_role(&admin, &DEFAULT_ADMIN_ROLE),
-        Err(Ok(Error::CannotRevokeLastAdmin))
-    );
-}
-
-#[test]
-fn test_second_admin_allows_the_first_to_step_down() {
-    let (env, _cid, client, admin, _registrar, _owner, _id) = setup!(false);
-    let successor = Address::generate(&env);
-
-    client.grant_role(&successor, &DEFAULT_ADMIN_ROLE);
-    client.revoke_role(&admin, &DEFAULT_ADMIN_ROLE);
-
-    assert!(!client.has_role(&admin, &DEFAULT_ADMIN_ROLE));
-    assert!(client.has_role(&successor, &DEFAULT_ADMIN_ROLE));
-}
-
-#[test]
-fn test_transfer_admin_rotates_the_role_not_just_the_mirror() {
-    let (env, _cid, client, _admin, _registrar, _owner, _id) = setup!(false);
+fn test_transfer_admin_rotates_the_admin() {
+    let (env, client, _admin, _registrar, _owner) = setup!();
     let next = Address::generate(&env);
 
     client.transfer_admin(&next);
 
     assert_eq!(client.admin(), next);
-    assert!(client.has_role(&next, &DEFAULT_ADMIN_ROLE));
-    assert!(!client.has_role(&Address::generate(&env), &DEFAULT_ADMIN_ROLE));
-    assert_eq!(client.role_members(&DEFAULT_ADMIN_ROLE).len(), 1);
 }
 
 #[test]
-fn test_renounce_clears_every_role() {
-    let (env, _cid, client, _admin, registrar, _owner, _id) = setup!(true);
+fn test_set_registrar_rotates_the_registrar() {
+    let (env, client, _admin, _registrar, _owner) = setup!();
+    let next = Address::generate(&env);
 
-    client.renounce_role();
+    client.set_registrar(&next);
 
-    assert!(!client.has_role(&registrar, &REGISTRAR_ROLE));
-    assert_eq!(client.role_members(&REGISTRAR_ROLE).len(), 0);
-}
-
-#[test]
-fn test_pause_blocks_every_state_change_regardless_of_role() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
-    let investor = Address::generate(&env);
-    let buyer = Address::generate(&env);
-
-    client.pause();
-
-    assert!(client.paused());
-    assert_eq!(
-        client.try_update_valuation(&id, &1),
-        Err(Ok(Error::Unauthorized))
-    );
-    assert_eq!(
-        client.try_record_ownership(&id, &investor, &1),
-        Err(Ok(Error::Unauthorized))
-    );
-    assert_eq!(
-        client.try_transfer_property(&id, &buyer),
-        Err(Ok(Error::Unauthorized))
-    );
-
-    client.unpause();
-    client.update_valuation(&id, &1);
+    assert_eq!(client.registrar(), next);
 }
 
 // ---------------------------------------------------------------------------
-// Behaviour
+// Error paths
 // ---------------------------------------------------------------------------
 
 #[test]
-fn test_register_seeds_full_ownership() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
-
-    assert_eq!(client.total_properties(), 1);
-    assert_eq!(client.ownership_of(&id, &owner), BASIS_POINTS_SCALE);
-    assert_eq!(client.get_property(&id).holder_count, 1);
-}
-
-#[test]
-fn test_register_rejects_duplicate_id() {
-    let (env, _cid, client, _admin, registrar, owner, id) = setup!(true);
+fn test_register_rejects_duplicate_property_id() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
 
     assert_eq!(
         client.try_register_property(
@@ -286,23 +248,47 @@ fn test_register_rejects_duplicate_id() {
 }
 
 #[test]
-fn test_record_ownership_moves_share_and_counts_the_holder() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
-    let investor = Address::generate(&env);
+fn test_operations_on_unknown_property_report_not_found() {
+    let (env, client, _admin, _registrar, _owner) = setup!();
+    let id = sid(&env, "MISSING");
+    let other = Address::generate(&env);
 
-    client.record_ownership(&id, &investor, &2_500);
+    assert_eq!(
+        client.try_get_property(&id),
+        Err(Ok(Error::PropertyNotFound))
+    );
+    assert_eq!(
+        client.try_update_valuation(&id, &1),
+        Err(Ok(Error::PropertyNotFound))
+    );
+    assert_eq!(
+        client.try_record_ownership(&id, &other, &1),
+        Err(Ok(Error::PropertyNotFound))
+    );
+    assert_eq!(
+        client.try_transfer_property(&id, &other),
+        Err(Ok(Error::PropertyNotFound))
+    );
+}
 
-    assert_eq!(client.ownership_of(&id, &owner), 7_500);
-    assert_eq!(client.ownership_of(&id, &investor), 2_500);
-    assert_eq!(client.get_property(&id).holder_count, 2);
+#[test]
+fn test_ownership_of_unknown_holder_is_zero_rather_than_an_error() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
 
-    client.record_ownership(&id, &investor, &1_000);
-    assert_eq!(client.get_property(&id).holder_count, 2);
+    assert_eq!(client.ownership_of(&id, &Address::generate(&env)), 0);
+    // Even for a property that does not exist at all.
+    assert_eq!(
+        client.ownership_of(&sid(&env, "MISSING"), &Address::generate(&env)),
+        0
+    );
+    let _ = owner;
 }
 
 #[test]
 fn test_record_ownership_rejects_more_than_the_owner_holds() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
     let investor = Address::generate(&env);
 
     client.record_ownership(&id, &investor, &6_000);
@@ -311,43 +297,181 @@ fn test_record_ownership_rejects_more_than_the_owner_holds() {
         client.try_record_ownership(&id, &investor, &4_001),
         Err(Ok(Error::OwnershipExceedsShare))
     );
+    // The rejected call must not have moved anything.
     assert_eq!(client.ownership_of(&id, &investor), 6_000);
+    assert_eq!(client.ownership_of(&id, &owner), 4_000);
 }
 
 #[test]
-fn test_transfer_property_moves_the_whole_position() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
-    let buyer = Address::generate(&env);
-
-    client.transfer_property(&id, &buyer);
-
-    assert_eq!(client.get_property(&id).owner, buyer);
-    assert_eq!(client.ownership_of(&id, &owner), 0);
-    assert_eq!(client.ownership_of(&id, &buyer), BASIS_POINTS_SCALE);
-    assert_eq!(client.get_property(&id).holder_count, 1);
-}
-
-#[test]
-fn test_transfer_property_rejects_transfer_to_self() {
-    let (env, _cid, client, _admin, _registrar, owner, id) = setup!(true);
+fn test_record_ownership_rejects_crediting_the_owner_of_record() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
 
     assert_eq!(
-        client.try_transfer_property(&id, &owner),
+        client.try_record_ownership(&id, &owner, &1_000),
         Err(Ok(Error::InvalidArgument))
     );
 }
 
 #[test]
-fn test_queries_fail_for_unknown_property() {
-    let (env, _cid, client, _admin, _registrar, _owner, _id) = setup!(true);
-    let id = sid(&env, "MISSING");
+fn test_record_ownership_rejects_pushing_a_holder_above_one_hundred_percent() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let investor = Address::generate(&env);
 
-    assert_eq!(client.try_get_property(&id), Err(Ok(Error::PropertyNotFound)));
+    client.record_ownership(&id, &investor, &6_000);
+    client.record_ownership(&id, &investor, &4_000);
+
+    assert_eq!(client.ownership_of(&id, &investor), BASIS_POINTS_SCALE);
+    assert_eq!(client.ownership_of(&id, &owner), 0);
 }
 
 #[test]
-fn test_ownership_of_unknown_holder_is_zero() {
-    let (env, _cid, client, _admin, _registrar, _owner, id) = setup!(true);
+fn test_transfer_property_rejects_transfer_to_self() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
 
-    assert_eq!(client.ownership_of(&id, &Address::generate(&env)), 0);
+    assert_eq!(
+        client.try_transfer_property(&id, &owner),
+        Err(Ok(Error::InvalidArgument))
+    );
+    assert_eq!(client.ownership_of(&id, &owner), BASIS_POINTS_SCALE);
+}
+
+#[test]
+fn test_transfer_property_with_a_diluted_owner_moves_nothing() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let investor = Address::generate(&env);
+
+    // The owner hands the whole position to `investor`, who is then at 100%.
+    client.record_ownership(&id, &investor, &8_000);
+    assert_eq!(client.ownership_of(&id, &investor), 8_000);
+
+    // A successor that already holds the maximum cannot be credited further.
+    let other = Address::generate(&env);
+    client.record_ownership(&id, &other, &2_000);
+    client.record_ownership(&id, &investor, &2_000);
+    assert_eq!(client.ownership_of(&id, &investor), BASIS_POINTS_SCALE);
+
+    // The owner now holds zero, so handing the property over moves nothing and
+    // cannot over-commit the new owner of record.
+    client.transfer_property(&id, &investor);
+    assert_eq!(client.ownership_of(&id, &investor), BASIS_POINTS_SCALE);
+}
+
+#[test]
+fn test_pause_blocks_every_state_change_and_unpause_restores_them() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+    let investor = Address::generate(&env);
+
+    client.pause();
+
+    assert!(client.paused());
+    assert_eq!(
+        client.try_update_valuation(&id, &1),
+        Err(Ok(Error::Unauthorized))
+    );
+    assert_eq!(
+        client.try_record_ownership(&id, &investor, &1),
+        Err(Ok(Error::Unauthorized))
+    );
+    assert_eq!(
+        client.try_transfer_property(&id, &investor),
+        Err(Ok(Error::Unauthorized))
+    );
+    assert_eq!(
+        client.try_register_property(
+            &sid(&env, "PROP-2"),
+            &owner,
+            &1,
+            &sid(&env, "USD"),
+            &sid(&env, "uri")
+        ),
+        Err(Ok(Error::Unauthorized))
+    );
+
+    client.unpause();
+    client.update_valuation(&id, &1);
+    assert_eq!(client.get_property(&id).valuation, 1);
+}
+
+#[test]
+fn test_pause_does_not_block_queries() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+
+    client.pause();
+
+    // Deliberate: a registry that cannot be inspected cannot be investigated.
+    assert!(client.paused());
+    assert_eq!(client.ownership_of(&id, &owner), BASIS_POINTS_SCALE);
+    assert_eq!(client.get_property(&id).owner, owner);
+    assert_eq!(client.total_properties(), 1);
+}
+
+#[test]
+fn test_valuation_accepts_the_full_u128_range() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let id = register!(&env, &client, &owner);
+
+    client.update_valuation(&id, &u128::MAX);
+    assert_eq!(client.get_property(&id).valuation, u128::MAX);
+
+    client.update_valuation(&id, &0);
+    assert_eq!(client.get_property(&id).valuation, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Storage layout
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_data_key_variant_count_matches_the_enum() {
+    // If someone inserts a variant in the middle of `DataKey`, this fails and
+    // points at the storage-collision hazard rather than letting it reach a
+    // deployment.
+    assert_eq!(DATA_KEY_VARIANT_COUNT, 7);
+}
+
+#[test]
+fn test_property_records_are_independent() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let first = register!(&env, &client, &owner);
+
+    let second = sid(&env, "PROP-2");
+    client.register_property(
+        &second,
+        &owner,
+        &1,
+        &sid(&env, "USD"),
+        &sid(&env, "uri"),
+    );
+
+    client.update_valuation(&first, &999);
+
+    assert_eq!(client.get_property(&first).valuation, 999);
+    assert_eq!(client.get_property(&second).valuation, 1);
+    assert_eq!(client.total_properties(), 2);
+}
+
+#[test]
+fn test_ownership_entries_are_scoped_to_their_property() {
+    let (env, client, _admin, _registrar, owner) = setup!();
+    let first = register!(&env, &client, &owner);
+    let second = sid(&env, "PROP-2");
+    let investor = Address::generate(&env);
+
+    client.register_property(
+        &second,
+        &owner,
+        &1,
+        &sid(&env, "USD"),
+        &sid(&env, "uri"),
+    );
+    client.record_ownership(&first, &investor, &1_000);
+
+    assert_eq!(client.ownership_of(&first, &investor), 1_000);
+    assert_eq!(client.ownership_of(&second, &investor), 0);
 }

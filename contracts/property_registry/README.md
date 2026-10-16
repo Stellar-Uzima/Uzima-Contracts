@@ -6,111 +6,114 @@ recorded valuation, and fractional ownership shares in basis points.
 | | |
 | --- | --- |
 | Crate | `contracts/property_registry` |
-| Access control | `src/access_control.rs`, audited in [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) |
-| Tests | `src/test.rs` (behaviour + access control), `src/invariant_tests.rs` (state-machine invariants), `tests/flows.rs` (end-to-end through the public interface) |
+| Docs | Every entry point carries `# Auth`, `# Errors` and `# Events` sections on the definition |
+| Reentrancy | [`REENTRANCY_REVIEW.md`](REENTRANCY_REVIEW.md), guard in [`src/reentrancy_guard.rs`](src/reentrancy_guard.rs) |
+| Tests | `src/test.rs` (behaviour), `src/reentrancy_tests.rs` (guard), `tests/fuzz/property_registry` (proptest) |
 
-## Roles
+## Entry points
 
-| Role | Capabilities |
+| Group | Functions |
 | --- | --- |
-| `DEFAULT_ADMIN_ROLE` | Rotate admin and registrar, grant and revoke roles, pause/unpause |
-| `REGISTRAR` | Register properties, revalue, record ownership shares |
-| Owner of record | Transfer the property, authorize debits from their own position |
+| Lifecycle | `initialize`, `transfer_admin`, `set_registrar` |
+| Operations | `pause`, `unpause` |
+| Property lifecycle | `register_property`, `update_valuation`, `transfer_property`, `record_ownership` |
+| Queries | `get_property`, `ownership_of`, `total_properties`, `admin`, `registrar`, `paused`, `reentrancy_locked` |
 
-The three gates are deliberately distinct: `REGISTRAR` says *who may amend the
-register*, *owner of record* says *whose position may be debited*. Neither alone
-is sufficient for `record_ownership`.
+## Authorisation
 
-## OpenZeppelin primitives (#1777)
+Three independent authorities, all checked before any state is touched:
 
-`src/access_control.rs` implements role-based access control modelled on
-OpenZeppelin's `Ownable` + `AccessControl`, deliberately **in-tree** rather than
-as a dependency. The workspace pins `soroban-sdk = "=21.7.7"` and carries no
-OpenZeppelin Soroban crate; adding one changes the dependency graph for every
-contract in the workspace, and OpenZeppelin's Soroban contracts are still
-pre-1.0. That is a decision for maintainers, not a side effect of a hardening
-PR.
+| Authority | Held by | Gates |
+| --- | --- | --- |
+| admin | `initialize` caller | `transfer_admin`, `set_registrar`, `pause`, `unpause` |
+| registrar | `initialize` second argument | `register_property`, `update_valuation`, `record_ownership` |
+| owner of record | `Property.owner` | `transfer_property`, and the debit leg of `record_ownership` |
 
-The module is written to be drop-in replaceable:
+**`record_ownership` requires two of them.** The registrar says who may amend the
+register; the owner says whose position may be debited. Either alone would be
+unsafe — without the owner, a compromised registrar could strip every property in
+the registry.
 
-| This module | OpenZeppelin equivalent |
-| --- | --- |
-| `DEFAULT_ADMIN_ROLE`, `REGISTRAR_ROLE` | `DEFAULT_ADMIN_ROLE`, custom role constants |
-| `has_role` / `require_role` | `has_role` / `only_role` |
-| `require_admin` / `require_registrar` | modifier-style guards |
-| `grant_role` / `revoke_role` / `renounce_role` | `grant_role` / `revoke_role` / `renounce_role` |
-| `role_members` | `get_role_members` (enumeration variant) |
+## Execution ordering
 
-Swapping the implementation for the real crate later is a `use` change, not a
-rewrite.
+Every state-changing entry point runs **check → guard → read → compute → write**.
+Steps 4 and 5 are kept separate so a rejected call cannot leave a half-applied
+mutation, and each ledger key is read at most once per call.
 
-Two deviations from stock OpenZeppelin, both deliberate:
+## Reentrancy (#1772)
 
-1. **Last-admin protection.** `revoke_role` refuses to remove `DEFAULT_ADMIN_ROLE`
-   from its last holder (`CannotRevokeLastAdmin`). Stock OZ lets an admin
-   renounce itself into a bricked contract; on a registry that would mean no
-   pause, no registrar rotation and no upgrade path.
-2. **Grant before revoke.** `transfer_admin` grants the successor the role before
-   revoking the incumbent, so there is never an instant with zero admins.
+There is no cross-contract call in any value path. The one dispatch out of the
+contract is `require_auth()`, which for an address backed by a custom
+`SorobanAuthorization` contract — the normal way to express multi-sig, spending
+policies or session keys — is a real contract invocation whose callee the
+address holder chooses. That makes it a genuine reentrancy vector.
 
-The registrar slot (`DataKey::Registrar`, surfaced as `registrar()`) is retained
-alongside the role and is checked by `require_registrar_role`. It records *who the
-registry was configured with*; the role records *who may currently amend*. Both
-are enforced so a rotation that updates only the slot cannot silently do nothing.
+The two multi-key entry points therefore take the guard **before** any
+authorization dispatch. `transfer_property` also validates the successor's credit
+against `BASIS_POINTS_SCALE` before debiting the incumbent, so an over-commitment
+is rejected while the incumbent's position is still intact.
 
-## Integration tests (#1778)
+Single-key entry points are deliberately unguarded: a guard costs a ledger read
+and a write on every call, and there is no interleaving to protect against.
+`unguarded_entry_points_are_unaffected_by_the_guard` pins that.
 
-`tests/flows.rs` lives outside the crate and reaches the contract only through
-what `lib.rs` re-exports, so it doubles as a public-surface regression check: if
-a flow there stops compiling, the exported API has regressed even though the
-unit tests still pass. Four end-to-end scenarios — register lifecycle with share
-reconciliation, admin handover, rejection paths asserting the register is
-untouched, registrar-role withdrawal, and pause.
+Full reasoning, including the two assumptions that were checked and found sound
+(rollback releases the lock; sequential calls do not deadlock), is in
+[`REENTRANCY_REVIEW.md`](REENTRANCY_REVIEW.md).
 
-## Access control audit (#1779)
+## Tests
 
-[`SECURITY_AUDIT.md`](SECURITY_AUDIT.md) records the trust model, six findings
-and their fixes, an entry-point-to-negative-test coverage map, and the residual
-risk that remains accepted. Summary:
+### Unit (`src/test.rs`)
 
-- **F1** The registrar slot was the whole access model; there was no way to add a
-  second registrar or withdraw one without rotating the slot. `REGISTRAR_ROLE`
-  now gates every amendment.
-- **F2** Authority was a single mirrored slot, so the authorization target and the
-  record of who is in charge could not be checked independently. Authority is
-  now derived from role membership and cross-checked.
-- **F3** Nothing stopped an admin revoking its own admin role and bricking the
-  contract. Now refused.
-- **F4** `renounce_role` could orphan the role-member index, which would have
-  defeated the F3 guard. Both are cleared together.
-- **F5** `holder_count` could drift if the transitions were driven off the
-  argument rather than the share read. Both are driven off the share.
-- **F6** Pause does not block queries — accepted, and recorded as a decision.
+Grouped by the acceptance-criteria triad: initialization, happy path, error path.
+Covers each error variant, the self-transfer and owner-as-holder rejections,
+share dilution to exactly 100%, partial-position handover, independence of
+property records, and the pause behaviour including that **queries keep working
+while paused** — a registry that cannot be inspected cannot be investigated.
 
-Tests that assert *which* address had to authorize use `env.auths()` rather than
-relying on `mock_all_auths()`, because the audit question is "whose signature was
-demanded", not "did the call succeed".
+### Reentrancy (`src/reentrancy_tests.rs`)
 
-## Invariants (#1780)
+Driven from `ReentryProbe`, a real contract that calls back into the registry
+while its own frame is still open — not a test function calling twice
+sequentially, which would prove nothing. The re-entrant call is issued with
+`try_` so a refusal is observable as a value rather than aborting the outer
+frame, which lets each test assert which call was refused and what the ledger
+looks like afterwards.
 
-`src/invariant_tests.rs` asserts properties that must hold for **any** path
-through the state machine, rather than for documented flows:
+Asserts: re-entrant `transfer_property` and `record_ownership` are refused with
+exactly one operation landing; the guard is released after success; the guard is
+released after rejection *on both sides* of `enter`, including the over-commit
+path that would otherwise wedge the registry; sequential guarded calls both
+succeed; unguarded entry points are unaffected.
 
-- the ownership split always totals exactly 100%
-- no single share can exceed 100%
-- the owner of record is always a holder
-- `holder_count` tracks distinct holders and a repeat transfer never double-counts
-- property count is monotone and re-registration is rejected
-- revaluation never disturbs the ownership split
-- rejected calls leave the register byte-identical
-- exactly one admin exists after any transfer
-- withdrawing `REGISTRAR` halts amendments; restoring it resumes from the ledger
-- pause is total: no role, however privileged, can move state while it holds
+### Fuzz (`tests/fuzz/property_registry`)
+
+```bash
+cd tests/fuzz/property_registry && cargo test
+PROPTEST_CASES=5000 cargo test   # long-duration
+```
+
+Five properties, chosen as the ones random input can most plausibly break and
+example-based tests cannot reach:
+
+1. **No panic, ever** — whatever bytes arrive, the contract returns a typed
+   error or a value, never a host trap.
+2. **The split is conserved** — for any accepted `record_ownership`, the sum of
+   the two affected shares is unchanged.
+3. **No share exceeds 100%** — no accepted call pushes a holder past
+   `BASIS_POINTS_SCALE`.
+4. **Rejected calls are inert** — after any rejection, both shares are exactly
+   what they were.
+5. **Reentrancy never wedges** — after any failure on a guarded entry point the
+   guard is clear and a subsequent valid call still succeeds.
+
+Amounts are drawn from both ends of the `u128` range as well as the whole range,
+because wrap behaviour lives at the boundaries. Identifiers are drawn as raw
+byte vectors, so empty, over-long and non-ASCII payloads all reach the contract.
 
 ## Running
 
 ```bash
-cargo test -p property_registry               # unit + invariant tests
-cargo test -p property_registry --test flows  # end-to-end flows
+cargo test -p property_registry
 cargo clippy -p property_registry --all-targets -- -D warnings
 ```
