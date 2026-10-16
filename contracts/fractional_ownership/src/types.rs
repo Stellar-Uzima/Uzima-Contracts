@@ -1,13 +1,14 @@
 use soroban_sdk::{contracttype, Address};
 
-/// Storage keys. `Admin`, `PaymentToken` and `AssetCount` live in instance
-/// storage; every other key lives in persistent storage.
+/// Storage keys. `Admin`, `PaymentToken`, `AssetCount` and `Locked` live in
+/// instance storage; every other key lives in persistent storage.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
     Admin,
     PaymentToken,
     AssetCount,
+    Locked,
     TotalShares(u64),
     Balance(u64, Address),
     Listing(u64, Address),

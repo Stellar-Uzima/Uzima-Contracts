@@ -16,4 +16,5 @@ pub enum Error {
     Overflow = 3010,
     NothingToClaim = 3011,
     PayoutTooSmall = 3012,
+    Reentrancy = 3013,
 }

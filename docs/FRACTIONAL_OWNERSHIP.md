@@ -76,10 +76,11 @@ Codes are registered in `docs/ERROR_CODES.md` under the reserved range
 | 3010 | `Overflow` | Checked arithmetic overflowed |
 | 3011 | `NothingToClaim` | Nothing is owed to the caller |
 | 3012 | `PayoutTooSmall` | Deposit too small to distribute |
+| 3013 | `Reentrancy` | A guarded external call is in progress |
 
 ## Storage
 
-Instance: `Admin`, `PaymentToken`, `AssetCount`. Persistent: `TotalShares`,
+Instance: `Admin`, `PaymentToken`, `AssetCount`, `Locked`. Persistent: `TotalShares`,
 `Balance`, `Listing`, `PayoutIndex`, `Checkpoint`, `Pending`. Persistent
 entries have their TTL extended on every write.
 
@@ -149,3 +150,20 @@ NatSpec-style tags inside Rust doc comments, so they also render in `cargo doc`:
 | `@custom:error` | Each error the function can return and when |
 
 Module-level notes describe rounding, the payout index and storage layout.
+
+## Reentrancy review (#1788)
+
+The full review is in
+[`FRACTIONAL_OWNERSHIP_SECURITY_REVIEW.md`](FRACTIONAL_OWNERSHIP_SECURITY_REVIEW.md).
+In short:
+
+- The only external calls are to the payment token, in `buy`,
+  `deposit_payout` and `claim_payout`, and each one is the last step of its
+  function after all state is updated.
+- Those three functions also hold a storage lock (`DataKey::Locked`), and every
+  other mutating entry point refuses to run while it is held (`Reentrancy`,
+  code 3013).
+- `src/test_reentrancy.rs` uses a hostile payment token that tries to re-enter
+  `claim_payout`, `buy`, `deposit_payout`, `transfer` and `list_shares`
+  mid-call. All attempts are rejected and the balances, listing and payout
+  state show exactly one effect.

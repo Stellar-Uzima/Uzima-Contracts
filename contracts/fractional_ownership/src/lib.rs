@@ -16,8 +16,17 @@
 //! The remainder ("dust", less than one payment-token base unit per deposit
 //! and per settlement) stays in the contract.
 //!
+//! ## Reentrancy
+//! The only external calls are to the payment token, in `buy`,
+//! `deposit_payout` and `claim_payout`. All three update their own state
+//! first (checks-effects-interactions) and also hold a storage lock for
+//! the duration of the call. Every other state-changing entry point
+//! refuses to run while the lock is held. Soroban itself also forbids a
+//! contract from being re-entered; the lock is defense in depth. See
+//! `docs/FRACTIONAL_OWNERSHIP_SECURITY_REVIEW.md`.
+//!
 //! ## Storage
-//! Instance: `Admin`, `PaymentToken`, `AssetCount`.
+//! Instance: `Admin`, `PaymentToken`, `AssetCount`, `Locked`.
 //! Persistent: balances, listings, payout index, checkpoints, pending claims.
 
 #[cfg(test)]
@@ -28,6 +37,9 @@ mod types;
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod test_reentrancy;
 
 #[cfg(test)]
 mod fuzz_test;
@@ -83,12 +95,14 @@ impl FractionalOwnership {
     /// @custom:error NotInitialized The contract is not initialized.
     /// @custom:error Unauthorized `admin` is not the stored admin.
     /// @custom:error InvalidAmount `total_shares` is zero or negative.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn create_asset(
         env: Env,
         admin: Address,
         issuer: Address,
         total_shares: i128,
     ) -> Result<u64, Error> {
+        ensure_unlocked(&env)?;
         let stored = read_admin(&env)?;
         admin.require_auth();
         if admin != stored {
@@ -132,6 +146,7 @@ impl FractionalOwnership {
     /// @custom:error SelfTransfer `from` equals `to`.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `from` holds fewer than `amount`.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn transfer(
         env: Env,
         from: Address,
@@ -139,6 +154,7 @@ impl FractionalOwnership {
         asset_id: u64,
         amount: i128,
     ) -> Result<(), Error> {
+        ensure_unlocked(&env)?;
         from.require_auth();
         if amount <= 0 {
             return Err(Error::InvalidAmount);
@@ -166,6 +182,7 @@ impl FractionalOwnership {
     /// @custom:error InvalidAmount `amount` or `price_per_share` is not positive.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `seller` holds fewer than `amount`.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn list_shares(
         env: Env,
         seller: Address,
@@ -173,6 +190,7 @@ impl FractionalOwnership {
         amount: i128,
         price_per_share: i128,
     ) -> Result<(), Error> {
+        ensure_unlocked(&env)?;
         seller.require_auth();
         if amount <= 0 || price_per_share <= 0 {
             return Err(Error::InvalidAmount);
@@ -200,7 +218,9 @@ impl FractionalOwnership {
     /// @param seller Listing owner; must authorize the call.
     /// @param asset_id Asset whose listing is removed.
     /// @custom:error NoListing `seller` has no open listing for `asset_id`.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn cancel_listing(env: Env, seller: Address, asset_id: u64) -> Result<(), Error> {
+        ensure_unlocked(&env)?;
         seller.require_auth();
         let key = DataKey::Listing(asset_id, seller.clone());
         if !env.storage().persistent().has(&key) {
@@ -229,6 +249,7 @@ impl FractionalOwnership {
     /// @custom:error ExceedsListing `amount` is larger than the listed amount.
     /// @custom:error Overflow `amount * price_per_share` overflows `i128`.
     /// @custom:error InsufficientShares `seller` no longer holds `amount` shares.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn buy(
         env: Env,
         buyer: Address,
@@ -237,6 +258,7 @@ impl FractionalOwnership {
         amount: i128,
     ) -> Result<i128, Error> {
         buyer.require_auth();
+        enter(&env)?;
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -277,6 +299,7 @@ impl FractionalOwnership {
         );
 
         payment_client(&env)?.transfer(&buyer, &seller, &cost);
+        exit(&env);
         Ok(cost)
     }
 
@@ -291,6 +314,7 @@ impl FractionalOwnership {
     /// @custom:error Overflow The scaled amount or the index overflows `i128`.
     /// @custom:error PayoutTooSmall The deposit is too small to raise the index
     ///               (it would be unclaimable), so it is rejected.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn deposit_payout(
         env: Env,
         depositor: Address,
@@ -298,6 +322,7 @@ impl FractionalOwnership {
         amount: i128,
     ) -> Result<(), Error> {
         depositor.require_auth();
+        enter(&env)?;
         if amount <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -319,6 +344,7 @@ impl FractionalOwnership {
         );
 
         payment_client(&env)?.transfer(&depositor, &env.current_contract_address(), &amount);
+        exit(&env);
         Ok(())
     }
 
@@ -331,8 +357,10 @@ impl FractionalOwnership {
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error Overflow Settlement arithmetic overflowed.
     /// @custom:error NothingToClaim Nothing is owed to `owner`.
+    /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
     pub fn claim_payout(env: Env, owner: Address, asset_id: u64) -> Result<i128, Error> {
         owner.require_auth();
+        enter(&env)?;
         total_shares_of(&env, asset_id)?;
         settle(&env, asset_id, &owner)?;
         let key = DataKey::Pending(asset_id, owner.clone());
@@ -345,6 +373,7 @@ impl FractionalOwnership {
             .publish((symbol_short!("claimed"), asset_id), (owner.clone(), owed));
 
         payment_client(&env)?.transfer(&env.current_contract_address(), &owner, &owed);
+        exit(&env);
         Ok(owed)
     }
 
@@ -401,6 +430,32 @@ impl FractionalOwnership {
         let unsettled = accrued(&env, asset_id, &owner)?;
         settled.checked_add(unsettled).ok_or(Error::Overflow)
     }
+}
+
+/// Fail with `Reentrancy` if a guarded external call is in progress.
+fn ensure_unlocked(env: &Env) -> Result<(), Error> {
+    if env
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::Locked)
+        .unwrap_or(false)
+    {
+        return Err(Error::Reentrancy);
+    }
+    Ok(())
+}
+
+/// Take the reentrancy lock. Released by [`exit`] on the success path;
+/// a failing call reverts all storage writes, including the lock.
+fn enter(env: &Env) -> Result<(), Error> {
+    ensure_unlocked(env)?;
+    env.storage().instance().set(&DataKey::Locked, &true);
+    Ok(())
+}
+
+/// Release the reentrancy lock.
+fn exit(env: &Env) {
+    env.storage().instance().set(&DataKey::Locked, &false);
 }
 
 fn read_admin(env: &Env) -> Result<Address, Error> {
