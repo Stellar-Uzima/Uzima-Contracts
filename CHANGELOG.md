@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow definitions (`.github/workflows/ci-gates.yml`) removed from the repository.
 
 ### Changed
+- `contracts/reentrancy_guard` added to the workspace `exclude` list: its manifest (8 bytes of binary data) and `src/lib.rs` (empty) are corrupted on `main`, which made `cargo` fail for the whole workspace. Other damaged files are listed in the commit message
 - `contracts/medical_record_backup` removed from the workspace `exclude` list: the crate already compiled and passed its standalone test suite, so it now builds and tests as part of `cargo check --workspace` / `cargo test --workspace` (#1452)
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
