@@ -6,6 +6,9 @@ extern crate std;
 mod errors;
 mod types;
 
+#[cfg(test)]
+mod test;
+
 pub use errors::Error;
 pub use types::{DataKey, Listing};
 

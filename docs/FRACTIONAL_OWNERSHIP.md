@@ -90,3 +90,25 @@ entries have their TTL extended on every write.
   the base contract.
 - The payment token is fixed at `initialize` and is trusted to behave like a
   standard token (see the security review for what that assumes).
+
+## Unit tests (#1785)
+
+`src/test.rs` holds the unit tests. Run them with:
+
+```bash
+cargo test -p fractional_ownership
+```
+
+Coverage by area:
+
+| Area | What is checked |
+|---|---|
+| `initialize` | Stores config, emits `init`, rejects a second call, views and `create_asset` fail before init, requires admin auth |
+| `create_asset` | Mints the whole supply to the issuer, sequential independent ids, `Unauthorized`, `InvalidAmount`, emits `created` |
+| `transfer` | Moves shares, full-balance transfer, `InvalidAmount`, `SelfTransfer`, `AssetNotFound`, `InsufficientShares`, requires sender auth, state untouched on failure |
+| `list_shares` / `cancel_listing` | Stores and replaces listings, no escrow, every input error, `NoListing` |
+| `buy` | Full and partial fills, funds and shares move, every input error, seller moved shares away, cost overflow, insufficient buyer funds reverts the share movement |
+| payouts | Single holder, pro-rata split, transfer after deposit keeps the seller's entitlement, late buyer gets nothing from earlier deposits, accumulation, double claim, rounding dust, `PayoutTooSmall`, overflow, per-asset isolation |
+
+Every `Error` variant except `Reentrancy` (covered in
+`src/test_reentrancy.rs`, see the security review) is asserted at least once.
