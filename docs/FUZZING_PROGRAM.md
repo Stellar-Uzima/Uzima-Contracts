@@ -35,6 +35,14 @@ The following fuzz targets are actively maintained under `contracts/contract_beh
 | `consent_handling_fuzz.rs` | Tests patient consent management workflows | multiple |
 | `cross_contract_fuzz.rs` | Tests cross-contract interaction atomicity and state consistency | multiple |
 
+### In-crate fuzz targets
+
+Some contracts keep their property tests next to the contract instead of in the harness crate. They run with `cargo test -p <crate> fuzz_` and are part of `scripts/run_contract_fuzz.sh`.
+
+| Crate | Test module | Description |
+|-------|-------------|-------------|
+| `fractional_ownership` | `src/fuzz_test.rs` | Random operation sequences checked against a reference model, extreme `i128` inputs that must never trap, and payout rounding bounds. See [FRACTIONAL_OWNERSHIP.md](FRACTIONAL_OWNERSHIP.md#fuzz-tests-1786) |
+
 ## Bounded Verification Command
 
 For reproducible verification that passes from a clean checkout, run the bounded fuzzing suite with proptest's default bounds:

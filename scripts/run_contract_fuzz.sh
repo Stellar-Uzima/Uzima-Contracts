@@ -12,3 +12,8 @@ cd "${PROJECT_ROOT}"
 # PROPTEST_DISABLE_FAILURE_PERSISTENCE=1 in the environment to opt out.
 PROPTEST_CASES="${PROPTEST_CASES:-40}" \
 cargo test -p contract_behavior_fuzzing --test sut_token_fuzz --test token_sale_fuzz --test identity_registry_fuzz
+
+# In-crate property tests (kept next to the contract, not in the harness
+# crate). Same PROPTEST_CASES bound and failure persistence as above.
+PROPTEST_CASES="${PROPTEST_CASES:-40}" \
+cargo test -p fractional_ownership fuzz_

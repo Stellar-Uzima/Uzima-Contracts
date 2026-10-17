@@ -11,10 +11,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI workflow definitions (`.github/workflows/ci-gates.yml`) removed from the repository.
 
 ### Changed
+- `contracts/reentrancy_guard` added to the workspace `exclude` list: its manifest (8 bytes of binary data) and `src/lib.rs` (empty) are corrupted on `main`, which made `cargo` fail for the whole workspace. Other damaged files are listed in the commit message
 - `contracts/medical_record_backup` removed from the workspace `exclude` list: the crate already compiled and passed its standalone test suite, so it now builds and tests as part of `cargo check --workspace` / `cargo test --workspace` (#1452)
 - `contracts/medical_record_backup/src/test.rs` gained an initialization-guard regression test (`initialize_can_only_run_once`) and an authorization-failure regression test (`register_target_rejects_unauthorized_caller`), covering the init/happy-path/error-path triad required for reintegration (#1451)
 
 ### Added
+- `fractional_ownership` reentrancy review (`docs/FRACTIONAL_OWNERSHIP_SECURITY_REVIEW.md`), a storage-based reentrancy lock on every mutating entry point, and hostile-payment-token tests (#1788)
+- NatSpec documentation for the `fractional_ownership` crate and every public entry point (#1787)
+- Property-based fuzz tests for `fractional_ownership`, run in CI by `scripts/run_contract_fuzz.sh` (#1786)
+- Unit tests for `fractional_ownership` covering every entry point and every error variant (#1785)
+- `contracts/fractional_ownership`: fixed-supply fractional ownership shares with transfers, fixed-price listings and a pro-rata payout pool; error codes reserved in `3000-3099` (base contract for #1785, #1786, #1787, #1788)
+- `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, with role-based access control (#1777, #1778, #1779, #1780)
+- `contracts/property_registry` gains `src/access_control.rs`, an in-tree `Ownable` + `AccessControl` model with `DEFAULT_ADMIN_ROLE` and `REGISTRAR`; `record_ownership` is gated by both the registrar role and the owner of record, and revoking `DEFAULT_ADMIN_ROLE` from its last holder is refused with `CannotRevokeLastAdmin` (#1777)
+- `contracts/property_registry/tests/flows.rs` added: four end-to-end scenarios driven only through the crate`s public re-exports, so the suite doubles as a public-surface regression check (#1778)
+- `contracts/property_registry/SECURITY_AUDIT.md` added: trust model, six access-control findings, an entry-point-to-negative-test coverage map, and the residual risk left accepted (#1779)
+- `contracts/property_registry/src/invariant_tests.rs` added: ten state-machine invariants covering the ownership split, holder counts, rejected-call inertness, admin conservation and pause totality (#1780)
 - `contracts/property_registry` added: on-chain registry of property records with owner of record, valuation, and basis-point ownership shares, under admin / registrar / owner-of-record authorities (#1769, #1770, #1771, #1772)
 - `contracts/property_registry/src/test.rs` added: unit tests grouped by the initialization / happy-path / error-path triad, covering every error variant, dilution to exactly 100%, partial-position handover, and rejection leaving the split byte-identical (#1769)
 - `tests/fuzz/property_registry` added: proptest harness asserting five properties — no panic ever, the ownership split is conserved, no share exceeds 100%, rejected calls are inert, and reentrancy never wedges the contract (#1770)
