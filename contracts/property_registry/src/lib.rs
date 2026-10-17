@@ -3,54 +3,83 @@
 //! # Property Registry
 //!
 //! On-chain registry of property records: legal owner of record, recorded
-//! valuation, and fractional ownership shares expressed in basis points.
+//! valuation, and fractional ownership shares expressed in basis points
+//! ([`BASIS_POINTS_SCALE`] = 10 000 == 100%).
 //!
-//! ## Scope
-//! - Lifecycle: `initialize`, `transfer_admin`, `set_registrar`
-//! - Operations: `pause`, `unpause`
-//! - Property lifecycle: `register_property`, `update_valuation`,
-//!   `transfer_property`, `record_ownership`
-//! - Queries: `get_property`, `ownership_of`, `ownership_percent`,
-//!   `total_properties`
+//! ## Entry points
 //!
-//! ## Roles
-//! | Role | Capabilities |
+//! | Group | Functions |
 //! | --- | --- |
-//! | Admin | Rotate admin and registrar, pause/unpause |
-//! | Registrar | Register properties, revalue, record ownership shares |
-//! | Owner of record | Transfer the property, authorize share movements |
+//! | Lifecycle | `initialize`, `transfer_admin`, `set_registrar` |
+//! | Operations | `pause`, `unpause` |
+//! | Property lifecycle | `register_property`, `update_valuation`, `transfer_property`, `record_ownership` |
+//! | Queries | `get_property`, `ownership_of`, `total_properties`, `admin`, `registrar`, `paused` |
 //!
-//! ## Design guarantees
-//! - **Typed errors.** Every rejection maps to a distinct `Error` variant with a
-//!   stable `u32` discriminant, so a client can tell "the id was malformed" from
-//!   "the currency was not alphabetic" from "the owner does not hold that much".
-//! - **Bounded inputs.** [`validation`] runs before `require_auth`, so a
-//!   malformed call cannot be used to probe who holds authority.
-//! - **Full audit trail.** Every state change publishes one event carrying the
-//!   complete before/after delta, so the register and the ownership split are
-//!   reconstructible from the event stream alone.
-//! - **Bounded writes.** Each entry point reads each ledger key at most once and
-//!   writes back only what changed.
-//! - **Consistent splits.** `record_ownership` and `transfer_property` move both
-//!   legs together and credit before they debit, so a rejected call leaves the
-//!   ownership split untouched and the total never exceeds 100%.
+//! Each carries `# Auth`, `# Errors` and `# Events` sections on the definition
+//! itself; see [`contract`] for the contract-wide execution ordering.
+//!
+//! ## Authorisation
+//!
+//! Three independent authorities — admin, registrar, and the owner of record.
+//! `record_ownership` requires **two** of them, which is the point most worth
+//! reading before extending this contract: the registrar says who may amend the
+//! register, the owner says whose position may be debited, and either alone would
+//! be unsafe. See [`contract::require_registrar`] and the `# Auth` section on
+//! `record_ownership`.
+//!
+//! ## Reentrancy
+//!
+//! There is no cross-contract call in any value path. The one dispatch out of
+//! this contract is the one behind `require_auth`, which for an address backed
+//! by a custom `SorobanAuthorization` contract is a real contract invocation.
+//! The two multi-key entry points therefore take the guard in
+//! [`reentrancy_guard`]; see that module for why, and
+//! [`reentrancy_tests`] for the regression coverage.
+//!
+//! ## Tests
+//!
+//! - [`test`] — behaviour and error paths.
+//! - [`reentrancy_tests`] — the guard, driven from a contract that calls back in.
+//! - `tests/fuzz/property_registry` — proptest harness for the arguments that
+//!   reach storage.
+//!
+//! ## Example
+//!
+//! ```rust,ignore
+//! use property_registry::{PropertyRegistryContract, PropertyRegistryContractClient};
+//! use soroban_sdk::{Env, Address, String};
+//!
+//! let env = Env::default();
+//! let id = env.register_contract(None, PropertyRegistryContract);
+//! let client = PropertyRegistryContractClient::new(&env, &id);
+//!
+//! let admin = Address::generate(&env);
+//! let registrar = Address::generate(&env);
+//! let owner = Address::generate(&env);
+//!
+//! client.initialize(&admin, &registrar);
+//! client.register_property(
+//!     &String::from_str(&env, "PROP-001"),
+//!     &owner,
+//!     &250_000_00,
+//!     &String::from_str(&env, "USD"),
+//!     &String::from_str(&env, "ipfs://deed"),
+//! );
+//! ```
 
-mod contract;
-mod errors;
-mod events;
-mod storage;
-mod types;
-mod validation;
+pub mod contract;
+pub mod errors;
+pub mod reentrancy_guard;
+pub mod storage;
+pub mod types;
 
+#[cfg(test)]
+mod reentrancy_tests;
 #[cfg(test)]
 mod test;
 
 pub use contract::{PropertyRegistryContract, PropertyRegistryContractClient};
 pub use errors::Error;
-pub use types::{DataKey, Property, BASIS_POINTS_SCALE};
-pub use validation::{
-    is_iso_4217, validate_currency, validate_debit, validate_holder,
-    validate_metadata_uri, validate_property_id, validate_share,
-    validate_share_total, validate_transfer_parties, validate_valuation,
-    MAX_CURRENCY_LEN, MAX_METADATA_URI_LEN, MAX_PROPERTY_ID_LEN, MIN_PROPERTY_ID_LEN,
+pub use types::{
+    DataKey, Property, BASIS_POINTS_SCALE, DATA_KEY_VARIANT_COUNT,
 };

@@ -1,54 +1,49 @@
 use soroban_sdk::contracterror;
 
-/// Typed errors for every rejection path in the contract.
+/// Typed errors for every rejection path.
 ///
-/// The discriminant is part of the contract interface: these values are what
-/// clients match on, so existing variants are never renumbered and new ones are
-/// only ever appended.
+/// # Stability
+///
+/// The `u32` discriminants are part of the contract interface: clients match on
+/// them, so existing variants are never renumbered and new ones are only ever
+/// appended at the end of the enum.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum Error {
+    /// The contract has not been initialized yet.
     NotInitialized = 1,
+    /// `initialize` was called on a contract that is already initialized.
     AlreadyInitialized = 2,
+    /// The caller's authorization or role check failed, or the contract is
+    /// paused.
+    ///
+    /// This one variant covers both "not permitted" and "temporarily halted"
+    /// because both mean the same thing to a caller: retry later or ask the
+    /// admin. Callers that need to tell them apart should consult `paused()`.
     Unauthorized = 3,
+    /// No property is registered under the supplied `property_id`.
     PropertyNotFound = 4,
+    /// A property is already registered under the supplied `property_id`.
     PropertyAlreadyExists = 5,
-
-    // ---- input validation -------------------------------------------------
-    /// `property_id` was empty, longer than
-    /// [`crate::validation::MAX_PROPERTY_ID_LEN`], or contained a character
-    /// outside `[A-Za-z0-9_-]`.
-    InvalidPropertyId = 6,
-    /// `valuation_currency` was empty or longer than
-    /// [`crate::validation::MAX_CURRENCY_LEN`].
-    InvalidCurrency = 7,
-    /// `metadata_uri` was empty or longer than
-    /// [`crate::validation::MAX_METADATA_URI_LEN`].
-    InvalidMetadataUri = 8,
-    /// A recorded valuation or share of zero was supplied where a positive
-    /// value is required.
-    ZeroValue = 9,
-    /// `record_ownership` was asked to credit the owner of record, which would
-    /// be a no-op written twice.
-    HolderIsOwner = 10,
-    /// `transfer_property` was asked to transfer the property to its current
-    /// owner of record.
-    TransferToSelf = 11,
-
-    // ---- share accounting -------------------------------------------------
-    /// The resulting shares for a property would exceed 100%.
-    ShareTotalExceeded = 12,
-    /// The requested share is larger than the recorded share.
-    OwnershipExceedsShare = 13,
-    /// A share that could not be represented in basis points was supplied.
-    ShareTooLarge = 14,
-
-    // ---- arithmetic -------------------------------------------------------
+    /// An argument was structurally unacceptable — currently only the
+    /// self-transfer and owner-as-holder cases, which are both no-ops written
+    /// twice.
+    InvalidArgument = 6,
     /// A `u128` addition or multiplication would have wrapped.
-    ArithmeticOverflow = 15,
+    ArithmeticOverflow = 7,
     /// A `u128` subtraction would have wrapped past zero.
-    ArithmeticUnderflow = 16,
+    ArithmeticUnderflow = 8,
+    /// The owner of record does not hold the share being moved.
+    OwnershipExceedsShare = 9,
+    /// The resulting shares for a property would exceed 100%.
+    ShareTotalExceeded = 10,
+    /// A guarded entry point was re-entered while already active.
+    ///
+    /// Only reachable by an address whose `SorobanAuthorization` contract is
+    /// under attacker control; see `src/reentrancy_guard.rs` for why the guard
+    /// exists at all.
+    ReentrantCall = 11,
 }
 
 impl core::fmt::Display for Error {
@@ -59,17 +54,12 @@ impl core::fmt::Display for Error {
             Error::Unauthorized => write!(f, "unauthorized"),
             Error::PropertyNotFound => write!(f, "property not found"),
             Error::PropertyAlreadyExists => write!(f, "property already exists"),
-            Error::InvalidPropertyId => write!(f, "invalid property id"),
-            Error::InvalidCurrency => write!(f, "invalid valuation currency"),
-            Error::InvalidMetadataUri => write!(f, "invalid metadata uri"),
-            Error::ZeroValue => write!(f, "value must be non-zero"),
-            Error::HolderIsOwner => write!(f, "holder is the owner of record"),
-            Error::TransferToSelf => write!(f, "transfer to self"),
-            Error::ShareTotalExceeded => write!(f, "share total exceeds 100 percent"),
-            Error::OwnershipExceedsShare => write!(f, "ownership exceeds recorded share"),
-            Error::ShareTooLarge => write!(f, "share too large"),
+            Error::InvalidArgument => write!(f, "invalid argument"),
             Error::ArithmeticOverflow => write!(f, "arithmetic overflow"),
             Error::ArithmeticUnderflow => write!(f, "arithmetic underflow"),
+            Error::OwnershipExceedsShare => write!(f, "ownership exceeds recorded share"),
+            Error::ShareTotalExceeded => write!(f, "share total exceeds 100 percent"),
+            Error::ReentrantCall => write!(f, "reentrant call"),
         }
     }
 }
