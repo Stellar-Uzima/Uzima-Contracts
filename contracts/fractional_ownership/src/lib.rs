@@ -11,6 +11,17 @@
 //!      number of holders. A holder's entitlement is settled lazily, always
 //!      before that holder's balance changes.
 //!
+//! ## Rental yield
+//! Rental income (the "RentalYield" flow) is paid through three entry points:
+//! - `deposit_payout`: anyone deposits rental income for an asset; it is
+//!   split pro-rata across all current share holders.
+//! - `get_pending_payout`: view what a holder can claim right now.
+//! - `claim_payout`: a holder withdraws everything they are owed.
+//!
+//! A holder's yield is `balance * (index_now - index_at_last_settle) /
+//! PAYOUT_PRECISION`. Transfers and purchases settle both parties first, so
+//! yield earned before a transfer always stays with the previous holder.
+//!
 //! ## Rounding
 //! Every division floors, so the contract can never owe more than it holds.
 //! The remainder ("dust", less than one payment-token base unit per deposit
