@@ -81,9 +81,13 @@ impl FractionalOwnership {
     /// @param payment_token Token contract used for purchases and payouts.
     /// @return `Ok(())` on success.
     /// @custom:error AlreadyInitialized The contract was already initialized.
+    /// @custom:error InvalidAddress `admin` and `payment_token` are the same address.
     pub fn initialize(env: Env, admin: Address, payment_token: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
+        }
+        if admin == payment_token {
+            return Err(Error::InvalidAddress);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -117,11 +121,7 @@ impl FractionalOwnership {
         total_shares: i128,
     ) -> Result<u64, Error> {
         ensure_unlocked(&env)?;
-        let stored = read_admin(&env)?;
-        admin.require_auth();
-        if admin != stored {
-            return Err(Error::Unauthorized);
-        }
+        only_admin(&env, &admin)?;
         if total_shares <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -158,6 +158,7 @@ impl FractionalOwnership {
     /// @param amount Number of shares, must be positive.
     /// @custom:error InvalidAmount `amount` is zero or negative.
     /// @custom:error SelfTransfer `from` equals `to`.
+    /// @custom:error InvalidAddress `to` is this contract.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `from` holds fewer than `amount`.
     /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
@@ -175,6 +176,9 @@ impl FractionalOwnership {
         }
         if from == to {
             return Err(Error::SelfTransfer);
+        }
+        if to == env.current_contract_address() {
+            return Err(Error::InvalidAddress);
         }
         total_shares_of(&env, asset_id)?;
         move_shares(&env, asset_id, &from, &to, amount)?;
@@ -476,6 +480,17 @@ fn exit(env: &Env) {
     env.storage().instance().set(&DataKey::Locked, &false);
 }
 
+/// Ownable-style access check (mirrors OpenZeppelin's `only_owner`):
+/// `caller` must authorize and be the stored admin.
+fn only_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+    let stored = read_admin(env)?;
+    caller.require_auth();
+    if *caller != stored {
+        return Err(Error::Unauthorized);
+    }
+    Ok(())
+}
+
 fn read_admin(env: &Env) -> Result<Address, Error> {
     env.storage()
         .instance()
@@ -546,6 +561,8 @@ fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
             .checked_add(owed)
             .ok_or(Error::Overflow)?;
         put(env, &key, &pending);
+        env.events()
+            .publish((symbol_short!("settled"), asset_id), (owner.clone(), owed));
     }
     put(env, &DataKey::Checkpoint(asset_id, owner.clone()), &index);
     Ok(())
