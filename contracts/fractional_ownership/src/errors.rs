@@ -17,4 +17,5 @@ pub enum Error {
     NothingToClaim = 3011,
     PayoutTooSmall = 3012,
     Reentrancy = 3013,
+    InvalidPrice = 3014,
 }
