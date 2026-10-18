@@ -11,6 +11,17 @@
 //!      number of holders. A holder's entitlement is settled lazily, always
 //!      before that holder's balance changes.
 //!
+//! ## Rental yield
+//! Rental income (the "RentalYield" flow) is paid through three entry points:
+//! - `deposit_payout`: anyone deposits rental income for an asset; it is
+//!   split pro-rata across all current share holders.
+//! - `get_pending_payout`: view what a holder can claim right now.
+//! - `claim_payout`: a holder withdraws everything they are owed.
+//!
+//! A holder's yield is `balance * (index_now - index_at_last_settle) /
+//! PAYOUT_PRECISION`. Transfers and purchases settle both parties first, so
+//! yield earned before a transfer always stays with the previous holder.
+//!
 //! ## Rounding
 //! Every division floors, so the contract can never owe more than it holds.
 //! The remainder ("dust", less than one payment-token base unit per deposit
@@ -45,7 +56,7 @@ mod test_reentrancy;
 mod fuzz_test;
 
 #[cfg(test)]
-mod test_rental_yield;
+mod test_integration;
 
 pub use errors::Error;
 pub use types::{DataKey, Listing};
@@ -182,7 +193,8 @@ impl FractionalOwnership {
     /// @param asset_id Asset being sold.
     /// @param amount Shares on offer, must be positive and not exceed the balance.
     /// @param price_per_share Price in payment-token base units, must be positive.
-    /// @custom:error InvalidAmount `amount` or `price_per_share` is not positive.
+    /// @custom:error InvalidAmount `amount` is not positive.
+    /// @custom:error InvalidPrice `price_per_share` is not positive.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `seller` holds fewer than `amount`.
     /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
@@ -195,8 +207,11 @@ impl FractionalOwnership {
     ) -> Result<(), Error> {
         ensure_unlocked(&env)?;
         seller.require_auth();
-        if amount <= 0 || price_per_share <= 0 {
+        if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+        if price_per_share <= 0 {
+            return Err(Error::InvalidPrice);
         }
         total_shares_of(&env, asset_id)?;
         if balance(&env, asset_id, &seller) < amount {

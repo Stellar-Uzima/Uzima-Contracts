@@ -335,11 +335,11 @@ fn list_shares_rejects_bad_input() {
     );
     assert_eq!(
         f.client.try_list_shares(&issuer, &id, &10, &0),
-        Err(Ok(Error::InvalidAmount))
+        Err(Ok(Error::InvalidPrice))
     );
     assert_eq!(
         f.client.try_list_shares(&issuer, &id, &10, &-3),
-        Err(Ok(Error::InvalidAmount))
+        Err(Ok(Error::InvalidPrice))
     );
     assert_eq!(
         f.client.try_list_shares(&issuer, &42, &10, &7),
