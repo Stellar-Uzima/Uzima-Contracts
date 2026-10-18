@@ -11,6 +11,17 @@
 //!      number of holders. A holder's entitlement is settled lazily, always
 //!      before that holder's balance changes.
 //!
+//! ## Rental yield
+//! Rental income (the "RentalYield" flow) is paid through three entry points:
+//! - `deposit_payout`: anyone deposits rental income for an asset; it is
+//!   split pro-rata across all current share holders.
+//! - `get_pending_payout`: view what a holder can claim right now.
+//! - `claim_payout`: a holder withdraws everything they are owed.
+//!
+//! A holder's yield is `balance * (index_now - index_at_last_settle) /
+//! PAYOUT_PRECISION`. Transfers and purchases settle both parties first, so
+//! yield earned before a transfer always stays with the previous holder.
+//!
 //! ## Rounding
 //! Every division floors, so the contract can never owe more than it holds.
 //! The remainder ("dust", less than one payment-token base unit per deposit
@@ -45,6 +56,9 @@ mod test_reentrancy;
 #[cfg(test)]
 mod fuzz_test;
 
+#[cfg(test)]
+mod test_integration;
+
 pub use errors::Error;
 pub use types::{DataKey, Listing};
 
@@ -71,9 +85,13 @@ impl FractionalOwnership {
     /// @param payment_token Token contract used for purchases and payouts.
     /// @return `Ok(())` on success.
     /// @custom:error AlreadyInitialized The contract was already initialized.
+    /// @custom:error InvalidAddress `admin` and `payment_token` are the same address.
     pub fn initialize(env: Env, admin: Address, payment_token: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
+        }
+        if admin == payment_token {
+            return Err(Error::InvalidAddress);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
@@ -110,11 +128,7 @@ impl FractionalOwnership {
         total_shares: i128,
     ) -> Result<u64, Error> {
         ensure_unlocked(&env)?;
-        let stored = read_admin(&env)?;
-        admin.require_auth();
-        if admin != stored {
-            return Err(Error::Unauthorized);
-        }
+        only_admin(&env, &admin)?;
         if total_shares <= 0 {
             return Err(Error::InvalidAmount);
         }
@@ -151,6 +165,7 @@ impl FractionalOwnership {
     /// @param amount Number of shares, must be positive.
     /// @custom:error InvalidAmount `amount` is zero or negative.
     /// @custom:error SelfTransfer `from` equals `to`.
+    /// @custom:error InvalidAddress `to` is this contract.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `from` holds fewer than `amount`.
     /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
@@ -169,6 +184,9 @@ impl FractionalOwnership {
         if from == to {
             return Err(Error::SelfTransfer);
         }
+        if to == env.current_contract_address() {
+            return Err(Error::InvalidAddress);
+        }
         total_shares_of(&env, asset_id)?;
         move_shares(&env, asset_id, &from, &to, amount)?;
         env.events().publish(
@@ -186,7 +204,8 @@ impl FractionalOwnership {
     /// @param asset_id Asset being sold.
     /// @param amount Shares on offer, must be positive and not exceed the balance.
     /// @param price_per_share Price in payment-token base units, must be positive.
-    /// @custom:error InvalidAmount `amount` or `price_per_share` is not positive.
+    /// @custom:error InvalidAmount `amount` is not positive.
+    /// @custom:error InvalidPrice `price_per_share` is not positive.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `seller` holds fewer than `amount`.
     /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
@@ -199,8 +218,11 @@ impl FractionalOwnership {
     ) -> Result<(), Error> {
         ensure_unlocked(&env)?;
         seller.require_auth();
-        if amount <= 0 || price_per_share <= 0 {
+        if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+        if price_per_share <= 0 {
+            return Err(Error::InvalidPrice);
         }
         total_shares_of(&env, asset_id)?;
         if balance(&env, asset_id, &seller) < amount {
@@ -445,7 +467,7 @@ impl FractionalOwnership {
     /// @custom:error Overflow Accrual arithmetic overflowed.
     pub fn get_pending_payout(env: Env, asset_id: u64, owner: Address) -> Result<i128, Error> {
         let settled = read_i128(&env, &DataKey::Pending(asset_id, owner.clone()));
-        let unsettled = accrued(&env, asset_id, &owner)?;
+        let unsettled = accrued(&env, asset_id, &owner, payout_index(&env, asset_id))?;
         settled.checked_add(unsettled).ok_or(Error::Overflow)
     }
 }
@@ -474,6 +496,17 @@ fn enter(env: &Env) -> Result<(), Error> {
 /// Release the reentrancy lock.
 fn exit(env: &Env) {
     env.storage().instance().set(&DataKey::Locked, &false);
+}
+
+/// Ownable-style access check (mirrors OpenZeppelin's `only_owner`):
+/// `caller` must authorize and be the stored admin.
+fn only_admin(env: &Env, caller: &Address) -> Result<(), Error> {
+    let stored = read_admin(env)?;
+    caller.require_auth();
+    if *caller != stored {
+        return Err(Error::Unauthorized);
+    }
+    Ok(())
 }
 
 fn read_admin(env: &Env) -> Result<Address, Error> {
@@ -525,8 +558,9 @@ fn payout_index(env: &Env, asset_id: u64) -> i128 {
 }
 
 /// Payout accrued by `owner` since their last checkpoint, not yet settled.
-fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
-    let index = payout_index(env, asset_id);
+/// Takes the current `index` so callers that already read it skip a second
+/// storage read.
+fn accrued(env: &Env, asset_id: u64, owner: &Address, index: i128) -> Result<i128, Error> {
     let checkpoint = read_i128(env, &DataKey::Checkpoint(asset_id, owner.clone()));
     let bal = balance(env, asset_id, owner);
     if index <= checkpoint || bal == 0 {
@@ -538,15 +572,17 @@ fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
 
 /// Move accrued payout into the pending balance and advance the checkpoint.
 fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
-    let owed = accrued(env, asset_id, owner)?;
+    let index = payout_index(env, asset_id);
+    let owed = accrued(env, asset_id, owner, index)?;
     if owed > 0 {
         let key = DataKey::Pending(asset_id, owner.clone());
         let pending = read_i128(env, &key)
             .checked_add(owed)
             .ok_or(Error::Overflow)?;
         put(env, &key, &pending);
+        env.events()
+            .publish((symbol_short!("settled"), asset_id), (owner.clone(), owed));
     }
-    let index = payout_index(env, asset_id);
     put(env, &DataKey::Checkpoint(asset_id, owner.clone()), &index);
     Ok(())
 }

@@ -10,7 +10,9 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = { workspace = true }
+soroban-sdk.workspace = true
+common_auth = { path = "../common_auth" }
+common_error = { path = "../common_error" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

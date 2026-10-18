@@ -1,15 +1,30 @@
+use common_error::CommonError;
 use soroban_sdk::contracterror;
 
-/// Custom errors returned by `RentalYield` instead of panicking.
+/// Module-local error type whose discriminants mirror `common_error::CommonError`
+/// (issue #1809: reuse the shared error taxonomy instead of inventing a new
+/// one), following the same pattern as `rbac::errors::Error`.
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    NotInitialized = 3101,
-    AlreadyInitialized = 3102,
-    Unauthorized = 3103,
-    InvalidAmount = 3104,
-    Overflow = 3105,
-    NothingToClaim = 3106,
-    Reentrancy = 3107,
+    Unauthorized = CommonError::Unauthorized as u32,
+    NotInitialized = CommonError::NotInitialized as u32,
+    AlreadyInitialized = CommonError::AlreadyInitialized as u32,
+    InvalidInput = CommonError::InvalidInput as u32,
+    InvalidState = CommonError::InvalidState as u32,
+    InsufficientFunds = CommonError::InsufficientFunds as u32,
+}
+
+impl core::fmt::Display for Error {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            Error::Unauthorized => write!(f, "unauthorized"),
+            Error::NotInitialized => write!(f, "not initialized"),
+            Error::AlreadyInitialized => write!(f, "already initialized"),
+            Error::InvalidInput => write!(f, "invalid input"),
+            Error::InvalidState => write!(f, "invalid state"),
+            Error::InsufficientFunds => write!(f, "insufficient funds"),
+        }
+    }
 }

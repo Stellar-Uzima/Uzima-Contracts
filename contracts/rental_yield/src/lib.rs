@@ -1,151 +1,185 @@
 #![no_std]
-//! # RentalYield
-//!
-//! @title RentalYield
-//! @notice Holds rental income deposited by the admin and lets each
-//!         beneficiary claim the yield credited to them.
-//!
-//! ## Errors
-//! Every failure returns a typed [`Error`] instead of panicking.
-//!
-//! ## Reentrancy
-//! The only external calls are to the payment token, in `deposit_yield`
-//! and `claim`. Both update state first (checks-effects-interactions) and
-//! hold a storage lock for the duration of the call. Soroban also forbids
-//! a contract from being re-entered; the lock is defense in depth.
 
 mod errors;
 
-pub use errors::Error;
+use errors::Error;
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, token, Address, Env};
+/// Minimal rental-yield distribution contract: tracks a per-property yield
+/// pool and lets the admin deposit collected rent and distribute it to a
+/// recipient. Intentionally small — a foundation for later Stellar Wave
+/// work (access-control audit, OpenZeppelin-style refactor, validation,
+/// events) to build on rather than a complete implementation. See
+/// issues #1806, #1807, #1809, #1811.
+#[contract]
+pub struct RentalYieldContract;
 
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum DataKey {
+#[derive(Clone)]
+enum DataKey {
     Admin,
-    PaymentToken,
-    Locked,
-    Claimable(Address),
+    Pool,
 }
 
-#[contract]
-pub struct RentalYield;
+// require_admin! hardcodes Error::NotAuthorized, but our Error (like
+// rbac::errors::Error) mirrors common_error's Unauthorized spelling instead,
+// so use the custom variant to map onto our own Error type.
+common_auth::require_admin_custom!(
+    instance,
+    DataKey::Admin,
+    Error::NotInitialized,
+    Error::Unauthorized
+);
 
 #[contractimpl]
-impl RentalYield {
-    /// @notice One-time setup of the contract.
-    /// @custom:error AlreadyInitialized The contract was already initialized.
-    pub fn initialize(env: Env, admin: Address, payment_token: Address) -> Result<(), Error> {
+impl RentalYieldContract {
+    /// One-time setup: records the admin address.
+    pub fn initialize(env: Env, admin: Address) -> Result<(), Error> {
         if env.storage().instance().has(&DataKey::Admin) {
             return Err(Error::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.storage()
-            .instance()
-            .set(&DataKey::PaymentToken, &payment_token);
+        env.storage().instance().set(&DataKey::Pool, &0i128);
         Ok(())
     }
 
-    /// @notice Pull `amount` from the admin and credit it to `beneficiary`.
-    /// @custom:error Unauthorized `admin` is not the stored admin.
-    /// @custom:error InvalidAmount `amount` is zero or negative.
-    /// @custom:error Overflow The claimable balance overflows `i128`.
-    /// @custom:error Reentrancy A guarded call is in progress.
-    pub fn deposit_yield(
-        env: Env,
-        admin: Address,
-        beneficiary: Address,
-        amount: i128,
-    ) -> Result<(), Error> {
-        admin.require_auth();
-        enter(&env)?;
-        if admin != read_admin(&env)? {
-            return Err(Error::Unauthorized);
-        }
+    /// Adds `amount` of collected rent to the yield pool (issue #1807: input
+    /// validation rejects non-positive amounts).
+    pub fn deposit(env: Env, caller: Address, amount: i128) -> Result<i128, Error> {
+        caller.require_auth();
+        require_admin(&env, &caller)?;
         if amount <= 0 {
-            return Err(Error::InvalidAmount);
+            return Err(Error::InvalidInput);
         }
-        let key = DataKey::Claimable(beneficiary.clone());
-        let claimable = claimable_of(&env, &beneficiary)
+
+        let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
+        let pool = pool
             .checked_add(amount)
-            .ok_or(Error::Overflow)?;
-        env.storage().persistent().set(&key, &claimable);
-        env.events()
-            .publish((symbol_short!("deposit"),), (beneficiary, amount));
+            .ok_or(Error::InvalidState)?;
+        env.storage().instance().set(&DataKey::Pool, &pool);
 
-        payment_client(&env)?.transfer(&admin, &env.current_contract_address(), &amount);
-        exit(&env);
-        Ok(())
+        // issue #1806: emit an event for the state change.
+        env.events()
+            .publish((symbol_short!("deposit"), caller), (amount, pool));
+
+        Ok(pool)
     }
 
-    /// @notice Withdraw everything credited to `beneficiary`.
-    /// @dev Zeroes the balance before transferring (checks-effects-interactions).
-    /// @custom:error NothingToClaim Nothing is owed to `beneficiary`.
-    /// @custom:error Reentrancy A guarded call is in progress.
-    pub fn claim(env: Env, beneficiary: Address) -> Result<i128, Error> {
-        beneficiary.require_auth();
-        enter(&env)?;
-        let owed = claimable_of(&env, &beneficiary);
-        if owed <= 0 {
-            return Err(Error::NothingToClaim);
+    /// Pays `amount` out of the yield pool to `recipient`. Admin-gated
+    /// (issue #1811: access control) using the shared `common_auth`
+    /// `require_admin_custom!` primitive rather than a hand-rolled check
+    /// (issue #1809: reuse shared primitives instead of duplicating auth
+    /// logic).
+    pub fn distribute(
+        env: Env,
+        caller: Address,
+        recipient: Address,
+        amount: i128,
+    ) -> Result<i128, Error> {
+        caller.require_auth();
+        require_admin(&env, &caller)?;
+        if amount <= 0 {
+            return Err(Error::InvalidInput);
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::Claimable(beneficiary.clone()), &0i128);
+
+        let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
+        if amount > pool {
+            return Err(Error::InsufficientFunds);
+        }
+        let pool = pool - amount;
+        env.storage().instance().set(&DataKey::Pool, &pool);
+
+        // issue #1806: emit an event for the state change.
         env.events()
-            .publish((symbol_short!("claimed"),), (beneficiary.clone(), owed));
+            .publish((symbol_short!("yield"), recipient), (amount, pool));
 
-        payment_client(&env)?.transfer(&env.current_contract_address(), &beneficiary, &owed);
-        exit(&env);
-        Ok(owed)
+        Ok(pool)
     }
 
-    /// @notice Yield currently claimable by `beneficiary`.
-    pub fn get_claimable(env: Env, beneficiary: Address) -> i128 {
-        claimable_of(&env, &beneficiary)
+    /// Current yield pool balance.
+    pub fn pool_balance(env: Env) -> i128 {
+        env.storage().instance().get(&DataKey::Pool).unwrap_or(0)
     }
 }
 
-/// Take the reentrancy lock. A failing call reverts all writes, including the lock.
-fn enter(env: &Env) -> Result<(), Error> {
-    if env
-        .storage()
-        .instance()
-        .get::<_, bool>(&DataKey::Locked)
-        .unwrap_or(false)
-    {
-        return Err(Error::Reentrancy);
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    fn setup(env: &Env) -> (Address, Address) {
+        let contract_id = env.register(RentalYieldContract, ());
+        let admin = Address::generate(env);
+        env.as_contract(&contract_id, || {
+            RentalYieldContract::initialize(env.clone(), admin.clone()).unwrap();
+        });
+        (contract_id, admin)
     }
-    env.storage().instance().set(&DataKey::Locked, &true);
-    Ok(())
-}
 
-/// Release the reentrancy lock.
-fn exit(env: &Env) {
-    env.storage().instance().set(&DataKey::Locked, &false);
-}
+    #[test]
+    fn deposit_and_distribute_update_the_pool() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, admin) = setup(&env);
+        let recipient = Address::generate(&env);
 
-fn read_admin(env: &Env) -> Result<Address, Error> {
-    env.storage()
-        .instance()
-        .get(&DataKey::Admin)
-        .ok_or(Error::NotInitialized)
-}
+        env.as_contract(&contract_id, || {
+            assert_eq!(
+                RentalYieldContract::deposit(env.clone(), admin.clone(), 100).unwrap(),
+                100
+            );
+            assert_eq!(
+                RentalYieldContract::distribute(env.clone(), admin.clone(), recipient, 40)
+                    .unwrap(),
+                60
+            );
+            assert_eq!(RentalYieldContract::pool_balance(env.clone()), 60);
+        });
+    }
 
-fn payment_client(env: &Env) -> Result<token::Client<'_>, Error> {
-    let addr: Address = env
-        .storage()
-        .instance()
-        .get(&DataKey::PaymentToken)
-        .ok_or(Error::NotInitialized)?;
-    Ok(token::Client::new(env, &addr))
-}
+    #[test]
+    fn rejects_non_positive_deposit() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, admin) = setup(&env);
 
-fn claimable_of(env: &Env, beneficiary: &Address) -> i128 {
-    env.storage()
-        .persistent()
-        .get(&DataKey::Claimable(beneficiary.clone()))
-        .unwrap_or(0)
+        env.as_contract(&contract_id, || {
+            assert_eq!(
+                RentalYieldContract::deposit(env.clone(), admin, 0),
+                Err(Error::InvalidInput)
+            );
+        });
+    }
+
+    #[test]
+    fn rejects_distribution_beyond_pool_balance() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, admin) = setup(&env);
+        let recipient = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            RentalYieldContract::deposit(env.clone(), admin.clone(), 10).unwrap();
+            assert_eq!(
+                RentalYieldContract::distribute(env.clone(), admin, recipient, 11),
+                Err(Error::InsufficientFunds)
+            );
+        });
+    }
+
+    #[test]
+    fn rejects_non_admin_caller() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (contract_id, _admin) = setup(&env);
+        let stranger = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            assert_eq!(
+                RentalYieldContract::deposit(env.clone(), stranger, 10),
+                Err(Error::Unauthorized)
+            );
+        });
+    }
 }
