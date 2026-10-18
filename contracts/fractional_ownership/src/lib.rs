@@ -26,7 +26,8 @@
 //! `docs/FRACTIONAL_OWNERSHIP_SECURITY_REVIEW.md`.
 //!
 //! ## Storage
-//! Instance: `Admin`, `PaymentToken`, `AssetCount`, `Locked`.
+//! Instance: `Admin`, `PaymentToken`, `AssetCount`, `Locked`, `StorageVersion`.
+//! `DataKey::Reserved*` variants are a storage gap kept for future upgrades.
 //! Persistent: balances, listings, payout index, checkpoints, pending claims.
 
 #[cfg(test)]
@@ -48,6 +49,9 @@ pub use errors::Error;
 pub use types::{DataKey, Listing};
 
 use soroban_sdk::{contract, contractimpl, symbol_short, token, Address, Env, IntoVal, Val};
+
+/// @notice Storage layout version, bumped whenever an upgrade changes the layout.
+pub const STORAGE_VERSION: u32 = 1;
 
 /// @notice Fixed-point scale applied to the cumulative payout index.
 pub const PAYOUT_PRECISION: i128 = 1_000_000_000_000;
@@ -77,6 +81,9 @@ impl FractionalOwnership {
             .instance()
             .set(&DataKey::PaymentToken, &payment_token);
         env.storage().instance().set(&DataKey::AssetCount, &0u64);
+        env.storage()
+            .instance()
+            .set(&DataKey::StorageVersion, &STORAGE_VERSION);
         extend_instance(&env);
         env.events().publish(
             (symbol_short!("init"),),
@@ -280,7 +287,10 @@ impl FractionalOwnership {
             .ok_or(Error::Overflow)?;
 
         move_shares(&env, asset_id, &seller, &buyer, amount)?;
-        let remaining = listing.amount - amount;
+        let remaining = listing
+            .amount
+            .checked_sub(amount)
+            .ok_or(Error::Overflow)?;
         if remaining == 0 {
             env.storage().persistent().remove(&key);
         } else {
@@ -400,6 +410,14 @@ impl FractionalOwnership {
             .unwrap_or(0)
     }
 
+    /// @notice Storage layout version written at initialization (zero if unset).
+    pub fn get_storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::StorageVersion)
+            .unwrap_or(0)
+    }
+
     /// @notice Fixed total supply of an asset.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     pub fn get_total_shares(env: Env, asset_id: u64) -> Result<i128, Error> {
@@ -514,7 +532,8 @@ fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
     if index <= checkpoint || bal == 0 {
         return Ok(0);
     }
-    Ok(bal.checked_mul(index - checkpoint).ok_or(Error::Overflow)? / PAYOUT_PRECISION)
+    let diff = index.checked_sub(checkpoint).ok_or(Error::Overflow)?;
+    Ok(bal.checked_mul(diff).ok_or(Error::Overflow)? / PAYOUT_PRECISION)
 }
 
 /// Move accrued payout into the pending balance and advance the checkpoint.
@@ -546,13 +565,16 @@ fn move_shares(
     if from_balance < amount {
         return Err(Error::InsufficientShares);
     }
+    let from_remaining = from_balance
+        .checked_sub(amount)
+        .ok_or(Error::Overflow)?;
     let to_balance = balance(env, asset_id, to)
         .checked_add(amount)
         .ok_or(Error::Overflow)?;
     put(
         env,
         &DataKey::Balance(asset_id, from.clone()),
-        &(from_balance - amount),
+        &from_remaining,
     );
     put(env, &DataKey::Balance(asset_id, to.clone()), &to_balance);
     Ok(())

@@ -1,7 +1,8 @@
 use soroban_sdk::{contracttype, Address};
 
-/// Storage keys. `Admin`, `PaymentToken`, `AssetCount` and `Locked` live in
-/// instance storage; every other key lives in persistent storage.
+/// Storage keys. `Admin`, `PaymentToken`, `AssetCount`, `Locked` and
+/// `StorageVersion` live in instance storage; every other key lives in
+/// persistent storage.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum DataKey {
@@ -15,6 +16,11 @@ pub enum DataKey {
     PayoutIndex(u64),
     Checkpoint(u64, Address),
     Pending(u64, Address),
+    StorageVersion,
+    // Storage gap: reserved for future upgrades. Do not reuse or reorder.
+    Reserved1,
+    Reserved2,
+    Reserved3,
 }
 
 /// An open sell offer: `amount` shares at `price_per_share` payment-token
