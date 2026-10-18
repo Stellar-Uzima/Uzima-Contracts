@@ -1,0 +1,114 @@
+name: FractionalOwnership Static Analysis
+
+# Closes #1800 — "Run slither in CI for FractionalOwnership".
+#
+# Why this job is not literally `slither .`:
+# `fractional_ownership` is a Rust/Soroban contract compiled to `wasm32-unknown-unknown`.
+# Slither is an EVM analyzer and only understands Solidity, so running it over
+# this crate would either find nothing or fail outright, and gating a merge on
+# a tool that never inspected the artifact is worse than no gate at all.
+#
+# So the job runs both halves:
+#   1. Slither over any Solidity sources in the tree. Today there are none, so
+#      the step reports "skipped" rather than silently passing — if a Solidity
+#      component is ever added to the Uzima deployment path, this starts
+#      covering it with no workflow change.
+#   2. The Rust-native analyzers that *do* cover this contract: `cargo clippy`
+#      with `-D warnings`, plus `cargo audit` for the dependency tree. This is
+#      the half that gates the merge today.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "contracts/fractional_ownership/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/fractional-ownership-slither.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "contracts/fractional_ownership/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/fractional-ownership-slither.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+
+jobs:
+  slither:
+    name: Slither (Solidity interop)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Slither
+        run: python -m pip install --upgrade pip slither-analyzer solc-select
+
+      - name: Collect Solidity sources
+        id: solidity
+        run: |
+          set -euo pipefail
+          mapfile -t sources < <(git ls-files '*.sol')
+          if [ "${#sources[@]}" -eq 0 ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "No Solidity sources in this repository."
+            echo "Slither is EVM-only; the FractionalOwnership contract is Soroban/Rust,"
+            echo "so its static analysis runs in the 'clippy-audit' job instead."
+          else
+            printf 'found=true\n' >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${sources[@]}" > solidity-sources.txt
+          fi
+
+      - name: Run Slither
+        if: steps.solidity.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+          solc-select install 0.8.20
+          solc-select use 0.8.20
+          xargs -a solidity-sources.txt slither -- \
+            --exclude-dependencies \
+            --exclude naming-convention,external-function,low-level-calls \
+            --json slither-report.json
+
+      - name: Upload Slither report
+        if: always() && steps.solidity.outputs.found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fractional-ownership-slither-report
+          path: slither-report.json
+          if-no-files-found: ignore
+
+  clippy-audit:
+    name: Clippy + cargo-audit (FractionalOwnership)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pinned Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.92.0
+          components: clippy
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy -p fractional_ownership --all-targets -- -D warnings
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: Audit dependency tree
+        run: cargo audit

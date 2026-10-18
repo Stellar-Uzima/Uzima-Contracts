@@ -67,7 +67,7 @@ Codes are registered in `docs/ERROR_CODES.md` under the reserved range
 | 3001 | `NotInitialized` | `initialize` has not run |
 | 3002 | `AlreadyInitialized` | `initialize` already ran |
 | 3003 | `Unauthorized` | Caller is not the stored admin |
-| 3004 | `InvalidAmount` | Zero or negative amount, supply or price |
+| 3004 | `InvalidAmount` | Zero or negative amount or supply |
 | 3005 | `AssetNotFound` | Unknown asset id |
 | 3006 | `InsufficientShares` | Holder owns fewer shares than requested |
 | 3007 | `SelfTransfer` | `from == to` or `buyer == seller` |
@@ -77,6 +77,7 @@ Codes are registered in `docs/ERROR_CODES.md` under the reserved range
 | 3011 | `NothingToClaim` | Nothing is owed to the caller |
 | 3012 | `PayoutTooSmall` | Deposit too small to distribute |
 | 3013 | `Reentrancy` | A guarded external call is in progress |
+| 3014 | `InvalidPrice` | Zero or negative listing price (#1792) |
 
 ## Storage
 
@@ -168,9 +169,19 @@ In short:
   mid-call. All attempts are rejected and the balances, listing and payout
   state show exactly one effect.
 
-## Recent changes
+## Integration tests (#1794)
 
-- `initialize` rejects `admin == payment_token` and `transfer` rejects sending shares to the contract itself (`InvalidAddress`, 3014).
-- A `settled` event (`asset_id`, `owner`, `amount`) is emitted whenever accrued payout is moved into a holder's pending balance.
-- `settle` skips the checkpoint write when it is already current, saving a storage write.
-- Admin checks use an OpenZeppelin `Ownable`-style `only_admin` helper.
+`src/test_integration.rs` runs the full flow end to end: create asset →
+transfer → list → buy → deposit payout → claim, checking balances and token
+movements at each step.
+
+## Access control audit (#1795)
+
+See
+[`FRACTIONAL_OWNERSHIP_ACCESS_CONTROL.md`](FRACTIONAL_OWNERSHIP_ACCESS_CONTROL.md).
+
+## Static analysis in CI (#1800)
+
+`.github/workflows/fractional-ownership-slither.yml` runs Slither over any
+Solidity sources, plus `cargo clippy -D warnings` and `cargo audit`, which are
+the analyzers that actually cover this Soroban/Rust contract.
