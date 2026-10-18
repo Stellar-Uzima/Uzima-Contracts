@@ -445,7 +445,7 @@ impl FractionalOwnership {
     /// @custom:error Overflow Accrual arithmetic overflowed.
     pub fn get_pending_payout(env: Env, asset_id: u64, owner: Address) -> Result<i128, Error> {
         let settled = read_i128(&env, &DataKey::Pending(asset_id, owner.clone()));
-        let unsettled = accrued(&env, asset_id, &owner)?;
+        let unsettled = accrued(&env, asset_id, &owner, payout_index(&env, asset_id))?;
         settled.checked_add(unsettled).ok_or(Error::Overflow)
     }
 }
@@ -525,8 +525,9 @@ fn payout_index(env: &Env, asset_id: u64) -> i128 {
 }
 
 /// Payout accrued by `owner` since their last checkpoint, not yet settled.
-fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
-    let index = payout_index(env, asset_id);
+/// Takes the current `index` so callers that already read it skip a second
+/// storage read.
+fn accrued(env: &Env, asset_id: u64, owner: &Address, index: i128) -> Result<i128, Error> {
     let checkpoint = read_i128(env, &DataKey::Checkpoint(asset_id, owner.clone()));
     let bal = balance(env, asset_id, owner);
     if index <= checkpoint || bal == 0 {
@@ -537,7 +538,8 @@ fn accrued(env: &Env, asset_id: u64, owner: &Address) -> Result<i128, Error> {
 
 /// Move accrued payout into the pending balance and advance the checkpoint.
 fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
-    let owed = accrued(env, asset_id, owner)?;
+    let index = payout_index(env, asset_id);
+    let owed = accrued(env, asset_id, owner, index)?;
     if owed > 0 {
         let key = DataKey::Pending(asset_id, owner.clone());
         let pending = read_i128(env, &key)
@@ -545,7 +547,6 @@ fn settle(env: &Env, asset_id: u64, owner: &Address) -> Result<(), Error> {
             .ok_or(Error::Overflow)?;
         put(env, &key, &pending);
     }
-    let index = payout_index(env, asset_id);
     put(env, &DataKey::Checkpoint(asset_id, owner.clone()), &index);
     Ok(())
 }
