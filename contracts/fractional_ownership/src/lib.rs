@@ -44,6 +44,9 @@ mod test_reentrancy;
 #[cfg(test)]
 mod fuzz_test;
 
+#[cfg(test)]
+mod test_integration;
+
 pub use errors::Error;
 pub use types::{DataKey, Listing};
 
@@ -179,7 +182,8 @@ impl FractionalOwnership {
     /// @param asset_id Asset being sold.
     /// @param amount Shares on offer, must be positive and not exceed the balance.
     /// @param price_per_share Price in payment-token base units, must be positive.
-    /// @custom:error InvalidAmount `amount` or `price_per_share` is not positive.
+    /// @custom:error InvalidAmount `amount` is not positive.
+    /// @custom:error InvalidPrice `price_per_share` is not positive.
     /// @custom:error AssetNotFound Unknown `asset_id`.
     /// @custom:error InsufficientShares `seller` holds fewer than `amount`.
     /// @custom:error Reentrancy A guarded call (an external token call) is in progress.
@@ -192,8 +196,11 @@ impl FractionalOwnership {
     ) -> Result<(), Error> {
         ensure_unlocked(&env)?;
         seller.require_auth();
-        if amount <= 0 || price_per_share <= 0 {
+        if amount <= 0 {
             return Err(Error::InvalidAmount);
+        }
+        if price_per_share <= 0 {
+            return Err(Error::InvalidPrice);
         }
         total_shares_of(&env, asset_id)?;
         if balance(&env, asset_id, &seller) < amount {
