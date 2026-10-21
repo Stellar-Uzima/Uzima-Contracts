@@ -54,9 +54,7 @@ impl RentalYieldContract {
         }
 
         let pool: i128 = env.storage().instance().get(&DataKey::Pool).unwrap_or(0);
-        let pool = pool
-            .checked_add(amount)
-            .ok_or(Error::InvalidState)?;
+        let pool = pool.checked_add(amount).ok_or(Error::InvalidState)?;
         env.storage().instance().set(&DataKey::Pool, &pool);
 
         // issue #1806: emit an event for the state change.
@@ -87,7 +85,7 @@ impl RentalYieldContract {
         if amount > pool {
             return Err(Error::InsufficientFunds);
         }
-        let pool = pool - amount;
+        let pool = pool.checked_sub(amount).ok_or(Error::InvalidState)?;
         env.storage().instance().set(&DataKey::Pool, &pool);
 
         // issue #1806: emit an event for the state change.
@@ -106,80 +104,118 @@ impl RentalYieldContract {
 #[cfg(test)]
 mod test {
     use super::*;
-    use soroban_sdk::testutils::Address as _;
+    use soroban_sdk::testutils::{Address as _, Events as _};
 
     fn setup(env: &Env) -> (Address, Address) {
-        let contract_id = env.register(RentalYieldContract, ());
+        env.mock_all_auths();
+        let contract_id = env.register_contract(None, RentalYieldContract);
         let admin = Address::generate(env);
-        env.as_contract(&contract_id, || {
-            RentalYieldContract::initialize(env.clone(), admin.clone()).unwrap();
-        });
+        RentalYieldContractClient::new(env, &contract_id).initialize(&admin);
         (contract_id, admin)
     }
 
     #[test]
     fn deposit_and_distribute_update_the_pool() {
         let env = Env::default();
-        env.mock_all_auths();
         let (contract_id, admin) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
         let recipient = Address::generate(&env);
-
-        env.as_contract(&contract_id, || {
-            assert_eq!(
-                RentalYieldContract::deposit(env.clone(), admin.clone(), 100).unwrap(),
-                100
-            );
-            assert_eq!(
-                RentalYieldContract::distribute(env.clone(), admin.clone(), recipient, 40)
-                    .unwrap(),
-                60
-            );
-            assert_eq!(RentalYieldContract::pool_balance(env.clone()), 60);
-        });
+        assert_eq!(client.deposit(&admin, &100), 100);
+        assert_eq!(client.distribute(&admin, &recipient, &40), 60);
+        assert_eq!(client.pool_balance(), 60);
     }
 
     #[test]
     fn rejects_non_positive_deposit() {
         let env = Env::default();
-        env.mock_all_auths();
         let (contract_id, admin) = setup(&env);
-
-        env.as_contract(&contract_id, || {
-            assert_eq!(
-                RentalYieldContract::deposit(env.clone(), admin, 0),
-                Err(Error::InvalidInput)
-            );
-        });
+        let client = RentalYieldContractClient::new(&env, &contract_id);
+        assert_eq!(client.try_deposit(&admin, &0), Err(Ok(Error::InvalidInput)));
     }
 
     #[test]
     fn rejects_distribution_beyond_pool_balance() {
         let env = Env::default();
-        env.mock_all_auths();
         let (contract_id, admin) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
         let recipient = Address::generate(&env);
-
-        env.as_contract(&contract_id, || {
-            RentalYieldContract::deposit(env.clone(), admin.clone(), 10).unwrap();
-            assert_eq!(
-                RentalYieldContract::distribute(env.clone(), admin, recipient, 11),
-                Err(Error::InsufficientFunds)
-            );
-        });
+        client.deposit(&admin, &10);
+        assert_eq!(
+            client.try_distribute(&admin, &recipient, &11),
+            Err(Ok(Error::InsufficientFunds))
+        );
     }
 
     #[test]
     fn rejects_non_admin_caller() {
         let env = Env::default();
-        env.mock_all_auths();
-        let (contract_id, _admin) = setup(&env);
+        let (contract_id, _) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
         let stranger = Address::generate(&env);
+        assert_eq!(
+            client.try_deposit(&stranger, &10),
+            Err(Ok(Error::Unauthorized))
+        );
+    }
 
-        env.as_contract(&contract_id, || {
+    #[test]
+    fn rejects_deposit_overflow_without_changing_balance_or_events() {
+        let env = Env::default();
+        let (contract_id, admin) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
+        client.deposit(&admin, &(i128::MAX - 1));
+        let events = env.events().all();
+        assert_eq!(client.try_deposit(&admin, &2), Err(Ok(Error::InvalidState)));
+        assert_eq!(env.events().all(), events);
+        assert_eq!(client.pool_balance(), i128::MAX - 1);
+        assert_eq!(client.deposit(&admin, &1), i128::MAX);
+        let events = env.events().all();
+        for amount in [1, i128::MAX] {
             assert_eq!(
-                RentalYieldContract::deposit(env.clone(), stranger, 10),
-                Err(Error::Unauthorized)
+                client.try_deposit(&admin, &amount),
+                Err(Ok(Error::InvalidState))
             );
-        });
+            assert_eq!(env.events().all(), events);
+            assert_eq!(client.pool_balance(), i128::MAX);
+        }
+    }
+
+    #[test]
+    fn distributes_maximum_balance_and_rejects_underflow() {
+        let env = Env::default();
+        let (contract_id, admin) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        assert_eq!(client.deposit(&admin, &i128::MAX), i128::MAX);
+        assert_eq!(client.distribute(&admin, &recipient, &i128::MAX), 0);
+        let events = env.events().all();
+        assert_eq!(
+            client.try_distribute(&admin, &recipient, &1),
+            Err(Ok(Error::InsufficientFunds))
+        );
+        assert_eq!(env.events().all(), events);
+        assert_eq!(client.pool_balance(), 0);
+    }
+
+    #[test]
+    fn rejects_minimum_integer_amount_without_changing_balance_or_events() {
+        let env = Env::default();
+        let (contract_id, admin) = setup(&env);
+        let client = RentalYieldContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        client.deposit(&admin, &1);
+        let events = env.events().all();
+        assert_eq!(
+            client.try_deposit(&admin, &i128::MIN),
+            Err(Ok(Error::InvalidInput))
+        );
+        assert_eq!(env.events().all(), events);
+        assert_eq!(client.pool_balance(), 1);
+        assert_eq!(
+            client.try_distribute(&admin, &recipient, &i128::MIN),
+            Err(Ok(Error::InvalidInput))
+        );
+        assert_eq!(env.events().all(), events);
+        assert_eq!(client.pool_balance(), 1);
     }
 }
