@@ -8,13 +8,24 @@ use soroban_sdk::contracterror;
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum Error {
-    Unauthorized = CommonError::Unauthorized as u32,
-    NotInitialized = CommonError::NotInitialized as u32,
-    AlreadyInitialized = CommonError::AlreadyInitialized as u32,
-    InvalidInput = CommonError::InvalidInput as u32,
-    InvalidState = CommonError::InvalidState as u32,
-    InsufficientFunds = CommonError::InsufficientFunds as u32,
+    Unauthorized = 1,
+    NotInitialized = 2,
+    AlreadyInitialized = 3,
+    InvalidInput = 8,
+    InvalidState = 9,
+    InsufficientFunds = 7,
 }
+
+// Soroban 21's contracterror macro requires literal discriminants. Keep them
+// aligned with the shared taxonomy at compile time without changing the ABI.
+const _: () = {
+    assert!(Error::Unauthorized as u32 == CommonError::Unauthorized as u32);
+    assert!(Error::NotInitialized as u32 == CommonError::NotInitialized as u32);
+    assert!(Error::AlreadyInitialized as u32 == CommonError::AlreadyInitialized as u32);
+    assert!(Error::InvalidInput as u32 == CommonError::InvalidInput as u32);
+    assert!(Error::InvalidState as u32 == CommonError::InvalidState as u32);
+    assert!(Error::InsufficientFunds as u32 == CommonError::InsufficientFunds as u32);
+};
 
 impl core::fmt::Display for Error {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {

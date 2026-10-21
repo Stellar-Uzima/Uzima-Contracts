@@ -17,3 +17,10 @@ at this minimal scope:
   rejected with `Error::InvalidInput` / `Error::InsufficientFunds`.
 - **Events**: `deposit` and `distribute` each publish an event with the
   amount and resulting pool balance.
+- **Integer overflow (#1813)**: pool arithmetic uses checked addition and
+  subtraction. Deposits exceeding `i128::MAX` return `Error::InvalidState`;
+  distributions exceeding the balance return `Error::InsufficientFunds`.
+  Rejected operations leave the balance unchanged and emit no event. A balance
+  of exactly `i128::MAX` is supported and can be fully distributed.
+
+Run the contract's tests with `cargo test -p rental_yield`.
