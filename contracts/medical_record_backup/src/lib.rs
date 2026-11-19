@@ -631,8 +631,10 @@ impl MedicalRecordBackupContract {
         env.storage()
             .persistent()
             .set(&DataKey::RestoreRequest(request_id), &request);
-        env.events()
-            .publish((symbol_short!("BKP_RREQ"),), (request_id, artifact_id));
+        env.events().publish(
+            (Symbol::new(&env, "restore_requested"),),
+            (request_id, artifact_id),
+        );
         Ok(request_id)
     }
 
@@ -658,8 +660,10 @@ impl MedicalRecordBackupContract {
         env.storage()
             .persistent()
             .set(&DataKey::RestoreRequest(request_id), &request);
-        env.events()
-            .publish((symbol_short!("BKP_RAPP"),), (request_id, caller));
+        env.events().publish(
+            (Symbol::new(&env, "restore_approved"),),
+            (request_id, caller),
+        );
         Ok(true)
     }
 
