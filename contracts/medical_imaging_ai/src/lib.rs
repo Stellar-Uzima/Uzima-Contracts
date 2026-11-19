@@ -174,6 +174,7 @@ pub enum Error {
     NotInitialized = 2,
     NotAuthorized = 3,
     ContractPaused = 4,
+    /// Rejects non-canonical Ed25519 S values in signature verification paths.
     InvalidInput = 5,
     ModelNotFound = 6,
     ModelNotActive = 7,
@@ -427,11 +428,15 @@ impl MedicalImagingAiContract {
         }
 
         #[cfg(not(test))]
-        env.crypto().ed25519_verify(
-            &model.signing_pubkey,
-            &attestation_hash.clone().into(),
-            &signature,
-        );
+        {
+            common_error::sig_malleability::check_s_value(&env, &signature.to_array())
+                .map_err(|_| Error::InvalidInput)?;
+            env.crypto().ed25519_verify(
+                &model.signing_pubkey,
+                &attestation_hash.clone().into(),
+                &signature,
+            );
+        }
 
         let result_id = Self::next_counter(&env, &NEXT_RES);
 
@@ -510,11 +515,15 @@ impl MedicalImagingAiContract {
         }
 
         #[cfg(not(test))]
-        env.crypto().ed25519_verify(
-            &model.signing_pubkey,
-            &attestation_hash.clone().into(),
-            &signature,
-        );
+        {
+            common_error::sig_malleability::check_s_value(&env, &signature.to_array())
+                .map_err(|_| Error::InvalidInput)?;
+            env.crypto().ed25519_verify(
+                &model.signing_pubkey,
+                &attestation_hash.clone().into(),
+                &signature,
+            );
+        }
 
         let seg_id = Self::next_counter(&env, &NEXT_SEG);
 
