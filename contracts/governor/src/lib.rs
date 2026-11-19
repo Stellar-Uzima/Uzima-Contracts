@@ -234,6 +234,7 @@ impl Governor {
         env.storage().persistent().set(&PROPS, &props);
         env.storage().instance().set(&P_COUNT, &id);
 
+        emit_governance_telemetry(&env, &proposer, "governor_propose");
         env.events()
             .publish((symbol_short!("Propose"), id), proposer);
         Ok(id)
@@ -290,6 +291,7 @@ impl Governor {
         props.set(proposal_id, p);
         env.storage().persistent().set(&PROPS, &props);
 
+        emit_governance_telemetry(&env, &voter, "governor_cast_vote");
         env.events().publish(
             (symbol_short!("Vote"), proposal_id),
             (voter, support, weight),
@@ -366,6 +368,7 @@ impl Governor {
             }
         }
 
+        emit_governance_telemetry(&env, &p.proposer, "governor_execute");
         p.executed = true;
         props.set(proposal_id, p.clone());
         env.storage().persistent().set(&PROPS, &props);

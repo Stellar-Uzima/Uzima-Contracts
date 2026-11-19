@@ -12,6 +12,7 @@ crate-type = ["cdylib"]
 [dependencies]
 soroban-sdk.workspace = true
 governance_commons = { workspace = true }
+contract_monitoring = { path = "../contract_monitoring" }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
