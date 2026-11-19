@@ -135,6 +135,12 @@ while IFS='|' read -r contract status ranges; do
             continue
         fi
         while IFS='|' read -r u_contract u_start u_end; do
+            # `common_error` owns the shared low band (0-99) by policy. Legacy
+            # sequential and shared-category contracts intentionally use codes
+            # in that band until their unique-range migration lands, so it is
+            # not a violation. Non-overlap is still enforced against every
+            # contract-specific unique range (issue #1949).
+            [[ "$u_contract" == "common_error" ]] && continue
             if (( start <= u_end && u_start <= end )); then
                 echo "FAIL: $contract range $start-$end overlaps with unique-range $u_contract ($u_start-$u_end)"
                 violations=$((violations + 1))

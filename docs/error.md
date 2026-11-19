@@ -2,7 +2,10 @@
 
 > **Last updated:** 2026-05-30  
 > **Soroban SDK:** v23.x  
-> **Contracts covered:** `medical_records`, `access_control`, `governance`, `identity_registry`
+> **Contracts covered:** every contract with a Rust `Error` enum. The authoritative,
+> machine-readable mapping is [docs/ERROR_CODES.md](ERROR_CODES.md), which is validated
+> by `scripts/check_error_codes.sh` (issue #1949). This document keeps the detailed
+> per-code tables for the contracts below and links to the registry for all others.
 
 Soroban contract errors are `u32` enum variants exposed as `Error(Contract, #N)` in transaction
 results and diagnostic events. Every error code in this file is **unique across all contracts**

@@ -2201,3 +2201,36 @@ fn test_get_schema_evolution() {
     // Note: register_schema_version stores under SchemaEvolutionCount which is the evolution_id
     // This test verifies the get_schema_evolution query function works
 }
+
+// ---- Pause/unpause privileged-operation coverage (issue #1948) ----
+
+#[test]
+fn test_pause_blocks_privileged_role_and_permission_changes_until_unpaused() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, admin) = create_contract(&env);
+    let doctor = Address::generate(&env);
+    let patient = Address::generate(&env);
+
+    // Baseline: privileged operations succeed while running.
+    assert!(client.manage_user(&admin, &doctor, &Role::Doctor));
+    assert!(client.grant_permission(&admin, &doctor, Permission::ReadRecord, 0, false));
+
+    client.pause(&admin);
+
+    // Role and permission grants must be blocked while paused.
+    assert_eq!(
+        client.try_manage_user(&admin, &Address::generate(&env), &Role::Patient),
+        Err(Ok(Error::ContractPaused))
+    );
+    assert_eq!(
+        client.try_grant_permission(&admin, &patient, Permission::ReadRecord, 0, false),
+        Err(Ok(Error::ContractPaused))
+    );
+
+    // Resume and confirm the same operations work again.
+    assert!(client.unpause(&admin));
+    assert!(client.manage_user(&admin, &patient, &Role::Patient));
+    assert!(client.grant_permission(&admin, &patient, Permission::ReadRecord, 0, false));
+}

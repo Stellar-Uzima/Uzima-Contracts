@@ -76,6 +76,11 @@ const PROPS: Symbol = symbol_short!("props");
 const P_COUNT: Symbol = symbol_short!("p_count");
 const VOTES: Symbol = symbol_short!("votes");
 
+/// Maximum size (bytes) of the description hash and execution payload accepted
+/// by `propose` (issue #1947).
+const MAX_DESCRIPTION_HASH_BYTES: u32 = 64;
+const MAX_EXECUTION_DATA_BYTES: u32 = 16_384;
+
 #[contract]
 pub struct Governor;
 
@@ -172,6 +177,10 @@ impl Governor {
         execution_data: Bytes,
     ) -> Result<u64, Error> {
         proposer.require_auth();
+        validation_utils::validate_bytes_size(&description_hash, 1, MAX_DESCRIPTION_HASH_BYTES)
+            .map_err(|_| Error::InvalidInput)?;
+        validation_utils::validate_bytes_size(&execution_data, 0, MAX_EXECUTION_DATA_BYTES)
+            .map_err(|_| Error::InvalidInput)?;
         // Single instance-storage read; host caches instance storage per tx.
         let cfg = get_cfg(&env)?;
 

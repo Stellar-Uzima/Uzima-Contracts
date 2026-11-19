@@ -3,8 +3,8 @@
 //! failover_detector - Healthcare smart contract on Stellar blockchain.
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, Symbol,
-    Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
+    Symbol, Vec,
 };
 
 // ============================================================================
@@ -174,8 +174,18 @@ impl FailoverDetector {
             .instance()
             .get(&ROLES)
             .unwrap_or_else(|| Map::new(&env));
-        roles.set(user, role_mask);
+        roles.set(user.clone(), role_mask);
         env.storage().instance().set(&ROLES, &roles);
+        // Emit the canonical role-granted event so monitoring can index the
+        // privileged change without understanding this contract's bitmask.
+        let role_label = if role_mask == ALL_ROLES {
+            String::from_str(&env, "all")
+        } else if role_mask & ROLE_ADMIN != 0 {
+            String::from_str(&env, "admin")
+        } else {
+            String::from_str(&env, "operator")
+        };
+        governance_commons::emit_role_granted(&env, &user, &role_label, &caller);
         Ok(())
     }
 

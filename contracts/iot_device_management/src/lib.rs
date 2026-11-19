@@ -292,7 +292,14 @@ impl IoTDeviceManagement {
         Self::check_not_paused(&env)?;
         env.storage()
             .persistent()
-            .set(&DataKey::UserRole(user), &role);
+            .set(&DataKey::UserRole(user.clone()), &role);
+        let role_label = match role {
+            Role::Admin => String::from_str(&env, "Admin"),
+            Role::Manufacturer => String::from_str(&env, "Manufacturer"),
+            Role::Operator => String::from_str(&env, "Operator"),
+            Role::Viewer => String::from_str(&env, "Viewer"),
+        };
+        governance_commons::emit_role_granted(&env, &user, &role_label, &admin);
         Ok(())
     }
 

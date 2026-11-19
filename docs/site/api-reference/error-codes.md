@@ -1,6 +1,6 @@
 # Error Codes
 
-All contracts use stable integer error codes. See [docs/ERROR_CODES.md](../../ERROR_CODES.md) for the full registry.
+All contracts use stable integer error codes. See [docs/ERROR_CODES.md](../../ERROR_CODES.md) for the full registry. It now registers every contract that defines an `Error` enum, including contracts with inline enums in `lib.rs`; `scripts/check_error_codes.sh` fails on any unregistered contract (issue #1949).
 
 ## Common Error Ranges
 
