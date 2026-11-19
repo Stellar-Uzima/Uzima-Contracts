@@ -279,27 +279,6 @@ impl StressTest {
     }
 }
 
-/// Memory usage tracker
-pub struct MemoryTracker {
-    tracking: bool,
-}
-
-impl MemoryTracker {
-    pub fn new() -> Self {
-        Self { tracking: false }
-    }
-
-    /// Start tracking memory
-    pub fn start(&mut self) {
-        self.tracking = true;
-    }
-
-    /// Calculate memory delta (placeholder — real impl would use system APIs)
-    pub fn delta(&self) -> Option<usize> {
-        if self.tracking { Some(0) } else { None }
-    }
-}
-
 /// Common performance targets (in milliseconds)
 pub mod performance_targets {
     use std::collections::HashMap;
