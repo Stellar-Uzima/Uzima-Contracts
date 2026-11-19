@@ -5,12 +5,15 @@ This document serves as the central catalog and tracking system for technical de
 
 ## Debt Catalog
 
-| ID | Contract/Module | Description | Type | Impact | Priority | Status | Target Date |
-|---|---|---|---|---|---|---|---|
-| TD-001 | `zkp_registry` | Replace simulated ZKP verification in `verify_zkp_internal` with actual cryptographic verification. | Security | High | High | Open | Q3 2024 |
-| TD-002 | `zkp_registry` | Implement proper expiration decryption and validation in `create_credential_proof`. | Security | High | High | Open | Q3 2024 |
-| TD-003 | `zkp_registry` | Replace simulated range proof verification in `verify_range_proof_internal` with actual verification. | Security | High | High | Resolved (PR #848) | Q3 2024 |
-| TD-004 | `zkp_registry` | Replace simulated recursive proof verification in `verify_recursive_proof_internal` with actual verification. | Security | High | High | Open | Q4 2024 |
+| ID | Contract/Module | Description | Type | Impact | Priority | Status | Owner | Target Date |
+|---|---|---|---|---|---|---|---|---|
+| TD-001 | `zkp_registry` | Replace simulated ZKP verification in `verify_zkp_internal` with actual cryptographic verification. Source still derives a gas cost from the proof type and checks it against `MAX_VERIFICATION_GAS` ("Simulate verification"). | Security | High | High | Open (verified 2026-11-19) | @Stellar-Uzima/maintainers | Q3 2024 (overdue; re-target at next quarterly review) |
+| TD-002 | `zkp_registry` | Implement proper expiration decryption and validation in `create_credential_proof`. | Security | High | High | Resolved in source: `create_credential_proof` calls `decrypt_credential_expiration`, which checks ciphertext length and domain tag and rejects expired credentials (`InvalidExpirationCiphertext`, `CredentialExpired`). No fixing PR recorded. Residual: it is an XOR cipher keyed by a per-issuer salt, with a public default salt when none is set (`DEFAULT_ISSUER_SALT`). (verified 2026-11-19) | @Stellar-Uzima/maintainers | Q3 2024 (met) |
+| TD-003 | `zkp_registry` | Replace simulated range proof verification in `verify_range_proof_internal` with actual verification. | Security | High | High | Resolved (PR #848) | @Stellar-Uzima/maintainers | Q3 2024 |
+| TD-004 | `zkp_registry` | Replace simulated recursive proof verification in `verify_recursive_proof_internal` with actual verification. | Security | High | High | Partially resolved in source: the stub is gone; the function now requires a stored, previously verified base proof and a matching `aggregated_vk_hash` (SHA-256 binding). It does not verify the recursive proof cryptographically, and the base proof's own verification is still TD-001. No fixing PR recorded. (verified 2026-11-19) | @Stellar-Uzima/maintainers | Q4 2024 (overdue; tied to TD-001) |
+| TD-005 | `scripts/wasm_size_baselines.json` | 31 deployable contracts, including `medical_records`, have no WASM size baseline entry; `check_wasm_baseline_staleness.sh` only reports the gap (non-blocking) until baselines are measured and `--strict` is enabled. Source: `docs/audits/WASM_BASELINE_STALENESS.md`. | Testing | Medium | Medium | Open | @Stellar-Uzima/maintainers | Q1 2027 (proposed) |
+| TD-006 | `dicomweb_services` | DICOM conformance tests in `src/conformance_tests.rs` are TODO stubs (WADO-RS and STOW-RS retrieve/store cases are not implemented). Source: `contracts/dicomweb_services/src/conformance_tests.rs`. | Testing | Medium | Medium | Open | @Stellar-Uzima/maintainers | Q1 2027 (proposed) |
+| TD-007 | Root `Cargo.toml` `workspace.exclude` | Contracts excluded from the workspace are deferred under issue #828 and tracked per contract (owner, blocker, status) in `docs/ONRAMP_OWNERSHIP.md`. | Architecture | High | Medium | Open (per-contract status in `docs/ONRAMP_OWNERSHIP.md`) | @Stellar-Uzima/maintainers | #828 on-ramp (see ownership map) |
 
 ## Assessment Matrix
 

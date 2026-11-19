@@ -66,7 +66,7 @@ make check        # runs fmt + clippy + test in one command
 
 ```
 Uzima-Contracts/
-├── contracts/           # 100+ Soroban smart contracts
+├── contracts/           # 110+ Soroban smart contracts
 │   ├── medical_records/
 │   ├── patient_consent_management/
 │   ├── access_control/
@@ -76,12 +76,17 @@ Uzima-Contracts/
 ├── docs/                # Architecture, security, API reference, ADRs
 ├── scripts/             # Deployment, monitoring, and utility scripts
 ├── config/              # Network and environment configuration
+├── contract_optimizer/  # Contract optimization tooling
+├── dashboard/           # Dashboard application
+├── deployments/         # Deployment records
 ├── schemas/             # Event and interface schemas
 ├── mobile-sdk/          # Multi-platform mobile SDKs
 ├── resource-budgets/    # Contract resource budget definitions
+├── reports/             # Generated reports
 ├── makefile             # Build automation
 ├── Cargo.toml           # Workspace configuration
 ├── clippy.toml          # Clippy lint configuration
+├── rust-toolchain.toml  # Pinned Rust toolchain
 └── rustfmt.toml         # Formatting configuration
 ```
 
@@ -122,7 +127,7 @@ Branch naming:
 - Run quality checks frequently: `make check`.
 - Keep changes focused and minimal.
 
-### Test locally
+### 4. Test locally
 
 ```bash
 make test            # all tests
