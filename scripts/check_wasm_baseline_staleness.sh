@@ -11,7 +11,11 @@
 # here. Pass --strict once that backlog is cleared, so this only blocks
 # *new* contracts from shipping without a baseline going forward.
 #
-# Usage: ./scripts/check_wasm_baseline_staleness.sh [--strict]
+# --strict-new=<git-ref> blocks only contracts whose Cargo.toml was added since
+# <git-ref> (e.g. origin/main), so the existing backlog is grandfathered while
+# newly added contracts must ship with a baseline. Requires full git history.
+#
+# Usage: ./scripts/check_wasm_baseline_staleness.sh [--strict | --strict-new=<git-ref>]
 
 set -euo pipefail
 
@@ -20,9 +24,11 @@ CONTRACTS_DIR="$ROOT_DIR/contracts"
 BASELINE_FILE="$ROOT_DIR/scripts/wasm_size_baselines.json"
 
 STRICT=false
+STRICT_NEW_REF=""
 for arg in "$@"; do
   case "$arg" in
     --strict) STRICT=true ;;
+    --strict-new=*) STRICT_NEW_REF="${arg#--strict-new=}" ;;
   esac
 done
 
@@ -41,6 +47,14 @@ excluded_entries="$(sed -n '/"excluded": \[/,/\]/p' "$BASELINE_FILE" \
   | grep -oE '"[a-zA-Z0-9_-]+"' | tr -d '"' | sort -u)"
 
 missing=0
+new_missing=0
+
+if [[ -n "$STRICT_NEW_REF" ]]; then
+  added_manifests="$(git -C "$ROOT_DIR" diff --diff-filter=A --name-only "$STRICT_NEW_REF"...HEAD -- 'contracts/*/Cargo.toml')" || {
+    echo "FATAL: could not diff against $STRICT_NEW_REF"
+    exit 1
+  }
+fi
 for dir in "$CONTRACTS_DIR"/*/; do
   name="$(basename "$dir")"
   [[ -f "$dir/Cargo.toml" ]] || continue
@@ -57,6 +71,10 @@ for dir in "$CONTRACTS_DIR"/*/; do
   fi
 
   missing=$((missing + 1))
+  if [[ -n "$STRICT_NEW_REF" ]] && grep -qxF "contracts/$name/Cargo.toml" <<<"$added_manifests"; then
+    new_missing=$((new_missing + 1))
+    echo "NEW CONTRACT MISSING BASELINE: $name"
+  fi
   echo "MISSING BASELINE: $name (deployable contract, no wasm_size_baselines.json entry and not excluded)"
 done
 
@@ -67,6 +85,10 @@ if [[ "$missing" -gt 0 ]]; then
   echo "scripts/wasm_size_monitor.sh after a release build) or add the contract name"
   echo "to \"excluded\" if it's intentionally not size-gated."
   if $STRICT; then
+    exit 1
+  fi
+  if [[ "$new_missing" -gt 0 ]]; then
+    echo "ERROR: $new_missing newly added contract(s) have no baseline (existing backlog is grandfathered)."
     exit 1
   fi
   exit 0
