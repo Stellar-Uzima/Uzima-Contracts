@@ -21,6 +21,9 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod reentrancy_tests;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };

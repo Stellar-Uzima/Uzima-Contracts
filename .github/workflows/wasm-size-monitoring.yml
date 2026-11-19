@@ -43,10 +43,12 @@ jobs:
       - name: Build contracts
         run: cargo build --workspace --target wasm32-unknown-unknown --release
 
-      # Fails the job (exit 1) on a >10% size regression against
-      # scripts/wasm_size_baselines.json, or a new 60 KB breach — see
-      # wasm_size_monitor.sh's --check-baseline mode, which is explicitly
-      # documented as "used by CI". Nothing here swallows it with || true.
+      # Strict gate: fails the job (exit 1) on a >10% size regression against
+      # scripts/wasm_size_baselines.json or on exceeding the threshold configured
+      # there (warning_threshold_bytes). Only contracts on the shrinking
+      # `grandfathered_over_threshold` list remain warn-only. Entries with a
+      # 0-byte baseline are reported as unmeasured until `--update` records a
+      # real release-WASM size. Nothing here swallows the failure with || true.
       - name: Check WASM size against baseline
         run: ./scripts/wasm_size_monitor.sh --check-baseline
 
@@ -62,4 +64,5 @@ jobs:
           path: |
             .wasm_size_trends.json
             .wasm_optimization_tips.json
+            wasm_size_report.md
           if-no-files-found: ignore
