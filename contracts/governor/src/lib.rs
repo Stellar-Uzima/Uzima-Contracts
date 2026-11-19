@@ -37,9 +37,23 @@ mod governance_tests;
 pub mod errors;
 pub use errors::Error;
 use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, vec, Address, Bytes, Env, IntoVal, Map,
-    Symbol, Vec,
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Map, Symbol, Vec,
 };
+
+#[soroban_sdk::contractclient(name = "DisputeClient")]
+pub trait DisputeStatus {
+    fn is_disputed(env: Env, claim_id: u64) -> bool;
+}
+
+#[soroban_sdk::contractclient(name = "TokenClient")]
+pub trait TokenBalance {
+    fn balance_of(env: Env, user: Address) -> i128;
+}
+
+#[soroban_sdk::contractclient(name = "ReputationClient")]
+pub trait ReputationScore {
+    fn get_score(env: Env, user: Address) -> i128;
+}
 
 #[derive(Clone)]
 #[contracttype]
@@ -75,6 +89,26 @@ const CFG: Symbol = symbol_short!("cfg");
 const PROPS: Symbol = symbol_short!("props");
 const P_COUNT: Symbol = symbol_short!("p_count");
 const VOTES: Symbol = symbol_short!("votes");
+
+fn is_disputed(env: &Env, dispute_addr: &Address, proposal_id: u64) -> bool {
+    DisputeClient::new(env, dispute_addr).is_disputed(&proposal_id)
+}
+
+fn token_balance(env: &Env, token: &Address, voter: &Address) -> Result<i128, Error> {
+    let balance = TokenClient::new(env, token).balance_of(voter);
+    if balance < 0 {
+        return Err(Error::InvalidState);
+    }
+    Ok(balance)
+}
+
+fn reputation_score(env: &Env, rep_addr: &Address, voter: &Address) -> Result<i128, Error> {
+    let score = ReputationClient::new(env, rep_addr).get_score(voter);
+    if score < 0 {
+        return Err(Error::InvalidState);
+    }
+    Ok(score)
+}
 
 #[contract]
 pub struct Governor;
@@ -114,10 +148,7 @@ fn proposal_state(env: &Env, cfg: &GovernorConfig, proposal_id: u64, p: &Proposa
     }
 
     if let Some(dispute_addr) = &cfg.dispute_contract {
-        let args = vec![env, proposal_id.into_val(env)];
-        let is_disputed: bool =
-            env.invoke_contract(dispute_addr, &Symbol::new(env, "is_disputed"), args);
-        if is_disputed {
+        if is_disputed(env, dispute_addr, proposal_id) {
             return 6;
         }
     }
@@ -175,7 +206,7 @@ impl Governor {
         // Single instance-storage read; host caches instance storage per tx.
         let cfg = get_cfg(&env)?;
 
-        let voting_power = Self::get_power(&env, &cfg, &proposer);
+        let voting_power = Self::get_power(&env, &cfg, &proposer)?;
         if voting_power < cfg.prop_threshold {
             return Err(Error::ProposalThresholdNotMet);
         }
@@ -253,7 +284,7 @@ impl Governor {
             return Err(Error::AlreadyVoted);
         }
 
-        let weight = Self::get_power(&env, &cfg, &voter);
+        let weight = Self::get_power(&env, &cfg, &voter)?;
         if weight == 0 {
             return Err(Error::NoVotingPower);
         }
@@ -341,10 +372,7 @@ impl Governor {
 
         let cfg = get_cfg(&env)?;
         if let Some(dispute_addr) = cfg.dispute_contract {
-            let args = vec![&env, proposal_id.into_val(&env)];
-            let is_disputed: bool =
-                env.invoke_contract(&dispute_addr, &Symbol::new(&env, "is_disputed"), args);
-            if is_disputed {
+            if is_disputed(&env, &dispute_addr, proposal_id) {
                 return Err(Error::ProposalDisputed);
             }
         }
@@ -388,19 +416,16 @@ impl Governor {
         Ok(removed)
     }
 
-    fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> i128 {
-        let token_args = vec![&env, voter.into_val(env)];
-        let balance: i128 =
-            env.invoke_contract(&cfg.token, &Symbol::new(&env, "balance_of"), token_args);
+    fn get_power(env: &Env, cfg: &GovernorConfig, voter: &Address) -> Result<i128, Error> {
+        let balance = token_balance(env, &cfg.token, voter)?;
 
-        let rep: i128 = if let Some(rep_addr) = &cfg.rep_contract {
-            let rep_args = vec![&env, voter.into_val(env)];
-            env.invoke_contract(rep_addr, &Symbol::new(&env, "get_score"), rep_args)
+        let rep = if let Some(rep_addr) = &cfg.rep_contract {
+            reputation_score(env, rep_addr, voter)?
         } else {
             0
         };
 
-        balance.saturating_add(rep)
+        Ok(balance.saturating_add(rep))
     }
 }
 

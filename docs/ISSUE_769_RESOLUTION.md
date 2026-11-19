@@ -166,12 +166,7 @@ Is this a governance/proposal decision?
 **Dispute Delegation** (lines 228-232, 288-292):
 ```rust
 if let Some(dispute_addr) = cfg.dispute_contract {
-    let args = vec![&env, proposal_id.into_val(&env)];
-    let is_disputed: bool = env.invoke_contract(
-        &dispute_addr,
-        &Symbol::new(&env, "is_disputed"),
-        args
-    );
+    let is_disputed = DisputeClient::new(&env, &dispute_addr).is_disputed(&proposal_id);
     if is_disputed {
         return Ok(6); // or Err(Error::ProposalDisputed)
     }
