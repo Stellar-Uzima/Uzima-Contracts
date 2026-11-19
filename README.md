@@ -69,7 +69,7 @@ _Top 5 contracts by estimated storage cost (from latest CI run):_
 <!-- STORAGE_LEADERBOARD_START -->
 | # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) | Status |
 |---|----------|----------|-------------|-----------------|--------|
-| — | _not yet generated — see below_ | — | — | — | — |
+| — | _unmeasured — regenerate with scripts/measure_storage.sh_ | — | — | — | — |
 <!-- STORAGE_LEADERBOARD_END -->
 
 > Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release`,

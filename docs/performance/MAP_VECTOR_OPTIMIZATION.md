@@ -63,3 +63,17 @@ let mut results = SVec::new(&env); // then push up to count items
 |-----------|--------|-------|
 | List 20 providers (specialty filter) | ~1.2M CPU | ~650K CPU (-46%) |
 | RBAC role check (10 roles) | ~800K CPU | ~300K CPU (-63%) |
+
+## Applied in medical_records (issue #1959)
+
+The tag inverted index no longer rewrites an unbounded `Vec<u64>` per tag on
+every record write. New writes use an append-only per-index layout:
+
+- `DataKey::TagRecordCount(tag)` — number of indexed record IDs (one `u64`)
+- `DataKey::TagRecord(tag, index)` — one record ID per small entry
+
+`MedicalRecordsContract::append_tag_index` performs an O(1) append, and
+`search_records_by_tag` reads only the requested page and validates that each
+candidate still carries the tag. The legacy `DataKey::TagIndex(tag)` vector is
+kept as a read fallback for records written before this layout, so the change is
+additive and backwards compatible.

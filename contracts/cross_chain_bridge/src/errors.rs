@@ -17,6 +17,7 @@ pub enum Error {
     InvalidNonce = 281,
     InvalidPayload = 282,
     InvalidAddress = 290,
+    PayloadSerializationBudgetExceeded = 284,
     BatchTooLarge = 283,
 
     // --- Lifecycle & State (300–399) ---
@@ -85,6 +86,9 @@ impl core::fmt::Display for Error {
             Error::InvalidMessage => write!(f, "invalid message"),
             Error::InvalidNonce => write!(f, "invalid nonce"),
             Error::InvalidPayload => write!(f, "invalid payload"),
+            Error::PayloadSerializationBudgetExceeded => {
+                write!(f, "payload serialization budget exceeded")
+            }
             Error::InvalidAddress => write!(f, "invalid address"),
             Error::BatchTooLarge => write!(f, "batch too large"),
             Error::AlreadyInitialized => write!(f, "already initialized"),
