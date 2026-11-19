@@ -12,9 +12,14 @@
  *   node scripts/measure_budgets.mjs                    # measure all contracts
  *   node scripts/measure_budgets.mjs medical_records    # measure one contract
  *   node scripts/measure_budgets.mjs --update-baselines # update baseline file
+ *   node scripts/measure_budgets.mjs --update-instruction-budgets # record CPU baselines
+ *
+ * Instruction-count regressions (> 15% and > 50,000 instructions over the
+ * committed baseline) fail the run and are reported in
+ * reports/instruction_count_deltas.json (issue #1958).
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { execSync } from 'child_process';
 
@@ -25,6 +30,8 @@ const REPORT_DIR = join(ROOT, 'reports');
 const VIOLATIONS_FILE = join(REPORT_DIR, 'budget_violations.json');
 const REPORT_FILE = join(REPORT_DIR, 'budget_report.md');
 const BASELINE_FILE = join(ROOT, 'resource-budgets', 'baselines.json');
+const INSTRUCTION_FILE = join(ROOT, 'resource-budgets', 'instruction-budgets.json');
+const DELTAS_FILE = join(REPORT_DIR, 'instruction_count_deltas.json');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -45,28 +52,72 @@ function saveJSON(path, data) {
 function getWasmSize(contractName) {
   const wasmPath = join(WASM_DIR, `${contractName}.wasm`);
   if (!existsSync(wasmPath)) return null;
-  const stat = require('fs').statSync(wasmPath);
-  return stat.size;
+  return statSync(wasmPath).size;
 }
 
-function runCargoTest(contractName) {
+/**
+ * Collect per-function CPU instruction counts from a contract's benchmark
+ * tests (issue #1958). Accepts both `[BENCH] name cpu=N insns` and the
+ * storage harness' `[STORAGE-BENCH] name ... after=N` / `cpu_cost=N` forms.
+ */
+function collectInstructionCounts(contractName) {
   try {
     const output = execSync(
-      `cargo test -p ${contractName} -- --nocapture 2>&1`,
-      { encoding: 'utf8', timeout: 120000, cwd: ROOT }
+      `cargo test -p ${contractName} bench_ -- --nocapture 2>&1`,
+      { encoding: 'utf8', timeout: 300000, cwd: ROOT }
     );
-    // Parse CPU instruction count from benchmark output
-    const cpuMatch = output.match(/\[STORAGE-BENCH\].*after=(\d+)/);
-    const cpuAfter = cpuMatch ? parseInt(cpuMatch[1], 10) : null;
-
-    // Parse storage entry count from benchmark output
-    const storageMatch = output.match(/storage_entries_count=(\d+)/);
-    const storageEntries = storageMatch ? parseInt(storageMatch[1], 10) : null;
-
-    return { cpu_instructions: cpuAfter, storage_entries: storageEntries, output };
+    const counts = {};
+    const pattern = /\[(?:BENCH|STORAGE-BENCH)\]\s+(\S+).*?(?:cpu|after|cpu_cost)=(\d+)/g;
+    let match;
+    while ((match = pattern.exec(output)) !== null) {
+      counts[match[1]] = parseInt(match[2], 10);
+    }
+    return counts;
   } catch (err) {
-    return { cpu_instructions: null, storage_entries: null, error: err.message };
+    console.error(`[budget] benchmark collection failed for ${contractName}: ${err.message}`);
+    return {};
   }
+}
+
+/** Compare collected counts against the committed per-function baselines. */
+function checkInstructionRegressions(results, filterContract) {
+  const budgets = existsSync(INSTRUCTION_FILE) ? loadJSON(INSTRUCTION_FILE) : {};
+  const functions = budgets.functions || {};
+  const tolerance = budgets.regression_tolerance_pct ?? 15;
+  const minDelta = budgets.min_delta_instructions ?? 50000;
+  const deltas = {};
+  let regressions = 0;
+
+  for (const result of results) {
+    if (filterContract && result.contract !== filterContract) continue;
+    for (const [fn, actual] of Object.entries(result.instruction_counts || {})) {
+      const key = `${result.contract}::${fn}`;
+      const baseline = functions[key];
+      const hasBaseline = typeof baseline === 'number' && baseline > 0;
+      const deltaPct = hasBaseline ? ((actual - baseline) / baseline) * 100 : 0;
+      deltas[key] = {
+        actual,
+        baseline: hasBaseline ? baseline : null,
+        delta_pct: Number(deltaPct.toFixed(1)),
+      };
+      if (hasBaseline && deltaPct > tolerance && actual - baseline > minDelta) {
+        regressions += 1;
+        result.violations.push({
+          metric: 'cpu_instruction_regression',
+          function: fn,
+          actual,
+          baseline,
+          over_pct: deltaPct.toFixed(1),
+          severity: deltaPct > 30 ? 'critical' : 'warning',
+        });
+      }
+    }
+  }
+
+  if (existsSync(REPORT_DIR)) {
+    saveJSON(DELTAS_FILE, { checked_at: new Date().toISOString(), deltas });
+  }
+  return regressions;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +175,7 @@ function checkBudgets(budgets, filterContract) {
       wasm_bytes: wasmSize,
       max_wasm_bytes: maxWasm,
       budget_notes: budget.notes || '',
+      instruction_counts: collectInstructionCounts(name),
       violations
     });
   }
@@ -231,6 +283,7 @@ function updateBaselines() {
 function main() {
   const args = process.argv.slice(2);
   const updateBaselinesFlag = args.includes('--update-baselines');
+  const updateInstructionsFlag = args.includes('--update-instruction-budgets');
   const filterContract = args.find(a => !a.startsWith('--')) || null;
 
   if (!existsSync(BUDGET_FILE)) {
@@ -243,10 +296,30 @@ function main() {
     return;
   }
 
+  if (updateInstructionsFlag) {
+    const budgets = loadJSON(BUDGET_FILE);
+    const results = checkBudgets(budgets, filterContract);
+    const functions = {};
+    for (const result of results) {
+      for (const [fn, count] of Object.entries(result.instruction_counts || {})) {
+        functions[`${result.contract}::${fn}`] = count;
+      }
+    }
+    saveJSON(INSTRUCTION_FILE, {
+      version: '1.0.0',
+      regression_tolerance_pct: 15,
+      min_delta_instructions: 50000,
+      functions,
+    });
+    console.log(`[budget] Updated ${Object.keys(functions).length} instruction baselines.`);
+    return;
+  }
+
   mkdirSync(REPORT_DIR, { recursive: true });
 
   const budgets = loadJSON(BUDGET_FILE);
   const results = checkBudgets(budgets, filterContract);
+  const regressions = checkInstructionRegressions(results, filterContract);
 
   // A contract with no release artifact measures nothing, and an unmeasured
   // contract produces no violations. Without this guard a clean checkout
@@ -283,8 +356,11 @@ function main() {
   // Console output
   console.log(report);
 
-  if (violations.length > 0) {
-    console.error(`[budget] ${violations.length} contract(s) have budget violations.`);
+  if (violations.length > 0 || regressions > 0) {
+    console.error(
+      `[budget] ${violations.length} contract(s) have budget violations; ` +
+      `${regressions} instruction-count regression(s) detected.`
+    );
     process.exit(1);
   } else {
     console.log('[budget] All contracts within budget.');

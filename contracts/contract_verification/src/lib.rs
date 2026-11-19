@@ -87,6 +87,9 @@ pub enum DataKey {
     IsVerified,
 }
 
+/// Maximum number of ABI entries accepted by `publish_abi` (issue #1947).
+const MAX_ABI_ENTRIES: u32 = 256;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[contracterror]
 #[repr(u32)]
@@ -95,6 +98,7 @@ pub enum VerificationError {
     AlreadyInitialized = 2,
     Unauthorized = 3,
     MetadataNotFound = 4,
+    InvalidInput = 5,
 }
 
 impl core::fmt::Display for VerificationError {
@@ -104,6 +108,7 @@ impl core::fmt::Display for VerificationError {
             VerificationError::AlreadyInitialized => write!(f, "already initialized"),
             VerificationError::Unauthorized => write!(f, "unauthorized"),
             VerificationError::MetadataNotFound => write!(f, "metadata not found"),
+            VerificationError::InvalidInput => write!(f, "invalid input"),
         }
     }
 }
@@ -191,6 +196,8 @@ impl ContractVerification {
 
     /// Publish the ABI for all public functions.
     pub fn publish_abi(env: Env, entries: Vec<AbiEntry>) -> Result<(), VerificationError> {
+        validation_utils::validate_vector_size(&entries, 1, MAX_ABI_ENTRIES)
+            .map_err(|_| VerificationError::InvalidInput)?;
         let admin = Self::get_admin(&env)?;
         admin.require_auth();
 

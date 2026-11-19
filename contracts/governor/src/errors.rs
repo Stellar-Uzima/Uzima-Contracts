@@ -29,6 +29,7 @@ pub enum Error {
 
     // --- Input Validation (200–299) ---
     InvalidVoteType = 280,
+    InvalidInput = 281,
 }
 
 impl core::fmt::Display for Error {
@@ -49,6 +50,7 @@ impl core::fmt::Display for Error {
             Error::NoVotingPower => write!(f, "no voting power"),
             Error::Overflow => write!(f, "overflow"),
             Error::InvalidVoteType => write!(f, "invalid vote type"),
+            Error::InvalidInput => write!(f, "invalid input"),
             Error::CleanupEmpty => write!(f, "cleanup empty"),
         }
     }

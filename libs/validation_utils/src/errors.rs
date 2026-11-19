@@ -31,6 +31,9 @@ pub enum ValidationError {
     // Timestamp errors
     InvalidTimestamp = 17,
     TimestampInFuture = 18,
+
+    // Arithmetic errors
+    Overflow = 19,
 }
 
 impl ValidationError {

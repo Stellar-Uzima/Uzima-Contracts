@@ -90,25 +90,10 @@ const PROPS: Symbol = symbol_short!("props");
 const P_COUNT: Symbol = symbol_short!("p_count");
 const VOTES: Symbol = symbol_short!("votes");
 
-fn is_disputed(env: &Env, dispute_addr: &Address, proposal_id: u64) -> bool {
-    DisputeClient::new(env, dispute_addr).is_disputed(&proposal_id)
-}
-
-fn token_balance(env: &Env, token: &Address, voter: &Address) -> Result<i128, Error> {
-    let balance = TokenClient::new(env, token).balance_of(voter);
-    if balance < 0 {
-        return Err(Error::InvalidState);
-    }
-    Ok(balance)
-}
-
-fn reputation_score(env: &Env, rep_addr: &Address, voter: &Address) -> Result<i128, Error> {
-    let score = ReputationClient::new(env, rep_addr).get_score(voter);
-    if score < 0 {
-        return Err(Error::InvalidState);
-    }
-    Ok(score)
-}
+/// Maximum size (bytes) of the description hash and execution payload accepted
+/// by `propose` (issue #1947).
+const MAX_DESCRIPTION_HASH_BYTES: u32 = 64;
+const MAX_EXECUTION_DATA_BYTES: u32 = 16_384;
 
 #[contract]
 pub struct Governor;
@@ -203,6 +188,10 @@ impl Governor {
         execution_data: Bytes,
     ) -> Result<u64, Error> {
         proposer.require_auth();
+        validation_utils::validate_bytes_size(&description_hash, 1, MAX_DESCRIPTION_HASH_BYTES)
+            .map_err(|_| Error::InvalidInput)?;
+        validation_utils::validate_bytes_size(&execution_data, 0, MAX_EXECUTION_DATA_BYTES)
+            .map_err(|_| Error::InvalidInput)?;
         // Single instance-storage read; host caches instance storage per tx.
         let cfg = get_cfg(&env)?;
 
@@ -212,7 +201,7 @@ impl Governor {
         }
 
         let count = env.storage().instance().get(&P_COUNT).unwrap_or(0u64);
-        let id = count.checked_add(1).ok_or(Error::Overflow)?;
+        let id = validation_utils::checked_increment!(count, Error::Overflow)?;
 
         let start = now(&env)
             .checked_add(cfg.voting_delay)

@@ -66,7 +66,7 @@ make check        # runs fmt + clippy + test in one command
 
 ```
 Uzima-Contracts/
-├── contracts/           # 100+ Soroban smart contracts
+├── contracts/           # 110+ Soroban smart contracts
 │   ├── medical_records/
 │   ├── patient_consent_management/
 │   ├── access_control/
@@ -76,12 +76,17 @@ Uzima-Contracts/
 ├── docs/                # Architecture, security, API reference, ADRs
 ├── scripts/             # Deployment, monitoring, and utility scripts
 ├── config/              # Network and environment configuration
+├── contract_optimizer/  # Contract optimization tooling
+├── dashboard/           # Dashboard application
+├── deployments/         # Deployment records
 ├── schemas/             # Event and interface schemas
 ├── mobile-sdk/          # Multi-platform mobile SDKs
 ├── resource-budgets/    # Contract resource budget definitions
+├── reports/             # Generated reports
 ├── makefile             # Build automation
 ├── Cargo.toml           # Workspace configuration
 ├── clippy.toml          # Clippy lint configuration
+├── rust-toolchain.toml  # Pinned Rust toolchain
 └── rustfmt.toml         # Formatting configuration
 ```
 
@@ -122,7 +127,7 @@ Branch naming:
 - Run quality checks frequently: `make check`.
 - Keep changes focused and minimal.
 
-### Test locally
+### 4. Test locally
 
 ```bash
 make test            # all tests
@@ -492,7 +497,8 @@ Verify the following before opening or marking a PR ready for review:
 - [ ] Breaking ABI/storage changes include an ADR (see [Architecture Decision Records](#architecture-decision-records))
 - [ ] Excluded-contract changes update `docs/ONRAMP_OWNERSHIP.md`
 
-See [docs/contract-review-checklist.md](docs/contract-review-checklist.md) for the full checklist.
+See [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md) for the single canonical Definition of Done checklist, and
+[docs/contract-review-checklist.md](docs/contract-review-checklist.md) for the full review checklist.
 
 ### What reviewers look for
 
@@ -594,7 +600,7 @@ Consistent `snake_case` event naming ensures that off-chain indexers and monitor
 
 - Follow [Security Best Practices](docs/SECURITY_BEST_PRACTICES.md) for all contract code.
 - Review [Threat Models](docs/MASTER_THREAT_MODEL.md) for security-sensitive changes.
-- Never commit secrets, keys, or credentials.
+- Never commit secrets, keys, or credentials. Scripts must not embed secrets or fake key literals; see the [script secret policy](docs/DEFINITION_OF_DONE.md#script-secret-policy).
 - Use `saturating_*` or `checked_*` arithmetic for all numeric operations.
 - Validate all external inputs at the contract boundary.
 - See [docs/SECURITY_CHECKLIST.md](docs/SECURITY_CHECKLIST.md) for the full security checklist.

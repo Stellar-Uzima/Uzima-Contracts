@@ -57,6 +57,8 @@ const MIN_DEFAULT_TTL: u64 = 1;
 // TTL constants for persistent storage management
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
+/// Maximum size of a public proof buffer (issue #1947).
+const MAX_PROOF_BYTES: u32 = 8_192;
 
 #[contract]
 pub struct ZkVerifierContract;
@@ -246,6 +248,12 @@ impl ZkVerifierContract {
         public_inputs_hash: BytesN<32>,
         proof: Bytes,
     ) -> bool {
+        // Bound the public proof buffer before any hashing/storage work
+        // (issue #1947). Oversized inputs are rejected rather than charged to
+        // the ledger.
+        if validation_utils::validate_bytes_size(&proof, 1, MAX_PROOF_BYTES).is_err() {
+            return false;
+        }
         if !env.storage().instance().has(&DataKey::Initialized) {
             return false;
         }

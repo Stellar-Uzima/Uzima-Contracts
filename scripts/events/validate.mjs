@@ -12,6 +12,7 @@ const REGISTRY_PATH = path.join(
 );
 const DOCS_PATH = path.join(REPO_ROOT, "docs", "EVENTS.md");
 const SCHEMAS_DIR = path.join(REPO_ROOT, "schemas", "events");
+const GOLDEN_EVENTS_DIR = path.join(REPO_ROOT, "tests", "golden", "events");
 
 function fail(msg) {
   process.stderr.write(msg + "\n");
@@ -170,6 +171,37 @@ async function validate() {
       } catch (err) {
         fail(`Schema file '${file}' is not a valid JSON schema: ${err.message}`);
       }
+    }
+  }
+
+  const goldenFiles = (await readdir(GOLDEN_EVENTS_DIR)).filter((file) =>
+    file.endsWith(".json")
+  );
+  const goldenContracts = new Set(
+    goldenFiles.map((file) => path.basename(file, ".json"))
+  );
+  const registryContracts = new Set(
+    Object.values(registry.events).map((entry) => entry.contract)
+  );
+
+  for (const contract of registryContracts) {
+    if (!goldenContracts.has(contract)) {
+      fail(
+        `❌ Missing golden event fixture for contract '${contract}'.
+Add tests/golden/events/${contract}.json before merging.`
+      );
+    }
+  }
+
+  for (const file of goldenFiles) {
+    const filePath = path.join(GOLDEN_EVENTS_DIR, file);
+    const golden = JSON.parse(await readFile(filePath, "utf8"));
+    if (
+      typeof golden.contract !== "string" ||
+      !Array.isArray(golden.events) ||
+      golden.events.length === 0
+    ) {
+      fail(`❌ Invalid golden event fixture ${filePath}.`);
     }
   }
 

@@ -212,7 +212,6 @@ explainable_ai::initialize
 explainable_ai::run_fairness_metrics
 
 # ── failover_detector ───────────────────────────────────────────────────────
-failover_detector::assign_role
 
 # ── federated_learning ──────────────────────────────────────────────────────
 federated_learning::initialize
@@ -392,7 +391,6 @@ ihe_integration::connectathon_is_compliant
 iot_device_management::initialize
 iot_device_management::pause
 iot_device_management::unpause
-iot_device_management::set_role
 iot_device_management::register_manufacturer
 iot_device_management::deactivate_manufacturer
 iot_device_management::register_device
@@ -675,8 +673,6 @@ provider_directory::search_providers
 
 # ── rbac ────────────────────────────────────────────────────────────────────
 rbac::initialize
-rbac::assign_role
-rbac::remove_role
 
 # ── regional_node_manager ───────────────────────────────────────────────────
 regional_node_manager::assign_role
@@ -1144,7 +1140,6 @@ medical_records::verify_attachment_integrity
 
 # ── meta_tx_forwarder ─────────────────────────────────────────────────────────
 meta_tx_forwarder::consume_nonce
-meta_tx_forwarder::current_fn
 meta_tx_forwarder::msg_data
 meta_tx_forwarder::msg_sender
 meta_tx_forwarder::msg_sender_from_data

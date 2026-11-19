@@ -1,7 +1,47 @@
 {
+  "audit": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "common_auth": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "common_error": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "escrow": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "healthcare_payment": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
   "medical_records": {
     "wasm_bytes": 0,
     "updated_at": "2026-07-22T00:00:00Z",
-    "note": "Initial baseline — update after first build"
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "patient_consent_management": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "timelock": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
+  },
+  "upgradeability": {
+    "wasm_bytes": 0,
+    "updated_at": "2026-11-19T00:00:00Z",
+    "note": "Initial baseline \u2014 update after first build"
   }
 }

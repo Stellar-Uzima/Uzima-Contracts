@@ -57,6 +57,37 @@ pub struct StorageCompatibilityRules {
 }
 ```
 
+## Storage Gaps and Layout Migration Policy
+
+Persisted `#[contracttype]` state types must keep a reserved storage gap so a
+future version can add fields without rewriting existing on-chain entries
+(issue #1946). `contracts/upgrade_manager/src/lib.rs` is the reference
+implementation: `UpgradeProposal` and `Config` each carry a `storage_version`
+plus `reserved_1..reserved_5` fields, governed by `STORAGE_SCHEMA_VERSION` and
+`STORAGE_GAP_SLOTS`.
+
+The policy is:
+
+1. **Append-only.** Never reorder, rename, remove or change the type of an
+   existing persisted field. New fields are appended *before* the gap and
+   consume one gap slot each.
+2. **Fixed gap size.** `STORAGE_GAP_SLOTS` may only shrink as slots are
+   consumed, never grow. Expose read-only `storage_gap_slots()` and
+   `is_reserved_gap_slot(slot)` views over the range `0..STORAGE_GAP_SLOTS`.
+3. **Schema version.** Every persisted state type carries `storage_version`,
+   stamped from `STORAGE_SCHEMA_VERSION` in `initialize`. A layout change must
+   bump this version in the same commit as the struct change. `storage_version()`
+   returns zero before initialization.
+4. **Migration.** Adding a field requires an `impl Migratable` migration that
+   backfills the new field/default and then calls `verify_integrity`. See the
+   `Migratable` section below and `tests/upgrade_and_migration_tests` for the
+   canonical V1-to-V2 state migration rehearsal (state preserved, rollback
+   restores the old version).
+5. **Tests.** Every gap change must keep tests asserting that the version stamp
+   is set on init and zero before init, that `storage_gap_slots()` equals the
+   constant, and that `is_reserved_gap_slot()` is true exactly for the reserved
+   range.
+
 ## Upgrade Policy
 
 The `UpgradePolicy` controls upgrade behavior:

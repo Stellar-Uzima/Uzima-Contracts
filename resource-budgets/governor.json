@@ -1,8 +1,10 @@
 {
   "contract": "governor",
+  "measurement_status": "unmeasured",
+  "measured": false,
+  "unmeasured_reason": "No release WASM build was performed. Regenerate with: cargo build --release --target wasm32-unknown-unknown && ./scripts/generate_budgets.sh",
   "wasm_size_bytes": 0,
-  "wasm_size_human": "N/A",
-  "note": "Placeholder — regenerate after building with: cargo build --release --target wasm32-unknown-unknown && ./scripts/generate_budgets.sh",
+  "wasm_size_human": null,
   "soroban_limits": {
     "max_read_entries": 2000,
     "max_write_entries": 1000,
@@ -11,14 +13,14 @@
   },
   "estimated_per_call": {
     "instructions": 0,
-    "read_entries": 200,
-    "write_entries": 50,
+    "read_entries": 0,
+    "write_entries": 0,
     "memory_bytes": 0
   },
   "budget_utilization_pct": {
     "instructions": 0,
-    "read_entries": 10,
-    "write_entries": 5
+    "read_entries": 0,
+    "write_entries": 0
   },
-  "generated_at": "2026-07-25T00:00:00Z"
+  "generated_at": null
 }

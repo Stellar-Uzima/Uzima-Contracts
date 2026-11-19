@@ -1,0 +1,61 @@
+name: Repo Gates
+
+on:
+  pull_request:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan-placeholders:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject placeholder values in deployment plans
+        run: python3 scripts/repo_gates.py plans
+
+  build-artifacts:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Block added build artifacts
+        run: python3 scripts/repo_gates.py artifacts "${BASE_REF}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+  readme-links:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check relative links in changed README/docs
+        run: python3 scripts/repo_gates.py links "${BASE_REF}"
+        env:
+          BASE_REF: ${{ github.base_ref }}
+
+  canonical-labels:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure canonical labels exist
+        run: python3 scripts/repo_gates.py labels
+      - name: Default-label new issues
+        if: github.event_name == 'issues'
+        run: gh issue edit "${ISSUE}" --add-label "state/needs-triage"
+        env:
+          ISSUE: ${{ github.event.issue.number }}

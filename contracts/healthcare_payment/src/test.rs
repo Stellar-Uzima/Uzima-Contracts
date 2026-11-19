@@ -245,14 +245,7 @@ fn test_arithmetic_overflow() {
         &0,
     );
 
-    // Manually update deductible_met to 1 to set up the overflow condition
-    let mut policy = client.get_coverage_policy(&coverage_policy_id);
-    policy.deductible_met = 1;
-    // This next line is a bit of a hack for testing purposes, as we don't have a public `update_policy`
-    // In a real scenario, this would be updated via claim processing.
-    // For the test, we can simulate it by re-registering, though this is not ideal.
-    // A better approach would be a test-only function to update the policy.
-    // For now, we'll just test the eligibility check which is where the overflow would occur.
+    client.update_policy_deductible_met(&admin, &coverage_policy_id, &1i128);
 
     let _result = client.try_verify_insurance_eligibility(
         &provider,

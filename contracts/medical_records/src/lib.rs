@@ -96,6 +96,10 @@ use soroban_sdk::{
 };
 use upgradeability::storage::{ADMIN as UPGRADE_ADMIN, VERSION};
 
+/// Layout version of the consolidated per-record storage entry (issue #1961).
+/// Bump when the on-chain `MedicalRecord` layout changes.
+pub const STORAGE_SCHEMA_VERSION: u32 = 2;
+
 // ==================== Compartmentalized Data Access Types =============
 /// Data tiers for role-based access control.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -697,12 +701,16 @@ pub enum DataKey {
     NextId,
     RecordCount,
     Record(u64),
+    LegacyRecordField(u64, Symbol), // pre-consolidation field-per-key record (migration only)
+    RecordSchemaVersion(u64),
     RecordMeta(u64),
     RecordCommitment(u64),
     PatientRecords(Address),
     PatientRecordCount(Address),
     PatientRecord(Address, u64),
-    TagIndex(String), // tag_value -> Vec<u64> (record IDs with this tag)
+    TagIndex(String), // legacy: tag_value -> Vec<u64> (record IDs with this tag)
+    TagRecordCount(String),       // tag -> number of indexed record IDs (issue #1959)
+    TagRecord(String, u64),       // (tag, index) -> record ID
 
     // Logs
     AccessLogCount,
@@ -3101,13 +3109,54 @@ impl MedicalRecordsContract {
         Self::require_initialized(&env)?;
         validation::validate_pagination(page, page_size)?;
 
+        // Per-tag index (issue #1959): read only the requested page instead of
+        // deserializing an ever-growing Vec. Fall back to the legacy Vec index
+        // for records written before the new layout was deployed.
+        let total: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TagRecordCount(tag.clone()))
+            .unwrap_or(0);
+
+        let start = page.saturating_mul(page_size) as u64;
+        let requested = page_size as u64;
+        if total > 0 {
+            let mut end = start.saturating_add(requested);
+            if end > total {
+                end = total;
+            }
+            let mut out: Vec<u64> = Vec::new(&env);
+            let mut i = start;
+            while i < end {
+                if let Some(id) = env
+                    .storage()
+                    .persistent()
+                    .get::<_, u64>(&DataKey::TagRecord(tag.clone(), i))
+                {
+                    // The index is append-only; verify the record still
+                    // carries the tag so removed tags never leak into results.
+                    if let Some(record) = env
+                        .storage()
+                        .persistent()
+                        .get::<_, MedicalRecord>(&DataKey::Record(id))
+                    {
+                        if record.tags.contains(&tag) {
+                            out.push_back(id);
+                        }
+                    }
+                }
+                i = i.saturating_add(1);
+            }
+            return Ok(out);
+        }
+
         let ids: Vec<u64> = env
             .storage()
             .persistent()
             .get(&DataKey::TagIndex(tag))
             .unwrap_or(Vec::new(&env));
 
-        let start = page.saturating_mul(page_size);
+        let start = start as u32;
         if start >= ids.len() {
             return Ok(Vec::new(&env));
         }
@@ -4151,6 +4200,7 @@ impl MedicalRecordsContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::TagIndex(tag.clone()), &ids);
+            Self::append_tag_index(&env, &tag, record_id);
         }
 
         Self::increment_record_count(&env);
@@ -5365,6 +5415,92 @@ impl MedicalRecordsContract {
         }
     }
 
+    /// Migrate one legacy field-per-key record into the consolidated
+    /// `MedicalRecord` struct (docs/medical-records-storage-optimization.md).
+    /// Idempotent: an already-consolidated record is left untouched.
+    pub fn migrate_record(env: Env, caller: Address, record_id: u64) -> Result<bool, Error> {
+        caller.require_auth();
+        Self::require_initialized(&env)?;
+        Self::require_not_paused(&env)?;
+        Self::require_admin(&env, &caller)?;
+
+        let key = DataKey::Record(record_id);
+        if env.storage().persistent().has(&key) {
+            return Err(Error::AlreadyInitialized);
+        }
+
+        let patient_id: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("patient")))
+            .ok_or(Error::RecordNotFound)?;
+        let doctor_id: Address = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("doctor")))
+            .ok_or(Error::RecordNotFound)?;
+        let timestamp: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("time")))
+            .unwrap_or(0);
+        let diagnosis: String = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("diag")))
+            .unwrap_or(String::from_str(&env, ""));
+        let treatment: String = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("treat")))
+            .unwrap_or(String::from_str(&env, ""));
+        let tags: Vec<String> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::LegacyRecordField(record_id, symbol_short!("tags")))
+            .unwrap_or(Vec::new(&env));
+
+        let record = MedicalRecord {
+            patient_id,
+            doctor_id,
+            timestamp,
+            diagnosis,
+            treatment,
+            is_confidential: false,
+            tags,
+            category: String::from_str(&env, ""),
+            treatment_type: String::from_str(&env, ""),
+            data_ref: String::from_str(&env, ""),
+            doctor_did: None,
+        };
+        env.storage().persistent().set(&key, &record);
+        env.storage()
+            .persistent()
+            .set(&DataKey::RecordSchemaVersion(record_id), &STORAGE_SCHEMA_VERSION);
+
+        for field in [
+            symbol_short!("patient"),
+            symbol_short!("doctor"),
+            symbol_short!("time"),
+            symbol_short!("diag"),
+            symbol_short!("treat"),
+            symbol_short!("tags"),
+        ] {
+            env.storage()
+                .persistent()
+                .remove(&DataKey::LegacyRecordField(record_id, field));
+        }
+        Ok(true)
+    }
+
+    /// Read-only view of the consolidated layout version for a record.
+    pub fn record_storage_version(env: Env, record_id: u64) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&DataKey::RecordSchemaVersion(record_id))
+            .unwrap_or(0)
+    }
+
     pub fn version(env: Env) -> u32 {
         env.storage().instance().get(&VERSION).unwrap_or(0)
     }
@@ -5817,7 +5953,24 @@ impl MedicalRecordsContract {
             env.storage()
                 .persistent()
                 .set(&DataKey::TagIndex(tag.clone()), &ids);
+            Self::append_tag_index(env, &tag, record_id);
         }
+    }
+
+    /// O(1) append to a tag's inverted index (issue #1959). One small entry per
+    /// record replaces rewriting an ever-growing `Vec` on every write.
+    fn append_tag_index(env: &Env, tag: &String, record_id: u64) {
+        let count: u64 = env
+            .storage()
+            .persistent()
+            .get(&DataKey::TagRecordCount(tag.clone()))
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TagRecord(tag.clone(), count), &record_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::TagRecordCount(tag.clone()), &(count + 1));
     }
 
     /// Updates the tag inverted-index when a record's tags change.
@@ -5858,6 +6011,7 @@ impl MedicalRecordsContract {
                 env.storage()
                     .persistent()
                     .set(&DataKey::TagIndex(new_tag.clone()), &ids);
+                Self::append_tag_index(env, &new_tag, record_id);
             }
         }
     }

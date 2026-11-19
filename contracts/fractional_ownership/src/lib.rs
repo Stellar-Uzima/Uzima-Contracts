@@ -137,7 +137,7 @@ impl FractionalOwnership {
             .instance()
             .get(&DataKey::AssetCount)
             .unwrap_or(0);
-        let asset_id = count.checked_add(1).ok_or(Error::Overflow)?;
+        let asset_id = validation_utils::checked_increment!(count, Error::Overflow)?;
         env.storage()
             .instance()
             .set(&DataKey::AssetCount, &asset_id);

@@ -20,15 +20,23 @@ Patterns repeated across multiple contracts that should be extracted into shared
 
 - **Admin check pattern**: `caller.require_auth(); Self::require_admin(&env, &caller)?;`
   - Appears in: `anomaly_detector`, `cross_chain_bridge`, `aml`, `audit`, `rbac`
-  - Suggestion: Macro `require_admin!(env, caller)` or shared trait
+  - Status: RESOLVED (issue #1943) — the shared `governance_commons::require_admin!(env, caller)`
+    macro is imported and used at every admin-only entry point in all five contracts. Each
+    contract keeps its own `require_admin` helper so its existing error variants are preserved.
 
 - **Initialization guard**: Check-then-set `DataKey::Admin` / `DataKey::Initialized`
   - Appears in: all contracts
   - Suggestion: Shared `init_guard` helper in a common module
 
 - **Overflow-safe counter increment**: `count.checked_add(1).ok_or(Error::Overflow)?`
-  - Appears in: `cross_chain_bridge`, `anomaly_detector`, `medical_records`
-  - Suggestion: `increment_counter(env, key)` utility
+  - Confirmed occurrences: `cross_chain_bridge`, `cross_chain_access`, `escrow`,
+    `bridge_dispute_mediation`, `fractional_ownership`, `governor` (the earlier
+    `anomaly_detector`/`medical_records` claim was inaccurate — they use `saturating_add`
+    and multi-line `NumberOutOfBounds` checks respectively).
+  - Status: RESOLVED (issue #1944) — consolidated into
+    `validation_utils::checked_increment_u32/u64/i128` plus the
+    `validation_utils::checked_increment!(value, Error::Overflow)?` call-site macro, which
+    preserves each contract's own `Error::Overflow` variant.
 
 ### 3. Dead Code Identification
 
@@ -38,9 +46,15 @@ Run the following to identify unused functions and types:
 cargo clippy --all -- -W dead_code 2>&1 | grep "warning: .* is never used"
 ```
 
-Known candidates (from last audit):
-- `contracts/ai_analytics/src/admin.rs` — `get_admin` function appears unused externally
-- `contracts/credential_notifications/src/lib.rs` — `initialize` is a no-op stub
+Known candidates — re-verified against current source in issue #1945:
+
+- Previously listed candidates were stale and have been removed:
+  - `contracts/ai_analytics/src/admin.rs`: that crate defines only `initialize`; there is
+    no `get_admin` function, so the old "unused externally" claim no longer applies.
+  - `contracts/credential_notifications/src/lib.rs`: `initialize` is fully implemented
+    (one-shot init guard, `admin.require_auth()`, `ADMIN` write and `CRED`/`INIT` event)
+    and is covered by `test_initialize_sets_admin` and `test_double_initialize_fails`.
+    It is not a no-op stub.
 
 ### 4. Performance Optimization Suggestions
 

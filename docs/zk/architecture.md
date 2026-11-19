@@ -32,6 +32,9 @@ This keeps proof generation heavy off-chain and keeps on-chain checks determinis
   - not expired,
   - verified=true,
   - active key version.
+- Pairing-based Groth16 verification is an external boundary: Soroban does not provide an on-chain pairing verifier in this repository.
+- `verify_groth16_proof` validates proof shape and then returns `VerificationFailed`; it never returns `true` while on-chain pairing verification is unavailable.
+- Callers must rely on the trusted attestation path above and treat `verify_groth16_proof` failures as closed.
 
 ### 3) Medical Records Contract Integration
 - Stores record commitments.
