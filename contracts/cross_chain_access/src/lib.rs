@@ -1079,7 +1079,7 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&DataKey::GrantCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        let new_count = validation_utils::checked_increment!(count, Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::GrantCount, &new_count);
@@ -1100,7 +1100,7 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&DataKey::RequestCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        let new_count = validation_utils::checked_increment!(count, Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::RequestCount, &new_count);
@@ -1114,7 +1114,7 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&DataKey::AuditCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        let new_count = validation_utils::checked_increment!(count, Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::AuditCount, &new_count);
@@ -1128,7 +1128,7 @@ impl CrossChainAccessContract {
             .persistent()
             .get(&DataKey::SwapCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        let new_count = validation_utils::checked_increment!(count, Error::Overflow)?;
         env.storage()
             .persistent()
             .set(&DataKey::SwapCount, &new_count);

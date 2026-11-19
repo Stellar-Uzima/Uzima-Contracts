@@ -13,6 +13,7 @@ crate-type = ["cdylib", "rlib"]
 soroban-sdk = { workspace = true }
 replay_protection = { workspace = true }
 governance_commons = { workspace = true }
+validation_utils.workspace = true
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }

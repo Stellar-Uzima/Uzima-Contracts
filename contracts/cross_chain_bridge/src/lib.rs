@@ -716,7 +716,7 @@ impl CrossChainBridgeContract {
             .unwrap_or(0);
         env.storage().instance().set(
             &DataKey::MessageCount,
-            &(count.checked_add(1).ok_or(Error::Overflow)?),
+            &(validation_utils::checked_increment!(count, Error::Overflow)?),
         );
 
         env.events().publish(
@@ -795,7 +795,7 @@ impl CrossChainBridgeContract {
                 .unwrap_or(0);
             env.storage().instance().set(
                 &DataKey::MessageCount,
-                &(count.checked_add(1).ok_or(Error::Overflow)?),
+                &(validation_utils::checked_increment!(count, Error::Overflow)?),
             );
 
             env.events().publish(
@@ -1335,7 +1335,7 @@ impl CrossChainBridgeContract {
             .instance()
             .get(&DataKey::OracleCount)
             .unwrap_or(0);
-        let report_id = count.checked_add(1).ok_or(Error::Overflow)?;
+        let report_id = validation_utils::checked_increment!(count, Error::Overflow)?;
 
         let report = OracleReport {
             report_id,
@@ -1641,7 +1641,7 @@ impl CrossChainBridgeContract {
             .instance()
             .get(&DataKey::EventCount)
             .unwrap_or(0);
-        let event_id = count.checked_add(1).ok_or(Error::Overflow)?;
+        let event_id = validation_utils::checked_increment!(count, Error::Overflow)?;
 
         let event = CrossChainEvent {
             event_id,

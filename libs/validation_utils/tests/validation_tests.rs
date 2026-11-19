@@ -186,6 +186,27 @@ fn test_validate_non_zero_u64() {
     );
 }
 
+// ==================== CHECKED INCREMENT TESTS (issue #1944) ====================
+
+#[test]
+fn test_checked_increment_u64() {
+    assert_eq!(checked_increment_u64(41), Ok(42));
+    assert_eq!(checked_increment_u64(0), Ok(1));
+    assert_eq!(checked_increment_u64(u64::MAX), Err(ValidationError::Overflow));
+}
+
+#[test]
+fn test_checked_increment_u32() {
+    assert_eq!(checked_increment_u32(9), Ok(10));
+    assert_eq!(checked_increment_u32(u32::MAX), Err(ValidationError::Overflow));
+}
+
+#[test]
+fn test_checked_increment_i128() {
+    assert_eq!(checked_increment_i128(-1), Ok(0));
+    assert_eq!(checked_increment_i128(i128::MAX), Err(ValidationError::Overflow));
+}
+
 // ==================== PROPERTY-BASED TEST PATTERNS ====================
 
 /// Demonstrates monotonic property: if a value is in range (min, max), 

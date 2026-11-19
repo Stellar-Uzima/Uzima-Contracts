@@ -28,6 +28,15 @@ pub struct UpgradeProposal {
     pub canceled: bool,
     pub approvals: Vec<Address>,
     pub is_emergency: bool,
+    // Storage gap — reserved for future upgrades. Never read, write, reorder or
+    // remove these fields. To add a field later, append it before the gap and
+    // consume one slot (decrement STORAGE_GAP_SLOTS in the same commit).
+    pub storage_version: u32,
+    pub reserved_1: u64,
+    pub reserved_2: u64,
+    pub reserved_3: u64,
+    pub reserved_4: u64,
+    pub reserved_5: u64,
 }
 
 #[contract]
@@ -37,6 +46,12 @@ const PROPOSALS: Symbol = symbol_short!("PROPS");
 const CONFIG: Symbol = symbol_short!("CONFIG");
 const MIN_DELAY: u64 = 86400; // 24 hours
 const REQUIRED_APPROVALS: u32 = 3;
+
+/// Bumped only when the on-chain layout of a persisted state type changes.
+pub const STORAGE_SCHEMA_VERSION: u32 = 1;
+/// Number of reserved slots kept in persisted state for additive upgrades.
+/// May only shrink as slots are consumed, never grow.
+pub const STORAGE_GAP_SLOTS: u32 = 5;
 
 // TTL constants for persistent storage management
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
@@ -49,6 +64,13 @@ pub struct Config {
     pub required_approvals: u32,
     pub validators: Vec<Address>,
     pub emergency_approvals: u32,
+    // Storage gap — see UpgradeProposal. Append-only; consume slots on upgrade.
+    pub storage_version: u32,
+    pub reserved_1: u64,
+    pub reserved_2: u64,
+    pub reserved_3: u64,
+    pub reserved_4: u64,
+    pub reserved_5: u64,
 }
 
 // Minimal interface for target contracts
@@ -68,9 +90,34 @@ impl UpgradeManager {
             required_approvals: REQUIRED_APPROVALS,
             validators: validators.clone(),
             emergency_approvals: validators.len(), // Default to all validators for emergency
+            storage_version: STORAGE_SCHEMA_VERSION,
+            reserved_1: 0,
+            reserved_2: 0,
+            reserved_3: 0,
+            reserved_4: 0,
+            reserved_5: 0,
         };
         env.storage().instance().set(&CONFIG, &config);
         Ok(())
+    }
+
+    /// Read-only view of the persisted-state schema version. Zero before init.
+    pub fn storage_version(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get::<_, Config>(&CONFIG)
+            .map(|c| c.storage_version)
+            .unwrap_or(0)
+    }
+
+    /// Number of reserved gap slots in upgradeable state types.
+    pub fn storage_gap_slots(_env: Env) -> u32 {
+        STORAGE_GAP_SLOTS
+    }
+
+    /// True exactly for the reserved gap range `0..STORAGE_GAP_SLOTS`.
+    pub fn is_reserved_gap_slot(_env: Env, slot: u32) -> bool {
+        slot < STORAGE_GAP_SLOTS
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -118,6 +165,12 @@ impl UpgradeManager {
             canceled: false,
             approvals: Vec::new(&env),
             is_emergency,
+            storage_version: STORAGE_SCHEMA_VERSION,
+            reserved_1: 0,
+            reserved_2: 0,
+            reserved_3: 0,
+            reserved_4: 0,
+            reserved_5: 0,
         };
 
         proposals.set(id, proposal);

@@ -140,3 +140,38 @@ pub fn validate_non_zero_u64(value: u64) -> Result<(), ValidationError> {
     }
     Ok(())
 }
+
+/// Increments a `u64` counter by one, mapping overflow to
+/// `ValidationError::Overflow` instead of wrapping or panicking.
+///
+/// This is the shared implementation behind the repo-wide
+/// `checked_add(1).ok_or(Error::Overflow)?` pattern (issue #1944).
+pub fn checked_increment_u64(value: u64) -> Result<u64, ValidationError> {
+    value.checked_add(1).ok_or(ValidationError::Overflow)
+}
+
+/// Increments a `u32` counter by one, mapping overflow to
+/// `ValidationError::Overflow`.
+pub fn checked_increment_u32(value: u32) -> Result<u32, ValidationError> {
+    value.checked_add(1).ok_or(ValidationError::Overflow)
+}
+
+/// Increments an `i128` counter by one, mapping overflow to
+/// `ValidationError::Overflow`.
+pub fn checked_increment_i128(value: i128) -> Result<i128, ValidationError> {
+    value.checked_add(1).ok_or(ValidationError::Overflow)
+}
+
+/// Call-site macro that consolidates the duplicated
+/// `value.checked_add(1).ok_or(Error::Overflow)?` pattern while letting each
+/// contract keep its own `Error::Overflow` variant.
+///
+/// ```ignore
+/// let id = validation_utils::checked_increment!(count, Error::Overflow)?;
+/// ```
+#[macro_export]
+macro_rules! checked_increment {
+    ($value:expr, $error:expr) => {
+        $value.checked_add(1).ok_or($error)?
+    };
+}
