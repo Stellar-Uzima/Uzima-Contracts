@@ -41,6 +41,26 @@ use soroban_sdk::{
     Symbol, Vec,
 };
 
+fn emit_governance_telemetry(env: &Env, actor: &Address, operation: &'static str) {
+    use contract_monitoring::telemetry::{
+        build_event, derive_trace_id, emit_telemetry_event, TelemetryEventType, TelemetrySeverity,
+    };
+
+    let trace_id = derive_trace_id(env, actor);
+    let event = build_event(
+        env,
+        "governor",
+        "0.1.0",
+        TelemetryEventType::StateTransition,
+        TelemetrySeverity::Info,
+        operation,
+        "governance state transition",
+        trace_id.clone(),
+        trace_id,
+    );
+    emit_telemetry_event(env, &event);
+}
+
 #[derive(Clone)]
 #[contracttype]
 pub struct GovernorConfig {
@@ -214,6 +234,7 @@ impl Governor {
         env.storage().persistent().set(&PROPS, &props);
         env.storage().instance().set(&P_COUNT, &id);
 
+        emit_governance_telemetry(&env, &proposer, "governor_propose");
         env.events()
             .publish((symbol_short!("Propose"), id), proposer);
         Ok(id)
@@ -270,6 +291,7 @@ impl Governor {
         props.set(proposal_id, p);
         env.storage().persistent().set(&PROPS, &props);
 
+        emit_governance_telemetry(&env, &voter, "governor_cast_vote");
         env.events().publish(
             (symbol_short!("Vote"), proposal_id),
             (voter, support, weight),
@@ -349,6 +371,7 @@ impl Governor {
             }
         }
 
+        emit_governance_telemetry(&env, &p.proposer, "governor_execute");
         p.executed = true;
         props.set(proposal_id, p.clone());
         env.storage().persistent().set(&PROPS, &props);

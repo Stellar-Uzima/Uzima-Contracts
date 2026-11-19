@@ -11,6 +11,26 @@ use upgradeability::UpgradeValidation;
 // Shared multi-sig helpers (Phase 4 migration: see issue #830)
 use governance_commons::{multi_sig, ApprovalStatus};
 
+fn emit_governance_telemetry(env: &Env, actor: &Address, operation: &'static str) {
+    use contract_monitoring::telemetry::{
+        build_event, derive_trace_id, emit_telemetry_event, TelemetryEventType, TelemetrySeverity,
+    };
+
+    let trace_id = derive_trace_id(env, actor);
+    let event = build_event(
+        env,
+        "upgrade_manager",
+        "0.1.0",
+        TelemetryEventType::StateTransition,
+        TelemetrySeverity::Info,
+        operation,
+        "governance state transition",
+        trace_id.clone(),
+        trace_id,
+    );
+    emit_telemetry_event(env, &event);
+}
+
 #[cfg(test)]
 mod test;
 
@@ -128,6 +148,7 @@ impl UpgradeManager {
             PERSISTENT_TTL_EXTEND_TO,
         );
 
+        emit_governance_telemetry(&env, &proposer, "upgrade_propose");
         env.events()
             .publish((symbol_short!("proposed"), id), proposer);
         Ok(id)
@@ -159,6 +180,7 @@ impl UpgradeManager {
             return Err(Error::AlreadyApproved);
         }
 
+        emit_governance_telemetry(&env, &validator, "upgrade_approve");
         proposals.set(proposal_id, proposal);
         env.storage().persistent().set(&PROPOSALS, &proposals);
         env.storage().persistent().extend_ttl(
@@ -200,6 +222,8 @@ impl UpgradeManager {
         {
             return Err(Error::NotEnoughApprovals);
         }
+
+        emit_governance_telemetry(&env, &proposal.proposer, "upgrade_execute");
 
         // Call target.upgrade(new_wasm_hash)
         let target_client = TargetContractClient::new(&env, &proposal.target);
@@ -248,6 +272,8 @@ impl UpgradeManager {
         {
             return Err(Error::NotEnoughApprovals);
         }
+
+        emit_governance_telemetry(&env, &proposal.proposer, "upgrade_execute_emergency");
 
         let target_client = TargetContractClient::new(&env, &proposal.target);
         target_client.upgrade(&proposal.new_wasm_hash);

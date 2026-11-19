@@ -313,6 +313,8 @@ impl TreasuryController {
             .instance()
             .set(&DataKey::ProposalCount, &proposal_id);
 
+        emit_governance_telemetry(&env, &proposer, "treasury_create_proposal");
+
         // Emit proposal created event
         env.events().publish(
             (symbol_short!("PROPOSAL"),),
@@ -382,6 +384,8 @@ impl TreasuryController {
             PERSISTENT_TTL_EXTEND_TO,
         );
 
+        emit_governance_telemetry(&env, &signer, "treasury_approve_proposal");
+
         // Emit approval event
         env.events().publish(
             (symbol_short!("APPROVED"),),
@@ -428,6 +432,8 @@ impl TreasuryController {
         if current_time < proposal.timelock_end {
             return Err(Error::TimelockNotExpired);
         }
+
+        emit_governance_telemetry(&env, &executor, "treasury_execute_proposal");
 
         // Execute withdrawal transfer first (external call)
         if matches!(proposal.proposal_type, ProposalType::Withdrawal) {
@@ -692,6 +698,26 @@ impl TreasuryController {
             .publish((symbol_short!("GOV_EXEC"),), (to, amount));
         Ok(())
     }
+}
+
+fn emit_governance_telemetry(env: &Env, actor: &Address, operation: &'static str) {
+    use contract_monitoring::telemetry::{
+        build_event, derive_trace_id, emit_telemetry_event, TelemetryEventType, TelemetrySeverity,
+    };
+
+    let trace_id = derive_trace_id(env, actor);
+    let event = build_event(
+        env,
+        "treasury_controller",
+        "0.1.0",
+        TelemetryEventType::StateTransition,
+        TelemetrySeverity::Info,
+        operation,
+        "governance state transition",
+        trace_id.clone(),
+        trace_id,
+    );
+    emit_telemetry_event(env, &event);
 }
 
 #[cfg(test)]

@@ -30,6 +30,26 @@ const QUEUE: Symbol = symbol_short!("queue");
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
 const PERSISTENT_TTL_EXTEND_TO: u32 = 10000;
 
+fn emit_governance_telemetry(env: &Env, actor: &Address, operation: &'static str) {
+    use contract_monitoring::telemetry::{
+        build_event, derive_trace_id, emit_telemetry_event, TelemetryEventType, TelemetrySeverity,
+    };
+
+    let trace_id = derive_trace_id(env, actor);
+    let event = build_event(
+        env,
+        "timelock",
+        "0.1.0",
+        TelemetryEventType::StateTransition,
+        TelemetrySeverity::Info,
+        operation,
+        "governance state transition",
+        trace_id.clone(),
+        trace_id,
+    );
+    emit_telemetry_event(env, &event);
+}
+
 #[contract]
 pub struct Timelock;
 
@@ -65,6 +85,7 @@ impl Timelock {
         if q.contains_key(id) {
             return Err(Error::AlreadyQueued);
         }
+        emit_governance_telemetry(&env, &target, "timelock_queue");
         q.set(id, QueuedTx { target, call, eta });
         env.storage().persistent().set(&QUEUE, &q);
         env.events().publish((symbol_short!("queued"), id), (eta,));
@@ -92,6 +113,8 @@ impl Timelock {
         if now < tx.eta {
             return Err(Error::NotReady);
         }
+        emit_governance_telemetry(&env, &tx.target, "timelock_execute");
+
         // In Soroban, cross-contract call dispatch is via auth + address invocations off-chain.
         // Here we just emit execution event and remove from queue.
         q.remove(id);
