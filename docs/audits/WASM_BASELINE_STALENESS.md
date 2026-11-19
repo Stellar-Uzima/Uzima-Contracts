@@ -43,6 +43,15 @@ numbers would defeat the entire point of a size-regression baseline.
   `wasm_size_baselines.json`.
 - Wired into `.github/workflows/wasm-baseline-check.yml`.
 
+## Strict mode for new contracts
+
+`check_wasm_baseline_staleness.sh --strict-new=<git-ref>` fails only for
+deployable contracts whose `Cargo.toml` was added since `<git-ref>`. The
+workflow passes `origin/<base branch>` on pull requests, so a new contract
+without a baseline (or `"excluded"` entry) fails CI while the existing
+backlog stays non-blocking. Plain `--strict` still fails on any missing
+baseline and remains the end state once the backlog is cleared.
+
 ## Follow-ups
 
 1. Run a full release build and populate baseline entries for the 31

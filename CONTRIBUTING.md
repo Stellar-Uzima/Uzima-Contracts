@@ -492,7 +492,8 @@ Verify the following before opening or marking a PR ready for review:
 - [ ] Breaking ABI/storage changes include an ADR (see [Architecture Decision Records](#architecture-decision-records))
 - [ ] Excluded-contract changes update `docs/ONRAMP_OWNERSHIP.md`
 
-See [docs/contract-review-checklist.md](docs/contract-review-checklist.md) for the full checklist.
+See [docs/DEFINITION_OF_DONE.md](docs/DEFINITION_OF_DONE.md) for the single canonical Definition of Done checklist, and
+[docs/contract-review-checklist.md](docs/contract-review-checklist.md) for the full review checklist.
 
 ### What reviewers look for
 
@@ -594,7 +595,7 @@ Consistent `snake_case` event naming ensures that off-chain indexers and monitor
 
 - Follow [Security Best Practices](docs/SECURITY_BEST_PRACTICES.md) for all contract code.
 - Review [Threat Models](docs/MASTER_THREAT_MODEL.md) for security-sensitive changes.
-- Never commit secrets, keys, or credentials.
+- Never commit secrets, keys, or credentials. Scripts must not embed secrets or fake key literals; see the [script secret policy](docs/DEFINITION_OF_DONE.md#script-secret-policy).
 - Use `saturating_*` or `checked_*` arithmetic for all numeric operations.
 - Validate all external inputs at the contract boundary.
 - See [docs/SECURITY_CHECKLIST.md](docs/SECURITY_CHECKLIST.md) for the full security checklist.
