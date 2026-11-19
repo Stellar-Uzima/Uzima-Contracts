@@ -8,24 +8,30 @@ on:
 
 jobs:
   admin-recovery-hardening:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Blocking for newly added contracts — see docs/audits/ADMIN_RECOVERY_HARDENING.md.
+      - name: Check admin/recovery negative-test coverage
+        run: ./scripts/check_admin_recovery_test_coverage.sh --strict
+
   security-telemetry-conformance:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # Informational for now — see docs/audits/ADMIN_RECOVERY_HARDENING.md
-      # for why this doesn't fail the build yet.
-      - name: Check admin/recovery negative-test coverage
-        run: ./scripts/check_admin_recovery_test_coverage.sh
+      # Blocking for newly added contracts — see docs/audits/SECURITY_TELEMETRY_CONFORMANCE.md.
+      - name: Check security telemetry conformance
+        run: ./scripts/check_security_telemetry_conformance.sh --strict
 
   crypto-conformance:
-      # Informational for now — see docs/audits/SECURITY_TELEMETRY_CONFORMANCE.md
-      # for why this doesn't fail the build yet.
-      - name: Check security telemetry conformance
-        run: ./scripts/check_security_telemetry_conformance.sh
-
-  artifact-signing-key-rotation:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,6 +42,17 @@ jobs:
       # this doesn't fail the build yet.
       - name: Check cryptographic security model conformance
         run: ./scripts/check_crypto_conformance.sh
+
+      # Blocking — see docs/audits/ED25519_SIGNATURE_MALLEABILITY_CONFORMANCE.md.
+      - name: Check Ed25519 signature-malleability conformance
+        run: ./scripts/check_ed25519_malleability_conformance.sh
+
+  artifact-signing-key-rotation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       # Informational — see docs/audits/ARTIFACT_SIGNING_KEY_ROTATION.md.
       # Reproduces sign -> verify -> rotate -> verify against a throwaway
       # fixture artifact; doesn't require building any contracts.
