@@ -3,7 +3,8 @@
 use validation_utils::{
     validate_string_length, validate_non_negative, validate_u32_range, validate_u64_range,
     validate_i128_range, validate_string_not_empty, validate_non_zero_u32, validate_non_zero_u64,
-    validate_percentage, validate_count, ValidationError,
+    validate_percentage, validate_count, checked_increment_u32, checked_increment_u64,
+    checked_increment_i128, ValidationError,
 };
 
 // ==================== STRING VALIDATION TESTS ====================
@@ -183,6 +184,27 @@ fn test_validate_non_zero_u64() {
         validate_non_zero_u64(0),
         Err(ValidationError::ZeroValueNotAllowed)
     );
+}
+
+// ==================== CHECKED INCREMENT TESTS (issue #1944) ====================
+
+#[test]
+fn test_checked_increment_u64() {
+    assert_eq!(checked_increment_u64(41), Ok(42));
+    assert_eq!(checked_increment_u64(0), Ok(1));
+    assert_eq!(checked_increment_u64(u64::MAX), Err(ValidationError::Overflow));
+}
+
+#[test]
+fn test_checked_increment_u32() {
+    assert_eq!(checked_increment_u32(9), Ok(10));
+    assert_eq!(checked_increment_u32(u32::MAX), Err(ValidationError::Overflow));
+}
+
+#[test]
+fn test_checked_increment_i128() {
+    assert_eq!(checked_increment_i128(-1), Ok(0));
+    assert_eq!(checked_increment_i128(i128::MAX), Err(ValidationError::Overflow));
 }
 
 // ==================== PROPERTY-BASED TEST PATTERNS ====================

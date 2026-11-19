@@ -181,7 +181,7 @@ impl Governor {
         }
 
         let count = env.storage().instance().get(&P_COUNT).unwrap_or(0u64);
-        let id = count.checked_add(1).ok_or(Error::Overflow)?;
+        let id = validation_utils::checked_increment!(count, Error::Overflow)?;
 
         let start = now(&env)
             .checked_add(cfg.voting_delay)
