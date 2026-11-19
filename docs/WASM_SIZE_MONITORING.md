@@ -33,10 +33,17 @@ On failure, a per-contract size report (with deltas) is posted as a PR comment.
 
 ### Grandfathering
 
-Contracts already above 60 KB are captured in the baseline and **grandfathered**
-— reported with a ⚠️ but not failed — as long as they do not grow more than 10%.
-This blocks *new* growth without requiring an unrelated optimization pass to turn
-CI green. `load_testing` is excluded from the gate entirely.
+The configured threshold (`warning_threshold_bytes` in
+`scripts/wasm_size_baselines.json`) is now **enforced**: any measured contract
+over it fails CI with `::error::` and a `:x:` row in the report (issue #1953).
+The only exceptions are contracts listed in `grandfathered_over_threshold`,
+which stay warn-only while their optimization work lands; that list must only
+shrink. `load_testing` and the other entries in `excluded` are skipped entirely.
+
+Contracts whose baseline value is `0` are listed in `unmeasured_contracts` and
+reported as `:grey_question: unmeasured baseline` rather than compared against a
+guess. `wasm_size_monitor.sh --update` replaces those zeros with real
+release-WASM sizes (issue #1952).
 
 ### Updating the baseline
 
