@@ -342,12 +342,26 @@ cmd_check_baseline() {
     [[ -f "$BASELINE_FILE" ]] || { log "${RED}Baseline not found: $BASELINE_FILE — run with --update${NC}"; exit 1; }
     [[ -d "$WASM_DIR" ]] || { log "${RED}WASM dir not found: $WASM_DIR${NC}"; exit 1; }
 
-    local fail=0 warn=0 name bytes base delta pct status rows=""
+    # The committed JSON is the source of truth for the configured gate.
+    WARN_SIZE_BYTES="$(jq -r '.warning_threshold_bytes // 61440' "$BASELINE_FILE")"
+    REGRESSION_PCT="$(jq -r '.regression_pct // 10' "$BASELINE_FILE")"
+    EXCLUDED_CONTRACTS="${EXCLUDED_CONTRACTS:-$(jq -r '.excluded | join(" ")' "$BASELINE_FILE")}"
+
+    local fail=0 warn=0 unmeasured=0 name bytes base delta pct status rows=""
     while read -r name bytes; do
         base="$(jq -r --arg n "$name" '.contracts[$n] // empty' "$BASELINE_FILE")"
         if [[ -z "$base" ]]; then
             status=":new: new contract"
-            if [[ "$bytes" -gt "$WARN_SIZE_BYTES" ]]; then status=":x: new contract over 60 KB"; fail=1; fi
+            if [[ "$bytes" -gt "$WARN_SIZE_BYTES" ]]; then status=":x: new contract over configured threshold"; fail=1; fi
+            rows+="| ${name} | — | $(bytes_to_human "$bytes") | — | ${status} |"$'\n'
+            continue
+        fi
+        if [[ "$base" -eq 0 ]]; then
+            # Explicit unmeasured sentinel: the baseline registry has an entry
+            # but no release-WASM measurement yet. Skip until `wasm_size_monitor.sh
+            # --update` records a real size so CI does not fail on a guess.
+            unmeasured=$((unmeasured + 1))
+            status=":grey_question: unmeasured baseline"
             rows+="| ${name} | — | $(bytes_to_human "$bytes") | — | ${status} |"$'\n'
             continue
         fi
@@ -359,7 +373,14 @@ cmd_check_baseline() {
         elif [[ "$bytes" -gt "$WARN_SIZE_BYTES" && "$base" -le "$WARN_SIZE_BYTES" ]]; then
             status=":x: crossed 60 KB"; fail=1
         elif [[ "$bytes" -gt "$WARN_SIZE_BYTES" ]]; then
-            status=":warning: over 60 KB (baseline)"; warn=$((warn + 1))
+            # Strict gate: exceeding the configured threshold fails CI with a
+            # clear message. Contracts on the documented `grandfathered`
+            # list are the migration exception and remain warnings only.
+            if jq -e --arg n "$name" '.grandfathered_over_threshold // [] | index($n) != null' "$BASELINE_FILE" >/dev/null; then
+                status=":warning: over ${WARN_SIZE_BYTES}B (grandfathered)"; warn=$((warn + 1))
+            else
+                status=":x: ${bytes}B exceeds configured ${WARN_SIZE_BYTES}B threshold"; fail=1
+            fi
         fi
         rows+="| ${name} | $(bytes_to_human "$base") | $(bytes_to_human "$bytes") | ${pct}% | ${status} |"$'\n'
     done < <(collect_current_sizes)
@@ -367,16 +388,17 @@ cmd_check_baseline() {
     {
         echo "### WASM Size Report (Issue #846)"
         echo
-        echo "Gate: fail if a contract grows > ${REGRESSION_PCT}% over baseline or newly crosses the 60 KB threshold. Contracts already over 60 KB are grandfathered (:warning:)."
+        echo "Gate: fail if a contract grows > ${REGRESSION_PCT}% over baseline or exceeds the configured ${WARN_SIZE_BYTES}-byte threshold. Only contracts listed in 'grandfathered_over_threshold' are exempt (and that list must shrink)."
         echo
         echo "| Contract | Baseline | Current | Δ | Status |"
         echo "|---|---|---|---|---|"
         printf '%s' "$rows"
         echo
         if [[ "$fail" -eq 1 ]]; then
-            echo "❌ WASM size gate failed (regression or new 60 KB breach)."
+            echo "❌ WASM size gate FAILED: a contract regressed > ${REGRESSION_PCT}% or exceeded the configured ${WARN_SIZE_BYTES}-byte threshold (see :x: rows)."
+            echo "::error::WASM size gate failed — see ${WASM_SIZE_REPORT}"
         else
-            echo "✅ No size regressions (${warn} contract(s) grandfathered over 60 KB)."
+            echo "✅ No size regressions; all measured contracts are within the configured ${WARN_SIZE_BYTES}-byte threshold (${warn} grandfathered, ${unmeasured} awaiting measurement)."
         fi
     } | tee "$WASM_SIZE_REPORT"
 

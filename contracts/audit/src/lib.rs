@@ -12,6 +12,8 @@ pub mod verification;
 mod test;
 #[cfg(test)]
 mod test_export_failure;
+#[cfg(test)]
+mod benchmarks;
 
 pub use crate::errors::Error;
 use crate::types::{

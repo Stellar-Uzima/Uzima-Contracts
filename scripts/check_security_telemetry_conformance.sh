@@ -28,8 +28,9 @@
 # an automatic CI failure.
 #
 # Usage: ./scripts/check_security_telemetry_conformance.sh [--strict]
-#   --strict   exit 1 if any MISSING contract is found (default: exit 0,
-#              report only). DIVERGENT never gates: a divergent contract is
+#   --strict   exit 1 if a MISSING contract was added vs BASE_REF (default
+#              origin/main) and has no contracts/<name>/TELEMETRY_EXEMPT.md
+#              documenting an exemption. Existing contracts are report only. DIVERGENT never gates: a divergent contract is
 #              already deployed and emitting events, so failing the build on it
 #              would be reporting a finding as a build break.
 
@@ -46,6 +47,10 @@ for arg in "$@"; do
 done
 
 # Heuristic: directory name suggests security-sensitive responsibility.
+# Contracts added relative to the base branch (strict mode only gates these).
+BASE_REF="${BASE_REF:-origin/main}"
+NEW_CONTRACTS="$(git -C "$ROOT_DIR" diff --name-only --diff-filter=A "$BASE_REF...HEAD" -- 'contracts/*/Cargo.toml' 2>/dev/null | cut -d/ -f2 || true)"
+
 SENSITIVE_PATTERN='auth|treasury|admin|bridge|consent|credential|custody|escrow|recovery|access_control|identity|key_'
 TELEMETRY_PATTERN='TelemetryEvent|derive_trace_id|emit_telemetry'
 
@@ -61,6 +66,7 @@ echo "====================================="
 echo ""
 
 flagged=0
+flagged_new=0
 checked=0
 divergent=0
 emitting=0
@@ -80,6 +86,10 @@ for dir in "$CONTRACTS_DIR"/*/; do
 
   flagged=$((flagged + 1))
   echo "  MISSING TELEMETRY: $name"
+  if grep -qxF "$name" <<<"$NEW_CONTRACTS" && [[ ! -f "$dir/TELEMETRY_EXEMPT.md" ]]; then
+    flagged_new=$((flagged_new + 1))
+    echo "  ^ NEW contract: emit telemetry or add contracts/$name/TELEMETRY_EXEMPT.md"
+  fi
 done
 
 echo ""
@@ -127,7 +137,7 @@ echo "conform it or record an explicit exemption."
 echo ""
 echo "See docs/audits/SECURITY_TELEMETRY_CONFORMANCE.md for the full picture."
 
-if $STRICT && [[ "$flagged" -gt 0 ]]; then
+if $STRICT && [[ "$flagged_new" -gt 0 ]]; then
   exit 1
 fi
 

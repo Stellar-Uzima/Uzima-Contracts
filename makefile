@@ -464,6 +464,12 @@ perf-budget-update: ## Re-record performance budgets from the current build
 perf-budget-trend: ## Show performance budget trend across retained samples
 	@bash scripts/performance_budget_gate.sh --trend
 
+instruction-gate: ## Check write-path instruction-count regressions (Issue #1958)
+	@node scripts/measure_budgets.mjs
+
+instruction-gate-update: ## Re-record per-function instruction baselines
+	@node scripts/measure_budgets.mjs --update-instruction-budgets
+
 test-perf-budget: ## Run the performance budget gate test suite
 	@bash tests/performance_budget_gate_test.sh
 

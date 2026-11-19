@@ -66,10 +66,29 @@ confirmed findings rather than heuristic false-positive risk. What's here:
   presence) isn't automated yet since "is this function actually
   admin-privileged" can't be determined by grep alone.
 
+## Manual triage results (#1884)
+
+The three remaining candidates from check #2 were reviewed against their
+contract sources. None performs cryptographic primitives in-contract; each
+stores or compares values computed off-chain and validates only the input
+shape or authorization at the contract boundary.
+
+| Contract | Reviewed surface | Decision | Replacement issue |
+| --- | --- | --- | --- |
+| `credential_registry` | `validate_metadata_hash`, `validate_signature`, root and credential registration | **Accept** — non-zero checks plus storage of externally computed hashes and signatures; no hashing or signature primitive is reimplemented. | None required |
+| `iot_device_management` | `encryption_key_hash`, `certification_hash`, `binary_hash`, `rotate_encryption_key`, `rotate_device_key` | **Accept** — role-gated storage and rotation of key hashes; encryption itself is handled off-chain. | None required |
+| `medical_imaging` | `content_hash`, DICOM UID hashes, `verify_image_integrity` | **Accept** — equality checks against externally computed hashes; no hashing, signing, or encryption is implemented in-contract. | None required |
+
+No replacement issue is needed for these candidates. The homomorphic case from
+check #2 remains an accepted, deliberately separate primitive class as
+described in `docs/CRYPTOGRAPHIC_SECURITY_MODEL.md`.
+
 ## Follow-ups (file as separate issues)
 
 1. Manually triage `credential_registry`, `iot_device_management`,
-   `medical_imaging` for hand-rolled crypto (confirm or dismiss).
+   `medical_imaging` for hand-rolled crypto (confirm or dismiss). **Done** —
+   see "Manual triage results (#1884)"; all three were accepted with no
+   replacement issue required.
 2. Read `crypto_registry/src/lib.rs` to confirm whether its admin config
    surface (if any) actually has threshold/timelock protection, and
    reconcile with the doc's framing of it as the canonical example.

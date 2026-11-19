@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "description": "Per-function CPU instruction baselines for write-path regression gating (issue #1958). A value of 0 means 'not yet measured' and is skipped by the gate.",
+  "regression_tolerance_pct": 15,
+  "min_delta_instructions": 50000,
+  "functions": {
+    "patient_consent_management::patient_consent_management::grant_consent": 0,
+    "patient_consent_management::patient_consent_management::revoke_consent": 0,
+    "patient_consent_management::patient_consent_management::check_consent": 0,
+    "patient_consent_management::patient_consent_management::verify_consent_with_audit": 0,
+    "audit::audit::log_event": 0
+  }
+}

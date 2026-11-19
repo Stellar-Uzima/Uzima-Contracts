@@ -265,6 +265,23 @@
 14. **Benchmarking**: Establish baseline performance metrics for normal operations
 15. **Continuous Improvement**: Regular review and update of resource protection measures based on lessons learned
 
+## Shared Input-Bound Helpers (issue #1947)
+
+`libs/validation_utils/src/collections.rs` now exposes `validate_vector_size` and
+`validate_bytes_size`, backed by `ValidationError::CollectionEmpty` /
+`CollectionTooLarge`. Public entrypoints that accept `Vec`/`Bytes` must call one
+of these before any storage write. Current migrations:
+
+| Contract | Entrypoint | Bound |
+|---|---|---|
+| `dispute_resolution` | `initialize` | `1..=64` arbiters |
+| `governor` | `propose` | `1..=64` description hash bytes, `0..=16384` execution bytes |
+| `contract_verification` | `publish_abi` | `1..=256` ABI entries |
+| `zk_verifier` | `verify_proof` | `1..=8192` proof bytes |
+
+New `Vec`/`Bytes` entrypoints should follow the same pattern and add a unit test
+asserting rejection at `max + 1`.
+
 ## Specific Implementation Recommendations
 
 1. **Add explicit limits to variable-length fields**:

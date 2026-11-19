@@ -8,14 +8,14 @@ Tracks: #1576 "Detect stale wasm_size_baselines.json entries"
 the regression gate described in `docs/PERFORMANCE_BUDGETS.md`. Comparing
 its `"contracts"` keys against the actual `contracts/*/` directories:
 
-- **114** contract directories have a `Cargo.toml`.
-- **78** have a baseline entry.
+- **119** contract directories have a `Cargo.toml`.
+- **110** have a baseline entry (34 newly registered with the `0` = unmeasured sentinel).
 - **7** of the remaining 36 are shared library crates with no `#[contract]`
   item (`common_auth`, `common_error`, `contract_behavior_fuzzing`,
   `fp_math`, `sanitization`, `shared_consent_policy`, `test-helpers`) —
   these don't produce a WASM artifact, so they were added to `"excluded"`
   as part of this change rather than left looking like an oversight.
-- **31** are genuine deployable contracts (have a `#[contract]` item)
+- **34** are genuine deployable contracts (have a `#[contract]` item)
   shipped with **no baseline entry at all**, including `medical_records` —
   one of the most central contracts in the repo. Full list produced by the
   check script below.
@@ -24,7 +24,7 @@ its `"contracts"` keys against the actual `contracts/*/` directories:
 
 ## Why the baseline wasn't regenerated here
 
-Populating real byte sizes for the 31 missing contracts requires an actual
+Populating real byte sizes for the 34 previously missing contracts requires an actual
 `cargo build --release --target wasm32-unknown-unknown` and reading the
 resulting `.wasm` file sizes — not something done in this change (no
 build/compile was run here, per the constraints of this pass). Guessing at
@@ -34,7 +34,7 @@ numbers would defeat the entire point of a size-regression baseline.
 
 - `scripts/check_wasm_baseline_staleness.sh` — walks `contracts/*/`,
   flags any deployable contract missing a baseline entry (or not in
-  `"excluded"`). Currently **non-blocking**: it reports the 31-contract
+  `"excluded"`). Currently **non-blocking**: it reports the 34-contract
   gap without failing the job, since flipping it blocking today would
   turn every future PR red until someone does the real build-and-measure
   work. Pass `--strict` once that backlog is cleared, so it only blocks
@@ -42,6 +42,15 @@ numbers would defeat the entire point of a size-regression baseline.
 - Added the 7 legitimate library crates to `"excluded"` in
   `wasm_size_baselines.json`.
 - Wired into `.github/workflows/wasm-baseline-check.yml`.
+
+## Strict mode for new contracts
+
+`check_wasm_baseline_staleness.sh --strict-new=<git-ref>` fails only for
+deployable contracts whose `Cargo.toml` was added since `<git-ref>`. The
+workflow passes `origin/<base branch>` on pull requests, so a new contract
+without a baseline (or `"excluded"` entry) fails CI while the existing
+backlog stays non-blocking. Plain `--strict` still fails on any missing
+baseline and remains the end state once the backlog is cleared.
 
 ## Follow-ups
 

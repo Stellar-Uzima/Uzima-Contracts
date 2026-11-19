@@ -129,6 +129,7 @@ impl RBAC {
                 Role::Service => String::from_str(&env, "Service"),
             };
             Storage::save_assignment(&env, &assignment);
+            governance_commons::emit_role_granted(&env, &address, &role_str, &admin);
             emit_role_assigned(&env, admin, address, role_str, success);
         }
 
@@ -168,6 +169,7 @@ impl RBAC {
                 Role::Auditor => String::from_str(&env, "Auditor"),
                 Role::Service => String::from_str(&env, "Service"),
             };
+            governance_commons::emit_role_revoked(&env, &address, &role_str, &admin);
             emit_role_removed(&env, admin, address, role_str, success);
         }
 

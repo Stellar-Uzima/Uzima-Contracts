@@ -3,21 +3,20 @@
 # reference to the canonical signature-malleability check
 # (common_error::sig_malleability::check_s_value).
 #
-# Informational check — see
-# docs/audits/ED25519_SIGNATURE_MALLEABILITY_CONFORMANCE.md for the full
-# analysis and why this doesn't fail the build yet.
+# Blocking check — see docs/audits/ED25519_SIGNATURE_MALLEABILITY_CONFORMANCE.md.
+# Exits 1 if any contract flagged (strict is the default; --report-only opts out).
 #
-# Usage: ./scripts/check_ed25519_malleability_conformance.sh [--strict]
+# Usage: ./scripts/check_ed25519_malleability_conformance.sh [--report-only]
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONTRACTS_DIR="$ROOT_DIR/contracts"
 
-STRICT=false
+STRICT=true
 for arg in "$@"; do
   case "$arg" in
-    --strict) STRICT=true ;;
+    --report-only) STRICT=false ;;
   esac
 done
 

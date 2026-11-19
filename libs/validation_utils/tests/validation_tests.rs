@@ -3,8 +3,8 @@
 use validation_utils::{
     validate_string_length, validate_non_negative, validate_u32_range, validate_u64_range,
     validate_i128_range, validate_string_not_empty, validate_non_zero_u32, validate_non_zero_u64,
-    validate_percentage, validate_count, checked_increment_u32, checked_increment_u64,
-    checked_increment_i128, ValidationError,
+    validate_percentage, validate_count, validate_collection_size, validate_bytes_size,
+    ValidationError,
 };
 
 // ==================== STRING VALIDATION TESTS ====================
@@ -283,6 +283,32 @@ fn property_basis_points_range() {
     assert_eq!(
         validate_percentage(10001, true),
         Err(ValidationError::ValueTooLarge)
+    );
+}
+
+// ==================== COLLECTION BOUND TESTS (issue #1947) ====================
+
+#[test]
+fn test_validate_collection_size_rejects_oversized() {
+    assert_eq!(
+        validate_collection_size(51, 0, 50),
+        Err(ValidationError::CollectionTooLarge)
+    );
+    assert_eq!(validate_collection_size(50, 1, 50), Ok(()));
+    assert_eq!(
+        validate_collection_size(0, 1, 50),
+        Err(ValidationError::CollectionEmpty)
+    );
+}
+
+#[test]
+fn test_validate_bytes_size_bounds() {
+    let env = soroban_sdk::Env::default();
+    let data = soroban_sdk::Bytes::from_slice(&env, b"1234");
+    assert_eq!(validate_bytes_size(&data, 1, 4), Ok(()));
+    assert_eq!(
+        validate_bytes_size(&data, 5, 10),
+        Err(ValidationError::CollectionEmpty)
     );
 }
 

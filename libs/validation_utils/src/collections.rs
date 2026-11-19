@@ -1,6 +1,6 @@
 //! Collection validation functions
 
-use soroban_sdk::Vec;
+use soroban_sdk::{Bytes, Vec};
 use crate::errors::ValidationError;
 
 /// Validates that a collection is not empty
@@ -73,4 +73,17 @@ pub fn validate_vector_size<T>(
     max_size: u32,
 ) -> Result<(), ValidationError> {
     validate_collection_size(vec.len(), min_size, max_size)
+}
+
+/// Validates that a byte buffer size is within allowed bounds.
+///
+/// `Bytes` entrypoints are a resource-exhaustion surface (see
+/// `docs/THREAT_MODELS_RESOURCE_EXHAUSTION.md`); every public buffer parameter
+/// should be bounded with this helper before any storage write (issue #1947).
+pub fn validate_bytes_size(
+    data: &Bytes,
+    min_size: u32,
+    max_size: u32,
+) -> Result<(), ValidationError> {
+    validate_collection_size(data.len(), min_size, max_size)
 }

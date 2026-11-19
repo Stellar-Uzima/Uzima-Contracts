@@ -18,6 +18,9 @@ mod timeout_simple_test;
 #[cfg(test)]
 mod reorg_protection_tests;
 
+#[cfg(test)]
+mod reentrancy_tests;
+
 /// # Cross-Chain Bridge Signature Scheme
 ///
 /// To prevent unauthorized relaying and replay attacks, all validator attestations
@@ -437,6 +440,14 @@ const MESSAGE_PASSING_TIMEOUT: u64 = 1_800; // 30 minutes
 const VERIFICATION_TIMEOUT: u64 = 900; // 15 minutes
 const MAX_EXTENSIONS: u32 = 3; // Maximum number of timeout extensions
 
+// Cross-chain serialization budget (issue #1960;
+// docs/performance/CROSS_CHAIN_SERIALIZATION.md).
+/// Hard cap on the serialized size of one message payload.
+pub const MAX_SERIALIZED_PAYLOAD_BYTES: u32 = 4_096;
+/// CPU budget (instruction-equivalent units) for serializing one payload.
+pub const MAX_SERIALIZATION_CPU_UNITS: u32 = 1_000_000;
+const SERIALIZATION_CPU_UNITS_PER_BYTE: u32 = 200;
+
 // TTL constants for storage management
 /// TTL threshold: extend persistent data if remaining TTL falls below this
 const PERSISTENT_TTL_THRESHOLD: u32 = 100;
@@ -625,6 +636,24 @@ impl CrossChainBridgeContract {
     /// has consented to data transfer to the destination jurisdiction via
     /// the PatientConsentManagement contract. Transfers to jurisdictions
     /// not in the patient's `jurisdictions_allowed` list are rejected.
+    /// Enforce the serialization size/CPU budget before any storage write
+    /// (issue #1960). Oversized payloads fail with a typed error.
+    fn validate_serialization_budget(env: &Env, payload: &String) -> Result<(), Error> {
+        let size = payload.len();
+        if size > MAX_SERIALIZED_PAYLOAD_BYTES {
+            env.events().publish(
+                (Symbol::new(env, "SerializationBudgetExceeded"),),
+                (size, MAX_SERIALIZED_PAYLOAD_BYTES),
+            );
+            return Err(Error::PayloadSerializationBudgetExceeded);
+        }
+        let estimated_cpu = size.saturating_mul(SERIALIZATION_CPU_UNITS_PER_BYTE);
+        if estimated_cpu > MAX_SERIALIZATION_CPU_UNITS {
+            return Err(Error::PayloadSerializationBudgetExceeded);
+        }
+        Ok(())
+    }
+
     pub fn submit_message(
         env: Env,
         validator: Address,
@@ -632,6 +661,7 @@ impl CrossChainBridgeContract {
     ) -> Result<BytesN<32>, Error> {
         validator.require_auth();
         Self::require_not_paused(&env)?;
+        Self::validate_serialization_budget(&env, &request.payload)?;
         let v_info = Self::get_active_validator_info(&env, &validator)?;
         Self::require_chain_supported(&env, &request.source_chain)?;
 
@@ -717,6 +747,7 @@ impl CrossChainBridgeContract {
         let mut message_ids: Vec<BytesN<32>> = Vec::new(&env);
 
         for request in requests.iter() {
+            Self::validate_serialization_budget(&env, &request.payload)?;
             Self::require_chain_supported(&env, &request.source_chain)?;
             Self::verify_nonce(&env, &request.sender, request.nonce)?;
 

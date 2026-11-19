@@ -6,8 +6,9 @@ Two scripts cover supply-chain and dependency risk for the contract
 workspace:
 
 - **`scripts/dependency_health_check.sh [output_path]`** — reports on
-  workspace dependency availability and duplicate versions. Report-only;
-  doesn't fail on its own.
+  workspace dependency availability, duplicate versions and CVEs sourced from
+  `cargo audit --json`. Exits non-zero on any high/critical advisory (set
+  `CARGO_AUDIT_JSON` to reuse a pre-generated audit report).
 - **`scripts/dependency_hazard_report.sh [version]`** — the actual gate.
   Checks workspace membership, Cargo `soroban-sdk` version alignment
   across contracts, circular dependencies, and WASM size budget, writing

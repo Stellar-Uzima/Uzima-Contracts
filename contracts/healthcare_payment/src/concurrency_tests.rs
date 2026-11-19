@@ -275,3 +275,31 @@ fn test_reentrancy_lock_prevents_concurrent_processing() {
     let result = client.try_process_payment(&claim_id);
     assert_eq!(result, Err(Ok(Error::InvalidStatus)));
 }
+
+// ---- Paused-state coverage for privileged role changes (issue #1948) ----
+
+#[test]
+fn test_privileged_pauser_changes_blocked_while_circuit_open_and_resume() {
+    let (env, client, admin, _provider, _patient, _pay_token) = setup_env();
+    let pauser = Address::generate(&env);
+
+    client.emergency_pause(&admin);
+
+    // Adding/removing a pauser is a privileged change and must be blocked
+    // while the circuit is open; recovery operations stay available.
+    assert_eq!(
+        client.try_add_authorized_pauser(&admin, &pauser),
+        Err(Ok(Error::CircuitOpen))
+    );
+    assert_eq!(
+        client.try_remove_authorized_pauser(&admin, &pauser),
+        Err(Ok(Error::CircuitOpen))
+    );
+
+    client.begin_recovery(&admin);
+    client.resume_operations(&admin);
+
+    // After resuming, the same privileged operations succeed.
+    client.add_authorized_pauser(&admin, &pauser);
+    client.remove_authorized_pauser(&admin, &pauser);
+}

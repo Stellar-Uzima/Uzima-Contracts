@@ -53,6 +53,36 @@ def expected_inventory():
     return json.loads(result.stdout)
 
 
+def expected_budget_dashboard():
+    """Rebuild resource-budgets/dashboard.json using the same inputs as
+    scripts/generate_budget_dashboard.mjs (issue #1955)."""
+    with open(ROOT / "resource-budgets" / "budgets.json", encoding="utf-8") as handle:
+        budgets = json.load(handle)
+    manifest_path = ROOT / "deployments" / "deployment-manifest.json"
+    deployable = []
+    if manifest_path.exists():
+        with open(manifest_path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        deployable = list(
+            dict.fromkeys(c["name"] for c in manifest.get("contracts", []) if c.get("name"))
+        )
+    monitored = sorted(set(deployable) | set((budgets.get("contracts") or {}).keys()))
+    return {
+        "dashboard_version": "1.0.0",
+        "description": "Memory and CPU budget overview per contract for Stellar Uzima Soroban contracts",
+        "soroban_network_limits": {
+            "max_read_entries": 2000,
+            "max_write_entries": 1000,
+            "max_instructions": 100000000,
+            "max_memory_bytes": 52428800,
+            "max_contract_size_bytes": 655360,
+        },
+        "contracts_monitored": monitored,
+        "regeneration_command": "./scripts/generate_budgets.sh",
+        "generated_at": "<volatile>",
+    }
+
+
 def summarise(label, expected, actual):
     """A short, actionable description of the difference."""
     lines = [f"  {label}: committed is {type(actual).__name__}"
@@ -105,7 +135,8 @@ def check(relative, expected):
         print(f"[dashboard] {relative} is stale:")
         print(summarise(relative, strip_volatile(expected), strip_volatile(actual)))
         return False
-    count = len(expected.get("contracts", []))
+    monitored = expected.get("contracts_monitored")
+    count = len(monitored) if monitored is not None else len(expected.get("contracts", []))
     print(f"[dashboard] {relative} is up to date ({count} contracts).")
     return True
 
@@ -113,6 +144,7 @@ def check(relative, expected):
 def main():
     ok = check("dashboard/contract_inventory.json", expected_inventory())
     ok = check("dashboard/risk_matrix.json", build_risk_matrix(str(ROOT / "contracts"))) and ok
+    ok = check("resource-budgets/dashboard.json", expected_budget_dashboard()) and ok
 
     if not ok:
         print("\nRun ./scripts/generate_dashboard_data.sh and commit the result.")

@@ -244,9 +244,7 @@ impl PolicyEngine {
                     (soroban_sdk::symbol_short!("policy"), soroban_sdk::symbol_short!("role_chk")),
                     (&ctx.caller, &ctx.target_function),
                 );
-                // Role check delegated to RBAC contract via Soroban cross-contract call.
-                // Placeholder: accept if called (real implementation would query rbac contract).
-                Ok(PolicyDecision::Allow)
+                Err(PolicyEngineError::MissingRole)
             }
         }
     }

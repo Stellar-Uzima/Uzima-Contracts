@@ -38,3 +38,33 @@ pub enum DataKey {
 Existing records stored under the old layout must be migrated via an admin
 `migrate_record(id)` function that reads old keys, writes the new struct, and
 deletes the old entries.
+## Current Layout (issue #1961)
+
+The consolidated single-entry layout is now the canonical storage form:
+
+- `DataKey::Record(u64)` stores one `MedicalRecord` struct per record.
+- `DataKey::RecordCount` tracks the number of records.
+- `DataKey::RecordSchemaVersion(u64)` stamps `STORAGE_SCHEMA_VERSION` (= 2).
+- Growth-prone tag lists are indexed via `DataKey::TagRecordCount(tag)` and
+  `DataKey::TagRecord(tag, index)` so a tag search reads only the requested page
+  instead of rewriting a full `Vec` (see `docs/performance/MAP_VECTOR_OPTIMIZATION.md`).
+
+`migrate_record(id)` is the admin migration entry point for legacy
+field-per-key records: it reads `DataKey::LegacyRecordField(id, field)`, writes
+the consolidated struct once, stamps the schema version and removes the old
+keys. It returns `Error::AlreadyInitialized` for an already-migrated record, so
+it is safe to replay.
+
+## Leaderboard verification
+
+Storage reductions are verified by the same commands CI runs:
+
+```bash
+cargo build --workspace --target wasm32-unknown-unknown --release
+./scripts/measure_storage.sh
+./scripts/update_readme_storage_leaderboard.sh
+```
+
+The checked-in `STORAGE_LEADERBOARD_START/END` block in `README.md` must match a
+fresh measurement. Until a release build is run in CI, the table is explicitly
+marked `unmeasured` rather than showing fabricated numbers.
