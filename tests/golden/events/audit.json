@@ -1,0 +1,16 @@
+{
+  "contract": "audit",
+  "events": [
+    {
+      "name": "access_logged",
+      "topics": ["access_logged", "audit"],
+      "data": {
+        "actor": "String",
+        "action": "String",
+        "resource": "String",
+        "outcome": "String",
+        "ledger": "u64"
+      }
+    }
+  ]
+}

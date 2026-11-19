@@ -25,3 +25,7 @@ When a contract change intentionally modifies an event format:
 | `cross_chain_bridge`  | MessageSubmitted, MessageVerified           | `cross_chain_bridge.json` |
 | `timelock`            | Queued, Executed, Cancelled                 | `timelock.json`           |
 | `escrow`              | EscNew, EscRel, EscDisput, Refunded         | `escrow.json`             |
+| `audit`               | access_logged                               | `audit.json`              |
+| `patient_consent_management` | consent_granted, consent_revoked     | `patient_consent_management.json` |
+| `rbac`                | role_granted, role_revoked                  | `rbac.json`               |
+| `upgradeability`      | contract_upgraded, lifecycle_transition      | `upgradeability.json`     |

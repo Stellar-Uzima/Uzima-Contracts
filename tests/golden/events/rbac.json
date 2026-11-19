@@ -1,0 +1,25 @@
+{
+  "contract": "rbac",
+  "events": [
+    {
+      "name": "role_granted",
+      "topics": ["role_granted", "rbac"],
+      "data": {
+        "grantee": "String",
+        "role": "String",
+        "granted_by": "String",
+        "ledger": "u64"
+      }
+    },
+    {
+      "name": "role_revoked",
+      "topics": ["role_revoked", "rbac"],
+      "data": {
+        "revokee": "String",
+        "role": "String",
+        "revoked_by": "String",
+        "ledger": "u64"
+      }
+    }
+  ]
+}
