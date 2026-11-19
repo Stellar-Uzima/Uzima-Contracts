@@ -115,3 +115,6 @@ plan.md
 wasm_size_report.md
 .wasm_size_trends.json
 .wasm_optimization_tips.json
+
+# Build artifacts must never be committed
+*.rlib
