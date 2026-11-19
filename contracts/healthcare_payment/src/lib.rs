@@ -615,6 +615,32 @@ impl HealthcarePayment {
         Ok(policy_id)
     }
 
+    pub fn update_policy_deductible_met(
+        env: Env,
+        caller: Address,
+        policy_id: u64,
+        deductible_met: i128,
+    ) -> Result<(), Error> {
+        caller.require_auth();
+        Self::require_admin(&env, &caller)?;
+
+        let mut policy = Self::get_policy(&env, policy_id)?;
+        if deductible_met < 0 || deductible_met > policy.deductible_total {
+            return Err(Error::InvalidCoverage);
+        }
+
+        policy.deductible_met = deductible_met;
+        env.storage()
+            .persistent()
+            .set(&DataKey::CoveragePolicy(policy_id), &policy);
+        env.events().publish(
+            (symbol_short!("POL_UPD"),),
+            (caller, policy_id, deductible_met),
+        );
+
+        Ok(())
+    }
+
     pub fn verify_insurance_eligibility(
         env: Env,
         caller: Address,
@@ -1645,6 +1671,10 @@ impl HealthcarePayment {
     /// Grant an address the ability to trigger an emergency pause. Admin only.
     pub fn add_authorized_pauser(env: Env, caller: Address, pauser: Address) -> Result<(), Error> {
         caller.require_auth();
+        // Privileged role changes must be blocked while the circuit is open
+        // (issue #1948). begin_recovery/resume_operations stay callable so the
+        // circuit can always be brought back to Closed.
+        Self::require_operational(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let mut pausers: Vec<Address> = env
@@ -1672,6 +1702,7 @@ impl HealthcarePayment {
         pauser: Address,
     ) -> Result<(), Error> {
         caller.require_auth();
+        Self::require_operational(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let pausers: Vec<Address> = env

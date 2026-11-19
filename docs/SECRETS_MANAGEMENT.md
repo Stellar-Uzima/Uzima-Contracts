@@ -123,6 +123,9 @@ Configuration entries are defined in `config/networks.toml` under the `[secrets.
 4. **Rate limiting** — Identity operations are rate-limited per configuration
 5. **Validation command** — Pre-flight checks before deployment
 6. **Safe export** — `export` command outputs env vars without raw secrets
+7. **Prerequisite fail-fast** — identity generation aborts with install
+   instructions if neither `soroban` nor `openssl` is available; no
+   `placeholder-*` addresses are written
 
 ## Integration with Docker
 

@@ -94,6 +94,11 @@ pub mod soroban_baselines {
     pub const CRYPTO_GET_BUNDLE: u64 = 2_000_000;
     pub const CRYPTO_REVOKE_KEY: u64 = 3_000_000;
     pub const CRYPTO_GET_VERSION: u64 = 1_500_000;
+
+    // Consent flows (issue #1956).
+    pub const CONSENT_GRANT: u64 = 3_000_000;
+    pub const CONSENT_REVOKE: u64 = 3_000_000;
+    pub const CONSENT_CHECK: u64 = 2_000_000;
 }
 
 /// Performance test result
@@ -271,27 +276,6 @@ impl StressTest {
             duration_secs,
             concurrent_threads: threads,
         }
-    }
-}
-
-/// Memory usage tracker
-pub struct MemoryTracker {
-    tracking: bool,
-}
-
-impl MemoryTracker {
-    pub fn new() -> Self {
-        Self { tracking: false }
-    }
-
-    /// Start tracking memory
-    pub fn start(&mut self) {
-        self.tracking = true;
-    }
-
-    /// Calculate memory delta (placeholder — real impl would use system APIs)
-    pub fn delta(&self) -> Option<usize> {
-        if self.tracking { Some(0) } else { None }
     }
 }
 

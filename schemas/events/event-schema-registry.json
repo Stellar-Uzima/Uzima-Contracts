@@ -439,6 +439,48 @@
         ],
         "additionalProperties": false
       }
+    },
+    "failover_detector.role_granted": {
+      "contract": "failover_detector",
+      "name": "role_granted",
+      "version": 1,
+      "description": "Emitted when a failover role is granted via assign_role",
+      "topics": [
+        "role_granted",
+        "failover_detector"
+      ],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "grantee": { "type": "string" },
+          "role": { "type": "string" },
+          "granted_by": { "type": "string" },
+          "ledger": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["grantee", "role", "granted_by", "ledger"],
+        "additionalProperties": false
+      }
+    },
+    "iot_device_management.role_granted": {
+      "contract": "iot_device_management",
+      "name": "role_granted",
+      "version": 1,
+      "description": "Emitted when an IoT device role is granted via set_role",
+      "topics": [
+        "role_granted",
+        "iot_device_management"
+      ],
+      "schema": {
+        "type": "object",
+        "properties": {
+          "grantee": { "type": "string" },
+          "role": { "type": "string" },
+          "granted_by": { "type": "string" },
+          "ledger": { "type": "integer", "minimum": 0 }
+        },
+        "required": ["grantee", "role", "granted_by", "ledger"],
+        "additionalProperties": false
+      }
     }
   },
   "validation_rules": {

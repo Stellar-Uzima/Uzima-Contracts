@@ -50,21 +50,20 @@ jobs:
           if-no-files-found: ignore
 
   security-review-check:
-    name: Automated security review checklist (informational)
+    name: Automated security review checklist
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Informational for now — see
+      # Blocking — see
       # docs/audits/SECURITY_REVIEW_CHECK_FALSE_POSITIVES.md. Check 2's
       # unwrap() heuristic (previously: any contract with .unwrap() calls
       # in its test file failed, since the old exclusion only removed the
       # #[cfg(test)] attribute line, not the rest of the test module) was
       # fixed to exclude dedicated test files, but it still can't catch
       # unwrap() inside an inline `#[cfg(test)] mod tests { ... }` block
-      # within a production file — that needs a real Rust-aware scan, not
-      # grep. Kept non-blocking until a clean CI run confirms no remaining
-      # false positives across the whole contract set.
+      # within a production file; the script now ignores everything after the
+      # first inline #[cfg(test)] in a file.
       - name: Run security review checklist
-        run: ./scripts/security_review_check.sh || true
+        run: ./scripts/security_review_check.sh

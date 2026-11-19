@@ -89,22 +89,5 @@ impl PaymentRouter {
     }
 }
 
-#[cfg(all(test, feature = "testutils"))]
-#[allow(clippy::unwrap_used)]
-mod test {
-    use super::*;
-    use soroban_sdk::testutils::Address as _;
-    use soroban_sdk::{Address, Env};
-
-    #[test]
-    fn test_fee_split() {
-        let env = Env::default();
-        let cid = env.register_contract(None, PaymentRouter);
-        let client = PaymentRouterClient::new(&env, &cid);
-        // Soroban contract clients auto-unwrap Result types
-        client.set_fee_config(&Address::generate(&env), &1000u32); // 10%
-        let (provider, fee) = client.compute_split(&1000i128);
-        assert_eq!(provider, 900);
-        assert_eq!(fee, 100);
-    }
-}
+#[cfg(test)]
+mod test;

@@ -39,7 +39,37 @@ for manifest in "$ROOT_DIR"/contracts/*/Cargo.toml; do
   WASM_FILE="$WASM_DIR/${ContractName}.wasm"
 
   if [[ ! -f "$WASM_FILE" ]]; then
-    # Skip contracts not in workspace
+    # No release WASM: write an explicit machine-readable unmeasured marker
+    # instead of fabricating placeholder values (issue #1954). Consumers use
+    # `measurement_status`/`measured` and the 0-byte sentinel to skip these.
+    cat > "$BUDGET_DIR/${ContractName}.json" <<EOF
+{
+  "contract": "$ContractName",
+  "measurement_status": "unmeasured",
+  "measured": false,
+  "unmeasured_reason": "No release WASM build found: $WASM_FILE",
+  "wasm_size_bytes": 0,
+  "wasm_size_human": null,
+  "soroban_limits": {
+    "max_read_entries": $MAX_READ_ENTRIES,
+    "max_write_entries": $MAX_WRITE_ENTRIES,
+    "max_instructions": $MAX_INSTRUCTIONS,
+    "max_memory_bytes": $((50 * 1024 * 1024))
+  },
+  "estimated_per_call": {
+    "instructions": 0,
+    "read_entries": 0,
+    "write_entries": 0,
+    "memory_bytes": 0
+  },
+  "budget_utilization_pct": {
+    "instructions": 0,
+    "read_entries": 0,
+    "write_entries": 0
+  },
+  "generated_at": null
+}
+EOF
     continue
   fi
 
@@ -60,6 +90,9 @@ for manifest in "$ROOT_DIR"/contracts/*/Cargo.toml; do
   cat > "$BUDGET_DIR/${ContractName}.json" <<EOF
 {
   "contract": "$ContractName",
+  "measurement_status": "measured",
+  "measured": true,
+  "unmeasured_reason": null,
   "wasm_size_bytes": $WASM_SIZE,
   "wasm_size_human": "$(numfmt --to=iec $WASM_SIZE 2>/dev/null || echo "${WASM_SIZE}B")",
   "soroban_limits": {

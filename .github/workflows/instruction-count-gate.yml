@@ -1,0 +1,66 @@
+name: Instruction Count Regression Gate
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "contracts/**"
+      - "resource-budgets/**"
+      - "scripts/measure_budgets.mjs"
+      - ".github/workflows/instruction-count-gate.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  instruction-counts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build contracts
+        run: cargo build --workspace --target wasm32-unknown-unknown --release
+
+      - name: Determine changed contracts
+        id: changed
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.sha }}"
+          changed=$(git diff --name-only "$base"..."$head" -- 'contracts/*/src/**' \
+            | cut -d/ -f2 | sort -u | tr '\n' ',')
+          echo "contracts=${changed%,}" >> "$GITHUB_OUTPUT"
+
+      - name: Gate changed contracts on instruction-count deltas
+        # `measure_budgets.mjs` accepts a positional per-contract filter, so
+        # run it once per changed contract (issue #1958).
+        run: |
+          IFS=',' read -ra names <<< "${{ steps.changed.outputs.contracts }}"
+          if [ ${#names[@]} -eq 0 ]; then
+            echo "No changed contracts; skipping."
+            exit 0
+          fi
+          for c in "${names[@]}"; do
+            [ -n "$c" ] || continue
+            node scripts/measure_budgets.mjs "$c"
+          done
+
+      - name: Upload delta report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: instruction-count-deltas
+          path: |
+            reports/instruction_count_deltas.json
+            reports/budget_report.md
+            reports/budget_violations.json
+          if-no-files-found: ignore

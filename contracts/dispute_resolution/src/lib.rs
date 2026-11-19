@@ -115,6 +115,7 @@ pub enum DataKey {
 }
 
 const MAX_EVIDENCE_PER_DISPUTE: u32 = 20;
+const MAX_ARBITERS: u32 = 64;
 const DEFAULT_DISPUTE_DEADLINE_SECS: u64 = 2_592_000; // 30 days
 
 #[contract]
@@ -125,6 +126,8 @@ impl DisputeResolution {
     /// Initialize with an admin and list of arbiters.
     pub fn initialize(env: Env, admin: Address, arbiters: Vec<Address>) {
         governance_commons::init_guard(&env);
+        validation_utils::validate_vector_size(&arbiters, 1, MAX_ARBITERS)
+            .unwrap_or_else(|_| panic!("arbiters length out of bounds"));
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage()
             .instance()

@@ -41,6 +41,9 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-dep-hazard-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked || true
+
       - name: Build contracts (for the WASM size budget sub-check)
         run: make dist
 

@@ -69,7 +69,7 @@ _Top 5 contracts by estimated storage cost (from latest CI run):_
 <!-- STORAGE_LEADERBOARD_START -->
 | # | Contract | Size (B) | Est. Entries | Est. Cost (XLM) | Status |
 |---|----------|----------|-------------|-----------------|--------|
-| — | _not yet generated — see below_ | — | — | — | — |
+| — | _unmeasured — regenerate with scripts/measure_storage.sh_ | — | — | — | — |
 <!-- STORAGE_LEADERBOARD_END -->
 
 > Run `./scripts/measure_storage.sh` locally after `cargo build --workspace --target wasm32-unknown-unknown --release`,
@@ -684,7 +684,7 @@ deployments/
 - **Invalid backup**: Backup file may be corrupted
 - **Contract not found**: Backup contract may have been removed
 
-For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contracts/issues) or [Discussions](https://github.com/your-org/Uzima-Contracts/discussions).
+For more help, check the [GitHub Issues](https://github.com/Stellar-Uzima/Uzima-Contracts/issues) or [Discussions](https://github.com/Stellar-Uzima/Uzima-Contracts/discussions).
 
 ---
 
@@ -692,7 +692,7 @@ For more help, check the [GitHub Issues](https://github.com/your-org/Uzima-Contr
 
 ### Documentation
 - [API Reference](./docs/api.md) - Complete contract API documentation and stability guarantees
-- [Architecture Guide](./docs/architecture.md) - System design and patterns
+- [Architecture Guide](./docs/SYSTEM_ARCHITECTURE.md) - System design and patterns
 - [Type Safety Guidelines](./docs/TYPE_SAFETY_GUIDELINES.md) - Best practices for Soroban type safety
 - [Contract Resource Limits](./docs/CONTRACT_RESOURCE_LIMITS.md) - Storage, execution, and batch constraints for all contracts
 - [Soroban Documentation](https://soroban.stellar.org/docs) - Official Soroban docs
@@ -971,8 +971,8 @@ A: All sensitive medical data is encrypted before storage, and access is control
 
 ## 🆘 Support
 
-- **Issues**: [GitHub Issues](https://github.com/your-org/Uzima-Contracts/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/Uzima-Contracts/discussions)
+- **Issues**: [GitHub Issues](https://github.com/Stellar-Uzima/Uzima-Contracts/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/Stellar-Uzima/Uzima-Contracts/discussions)
 - **Documentation**: [Project Docs](./docs/)
 
 ---

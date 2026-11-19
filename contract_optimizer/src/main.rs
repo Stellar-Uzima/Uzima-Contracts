@@ -4,7 +4,7 @@ use contract_optimizer::complexity::{
     ContractThresholdResult, ThresholdLevel,
 };
 use contract_optimizer::metrics::AccuracyMetrics;
-use contract_optimizer::{analyze_contracts, generate_report, integrate_pr_review};
+use contract_optimizer::{analyze_contracts, generate_report};
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -69,18 +69,6 @@ enum Commands {
         /// PR comment output path
         #[arg(long, default_value = "reports/complexity_pr_comment.txt")]
         comment_output: PathBuf,
-    },
-    /// Integrate analysis into a GitHub PR review
-    PrReview {
-        /// Repository in owner/repo format
-        #[arg(short, long)]
-        repo: String,
-        /// Pull request number
-        #[arg(short, long)]
-        pr_number: u64,
-        /// GitHub token
-        #[arg(short, long)]
-        token: String,
     },
 }
 
@@ -251,14 +239,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("FAIL: One or more contracts exceed the fail threshold.");
                 std::process::exit(1);
             }
-        },
-        Commands::PrReview {
-            repo,
-            pr_number,
-            token,
-        } => {
-            integrate_pr_review(&repo, pr_number, &token).await?;
-            println!("PR review integration completed");
         },
         Commands::Metrics { metrics_file } => {
             let metrics = AccuracyMetrics::load(&metrics_file)?;

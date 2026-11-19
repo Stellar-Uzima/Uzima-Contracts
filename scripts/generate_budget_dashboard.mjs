@@ -16,6 +16,8 @@ import { join, dirname } from 'path';
 const ROOT = process.cwd();
 const BUDGET_FILE = join(ROOT, 'resource-budgets', 'budgets.json');
 const BASELINE_FILE = join(ROOT, 'resource-budgets', 'baselines.json');
+const DASHBOARD_DATA_FILE = join(ROOT, 'resource-budgets', 'dashboard.json');
+const DEPLOYMENT_MANIFEST = join(ROOT, 'deployments', 'deployment-manifest.json');
 const DEFAULT_OUTPUT = join(ROOT, 'dashboard', 'resource-budgets.html');
 
 function loadJSON(path) {
@@ -159,6 +161,43 @@ function generateHTML(budgets, baselines) {
 </html>`;
 }
 
+/**
+ * Collect the deployable contract names from the canonical deployment manifest
+ * (issue #1955). This replaces the hand-maintained static list that drifted as
+ * new contracts were added.
+ */
+function collectDeployableContracts() {
+  const manifest = loadJSON(DEPLOYMENT_MANIFEST);
+  if (!manifest || !Array.isArray(manifest.contracts)) return [];
+  return [...new Set(manifest.contracts.map((c) => c.name).filter(Boolean))];
+}
+
+/** Write the machine-readable dashboard data consumed by checks and UIs. */
+function writeDashboardData(budgets) {
+  const deployable = collectDeployableContracts();
+  const monitored = [
+    ...new Set([...deployable, ...Object.keys(budgets.contracts || {})]),
+  ].sort();
+  const data = {
+    dashboard_version: '1.0.0',
+    description:
+      'Memory and CPU budget overview per contract for Stellar Uzima Soroban contracts',
+    soroban_network_limits: {
+      max_read_entries: 2000,
+      max_write_entries: 1000,
+      max_instructions: 100000000,
+      max_memory_bytes: 52428800,
+      max_contract_size_bytes: 655360,
+    },
+    contracts_monitored: monitored,
+    regeneration_command: './scripts/generate_budgets.sh',
+    generated_at: new Date().toISOString(),
+  };
+  writeFileSync(DASHBOARD_DATA_FILE, `${JSON.stringify(data, null, 2)}\n`);
+  console.log(`[budget-dashboard] Dashboard data generated: ${DASHBOARD_DATA_FILE}`);
+  return monitored.length;
+}
+
 function main() {
   const args = process.argv.slice(2);
   const outputIdx = args.indexOf('--output');
@@ -178,6 +217,8 @@ function main() {
 
   console.log(`[budget-dashboard] Dashboard generated: ${outputPath}`);
   console.log(`[budget-dashboard] ${Object.keys(budgets.contracts || {}).length} contracts included`);
+  const monitored = writeDashboardData(budgets);
+  console.log(`[budget-dashboard] ${monitored} contracts monitored in dashboard.json`);
 }
 
 main();

@@ -249,18 +249,3 @@ pub fn generate_report(input_path: &Path) -> Result<String, Box<dyn std::error::
 
     Ok(report)
 }
-
-pub async fn integrate_pr_review(
-    repo: &str,
-    pr_number: u64,
-    _token: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // This would integrate with GitHub API to post comments on PR
-    // For now, just a placeholder
-    println!(
-        "Integrating analysis into PR review for {}/{}",
-        repo, pr_number
-    );
-    // Use octocrab to create PR comments with recommendations
-    Ok(())
-}

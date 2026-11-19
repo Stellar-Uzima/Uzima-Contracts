@@ -173,6 +173,15 @@ generate_identity() {
         return 0
     fi
 
+    # Fail fast: a placeholder identity is not usable by any deploy script.
+    if ! command -v soroban >/dev/null 2>&1 && ! command -v openssl >/dev/null 2>&1; then
+        log "ERROR" "Cannot generate identity '$name' for '$network': neither 'soroban' nor 'openssl' is installed."
+        log "INFO" "Install one of the following, then re-run this command:"
+        log "INFO" "  soroban CLI: cargo install --locked soroban-cli"
+        log "INFO" "  openssl:     apt-get install openssl   (macOS: brew install openssl)"
+        exit 1
+    fi
+
     mkdir -p "$identity_dir"
 
     if command -v soroban &>/dev/null; then
@@ -186,8 +195,9 @@ generate_identity() {
         openssl pkey -in "$identity_dir/$name.key" -pubout -out "$identity_dir/$name.pub" 2>/dev/null
         echo "key-generated-$(date +%s)" > "$identity_dir/address.txt"
     else
-        log "WARN" "Neither soroban nor openssl found. Creating placeholder identity."
-        echo "placeholder-$(date +%s)" > "$identity_dir/address.txt"
+        log "ERROR" "No usable identity generator available for '$name'; refusing to create a placeholder."
+        rmdir "$identity_dir" 2>/dev/null || true
+        exit 1
     fi
 
     cat > "$identity_dir/metadata.toml" <<EOFMETA

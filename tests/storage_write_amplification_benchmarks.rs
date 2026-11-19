@@ -6,11 +6,11 @@
 //! Extended coverage (#1578): patient_consent_management now has an
 //! equivalent write-amplification benchmark in
 //! `contracts/patient_consent_management/src/benchmarks.rs` (picked up by
-//! `scripts/measure_storage.sh`). `audit` and `identity_registry` were not
-//! extended in the same pass — both require nontrivial fixture setup
-//! (audit: `AuditConfig`/`Map<String,String>` event payloads; identity_registry:
-//! full DID document construction) that needs its own reviewed follow-up
-//! rather than being guessed at without compiling.
+//! `scripts/measure_storage.sh`). Issue #1957 extends the same coverage to
+//! `audit`: the authoritative benchmarks live in
+//! `contracts/audit/src/benchmarks.rs`, and the shared harness below records
+//! the append-heavy workload too. `identity_registry` still needs full DID
+//! document construction and remains a separate follow-up.
 
 #![cfg(all(test, feature = "testutils"))]
 
@@ -110,4 +110,53 @@ fn benchmark_multi_patient_storage() {
             );
         }
     }
+}
+
+/// Append-heavy audit workload: 50 sequential `log_event` calls (issue #1957).
+/// Each append performs one log write plus growing index rewrites.
+#[test]
+fn benchmark_audit_append_heavy() {
+    use audit::types::{ActionType, AuditConfig, AuditType, OperationResult};
+    use audit::{AuditTrail, AuditTrailClient};
+    use soroban_sdk::{Map, Vec};
+
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let id = env.register_contract(None, AuditTrail);
+    let client = AuditTrailClient::new(&env, &id);
+    let mut types = Vec::new(&env);
+    types.push_back(AuditType::Event);
+    types.push_back(AuditType::AdminAction);
+    client.initialize(
+        &admin,
+        &AuditConfig {
+            archive_threshold: 1000,
+            enabled_types: types,
+        },
+    );
+
+    let actor = Address::generate(&env);
+    env.budget().reset_unlimited();
+    for i in 0..50u64 {
+        let mut meta = Map::new(&env);
+        meta.set(
+            String::from_str(&env, "seq"),
+            String::from_str(&env, if i % 2 == 0 { "even" } else { "odd" }),
+        );
+        client.log_event(
+            &actor,
+            &ActionType::DataWrite,
+            &BytesN::from_array(&env, &[i as u8; 32]),
+            &OperationResult::Success,
+            &meta,
+        );
+    }
+    let cpu = env.budget().cpu_instruction_cost();
+    std::println!("[STORAGE-BENCH] audit::append_50 after={}", cpu);
+    assert!(
+        cpu <= 250_000_000,
+        "audit append workload exceeded CPU budget: {}",
+        cpu
+    );
 }

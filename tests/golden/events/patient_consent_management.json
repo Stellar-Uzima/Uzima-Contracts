@@ -1,0 +1,26 @@
+{
+  "contract": "patient_consent_management",
+  "events": [
+    {
+      "name": "consent_granted",
+      "topics": ["consent_granted", "patient_consent_management"],
+      "data": {
+        "patient": "String",
+        "provider": "String",
+        "data_type": "String",
+        "expiry_ledger": "u64",
+        "ledger": "u64"
+      }
+    },
+    {
+      "name": "consent_revoked",
+      "topics": ["consent_revoked", "patient_consent_management"],
+      "data": {
+        "patient": "String",
+        "provider": "String",
+        "data_type": "String",
+        "ledger": "u64"
+      }
+    }
+  ]
+}

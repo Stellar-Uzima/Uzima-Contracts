@@ -152,7 +152,7 @@ fn update_stats(
         });
 
     if is_new {
-        stats.total_escrows = stats.total_escrows.checked_add(1).ok_or(Error::Overflow)?;
+        stats.total_escrows = validation_utils::checked_increment!(stats.total_escrows, Error::Overflow)?;
         stats.total_volume = stats.total_volume.checked_add(volume).ok_or(Error::Overflow)?;
 
         // Time-bucketed daily stats
@@ -168,18 +168,18 @@ fn update_stats(
             count: 0,
         });
         daily.volume = daily.volume.checked_add(volume).ok_or(Error::Overflow)?;
-        daily.count = daily.count.checked_add(1).ok_or(Error::Overflow)?;
+        daily.count = validation_utils::checked_increment!(daily.count, Error::Overflow)?;
         daily_map.set(day_id, daily);
         env.storage().persistent().set(&DAILY_STATS, &daily_map);
     }
     if settled {
-        stats.settled_count = stats.settled_count.checked_add(1).ok_or(Error::Overflow)?;
+        stats.settled_count = validation_utils::checked_increment!(stats.settled_count, Error::Overflow)?;
     }
     if refunded {
-        stats.refunded_count = stats.refunded_count.checked_add(1).ok_or(Error::Overflow)?;
+        stats.refunded_count = validation_utils::checked_increment!(stats.refunded_count, Error::Overflow)?;
     }
     if disputed {
-        stats.disputed_count = stats.disputed_count.checked_add(1).ok_or(Error::Overflow)?;
+        stats.disputed_count = validation_utils::checked_increment!(stats.disputed_count, Error::Overflow)?;
     }
 
     if active_delta > 0 {

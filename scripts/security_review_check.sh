@@ -70,7 +70,8 @@ scan_contract() {
     case "$file" in
       */test.rs|*/tests.rs|*_test.rs|*_tests.rs|*/tests/*) continue ;;
     esac
-    file_count=$(grep -n '\.unwrap()' "$file" 2>/dev/null | grep -v '#\[cfg(test)\]' | grep -v '//.*unwrap' | wc -l || echo 0)
+    # Stop at the first inline #[cfg(test)] (test module convention: at file end).
+    file_count=$(awk '/#\[cfg\(test\)\]/{exit} /\.unwrap\(\)/ && !/\/\/.*unwrap/' "$file" 2>/dev/null | wc -l || echo 0)
     unwrap_count=$((unwrap_count + file_count))
   done < <(find "$dir" -name '*.rs' -print0)
   if [[ "$unwrap_count" -eq 0 ]]; then

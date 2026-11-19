@@ -171,3 +171,40 @@ fn test_duplicate_approval_rejected_by_add_approval_helper() {
     // dedup only rejected the duplicate entry, not all subsequent approvals.
     assert!(manager_client.try_approve(&v2, &prop_id).is_ok());
 }
+
+// ---- Storage gap regression tests (issue #1946) ----
+
+#[test]
+fn storage_version_is_zero_before_initialization() {
+    let env = Env::default();
+    let id = env.register_contract(None, UpgradeManager);
+    let client = UpgradeManagerClient::new(&env, &id);
+    assert_eq!(client.storage_version(), 0);
+}
+
+#[test]
+fn initialize_stamps_storage_schema_version() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let validators = Vec::from_array(&env, [Address::generate(&env)]);
+    let id = env.register_contract(None, UpgradeManager);
+    let client = UpgradeManagerClient::new(&env, &id);
+    client.initialize(&admin, &validators);
+    assert_eq!(client.storage_version(), crate::STORAGE_SCHEMA_VERSION);
+}
+
+#[test]
+fn reserved_gap_slots_are_reported_and_bounded() {
+    let env = Env::default();
+    let id = env.register_contract(None, UpgradeManager);
+    let client = UpgradeManagerClient::new(&env, &id);
+    let slots = client.storage_gap_slots();
+    assert_eq!(slots, crate::STORAGE_GAP_SLOTS);
+    assert!(slots > 0);
+    for slot in 0..slots {
+        assert!(client.is_reserved_gap_slot(&slot));
+    }
+    assert!(!client.is_reserved_gap_slot(&slots));
+    assert!(!client.is_reserved_gap_slot(&(slots + 1)));
+}

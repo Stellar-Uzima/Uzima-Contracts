@@ -21,6 +21,9 @@
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod reentrancy_tests;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, Address, BytesN, Env, String, Symbol, Vec,
 };
@@ -365,7 +368,7 @@ impl BridgeDisputeMediationContract {
             .instance()
             .get(&DataKey::DisputeCount)
             .unwrap_or(0);
-        let new_count = count.checked_add(1).ok_or(Error::Overflow)?;
+        let new_count = validation_utils::checked_increment!(count, Error::Overflow)?;
 
         // Derive a deterministic dispute_id from (operation_id, count, timestamp).
         let now = env.ledger().timestamp();
