@@ -67,10 +67,7 @@ fn old_state(env: &Env, proposal_id: u64) -> Result<u32, Error> {
     }
 
     if let Some(dispute_addr) = cfg.dispute_contract {
-        let args = vec![env, proposal_id.into_val(env)];
-        let is_disputed: bool =
-            env.invoke_contract(&dispute_addr, &Symbol::new(env, "is_disputed"), args);
-        if is_disputed {
+        if is_disputed(env, &dispute_addr, proposal_id) {
             return Ok(6);
         }
     }
@@ -146,10 +143,7 @@ fn new_execute(env: &Env, proposal_id: u64) -> Result<(), Error> {
 
     let cfg = get_cfg(env)?;
     if let Some(dispute_addr) = &cfg.dispute_contract {
-        let args = vec![env, proposal_id.into_val(env)];
-        let is_disputed: bool =
-            env.invoke_contract(dispute_addr, &Symbol::new(env, "is_disputed"), args);
-        if is_disputed {
+        if is_disputed(env, dispute_addr, proposal_id) {
             return Err(Error::ProposalDisputed);
         }
     }
@@ -178,10 +172,7 @@ fn old_execute(env: &Env, proposal_id: u64) -> Result<(), Error> {
 
     let cfg = get_cfg(env)?;
     if let Some(dispute_addr) = cfg.dispute_contract {
-        let args = vec![env, proposal_id.into_val(env)];
-        let is_disputed: bool =
-            env.invoke_contract(&dispute_addr, &Symbol::new(env, "is_disputed"), args);
-        if is_disputed {
+        if is_disputed(env, &dispute_addr, proposal_id) {
             return Err(Error::ProposalDisputed);
         }
     }
