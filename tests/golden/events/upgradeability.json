@@ -1,0 +1,26 @@
+{
+  "contract": "upgradeability",
+  "events": [
+    {
+      "name": "contract_upgraded",
+      "topics": ["contract_upgraded", "upgradeability"],
+      "data": {
+        "contract": "String",
+        "old_version": "u64",
+        "new_version": "u64",
+        "wasm_hash": "String",
+        "upgraded_by": "String",
+        "ledger": "u64"
+      }
+    },
+    {
+      "name": "lifecycle_transition",
+      "topics": ["lifecycle", "transition"],
+      "data": {
+        "old_state": "u64",
+        "new_state": "u64",
+        "ledger": "u64"
+      }
+    }
+  ]
+}
