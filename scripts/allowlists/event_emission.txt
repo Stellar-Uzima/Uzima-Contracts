@@ -1144,7 +1144,6 @@ medical_records::verify_attachment_integrity
 
 # ── meta_tx_forwarder ─────────────────────────────────────────────────────────
 meta_tx_forwarder::consume_nonce
-meta_tx_forwarder::current_fn
 meta_tx_forwarder::msg_data
 meta_tx_forwarder::msg_sender
 meta_tx_forwarder::msg_sender_from_data

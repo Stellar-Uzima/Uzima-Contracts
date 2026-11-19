@@ -42,7 +42,7 @@
 //!
 //! All helpers in this module are `no_std` safe and live in instance storage.
 
-use soroban_sdk::{Address, Env, Symbol, Val, Vec};
+use soroban_sdk::{Address, Env, Val, Vec};
 // `Address::try_from_val(env, &val)` lives on `TryFromVal<Env, Val>`. We avoid
 // `Invoker` entirely because soroban-sdk 21.7.7 has removed it.
 use soroban_sdk::TryFromVal;
@@ -172,13 +172,6 @@ impl ERC2771ContextImpl {
         Self::has_trusted_forwarder(env)
     }
 
-    /// Looking up the function name this contract was called through.
-    /// Soroban 21.7.7 does not expose the invoked symbol directly; this
-    /// helper exists as a placeholder so callers can document intent
-    /// (e.g. via a custom enum keyed on caller-supplied Symbol).
-    pub fn current_fn(_env: &Env, hint: &Symbol) -> Symbol {
-        hint.clone()
-    }
 }
 
 // ============================================================================
