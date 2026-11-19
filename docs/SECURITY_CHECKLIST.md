@@ -89,6 +89,9 @@ single standardized helper instead.
   pub fn initialize(env: Env, ...) { ... }
   ```
 
+  The current repository-wide classification is recorded in
+  [`docs/audits/INITIALIZE_GUARD_INVENTORY.md`](audits/INITIALIZE_GUARD_INVENTORY.md).
+
 ## 5. Events & Audit Trail
 
 - [ ] Every state-changing operation emits a corresponding event
