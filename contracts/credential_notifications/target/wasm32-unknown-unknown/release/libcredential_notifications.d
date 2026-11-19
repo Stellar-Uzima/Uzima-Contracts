@@ -1,1 +1,0 @@
-C:\Users\HP\Documents\students\grandfox\Uzima-Contracts\contracts\credential_notifications\target\wasm32-unknown-unknown\release\libcredential_notifications.rlib: C:\Users\HP\Documents\students\grandfox\Uzima-Contracts\contracts\credential_notifications\src\lib.rs
