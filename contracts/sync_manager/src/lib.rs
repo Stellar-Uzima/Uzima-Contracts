@@ -920,6 +920,205 @@ mod test {
         assert!(check.is_some());
         assert_eq!(check.unwrap().status, ReconciliationCheckStatus::Verified);
     }
+
+    fn setup_manager(env: &Env) -> (Address, Address, Address) {
+        let admin = Address::generate(env);
+        let operator = Address::generate(env);
+        let contract = env.register_contract(None, SyncManager);
+
+        env.as_contract(&contract, || {
+            SyncManager::initialize(env.clone(), admin.clone())
+        })
+        .unwrap();
+        env.as_contract(&contract, || {
+            SyncManager::assign_role(env.clone(), admin.clone(), operator.clone(), ROLE_OPERATOR)
+        })
+        .unwrap();
+
+        (contract, admin, operator)
+    }
+
+    #[test]
+    fn test_conflict_policy_strategies_are_deterministic() {
+        let env = Env::default();
+        let (contract, admin, operator) = setup_manager(&env);
+
+        let policy = SyncPolicy {
+            sync_interval_ms: 30_000,
+            max_lag_ms: 2_000,
+            consistency_mode: ConsistencyLevel::Strong,
+            max_retries: 2,
+            auto_sync_enabled: true,
+            conflict_resolution_strategy: 2,
+        };
+        env.as_contract(&contract, || {
+            SyncManager::set_sync_policy(env.clone(), admin, policy)
+        })
+        .unwrap();
+
+        let stored_policy =
+            env.as_contract(&contract, || SyncManager::get_sync_policy(env.clone()));
+        assert_eq!(stored_policy.conflict_resolution_strategy, 2);
+        assert_eq!(stored_policy.sync_interval_ms, 30_000);
+
+        let targets = Vec::from_array(&env, [2u32, 3u32]);
+        let operation_id = env
+            .as_contract(&contract, || {
+                SyncManager::initiate_sync(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    targets,
+                    42,
+                    ConsistencyLevel::Strong,
+                )
+            })
+            .unwrap();
+
+        let conflict_id = env
+            .as_contract(&contract, || {
+                SyncManager::detect_sync_conflict(
+                    env.clone(),
+                    operator.clone(),
+                    operation_id,
+                    Vec::from_array(&env, [4u32]),
+                )
+            })
+            .unwrap();
+        assert_eq!(conflict_id, 1);
+
+        env.as_contract(&contract, || {
+            SyncManager::resolve_conflict(env.clone(), operator, conflict_id, 2)
+        })
+        .unwrap();
+
+        let conflicts = env.as_contract(&contract, || SyncManager::get_conflicts(env.clone()));
+        assert_eq!(conflicts.len(), 1);
+        let conflict = conflicts.get_unchecked(0);
+        assert_eq!(conflict.conflict_id, 1);
+        assert_eq!(conflict.operation_id, operation_id);
+        assert!(conflict.resolved);
+        assert_eq!(conflict.resolution_strategy, 2);
+    }
+
+    #[test]
+    fn test_duplicate_sync_requests_have_stable_distinct_ids() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup_manager(&env);
+        let targets = Vec::from_array(&env, [2u32]);
+
+        let first_id = env
+            .as_contract(&contract, || {
+                SyncManager::initiate_sync(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    targets.clone(),
+                    99,
+                    ConsistencyLevel::Eventual,
+                )
+            })
+            .unwrap();
+        let second_id = env
+            .as_contract(&contract, || {
+                SyncManager::initiate_sync(
+                    env.clone(),
+                    operator,
+                    1,
+                    targets,
+                    99,
+                    ConsistencyLevel::Eventual,
+                )
+            })
+            .unwrap();
+
+        assert_eq!(first_id, 1);
+        assert_eq!(second_id, 2);
+
+        let first = env
+            .as_contract(&contract, || {
+                SyncManager::get_sync_operation(env.clone(), first_id)
+            })
+            .unwrap();
+        let second = env
+            .as_contract(&contract, || {
+                SyncManager::get_sync_operation(env.clone(), second_id)
+            })
+            .unwrap();
+
+        assert_eq!(first.status, SyncStatus::Pending);
+        assert_eq!(second.status, SyncStatus::Pending);
+        assert_eq!(first.data_hash, 99);
+        assert_eq!(second.data_hash, 99);
+    }
+
+    #[test]
+    fn test_offline_replay_status_is_deterministic() {
+        let env = Env::default();
+        let (contract, _admin, operator) = setup_manager(&env);
+
+        let first_id = env
+            .as_contract(&contract, || {
+                SyncManager::reconcile_offline(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    2,
+                    100,
+                    90,
+                    String::from_str(&env, "replay-a"),
+                )
+            })
+            .unwrap();
+        let second_id = env
+            .as_contract(&contract, || {
+                SyncManager::reconcile_offline(
+                    env.clone(),
+                    operator.clone(),
+                    1,
+                    2,
+                    100,
+                    90,
+                    String::from_str(&env, "replay-b"),
+                )
+            })
+            .unwrap();
+        let third_id = env
+            .as_contract(&contract, || {
+                SyncManager::reconcile_offline(
+                    env.clone(),
+                    operator,
+                    1,
+                    2,
+                    100,
+                    100,
+                    String::from_str(&env, "replay-c"),
+                )
+            })
+            .unwrap();
+
+        assert_eq!((first_id, second_id, third_id), (1, 2, 3));
+
+        let first = env
+            .as_contract(&contract, || {
+                SyncManager::get_reconciliation_status(env.clone(), first_id)
+            })
+            .unwrap();
+        let second = env
+            .as_contract(&contract, || {
+                SyncManager::get_reconciliation_status(env.clone(), second_id)
+            })
+            .unwrap();
+        let third = env
+            .as_contract(&contract, || {
+                SyncManager::get_reconciliation_status(env.clone(), third_id)
+            })
+            .unwrap();
+
+        assert_eq!(first.status, ReconciliationCheckStatus::Mismatch);
+        assert_eq!(second.status, ReconciliationCheckStatus::Mismatch);
+        assert_eq!(third.status, ReconciliationCheckStatus::Verified);
+    }
 }
 
 #![no_std]
