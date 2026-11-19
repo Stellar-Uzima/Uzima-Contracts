@@ -1,0 +1,54 @@
+name: CI Gates
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  diff-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Stub and empty-test detector (#1871)
+        run: ./scripts/ci_gates.sh stubs "origin/${{ github.base_ref }}"
+
+      - name: Snake_case event topics (#1872)
+        run: ./scripts/ci_gates.sh topics "origin/${{ github.base_ref }}"
+
+      - name: Init-guard audit (#1873)
+        run: ./scripts/ci_gates.sh initguard "origin/${{ github.base_ref }}"
+
+  complexity-regression:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Generate complexity report
+        run: ./scripts/check_complexity.sh contracts dashboard/data/complexity_report.json reports/complexity_pr_comment.txt
+
+      # Baseline maps contract_name -> total_score. Empty ({}) means no contract is gated yet.
+      - name: Fail on regression against baseline (#1874)
+        run: |
+          jq -r --slurpfile b scripts/allowlists/complexity_baseline.json \
+            '.contracts[] | select(($b[0][.contract_name] // null) != null and .total_score > $b[0][.contract_name])
+             | "\(.contract_name): \($b[0][.contract_name]) -> \(.total_score)"' \
+            dashboard/data/complexity_report.json | tee complexity_regressions.txt
+          test ! -s complexity_regressions.txt
+
+      - name: Upload complexity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-regression-report
+          path: |
+            dashboard/data/complexity_report.json
+            complexity_regressions.txt
+          if-no-files-found: ignore
