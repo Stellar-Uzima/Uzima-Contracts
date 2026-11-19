@@ -89,6 +89,7 @@ exclude = [
 soroban-sdk = { version = "=21.7.7" }
 soroban-cli = "=21.7.7"
 governance_commons = { path = "libs/governance_commons" }
+validation_utils = { path = "libs/validation_utils" }
 replay_protection = { path = "libs/replay_protection" }
 icd_cpt = { path = "libs/icd_cpt" }
 xdr_trace = { path = "libs/xdr_trace" }

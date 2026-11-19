@@ -1645,6 +1645,10 @@ impl HealthcarePayment {
     /// Grant an address the ability to trigger an emergency pause. Admin only.
     pub fn add_authorized_pauser(env: Env, caller: Address, pauser: Address) -> Result<(), Error> {
         caller.require_auth();
+        // Privileged role changes must be blocked while the circuit is open
+        // (issue #1948). begin_recovery/resume_operations stay callable so the
+        // circuit can always be brought back to Closed.
+        Self::require_operational(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let mut pausers: Vec<Address> = env
@@ -1672,6 +1676,7 @@ impl HealthcarePayment {
         pauser: Address,
     ) -> Result<(), Error> {
         caller.require_auth();
+        Self::require_operational(&env)?;
         Self::require_admin(&env, &caller)?;
 
         let pausers: Vec<Address> = env
