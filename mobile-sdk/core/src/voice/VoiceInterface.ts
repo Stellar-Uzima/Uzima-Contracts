@@ -16,6 +16,27 @@ export interface VoiceInterfaceOptions {
   maxResponseTimeMs?: number;
 }
 
+/** Opaque, encrypted audio frame produced by the platform recorder. */
+export interface AudioEnvelope {
+  /** Encrypted frame bytes (base64 or UTF-8 depending on the recorder). */
+  data: string;
+  /** IANA MIME type, for example `audio/opus` or `audio/pcm`. */
+  mimeType: string;
+  /** Monotonic frame number used for ordering and de-duplication. */
+  sequence: number;
+  /** Sampling rate in Hz. */
+  sampleRate: number;
+  /** Hex-encoded SHA-256 of the decrypted frame. */
+  checksum: string;
+}
+
+/** Push-based audio source intended to replace the simulated transcript replay. */
+export interface AudioStreamSource {
+  subscribe(onFrame: (frame: AudioEnvelope) => void): { unsubscribe(): void };
+  start(): Promise<void>;
+  stop(): Promise<void>;
+}
+
 const MEDICAL_TERMINOLOGY = [
   'hypertension',
   'diabetes',
@@ -35,6 +56,13 @@ const MEDICAL_TERMINOLOGY = [
   'biopsy'
 ];
 
+/**
+ * Reference voice interface.
+ *
+ * @experimental `transcribe`, `startRealtimeTranscription` and
+ * `authenticateVoiceBiometric` are simulated reference implementations, not a
+ * production speech or biometric engine. See `docs/voice-interface.md`.
+ */
 export class VoiceInterface {
   private options: Required<VoiceInterfaceOptions>;
   private biometricAuth: BiometricAuth;
@@ -142,18 +170,20 @@ export class VoiceInterface {
     return command;
   }
 
+  /**
+   * @experimental Voice biometrics is NOT a secure authenticator in this
+   * reference SDK. Phrase-based samples are never accepted as proof of
+   * identity; the platform biometric/PIN fallback is always required.
+   */
   async authenticateVoiceBiometric(voiceSample: string): Promise<boolean> {
     if (!voiceSample || typeof voiceSample !== 'string') {
       throw new Error('Voice sample is required');
     }
-
-    // For this placeholder implementation, accept phrase-based samples and leverage biometric auth fallback.
-    if (voiceSample.toLowerCase().includes('verified-clinician')) {
-      return true;
-    }
-
-    const authenticated = await this.biometricAuth.authenticate({ fallbackToPin: true, enabled: true });
-    return authenticated;
+    console.warn(
+      '[VoiceInterface] authenticateVoiceBiometric is EXPERIMENTAL; phrase ' +
+        'matching is not used as an authenticator. See docs/voice-interface.md.'
+    );
+    return this.biometricAuth.authenticate({ fallbackToPin: true, enabled: true });
   }
 
   isHIPAACompliant(): boolean {
