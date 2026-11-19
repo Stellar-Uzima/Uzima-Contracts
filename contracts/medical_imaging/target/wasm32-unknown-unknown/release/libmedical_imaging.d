@@ -1,1 +1,0 @@
-C:\Users\HP\Documents\students\grandfox\Uzima-Contracts\contracts\medical_imaging\target\wasm32-unknown-unknown\release\libmedical_imaging.rlib: C:\Users\HP\Documents\students\grandfox\Uzima-Contracts\contracts\medical_imaging\src\lib.rs
