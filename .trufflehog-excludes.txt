@@ -1,2 +1,4 @@
 # Regex patterns passed to `trufflehog git --exclude-paths`.
 ^deployments/testnet/medical_records/plan\.json$
+# Deliberate canary used by the secret-scan regression test; not a credential.
+^tests/fixtures/secret_scan/fake_stellar_secret\.txt$
