@@ -18,6 +18,10 @@ from .contract_bindings import (
     IdentityDocument,
     PaymentStatus,
     AuditEntry,
+    ContractMonitoringClient,
+    IdentityRegistryClient,
+    MedicalRecordsClient,
+    PatientConsentManagementClient,
 )
 
 from .client import (
@@ -52,6 +56,10 @@ __all__ = [
     "IdentityDocument",
     "PaymentStatus",
     "AuditEntry",
+    "ContractMonitoringClient",
+    "IdentityRegistryClient",
+    "MedicalRecordsClient",
+    "PatientConsentManagementClient",
     "UzimaClient",
     "UzimaConfig",
     "SDKStatus",

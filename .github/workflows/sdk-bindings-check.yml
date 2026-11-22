@@ -5,14 +5,22 @@ on:
     branches: [main]
     paths:
       - "scripts/generate-sdk-types.mjs"
+      - "scripts/check-sdk-bindings.mjs"
+      - "scripts/check-sdk-bindings.sh"
       - "schemas/**"
+      - "mobile-sdk/**"
+      - "contracts/*/src/lib.rs"
       - "package.json"
       - ".github/workflows/sdk-bindings-check.yml"
   pull_request:
     branches: [main]
     paths:
       - "scripts/generate-sdk-types.mjs"
+      - "scripts/check-sdk-bindings.mjs"
+      - "scripts/check-sdk-bindings.sh"
       - "schemas/**"
+      - "mobile-sdk/**"
+      - "contracts/*/src/lib.rs"
       - "package.json"
       - ".github/workflows/sdk-bindings-check.yml"
 
@@ -22,6 +30,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -32,12 +42,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Fails the job when the checked-in TypeScript/Python SDK bindings
-      # have drifted from what the generator would produce — see
-      # scripts/generate-sdk-types.mjs's own --check exit behavior.
-      # Nothing here swallows it with || true.
-      - name: Check SDK bindings for drift
+      # Fails the job when the checked-in TypeScript/Python/Kotlin/Swift
+      # bindings have drifted, when a registered public interface has no
+      # binding in one of those languages, or when a newly added public
+      # contract function is missing from the registry. Nothing swallows it
+      # with || true.
+      - name: Check SDK bindings for drift and coverage
         run: npm run sdk:check -- --report reports/sdk_bindings_drift.txt
+        env:
+          SDK_BINDINGS_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+      - name: Test SDK binding coverage gate
+        run: bash tests/sdk_bindings_coverage_test.sh
 
       - name: Upload SDK drift report
         if: always()

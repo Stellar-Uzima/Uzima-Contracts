@@ -372,3 +372,80 @@ export interface AuditEntry {
   ipAddress?: string;
   metadata?: Record<string, string>;
 }
+
+// ==================== Contract Client Bindings ====================
+
+/**
+ * Generated client binding for the contract_monitoring public interface.
+ * @interface ContractMonitoringClient
+ */
+export interface ContractMonitoringClient {
+  /** Get dashboard snapshot */
+  get_dashboard(): unknown;
+  /** Initialize the monitoring contract */
+  initialize(admin: string, alert_config: unknown): void;
+  /** Record a successful function call */
+  record_call(caller: string, function_name: string, gas_used: number): void;
+  /** Record a failed function call */
+  record_error(function_name: string): void;
+}
+
+/**
+ * Generated client binding for the identity_registry public interface.
+ * @interface IdentityRegistryClient
+ */
+export interface IdentityRegistryClient {
+  /** Initialize the identity registry */
+  initialize(admin: string): void;
+  /** Register a new identity */
+  register_identity(identity: string, role: string, metadata: string): void;
+  /** Revoke an identity */
+  revoke_identity(identity: string): void;
+  /** Verify an identity exists and has role */
+  verify_identity(identity: string, role: string): boolean;
+}
+
+/**
+ * Generated client binding for the medical_records public interface.
+ * @interface MedicalRecordsClient
+ */
+export interface MedicalRecordsClient {
+  /** Create a new medical record */
+  create_record(patient: string, data: string, record_type: string): number;
+  /** Soft-delete a medical record */
+  delete_record(patient: string, record_id: number): void;
+  /** Grant a provider access to patient records */
+  grant_access(patient: string, provider: string): void;
+  /** Initialize the contract with admin and RBAC */
+  initialize(admin: string, rbac_id: string): void;
+  /** Read a medical record by ID */
+  read_record(patient: string, record_id: number): MedicalRecord;
+  /** Revoke provider access to patient records */
+  revoke_access(patient: string, provider: string): void;
+  /** Update an existing medical record */
+  update_record(patient: string, record_id: number, data: string): void;
+}
+
+/**
+ * Generated client binding for the patient_consent_management public interface.
+ * @interface PatientConsentManagementClient
+ */
+export interface PatientConsentManagementClient {
+  /** Check if consent is active */
+  check_consent(patient: string, provider: string, data_type: string): boolean;
+  /** Grant consent for data access */
+  grant_consent(patient: string, provider: string, data_type: string, expiry_ledger: number): void;
+  /** Initialize the consent contract */
+  initialize(admin: string): void;
+  /** Revoke previously granted consent */
+  revoke_consent(patient: string, provider: string, data_type: string): void;
+}
+
+// ==================== Binding Coverage ====================
+
+export const SDK_CONTRACT_INTERFACE_COVERAGE: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  contract_monitoring: ['get_dashboard', 'initialize', 'record_call', 'record_error'],
+  identity_registry: ['initialize', 'register_identity', 'revoke_identity', 'verify_identity'],
+  medical_records: ['create_record', 'delete_record', 'grant_access', 'initialize', 'read_record', 'revoke_access', 'update_record'],
+  patient_consent_management: ['check_consent', 'grant_consent', 'initialize', 'revoke_consent'],
+});

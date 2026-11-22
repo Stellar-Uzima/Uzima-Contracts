@@ -3,12 +3,16 @@
 /**
  * SDK type generator for Uzima contract bindings.
  *
- * Generates TypeScript and Python (stellar-py style) bindings from the shared
- * contract schema and enforces drift detection in CI.
+ * Generates TypeScript, Python (stellar-py style), Kotlin and Swift bindings
+ * from the shared contract schema plus the public interface registry, and
+ * enforces drift/coverage detection in CI. Every contract that declares a
+ * public interface in schemas/interface-registry/registry.json must have a
+ * generated client binding in all four languages; a new interface without
+ * bindings fails --check.
  *
  * Usage:
  *   node scripts/generate-sdk-types.mjs            # write bindings
- *   node scripts/generate-sdk-types.mjs --check    # fail if committed copy drifts
+ *   node scripts/generate-sdk-types.mjs --check    # fail on drift or missing coverage
  *   node scripts/generate-sdk-types.mjs --report reports/sdk_bindings_drift.txt
  */
 
@@ -38,6 +42,26 @@ const OUTPUT_PY_INIT = path.join(
   projectRoot,
   'mobile-sdk/python/uzima_sdk/__init__.py',
 );
+const OUTPUT_KT = resolveArg('--output-kotlin', path.join(
+  projectRoot,
+  'mobile-sdk/android/src/generated/ContractBindings.kt',
+));
+const OUTPUT_SWIFT = resolveArg('--output-swift', path.join(
+  projectRoot,
+  'mobile-sdk/ios/src/generated/ContractBindings.swift',
+));
+const REGISTRY_PATH = resolveArg('--registry', path.join(
+  projectRoot,
+  'schemas/interface-registry/registry.json',
+));
+
+const LANGUAGES = ['typescript', 'python', 'kotlin', 'swift'];
+const LANGUAGE_OUTPUTS = {
+  typescript: OUTPUT_TS,
+  python: OUTPUT_PY,
+  kotlin: OUTPUT_KT,
+  swift: OUTPUT_SWIFT,
+};
 
 function resolveArg(flag, defaultValue) {
   const index = args.indexOf(flag);
@@ -304,7 +328,108 @@ function tsInterface(name, config) {
   return lines.join('\n');
 }
 
-function generateTypeScriptBindings() {
+function loadRegistryContracts() {
+  let registry;
+  try {
+    registry = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf8'));
+  } catch (error) {
+    throw new Error(`Unable to read interface registry ${REGISTRY_PATH}: ${error.message}`);
+  }
+  const contracts = registry.contracts;
+  if (!contracts || typeof contracts !== 'object') {
+    throw new Error(`Interface registry ${REGISTRY_PATH} has no contracts object`);
+  }
+  return Object.fromEntries(
+    Object.entries(contracts)
+      .filter(([, config]) => config && Object.keys(config.interfaces || {}).length > 0)
+      .map(([name, config]) => [
+        name,
+        Object.fromEntries(
+          Object.entries(config.interfaces).sort(([a], [b]) => a.localeCompare(b)),
+        ),
+      ]),
+  );
+}
+
+function pascalCase(name) {
+  return name
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join('');
+}
+
+function camelCase(name) {
+  const value = pascalCase(name);
+  return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function knownBindingType(name) {
+  return Object.hasOwn(INTERFACE_DEFINITIONS, name) || Object.hasOwn(ENUM_DEFINITIONS, name);
+}
+
+function mapType(type, language) {
+  const value = String(type || '').trim();
+
+  if (value.startsWith('Option<') && value.endsWith('>')) {
+    const inner = mapType(value.slice(7, -1), language);
+    if (language === 'typescript') return `${inner} | null`;
+    if (language === 'python') return `Optional[${inner}]`;
+    if (language === 'kotlin') return `${inner}?`;
+    return `${inner}?`;
+  }
+  if (value.endsWith('[]')) {
+    const inner = mapType(value.slice(0, -2), language);
+    if (language === 'python') return `List[${inner}]`;
+    if (language === 'kotlin') return `List<${inner}>`;
+    if (language === 'swift') return `[${inner}]`;
+    return `${inner}[]`;
+  }
+  if (value === 'void' || value === '()') {
+    if (language === 'typescript') return 'void';
+    if (language === 'python') return 'None';
+    if (language === 'kotlin') return 'Unit';
+    return 'Void';
+  }
+  if (['u8', 'u16', 'u32', 'u64', 'i32', 'i64', 'usize', 'number'].includes(value)) {
+    if (language === 'typescript') return 'number';
+    if (language === 'python') return 'int';
+    if (language === 'kotlin') return 'Long';
+    return 'Int64';
+  }
+  if (value === 'bool' || value === 'boolean') {
+    if (language === 'typescript') return 'boolean';
+    if (language === 'python') return 'bool';
+    if (language === 'kotlin') return 'Boolean';
+    return 'Bool';
+  }
+  if (['Address', 'String', 'Symbol', 'Bytes', 'BytesN', 'symbol', 'string'].includes(value)) {
+    if (language === 'typescript') return 'string';
+    if (language === 'python') return 'str';
+    return 'String';
+  }
+  if (knownBindingType(value)) return value;
+
+  if (language === 'typescript') return 'unknown';
+  if (language === 'python') return 'Any';
+  if (language === 'kotlin') return 'Any';
+  return 'Any';
+}
+
+function orderedArgs(args = []) {
+  return [...args].sort((a, b) => Number(b.required !== false) - Number(a.required !== false));
+}
+
+function contractEntries(contracts) {
+  return Object.entries(contracts).sort(([a], [b]) => a.localeCompare(b));
+}
+
+function coverageEntries(contracts) {
+  return contractEntries(contracts)
+    .map(([contract, interfaces]) => [contract, Object.keys(interfaces).sort()]);
+}
+
+function generateTypeScriptBindings(contracts) {
   const sections = [
     '/**',
     ' * Auto-generated contract bindings for the Uzima mobile SDK.',
@@ -327,6 +452,36 @@ function generateTypeScriptBindings() {
   for (const [name, config] of Object.entries(INTERFACE_DEFINITIONS)) {
     sections.push(tsInterface(name, config), '');
   }
+
+  sections.push('// ==================== Contract Client Bindings ====================', '');
+
+  for (const [contract, interfaces] of contractEntries(contracts)) {
+    const lines = [
+      '/**',
+      ` * Generated client binding for the ${contract} public interface.`,
+      ' * @interface ' + pascalCase(contract) + 'Client',
+      ' */',
+      `export interface ${pascalCase(contract)}Client {`,
+    ];
+    for (const [name, iface] of Object.entries(interfaces).sort(([a], [b]) => a.localeCompare(b))) {
+      lines.push(`  /** ${iface.description || name} */`);
+      const params = orderedArgs(iface.args).map((arg) => {
+        const optional = arg.required === false ? '?' : '';
+        return `${arg.name}${optional}: ${mapType(arg.type, 'typescript')}`;
+      });
+      lines.push(`  ${name}(${params.join(', ')}): ${mapType(iface.returns, 'typescript')};`);
+    }
+    lines.push('}');
+    sections.push(lines.join('\n'), '');
+  }
+
+  sections.push('// ==================== Binding Coverage ====================', '');
+  sections.push([
+    'export const SDK_CONTRACT_INTERFACE_COVERAGE: Readonly<Record<string, readonly string[]>> = Object.freeze({',
+    ...coverageEntries(contracts).map(([contract, names]) =>
+      `  ${contract}: [${names.map((name) => `'${name}'`).join(', ')}],`),
+    '});',
+  ].join('\n'));
 
   const content = `${sections.join('\n').trimEnd()}\n`;
   if (content.match(/:\s*any(?![a-zA-Z_])/)) {
@@ -389,7 +544,7 @@ function pyDataclass(name, config) {
   return lines.join('\n');
 }
 
-function generatePythonBindings() {
+function generatePythonBindings(contracts) {
   const needsLiteral = Object.values(INTERFACE_DEFINITIONS).some((config) =>
     config.fields.some((field) => field.type.startsWith("'")),
   );
@@ -406,7 +561,7 @@ function generatePythonBindings() {
     '',
     'from dataclasses import dataclass',
     'from enum import Enum',
-    'from typing import Dict, List, Optional',
+    'from typing import Any, Dict, List, Optional, Protocol',
   ];
   if (needsLiteral) {
     imports.push('from typing import Literal');
@@ -424,24 +579,224 @@ function generatePythonBindings() {
     sections.push(pyDataclass(name, config), '');
   }
 
+  sections.push('# ==================== Contract Client Bindings ====================', '');
+
+  for (const [contract, interfaces] of contractEntries(contracts)) {
+    const lines = [
+      `class ${pascalCase(contract)}Client(Protocol):`,
+      `    """Generated client binding for the ${contract} public interface."""`,
+      '',
+    ];
+    for (const [name, iface] of Object.entries(interfaces).sort(([a], [b]) => a.localeCompare(b))) {
+      const params = orderedArgs(iface.args).map((arg) => {
+        const baseType = mapType(arg.type, 'python');
+        if (arg.required === false) return `${arg.name}: Optional[${baseType}] = None`;
+        return `${arg.name}: ${baseType}`;
+      });
+      lines.push(`    def ${name}(self, ${params.join(', ')}) -> ${mapType(iface.returns, 'python')}:`);
+      lines.push(`        """${iface.description || name}"""`);
+      lines.push('        ...');
+      lines.push('');
+    }
+    sections.push(lines.join('\n').trimEnd(), '');
+  }
+
+  sections.push('# ==================== Binding Coverage ====================', '');
+  sections.push([
+    'SDK_CONTRACT_INTERFACE_COVERAGE: Dict[str, List[str]] = {',
+    ...coverageEntries(contracts).map(([contract, names]) =>
+      `    "${contract}": [${names.map((name) => `"${name}"`).join(', ')}],`),
+    '}',
+  ].join('\n'));
+
   return `${sections.join('\n').trimEnd()}\n`;
 }
 
-function generatePythonInit() {
+function generatePythonInit(contracts) {
   const names = [
     ...Object.keys(ENUM_DEFINITIONS),
     ...Object.keys(INTERFACE_DEFINITIONS),
+    ...coverageEntries(contracts).map(([contract]) => `${pascalCase(contract)}Client`),
   ];
-  return `"""Uzima Python SDK — contract bindings (auto-generated exports)."""
+  const clientNames = [
+    'UzimaClient',
+    'UzimaConfig',
+    'SDKStatus',
+    'SyncResult',
+    'RecordsManager',
+    'ConsentManager',
+    'IdentityManager',
+    'PaymentManager',
+    'AuditManager',
+    'OfflineManager',
+    'NotificationManager',
+  ];
+  return `\uFEFF"""Uzima Python SDK — contract bindings and client (auto-generated exports)."""
 
 from .contract_bindings import (
 ${names.map((name) => `    ${name},`).join('\n')}
 )
 
+from .client import (
+${clientNames.map((name) => `    ${name},`).join('\n')}
+)
+
 __all__ = [
-${names.map((name) => `    "${name}",`).join('\n')}
-]
-`;
+${[...names, ...clientNames].map((name) => `    "${name}",`).join('\n')}
+]`;
+}
+
+function mapFieldType(tsType, language) {
+  const value = String(tsType).trim();
+  if (value.startsWith("'") && value.includes('|')) {
+    return language === 'python' ? 'str' : 'String';
+  }
+  if (value === 'Record<string, string>') {
+    if (language === 'python') return 'Dict[str, str]';
+    if (language === 'kotlin') return 'Map<String, String>';
+    return '[String: String]';
+  }
+  return mapType(value, language);
+}
+
+function generateKotlinBindings(contracts) {
+  const sections = [
+    '/**',
+    ' * Auto-generated contract bindings for the Uzima Android SDK.',
+    ' *',
+    ' * DO NOT EDIT MANUALLY — run `node scripts/generate-sdk-types.mjs` instead.',
+    ` * Generator version: ${GENERATOR_VERSION}`,
+    ' */',
+    '',
+    'package com.uzima.sdk.generated',
+    '',
+    '// ==================== Contract Enums ====================',
+    '',
+  ];
+
+  for (const [name, config] of Object.entries(ENUM_DEFINITIONS)) {
+    sections.push([
+      `enum class ${name}(val value: String) {`,
+      ...config.values.map(([member, value]) => `    ${member}("${value}"),`),
+      '}',
+    ].join('\n'), '');
+  }
+
+  sections.push('// ==================== Contract Data Classes ====================', '');
+
+  for (const [name, config] of Object.entries(INTERFACE_DEFINITIONS)) {
+    sections.push([
+      `data class ${name}(`,
+      ...config.fields.map((field) =>
+        `    val ${field.name}: ${mapFieldType(field.type, 'kotlin')}${field.optional ? '? = null' : ''},`),
+      ')',
+    ].join('\n'), '');
+  }
+
+  sections.push('// ==================== Contract Client Bindings ====================', '');
+
+  for (const [contract, interfaces] of contractEntries(contracts)) {
+    const lines = [
+      '/**',
+      ` * Generated client binding for the ${contract} public interface.`,
+      ' */',
+      `interface ${pascalCase(contract)}Client {`,
+    ];
+    for (const [name, iface] of Object.entries(interfaces).sort(([a], [b]) => a.localeCompare(b))) {
+      lines.push(`    /** ${iface.description || name} */`);
+      const params = orderedArgs(iface.args).map((arg) =>
+        `${camelCase(arg.name)}: ${mapType(arg.type, 'kotlin')}${arg.required === false ? '? = null' : ''}`,
+      );
+      lines.push(`    fun ${camelCase(name)}(${params.join(', ')}): ${mapType(iface.returns, 'kotlin')}`);
+    }
+    lines.push('}');
+    sections.push(lines.join('\n'), '');
+  }
+
+  sections.push('// ==================== Binding Coverage ====================', '');
+  sections.push([
+    'val SDK_CONTRACT_INTERFACE_COVERAGE: Map<String, List<String>> = mapOf(',
+    ...coverageEntries(contracts).map(([contract, names]) =>
+      `    "${contract}" to listOf(${names.map((name) => `"${name}"`).join(', ')}),`),
+    ')',
+  ].join('\n'));
+
+  return `${sections.join('\n').trimEnd()}\n`;
+}
+
+function generateSwiftBindings(contracts) {
+  const sections = [
+    '/**',
+    ' * Auto-generated contract bindings for the Uzima iOS SDK.',
+    ' *',
+    ' * DO NOT EDIT MANUALLY — run `node scripts/generate-sdk-types.mjs` instead.',
+    ` * Generator version: ${GENERATOR_VERSION}`,
+    ' */',
+    '',
+    '// ==================== Contract Enums ====================',
+    '',
+  ];
+
+  for (const [name, config] of Object.entries(ENUM_DEFINITIONS)) {
+    sections.push([
+      `public enum ${name}: String {`,
+      ...config.values.map(([, value]) => `    case ${camelCase(value)} = "${value}"`),
+      '}',
+    ].join('\n'), '');
+  }
+
+  sections.push('// ==================== Contract Data Types ====================', '');
+
+  for (const [name, config] of Object.entries(INTERFACE_DEFINITIONS)) {
+    const properties = config.fields.map((field) =>
+      `    public var ${field.name}: ${mapFieldType(field.type, 'swift')}${field.optional ? '?' : ''}`);
+    const params = config.fields.map((field) => {
+      const type = mapFieldType(field.type, 'swift');
+      return `${field.name}: ${type}${field.optional ? '? = nil' : ''}`;
+    });
+    const assignments = config.fields.map((field) =>
+      `        self.${field.name} = ${field.name}`);
+    sections.push([
+      `public struct ${name} {`,
+      ...properties,
+      '',
+      `    public init(${params.join(', ')}) {`,
+      ...assignments,
+      '    }',
+      '}',
+    ].join('\n'), '');
+  }
+
+  sections.push('// ==================== Contract Client Bindings ====================', '');
+
+  for (const [contract, interfaces] of contractEntries(contracts)) {
+    const lines = [
+      `/// Generated client binding for the ${contract} public interface.`,
+      `public protocol ${pascalCase(contract)}Client {`,
+    ];
+    for (const [name, iface] of Object.entries(interfaces).sort(([a], [b]) => a.localeCompare(b))) {
+      lines.push(`    /// ${iface.description || name}`);
+      const params = orderedArgs(iface.args).map((arg) => {
+        const baseType = mapType(arg.type, 'swift');
+        return `${camelCase(arg.name)}: ${arg.required === false ? `${baseType}? = nil` : baseType}`;
+      });
+      const returnType = mapType(iface.returns, 'swift');
+      const suffix = returnType === 'Void' ? '' : ` -> ${returnType}`;
+      lines.push(`    func ${camelCase(name)}(${params.join(', ')})${suffix}`);
+    }
+    lines.push('}');
+    sections.push(lines.join('\n'), '');
+  }
+
+  sections.push('// ==================== Binding Coverage ====================', '');
+  sections.push([
+    'public let sdkContractInterfaceCoverage: [String: [String]] = [',
+    ...coverageEntries(contracts).map(([contract, names]) =>
+      `    "${contract}": [${names.map((name) => `"${name}"`).join(', ')}],`),
+    ']',
+  ].join('\n'));
+
+  return `${sections.join('\n').trimEnd()}\n`;
 }
 
 function ensureParentDir(filePath) {
@@ -463,8 +818,51 @@ function readOrEmpty(filePath) {
   }
 }
 
-function buildDriftReport(diffs) {
-  const lines = ['SDK_BINDINGS_DRIFT=1', `GENERATOR_VERSION=${GENERATOR_VERSION}`, ''];
+function clientBlock(content, language, typeName) {
+  const patterns = {
+    typescript: new RegExp(`export interface ${typeName} \\{[\\s\\S]*?\\n\\}`),
+    python: new RegExp(`class ${typeName}\\(Protocol\\):[\\s\\S]*?(?=\\nclass |\\n# |\\nSDK_CONTRACT_INTERFACE_COVERAGE|$)`),
+    kotlin: new RegExp(`interface ${typeName} \\{[\\s\\S]*?\\n\\}`),
+    swift: new RegExp(`public protocol ${typeName} \\{[\\s\\S]*?\\n\\}`),
+  };
+  const match = content.match(patterns[language]);
+  return match ? match[0] : '';
+}
+
+function coverageGaps(contracts, contents) {
+  const gaps = [];
+  for (const [contract, interfaces] of coverageEntries(contracts)) {
+    const typeName = `${pascalCase(contract)}Client`;
+    for (const language of LANGUAGES) {
+      const block = clientBlock(contents[language] || '', language, typeName);
+      if (!block) {
+        gaps.push(`${contract}: no ${language} client binding (${typeName})`);
+        continue;
+      }
+      for (const name of interfaces) {
+        const method = language === 'typescript' || language === 'python'
+          ? name
+          : camelCase(name);
+        if (!new RegExp(`\\b${method}\\s*\\(`).test(block)) {
+          gaps.push(`${contract}.${name}: no ${language} binding`);
+        }
+      }
+    }
+  }
+  return gaps;
+}
+
+function buildDriftReport(diffs, gaps) {
+  const lines = [
+    `SDK_BINDINGS_DRIFT=${diffs.length > 0 ? 1 : 0}`,
+    `SDK_BINDINGS_MISSING=${gaps.length}`,
+    `GENERATOR_VERSION=${GENERATOR_VERSION}`,
+    '',
+  ];
+  for (const gap of gaps) {
+    lines.push(`MISSING=${gap}`);
+  }
+  if (gaps.length > 0) lines.push('');
   for (const diff of diffs) {
     lines.push(`FILE=${diff.path}`);
     lines.push(`STATUS=${diff.status}`);
@@ -513,26 +911,52 @@ function compareOutputs(outputs) {
 function main() {
   console.log('🚀 Uzima SDK binding generator\n');
 
+  const contracts = loadRegistryContracts();
   const outputs = {
-    [OUTPUT_TS]: generateTypeScriptBindings(),
-    [OUTPUT_PY]: generatePythonBindings(),
-    [OUTPUT_PY_INIT]: generatePythonInit(),
+    [OUTPUT_TS]: generateTypeScriptBindings(contracts),
+    [OUTPUT_PY]: generatePythonBindings(contracts),
+    [OUTPUT_PY_INIT]: generatePythonInit(contracts),
+    [OUTPUT_KT]: generateKotlinBindings(contracts),
+    [OUTPUT_SWIFT]: generateSwiftBindings(contracts),
   };
+
+  const generatedContents = {
+    typescript: outputs[OUTPUT_TS],
+    python: outputs[OUTPUT_PY],
+    kotlin: outputs[OUTPUT_KT],
+    swift: outputs[OUTPUT_SWIFT],
+  };
+  const committedContents = CHECK_MODE
+    ? Object.fromEntries(LANGUAGES.map((language) => [
+      language,
+      readOrEmpty(LANGUAGE_OUTPUTS[language]),
+    ]))
+    : generatedContents;
+  const gaps = [...new Set([
+    ...coverageGaps(contracts, generatedContents),
+    ...coverageGaps(contracts, committedContents),
+  ])];
 
   const diffs = compareOutputs(outputs);
 
   if (REPORT_PATH) {
     ensureParentDir(REPORT_PATH);
-    const report = diffs.length === 0
-      ? `SDK_BINDINGS_DRIFT=0\nGENERATOR_VERSION=${GENERATOR_VERSION}\n`
-      : buildDriftReport(diffs);
-    fs.writeFileSync(REPORT_PATH, report, 'utf8');
+    fs.writeFileSync(REPORT_PATH, buildDriftReport(diffs, gaps), 'utf8');
     console.log(`📄 Drift report written to ${REPORT_PATH}`);
   }
 
   if (CHECK_MODE) {
+    if (gaps.length > 0) {
+      console.error(`❌ Public interfaces without SDK bindings (${gaps.length}):`);
+      for (const gap of gaps) {
+        console.error(`  - ${gap}`);
+      }
+      console.error('\nRun `node scripts/generate-sdk-types.mjs` and commit the regenerated bindings.');
+      process.exit(1);
+    }
     if (diffs.length === 0) {
       console.log('✅ SDK bindings are in sync with on-chain contract types.');
+      console.log(`✅ All ${Object.keys(contracts).length} registered contracts have bindings in ${LANGUAGES.join(', ')}.`);
       return;
     }
     console.error(`❌ SDK bindings are out of sync (${diffs.length} file(s)):`);
@@ -550,6 +974,8 @@ function main() {
   console.log(`✓ TypeScript: ${path.relative(projectRoot, OUTPUT_TS)}`);
   console.log(`✓ Python:     ${path.relative(projectRoot, OUTPUT_PY)}`);
   console.log(`✓ Python init: ${path.relative(projectRoot, OUTPUT_PY_INIT)}`);
+  console.log(`✓ Kotlin:     ${path.relative(projectRoot, OUTPUT_KT)}`);
+  console.log(`✓ Swift:      ${path.relative(projectRoot, OUTPUT_SWIFT)}`);
   console.log('\n🎉 SDK binding generation complete.');
 }
 

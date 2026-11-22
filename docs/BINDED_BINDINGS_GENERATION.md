@@ -28,6 +28,13 @@ Run the generation script:
 |--------|-------------|-------------|
 | Python | `mobile-sdk/python/uzima_sdk/contract_bindings.py` | Python dataclasses and enums |
 | TypeScript | `mobile-sdk/core/src/generated/contract-bindings.ts` | TypeScript interfaces and enums |
+| Kotlin | `mobile-sdk/android/src/generated/ContractBindings.kt` | Kotlin client interfaces and data classes |
+| Swift | `mobile-sdk/ios/src/generated/ContractBindings.swift` | Swift client protocols and data types |
+
+The canonical drift/coverage gate is `npm run sdk:check` (see
+`docs/SDK_BINDINGS.md`). It fails when a registered public interface is
+missing from any of the four generated bindings, or when a newly added public
+contract function is not present in the registry.
 
 ## Regeneration
 

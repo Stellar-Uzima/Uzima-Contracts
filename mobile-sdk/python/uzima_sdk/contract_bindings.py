@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Protocol
 from typing import Literal
 
 # ==================== Contract Enums ====================
@@ -198,3 +198,102 @@ class AuditEntry:
     timestamp: int
     ip_address: Optional[str] = None
     metadata: Optional[Dict[str, str]] = None
+
+# ==================== Contract Client Bindings ====================
+
+class ContractMonitoringClient(Protocol):
+    """Generated client binding for the contract_monitoring public interface."""
+
+    def get_dashboard(self, ) -> Any:
+        """Get dashboard snapshot"""
+        ...
+
+    def initialize(self, admin: str, alert_config: Any) -> None:
+        """Initialize the monitoring contract"""
+        ...
+
+    def record_call(self, caller: str, function_name: str, gas_used: int) -> None:
+        """Record a successful function call"""
+        ...
+
+    def record_error(self, function_name: str) -> None:
+        """Record a failed function call"""
+        ...
+
+class IdentityRegistryClient(Protocol):
+    """Generated client binding for the identity_registry public interface."""
+
+    def initialize(self, admin: str) -> None:
+        """Initialize the identity registry"""
+        ...
+
+    def register_identity(self, identity: str, role: str, metadata: str) -> None:
+        """Register a new identity"""
+        ...
+
+    def revoke_identity(self, identity: str) -> None:
+        """Revoke an identity"""
+        ...
+
+    def verify_identity(self, identity: str, role: str) -> bool:
+        """Verify an identity exists and has role"""
+        ...
+
+class MedicalRecordsClient(Protocol):
+    """Generated client binding for the medical_records public interface."""
+
+    def create_record(self, patient: str, data: str, record_type: str) -> int:
+        """Create a new medical record"""
+        ...
+
+    def delete_record(self, patient: str, record_id: int) -> None:
+        """Soft-delete a medical record"""
+        ...
+
+    def grant_access(self, patient: str, provider: str) -> None:
+        """Grant a provider access to patient records"""
+        ...
+
+    def initialize(self, admin: str, rbac_id: str) -> None:
+        """Initialize the contract with admin and RBAC"""
+        ...
+
+    def read_record(self, patient: str, record_id: int) -> MedicalRecord:
+        """Read a medical record by ID"""
+        ...
+
+    def revoke_access(self, patient: str, provider: str) -> None:
+        """Revoke provider access to patient records"""
+        ...
+
+    def update_record(self, patient: str, record_id: int, data: str) -> None:
+        """Update an existing medical record"""
+        ...
+
+class PatientConsentManagementClient(Protocol):
+    """Generated client binding for the patient_consent_management public interface."""
+
+    def check_consent(self, patient: str, provider: str, data_type: str) -> bool:
+        """Check if consent is active"""
+        ...
+
+    def grant_consent(self, patient: str, provider: str, data_type: str, expiry_ledger: int) -> None:
+        """Grant consent for data access"""
+        ...
+
+    def initialize(self, admin: str) -> None:
+        """Initialize the consent contract"""
+        ...
+
+    def revoke_consent(self, patient: str, provider: str, data_type: str) -> None:
+        """Revoke previously granted consent"""
+        ...
+
+# ==================== Binding Coverage ====================
+
+SDK_CONTRACT_INTERFACE_COVERAGE: Dict[str, List[str]] = {
+    "contract_monitoring": ["get_dashboard", "initialize", "record_call", "record_error"],
+    "identity_registry": ["initialize", "register_identity", "revoke_identity", "verify_identity"],
+    "medical_records": ["create_record", "delete_record", "grant_access", "initialize", "read_record", "revoke_access", "update_record"],
+    "patient_consent_management": ["check_consent", "grant_consent", "initialize", "revoke_consent"],
+}
