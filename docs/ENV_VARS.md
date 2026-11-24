@@ -39,3 +39,4 @@ Variables marked **Secret** contain sensitive values and must never be committed
 - All `deploy_*.sh` scripts accept the network as the first positional argument.
 - TypeScript scripts (`*.ts`) pull configuration from `process.env`; RPC URL and network passphrase must always be correct for the target network.
 - `generate_compliance_report.sh` reads all contract IDs and the RPC/network configuration from the variables above and runs without manual edits to the script. Set `MEDICAL_RECORDS_ID` (and `ANOMALY_DETECTION_ID` if anomaly findings should be included) before running it.
+- The CI check `scripts/check_crypto_conformance.sh` must be executable in the repository (`chmod +x scripts/check_crypto_conformance.sh`, committed with mode 755) so it can be invoked directly by the `crypto-conformance` workflow step.
