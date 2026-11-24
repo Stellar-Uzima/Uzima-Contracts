@@ -1,35 +1,78 @@
 #!/usr/bin/env bash
-# Simple helper script to generate a compliance report by querying the healthcare_compliance contract
-# Requires: soroban CLI configured and network set (local/testnet)
-# Usage: ./scripts/generate_compliance_report.sh <NETWORK> <COMPLIANCE_CONTRACT_ID> <OUTPUT_DIR>
+# Helper script to generate a compliance report by querying the healthcare_compliance contract
+# Requires: soroban CLI configured and network set (local/testnet/futurenet/mainnet)
+# Usage: ./scripts/generate_compliance_report.sh <NETWORK> <COMPLIANCE_CONTRACT_ID> [OUTPUT_DIR]
+#
+# Contract IDs may also be supplied via environment variables so the script
+# runs against configured contracts without manual edits:
+#   COMPLIANCE_CONTRACT_ID  - healthcare_compliance contract ID (used if arg 2 is omitted)
+#   MEDICAL_RECORDS_ID      - MedicalRecords contract ID (fallback for COMPLIANCE_CONTRACT_ID)
+#   NETWORK                 - network name (used if arg 1 is omitted)
+#   COMPLIANCE_METRICS_FN   - contract method returning metrics (default: get_compliance_metrics)
+#   COMPLIANCE_AUDIT_FN     - contract method returning audit logs (default: get_audit_logs)
+#   COMPLIANCE_AUDIT_ARGS   - JSON args passed to the audit method (default: [])
+#   ANOMALY_DETECTION_ID    - optional AnomalyDetection contract ID; when set, its
+#                             findings are included in the report
+#   ANOMALY_FINDINGS_FN     - AnomalyDetection method returning findings
+#                             (default: get_anomaly_findings)
 
 set -euo pipefail
 
-NETWORK=${1:-local}
-CONTRACT_ID=${2:-}
+NETWORK=${1:-${NETWORK:-local}}
+CONTRACT_ID=${2:-${COMPLIANCE_CONTRACT_ID:-${MEDICAL_RECORDS_ID:-}}}
 OUT_DIR=${3:-deployments}
+
+METRICS_FN=${COMPLIANCE_METRICS_FN:-get_compliance_metrics}
+AUDIT_FN=${COMPLIANCE_AUDIT_FN:-get_audit_logs}
+AUDIT_ARGS=${COMPLIANCE_AUDIT_ARGS:-[]}
+ANOMALY_ID=${ANOMALY_DETECTION_ID:-}
+ANOMALY_FN=${ANOMALY_FINDINGS_FN:-get_anomaly_findings}
 
 if [ -z "$CONTRACT_ID" ]; then
   echo "Usage: $0 <network> <compliance_contract_id> [output_dir]"
+  echo "Or set COMPLIANCE_CONTRACT_ID (or MEDICAL_RECORDS_ID) and optionally NETWORK in the environment."
+  exit 1
+fi
+
+if ! command -v soroban >/dev/null 2>&1; then
+  echo "Error: soroban CLI not found in PATH" >&2
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Error: jq not found in PATH" >&2
   exit 1
 fi
 
 mkdir -p "$OUT_DIR"
 TIMESTAMP=$(date --utc +%Y%m%dT%H%M%SZ)
 OUT_FILE="$OUT_DIR/compliance_report_${TIMESTAMP}.json"
-
-# Fetch compliance metrics (this uses soroban CLI - replace with your configured command if needed)
-# The following commands are placeholders showing how to call the contract. Replace CONTRACT_ID and method names as needed.
+METRICS_RAW=$(mktemp)
+AUDITS_RAW=$(mktemp)
+ANOMALY_RAW=$(mktemp)
+trap 'rm -f "$METRICS_RAW" "$AUDITS_RAW" "$ANOMALY_RAW"' EXIT
 
 echo "Generating compliance report for contract $CONTRACT_ID on network $NETWORK"
 
-# Get metrics
-soroban contract invoke --network "$NETWORK" --id "$CONTRACT_ID" --fn get_compliance_metrics > /tmp/metrics_raw.json || true
+# Fetch compliance metrics from the contract
+soroban contract invoke --network "$NETWORK" --id "$CONTRACT_ID" --fn "$METRICS_FN" > "$METRICS_RAW"
 
-# Get a sample audit log batch (limit 50). If your CLI supports passing args, set the limit accordingly.
-soroban contract invoke --network "$NETWORK" --id "$CONTRACT_ID" --fn get_audit_logs --args '[]' > /tmp/audits_raw.json || true
+# Fetch audit log batch from the contract
+soroban contract invoke --network "$NETWORK" --id "$CONTRACT_ID" --fn "$AUDIT_FN" --args "$AUDIT_ARGS" > "$AUDITS_RAW"
 
-# Build combined report
-jq -n --slurpfile metrics /tmp/metrics_raw.json --slurpfile audits /tmp/audits_raw.json '{generated_at: "'"$TIMESTAMP"'", metrics: $metrics[0], audits: $audits[0]}' > "$OUT_FILE" || echo "Could not create JSON with jq; copying raw outputs instead" && cat /tmp/metrics_raw.json > "$OUT_FILE"
+# Optionally fetch anomaly findings
+if [ -n "$ANOMALY_ID" ]; then
+  soroban contract invoke --network "$NETWORK" --id "$ANOMALY_ID" --fn "$ANOMALY_FN" > "$ANOMALY_RAW"
+else
+  echo 'null' > "$ANOMALY_RAW"
+fi
+
+# Build combined report; fail loudly rather than writing partial data
+jq -n \
+  --arg generated_at "$TIMESTAMP" \
+  --slurpfile metrics "$METRICS_RAW" \
+  --slurpfile audits "$AUDITS_RAW" \
+  --slurpfile anomalies "$ANOMALY_RAW" \
+  '{generated_at: $generated_at, metrics: $metrics[0], audits: $audits[0], anomalies: $anomalies[0]}' > "$OUT_FILE"
 
 echo "Report written to $OUT_FILE"

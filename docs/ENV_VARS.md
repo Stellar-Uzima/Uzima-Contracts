@@ -7,13 +7,13 @@ Variables marked **Secret** contain sensitive values and must never be committed
 
 | Variable | Script(s) | Description | Required | Secret |
 |---|---|---|---|---|
-| `NETWORK` | `deploy_*.sh`, `interact.sh`, `did_management.sh` | Stellar network target (`local`, `testnet`, `futurenet`, `mainnet`) | Yes | No |
+| `NETWORK` | `deploy_*.sh`, `interact.sh`, `did_management.sh`, `generate_compliance_report.sh` | Stellar network target (`local`, `testnet`, `futurenet`, `mainnet`) | Yes | No |
 | `IDENTITY` | `did_management.sh`, `deploy_environment.sh`, `deploy_did_registry.sh` | Stellar CLI identity name used as the source account | Depends | No |
 | `SOROBAN_IDENTITY` | `interact.sh` | Fallback identity when no explicit arg is passed (defaults to `"default"`) | No | No |
-| `RPC_URL` | `analytics_dashboard.ts`, `cross_institution_analytics.ts` | Soroban RPC endpoint URL | Yes\* | No |
-| `NETWORK_PASSPHRASE` | `analytics_dashboard.ts`, `cross_institution_analytics.ts` | Network passphrase for transaction signing | Yes\* | No |
-| `MEDICAL_RECORDS_ID` | `analytics_dashboard.ts` | Deployed MedicalRecords contract ID | Yes\* | No |
-| `ANOMALY_DETECTION_ID` | `analytics_dashboard.ts`, `cross_institution_analytics.ts` | Deployed AnomalyDetection contract ID | No | No |
+| `RPC_URL` | `analytics_dashboard.ts`, `cross_institution_analytics.ts`, `generate_compliance_report.sh` | Soroban RPC endpoint URL | Yes\* | No |
+| `NETWORK_PASSPHRASE` | `analytics_dashboard.ts`, `cross_institution_analytics.ts`, `generate_compliance_report.sh` | Network passphrase for transaction signing | Yes\* | No |
+| `MEDICAL_RECORDS_ID` | `analytics_dashboard.ts`, `generate_compliance_report.sh` | Deployed MedicalRecords contract ID | Yes\* | No |
+| `ANOMALY_DETECTION_ID` | `analytics_dashboard.ts`, `cross_institution_analytics.ts`, `generate_compliance_report.sh` | Deployed AnomalyDetection contract ID | No | No |
 | `PREDICTIVE_ANALYTICS_ID` | `analytics_dashboard.ts`, `cross_institution_analytics.ts` | Deployed PredictiveAnalytics contract ID | No | No |
 | `FEDERATED_LEARNING_ID` | `analytics_dashboard.ts` | Deployed FederatedLearning contract ID | No | No |
 | `EXPLAINABLE_AI_ID` | `analytics_dashboard.ts` | Deployed ExplainableAI contract ID | No | No |
@@ -38,3 +38,5 @@ Variables marked **Secret** contain sensitive values and must never be committed
 - For local development a `.env` file can be used; ensure it is listed in `.gitignore`.
 - All `deploy_*.sh` scripts accept the network as the first positional argument.
 - TypeScript scripts (`*.ts`) pull configuration from `process.env`; RPC URL and network passphrase must always be correct for the target network.
+- `generate_compliance_report.sh` reads all contract IDs and the RPC/network configuration from the variables above and runs without manual edits to the script. Set `MEDICAL_RECORDS_ID` (and `ANOMALY_DETECTION_ID` if anomaly findings should be included) before running it.
+- The CI check `scripts/check_crypto_conformance.sh` must be executable in the repository (`chmod +x scripts/check_crypto_conformance.sh`, committed with mode 755) so it can be invoked directly by the `crypto-conformance` workflow step.
